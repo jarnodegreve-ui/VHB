@@ -22,7 +22,8 @@ import {
   Settings,
   Users,
   Upload,
-  Trash2
+  Trash2,
+  RotateCcw
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -411,7 +412,7 @@ function DashboardView({ user, shifts }: { user: User, shifts: Shift[] }) {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
         <section className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
           <div className="flex items-center justify-between mb-8">
-            <h3 className="font-black text-xl tracking-tight">Vandaag's Rooster</h3>
+            <h3 className="font-black text-xl tracking-tight">Planning voor vandaag</h3>
             <span className="text-[10px] font-black bg-oker-50 text-oker-700 px-4 py-1.5 rounded-full uppercase tracking-widest">5 Maart 2024</span>
           </div>
           <div className="space-y-4">
@@ -563,8 +564,8 @@ function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[]
         <h3 className="text-2xl font-bold">Mijn Werkrooster</h3>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[600px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Datum</th>
@@ -793,6 +794,16 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
     if (confirm('Weet je zeker dat je deze gebruiker wilt verwijderen?')) {
       onSave(users.filter(u => u.id !== id));
       if (editingUser?.id === id) setEditingUser(null);
+    }
+  };
+
+  const handleResetPassword = (user: User) => {
+    if (confirm(`Weet je zeker dat je het wachtwoord van ${user.name} wilt resetten naar '123'?`)) {
+      const updatedUsers = users.map(u => 
+        u.id === user.id ? { ...u, password: '123' } : u
+      );
+      onSave(updatedUsers);
+      alert(`Wachtwoord voor ${user.name} is gereset naar '123'`);
     }
   };
 
@@ -1059,8 +1070,8 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
         <p className="text-oker-700">Zorg dat je Excel de volgende kolommen heeft: <span className="font-mono font-bold">Naam, Rol, Wachtwoord</span>. De rollen kunnen zijn: chauffeur, planner, admin. De ID's worden automatisch gegenereerd als ze ontbreken.</p>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-left border-collapse">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[800px]">
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Naam</th>
@@ -1087,7 +1098,14 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
                     {u.activeSessions || 0}
                   </span>
                 </td>
-                <td className="px-6 py-5 text-right">
+                <td className="px-6 py-5 text-right flex items-center justify-end gap-3">
+                  <button 
+                    onClick={() => handleResetPassword(u)}
+                    className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-lg transition-all"
+                    title="Reset wachtwoord naar 123"
+                  >
+                    <RotateCcw size={16} />
+                  </button>
                   <button 
                     onClick={() => setEditingUser(u)}
                     className="text-sm font-bold text-oker-600 hover:text-oker-700 transition-colors"
@@ -1125,15 +1143,15 @@ function Input({ label, type, placeholder, options }: { label: string, type: str
 
 function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string, subValue: string }) {
   return (
-    <div className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100 flex items-center gap-6 group hover:shadow-xl hover:shadow-oker-500/5 transition-all duration-500 relative overflow-hidden">
+    <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100 flex items-center gap-4 md:gap-6 group hover:shadow-xl hover:shadow-oker-500/5 transition-all duration-500 relative overflow-hidden">
       <div className="absolute top-0 right-0 w-32 h-32 bg-oker-50 rounded-full -mr-16 -mt-16 opacity-50 group-hover:scale-150 transition-transform duration-700" />
-      <div className="p-4 bg-oker-50 rounded-2xl relative z-10 group-hover:scale-110 transition-transform">
+      <div className="p-3 md:p-4 bg-oker-50 rounded-2xl relative z-10 group-hover:scale-110 transition-transform">
         {icon}
       </div>
       <div className="relative z-10">
-        <p className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</p>
-        <p className="text-3xl font-black text-slate-900 mt-1 tracking-tight">{value}</p>
-        <p className="text-xs text-slate-500 mt-1 font-medium">{subValue}</p>
+        <p className="text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest">{label}</p>
+        <p className="text-xl md:text-3xl font-black text-slate-900 mt-0.5 md:mt-1 tracking-tight">{value}</p>
+        <p className="text-[10px] md:text-xs text-slate-500 mt-0.5 md:mt-1 font-medium">{subValue}</p>
       </div>
     </div>
   );
