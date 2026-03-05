@@ -1,0 +1,32 @@
+@import "tailwindcss";
+
+@theme {
+  --color-oker-50: #fffbeb;
+  --color-oker-100: #fef3c7;
+  --color-oker-200: #fde68a;
+  --color-oker-300: #fcd34d;
+  --color-oker-400: #fbbf24;
+  --color-oker-500: #f59e0b;
+  --color-oker-600: #d97706;
+  --color-oker-700: #b45309;
+  --color-oker-800: #92400e;
+  --color-oker-900: #78350f;
+}
+
+@layer utilities {
+  .glass {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+  }
+  
+  .glass-oker {
+    background: rgba(251, 191, 36, 0.15);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    box-shadow: 0 8px 32px 0 rgba(251, 191, 36, 0.1);
+  }
+}

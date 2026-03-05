@@ -1,0 +1,5 @@
+[
+  { "id": "1", "name": "Jan de Vries", "role": "chauffeur", "employeeId": "CH-4492", "password": "123" },
+  { "id": "2", "name": "Sarah de Groot", "role": "planner", "employeeId": "PL-1102", "password": "123" },
+  { "id": "3", "name": "Mark Admin", "role": "admin", "employeeId": "AD-0001", "password": "123" }
+]
