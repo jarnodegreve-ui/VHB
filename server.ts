@@ -141,9 +141,10 @@ async function startServer() {
       } else {
         res.status(400).json({ error: "Invalid data format. Expected an array." });
       }
-    } catch (err) {
-      console.error("Error saving planning data:", err);
-      res.status(500).json({ error: "Failed to save data" });
+    } catch (err: any) {
+      const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      console.error("Error saving planning data:", errorMessage);
+      res.status(500).json({ error: "Failed to save data", details: errorMessage });
     }
   });
 
@@ -166,9 +167,10 @@ async function startServer() {
       } else {
         res.status(400).json({ error: "Invalid data format. Expected an array." });
       }
-    } catch (err) {
-      console.error("Error saving users data:", err);
-      res.status(500).json({ error: "Failed to save data" });
+    } catch (err: any) {
+      const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      console.error("Error saving users data:", errorMessage);
+      res.status(500).json({ error: "Failed to save data", details: errorMessage });
     }
   });
   
@@ -191,9 +193,10 @@ async function startServer() {
       } else {
         res.status(400).json({ error: "Invalid data format. Expected an array." });
       }
-    } catch (err) {
-      console.error("Error saving diversions data:", err);
-      res.status(500).json({ error: "Failed to save data" });
+    } catch (err: any) {
+      const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+      console.error("Error saving diversions data:", errorMessage);
+      res.status(500).json({ error: "Failed to save data", details: errorMessage });
     }
   });
 
