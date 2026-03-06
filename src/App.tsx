@@ -23,7 +23,11 @@ import {
   Users,
   Upload,
   Trash2,
-  RotateCcw
+  RotateCcw,
+  Menu,
+  X,
+  Map,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -36,17 +40,86 @@ function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+function ConfirmationModal({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  title, 
+  message, 
+  confirmText = "Verwijderen", 
+  cancelText = "Annuleren",
+  variant = "danger"
+}: { 
+  isOpen: boolean, 
+  onClose: () => void, 
+  onConfirm: () => void, 
+  title: string, 
+  message: string,
+  confirmText?: string,
+  cancelText?: string,
+  variant?: "danger" | "warning"
+}) {
+  return (
+    <AnimatePresence>
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <motion.div 
+            initial={{ opacity: 0, scale: 0.95, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
+            className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden"
+          >
+            <div className="p-8 border-b border-slate-100">
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center mb-4",
+                variant === 'danger' ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"
+              )}>
+                <AlertTriangle size={24} />
+              </div>
+              <h4 className="text-xl font-black">{title}</h4>
+              <p className="text-sm text-slate-500 font-medium mt-2">{message}</p>
+            </div>
+            <div className="p-8 bg-slate-50 flex gap-3">
+              <button 
+                onClick={onClose}
+                className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-400 hover:bg-white transition-all uppercase tracking-widest text-xs border border-transparent hover:border-slate-200"
+              >
+                {cancelText}
+              </button>
+              <button 
+                onClick={() => {
+                  onConfirm();
+                  onClose();
+                }}
+                className={cn(
+                  "flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-widest text-xs",
+                  variant === 'danger' ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                )}
+              >
+                {confirmText}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [shifts, setShifts] = useState<Shift[]>(MOCK_SHIFTS);
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
+  const [diversions, setDiversions] = useState<Diversion[]>(MOCK_DIVERSIONS);
   const [isLoading, setIsLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
     fetchPlanning();
     fetchUsers();
+    fetchDiversions();
   }, []);
 
   const fetchUsers = async () => {
@@ -112,6 +185,39 @@ export default function App() {
     }
   };
 
+  const fetchDiversions = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/diversions');
+      const data = await response.json();
+      if (data && Array.isArray(data)) {
+        setDiversions(data.length > 0 ? data : MOCK_DIVERSIONS);
+      }
+    } catch (error) {
+      console.error('Error fetching diversions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveDiversions = async (newDiversions: Diversion[]) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/diversions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newDiversions),
+      });
+      if (response.ok) {
+        setDiversions(newDiversions);
+      }
+    } catch (error) {
+      console.error('Error saving diversions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleLogin = (user: User) => {
     const now = new Date().toLocaleString('nl-BE');
     const updatedUsers = users.map(u => 
@@ -148,10 +254,32 @@ export default function App() {
   const isAdmin = currentUser.role === 'admin';
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans">
+    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+      {/* Sidebar Overlay */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <motion.div 
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 lg:hidden"
+          />
+        )}
+      </AnimatePresence>
+
       {/* Sidebar */}
-      <aside className="w-72 bg-white border-r border-slate-200 flex flex-col shadow-sm z-10">
-        <div className="p-8 flex flex-col items-center border-b border-slate-100">
+      <aside className={cn(
+        "fixed inset-y-0 left-0 w-72 bg-white border-r border-slate-200 flex flex-col shadow-sm z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0",
+        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+      )}>
+        <div className="p-8 flex flex-col items-center border-b border-slate-100 relative">
+          <button 
+            onClick={() => setIsSidebarOpen(false)}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 lg:hidden"
+          >
+            <X size={20} />
+          </button>
           <div className="text-center">
             <h1 className="font-black text-2xl tracking-tighter text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
             <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Van Hoorebeke en Zoon</p>
@@ -163,25 +291,25 @@ export default function App() {
             icon={<LayoutDashboard size={20} />} 
             label="Dashboard" 
             active={currentView === 'dashboard'} 
-            onClick={() => setCurrentView('dashboard')} 
+            onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
             icon={<MapPin size={20} />} 
             label="Omleidingen" 
             active={currentView === 'omleidingen'} 
-            onClick={() => setCurrentView('omleidingen')} 
+            onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
             icon={<Calendar size={20} />} 
             label="Mijn Rooster" 
             active={currentView === 'rooster'} 
-            onClick={() => setCurrentView('rooster')} 
+            onClick={() => { setCurrentView('rooster'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
             icon={<Bell size={20} />} 
             label="Updates" 
             active={currentView === 'updates'} 
-            onClick={() => setCurrentView('updates')} 
+            onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
           />
 
           {isPlanner && (
@@ -191,13 +319,19 @@ export default function App() {
                 icon={<Settings size={20} />} 
                 label="Beheer Roosters" 
                 active={currentView === 'beheer-roosters'} 
-                onClick={() => setCurrentView('beheer-roosters')} 
+                onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
                 icon={<Plus size={20} />} 
                 label="Nieuwe Update" 
                 active={currentView === 'beheer-updates'} 
-                onClick={() => setCurrentView('beheer-updates')} 
+                onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} 
+              />
+              <NavItem 
+                icon={<Map size={20} />} 
+                label="Beheer Omleidingen" 
+                active={currentView === 'beheer-omleidingen'} 
+                onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} 
               />
             </>
           )}
@@ -209,7 +343,7 @@ export default function App() {
                 icon={<Users size={20} />} 
                 label="Gebruikers" 
                 active={currentView === 'gebruikers'} 
-                onClick={() => setCurrentView('gebruikers')} 
+                onClick={() => { setCurrentView('gebruikers'); setIsSidebarOpen(false); }} 
               />
             </>
           )}
@@ -229,10 +363,18 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-8 shrink-0">
-          <h2 className="text-lg font-semibold capitalize">{currentView.replace('-', ' ')}</h2>
+        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0">
           <div className="flex items-center gap-4">
-            <div className="text-right">
+            <button 
+              onClick={() => setIsSidebarOpen(true)}
+              className="p-2 text-slate-500 hover:bg-slate-50 rounded-lg lg:hidden"
+            >
+              <Menu size={20} />
+            </button>
+            <h2 className="text-lg font-semibold capitalize truncate">{currentView.replace('-', ' ')}</h2>
+          </div>
+          <div className="flex items-center gap-2 md:gap-4">
+            <div className="text-right hidden sm:block">
               <p className="text-sm font-medium">{currentUser.name}</p>
               <p className="text-xs text-slate-500 uppercase">{currentUser.role} • {currentUser.employeeId}</p>
             </div>
@@ -243,7 +385,7 @@ export default function App() {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentView}
@@ -252,13 +394,14 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {currentView === 'dashboard' && <DashboardView user={currentUser} shifts={shifts} />}
-              {currentView === 'omleidingen' && <DiversionsView />}
+              {currentView === 'dashboard' && <DashboardView user={currentUser} shifts={shifts} diversions={diversions} />}
+              {currentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
               {currentView === 'rooster' && <ScheduleView user={currentUser} shifts={shifts} />}
               {currentView === 'updates' && <UpdatesView />}
-              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} />}
+              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} />}
               {currentView === 'beheer-updates' && <ManageUpdatesView />}
               {currentView === 'gebruikers' && <ManageUsersView users={users} onSave={saveUsers} />}
+              {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -341,7 +484,7 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
               required
             >
               <option value="">Selecteer medewerker...</option>
-              {users.map(u => (
+              {[...users].sort((a, b) => a.name.localeCompare(b.name)).map(u => (
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </select>
@@ -385,7 +528,7 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
   );
 }
 
-function DashboardView({ user, shifts }: { user: User, shifts: Shift[] }) {
+function DashboardView({ user, shifts, diversions }: { user: User, shifts: Shift[], diversions: Diversion[] }) {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -393,13 +536,13 @@ function DashboardView({ user, shifts }: { user: User, shifts: Shift[] }) {
           icon={<Clock className="text-oker-600" />} 
           label="Volgende Dienst" 
           value={shifts.find(s => s.driverId === user.id)?.startTime || '--:--'} 
-          subValue={shifts.find(s => s.driverId === user.id)?.line ? `Lijn ${shifts.find(s => s.driverId === user.id)?.line}` : 'Geen dienst'} 
+          subValue={shifts.find(s => s.driverId === user.id)?.line ? `Dienst ${shifts.find(s => s.driverId === user.id)?.line}` : 'Geen dienst'} 
         />
         <StatCard 
           icon={<AlertTriangle className="text-red-500" />} 
           label="Actieve Omleidingen" 
-          value="3" 
-          subValue="Op jouw routes" 
+          value={diversions.length.toString()} 
+          subValue="Totaal aantal" 
         />
         <StatCard 
           icon={<Bell className="text-oker-500" />} 
@@ -423,7 +566,7 @@ function DashboardView({ user, shifts }: { user: User, shifts: Shift[] }) {
                 </div>
                 <div className="flex-1">
                   <p className="font-black text-lg text-slate-800">{shift.startTime} - {shift.endTime}</p>
-                  <p className="text-sm text-slate-400 font-medium">{shift.startLocation}</p>
+                  <p className="text-sm text-slate-400 font-medium">Loopnr: {shift.loopnr}</p>
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Bus</p>
@@ -466,7 +609,7 @@ function DashboardView({ user, shifts }: { user: User, shifts: Shift[] }) {
   );
 }
 
-function DiversionsView() {
+function DiversionsView({ diversions }: { diversions: Diversion[] }) {
   const [selectedDiversion, setSelectedDiversion] = useState<Diversion | null>(null);
 
   return (
@@ -476,7 +619,7 @@ function DiversionsView() {
       </div>
       
       <div className="space-y-4">
-        {MOCK_DIVERSIONS.map(div => (
+        {diversions.map(div => (
           <div key={div.id} className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
             <div 
               onClick={() => setSelectedDiversion(selectedDiversion?.id === div.id ? null : div)}
@@ -570,9 +713,8 @@ function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[]
             <tr className="bg-slate-50 border-b border-slate-100">
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Datum</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Tijd</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Lijn</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Locatie</th>
-              {user.role !== 'chauffeur' && <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Chauffeur</th>}
+              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Dienst</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Loopnr</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Bus</th>
             </tr>
           </thead>
@@ -591,12 +733,11 @@ function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[]
                     {shift.line}
                   </span>
                 </td>
-                <td className="px-6 py-5 text-slate-600 text-sm">{shift.startLocation}</td>
-                {user.role !== 'chauffeur' && (
-                  <td className="px-6 py-5 text-slate-900 font-medium">
-                    {MOCK_USERS.find(u => u.id === shift.driverId)?.name || 'Onbekend'}
-                  </td>
-                )}
+                <td className="px-6 py-5">
+                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-bold text-sm">
+                    {shift.loopnr}
+                  </span>
+                </td>
                 <td className="px-6 py-5 font-mono text-xs text-slate-400">{shift.busNumber}</td>
               </tr>
             ))}
@@ -640,7 +781,7 @@ function UpdatesView() {
   );
 }
 
-function ManageSchedulesView({ shifts, onSave }: { shifts: Shift[], onSave: (s: Shift[]) => void }) {
+function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[] }) {
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
 
@@ -708,10 +849,11 @@ function ManageSchedulesView({ shifts, onSave }: { shifts: Shift[], onSave: (s: 
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Input label="Datum" type="date" />
-          <Input label="Chauffeur" type="select" options={MOCK_USERS.filter(u => u.role === 'chauffeur').map(u => ({ label: u.name, value: u.id }))} />
+          <Input label="Chauffeur" type="select" options={[...users].filter(u => u.role === 'chauffeur').sort((a, b) => a.name.localeCompare(b.name)).map(u => ({ label: u.name, value: u.id }))} />
           <Input label="Start Tijd" type="time" />
           <Input label="Eind Tijd" type="time" />
-          <Input label="Lijn" type="text" placeholder="Bijv. 12" />
+          <Input label="Dienst" type="text" placeholder="Bijv. 12" />
+          <Input label="Loopnr" type="text" placeholder="Bijv. L-101" />
           <Input label="Bus Nummer" type="text" placeholder="Bijv. 8421" />
         </div>
         <button className="mt-8 bg-emerald-500 text-white font-bold px-8 py-3 rounded-xl hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20">
@@ -763,6 +905,14 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '' });
+  const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
+  
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
+
+  const filteredUsers = users
+    .filter(u => roleFilter === 'all' || u.role === roleFilter)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
@@ -790,20 +940,22 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
     setEditingUser(null);
   };
 
-  const handleDeleteUser = (id: string) => {
-    if (confirm('Weet je zeker dat je deze gebruiker wilt verwijderen?')) {
-      onSave(users.filter(u => u.id !== id));
-      if (editingUser?.id === id) setEditingUser(null);
+  const handleDeleteUser = () => {
+    if (confirmDeleteId) {
+      onSave(users.filter(u => u.id !== confirmDeleteId));
+      if (editingUser?.id === confirmDeleteId) setEditingUser(null);
+      setConfirmDeleteId(null);
     }
   };
 
-  const handleResetPassword = (user: User) => {
-    if (confirm(`Weet je zeker dat je het wachtwoord van ${user.name} wilt resetten naar '123'?`)) {
+  const handleResetPassword = () => {
+    if (confirmResetUser) {
       const updatedUsers = users.map(u => 
-        u.id === user.id ? { ...u, password: '123' } : u
+        u.id === confirmResetUser.id ? { ...u, password: '123' } : u
       );
       onSave(updatedUsers);
-      alert(`Wachtwoord voor ${user.name} is gereset naar '123'`);
+      setConfirmResetUser(null);
+      alert(`Wachtwoord voor ${confirmResetUser.name} is gereset naar '123'`);
     }
   };
 
@@ -819,44 +971,68 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[firstSheetName];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        // Try to get headers first to see what we're working with
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
+          alert('Het Excel-bestand lijkt leeg te zijn of heeft geen herkenbare gegevens.');
+          return;
+        }
+
+        // Get keys from the first row to check column names
+        const firstRow = jsonData[0] as any;
+        const keys = Object.keys(firstRow);
+        
+        console.log('Excel Headers found:', keys);
 
         // Map Excel columns to User type
         const importedUsers: User[] = jsonData.map((row: any, index) => {
-          // Find name in various possible columns (case-insensitive search)
-          const keys = Object.keys(row);
-          const nameKey = keys.find(k => /^(naam|name|voornaam|achternaam|medewerker|chauffeur)/i.test(k.trim()));
-          const roleKey = keys.find(k => /^(rol|role)/i.test(k.trim()));
-          const idKey = keys.find(k => /^(id|employeeid|personeelsnummer|nummer)/i.test(k.trim()));
-          const passKey = keys.find(k => /^(wachtwoord|password|pass)/i.test(k.trim()));
-
-          const userName = nameKey ? row[nameKey] : '';
-          const role = (roleKey ? row[roleKey] : 'chauffeur').toString().toLowerCase();
-          const employeeId = idKey ? row[idKey] : '';
-          const password = passKey ? row[passKey] : '';
+          const rowKeys = Object.keys(row);
           
+          // Helper to find key by partial match
+          const findValue = (patterns: string[]) => {
+            const foundKey = rowKeys.find(k => {
+              const cleanK = k.toString().trim().toLowerCase();
+              return patterns.some(p => cleanK.includes(p));
+            });
+            return foundKey ? row[foundKey] : undefined;
+          };
+
+          const userName = findValue(['naam', 'name', 'voornaam', 'achternaam', 'medewerker', 'chauffeur', 'gebruiker', 'user']);
+          const rawRole = (findValue(['rol', 'role', 'functie', 'type']) || 'chauffeur').toString().toLowerCase();
+          const employeeId = findValue(['id', 'employee', 'personeel', 'nummer', 'code', 'nr']);
+          const password = findValue(['wachtwoord', 'password', 'pass', 'wacht', 'pw']);
+          
+          // Normalize role
+          let role: 'admin' | 'planner' | 'chauffeur' = 'chauffeur';
+          if (rawRole.includes('admin') || rawRole.includes('beheer')) role = 'admin';
+          else if (rawRole.includes('plan') || rawRole.includes('dispo')) role = 'planner';
+          else role = 'chauffeur';
+
           const generatedId = (Date.now() + index).toString();
           return {
-            id: row.id?.toString() || generatedId,
+            id: generatedId, // Always generate a fresh ID for imports to avoid conflicts
             name: userName?.toString().trim() || '',
-            role: (['admin', 'planner', 'chauffeur'].includes(role) ? role : 'chauffeur') as any,
+            role: role,
             employeeId: employeeId?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
             password: password?.toString() || '123'
           };
-        }).filter(u => u.name && u.name.length > 1); // Skip empty or too short names
+        }).filter(u => u.name && u.name.length > 1);
 
-        if (importedUsers.length > 0) {
-          // Merge with existing users, avoiding duplicates by name or employeeId
+        if (importedUsers.length === 0) {
+          const detectedHeaders = keys.join(', ');
+          alert(`Geen geldige gebruikers gevonden. \n\nGevonden kolommen: ${detectedHeaders}\n\nZorg dat er een kolom is met "Naam", "Wachtwoord" en "Rol".`);
+        } else {
+          // Merge with existing users, avoiding duplicates by name
           const existingUserNames = new Set(users.map(u => u.name.toLowerCase()));
-          const existingEmployeeIds = new Set(users.map(u => u.employeeId.toLowerCase()));
           
           const uniqueNewUsers = importedUsers.filter(u => 
-            !existingUserNames.has(u.name.toLowerCase()) && 
-            !existingEmployeeIds.has(u.employeeId.toLowerCase())
+            !existingUserNames.has(u.name.toLowerCase())
           );
 
           if (uniqueNewUsers.length === 0) {
-            alert('Geen nieuwe gebruikers gevonden om te importeren (ze bestaan al).');
+            alert('Alle gebruikers uit dit bestand bestaan al in het systeem (gecontroleerd op naam).');
           } else {
             onSave([...users, ...uniqueNewUsers]);
             alert(`${uniqueNewUsers.length} nieuwe gebruikers succesvol toegevoegd!`);
@@ -864,19 +1040,41 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
         }
       } catch (error) {
         console.error('Error parsing Excel:', error);
-        alert('Fout bij het verwerken van het Excel-bestand. Controleer de kolommen (Naam, Rol, ID, Wachtwoord).');
+        alert('Fout bij het verwerken van het Excel-bestand. Zorg dat het een geldig Excel-bestand (.xlsx of .xls) is.');
       } finally {
         setIsImporting(false);
+        if (e.target) e.target.value = '';
       }
+    };
+    reader.onerror = () => {
+      alert('Fout bij het lezen van het bestand.');
+      setIsImporting(false);
     };
     reader.readAsArrayBuffer(file);
   };
 
   return (
     <div className="max-w-4xl space-y-8">
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-bold">Gebruikersbeheer</h3>
-        <div className="flex gap-3">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-bold">Gebruikersbeheer</h3>
+          <p className="text-sm text-slate-500 font-medium">Beheer medewerkers en hun toegangsrechten.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex bg-slate-100 p-1 rounded-xl mr-2">
+            {(['all', 'chauffeur', 'planner', 'admin'] as const).map(role => (
+              <button
+                key={role}
+                onClick={() => setRoleFilter(role)}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize",
+                  roleFilter === role ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                {role === 'all' ? 'Alles' : role}
+              </button>
+            ))}
+          </div>
           <label className="bg-oker-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer hover:bg-oker-600 transition-colors shadow-lg shadow-oker-500/20">
             <Upload size={18} /> 
             {isImporting ? 'Bezig...' : 'Excel Upload'}
@@ -984,7 +1182,7 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
                   <p className="text-sm text-slate-500">Pas de gegevens van {editingUser.name} aan.</p>
                 </div>
                 <button 
-                  onClick={() => handleDeleteUser(editingUser.id)}
+                  onClick={() => setConfirmDeleteId(editingUser.id)}
                   className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
                   title="Verwijder gebruiker"
                 >
@@ -1081,7 +1279,7 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
-            {users.map(u => (
+            {filteredUsers.map(u => (
               <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
                 <td className="px-6 py-5">
                   <div className="font-bold text-slate-900">{u.name}</div>
@@ -1100,7 +1298,7 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
                 </td>
                 <td className="px-6 py-5 text-right flex items-center justify-end gap-3">
                   <button 
-                    onClick={() => handleResetPassword(u)}
+                    onClick={() => setConfirmResetUser(u)}
                     className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-lg transition-all"
                     title="Reset wachtwoord naar 123"
                   >
@@ -1118,6 +1316,320 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
           </tbody>
         </table>
       </div>
+
+      <ConfirmationModal 
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={handleDeleteUser}
+        title="Gebruiker Verwijderen"
+        message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+      />
+
+      <ConfirmationModal 
+        isOpen={!!confirmResetUser}
+        onClose={() => setConfirmResetUser(null)}
+        onConfirm={handleResetPassword}
+        title="Wachtwoord Resetten"
+        message={`Weet je zeker dat je het wachtwoord van ${confirmResetUser?.name} wilt resetten naar '123'?`}
+        confirmText="Resetten"
+        variant="warning"
+      />
+    </div>
+  );
+}
+
+function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [formData, setFormData] = useState<Partial<Diversion>>({
+    line: '',
+    title: '',
+    description: '',
+    startDate: new Date().toISOString().split('T')[0],
+    severity: 'medium'
+  });
+  const [pdfFile, setPdfFile] = useState<File | null>(null);
+
+  const handleOpenAdd = () => {
+    setEditingId(null);
+    setFormData({
+      line: '',
+      title: '',
+      description: '',
+      startDate: new Date().toISOString().split('T')[0],
+      severity: 'medium'
+    });
+    setPdfFile(null);
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (div: Diversion) => {
+    setEditingId(div.id);
+    setFormData({
+      line: div.line,
+      title: div.title,
+      description: div.description,
+      startDate: div.startDate,
+      endDate: div.endDate,
+      severity: div.severity
+    });
+    setPdfFile(null);
+    setShowModal(true);
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    let pdfUrl = '';
+    if (pdfFile) {
+      pdfUrl = await new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.readAsDataURL(pdfFile);
+      });
+    }
+
+    if (editingId) {
+      const updatedDiversions = diversions.map(d => 
+        d.id === editingId 
+          ? { 
+              ...d, 
+              ...formData, 
+              pdfUrl: pdfUrl || d.pdfUrl 
+            } as Diversion 
+          : d
+      );
+      onSave(updatedDiversions);
+    } else {
+      const diversionToAdd: Diversion = {
+        id: Date.now().toString(),
+        line: formData.line || 'Alle',
+        title: formData.title || '',
+        description: formData.description || '',
+        startDate: formData.startDate || '',
+        endDate: formData.endDate,
+        severity: formData.severity as any || 'medium',
+        pdfUrl: pdfUrl || undefined
+      };
+      onSave([...diversions, diversionToAdd]);
+    }
+
+    setShowModal(false);
+  };
+
+  const handleDelete = () => {
+    if (confirmDeleteId) {
+      onSave(diversions.filter(d => d.id !== confirmDeleteId));
+      setConfirmDeleteId(null);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-bold text-slate-900">Beheer Omleidingen</h3>
+          <p className="text-sm text-slate-500 font-medium">Voeg omleidingen toe en upload PDF-bestanden voor chauffeurs.</p>
+        </div>
+        <button 
+          onClick={handleOpenAdd}
+          className="bg-oker-500 text-white px-6 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20"
+        >
+          <Plus size={18} /> Omleiding Toevoegen
+        </button>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4">
+        {diversions.map(div => (
+          <div key={div.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between gap-4">
+            <div className="flex items-center gap-4">
+              <div className={cn(
+                "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
+                div.severity === 'high' ? "bg-red-100 text-red-600" : 
+                div.severity === 'medium' ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"
+              )}>
+                <MapPin size={24} />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h4 className="font-bold text-slate-900">{div.title}</h4>
+                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-bold uppercase">Lijn {div.line}</span>
+                </div>
+                <p className="text-xs text-slate-400 font-medium mt-0.5">{div.startDate} {div.endDate ? `t/m ${div.endDate}` : ''}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              {div.pdfUrl && (
+                <div className="p-2 text-emerald-500 bg-emerald-50 rounded-lg" title="PDF Beschikbaar">
+                  <FileText size={18} />
+                </div>
+              )}
+              <button 
+                onClick={() => handleOpenEdit(div)}
+                className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-lg transition-all"
+                title="Bewerken"
+              >
+                <Pencil size={18} />
+              </button>
+              <button 
+                onClick={() => setConfirmDeleteId(div.id)}
+                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                title="Verwijderen"
+              >
+                <Trash2 size={18} />
+              </button>
+            </div>
+          </div>
+        ))}
+        {diversions.length === 0 && (
+          <div className="text-center py-12 bg-white rounded-[32px] border border-dashed border-slate-200">
+            <p className="text-slate-400 font-medium">Geen actieve omleidingen.</p>
+          </div>
+        )}
+      </div>
+
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                <div>
+                  <h4 className="text-xl font-black">{editingId ? 'Omleiding Bewerken' : 'Nieuwe Omleiding'}</h4>
+                  <p className="text-sm text-slate-500 font-medium">Vul de details in en upload eventueel een PDF.</p>
+                </div>
+                <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl">
+                  <X size={24} />
+                </button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-8 space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Lijn(en)</label>
+                    <input 
+                      type="text" 
+                      required
+                      value={formData.line}
+                      onChange={(e) => setFormData({...formData, line: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      placeholder="bijv. 1, 2 of Alle"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ernst</label>
+                    <select 
+                      value={formData.severity}
+                      onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm bg-white"
+                    >
+                      <option value="low">Laag (Informatief)</option>
+                      <option value="medium">Medium (Vertraging)</option>
+                      <option value="high">Hoog (Blokkade)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Titel</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={formData.title}
+                    onChange={(e) => setFormData({...formData, title: e.target.value})}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    placeholder="bijv. Wegwerkzaamheden N70"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Omschrijving</label>
+                  <textarea 
+                    required
+                    rows={3}
+                    value={formData.description}
+                    onChange={(e) => setFormData({...formData, description: e.target.value})}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm resize-none"
+                    placeholder="Beschrijf de omleiding..."
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Startdatum</label>
+                    <input 
+                      type="date" 
+                      required
+                      value={formData.startDate}
+                      onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Einddatum (Optioneel)</label>
+                    <input 
+                      type="date" 
+                      value={formData.endDate || ''}
+                      onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">PDF Bestand {editingId && '(Optioneel)'}</label>
+                  <div className="relative">
+                    <input 
+                      type="file" 
+                      accept=".pdf"
+                      onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
+                      className="hidden"
+                      id="pdf-upload"
+                    />
+                    <label 
+                      htmlFor="pdf-upload"
+                      className="w-full px-4 py-4 rounded-2xl border-2 border-dashed border-slate-200 hover:border-oker-400 hover:bg-oker-50 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer group"
+                    >
+                      <Upload className="text-slate-300 group-hover:text-oker-500 transition-colors" size={24} />
+                      <span className="text-xs font-bold text-slate-400 group-hover:text-oker-600">
+                        {pdfFile ? pdfFile.name : (editingId ? 'Klik om PDF te vervangen' : 'Klik om PDF te selecteren')}
+                      </span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    type="button"
+                    onClick={() => setShowModal(false)}
+                    className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-400 hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
+                  >
+                    Annuleren
+                  </button>
+                  <button 
+                    type="submit"
+                    className="flex-1 px-4 py-4 rounded-2xl font-black bg-oker-500 text-white hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 uppercase tracking-widest text-xs"
+                  >
+                    {editingId ? 'Opslaan' : 'Toevoegen'}
+                  </button>
+                </div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <ConfirmationModal 
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={handleDelete}
+        title="Omleiding Verwijderen"
+        message="Weet je zeker dat je deze omleiding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+      />
     </div>
   );
 }

@@ -28,7 +28,7 @@ export interface Shift {
   endTime: string;
   line: string;
   busNumber: string;
-  startLocation: string;
+  loopnr: string;
   driverId: string;
 }
 
@@ -40,4 +40,4 @@ export interface Update {
   category: 'algemeen' | 'veiligheid' | 'technisch';
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers';
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen';

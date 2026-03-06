@@ -44,7 +44,7 @@ export const MOCK_SHIFTS: Shift[] = [
     endTime: '14:30',
     line: '12',
     busNumber: '8421',
-    startLocation: 'Depot Noord',
+    loopnr: 'L-101',
     driverId: '1',
   },
   {
@@ -54,7 +54,7 @@ export const MOCK_SHIFTS: Shift[] = [
     endTime: '22:30',
     line: '5',
     busNumber: '7712',
-    startLocation: 'Centraal Station',
+    loopnr: 'L-205',
     driverId: '1',
   },
   {
@@ -64,7 +64,7 @@ export const MOCK_SHIFTS: Shift[] = [
     endTime: '16:30',
     line: '8',
     busNumber: '8421',
-    startLocation: 'Depot Noord',
+    loopnr: 'L-101',
     driverId: '1',
   },
 ];

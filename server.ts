@@ -10,6 +10,7 @@ const __dirname = path.dirname(__filename);
 
 const DATA_FILE = path.join(__dirname, "planning_data.json");
 const USERS_FILE = path.join(__dirname, "users_data.json");
+const DIVERSIONS_FILE = path.join(__dirname, "diversions_data.json");
 
 // Helper to read/write data
 const getPlanningData = () => {
@@ -32,6 +33,17 @@ const getUsersData = () => {
 
 const saveUsersData = (data: any) => {
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
+};
+
+const getDiversionsData = () => {
+  if (fs.existsSync(DIVERSIONS_FILE)) {
+    return JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
+  }
+  return [];
+};
+
+const saveDiversionsData = (data: any) => {
+  fs.writeFileSync(DIVERSIONS_FILE, JSON.stringify(data, null, 2));
 };
 
 async function startServer() {
@@ -104,6 +116,30 @@ async function startServer() {
       }
     } catch (err) {
       console.error("Error saving users data:", err);
+      res.status(500).json({ error: "Failed to save data" });
+    }
+  });
+  
+  app.get("/api/diversions", (req, res) => {
+    try {
+      res.json(getDiversionsData());
+    } catch (err) {
+      console.error("Error reading diversions data:", err);
+      res.status(500).json({ error: "Failed to read data" });
+    }
+  });
+
+  app.post("/api/diversions", (req, res) => {
+    try {
+      const newData = req.body;
+      if (Array.isArray(newData)) {
+        saveDiversionsData(newData);
+        res.json({ success: true, count: newData.length });
+      } else {
+        res.status(400).json({ error: "Invalid data format. Expected an array." });
+      }
+    } catch (err) {
+      console.error("Error saving diversions data:", err);
       res.status(500).json({ error: "Failed to save data" });
     }
   });
