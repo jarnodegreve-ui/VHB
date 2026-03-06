@@ -8,6 +8,7 @@ export interface User {
   password?: string;
   lastLogin?: string;
   activeSessions?: number;
+  isActive?: boolean;
 }
 
 export interface Diversion {

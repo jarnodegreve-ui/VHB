@@ -4,6 +4,10 @@ import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createClient } from "@supabase/supabase-js";
+import dotenv from "dotenv";
+
+dotenv.config();
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,37 +16,86 @@ const DATA_FILE = path.join(__dirname, "planning_data.json");
 const USERS_FILE = path.join(__dirname, "users_data.json");
 const DIVERSIONS_FILE = path.join(__dirname, "diversions_data.json");
 
+// Supabase Client
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY;
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+
+if (!supabase) {
+  console.warn("Supabase configuration missing. Falling back to local JSON files.");
+} else {
+  console.log("Supabase client initialized.");
+}
+
 // Helper to read/write data
-const getPlanningData = () => {
+const getPlanningData = async () => {
+  if (supabase) {
+    const { data, error } = await supabase.from('planning').select('*');
+    if (error) throw error;
+    return data || [];
+  }
   if (fs.existsSync(DATA_FILE)) {
     return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
   }
   return [];
 };
 
-const savePlanningData = (data: any) => {
+const savePlanningData = async (data: any) => {
+  if (supabase) {
+    // For simplicity in this demo, we'll delete and re-insert
+    // In a real app, you'd want upserts or specific updates
+    const { error: deleteError } = await supabase.from('planning').delete().neq('id', '0');
+    if (deleteError) throw deleteError;
+    const { error: insertError } = await supabase.from('planning').insert(data);
+    if (insertError) throw insertError;
+    return;
+  }
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
-const getUsersData = () => {
+const getUsersData = async () => {
+  if (supabase) {
+    const { data, error } = await supabase.from('users').select('*');
+    if (error) throw error;
+    return data && data.length > 0 ? data : null;
+  }
   if (fs.existsSync(USERS_FILE)) {
     return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
   }
-  return null; // Return null if no custom users yet
+  return null;
 };
 
-const saveUsersData = (data: any) => {
+const saveUsersData = async (data: any) => {
+  if (supabase) {
+    const { error: deleteError } = await supabase.from('users').delete().neq('id', '0');
+    if (deleteError) throw deleteError;
+    const { error: insertError } = await supabase.from('users').insert(data);
+    if (insertError) throw insertError;
+    return;
+  }
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
 };
 
-const getDiversionsData = () => {
+const getDiversionsData = async () => {
+  if (supabase) {
+    const { data, error } = await supabase.from('diversions').select('*');
+    if (error) throw error;
+    return data || [];
+  }
   if (fs.existsSync(DIVERSIONS_FILE)) {
     return JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
   }
   return [];
 };
 
-const saveDiversionsData = (data: any) => {
+const saveDiversionsData = async (data: any) => {
+  if (supabase) {
+    const { error: deleteError } = await supabase.from('diversions').delete().neq('id', '0');
+    if (deleteError) throw deleteError;
+    const { error: insertError } = await supabase.from('diversions').insert(data);
+    if (insertError) throw insertError;
+    return;
+  }
   fs.writeFileSync(DIVERSIONS_FILE, JSON.stringify(data, null, 2));
 };
 
@@ -60,31 +113,30 @@ async function startServer() {
 
   // Health check
   app.get("/api/health", (req, res) => {
-    console.log("Health check requested");
-    res.json({ status: "ok", env: process.env.NODE_ENV, time: new Date().toISOString() });
-  });
-
-  app.get("/test", (req, res) => {
-    console.log("Test route hit");
-    res.send("Server is reachable and active!");
+    res.json({ 
+      status: "ok", 
+      supabase: !!supabase,
+      env: process.env.NODE_ENV, 
+      time: new Date().toISOString() 
+    });
   });
 
   // API Routes
-  app.get("/api/planning", (req, res) => {
+  app.get("/api/planning", async (req, res) => {
     try {
-      console.log("Fetching planning data");
-      res.json(getPlanningData());
+      const data = await getPlanningData();
+      res.json(data);
     } catch (err) {
       console.error("Error reading planning data:", err);
       res.status(500).json({ error: "Failed to read data" });
     }
   });
 
-  app.post("/api/planning", (req, res) => {
+  app.post("/api/planning", async (req, res) => {
     try {
       const newData = req.body;
       if (Array.isArray(newData)) {
-        savePlanningData(newData);
+        await savePlanningData(newData);
         res.json({ success: true, count: newData.length });
       } else {
         res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -95,9 +147,9 @@ async function startServer() {
     }
   });
 
-  app.get("/api/users", (req, res) => {
+  app.get("/api/users", async (req, res) => {
     try {
-      const users = getUsersData();
+      const users = await getUsersData();
       res.json(users);
     } catch (err) {
       console.error("Error reading users data:", err);
@@ -105,11 +157,11 @@ async function startServer() {
     }
   });
 
-  app.post("/api/users", (req, res) => {
+  app.post("/api/users", async (req, res) => {
     try {
       const newData = req.body;
       if (Array.isArray(newData)) {
-        saveUsersData(newData);
+        await saveUsersData(newData);
         res.json({ success: true, count: newData.length });
       } else {
         res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -120,20 +172,21 @@ async function startServer() {
     }
   });
   
-  app.get("/api/diversions", (req, res) => {
+  app.get("/api/diversions", async (req, res) => {
     try {
-      res.json(getDiversionsData());
+      const data = await getDiversionsData();
+      res.json(data);
     } catch (err) {
       console.error("Error reading diversions data:", err);
       res.status(500).json({ error: "Failed to read data" });
     }
   });
 
-  app.post("/api/diversions", (req, res) => {
+  app.post("/api/diversions", async (req, res) => {
     try {
       const newData = req.body;
       if (Array.isArray(newData)) {
-        saveDiversionsData(newData);
+        await saveDiversionsData(newData);
         res.json({ success: true, count: newData.length });
       } else {
         res.status(400).json({ error: "Invalid data format. Expected an array." });

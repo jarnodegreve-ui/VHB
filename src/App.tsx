@@ -447,6 +447,10 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
     e.preventDefault();
     const user = users.find(u => u.id === selectedUser);
     if (user) {
+      if (user.isActive === false) {
+        setError('Dit account is inactief');
+        return;
+      }
       if (user.password === password || (!user.password && password === '123')) {
         onLogin(user);
       } else {
@@ -484,7 +488,7 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
               required
             >
               <option value="">Selecteer medewerker...</option>
-              {[...users].sort((a, b) => a.name.localeCompare(b.name)).map(u => (
+              {[...users].filter(u => u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)).map(u => (
                 <option key={u.id} value={u.id}>{u.name}</option>
               ))}
             </select>
@@ -849,7 +853,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
         </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Input label="Datum" type="date" />
-          <Input label="Chauffeur" type="select" options={[...users].filter(u => u.role === 'chauffeur').sort((a, b) => a.name.localeCompare(b.name)).map(u => ({ label: u.name, value: u.id }))} />
+          <Input label="Chauffeur" type="select" options={[...users].filter(u => u.role === 'chauffeur' && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)).map(u => ({ label: u.name, value: u.id }))} />
           <Input label="Start Tijd" type="time" />
           <Input label="Eind Tijd" type="time" />
           <Input label="Dienst" type="text" placeholder="Bijv. 12" />
@@ -923,7 +927,8 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
       name: newUser.name,
       role: newUser.role as any,
       employeeId: newUser.employeeId || `VHB-${Math.floor(1000 + Math.random() * 9000)}`,
-      password: newUser.password || '123'
+      password: newUser.password || '123',
+      isActive: true
     };
 
     onSave([...users, userToAdd]);
@@ -1016,7 +1021,8 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
             name: userName?.toString().trim() || '',
             role: role,
             employeeId: employeeId?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
-            password: password?.toString() || '123'
+            password: password?.toString() || '123',
+            isActive: true
           };
         }).filter(u => u.name && u.name.length > 1);
 
@@ -1232,6 +1238,26 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
                   />
                 </div>
 
+                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                  <div>
+                    <p className="text-sm font-bold text-slate-700">Account Actief</p>
+                    <p className="text-[10px] text-slate-400 font-medium">Inactieve gebruikers kunnen niet inloggen.</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setEditingUser({...editingUser, isActive: editingUser.isActive === false ? true : false})}
+                    className={cn(
+                      "w-12 h-6 rounded-full transition-all relative",
+                      editingUser.isActive !== false ? "bg-emerald-500" : "bg-slate-300"
+                    )}
+                  >
+                    <div className={cn(
+                      "absolute top-1 w-4 h-4 bg-white rounded-full transition-all",
+                      editingUser.isActive !== false ? "left-7" : "left-1"
+                    )} />
+                  </button>
+                </div>
+
                 <div className="pt-2 grid grid-cols-2 gap-4">
                   <div className="p-3 bg-slate-50 rounded-xl">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Laatst Ingelogd</p>
@@ -1273,6 +1299,7 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
           <thead>
             <tr className="bg-slate-50 border-b border-slate-100">
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Naam</th>
+              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Laatst Ingelogd</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Sessies</th>
               <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Acties</th>
@@ -1284,6 +1311,14 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
                 <td className="px-6 py-5">
                   <div className="font-bold text-slate-900">{u.name}</div>
                   <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{u.role}</div>
+                </td>
+                <td className="px-6 py-5">
+                  <span className={cn(
+                    "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
+                    u.isActive !== false ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
+                  )}>
+                    {u.isActive !== false ? 'Actief' : 'Inactief'}
+                  </span>
                 </td>
                 <td className="px-6 py-5 text-sm text-slate-500">
                   {u.lastLogin ? u.lastLogin : <span className="text-slate-300 italic">Nooit</span>}
