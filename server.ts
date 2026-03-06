@@ -30,9 +30,17 @@ if (!supabase) {
 // Helper to read/write data
 const getPlanningData = async () => {
   if (supabase) {
-    const { data, error } = await supabase.from('planning').select('*');
-    if (error) throw error;
-    return data || [];
+    try {
+      const { data, error } = await supabase.from('planning').select('*');
+      if (error) {
+        console.error("Supabase error fetching planning:", error);
+        return [];
+      }
+      return data || [];
+    } catch (e) {
+      console.error("Unexpected error fetching planning:", e);
+      return [];
+    }
   }
   if (fs.existsSync(DATA_FILE)) {
     return JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
@@ -55,9 +63,17 @@ const savePlanningData = async (data: any) => {
 
 const getUsersData = async () => {
   if (supabase) {
-    const { data, error } = await supabase.from('users').select('*');
-    if (error) throw error;
-    return data && data.length > 0 ? data : null;
+    try {
+      const { data, error } = await supabase.from('users').select('*');
+      if (error) {
+        console.error("Supabase error fetching users:", error);
+        return null;
+      }
+      return data && data.length > 0 ? data : null;
+    } catch (e) {
+      console.error("Unexpected error fetching users:", e);
+      return null;
+    }
   }
   if (fs.existsSync(USERS_FILE)) {
     return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
@@ -99,130 +115,128 @@ const saveDiversionsData = async (data: any) => {
   fs.writeFileSync(DIVERSIONS_FILE, JSON.stringify(data, null, 2));
 };
 
-async function startServer() {
-  const app = express();
-  const PORT = 3000;
+const app = express();
+const PORT = 3000;
 
-  app.use(cors());
-  app.use(express.json({ limit: '10mb' }));
+app.use(cors());
+app.use(express.json({ limit: '10mb' }));
 
-  app.use((req, res, next) => {
-    console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
-    next();
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  next();
+});
+
+// Health check
+app.get("/api/health", (req, res) => {
+  res.json({ 
+    status: "ok", 
+    supabase: !!supabase,
+    env: process.env.NODE_ENV, 
+    time: new Date().toISOString() 
   });
+});
 
-  // Health check
-  app.get("/api/health", (req, res) => {
-    res.json({ 
-      status: "ok", 
-      supabase: !!supabase,
-      env: process.env.NODE_ENV, 
-      time: new Date().toISOString() 
+// API Routes
+app.get("/api/planning", async (req, res) => {
+  try {
+    const data = await getPlanningData();
+    res.json(data);
+  } catch (err) {
+    console.error("Error reading planning data:", err);
+    res.status(500).json({ error: "Failed to read data" });
+  }
+});
+
+app.post("/api/planning", async (req, res) => {
+  try {
+    const newData = req.body;
+    if (Array.isArray(newData)) {
+      await savePlanningData(newData);
+      res.json({ success: true, count: newData.length });
+    } else {
+      res.status(400).json({ error: "Invalid data format. Expected an array." });
+    }
+  } catch (err: any) {
+    const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+    console.error("Error saving planning data:", errorMessage);
+    res.status(500).json({ error: "Failed to save data", details: errorMessage });
+  }
+});
+
+app.get("/api/users", async (req, res) => {
+  try {
+    const users = await getUsersData();
+    res.json(users);
+  } catch (err) {
+    console.error("Error reading users data:", err);
+    res.status(500).json({ error: "Failed to read data" });
+  }
+});
+
+app.post("/api/users", async (req, res) => {
+  try {
+    const newData = req.body;
+    if (Array.isArray(newData)) {
+      await saveUsersData(newData);
+      res.json({ success: true, count: newData.length });
+    } else {
+      res.status(400).json({ error: "Invalid data format. Expected an array." });
+    }
+  } catch (err: any) {
+    const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+    console.error("Error saving users data:", errorMessage);
+    res.status(500).json({ error: "Failed to save data", details: errorMessage });
+  }
+});
+
+app.get("/api/diversions", async (req, res) => {
+  try {
+    const data = await getDiversionsData();
+    res.json(data);
+  } catch (err) {
+    console.error("Error reading diversions data:", err);
+    res.status(500).json({ error: "Failed to read data" });
+  }
+});
+
+app.post("/api/diversions", async (req, res) => {
+  try {
+    const newData = req.body;
+    if (Array.isArray(newData)) {
+      await saveDiversionsData(newData);
+      res.json({ success: true, count: newData.length });
+    } else {
+      res.status(400).json({ error: "Invalid data format. Expected an array." });
+    }
+  } catch (err: any) {
+    const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
+    console.error("Error saving diversions data:", errorMessage);
+    res.status(500).json({ error: "Failed to save data", details: errorMessage });
+  }
+});
+
+app.get("/api/test", (req, res) => {
+  res.send("VHB Portaal API is active");
+});
+
+// Vite middleware for development
+if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
+  const startVite = async () => {
+    console.log("Starting with Vite middleware...");
+    const vite = await createViteServer({
+      server: { middlewareMode: true },
+      appType: "spa",
+      optimizeDeps: {
+        include: ['react', 'react-dom']
+      }
     });
-  });
-
-  // API Routes
-  app.get("/api/planning", async (req, res) => {
-    try {
-      const data = await getPlanningData();
-      res.json(data);
-    } catch (err) {
-      console.error("Error reading planning data:", err);
-      res.status(500).json({ error: "Failed to read data" });
-    }
-  });
-
-  app.post("/api/planning", async (req, res) => {
-    try {
-      const newData = req.body;
-      if (Array.isArray(newData)) {
-        await savePlanningData(newData);
-        res.json({ success: true, count: newData.length });
-      } else {
-        res.status(400).json({ error: "Invalid data format. Expected an array." });
-      }
-    } catch (err: any) {
-      const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-      console.error("Error saving planning data:", errorMessage);
-      res.status(500).json({ error: "Failed to save data", details: errorMessage });
-    }
-  });
-
-  app.get("/api/users", async (req, res) => {
-    try {
-      const users = await getUsersData();
-      res.json(users);
-    } catch (err) {
-      console.error("Error reading users data:", err);
-      res.status(500).json({ error: "Failed to read data" });
-    }
-  });
-
-  app.post("/api/users", async (req, res) => {
-    try {
-      const newData = req.body;
-      if (Array.isArray(newData)) {
-        await saveUsersData(newData);
-        res.json({ success: true, count: newData.length });
-      } else {
-        res.status(400).json({ error: "Invalid data format. Expected an array." });
-      }
-    } catch (err: any) {
-      const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-      console.error("Error saving users data:", errorMessage);
-      res.status(500).json({ error: "Failed to save data", details: errorMessage });
-    }
-  });
-  
-  app.get("/api/diversions", async (req, res) => {
-    try {
-      const data = await getDiversionsData();
-      res.json(data);
-    } catch (err) {
-      console.error("Error reading diversions data:", err);
-      res.status(500).json({ error: "Failed to read data" });
-    }
-  });
-
-  app.post("/api/diversions", async (req, res) => {
-    try {
-      const newData = req.body;
-      if (Array.isArray(newData)) {
-        await saveDiversionsData(newData);
-        res.json({ success: true, count: newData.length });
-      } else {
-        res.status(400).json({ error: "Invalid data format. Expected an array." });
-      }
-    } catch (err: any) {
-      const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
-      console.error("Error saving diversions data:", errorMessage);
-      res.status(500).json({ error: "Failed to save data", details: errorMessage });
-    }
-  });
-
-  app.get("/", (req, res, next) => {
-    console.log("Root route hit");
-    // If it's a browser request, let Vite handle it
-    if (req.headers.accept?.includes("text/html")) {
-      return next();
-    }
-    res.send("VHB Portaal API is active");
-  });
-
-  // Use Vite middleware for everything else (SPA fallback, static assets, etc.)
-  console.log("Starting with Vite middleware...");
-  const vite = await createViteServer({
-    server: { middlewareMode: true },
-    appType: "spa",
-    optimizeDeps: {
-      include: ['react', 'react-dom']
-    }
-  });
-  app.use(vite.middlewares);
-
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+    app.use(vite.middlewares);
+    
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  };
+  startVite();
 }
 
-startServer();
+export default app;
