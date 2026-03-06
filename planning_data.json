@@ -1,0 +1,32 @@
+[
+  {
+    "id": "101",
+    "date": "2024-03-05",
+    "startTime": "06:00",
+    "endTime": "14:30",
+    "line": "12",
+    "busNumber": "8421",
+    "loopnr": "L-101",
+    "driverId": "1"
+  },
+  {
+    "id": "102",
+    "date": "2024-03-06",
+    "startTime": "14:00",
+    "endTime": "22:30",
+    "line": "5",
+    "busNumber": "7712",
+    "loopnr": "L-205",
+    "driverId": "1"
+  },
+  {
+    "id": "103",
+    "date": "2024-03-07",
+    "startTime": "08:00",
+    "endTime": "16:30",
+    "line": "8",
+    "busNumber": "8421",
+    "loopnr": "L-101",
+    "driverId": "1"
+  }
+]

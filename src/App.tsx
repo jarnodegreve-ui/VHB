@@ -804,8 +804,41 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
     }
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    if (!confirm('Weet je zeker dat je de lokale gegevens wilt synchroniseren naar de database? Dit overschrijft bestaande gegevens in de database met dezelfde ID.')) return;
+    
+    try {
+      setIsSyncing(true);
+      const response = await fetch('/api/admin/sync', { method: 'POST' });
+      const data = await response.json();
+      if (data.success) {
+        alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
+      } else {
+        alert('Synchronisatie mislukt: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert('Er is een fout opgetreden bij het synchroniseren.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl space-y-8">
+      <div className="flex justify-end">
+        <button 
+          onClick={handleSync}
+          disabled={isSyncing}
+          className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+          title="Synchroniseer lokale JSON data naar Supabase"
+        >
+          <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
+          {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+        </button>
+      </div>
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-bold flex items-center gap-2">
@@ -1059,6 +1092,28 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
     reader.readAsArrayBuffer(file);
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    if (!confirm('Weet je zeker dat je de lokale gegevens wilt synchroniseren naar de database? Dit overschrijft bestaande gegevens in de database met dezelfde ID.')) return;
+    
+    try {
+      setIsSyncing(true);
+      const response = await fetch('/api/admin/sync', { method: 'POST' });
+      const data = await response.json();
+      if (data.success) {
+        alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
+      } else {
+        alert('Synchronisatie mislukt: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert('Er is een fout opgetreden bij het synchroniseren.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="max-w-4xl space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -1067,6 +1122,15 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
           <p className="text-sm text-slate-500 font-medium">Beheer medewerkers en hun toegangsrechten.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+            title="Synchroniseer lokale JSON data naar Supabase"
+          >
+            <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
+            {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+          </button>
           <div className="flex bg-slate-100 p-1 rounded-xl mr-2">
             {(['all', 'chauffeur', 'planner', 'admin'] as const).map(role => (
               <button
@@ -1377,6 +1441,28 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSync = async () => {
+    if (!confirm('Weet je zeker dat je de lokale gegevens wilt synchroniseren naar de database? Dit overschrijft bestaande gegevens in de database met dezelfde ID.')) return;
+    
+    try {
+      setIsSyncing(true);
+      const response = await fetch('/api/admin/sync', { method: 'POST' });
+      const data = await response.json();
+      if (data.success) {
+        alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
+      } else {
+        alert('Synchronisatie mislukt: ' + data.error);
+      }
+    } catch (error) {
+      console.error('Sync error:', error);
+      alert('Er is een fout opgetreden bij het synchroniseren.');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const [formData, setFormData] = useState<Partial<Diversion>>({
     line: '',
     title: '',
@@ -1462,6 +1548,17 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
 
   return (
     <div className="max-w-4xl space-y-8">
+      <div className="flex justify-end">
+        <button 
+          onClick={handleSync}
+          disabled={isSyncing}
+          className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+          title="Synchroniseer lokale JSON data naar Supabase"
+        >
+          <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
+          {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+        </button>
+      </div>
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h3 className="text-2xl font-bold text-slate-900">Beheer Omleidingen</h3>

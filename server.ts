@@ -38,12 +38,11 @@ const getPlanningData = async () => {
       const { data, error } = await supabase.from('planning').select('*');
       if (error) {
         console.error("Supabase error fetching planning:", error);
-        return [];
+      } else if (data && data.length > 0) {
+        return data;
       }
-      return data || [];
     } catch (e) {
       console.error("Unexpected error fetching planning:", e);
-      return [];
     }
   }
   if (fs.existsSync(DATA_FILE)) {
@@ -71,12 +70,11 @@ const getUsersData = async () => {
       const { data, error } = await supabase.from('users').select('*');
       if (error) {
         console.error("Supabase error fetching users:", error);
-        return null;
+      } else if (data && data.length > 0) {
+        return data;
       }
-      return data && data.length > 0 ? data : null;
     } catch (e) {
       console.error("Unexpected error fetching users:", e);
-      return null;
     }
   }
   if (fs.existsSync(USERS_FILE)) {
@@ -98,9 +96,16 @@ const saveUsersData = async (data: any) => {
 
 const getDiversionsData = async () => {
   if (supabase) {
-    const { data, error } = await supabase.from('diversions').select('*');
-    if (error) throw error;
-    return data || [];
+    try {
+      const { data, error } = await supabase.from('diversions').select('*');
+      if (error) {
+        console.error("Supabase error fetching diversions:", error);
+      } else if (data && data.length > 0) {
+        return data;
+      }
+    } catch (e) {
+      console.error("Unexpected error fetching diversions:", e);
+    }
   }
   if (fs.existsSync(DIVERSIONS_FILE)) {
     return JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
@@ -221,6 +226,48 @@ app.post("/api/diversions", async (req, res) => {
 
 app.get("/api/test", (req, res) => {
   res.send("VHB Portaal API is active");
+});
+
+// Admin endpoint to sync local JSON to Supabase
+app.post("/api/admin/sync", async (req, res) => {
+  if (!supabase) {
+    return res.status(400).json({ error: "Supabase not configured. Cannot sync." });
+  }
+
+  try {
+    const results: any = {};
+
+    // Sync Planning
+    if (fs.existsSync(DATA_FILE)) {
+      const localPlanning = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+      if (localPlanning.length > 0) {
+        const { error } = await supabase.from('planning').upsert(localPlanning);
+        results.planning = error ? `Error: ${error.message}` : `Synced ${localPlanning.length} items`;
+      }
+    }
+
+    // Sync Users
+    if (fs.existsSync(USERS_FILE)) {
+      const localUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
+      if (localUsers.length > 0) {
+        const { error } = await supabase.from('users').upsert(localUsers);
+        results.users = error ? `Error: ${error.message}` : `Synced ${localUsers.length} items`;
+      }
+    }
+
+    // Sync Diversions
+    if (fs.existsSync(DIVERSIONS_FILE)) {
+      const localDiversions = JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
+      if (localDiversions.length > 0) {
+        const { error } = await supabase.from('diversions').upsert(localDiversions);
+        results.diversions = error ? `Error: ${error.message}` : `Synced ${localDiversions.length} items`;
+      }
+    }
+
+    res.json({ success: true, results });
+  } catch (err: any) {
+    res.status(500).json({ error: "Sync failed", details: err.message });
+  }
 });
 
 // Vite middleware for development
