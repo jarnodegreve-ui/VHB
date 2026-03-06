@@ -1,6 +1,5 @@
 import express from "express";
 import cors from "cors";
-import { createServer as createViteServer } from "vite";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -9,12 +8,17 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
+console.log("Server starting in environment:", process.env.NODE_ENV);
+console.log("Supabase URL present:", !!process.env.SUPABASE_URL);
+console.log("Supabase Key present:", !!process.env.SUPABASE_ANON_KEY);
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const DATA_FILE = path.join(__dirname, "planning_data.json");
-const USERS_FILE = path.join(__dirname, "users_data.json");
-const DIVERSIONS_FILE = path.join(__dirname, "diversions_data.json");
+// Use /tmp for local files on Vercel if needed, but for reading we use process.cwd()
+const DATA_FILE = path.join(process.cwd(), "planning_data.json");
+const USERS_FILE = path.join(process.cwd(), "users_data.json");
+const DIVERSIONS_FILE = path.join(process.cwd(), "diversions_data.json");
 
 // Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -222,6 +226,7 @@ app.get("/api/test", (req, res) => {
 // Vite middleware for development
 if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
   const startVite = async () => {
+    const { createServer: createViteServer } = await import("vite");
     console.log("Starting with Vite middleware...");
     const vite = await createViteServer({
       server: { middlewareMode: true },
