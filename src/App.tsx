@@ -27,14 +27,16 @@ import {
   Menu,
   X,
   Map,
-  Pencil
+  Pencil,
+  Search,
+  Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
-import { View, User, Shift, Update, Diversion } from './types';
-import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS } from './constants';
+import { View, User, Shift, Update, Diversion, Service } from './types';
+import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -113,6 +115,7 @@ export default function App() {
   const [shifts, setShifts] = useState<Shift[]>(MOCK_SHIFTS);
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [diversions, setDiversions] = useState<Diversion[]>(MOCK_DIVERSIONS);
+  const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -120,7 +123,41 @@ export default function App() {
     fetchPlanning();
     fetchUsers();
     fetchDiversions();
+    fetchServices();
   }, []);
+
+  const fetchServices = async () => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/services');
+      const data = await response.json();
+      if (data && Array.isArray(data)) {
+        setServices(data.length > 0 ? data : MOCK_SERVICES);
+      }
+    } catch (error) {
+      console.error('Error fetching services:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const saveServices = async (newServices: Service[]) => {
+    try {
+      setIsLoading(true);
+      const response = await fetch('/api/services', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newServices),
+      });
+      if (response.ok) {
+        setServices(newServices);
+      }
+    } catch (error) {
+      console.error('Error saving services:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const fetchUsers = async () => {
     try {
@@ -306,6 +343,18 @@ export default function App() {
             onClick={() => { setCurrentView('rooster'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
+            icon={<Bus size={20} />} 
+            label="Dienstoverzicht" 
+            active={currentView === 'dienstoverzicht'} 
+            onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem 
+            icon={<Phone size={20} />} 
+            label="Contactlijst" 
+            active={currentView === 'contacten'} 
+            onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem 
             icon={<Bell size={20} />} 
             label="Updates" 
             active={currentView === 'updates'} 
@@ -314,7 +363,7 @@ export default function App() {
 
           {isPlanner && (
             <>
-              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Planning</div>
+              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Beheer</div>
               <NavItem 
                 icon={<Settings size={20} />} 
                 label="Beheer Roosters" 
@@ -332,6 +381,18 @@ export default function App() {
                 label="Beheer Omleidingen" 
                 active={currentView === 'beheer-omleidingen'} 
                 onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} 
+              />
+              <NavItem 
+                icon={<Bus size={20} />} 
+                label="Beheer Dienstoverzicht" 
+                active={currentView === 'beheer-dienstoverzicht'} 
+                onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} 
+              />
+              <NavItem 
+                icon={<Phone size={20} />} 
+                label="Beheer Contactlijst" 
+                active={currentView === 'beheer-contactlijst'} 
+                onClick={() => { setCurrentView('beheer-contactlijst'); setIsSidebarOpen(false); }} 
               />
             </>
           )}
@@ -361,31 +422,36 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden">
+      <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
-        <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0">
-          <div className="flex items-center gap-4">
+        <header className="h-16 md:h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
+          <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-500 hover:bg-slate-50 rounded-lg lg:hidden"
+              className="p-2 text-slate-500 hover:bg-slate-50 rounded-xl lg:hidden transition-colors"
             >
-              <Menu size={20} />
+              <Menu size={24} />
             </button>
-            <h2 className="text-lg font-semibold capitalize truncate">{currentView.replace('-', ' ')}</h2>
+            <div className="flex flex-col">
+              <h2 className="text-lg md:text-xl font-black capitalize truncate tracking-tight">
+                {currentView.replace('-', ' ')}
+              </h2>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest lg:hidden">VHB Portaal</p>
+            </div>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             <div className="text-right hidden sm:block">
-              <p className="text-sm font-medium">{currentUser.name}</p>
-              <p className="text-xs text-slate-500 uppercase">{currentUser.role} • {currentUser.employeeId}</p>
+              <p className="text-sm font-black text-slate-800">{currentUser.name}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.role} • {currentUser.employeeId}</p>
             </div>
-            <div className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-600">
+            <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-600 shadow-inner border border-white">
               <UserIcon size={20} />
             </div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8">
+        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 lg:pb-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentView}
@@ -397,16 +463,80 @@ export default function App() {
               {currentView === 'dashboard' && <DashboardView user={currentUser} shifts={shifts} diversions={diversions} />}
               {currentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
               {currentView === 'rooster' && <ScheduleView user={currentUser} shifts={shifts} />}
+              {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {currentView === 'updates' && <UpdatesView />}
+              {currentView === 'contacten' && <ContactsView users={users} />}
               {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} />}
               {currentView === 'beheer-updates' && <ManageUpdatesView />}
               {currentView === 'gebruikers' && <ManageUsersView users={users} onSave={saveUsers} />}
               {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
+              {currentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
+              {currentView === 'beheer-contactlijst' && <ManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" />}
             </motion.div>
           </AnimatePresence>
         </div>
+
+        {/* Mobile Bottom Navigation */}
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 py-3 flex justify-between items-center z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+          <MobileNavItem 
+            icon={<LayoutDashboard size={20} />} 
+            active={currentView === 'dashboard'} 
+            onClick={() => setCurrentView('dashboard')} 
+          />
+          <MobileNavItem 
+            icon={<MapPin size={20} />} 
+            active={currentView === 'omleidingen'} 
+            onClick={() => setCurrentView('omleidingen')} 
+          />
+          <MobileNavItem 
+            icon={<Calendar size={20} />} 
+            active={currentView === 'rooster'} 
+            onClick={() => setCurrentView('rooster')} 
+          />
+          <MobileNavItem 
+            icon={<Bus size={20} />} 
+            active={currentView === 'dienstoverzicht'} 
+            onClick={() => setCurrentView('dienstoverzicht')} 
+          />
+          <MobileNavItem 
+            icon={<Phone size={20} />} 
+            active={currentView === 'contacten'} 
+            onClick={() => setCurrentView('contacten')} 
+          />
+          <MobileNavItem 
+            icon={<Bell size={20} />} 
+            active={currentView === 'updates'} 
+            onClick={() => setCurrentView('updates')} 
+          />
+          <button 
+            onClick={() => setIsSidebarOpen(true)}
+            className="p-3 text-slate-400 hover:text-oker-500 transition-colors"
+          >
+            <Menu size={20} />
+          </button>
+        </div>
       </main>
     </div>
+  );
+}
+
+function MobileNavItem({ icon, active, onClick }: { icon: React.ReactNode, active: boolean, onClick: () => void }) {
+  return (
+    <button 
+      onClick={onClick}
+      className={cn(
+        "p-3 rounded-2xl transition-all duration-300 relative",
+        active ? "text-oker-500 bg-oker-50 shadow-inner" : "text-slate-400"
+      )}
+    >
+      {active && (
+        <motion.div 
+          layoutId="activeTab"
+          className="absolute inset-0 bg-oker-500/10 rounded-2xl -z-10"
+        />
+      )}
+      {icon}
+    </button>
   );
 }
 
@@ -532,6 +662,177 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
   );
 }
 
+function ContactsView({ users }: { users: User[] }) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredUsers = users.filter(u => 
+    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (u.phone && u.phone.includes(searchQuery))
+  ).sort((a, b) => a.name.localeCompare(b.name));
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-black tracking-tight">Contactlijst</h3>
+          <p className="text-sm text-slate-500 font-medium">Contactgegevens van alle medewerkers.</p>
+        </div>
+        <div className="relative w-full md:w-72 group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Zoek op naam of nummer..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        {filteredUsers.map(u => (
+          <div key={u.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-black text-lg">
+                {u.name.charAt(0)}
+              </div>
+              <div>
+                <h4 className="font-black text-slate-800 tracking-tight">{u.name}</h4>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{u.role}</p>
+              </div>
+            </div>
+            {u.phone ? (
+              <a 
+                href={`tel:${u.phone.replace(/\s/g, '')}`}
+                className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all active:scale-90"
+                title={`Bel ${u.name}`}
+              >
+                <Phone size={18} />
+              </a>
+            ) : (
+              <div className="text-[10px] text-slate-300 font-bold italic">Geen nummer</div>
+            )}
+          </div>
+        ))}
+        {filteredUsers.length === 0 && (
+          <div className="col-span-full text-center py-12 bg-white rounded-[32px] border border-dashed border-slate-200">
+            <p className="text-slate-400 font-medium">Geen contacten gevonden.</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ServicesView({ services }: { services: Service[] }) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredServices = services.filter(s => 
+    s.serviceNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  ).sort((a, b) => a.serviceNumber.localeCompare(b.serviceNumber));
+
+  const downloadCSV = () => {
+    const headers = ['Dienstnummer', 'Starttijd', 'Eindtijd'];
+    const rows = filteredServices.map(s => [
+      `"${s.serviceNumber}"`, 
+      `"${s.startTime}"`, 
+      `"${s.endTime}"`
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  return (
+    <div className="max-w-4xl space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-black tracking-tight">Dienstoverzicht</h3>
+          <p className="text-sm text-slate-500 font-medium">Overzicht van alle diensten en bijbehorende uren.</p>
+        </div>
+        <div className="flex items-center gap-3 w-full md:w-auto">
+          <button
+            onClick={downloadCSV}
+            className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+            title="Download als CSV"
+          >
+            <Download size={18} className="text-oker-500" />
+            <span className="hidden sm:inline">Download CSV</span>
+          </button>
+          <div className="relative flex-1 md:w-72 group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Zoek op dienstnummer..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50">
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienstnummer</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Starttijd</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Eindtijd</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredServices.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-5">
+                    <span className="font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-2 text-slate-600 font-bold">
+                      <Clock size={14} className="text-oker-500" />
+                      {s.startTime}
+                    </div>
+                  </td>
+                  <td className="px-8 py-5">
+                    <div className="flex items-center gap-2 text-slate-600 font-bold">
+                      <Clock size={14} className="text-oker-500" />
+                      {s.endTime}
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {filteredServices.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="px-8 py-12 text-center text-slate-400 font-medium">
+                    Geen diensten gevonden voor "{searchQuery}"
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function DashboardView({ user, shifts, diversions }: { user: User, shifts: Shift[], diversions: Diversion[] }) {
   return (
     <div className="space-y-8">
@@ -615,39 +916,69 @@ function DashboardView({ user, shifts, diversions }: { user: User, shifts: Shift
 
 function DiversionsView({ diversions }: { diversions: Diversion[] }) {
   const [selectedDiversion, setSelectedDiversion] = useState<Diversion | null>(null);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const filteredDiversions = diversions.filter(div => 
+    div.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    div.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    div.line.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-bold">Actuele Omleidingen</h3>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h3 className="text-2xl font-black tracking-tight">Actuele Omleidingen</h3>
+        <div className="relative w-full md:w-72 group">
+          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+            <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+          </div>
+          <input
+            type="text"
+            placeholder="Zoek op titel, lijn of omschrijving..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
+          />
+          {searchQuery && (
+            <button 
+              onClick={() => setSearchQuery('')}
+              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-300 hover:text-slate-500"
+            >
+              <X size={16} />
+            </button>
+          )}
+        </div>
       </div>
       
       <div className="space-y-4">
-        {diversions.map(div => (
-          <div key={div.id} className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+        {filteredDiversions.length > 0 ? (
+          filteredDiversions.map(div => (
+            <div key={div.id} className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden group transition-all duration-300 hover:shadow-md">
             <div 
               onClick={() => setSelectedDiversion(selectedDiversion?.id === div.id ? null : div)}
-              className="p-6 cursor-pointer hover:bg-slate-50 transition-colors flex items-start justify-between gap-4"
+              className="p-6 md:p-8 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-start justify-between gap-4"
             >
-              <div className="flex gap-4">
+              <div className="flex gap-4 md:gap-6">
                 <div className={cn(
-                  "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                  div.severity === 'high' ? "bg-red-100 text-red-600" : 
-                  div.severity === 'medium' ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"
+                  "w-12 h-12 md:w-16 md:h-16 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110",
+                  div.severity === 'high' ? "bg-red-50 text-red-600 border border-red-100" : 
+                  div.severity === 'medium' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-blue-50 text-blue-600 border border-blue-100"
                 )}>
-                  <MapPin size={24} />
+                  <MapPin size={24} className="md:size-8" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-3">
-                    <h4 className="font-bold text-lg">{div.title}</h4>
-                    <span className="px-2 py-0.5 bg-slate-100 text-slate-600 rounded text-[10px] font-bold uppercase">{div.line}</span>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h4 className="font-black text-lg md:text-xl text-slate-800 tracking-tight">{div.title}</h4>
+                    <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">{div.line}</span>
                   </div>
-                  <p className="text-slate-500 text-sm mt-1">Klik voor omschrijving en PDF</p>
+                  <p className="text-slate-400 text-xs md:text-sm font-bold uppercase tracking-widest">
+                    {selectedDiversion?.id === div.id ? 'Tik om te sluiten' : 'Tik voor meer info'}
+                  </p>
                 </div>
               </div>
-              <motion.div
+              <motion.div 
                 animate={{ rotate: selectedDiversion?.id === div.id ? 90 : 0 }}
-                className="p-2 text-slate-300"
+                className="p-2 text-slate-300 mt-1"
               >
                 <ChevronRight size={24} />
               </motion.div>
@@ -659,47 +990,75 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden bg-slate-50 border-t border-slate-100"
+                  className="overflow-hidden bg-slate-50/50 border-t border-slate-100"
                 >
-                  <div className="p-6 space-y-4">
-                    <p className="text-slate-700 leading-relaxed">{div.description}</p>
-                    <div className="flex items-center gap-4 text-xs text-slate-400 font-medium">
-                      <span className="flex items-center gap-1"><Calendar size={14} /> Start: {div.startDate}</span>
-                      {div.endDate && <span className="flex items-center gap-1"><Calendar size={14} /> Eind: {div.endDate}</span>}
+                  <div className="p-6 md:p-8 space-y-6">
+                    <div className="prose prose-slate max-w-none">
+                      <p className="text-slate-700 leading-relaxed font-medium text-sm md:text-base">{div.description}</p>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-4 md:gap-8">
+                      <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
+                        <Calendar size={14} className="text-oker-400" />
+                        <span>Start: {div.startDate}</span>
+                      </div>
+                      {div.endDate && (
+                        <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
+                          <Calendar size={14} className="text-oker-400" />
+                          <span>Eind: {div.endDate}</span>
+                        </div>
+                      )}
                     </div>
                     
                     {div.pdfUrl ? (
-                      <div className="pt-4 flex gap-3">
+                      <div className="pt-2 flex flex-col sm:flex-row gap-3">
                         <a 
                           href={div.pdfUrl} 
                           target="_blank" 
                           rel="noopener noreferrer"
-                          className="flex items-center gap-2 px-4 py-2 bg-white border border-slate-200 rounded-xl text-sm font-bold text-slate-700 hover:bg-slate-50 transition-colors"
+                          className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
                         >
-                          <FileText size={16} className="text-red-500" />
-                          Bekijk PDF
+                          <FileText size={18} className="text-red-500" />
+                          BEKIJK PDF
                         </a>
                         <a 
                           href={div.pdfUrl} 
                           download
-                          className="flex items-center gap-2 px-4 py-2 bg-emerald-500 rounded-xl text-sm font-bold text-white hover:bg-emerald-600 transition-colors shadow-sm"
+                          className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-emerald-500 rounded-2xl text-sm font-black text-white hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
                         >
-                          <Download size={16} />
-                          Download PDF
+                          <Download size={18} />
+                          DOWNLOAD PDF
                         </a>
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-400 italic pt-2">Geen PDF bijlage beschikbaar voor deze omleiding.</p>
+                      <div className="p-4 bg-slate-100/50 rounded-2xl border border-dashed border-slate-200 text-center">
+                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Geen PDF bijlage beschikbaar</p>
+                      </div>
                     )}
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
-        ))}
-      </div>
+        ))
+      ) : (
+        <div className="text-center py-20 bg-white rounded-[40px] border border-dashed border-slate-200">
+          <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Search size={32} className="text-slate-300" />
+          </div>
+          <h4 className="text-xl font-black text-slate-800 tracking-tight">Geen resultaten</h4>
+          <p className="text-slate-400 font-medium mt-2">Geen omleidingen gevonden voor "{searchQuery}"</p>
+          <button 
+            onClick={() => setSearchQuery('')}
+            className="mt-6 text-oker-500 font-black uppercase tracking-widest text-xs hover:text-oker-600 transition-colors"
+          >
+            Wis zoekopdracht
+          </button>
+        </div>
+      )}
     </div>
-  );
+  </div>
+);
 }
 
 function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[] }) {
@@ -708,45 +1067,85 @@ function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[]
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-bold">Mijn Werkrooster</h3>
+        <h3 className="text-2xl font-black tracking-tight">Mijn Werkrooster</h3>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[600px]">
+      {/* Desktop Table */}
+      <div className="hidden md:block bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+        <table className="w-full text-left border-collapse">
           <thead>
-            <tr className="bg-slate-50 border-b border-slate-100">
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Datum</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Tijd</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Dienst</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Loopnr</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Bus</th>
+            <tr className="bg-slate-50/50 border-b border-slate-100">
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijd</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Loopnr</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Bus</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {shifts.map(shift => (
-              <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-5 font-bold text-slate-900">{shift.date}</td>
-                <td className="px-6 py-5">
-                  <div className="flex items-center gap-2 text-slate-700 font-medium">
-                    <Clock size={16} className="text-slate-400" />
+              <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors group">
+                <td className="px-8 py-6 font-black text-slate-800">{shift.date}</td>
+                <td className="px-8 py-6">
+                  <div className="flex items-center gap-3 text-slate-600 font-bold">
+                    <Clock size={16} className="text-oker-400" />
                     {shift.startTime} - {shift.endTime}
                   </div>
                 </td>
-                <td className="px-6 py-5">
-                  <span className="px-3 py-1 bg-emerald-100 text-emerald-700 rounded-lg font-bold text-sm">
-                    {shift.line}
+                <td className="px-8 py-6">
+                  <span className="px-4 py-1.5 bg-oker-50 text-oker-700 rounded-xl font-black text-xs uppercase tracking-wider">
+                    Lijn {shift.line}
                   </span>
                 </td>
-                <td className="px-6 py-5">
-                  <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg font-bold text-sm">
-                    {shift.loopnr}
+                <td className="px-8 py-6">
+                  <span className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-wider">
+                    #{shift.loopnr}
                   </span>
                 </td>
-                <td className="px-6 py-5 font-mono text-xs text-slate-400">{shift.busNumber}</td>
+                <td className="px-8 py-6 font-mono text-xs font-bold text-slate-400">{shift.busNumber}</td>
               </tr>
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Mobile Cards */}
+      <div className="md:hidden space-y-4">
+        {shifts.map(shift => (
+          <div key={shift.id} className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100 space-y-4">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Datum</p>
+                <p className="font-black text-slate-800">{shift.date}</p>
+              </div>
+              <div className="text-right">
+                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Bus</p>
+                <p className="font-mono text-xs font-bold text-slate-400">{shift.busNumber}</p>
+              </div>
+            </div>
+            
+            <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
+              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+                <Clock size={20} className="text-oker-500" />
+              </div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tijdstip</p>
+                <p className="font-black text-slate-800">{shift.startTime} - {shift.endTime}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 bg-oker-50 rounded-2xl border border-oker-100">
+                <p className="text-[10px] font-black text-oker-400 uppercase tracking-widest mb-1">Lijn</p>
+                <p className="font-black text-oker-700">{shift.line}</p>
+              </div>
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Loopnr</p>
+                <p className="font-black text-slate-700">#{shift.loopnr}</p>
+              </div>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -755,29 +1154,38 @@ function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[]
 function UpdatesView() {
   return (
     <div className="max-w-3xl space-y-6">
-      <h3 className="text-2xl font-bold">Updates & Nieuws</h3>
+      <h3 className="text-2xl font-black tracking-tight">Updates & Nieuws</h3>
       <div className="space-y-6">
         {MOCK_UPDATES.map(update => (
-          <div key={update.id} className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100 relative overflow-hidden group">
+          <div key={update.id} className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100 relative overflow-hidden group transition-all duration-300 hover:shadow-md">
             <div className={cn(
-              "absolute top-0 left-0 w-1 h-full",
+              "absolute top-0 left-0 w-1.5 h-full",
               update.category === 'veiligheid' ? "bg-red-500" : 
               update.category === 'technisch' ? "bg-blue-500" : "bg-emerald-500"
             )} />
             
-            <div className="flex justify-between items-start mb-4">
+            <div className="flex justify-between items-center mb-6">
               <span className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider",
+                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em]",
                 update.category === 'veiligheid' ? "bg-red-50 text-red-600" : 
                 update.category === 'technisch' ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
               )}>
                 {update.category}
               </span>
-              <span className="text-xs text-slate-400 font-medium">{update.date}</span>
+              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                <Clock size={12} className="text-slate-300" />
+                {update.date}
+              </div>
             </div>
             
-            <h4 className="text-xl font-bold text-slate-900 mb-3 group-hover:text-emerald-600 transition-colors">{update.title}</h4>
-            <p className="text-slate-600 leading-relaxed">{update.content}</p>
+            <h4 className="text-xl font-black text-slate-800 mb-4 group-hover:text-oker-500 transition-colors leading-tight">{update.title}</h4>
+            <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">{update.content}</p>
+            
+            <div className="mt-6 pt-6 border-t border-slate-50 flex justify-end">
+              <button className="text-[10px] font-black text-oker-500 uppercase tracking-widest hover:text-oker-600 transition-colors flex items-center gap-2">
+                Lees meer <ChevronRight size={14} />
+              </button>
+            </div>
           </div>
         ))}
       </div>
@@ -812,44 +1220,52 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
     try {
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', { method: 'POST' });
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Server returned non-JSON response: ' + text.slice(0, 100));
+      }
+
       if (data.success) {
         alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
       } else {
-        alert('Synchronisatie mislukt: ' + data.error);
+        alert('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sync error:', error);
-      alert('Er is een fout opgetreden bij het synchroniseren.');
+      alert('Er is een fout opgetreden bij het synchroniseren: ' + error.message);
     } finally {
       setIsSyncing(false);
     }
   };
 
   return (
-    <div className="max-w-4xl space-y-8">
-      <div className="flex justify-end">
+    <div className="max-w-4xl space-y-6 md:space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h3 className="text-2xl font-black tracking-tight">Beheer Roosters</h3>
         <button 
           onClick={handleSync}
           disabled={isSyncing}
-          className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+          className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
           title="Synchroniseer lokale JSON data naar Supabase"
         >
           <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
-          {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+          {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
         </button>
       </div>
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+      <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100">
         <div className="flex items-center justify-between mb-6">
-          <h3 className="text-xl font-bold flex items-center gap-2">
+          <h3 className="text-lg font-black flex items-center gap-3 tracking-tight">
             <FileText size={24} className="text-oker-500" />
             Excel / JSON Import
           </h3>
           <button 
             onClick={() => setShowExcelInfo(!showExcelInfo)}
-            className="text-sm font-bold text-oker-600 hover:underline"
+            className="text-[10px] font-black text-oker-600 hover:underline uppercase tracking-widest"
           >
-            Hoe werkt dit?
+            Info
           </button>
         </div>
 
@@ -879,12 +1295,12 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
         </button>
       </div>
 
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+      <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100">
+        <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Plus size={24} className="text-emerald-500" />
-          Handmatig Dienst Toevoegen
+          Handmatig Toevoegen
         </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6">
           <Input label="Datum" type="date" />
           <Input label="Chauffeur" type="select" options={[...users].filter(u => u.role === 'chauffeur' && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)).map(u => ({ label: u.name, value: u.id }))} />
           <Input label="Start Tijd" type="time" />
@@ -893,7 +1309,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
           <Input label="Loopnr" type="text" placeholder="Bijv. L-101" />
           <Input label="Bus Nummer" type="text" placeholder="Bijv. 8421" />
         </div>
-        <button className="mt-8 bg-emerald-500 text-white font-bold px-8 py-3 rounded-xl hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20">
+        <button className="w-full mt-8 bg-emerald-500 text-white font-black px-8 py-4 rounded-2xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase tracking-widest text-xs">
           Dienst Opslaan
         </button>
       </div>
@@ -908,9 +1324,10 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
 
 function ManageUpdatesView() {
   return (
-    <div className="max-w-3xl space-y-8">
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
-        <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+    <div className="max-w-3xl space-y-6 md:space-y-8">
+      <h3 className="text-2xl font-black tracking-tight">Beheer Updates</h3>
+      <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100">
+        <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-emerald-500" />
           Nieuwe Update Publiceren
         </h3>
@@ -922,14 +1339,14 @@ function ManageUpdatesView() {
             { label: 'Technisch', value: 'technisch' }
           ]} />
           <div>
-            <label className="block text-sm font-semibold text-slate-700 mb-2">Inhoud</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Inhoud van het bericht</label>
             <textarea 
-              className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all min-h-[150px]"
+              className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
               placeholder="Schrijf hier het bericht voor de chauffeurs..."
             />
           </div>
         </div>
-        <button className="mt-8 bg-emerald-500 text-white font-bold px-8 py-3 rounded-xl hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20">
+        <button className="w-full mt-8 bg-emerald-500 text-white font-black px-8 py-4 rounded-2xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase tracking-widest text-xs">
           Update Publiceren
         </button>
       </div>
@@ -937,11 +1354,11 @@ function ManageUpdatesView() {
   );
 }
 
-function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[]) => void }) {
+function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users: User[], onSave: (u: User[]) => void, title?: string }) {
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '' });
+  const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -961,12 +1378,13 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
       role: newUser.role as any,
       employeeId: newUser.employeeId || `VHB-${Math.floor(1000 + Math.random() * 9000)}`,
       password: newUser.password || '123',
+      phone: newUser.phone,
       isActive: true
     };
 
     onSave([...users, userToAdd]);
     setShowAddModal(false);
-    setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '' });
+    setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '' });
   };
 
   const handleUpdateUser = (e: React.FormEvent) => {
@@ -1041,6 +1459,7 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
           const rawRole = (findValue(['rol', 'role', 'functie', 'type']) || 'chauffeur').toString().toLowerCase();
           const employeeId = findValue(['id', 'employee', 'personeel', 'nummer', 'code', 'nr']);
           const password = findValue(['wachtwoord', 'password', 'pass', 'wacht', 'pw']);
+          const phone = findValue(['gsm', 'telefoon', 'phone', 'mobiel', 'gsm-nummer', 'tel']);
           
           // Normalize role
           let role: 'admin' | 'planner' | 'chauffeur' = 'chauffeur';
@@ -1055,6 +1474,7 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
             role: role,
             employeeId: employeeId?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
             password: password?.toString() || '123',
+            phone: phone?.toString().trim() || undefined,
             isActive: true
           };
         }).filter(u => u.name && u.name.length > 1);
@@ -1100,15 +1520,22 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
     try {
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', { method: 'POST' });
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Server returned non-JSON response: ' + text.slice(0, 100));
+      }
+
       if (data.success) {
         alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
       } else {
-        alert('Synchronisatie mislukt: ' + data.error);
+        alert('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sync error:', error);
-      alert('Er is een fout opgetreden bij het synchroniseren.');
+      alert('Er is een fout opgetreden bij het synchroniseren: ' + error.message);
     } finally {
       setIsSyncing(false);
     }
@@ -1118,7 +1545,7 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
     <div className="max-w-4xl space-y-8">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h3 className="text-2xl font-bold">Gebruikersbeheer</h3>
+          <h3 className="text-2xl font-bold">{title}</h3>
           <p className="text-sm text-slate-500 font-medium">Beheer medewerkers en hun toegangsrechten.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -1216,6 +1643,16 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
                     placeholder="Standaard: 123"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">GSM Nummer (Optioneel)</label>
+                  <input 
+                    type="text" 
+                    value={newUser.phone}
+                    onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    placeholder="bijv. 0470 12 34 56"
+                  />
+                </div>
                 <div className="flex gap-3 pt-4">
                   <button 
                     type="button"
@@ -1301,6 +1738,16 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
                     placeholder="Wachtwoord ongewijzigd laten indien leeg"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">GSM Nummer</label>
+                  <input 
+                    type="text" 
+                    value={editingUser.phone || ''}
+                    onChange={(e) => setEditingUser({...editingUser, phone: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    placeholder="bijv. 0470 12 34 56"
+                  />
+                </div>
 
                 <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
                   <div>
@@ -1358,62 +1805,114 @@ function ManageUsersView({ users, onSave }: { users: User[], onSave: (u: User[])
         <p className="text-oker-700">Zorg dat je Excel de volgende kolommen heeft: <span className="font-mono font-bold">Naam, Rol, Wachtwoord</span>. De rollen kunnen zijn: chauffeur, planner, admin. De ID's worden automatisch gegenereerd als ze ontbreken.</p>
       </div>
 
-      <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-x-auto">
-        <table className="w-full text-left border-collapse min-w-[800px]">
-          <thead>
-            <tr className="bg-slate-50 border-b border-slate-100">
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Naam</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider">Laatst Ingelogd</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-center">Sessies</th>
-              <th className="px-6 py-4 text-xs font-bold text-slate-400 uppercase tracking-wider text-right">Acties</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {filteredUsers.map(u => (
-              <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-5">
-                  <div className="font-bold text-slate-900">{u.name}</div>
-                  <div className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{u.role}</div>
-                </td>
-                <td className="px-6 py-5">
-                  <span className={cn(
-                    "px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider",
-                    u.isActive !== false ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                  )}>
-                    {u.isActive !== false ? 'Actief' : 'Inactief'}
-                  </span>
-                </td>
-                <td className="px-6 py-5 text-sm text-slate-500">
-                  {u.lastLogin ? u.lastLogin : <span className="text-slate-300 italic">Nooit</span>}
-                </td>
-                <td className="px-6 py-5 text-center">
-                  <span className={cn(
-                    "px-2 py-1 rounded-lg text-[10px] font-black",
-                    (u.activeSessions || 0) > 0 ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-400"
-                  )}>
-                    {u.activeSessions || 0}
-                  </span>
-                </td>
-                <td className="px-6 py-5 text-right flex items-center justify-end gap-3">
-                  <button 
-                    onClick={() => setConfirmResetUser(u)}
-                    className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-lg transition-all"
-                    title="Reset wachtwoord naar 123"
-                  >
-                    <RotateCcw size={16} />
-                  </button>
-                  <button 
-                    onClick={() => setEditingUser(u)}
-                    className="text-sm font-bold text-oker-600 hover:text-oker-700 transition-colors"
-                  >
-                    Bewerken
-                  </button>
-                </td>
+      <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Medewerker</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Laatst Actief</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Sessies</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Acties</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredUsers.map(u => (
+                <tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-6">
+                    <div className="font-black text-slate-800 tracking-tight text-lg">{u.name}</div>
+                    <div className="text-[10px] text-oker-500 font-black uppercase tracking-widest mt-0.5">{u.role}</div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className={cn(
+                      "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                      u.isActive !== false ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-red-50 text-red-600 border border-red-100"
+                    )}>
+                      {u.isActive !== false ? 'Actief' : 'Inactief'}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-sm font-bold text-slate-500">
+                    {u.lastLogin ? u.lastLogin : <span className="text-slate-300 italic font-medium">Nooit</span>}
+                  </td>
+                  <td className="px-8 py-6 text-center">
+                    <span className={cn(
+                      "w-8 h-8 inline-flex items-center justify-center rounded-xl text-xs font-black",
+                      (u.activeSessions || 0) > 0 ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-slate-50 text-slate-400 border border-slate-100"
+                    )}>
+                      {u.activeSessions || 0}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => setConfirmResetUser(u)}
+                        className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-xl transition-all"
+                        title="Reset wachtwoord naar 123"
+                      >
+                        <RotateCcw size={18} />
+                      </button>
+                      <button 
+                        onClick={() => setEditingUser(u)}
+                        className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-oker-500 transition-all active:scale-95"
+                      >
+                        Bewerken
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredUsers.map(u => (
+            <div key={u.id} className="p-6 space-y-4 active:bg-slate-50 transition-colors">
+              <div className="flex justify-between items-start">
+                <div>
+                  <div className="font-black text-slate-800 tracking-tight text-lg leading-tight">{u.name}</div>
+                  <div className="text-[10px] text-oker-500 font-black uppercase tracking-widest mt-1">{u.role}</div>
+                </div>
+                <span className={cn(
+                  "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                  u.isActive !== false ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-red-50 text-red-600 border border-red-100"
+                )}>
+                  {u.isActive !== false ? 'Actief' : 'Inactief'}
+                </span>
+              </div>
+              
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="p-3 bg-slate-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Laatst Actief</p>
+                  <p className="text-xs font-bold text-slate-700 mt-1">{u.lastLogin || 'Nooit'}</p>
+                </div>
+                <div className="p-3 bg-slate-50 rounded-2xl">
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sessies</p>
+                  <p className="text-xs font-bold text-slate-700 mt-1">{u.activeSessions || 0}</p>
+                </div>
+              </div>
+
+              <div className="flex gap-2 pt-2">
+                <button 
+                  onClick={() => setEditingUser(u)}
+                  className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
+                >
+                  Bewerken
+                </button>
+                <button 
+                  onClick={() => setConfirmResetUser(u)}
+                  className="px-4 bg-slate-100 text-slate-500 rounded-2xl active:scale-95 transition-all"
+                  title="Reset wachtwoord"
+                >
+                  <RotateCcw size={20} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
 
       <ConfirmationModal 
@@ -1449,15 +1948,22 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
     try {
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', { method: 'POST' });
-      const data = await response.json();
+      const text = await response.text();
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (e) {
+        throw new Error('Server returned non-JSON response: ' + text.slice(0, 100));
+      }
+
       if (data.success) {
         alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
       } else {
-        alert('Synchronisatie mislukt: ' + data.error);
+        alert('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'));
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Sync error:', error);
-      alert('Er is een fout opgetreden bij het synchroniseren.');
+      alert('Er is een fout opgetreden bij het synchroniseren: ' + error.message);
     } finally {
       setIsSyncing(false);
     }
@@ -1547,69 +2053,77 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
   };
 
   return (
-    <div className="max-w-4xl space-y-8">
-      <div className="flex justify-end">
+    <div className="max-w-4xl space-y-6 md:space-y-8">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h3 className="text-2xl font-black tracking-tight">Beheer Omleidingen</h3>
         <button 
           onClick={handleSync}
           disabled={isSyncing}
-          className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
+          className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
           title="Synchroniseer lokale JSON data naar Supabase"
         >
           <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
-          {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+          {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
         </button>
       </div>
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm">
         <div>
-          <h3 className="text-2xl font-bold text-slate-900">Beheer Omleidingen</h3>
-          <p className="text-sm text-slate-500 font-medium">Voeg omleidingen toe en upload PDF-bestanden voor chauffeurs.</p>
+          <h4 className="text-lg font-black text-slate-800 tracking-tight">Nieuwe Omleiding</h4>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Voeg een omleiding toe voor de chauffeurs</p>
         </div>
         <button 
           onClick={handleOpenAdd}
-          className="bg-oker-500 text-white px-6 py-3 rounded-2xl text-sm font-bold flex items-center gap-2 hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20"
+          className="w-full sm:w-auto bg-oker-500 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 active:scale-95"
         >
-          <Plus size={18} /> Omleiding Toevoegen
+          <Plus size={20} /> TOEVOEGEN
         </button>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
         {diversions.map(div => (
-          <div key={div.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+          <div key={div.id} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group transition-all hover:shadow-md">
+            <div className="flex items-start gap-5">
               <div className={cn(
-                "w-12 h-12 rounded-2xl flex items-center justify-center shrink-0",
-                div.severity === 'high' ? "bg-red-100 text-red-600" : 
-                div.severity === 'medium' ? "bg-amber-100 text-amber-600" : "bg-blue-100 text-blue-600"
+                "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110",
+                div.severity === 'high' ? "bg-red-50 text-red-600 border border-red-100" : 
+                div.severity === 'medium' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-blue-50 text-blue-600 border border-blue-100"
               )}>
-                <MapPin size={24} />
+                <MapPin size={28} />
               </div>
               <div>
-                <div className="flex items-center gap-2">
-                  <h4 className="font-bold text-slate-900">{div.title}</h4>
-                  <span className="px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-[10px] font-bold uppercase">Lijn {div.line}</span>
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <h4 className="font-black text-slate-800 text-lg tracking-tight leading-tight">{div.title}</h4>
+                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">Lijn {div.line}</span>
                 </div>
-                <p className="text-xs text-slate-400 font-medium mt-0.5">{div.startDate} {div.endDate ? `t/m ${div.endDate}` : ''}</p>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                  <Calendar size={12} className="text-oker-400" />
+                  {div.startDate} {div.endDate ? `t/m ${div.endDate}` : '(Geen einddatum)'}
+                </div>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              {div.pdfUrl && (
-                <div className="p-2 text-emerald-500 bg-emerald-50 rounded-lg" title="PDF Beschikbaar">
-                  <FileText size={18} />
-                </div>
-              )}
-              <button 
-                onClick={() => handleOpenEdit(div)}
-                className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-lg transition-all"
-                title="Bewerken"
-              >
-                <Pencil size={18} />
-              </button>
+            
+            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-50">
+              <div className="flex items-center gap-2">
+                {div.pdfUrl && (
+                  <div className="w-10 h-10 flex items-center justify-center text-emerald-500 bg-emerald-50 border border-emerald-100 rounded-xl" title="PDF Beschikbaar">
+                    <FileText size={20} />
+                  </div>
+                )}
+                <button 
+                  onClick={() => handleOpenEdit(div)}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-oker-600 hover:bg-oker-50 border border-slate-100 rounded-xl transition-all active:scale-90"
+                  title="Bewerken"
+                >
+                  <Pencil size={20} />
+                </button>
+              </div>
               <button 
                 onClick={() => setConfirmDeleteId(div.id)}
-                className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 border border-slate-100 rounded-xl transition-all active:scale-90"
                 title="Verwijderen"
               >
-                <Trash2 size={18} />
+                <Trash2 size={20} />
               </button>
             </div>
           </div>
@@ -1781,6 +2295,165 @@ function Input({ label, type, placeholder, options }: { label: string, type: str
           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
         />
       )}
+    </div>
+  );
+}
+
+function ManageServicesView({ services, onSave }: { services: Service[], onSave: (s: Service[]) => void }) {
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ serviceNumber: '', startTime: '', endTime: '' });
+
+  const downloadCSV = () => {
+    const headers = ['Dienstnummer', 'Starttijd', 'Eindtijd'];
+    const rows = services.map(s => [
+      `"${s.serviceNumber}"`, 
+      `"${s.startTime}"`, 
+      `"${s.endTime}"`
+    ]);
+    
+    const csvContent = [
+      headers.join(','),
+      ...rows.map(r => r.join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', `beheer_dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handleEdit = (service: Service) => {
+    setEditingId(service.id);
+    setFormData({ serviceNumber: service.serviceNumber, startTime: service.startTime, endTime: service.endTime });
+    setShowModal(true);
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingId) {
+      onSave(services.map(s => s.id === editingId ? { ...s, ...formData } : s));
+    } else {
+      onSave([...services, { id: Date.now().toString(), ...formData }]);
+    }
+    setShowModal(false);
+    setEditingId(null);
+    setFormData({ serviceNumber: '', startTime: '', endTime: '' });
+  };
+
+  const handleDelete = (id: string) => {
+    if (confirm('Weet u zeker dat u deze dienst wilt verwijderen?')) {
+      onSave(services.filter(s => s.id !== id));
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-2xl font-black tracking-tight">Beheer Dienstoverzicht</h3>
+          <p className="text-sm text-slate-500 font-medium">Voeg diensten toe, bewerk of verwijder ze.</p>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={downloadCSV}
+            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+            title="Download als CSV"
+          >
+            <Download size={20} className="text-oker-500" />
+            Download CSV
+          </button>
+          <button 
+            onClick={() => { setEditingId(null); setFormData({ serviceNumber: '', startTime: '', endTime: '' }); setShowModal(true); }}
+            className="bg-oker-500 text-white font-black px-6 py-3 rounded-2xl hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20 active:scale-95 flex items-center gap-2"
+          >
+            <Plus size={20} />
+            Nieuwe Dienst
+          </button>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+        <table className="w-full text-left border-collapse">
+          <thead>
+            <tr className="bg-slate-50/50">
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienstnummer</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Starttijd</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Eindtijd</th>
+              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Acties</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {services.map(s => (
+              <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                <td className="px-8 py-5 font-black text-slate-800">{s.serviceNumber}</td>
+                <td className="px-8 py-5 text-slate-600 font-bold">{s.startTime}</td>
+                <td className="px-8 py-5 text-slate-600 font-bold">{s.endTime}</td>
+                <td className="px-8 py-5 text-right">
+                  <div className="flex items-center justify-end gap-2">
+                    <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
+                    <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      <AnimatePresence>
+        {showModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                <h4 className="text-xl font-black">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
+                <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
+              </div>
+              <form onSubmit={handleSubmit} className="p-8 space-y-5">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dienstnummer</label>
+                  <input 
+                    type="text" required value={formData.serviceNumber}
+                    onChange={(e) => setFormData({...formData, serviceNumber: e.target.value})}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd</label>
+                    <input 
+                      type="time" required value={formData.startTime}
+                      onChange={(e) => setFormData({...formData, startTime: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd</label>
+                    <input 
+                      type="time" required value={formData.endTime}
+                      onChange={(e) => setFormData({...formData, endTime: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                </div>
+                <button type="submit" className="w-full bg-oker-500 text-white font-black py-4 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 mt-4">
+                  {editingId ? 'Dienst Bijwerken' : 'Dienst Toevoegen'}
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -9,6 +9,7 @@ export interface User {
   lastLogin?: string;
   activeSessions?: number;
   isActive?: boolean;
+  phone?: string;
 }
 
 export interface Diversion {
@@ -41,4 +42,11 @@ export interface Update {
   category: 'algemeen' | 'veiligheid' | 'technisch';
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen';
+export interface Service {
+  id: string;
+  serviceNumber: string;
+  startTime: string;
+  endTime: string;
+}
+
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst';
