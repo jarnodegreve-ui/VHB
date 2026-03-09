@@ -155,7 +155,12 @@ const getServicesData = async () => {
     try {
       const { data, error } = await supabase.from('services').select('*');
       if (error) {
-        console.error("Supabase error fetching services:", error);
+        // If it's a missing table error (42P01 in Postgres), we just log a warning and fallback
+        if (error.code === '42P01') {
+          console.warn("Supabase 'services' table not found. Falling back to local/mock data.");
+        } else {
+          console.error("Supabase error fetching services:", error);
+        }
       } else if (data && data.length > 0) {
         return data;
       }
@@ -372,6 +377,21 @@ app.post("/api/admin/sync", async (req, res) => {
     } else {
       console.warn("Diversions file not found");
       results.diversions = "File not found";
+    }
+
+    // Sync Services
+    console.log("Checking services file:", SERVICES_FILE);
+    if (fs.existsSync(SERVICES_FILE)) {
+      const localServices = JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
+      console.log(`Found ${localServices.length} services`);
+      if (localServices.length > 0) {
+        const { error } = await supabase.from('services').upsert(localServices);
+        if (error) console.error("Services sync error:", error);
+        results.services = error ? `Error: ${error.message}` : `Synced ${localServices.length} items`;
+      }
+    } else {
+      console.warn("Services file not found");
+      results.services = "File not found";
     }
 
     console.log("Sync completed with results:", results);
