@@ -32,6 +32,23 @@ if (!supabase) {
   console.log("Supabase client initialized.");
 }
 
+// Default Mock Data
+const DEFAULT_USERS = [
+  { id: '1', name: 'Jan de Vries', role: 'chauffeur', employeeId: 'CH-4492', password: '123', phone: '0470 12 34 56', isActive: true },
+  { id: '2', name: 'Sarah de Groot', role: 'planner', employeeId: 'PL-1102', password: '123', phone: '0480 98 76 54', isActive: true },
+  { id: '3', name: 'Mark Admin', role: 'admin', employeeId: 'AD-0001', password: '123', phone: '0490 55 44 33', isActive: true },
+];
+
+const DEFAULT_SERVICES = [
+  { id: '1', serviceNumber: 'D-101', startTime: '05:30', endTime: '13:45' },
+  { id: '2', serviceNumber: 'D-102', startTime: '06:15', endTime: '14:30' },
+  { id: '3', serviceNumber: 'D-201', startTime: '13:30', endTime: '21:45' },
+  { id: '4', serviceNumber: 'D-202', startTime: '14:15', endTime: '22:30' },
+  { id: '5', serviceNumber: 'D-301', startTime: '21:30', endTime: '05:45' },
+  { id: '6', serviceNumber: 'D-103', startTime: '07:00', endTime: '15:15' },
+  { id: '7', serviceNumber: 'D-104', startTime: '08:30', endTime: '16:45' },
+];
+
 // Helper to read/write data
 const getPlanningData = async () => {
   if (supabase) {
@@ -79,9 +96,17 @@ const getUsersData = async () => {
     }
   }
   if (fs.existsSync(USERS_FILE)) {
-    return JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
+    try {
+      const content = fs.readFileSync(USERS_FILE, "utf-8");
+      if (content.trim()) {
+        const data = JSON.parse(content);
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    } catch (e) {
+      console.error("Error reading users file:", e);
+    }
   }
-  return null;
+  return DEFAULT_USERS;
 };
 
 const saveUsersData = async (data: any) => {
@@ -139,9 +164,17 @@ const getServicesData = async () => {
     }
   }
   if (fs.existsSync(SERVICES_FILE)) {
-    return JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
+    try {
+      const content = fs.readFileSync(SERVICES_FILE, "utf-8");
+      if (content.trim()) {
+        const data = JSON.parse(content);
+        if (Array.isArray(data) && data.length > 0) return data;
+      }
+    } catch (e) {
+      console.error("Error reading services file:", e);
+    }
   }
-  return [];
+  return DEFAULT_SERVICES;
 };
 
 const saveServicesData = async (data: any) => {

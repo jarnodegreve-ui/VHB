@@ -163,7 +163,7 @@ export default function App() {
     try {
       const response = await fetch('/api/users');
       const data = await response.json();
-      if (data && Array.isArray(data)) {
+      if (data && Array.isArray(data) && data.length > 0) {
         setUsers(data);
       }
     } catch (error) {
