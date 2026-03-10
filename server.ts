@@ -1,4 +1,5 @@
 import express from "express";
+// Build trigger: Environment variables updated in Vercel
 import cors from "cors";
 import fs from "fs";
 import path from "path";
