@@ -263,7 +263,7 @@ app.get("/api/health", async (req, res) => {
 
   res.json({ 
     status: "ok", 
-    supabase: supabaseStatus,
+    supabase: supabaseStatus, 
     tables,
     env: process.env.NODE_ENV, 
     time: new Date().toISOString() 
