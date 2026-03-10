@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "trailingSlash": false,
+  "functions": {
+    "server.ts": {
+      "runtime": "vercel-node@latest"
+    }
+  },
   "rewrites": [
     {
       "source": "/api/(.*)",

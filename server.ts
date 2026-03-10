@@ -231,7 +231,7 @@ app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 
 app.use((req, res, next) => {
-  console.log(`${new Date().toISOString()} - ${req.method} ${req.url}`);
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
 
@@ -271,6 +271,10 @@ app.get("/api/health", async (req, res) => {
 });
 
 // API Routes
+app.post("/api/test", (req, res) => {
+  res.json({ success: true, message: "POST method is working", body: req.body });
+});
+
 app.get("/api/planning", async (req, res) => {
   try {
     const data = await getPlanningData();
@@ -308,12 +312,15 @@ app.get("/api/users", async (req, res) => {
 });
 
 app.post("/api/users", async (req, res) => {
+  console.log("POST /api/users called. Body size:", req.body?.length);
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
       await saveUsersData(newData);
+      console.log("Users saved successfully. Count:", newData.length);
       res.json({ success: true, count: newData.length });
     } else {
+      console.warn("Invalid data format for POST /api/users:", typeof newData);
       res.status(400).json({ error: "Invalid data format. Expected an array." });
     }
   } catch (err: any) {
@@ -490,8 +497,8 @@ app.post("/api/admin/sync", async (req, res) => {
   }
 });
 
-// Catch-all for API routes to ensure JSON response
 app.all("/api/*", (req, res) => {
+  console.log(`API Route not found: ${req.method} ${req.url}`);
   res.status(404).json({ error: `Route ${req.method} ${req.url} not found on server` });
 });
 
@@ -541,9 +548,11 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-  });
+  if (!process.env.VERCEL) {
+    app.listen(PORT, "0.0.0.0", () => {
+      console.log(`Server running on http://localhost:${PORT}`);
+    });
+  }
 }
 
 export default app;

@@ -1206,6 +1206,19 @@ function DebugView() {
     try {
       setIsTesting(true);
       setTestResult(null);
+      
+      // First test general POST
+      const testResponse = await fetch('/api/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ test: true })
+      });
+      
+      if (!testResponse.ok) {
+        setTestResult(`Algemene POST test mislukt (${testResponse.status}). Dit duidt op een server/Vercel configuratie probleem.`);
+        return;
+      }
+
       const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
