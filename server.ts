@@ -334,6 +334,9 @@ app.post("/api/admin/sync", async (req, res) => {
 
   try {
     const results: any = {};
+    const cwd = process.cwd();
+    console.log("Current working directory:", cwd);
+    console.log("Files in CWD:", fs.readdirSync(cwd).join(", "));
 
     // Sync Planning
     console.log("Checking planning file:", DATA_FILE);
@@ -401,6 +404,11 @@ app.post("/api/admin/sync", async (req, res) => {
     console.error("Global sync error:", err);
     res.status(500).json({ error: "Sync failed", details: err.message });
   }
+});
+
+// Catch-all for API routes to ensure JSON response
+app.all("/api/*", (req, res) => {
+  res.status(404).json({ error: `Route ${req.method} ${req.url} not found on server` });
 });
 
 // Vite middleware for development

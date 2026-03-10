@@ -1221,11 +1221,17 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', { method: 'POST' });
       const text = await response.text();
+      
+      if (!response.ok && !text.startsWith('{')) {
+        throw new Error(`Server fout (${response.status}): ${text.slice(0, 200) || 'Lege response'}`);
+      }
+
       let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
-        throw new Error('Server returned non-JSON response: ' + text.slice(0, 100));
+        console.error('Failed to parse JSON. Response text:', text);
+        throw new Error('Server gaf geen geldig JSON-antwoord terug. Controleer de console voor details.');
       }
 
       if (data.success) {
@@ -1521,11 +1527,17 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', { method: 'POST' });
       const text = await response.text();
+      
+      if (!response.ok && !text.startsWith('{')) {
+        throw new Error(`Server fout (${response.status}): ${text.slice(0, 200) || 'Lege response'}`);
+      }
+
       let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
-        throw new Error('Server returned non-JSON response: ' + text.slice(0, 100));
+        console.error('Failed to parse JSON. Response text:', text);
+        throw new Error('Server gaf geen geldig JSON-antwoord terug. Controleer de console voor details.');
       }
 
       if (data.success) {
@@ -1949,11 +1961,17 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', { method: 'POST' });
       const text = await response.text();
+      
+      if (!response.ok && !text.startsWith('{')) {
+        throw new Error(`Server fout (${response.status}): ${text.slice(0, 200) || 'Lege response'}`);
+      }
+
       let data;
       try {
         data = JSON.parse(text);
       } catch (e) {
-        throw new Error('Server returned non-JSON response: ' + text.slice(0, 100));
+        console.error('Failed to parse JSON. Response text:', text);
+        throw new Error('Server gaf geen geldig JSON-antwoord terug. Controleer de console voor details.');
       }
 
       if (data.success) {
