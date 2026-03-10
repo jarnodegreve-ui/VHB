@@ -29,7 +29,8 @@ import {
   Map,
   Pencil,
   Search,
-  Phone
+  Phone,
+  Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
@@ -161,9 +162,11 @@ export default function App() {
 
   const fetchUsers = async () => {
     try {
+      console.log('Fetching users...');
       const response = await fetch('/api/users');
       const data = await response.json();
-      if (data && Array.isArray(data) && data.length > 0) {
+      console.log('Users fetched:', data?.length);
+      if (data && Array.isArray(data)) {
         setUsers(data);
       }
     } catch (error) {
@@ -173,6 +176,7 @@ export default function App() {
 
   const saveUsers = async (newUsers: User[]) => {
     try {
+      console.log('Saving users, count:', newUsers.length);
       setIsLoading(true);
       const response = await fetch('/api/users', {
         method: 'POST',
@@ -180,10 +184,23 @@ export default function App() {
         body: JSON.stringify(newUsers),
       });
       if (response.ok) {
+        console.log('Users saved successfully');
         setUsers(newUsers);
+        return true;
+      } else {
+        const text = await response.text();
+        console.error('Server error saving users:', text);
+        let errorMsg = 'Server fout';
+        try {
+          const errorData = JSON.parse(text);
+          errorMsg = errorData.details || errorData.error || errorMsg;
+        } catch (e) {}
+        throw new Error(errorMsg);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving users:', error);
+      alert('Fout bij het opslaan van gebruikers: ' + error.message);
+      return false;
     } finally {
       setIsLoading(false);
     }
@@ -406,6 +423,12 @@ export default function App() {
                 active={currentView === 'gebruikers'} 
                 onClick={() => { setCurrentView('gebruikers'); setIsSidebarOpen(false); }} 
               />
+              <NavItem 
+                icon={<Activity size={20} />} 
+                label="Systeem Status" 
+                active={currentView === 'beheer-debug'} 
+                onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} 
+              />
             </>
           )}
         </nav>
@@ -472,6 +495,7 @@ export default function App() {
               {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {currentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
               {currentView === 'beheer-contactlijst' && <ManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" />}
+              {currentView === 'beheer-debug' && <DebugView />}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1151,6 +1175,96 @@ function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[]
   );
 }
 
+function DebugView() {
+  const [healthData, setHealthData] = useState<any>(null);
+  const [isCheckingHealth, setIsCheckingHealth] = useState(false);
+
+  const checkHealth = async () => {
+    try {
+      setIsCheckingHealth(true);
+      const response = await fetch('/api/health');
+      const data = await response.json();
+      setHealthData(data);
+    } catch (error) {
+      console.error('Health check error:', error);
+    } finally {
+      setIsCheckingHealth(false);
+    }
+  };
+
+  useEffect(() => {
+    checkHealth();
+  }, []);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-black tracking-tight">Systeem Status (Debug)</h3>
+        <button 
+          onClick={checkHealth}
+          disabled={isCheckingHealth}
+          className="px-4 py-2 bg-slate-100 rounded-xl text-slate-600 font-bold text-sm hover:bg-slate-200 disabled:opacity-50"
+        >
+          {isCheckingHealth ? 'Controleren...' : 'Ververs Status'}
+        </button>
+      </div>
+      
+      {healthData && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Supabase Status</h4>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-slate-600">Configuratie:</span>
+                <span className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", healthData.supabase === 'configured' ? "bg-emerald-50 text-emerald-500" : "bg-red-50 text-red-500")}>
+                  {healthData.supabase}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-slate-600">Omgeving:</span>
+                <span className="text-sm font-black text-slate-800">{healthData.env}</span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm font-bold text-slate-600">Server Tijd:</span>
+                <span className="text-xs font-mono text-slate-500">{new Date(healthData.time).toLocaleString()}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Tabel Status</h4>
+            <div className="space-y-3">
+              {Object.entries(healthData.tables || {}).map(([name, status]: [string, any]) => (
+                <div key={name} className="flex justify-between items-center">
+                  <span className="text-sm font-bold text-slate-600 capitalize">{name}:</span>
+                  <span className={cn("px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest", status === 'OK' ? "bg-emerald-50 text-emerald-500" : "bg-red-50 text-red-500")}>
+                    {status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      
+      <div className="bg-oker-50 p-8 rounded-[40px] border border-oker-100">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-oker-500 text-white rounded-2xl shadow-lg shadow-oker-500/20">
+            <Activity size={24} />
+          </div>
+          <div>
+            <h4 className="text-oker-900 font-black text-lg mb-2">Hulp bij problemen</h4>
+            <p className="text-oker-800 text-sm leading-relaxed font-medium">
+              Als de tabellen hierboven "Error" of "Exception" aangeven, betekent dit dat de tabel waarschijnlijk nog niet bestaat in Supabase of dat de rechten niet goed staan. 
+              Zorg ervoor dat je de tabellen <code className="bg-oker-100 px-1 rounded font-black">users</code>, <code className="bg-oker-100 px-1 rounded font-black">planning</code>, <code className="bg-oker-100 px-1 rounded font-black">diversions</code> en <code className="bg-oker-100 px-1 rounded font-black">services</code> hebt aangemaakt in je Supabase project.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UpdatesView() {
   return (
     <div className="max-w-3xl space-y-6">
@@ -1360,7 +1474,7 @@ function ManageUpdatesView() {
   );
 }
 
-function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users: User[], onSave: (u: User[]) => void, title?: string }) {
+function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users: User[], onSave: (u: User[]) => Promise<boolean>, title?: string }) {
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -1421,13 +1535,13 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
     }
   };
 
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     setIsImporting(true);
     const reader = new FileReader();
-    reader.onload = (event) => {
+    reader.onload = async (event) => {
       try {
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
@@ -1439,6 +1553,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
 
         if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
           alert('Het Excel-bestand lijkt leeg te zijn of heeft geen herkenbare gegevens.');
+          setIsImporting(false);
           return;
         }
 
@@ -1499,8 +1614,10 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
           if (uniqueNewUsers.length === 0) {
             alert('Alle gebruikers uit dit bestand bestaan al in het systeem (gecontroleerd op naam).');
           } else {
-            onSave([...users, ...uniqueNewUsers]);
-            alert(`${uniqueNewUsers.length} nieuwe gebruikers succesvol toegevoegd!`);
+            const success = await onSave([...users, ...uniqueNewUsers]);
+            if (success) {
+              alert(`${uniqueNewUsers.length} nieuwe gebruikers succesvol toegevoegd!`);
+            }
           }
         }
       } catch (error) {

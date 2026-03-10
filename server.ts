@@ -72,30 +72,46 @@ const getPlanningData = async () => {
 
 const savePlanningData = async (data: any) => {
   if (supabase) {
-    // For simplicity in this demo, we'll delete and re-insert
-    // In a real app, you'd want upserts or specific updates
-    const { error: deleteError } = await supabase.from('planning').delete().neq('id', '0');
-    if (deleteError) throw deleteError;
-    const { error: insertError } = await supabase.from('planning').insert(data);
-    if (insertError) throw insertError;
+    const { error } = await supabase.from('planning').upsert(data);
+    if (error) throw error;
     return;
   }
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
 const getUsersData = async () => {
+  console.log("getUsersData called. Supabase configured:", !!supabase);
   if (supabase) {
     try {
       const { data, error } = await supabase.from('users').select('*');
       if (error) {
         console.error("Supabase error fetching users:", error);
-      } else if (data && data.length > 0) {
-        return data;
+      } else if (data) {
+        console.log(`Supabase returned ${data.length} users`);
+        // If we have a connection to Supabase, it's the source of truth.
+        // We only fall back to local/defaults if Supabase is empty AND we have local data.
+        if (data.length > 0) return data;
+        
+        // If Supabase is empty, check if we have local data to "bootstrap" from
+        if (fs.existsSync(USERS_FILE)) {
+          const content = fs.readFileSync(USERS_FILE, "utf-8");
+          if (content.trim()) {
+            const localData = JSON.parse(content);
+            if (Array.isArray(localData) && localData.length > 0) {
+              console.log("Supabase empty, using local file data");
+              return localData;
+            }
+          }
+        }
+        // If both are empty, return empty array (don't force defaults if we're connected)
+        return [];
       }
     } catch (e) {
       console.error("Unexpected error fetching users:", e);
     }
   }
+  
+  // Fallback for non-Supabase environments
   if (fs.existsSync(USERS_FILE)) {
     try {
       const content = fs.readFileSync(USERS_FILE, "utf-8");
@@ -107,15 +123,19 @@ const getUsersData = async () => {
       console.error("Error reading users file:", e);
     }
   }
+  console.log("No data found, returning DEFAULT_USERS");
   return DEFAULT_USERS;
 };
 
 const saveUsersData = async (data: any) => {
+  console.log(`saveUsersData called with ${data.length} items. Supabase:`, !!supabase);
   if (supabase) {
-    const { error: deleteError } = await supabase.from('users').delete().neq('id', '0');
-    if (deleteError) throw deleteError;
-    const { error: insertError } = await supabase.from('users').insert(data);
-    if (insertError) throw insertError;
+    const { error } = await supabase.from('users').upsert(data);
+    if (error) {
+      console.error("Supabase upsert error:", error);
+      throw error;
+    }
+    console.log("Supabase upsert successful");
     return;
   }
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
@@ -142,10 +162,8 @@ const getDiversionsData = async () => {
 
 const saveDiversionsData = async (data: any) => {
   if (supabase) {
-    const { error: deleteError } = await supabase.from('diversions').delete().neq('id', '0');
-    if (deleteError) throw deleteError;
-    const { error: insertError } = await supabase.from('diversions').insert(data);
-    if (insertError) throw insertError;
+    const { error } = await supabase.from('diversions').upsert(data);
+    if (error) throw error;
     return;
   }
   fs.writeFileSync(DIVERSIONS_FILE, JSON.stringify(data, null, 2));
@@ -185,10 +203,8 @@ const getServicesData = async () => {
 
 const saveServicesData = async (data: any) => {
   if (supabase) {
-    const { error: deleteError } = await supabase.from('services').delete().neq('id', '0');
-    if (deleteError) throw deleteError;
-    const { error: insertError } = await supabase.from('services').insert(data);
-    if (insertError) throw insertError;
+    const { error } = await supabase.from('services').upsert(data);
+    if (error) throw error;
     return;
   }
   fs.writeFileSync(SERVICES_FILE, JSON.stringify(data, null, 2));
@@ -206,10 +222,35 @@ app.use((req, res, next) => {
 });
 
 // Health check
-app.get("/api/health", (req, res) => {
+app.get("/api/health", async (req, res) => {
+  let supabaseStatus = "not configured";
+  let tables: any = {};
+  
+  if (supabase) {
+    supabaseStatus = "configured";
+    try {
+      const checkTable = async (name: string) => {
+        try {
+          const { error } = await supabase.from(name).select('*').limit(0);
+          return error ? `Error: ${error.message}` : "OK";
+        } catch (e: any) {
+          return `Exception: ${e.message}`;
+        }
+      };
+      
+      tables.users = await checkTable('users');
+      tables.planning = await checkTable('planning');
+      tables.diversions = await checkTable('diversions');
+      tables.services = await checkTable('services');
+    } catch (e: any) {
+      supabaseStatus = `Error: ${e.message}`;
+    }
+  }
+
   res.json({ 
     status: "ok", 
-    supabase: !!supabase,
+    supabase: supabaseStatus,
+    tables,
     env: process.env.NODE_ENV, 
     time: new Date().toISOString() 
   });
@@ -336,66 +377,95 @@ app.post("/api/admin/sync", async (req, res) => {
     const results: any = {};
     const cwd = process.cwd();
     console.log("Current working directory:", cwd);
-    console.log("Files in CWD:", fs.readdirSync(cwd).join(", "));
+    
+    try {
+      console.log("Files in CWD:", fs.readdirSync(cwd).join(", "));
+    } catch (e) {
+      console.error("Error reading CWD:", e);
+    }
 
     // Sync Planning
-    console.log("Checking planning file:", DATA_FILE);
-    if (fs.existsSync(DATA_FILE)) {
-      const localPlanning = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-      console.log(`Found ${localPlanning.length} planning items`);
-      if (localPlanning.length > 0) {
-        const { error } = await supabase.from('planning').upsert(localPlanning);
-        if (error) console.error("Planning sync error:", error);
-        results.planning = error ? `Error: ${error.message}` : `Synced ${localPlanning.length} items`;
+    try {
+      console.log("Checking planning file:", DATA_FILE);
+      if (fs.existsSync(DATA_FILE)) {
+        const localPlanning = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
+        console.log(`Found ${localPlanning.length} planning items`);
+        if (localPlanning.length > 0) {
+          const { error } = await supabase.from('planning').upsert(localPlanning);
+          if (error) console.error("Planning sync error:", error);
+          results.planning = error ? `Error: ${error.message}` : `Synced ${localPlanning.length} items`;
+        } else {
+          results.planning = "Empty file";
+        }
+      } else {
+        console.warn("Planning file not found");
+        results.planning = "File not found";
       }
-    } else {
-      console.warn("Planning file not found");
-      results.planning = "File not found";
+    } catch (e: any) {
+      results.planning = `Exception: ${e.message}`;
     }
 
     // Sync Users
-    console.log("Checking users file:", USERS_FILE);
-    if (fs.existsSync(USERS_FILE)) {
-      const localUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
-      console.log(`Found ${localUsers.length} users`);
-      if (localUsers.length > 0) {
-        const { error } = await supabase.from('users').upsert(localUsers);
-        if (error) console.error("Users sync error:", error);
-        results.users = error ? `Error: ${error.message}` : `Synced ${localUsers.length} items`;
+    try {
+      console.log("Checking users file:", USERS_FILE);
+      if (fs.existsSync(USERS_FILE)) {
+        const localUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
+        console.log(`Found ${localUsers.length} users`);
+        if (localUsers.length > 0) {
+          const { error } = await supabase.from('users').upsert(localUsers);
+          if (error) console.error("Users sync error:", error);
+          results.users = error ? `Error: ${error.message}` : `Synced ${localUsers.length} items`;
+        } else {
+          results.users = "Empty file";
+        }
+      } else {
+        console.warn("Users file not found");
+        results.users = "File not found";
       }
-    } else {
-      console.warn("Users file not found");
-      results.users = "File not found";
+    } catch (e: any) {
+      results.users = `Exception: ${e.message}`;
     }
 
     // Sync Diversions
-    console.log("Checking diversions file:", DIVERSIONS_FILE);
-    if (fs.existsSync(DIVERSIONS_FILE)) {
-      const localDiversions = JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
-      console.log(`Found ${localDiversions.length} diversions`);
-      if (localDiversions.length > 0) {
-        const { error } = await supabase.from('diversions').upsert(localDiversions);
-        if (error) console.error("Diversions sync error:", error);
-        results.diversions = error ? `Error: ${error.message}` : `Synced ${localDiversions.length} items`;
+    try {
+      console.log("Checking diversions file:", DIVERSIONS_FILE);
+      if (fs.existsSync(DIVERSIONS_FILE)) {
+        const localDiversions = JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
+        console.log(`Found ${localDiversions.length} diversions`);
+        if (localDiversions.length > 0) {
+          const { error } = await supabase.from('diversions').upsert(localDiversions);
+          if (error) console.error("Diversions sync error:", error);
+          results.diversions = error ? `Error: ${error.message}` : `Synced ${localDiversions.length} items`;
+        } else {
+          results.diversions = "Empty file";
+        }
+      } else {
+        console.warn("Diversions file not found");
+        results.diversions = "File not found";
       }
-    } else {
-      console.warn("Diversions file not found");
-      results.diversions = "File not found";
+    } catch (e: any) {
+      results.diversions = `Exception: ${e.message}`;
     }
 
     // Sync Services
-    console.log("Checking services file:", SERVICES_FILE);
-    if (fs.existsSync(SERVICES_FILE)) {
-      const localServices = JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
-      console.log(`Found ${localServices.length} services`);
-      if (localServices.length > 0) {
-        const { error } = await supabase.from('services').upsert(localServices);
-        if (error) console.error("Services sync error:", error);
-        results.services = error ? `Error: ${error.message}` : `Synced ${localServices.length} items`;
+    try {
+      console.log("Checking services file:", SERVICES_FILE);
+      if (fs.existsSync(SERVICES_FILE)) {
+        const localServices = JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
+        console.log(`Found ${localServices.length} services`);
+        if (localServices.length > 0) {
+          const { error } = await supabase.from('services').upsert(localServices);
+          if (error) console.error("Services sync error:", error);
+          results.services = error ? `Error: ${error.message}` : `Synced ${localServices.length} items`;
+        } else {
+          results.services = "Empty file";
+        }
+      } else {
+        console.warn("Services file not found");
+        results.services = "File not found";
       }
-    } else {
-      console.warn("Services file not found");
-      results.services = "File not found";
+    } catch (e: any) {
+      results.services = `Exception: ${e.message}`;
     }
 
     console.log("Sync completed with results:", results);
