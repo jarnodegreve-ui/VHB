@@ -76,6 +76,9 @@ const savePlanningData = async (data: any) => {
     if (error) throw error;
     return;
   }
+  if (process.env.VERCEL) {
+    throw new Error("Supabase is niet geconfigureerd op Vercel.");
+  }
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
@@ -138,6 +141,11 @@ const saveUsersData = async (data: any) => {
     console.log("Supabase upsert successful");
     return;
   }
+  
+  if (process.env.VERCEL) {
+    throw new Error("Supabase is niet geconfigureerd op Vercel. Controleer de omgevingsvariabelen (SUPABASE_URL en SUPABASE_ANON_KEY) in het Vercel dashboard.");
+  }
+  
   fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
 };
 
@@ -165,6 +173,9 @@ const saveDiversionsData = async (data: any) => {
     const { error } = await supabase.from('diversions').upsert(data);
     if (error) throw error;
     return;
+  }
+  if (process.env.VERCEL) {
+    throw new Error("Supabase is niet geconfigureerd op Vercel.");
   }
   fs.writeFileSync(DIVERSIONS_FILE, JSON.stringify(data, null, 2));
 };
@@ -206,6 +217,9 @@ const saveServicesData = async (data: any) => {
     const { error } = await supabase.from('services').upsert(data);
     if (error) throw error;
     return;
+  }
+  if (process.env.VERCEL) {
+    throw new Error("Supabase is niet geconfigureerd op Vercel.");
   }
   fs.writeFileSync(SERVICES_FILE, JSON.stringify(data, null, 2));
 };
@@ -481,6 +495,16 @@ app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.url} not found on server` });
 });
 
+// Global error handler
+app.use((err: any, req: any, res: any, next: any) => {
+  console.error("GLOBAL ERROR:", err);
+  res.status(500).json({ 
+    error: "Internal Server Error", 
+    details: err.message || String(err),
+    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
+  });
+});
+
 // Vite middleware for development
 if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
   const startVite = async () => {
@@ -500,6 +524,26 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     });
   };
   startVite();
+} else {
+  // Production mode
+  console.log("Starting in production mode...");
+  const distPath = path.join(process.cwd(), "dist");
+  
+  if (fs.existsSync(distPath)) {
+    app.use(express.static(distPath));
+    app.get("*", (req, res) => {
+      res.sendFile(path.join(distPath, "index.html"));
+    });
+  } else {
+    console.warn("Dist folder not found. Static serving disabled.");
+    app.get("*", (req, res) => {
+      res.status(404).send("Production build not found. Please run 'npm run build'.");
+    });
+  }
+
+  app.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+  });
 }
 
 export default app;
