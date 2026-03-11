@@ -1,9 +1,9 @@
 import { Diversion, Service, Shift, Update, User } from './types';
 
 export const MOCK_USERS: User[] = [
-  { id: '1', name: 'Jan de Vries', role: 'chauffeur', employeeId: 'CH-4492', lastLogin: '2024-03-05T08:30:00Z', activeSessions: 1, phone: '0470 12 34 56' },
-  { id: '2', name: 'Sarah de Groot', role: 'planner', employeeId: 'PL-1102', lastLogin: '2024-03-05T09:15:00Z', activeSessions: 0, phone: '0480 98 76 54' },
-  { id: '3', name: 'Mark Admin', role: 'admin', employeeId: 'AD-0001', lastLogin: '2024-03-05T10:00:00Z', activeSessions: 1, phone: '0490 55 44 33' },
+  { id: '1', name: 'Jan de Vries', role: 'chauffeur', employeeId: 'CH-4492', lastLogin: '2024-03-05T08:30:00Z', activeSessions: 1, phone: '0470 12 34 56', email: 'jan.devries@example.com' },
+  { id: '2', name: 'Sarah de Groot', role: 'planner', employeeId: 'PL-1102', lastLogin: '2024-03-05T09:15:00Z', activeSessions: 0, phone: '0480 98 76 54', email: 'sarah.degroot@example.com' },
+  { id: '3', name: 'Mark Admin', role: 'admin', employeeId: 'AD-0001', lastLogin: '2024-03-05T10:00:00Z', activeSessions: 1, phone: '0490 55 44 33', email: 'mark.admin@example.com' },
 ];
 
 export const MOCK_DIVERSIONS: Diversion[] = [
@@ -15,6 +15,7 @@ export const MOCK_DIVERSIONS: Diversion[] = [
     startDate: '2024-03-01',
     severity: 'medium',
     pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
+    mapCoordinates: '[[51.0543, 3.7174], [51.0550, 3.7200], [51.0560, 3.7250]]'
   },
   {
     id: '2',

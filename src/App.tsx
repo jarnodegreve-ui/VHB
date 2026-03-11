@@ -14,6 +14,8 @@ import {
   AlertTriangle, 
   Clock, 
   ChevronRight,
+  ChevronUp,
+  ChevronDown,
   User as UserIcon,
   Info,
   FileText,
@@ -36,8 +38,20 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
-import { View, User, Shift, Update, Diversion, Service } from './types';
+import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest } from './types';
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+
+// Fix for default marker icons in Leaflet
+// @ts-ignore
+delete L.Icon.Default.prototype._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
+  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
+  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+});
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -117,6 +131,9 @@ export default function App() {
   const [users, setUsers] = useState<User[]>(MOCK_USERS);
   const [diversions, setDiversions] = useState<Diversion[]>(MOCK_DIVERSIONS);
   const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
+  const [updates, setUpdates] = useState<Update[]>(MOCK_UPDATES);
+  const [swaps, setSwaps] = useState<SwapRequest[]>([]);
+  const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -125,7 +142,100 @@ export default function App() {
     fetchUsers();
     fetchDiversions();
     fetchServices();
+    fetchUpdates();
+    fetchSwaps();
+    fetchLeave();
   }, []);
+
+  const fetchUpdates = async () => {
+    try {
+      const response = await fetch('/api/updates');
+      const data = await response.json();
+      if (data && Array.isArray(data)) setUpdates(data.length > 0 ? data : MOCK_UPDATES);
+    } catch (error) {
+      console.error('Error fetching updates:', error);
+    }
+  };
+
+  const saveUpdates = async (newUpdates: Update[]) => {
+    try {
+      const response = await fetch('/api/updates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newUpdates),
+      });
+      if (response.ok) setUpdates(newUpdates);
+      return response.ok;
+    } catch (error) {
+      console.error('Error saving updates:', error);
+      return false;
+    }
+  };
+
+  const sendUrgentEmail = async (update: Update) => {
+    try {
+      const response = await fetch('/api/send-urgent-update-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          update,
+          recipients: users.filter(u => u.email)
+        }),
+      });
+      const data = await response.json();
+      if (data.success) {
+        alert(data.mocked ? `E-mail gelogd: ${data.message}` : "E-mails succesvol verzonden naar alle chauffeurs!");
+      }
+    } catch (error) {
+      console.error('Error sending urgent email:', error);
+    }
+  };
+
+  const fetchSwaps = async () => {
+    try {
+      const response = await fetch('/api/swaps');
+      const data = await response.json();
+      if (data && Array.isArray(data)) setSwaps(data);
+    } catch (error) {
+      console.error('Error fetching swaps:', error);
+    }
+  };
+
+  const saveSwaps = async (newSwaps: SwapRequest[]) => {
+    try {
+      const response = await fetch('/api/swaps', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newSwaps),
+      });
+      if (response.ok) setSwaps(newSwaps);
+    } catch (error) {
+      console.error('Error saving swaps:', error);
+    }
+  };
+
+  const fetchLeave = async () => {
+    try {
+      const response = await fetch('/api/leave');
+      const data = await response.json();
+      if (data && Array.isArray(data)) setLeaveRequests(data);
+    } catch (error) {
+      console.error('Error fetching leave:', error);
+    }
+  };
+
+  const saveLeave = async (newLeave: LeaveRequest[]) => {
+    try {
+      const response = await fetch('/api/leave', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(newLeave),
+      });
+      if (response.ok) setLeaveRequests(newLeave);
+    } catch (error) {
+      console.error('Error saving leave:', error);
+    }
+  };
 
   const fetchServices = async () => {
     try {
@@ -385,10 +495,28 @@ export default function App() {
             active={currentView === 'updates'} 
             onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
           />
+          <NavItem 
+            icon={<RotateCcw size={20} />} 
+            label="Dienstwissels" 
+            active={currentView === 'ruil-verzoeken'} 
+            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem 
+            icon={<Calendar size={20} />} 
+            label="Verlof Aanvragen" 
+            active={currentView === 'verlof'} 
+            onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }} 
+          />
 
           {isPlanner && (
             <>
               <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Beheer</div>
+              <NavItem 
+                icon={<Calendar size={20} />} 
+                label="Verlofbeheer" 
+                active={currentView === 'verlof-beheer'} 
+                onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }} 
+              />
               <NavItem 
                 icon={<Settings size={20} />} 
                 label="Beheer Roosters" 
@@ -495,14 +623,16 @@ export default function App() {
               {currentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
               {currentView === 'rooster' && <ScheduleView user={currentUser} shifts={shifts} />}
               {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
-              {currentView === 'updates' && <UpdatesView />}
+              {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} />}
               {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} />}
-              {currentView === 'beheer-updates' && <ManageUpdatesView />}
+              {currentView === 'beheer-updates' && <ManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} />}
               {currentView === 'gebruikers' && <ManageUsersView users={users} onSave={saveUsers} />}
               {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {currentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
               {currentView === 'beheer-contactlijst' && <ManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" />}
+              {currentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
+              {(currentView === 'verlof' || currentView === 'verlof-beheer') && <LeaveManagementView user={currentUser} leaveRequests={leaveRequests} users={users} onSave={saveLeave} />}
               {currentView === 'beheer-debug' && <DebugView />}
             </motion.div>
           </AnimatePresence>
@@ -536,9 +666,9 @@ export default function App() {
             onClick={() => setCurrentView('contacten')} 
           />
           <MobileNavItem 
-            icon={<Bell size={20} />} 
-            active={currentView === 'updates'} 
-            onClick={() => setCurrentView('updates')} 
+            icon={<Calendar size={20} />} 
+            active={currentView === 'verlof'} 
+            onClick={() => setCurrentView('verlof')} 
           />
           <button 
             onClick={() => setIsSidebarOpen(true)}
@@ -760,10 +890,29 @@ function ContactsView({ users }: { users: User[] }) {
 
 function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<'number' | 'time'>('number');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
   const filteredServices = services.filter(s => 
     s.serviceNumber.toLowerCase().includes(searchQuery.toLowerCase())
-  ).sort((a, b) => a.serviceNumber.localeCompare(b.serviceNumber));
+  ).sort((a, b) => {
+    let comparison = 0;
+    if (sortBy === 'number') {
+      comparison = a.serviceNumber.localeCompare(b.serviceNumber, undefined, { numeric: true });
+    } else {
+      comparison = a.startTime.localeCompare(b.startTime);
+    }
+    return sortOrder === 'asc' ? comparison : -comparison;
+  });
+
+  const toggleSort = (field: 'number' | 'time') => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortBy(field);
+      setSortOrder('asc');
+    }
+  };
 
   const downloadCSV = () => {
     const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Start 2', 'Eind 2', 'Start 3', 'Eind 3'];
@@ -800,22 +949,44 @@ function ServicesView({ services }: { services: Service[] }) {
           <h3 className="text-2xl font-black tracking-tight">Dienstoverzicht</h3>
           <p className="text-sm text-slate-500 font-medium">Overzicht van alle diensten en bijbehorende uren.</p>
         </div>
-        <div className="flex items-center gap-3 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          <div className="flex bg-slate-100 p-1 rounded-xl">
+            <button
+              onClick={() => toggleSort('number')}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                sortBy === 'number' ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Dienst #
+              {sortBy === 'number' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+            </button>
+            <button
+              onClick={() => toggleSort('time')}
+              className={cn(
+                "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                sortBy === 'time' ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              Starttijd
+              {sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+            </button>
+          </div>
           <button
             onClick={downloadCSV}
             className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm active:scale-95"
             title="Download als CSV"
           >
             <Download size={18} className="text-oker-500" />
-            <span className="hidden sm:inline">Download CSV</span>
+            <span className="hidden sm:inline">CSV</span>
           </button>
-          <div className="relative flex-1 md:w-72 group">
+          <div className="relative flex-1 md:w-64 group">
             <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
               <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
             </div>
             <input
               type="text"
-              placeholder="Zoek op dienstnummer..."
+              placeholder="Zoek..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
@@ -824,8 +995,9 @@ function ServicesView({ services }: { services: Service[] }) {
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white md:bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
@@ -869,16 +1041,59 @@ function ServicesView({ services }: { services: Service[] }) {
                   </td>
                 </tr>
               ))}
-              {filteredServices.length === 0 && (
-                <tr>
-                  <td colSpan={4} className="px-8 py-12 text-center text-slate-400 font-medium">
-                    Geen diensten gevonden voor "{searchQuery}"
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-slate-50">
+          {filteredServices.map(s => (
+            <div key={s.id} className="p-6 space-y-4 hover:bg-slate-50/50 transition-colors">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                <div className="px-3 py-1 bg-oker-50 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                  Dienst
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 1</span>
+                  <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                    <Clock size={14} className="text-oker-500" />
+                    {s.startTime} - {s.endTime}
+                  </div>
+                </div>
+
+                {s.startTime2 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</span>
+                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                      <Clock size={14} className="text-oker-500" />
+                      {s.startTime2} - {s.endTime2}
+                    </div>
+                  </div>
+                )}
+
+                {s.startTime3 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</span>
+                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                      <Clock size={14} className="text-oker-500" />
+                      {s.startTime3} - {s.endTime3}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {filteredServices.length === 0 && (
+          <div className="px-8 py-12 text-center text-slate-400 font-medium">
+            Geen diensten gevonden voor "{searchQuery}"
+          </div>
+        )}
       </div>
     </div>
   );
@@ -968,36 +1183,61 @@ function DashboardView({ user, shifts, diversions }: { user: User, shifts: Shift
 function DiversionsView({ diversions }: { diversions: Diversion[] }) {
   const [selectedDiversion, setSelectedDiversion] = useState<Diversion | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
+  const [selectedLine, setSelectedLine] = useState<string>('all');
 
-  const filteredDiversions = diversions.filter(div => 
-    div.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    div.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    div.line.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Get unique line numbers for the filter
+  const uniqueLines = Array.from(new Set(diversions.map(div => div.line))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+
+  const filteredDiversions = diversions.filter(div => {
+    const matchesSearch = div.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      div.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      div.line.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesLine = selectedLine === 'all' || div.line === selectedLine;
+    
+    return matchesSearch && matchesLine;
+  });
 
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h3 className="text-2xl font-black tracking-tight">Actuele Omleidingen</h3>
-        <div className="relative w-full md:w-72 group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
-          </div>
-          <input
-            type="text"
-            placeholder="Zoek op titel, lijn of omschrijving..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
-          />
-          {searchQuery && (
-            <button 
-              onClick={() => setSearchQuery('')}
-              className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-300 hover:text-slate-500"
+        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+          <div className="relative group">
+            <select
+              value={selectedLine}
+              onChange={(e) => setSelectedLine(e.target.value)}
+              className="appearance-none w-full sm:w-40 pl-4 pr-10 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-bold text-sm shadow-sm cursor-pointer"
             >
-              <X size={16} />
-            </button>
-          )}
+              <option value="all">Alle Lijnen</option>
+              {uniqueLines.map(line => (
+                <option key={line} value={line}>Lijn {line}</option>
+              ))}
+            </select>
+            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-400">
+              <ChevronDown size={16} />
+            </div>
+          </div>
+          <div className="relative flex-1 md:w-72 group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Zoek..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
+            />
+            {searchQuery && (
+              <button 
+                onClick={() => setSearchQuery('')}
+                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-300 hover:text-slate-500"
+              >
+                <X size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
       
@@ -1044,48 +1284,83 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                   className="overflow-hidden bg-slate-50/50 border-t border-slate-100"
                 >
                   <div className="p-6 md:p-8 space-y-6">
-                    <div className="prose prose-slate max-w-none">
-                      <p className="text-slate-700 leading-relaxed font-medium text-sm md:text-base">{div.description}</p>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-4 md:gap-8">
-                      <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
-                        <Calendar size={14} className="text-oker-400" />
-                        <span>Start: {div.startDate}</span>
+                    <div className="grid md:grid-cols-2 gap-8">
+                      <div className="space-y-6">
+                        <div className="prose prose-slate max-w-none">
+                          <p className="text-slate-700 leading-relaxed font-medium text-sm md:text-base">{div.description}</p>
+                        </div>
+                        
+                        <div className="flex flex-wrap items-center gap-4 md:gap-8">
+                          <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
+                            <Calendar size={14} className="text-oker-400" />
+                            <span>Start: {div.startDate}</span>
+                          </div>
+                          {div.endDate && (
+                            <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
+                              <Calendar size={14} className="text-oker-400" />
+                              <span>Eind: {div.endDate}</span>
+                            </div>
+                          )}
+                        </div>
+                        
+                        {div.pdfUrl ? (
+                          <div className="pt-2 flex flex-col sm:flex-row gap-3">
+                            <a 
+                              href={div.pdfUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                            >
+                              <FileText size={18} className="text-red-500" />
+                              BEKIJK PDF
+                            </a>
+                            <a 
+                              href={div.pdfUrl} 
+                              download
+                              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-emerald-500 rounded-2xl text-sm font-black text-white hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
+                            >
+                              <Download size={18} />
+                              DOWNLOAD PDF
+                            </a>
+                          </div>
+                        ) : (
+                          <div className="p-4 bg-slate-100/50 rounded-2xl border border-dashed border-slate-200 text-center">
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Geen PDF bijlage beschikbaar</p>
+                          </div>
+                        )}
                       </div>
-                      {div.endDate && (
-                        <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
-                          <Calendar size={14} className="text-oker-400" />
-                          <span>Eind: {div.endDate}</span>
+
+                      {div.mapCoordinates && (
+                        <div className="space-y-2">
+                          <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Visuele Omleiding</p>
+                          <div className="h-64 rounded-3xl overflow-hidden border border-slate-100 shadow-inner z-0">
+                            <MapContainer 
+                              center={JSON.parse(div.mapCoordinates)[0]} 
+                              zoom={13} 
+                              style={{ height: '100%', width: '100%' }}
+                              scrollWheelZoom={false}
+                            >
+                              <TileLayer
+                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                              />
+                              <Polyline 
+                                positions={JSON.parse(div.mapCoordinates)} 
+                                color={div.severity === 'high' ? '#ef4444' : div.severity === 'medium' ? '#f59e0b' : '#3b82f6'} 
+                                weight={5}
+                                opacity={0.7}
+                              />
+                              <Marker position={JSON.parse(div.mapCoordinates)[0]}>
+                                <Popup>Start Omleiding</Popup>
+                              </Marker>
+                              <Marker position={JSON.parse(div.mapCoordinates)[JSON.parse(div.mapCoordinates).length - 1]}>
+                                <Popup>Eind Omleiding</Popup>
+                              </Marker>
+                            </MapContainer>
+                          </div>
                         </div>
                       )}
                     </div>
-                    
-                    {div.pdfUrl ? (
-                      <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                        <a 
-                          href={div.pdfUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
-                        >
-                          <FileText size={18} className="text-red-500" />
-                          BEKIJK PDF
-                        </a>
-                        <a 
-                          href={div.pdfUrl} 
-                          download
-                          className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-emerald-500 rounded-2xl text-sm font-black text-white hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 active:scale-95"
-                        >
-                          <Download size={18} />
-                          DOWNLOAD PDF
-                        </a>
-                      </div>
-                    ) : (
-                      <div className="p-4 bg-slate-100/50 rounded-2xl border border-dashed border-slate-200 text-center">
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Geen PDF bijlage beschikbaar</p>
-                      </div>
-                    )}
                   </div>
                 </motion.div>
               )}
@@ -1368,43 +1643,79 @@ function DebugView() {
   );
 }
 
-function UpdatesView() {
+function UpdatesView({ updates }: { updates: Update[] }) {
+  const [filter, setFilter] = useState<'all' | 'algemeen' | 'veiligheid' | 'technisch'>('all');
+
+  const filteredUpdates = updates.filter(u => filter === 'all' || u.category === filter);
+
   return (
     <div className="max-w-3xl space-y-6">
-      <h3 className="text-2xl font-black tracking-tight">Updates & Nieuws</h3>
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <h3 className="text-2xl font-black tracking-tight">Updates & Nieuws</h3>
+        <div className="flex bg-slate-100 p-1 rounded-xl">
+          {(['all', 'algemeen', 'veiligheid', 'technisch'] as const).map(cat => (
+            <button
+              key={cat}
+              onClick={() => setFilter(cat)}
+              className={cn(
+                "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                filter === cat ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+              )}
+            >
+              {cat === 'all' ? 'Alles' : cat}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-6">
-        {MOCK_UPDATES.map(update => (
-          <div key={update.id} className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100 relative overflow-hidden group transition-all duration-300 hover:shadow-md">
-            <div className={cn(
-              "absolute top-0 left-0 w-1.5 h-full",
-              update.category === 'veiligheid' ? "bg-red-500" : 
-              update.category === 'technisch' ? "bg-blue-500" : "bg-emerald-500"
-            )} />
-            
-            <div className="flex justify-between items-center mb-6">
-              <span className={cn(
-                "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em]",
-                update.category === 'veiligheid' ? "bg-red-50 text-red-600" : 
-                update.category === 'technisch' ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
-              )}>
-                {update.category}
-              </span>
-              <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-widest">
-                <Clock size={12} className="text-slate-300" />
-                {update.date}
+        {filteredUpdates.length > 0 ? (
+          filteredUpdates.map(update => (
+            <div key={update.id} className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100 relative overflow-hidden group transition-all duration-300 hover:shadow-md">
+              <div className={cn(
+                "absolute top-0 left-0 w-1.5 h-full",
+                update.isUrgent ? "bg-red-600" :
+                update.category === 'veiligheid' ? "bg-red-500" : 
+                update.category === 'technisch' ? "bg-blue-500" : "bg-emerald-500"
+              )} />
+              
+              <div className="flex justify-between items-center mb-6">
+                <div className="flex gap-2">
+                  <span className={cn(
+                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em]",
+                    update.category === 'veiligheid' ? "bg-red-50 text-red-600" : 
+                    update.category === 'technisch' ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
+                  )}>
+                    {update.category}
+                  </span>
+                  {update.isUrgent && (
+                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-red-600 text-white flex items-center gap-1">
+                      <AlertTriangle size={10} /> DRINGEND
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                  <Clock size={12} className="text-slate-300" />
+                  {update.date}
+                </div>
+              </div>
+              
+              <h4 className="text-xl font-black text-slate-800 mb-4 group-hover:text-oker-500 transition-colors leading-tight">{update.title}</h4>
+              <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">{update.content}</p>
+              
+              <div className="mt-6 pt-6 border-t border-slate-50 flex justify-end">
+                <button className="text-[10px] font-black text-oker-500 uppercase tracking-widest hover:text-oker-600 transition-colors flex items-center gap-2">
+                  Lees meer <ChevronRight size={14} />
+                </button>
               </div>
             </div>
-            
-            <h4 className="text-xl font-black text-slate-800 mb-4 group-hover:text-oker-500 transition-colors leading-tight">{update.title}</h4>
-            <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">{update.content}</p>
-            
-            <div className="mt-6 pt-6 border-t border-slate-50 flex justify-end">
-              <button className="text-[10px] font-black text-oker-500 uppercase tracking-widest hover:text-oker-600 transition-colors flex items-center gap-2">
-                Lees meer <ChevronRight size={14} />
-              </button>
-            </div>
+          ))
+        ) : (
+          <div className="bg-white p-12 rounded-[32px] text-center border border-slate-100">
+            <Info size={48} className="mx-auto text-slate-200 mb-4" />
+            <p className="text-slate-400 font-bold">Geen updates gevonden in deze categorie.</p>
           </div>
-        ))}
+        )}
       </div>
     </div>
   );
@@ -1545,7 +1856,35 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
   );
 }
 
-function ManageUpdatesView() {
+function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Update[], onSave: (u: Update[]) => Promise<boolean>, onSendUrgentEmail: (u: Update) => Promise<void> }) {
+  const [newUpdate, setNewUpdate] = useState({ title: '', category: 'algemeen', content: '', isUrgent: false });
+  const [isPublishing, setIsPublishing] = useState(false);
+
+  const handlePublish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUpdate.title || !newUpdate.content) return;
+
+    setIsPublishing(true);
+    const updateToAdd: Update = {
+      id: Date.now().toString(),
+      date: new Date().toLocaleDateString('nl-BE'),
+      title: newUpdate.title,
+      category: newUpdate.category as any,
+      content: newUpdate.content,
+      isUrgent: newUpdate.isUrgent
+    };
+
+    const success = await onSave([updateToAdd, ...updates]);
+    if (success) {
+      if (newUpdate.isUrgent) {
+        await onSendUrgentEmail(updateToAdd);
+      }
+      setNewUpdate({ title: '', category: 'algemeen', content: '', isUrgent: false });
+      alert('Update succesvol gepubliceerd!');
+    }
+    setIsPublishing(false);
+  };
+
   return (
     <div className="max-w-3xl space-y-6 md:space-y-8">
       <h3 className="text-2xl font-black tracking-tight">Beheer Updates</h3>
@@ -1554,24 +1893,60 @@ function ManageUpdatesView() {
           <Bell size={24} className="text-emerald-500" />
           Nieuwe Update Publiceren
         </h3>
-        <div className="space-y-6">
-          <Input label="Titel" type="text" placeholder="Onderwerp van de update" />
-          <Input label="Categorie" type="select" options={[
-            { label: 'Algemeen', value: 'algemeen' },
-            { label: 'Veiligheid', value: 'veiligheid' },
-            { label: 'Technisch', value: 'technisch' }
-          ]} />
+        <form onSubmit={handlePublish} className="space-y-6">
+          <Input 
+            label="Titel" 
+            type="text" 
+            placeholder="Onderwerp van de update" 
+            value={newUpdate.title}
+            onChange={(e) => setNewUpdate({ ...newUpdate, title: e.target.value })}
+          />
+          <Input 
+            label="Categorie" 
+            type="select" 
+            options={[
+              { label: 'Algemeen', value: 'algemeen' },
+              { label: 'Veiligheid', value: 'veiligheid' },
+              { label: 'Technisch', value: 'technisch' }
+            ]} 
+            value={newUpdate.category}
+            onChange={(e) => setNewUpdate({ ...newUpdate, category: e.target.value })}
+          />
+          
+          <div className="flex items-center gap-3 p-4 bg-red-50 rounded-2xl border border-red-100">
+            <input 
+              type="checkbox" 
+              id="isUrgent" 
+              className="w-5 h-5 rounded border-red-300 text-red-600 focus:ring-red-500"
+              checked={newUpdate.isUrgent}
+              onChange={(e) => setNewUpdate({ ...newUpdate, isUrgent: e.target.checked })}
+            />
+            <label htmlFor="isUrgent" className="text-sm font-black text-red-700 uppercase tracking-widest cursor-pointer flex items-center gap-2">
+              <AlertTriangle size={16} /> Markeer als DRINGEND (verstuurt automatische e-mail)
+            </label>
+          </div>
+
           <div>
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Inhoud van het bericht</label>
             <textarea 
               className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
               placeholder="Schrijf hier het bericht voor de chauffeurs..."
+              value={newUpdate.content}
+              onChange={(e) => setNewUpdate({ ...newUpdate, content: e.target.value })}
             />
           </div>
-        </div>
-        <button className="w-full mt-8 bg-emerald-500 text-white font-black px-8 py-4 rounded-2xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase tracking-widest text-xs">
-          Update Publiceren
-        </button>
+          
+          <button 
+            type="submit"
+            disabled={isPublishing}
+            className={cn(
+              "w-full mt-8 font-black px-8 py-4 rounded-2xl transition-all shadow-xl uppercase tracking-widest text-xs active:scale-95",
+              isPublishing ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20"
+            )}
+          >
+            {isPublishing ? 'Publiceren...' : 'Update Publiceren'}
+          </button>
+        </form>
       </div>
     </div>
   );
@@ -1581,7 +1956,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
-  const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '' });
+  const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -1602,12 +1977,13 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
       employeeId: newUser.employeeId || `VHB-${Math.floor(1000 + Math.random() * 9000)}`,
       password: newUser.password || '123',
       phone: newUser.phone,
+      email: newUser.email,
       isActive: true
     };
 
     onSave([...users, userToAdd]);
     setShowAddModal(false);
-    setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '' });
+    setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   };
 
   const handleUpdateUser = (e: React.FormEvent) => {
@@ -1684,6 +2060,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
           const employeeId = findValue(['id', 'employee', 'personeel', 'nummer', 'code', 'nr']);
           const password = findValue(['wachtwoord', 'password', 'pass', 'wacht', 'pw']);
           const phone = findValue(['gsm', 'telefoon', 'phone', 'mobiel', 'gsm-nummer', 'tel']);
+          const email = findValue(['email', 'mail', 'e-mail', 'adres']);
           
           // Normalize role
           let role: 'admin' | 'planner' | 'chauffeur' = 'chauffeur';
@@ -1699,6 +2076,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
             employeeId: employeeId?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
             password: password?.toString() || '123',
             phone: phone?.toString().trim() || undefined,
+            email: email?.toString().trim() || undefined,
             isActive: true
           };
         }).filter(u => u.name && u.name.length > 1);
@@ -1719,6 +2097,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
               newUsersList[existingIdx] = {
                 ...newUsersList[existingIdx],
                 phone: impUser.phone || newUsersList[existingIdx].phone,
+                email: impUser.email || newUsersList[existingIdx].email,
                 role: impUser.role || newUsersList[existingIdx].role,
                 employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId,
                 // Update password only if provided and not default '123'
@@ -1909,6 +2288,16 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
                     placeholder="bijv. 0470 12 34 56"
                   />
                 </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">E-mailadres (Optioneel)</label>
+                  <input 
+                    type="email" 
+                    value={newUser.email}
+                    onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    placeholder="bijv. jan@voorbeeld.be"
+                  />
+                </div>
                 <div className="flex gap-3 pt-4">
                   <button 
                     type="button"
@@ -2002,6 +2391,16 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
                     onChange={(e) => setEditingUser({...editingUser, phone: e.target.value})}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
                     placeholder="bijv. 0470 12 34 56"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">E-mailadres</label>
+                  <input 
+                    type="email" 
+                    value={editingUser.email || ''}
+                    onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
+                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    placeholder="bijv. jan@voorbeeld.be"
                   />
                 </div>
 
@@ -2236,7 +2635,8 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
     title: '',
     description: '',
     startDate: new Date().toISOString().split('T')[0],
-    severity: 'medium'
+    severity: 'medium',
+    mapCoordinates: ''
   });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
 
@@ -2247,7 +2647,8 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
       title: '',
       description: '',
       startDate: new Date().toISOString().split('T')[0],
-      severity: 'medium'
+      severity: 'medium',
+      mapCoordinates: ''
     });
     setPdfFile(null);
     setShowModal(true);
@@ -2261,7 +2662,8 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
       description: div.description,
       startDate: div.startDate,
       endDate: div.endDate,
-      severity: div.severity
+      severity: div.severity,
+      mapCoordinates: div.mapCoordinates || ''
     });
     setPdfFile(null);
     setShowModal(true);
@@ -2299,7 +2701,8 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
         startDate: formData.startDate || '',
         endDate: formData.endDate,
         severity: formData.severity as any || 'medium',
-        pdfUrl: pdfUrl || undefined
+        pdfUrl: pdfUrl || undefined,
+        mapCoordinates: formData.mapCoordinates || undefined
       };
       onSave([...diversions, diversionToAdd]);
     }
@@ -2489,6 +2892,18 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
                 </div>
 
                 <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Kaart Coördinaten (JSON Array)</label>
+                  <textarea 
+                    rows={2}
+                    value={formData.mapCoordinates}
+                    onChange={(e) => setFormData({...formData, mapCoordinates: e.target.value})}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm resize-none"
+                    placeholder='[[lat, lng], [lat, lng], ...]'
+                  />
+                  <p className="text-[9px] text-slate-400 font-medium px-1">Plak hier een JSON array van coördinaten om de route op de kaart te tonen.</p>
+                </div>
+
+                <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">PDF Bestand {editingId && '(Optioneel)'}</label>
                   <div className="relative">
                     <input 
@@ -2542,18 +2957,24 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
   );
 }
 
-function Input({ label, type, placeholder, options }: { label: string, type: string, placeholder?: string, options?: { label: string, value: string }[] }) {
+function Input({ label, type, placeholder, options, value, onChange }: { label: string, type: string, placeholder?: string, options?: { label: string, value: string }[], value?: any, onChange?: (e: any) => void }) {
   return (
     <div>
       <label className="block text-sm font-semibold text-slate-700 mb-2">{label}</label>
       {type === 'select' ? (
-        <select className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-white">
+        <select 
+          value={value}
+          onChange={onChange}
+          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all bg-white"
+        >
           {options?.map(opt => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
         </select>
       ) : (
         <input 
           type={type} 
           placeholder={placeholder}
+          value={value}
+          onChange={onChange}
           className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
         />
       )}
@@ -2791,39 +3212,93 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
       </div>
 
       <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50/50">
-              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienst</th>
-              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 1</th>
-              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 2</th>
-              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 3</th>
-              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Acties</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {services.map(s => (
-              <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-6 py-5 font-black text-slate-800">{s.serviceNumber}</td>
-                <td className="px-6 py-5 text-slate-600 font-bold text-xs">
-                  {s.startTime} - {s.endTime}
-                </td>
-                <td className="px-6 py-5 text-slate-600 font-bold text-xs">
-                  {s.startTime2 ? `${s.startTime2} - ${s.endTime2}` : '-'}
-                </td>
-                <td className="px-6 py-5 text-slate-600 font-bold text-xs">
-                  {s.startTime3 ? `${s.startTime3} - ${s.endTime3}` : '-'}
-                </td>
-                <td className="px-6 py-5 text-right">
-                  <div className="flex items-center justify-end gap-2">
-                    <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
-                    <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
-                  </div>
-                </td>
+        {/* Desktop Table View */}
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50">
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienst</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 1</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 2</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 3</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Acties</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {services.map(s => (
+                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-6 py-5 font-black text-slate-800">{s.serviceNumber}</td>
+                  <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                    {s.startTime} - {s.endTime}
+                  </td>
+                  <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                    {s.startTime2 ? `${s.startTime2} - ${s.endTime2}` : '-'}
+                  </td>
+                  <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                    {s.startTime3 ? `${s.startTime3} - ${s.endTime3}` : '-'}
+                  </td>
+                  <td className="px-6 py-5 text-right">
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
+                      <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Mobile Card View */}
+        <div className="md:hidden divide-y divide-slate-50">
+          {services.map(s => (
+            <div key={s.id} className="p-6 space-y-4 hover:bg-slate-50/50 transition-colors">
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
+                  <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 gap-3">
+                <div className="flex flex-col gap-1">
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 1</span>
+                  <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                    <Clock size={14} className="text-oker-500" />
+                    {s.startTime} - {s.endTime}
+                  </div>
+                </div>
+
+                {s.startTime2 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</span>
+                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                      <Clock size={14} className="text-oker-500" />
+                      {s.startTime2} - {s.endTime2}
+                    </div>
+                  </div>
+                )}
+
+                {s.startTime3 && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</span>
+                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                      <Clock size={14} className="text-oker-500" />
+                      {s.startTime3} - {s.endTime3}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {services.length === 0 && (
+          <div className="px-8 py-12 text-center text-slate-400 font-medium">
+            Geen diensten geconfigureerd.
+          </div>
+        )}
       </div>
 
       <AnimatePresence>
@@ -2928,6 +3403,504 @@ function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, lab
         <p className="text-xl md:text-3xl font-black text-slate-900 mt-0.5 md:mt-1 tracking-tight">{value}</p>
         <p className="text-[10px] md:text-xs text-slate-500 mt-0.5 md:mt-1 font-medium">{subValue}</p>
       </div>
+    </div>
+  );
+}
+
+function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
+  const [showOfferModal, setShowOfferModal] = useState(false);
+  const [selectedShift, setSelectedShift] = useState<string>('');
+  const [reason, setReason] = useState('');
+
+  const isPlanner = user.role === 'planner' || user.role === 'admin';
+  const myShifts = shifts.filter(s => s.driverId === user.id);
+  const mySwaps = swaps.filter(s => s.requesterId === user.id);
+  const availableSwaps = swaps.filter(s => s.status === 'pending' && s.requesterId !== user.id);
+
+  const handleOfferShift = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedShift) return;
+
+    const newSwap: SwapRequest = {
+      id: Date.now().toString(),
+      shiftId: selectedShift,
+      requesterId: user.id,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+      reason
+    };
+
+    onSave([...swaps, newSwap]);
+    setShowOfferModal(false);
+    setSelectedShift('');
+    setReason('');
+  };
+
+  const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status']) => {
+    const updatedSwaps = swaps.map(s => s.id === swapId ? { ...s, status: newStatus } : s);
+    onSave(updatedSwaps);
+  };
+
+  return (
+    <div className="max-w-4xl space-y-8">
+      <div className="flex items-center justify-between">
+        <h3 className="text-2xl font-black tracking-tight">Dienstwissels</h3>
+        {!isPlanner && (
+          <button 
+            onClick={() => setShowOfferModal(true)}
+            className="px-6 py-3 bg-oker-500 text-white rounded-2xl font-black text-sm hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20"
+          >
+            Dienst Aanbieden
+          </button>
+        )}
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-8">
+        <div className="space-y-4">
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Mijn Verzoeken</h4>
+          {mySwaps.length > 0 ? (
+            mySwaps.map(swap => {
+              const shift = shifts.find(s => s.id === swap.shiftId);
+              return (
+                <div key={swap.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
+                  <div>
+                    <p className="font-black text-slate-800">{shift?.line} - {shift?.date}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
+                  </div>
+                  <span className={cn(
+                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                    swap.status === 'pending' ? "bg-amber-50 text-amber-600" :
+                    swap.status === 'approved' ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                  )}>
+                    {swap.status}
+                  </span>
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-slate-400 font-medium italic p-4">Geen actieve verzoeken.</p>
+          )}
+        </div>
+
+        <div className="space-y-4">
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Openstaande Wissels</h4>
+          {availableSwaps.length > 0 ? (
+            availableSwaps.map(swap => {
+              const shift = shifts.find(s => s.id === swap.shiftId);
+              const requester = users.find(u => u.id === swap.requesterId);
+              return (
+                <div key={swap.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="font-black text-slate-800">{shift?.line} - {shift?.date}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Door: {requester?.name}</p>
+                    </div>
+                    <button className="px-4 py-2 bg-oker-50 text-oker-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-oker-100 transition-all">
+                      Overnemen
+                    </button>
+                  </div>
+                  {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
+                </div>
+              );
+            })
+          ) : (
+            <p className="text-slate-400 font-medium italic p-4">Geen openstaande wissels.</p>
+          )}
+        </div>
+      </div>
+
+      {isPlanner && (
+        <div className="space-y-4 pt-8">
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Goedkeuring Planner</h4>
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+            <table className="w-full text-left">
+              <thead className="bg-slate-50 border-b border-slate-100">
+                <tr>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chauffeur</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acties</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {swaps.filter(s => s.status === 'pending').map(swap => {
+                  const shift = shifts.find(s => s.id === swap.shiftId);
+                  const requester = users.find(u => u.id === swap.requesterId);
+                  return (
+                    <tr key={swap.id}>
+                      <td className="px-6 py-4 font-bold text-sm">{requester?.name}</td>
+                      <td className="px-6 py-4 text-xs font-medium">{shift?.line} ({shift?.date})</td>
+                      <td className="px-6 py-4">
+                        <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-widest">Pending</span>
+                      </td>
+                      <td className="px-6 py-4 flex gap-2">
+                        <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Plus size={18} /></button>
+                        <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      <AnimatePresence>
+        {showOfferModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden">
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                <h4 className="text-xl font-black">Dienst Aanbieden</h4>
+                <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
+              </div>
+              <form onSubmit={handleOfferShift} className="p-8 space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Selecteer Dienst</label>
+                  <select 
+                    value={selectedShift} 
+                    onChange={(e) => setSelectedShift(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:border-oker-400"
+                    required
+                  >
+                    <option value="">Kies een dienst...</option>
+                    {myShifts.map(s => (
+                      <option key={s.id} value={s.id}>{s.date} - {s.line} ({s.startTime})</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reden (optioneel)</label>
+                  <textarea 
+                    value={reason} 
+                    onChange={(e) => setReason(e.target.value)}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:border-oker-400 h-24 resize-none"
+                    placeholder="Waarom wil je ruilen?"
+                  />
+                </div>
+                <button type="submit" className="w-full bg-oker-500 text-white font-black py-4 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20">
+                  Aanbieden
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: User, leaveRequests: LeaveRequest[], users: User[], onSave: (l: LeaveRequest[]) => void }) {
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'vakantie' as LeaveRequest['type'], comment: '' });
+  const [viewMonth, setViewMonth] = useState(new Date(2026, 2, 1)); // Maart 2026
+
+  const isPlanner = user.role === 'planner' || user.role === 'admin';
+  const myRequests = leaveRequests.filter(r => r.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+  const handleRequestLeave = (e: React.FormEvent) => {
+    e.preventDefault();
+    const newRequest: LeaveRequest = {
+      id: Date.now().toString(),
+      userId: user.id,
+      ...formData,
+      status: 'pending',
+      createdAt: new Date().toISOString()
+    };
+    onSave([...leaveRequests, newRequest]);
+    setShowRequestModal(false);
+    setFormData({ startDate: '', endDate: '', type: 'vakantie', comment: '' });
+  };
+
+  const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status']) => {
+    const updated = leaveRequests.map(r => r.id === requestId ? { ...r, status: newStatus } : r);
+    onSave(updated);
+  };
+
+  const getRequestsForDate = (dateStr: string) => {
+    return leaveRequests.filter(r => {
+      const start = new Date(r.startDate);
+      const end = new Date(r.endDate);
+      const current = new Date(dateStr);
+      return r.status === 'approved' && current >= start && current <= end;
+    });
+  };
+
+  const daysInMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth() + 1, 0).getDate();
+  const firstDayOfMonth = new Date(viewMonth.getFullYear(), viewMonth.getMonth(), 1).getDay();
+  const monthName = viewMonth.toLocaleString('nl-BE', { month: 'long', year: 'numeric' });
+
+  const calendarDays = [];
+  // Add empty slots for days before the first day of the month
+  const startOffset = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1; // Adjust for Monday start
+  for (let i = 0; i < startOffset; i++) {
+    calendarDays.push(null);
+  }
+  for (let i = 1; i <= daysInMonth; i++) {
+    calendarDays.push(i);
+  }
+
+  return (
+    <div className="max-w-6xl space-y-8 pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-black tracking-tight">Verlof & Afwezigheid</h3>
+          <p className="text-sm text-slate-500 font-medium">Beheer verlofaanvragen en bekijk de bezetting.</p>
+        </div>
+        {!isPlanner && (
+          <button 
+            onClick={() => setShowRequestModal(true)}
+            className="px-8 py-4 bg-oker-500 text-white rounded-2xl font-black text-sm hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 active:scale-95 flex items-center gap-2"
+          >
+            <Plus size={20} /> Verlof Aanvragen
+          </button>
+        )}
+      </div>
+
+      <div className="grid lg:grid-cols-12 gap-8">
+        {/* Left Column: Calendar & Occupancy */}
+        <div className="lg:col-span-8 space-y-6">
+          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+            <div className="flex items-center justify-between mb-8">
+              <h4 className="text-lg font-black tracking-tight capitalize">{monthName}</h4>
+              <div className="flex gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-emerald-500 rounded-full" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voldoende</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-amber-500 rounded-full" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Krap</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 bg-red-500 rounded-full" />
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Onderbezet</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-7 gap-3">
+              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map(d => (
+                <div key={d} className="text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] mb-2">{d}</div>
+              ))}
+              {calendarDays.map((day, i) => {
+                if (day === null) return <div key={`empty-${i}`} />;
+                
+                const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                const dayRequests = getRequestsForDate(dateStr);
+                const occupancyCount = dayRequests.length;
+                
+                const statusColor = occupancyCount >= 3 ? 'bg-red-500' : occupancyCount >= 2 ? 'bg-amber-500' : occupancyCount >= 1 ? 'bg-emerald-500' : 'bg-slate-100';
+                const isSelected = selectedDate === dateStr;
+
+                return (
+                  <button 
+                    key={day}
+                    onClick={() => setSelectedDate(isSelected ? null : dateStr)}
+                    className={cn(
+                      "aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group",
+                      isSelected ? "border-oker-500 bg-oker-50 ring-4 ring-oker-500/10" : "border-slate-50 hover:border-slate-200 bg-white"
+                    )}
+                  >
+                    <span className={cn(
+                      "text-sm font-black transition-colors",
+                      isSelected ? "text-oker-600" : "text-slate-400 group-hover:text-slate-600"
+                    )}>{day}</span>
+                    {occupancyCount > 0 && (
+                      <div className={cn("w-1.5 h-1.5 rounded-full mt-1.5", statusColor)} />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {selectedDate && (
+            <motion.div 
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <h4 className="font-black text-slate-800">Afwezigheid op {new Date(selectedDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
+                <button onClick={() => setSelectedDate(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+              </div>
+              <div className="space-y-3">
+                {getRequestsForDate(selectedDate).length > 0 ? (
+                  getRequestsForDate(selectedDate).map(req => {
+                    const requester = users.find(u => u.id === req.userId);
+                    return (
+                      <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100">
+                            <UserIcon size={20} />
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-800 text-sm">{requester?.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{req.type}</p>
+                          </div>
+                        </div>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{req.startDate} - {req.endDate}</span>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="text-center py-4 text-slate-400 font-medium italic">Geen afwezigen op deze dag.</p>
+                )}
+              </div>
+            </motion.div>
+          )}
+        </div>
+
+        {/* Right Column: My Requests or Planner Actions */}
+        <div className="lg:col-span-4 space-y-8">
+          {isPlanner && (
+            <div className="space-y-4">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Wachtend op Goedkeuring</h4>
+              <div className="space-y-4">
+                {leaveRequests.filter(r => r.status === 'pending').length > 0 ? (
+                  leaveRequests.filter(r => r.status === 'pending').map(req => {
+                    const requester = users.find(u => u.id === req.userId);
+                    return (
+                      <div key={req.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500">
+                            <UserIcon size={24} />
+                          </div>
+                          <div>
+                            <p className="font-black text-slate-800">{requester?.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{req.type} • {req.createdAt.split('T')[0]}</p>
+                          </div>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-2xl space-y-2">
+                          <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            <span>Periode</span>
+                            <span className="text-slate-800">{req.startDate} t/m {req.endDate}</span>
+                          </div>
+                          {req.comment && (
+                            <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>
+                          )}
+                        </div>
+                        <div className="flex gap-2">
+                          <button 
+                            onClick={() => handleStatusUpdate(req.id, 'approved')}
+                            className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
+                          >
+                            Goedkeuren
+                          </button>
+                          <button 
+                            onClick={() => handleStatusUpdate(req.id, 'rejected')}
+                            className="flex-1 py-3 bg-white border border-slate-200 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-50 transition-all"
+                          >
+                            Afwijzen
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="bg-white p-8 rounded-[32px] border border-slate-100 text-center">
+                    <p className="text-slate-400 font-bold text-sm">Geen openstaande aanvragen.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Mijn Verlof Historie</h4>
+            <div className="space-y-4">
+              {myRequests.length > 0 ? (
+                myRequests.map(req => (
+                  <div key={req.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden">
+                    <div className={cn(
+                      "absolute top-0 left-0 w-1 h-full",
+                      req.status === 'approved' ? "bg-emerald-500" : req.status === 'rejected' ? "bg-red-500" : "bg-amber-500"
+                    )} />
+                    <div className="flex justify-between items-start mb-4">
+                      <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[8px] font-black uppercase tracking-widest">{req.type}</span>
+                      <span className={cn(
+                        "text-[10px] font-black uppercase tracking-widest",
+                        req.status === 'approved' ? "text-emerald-500" : req.status === 'rejected' ? "text-red-500" : "text-amber-500"
+                      )}>{req.status}</span>
+                    </div>
+                    <p className="font-black text-slate-800 text-sm mb-1">{new Date(req.startDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} - {new Date(req.endDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aangevraagd op {req.createdAt.split('T')[0]}</p>
+                  </div>
+                ))
+              ) : (
+                <div className="bg-white p-8 rounded-[32px] border border-slate-100 text-center">
+                  <p className="text-slate-400 font-bold text-sm">Nog geen verlof aangevraagd.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {showRequestModal && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden"
+            >
+              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                <h4 className="text-xl font-black">Verlof Aanvragen</h4>
+                <button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
+              </div>
+              <form onSubmit={handleRequestLeave} className="p-8 space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Startdatum</label>
+                    <input 
+                      type="date" required value={formData.startDate} 
+                      onChange={(e) => setFormData({...formData, startDate: e.target.value})} 
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Einddatum</label>
+                    <input 
+                      type="date" required value={formData.endDate} 
+                      onChange={(e) => setFormData({...formData, endDate: e.target.value})} 
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all" 
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type Verlof</label>
+                  <select 
+                    value={formData.type} 
+                    onChange={(e) => setFormData({...formData, type: e.target.value as any})} 
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all bg-white"
+                  >
+                    <option value="vakantie">Vakantie</option>
+                    <option value="ziekte">Ziekte</option>
+                    <option value="persoonlijk">Persoonlijk</option>
+                    <option value="overig">Overig</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Opmerking</label>
+                  <textarea 
+                    value={formData.comment} 
+                    onChange={(e) => setFormData({...formData, comment: e.target.value})} 
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" 
+                    placeholder="Optionele toelichting..." 
+                  />
+                </div>
+                <button type="submit" className="w-full bg-oker-500 text-white font-black py-4 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 active:scale-[0.98]">
+                  Aanvraag Indienen
+                </button>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

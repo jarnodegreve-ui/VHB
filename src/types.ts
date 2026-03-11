@@ -10,6 +10,7 @@ export interface User {
   activeSessions?: number;
   isActive?: boolean;
   phone?: string;
+  email?: string;
 }
 
 export interface Diversion {
@@ -21,6 +22,28 @@ export interface Diversion {
   endDate?: string;
   severity: 'low' | 'medium' | 'high';
   pdfUrl?: string;
+  mapCoordinates?: string;
+}
+
+export interface SwapRequest {
+  id: string;
+  shiftId: string;
+  requesterId: string;
+  targetDriverId?: string;
+  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  createdAt: string;
+  reason?: string;
+}
+
+export interface LeaveRequest {
+  id: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  type: 'vakantie' | 'ziekte' | 'persoonlijk' | 'overig';
+  status: 'pending' | 'approved' | 'rejected';
+  comment?: string;
+  createdAt: string;
 }
 
 export interface Shift {
@@ -40,6 +63,7 @@ export interface Update {
   title: string;
   content: string;
   category: 'algemeen' | 'veiligheid' | 'technisch';
+  isUrgent?: boolean;
 }
 
 export interface Service {
@@ -53,4 +77,4 @@ export interface Service {
   endTime3?: string;
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst';
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof';

@@ -6,6 +6,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { createClient } from "@supabase/supabase-js";
 import dotenv from "dotenv";
+import nodemailer from "nodemailer";
 
 dotenv.config();
 
@@ -21,6 +22,9 @@ const DATA_FILE = path.join(process.cwd(), "planning_data.json");
 const USERS_FILE = path.join(process.cwd(), "users_data.json");
 const DIVERSIONS_FILE = path.join(process.cwd(), "diversions_data.json");
 const SERVICES_FILE = path.join(process.cwd(), "services_data.json");
+const UPDATES_FILE = path.join(process.cwd(), "updates_data.json");
+const SWAPS_FILE = path.join(process.cwd(), "swaps_data.json");
+const LEAVE_FILE = path.join(process.cwd(), "leave_data.json");
 
 // Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -35,9 +39,9 @@ if (!supabase) {
 
 // Default Mock Data
 const DEFAULT_USERS = [
-  { id: '1', name: 'Jan de Vries', role: 'chauffeur', employeeId: 'CH-4492', password: '123', phone: '0470 12 34 56', isActive: true },
-  { id: '2', name: 'Sarah de Groot', role: 'planner', employeeId: 'PL-1102', password: '123', phone: '0480 98 76 54', isActive: true },
-  { id: '3', name: 'Mark Admin', role: 'admin', employeeId: 'AD-0001', password: '123', phone: '0490 55 44 33', isActive: true },
+  { id: '1', name: 'Jan de Vries', role: 'chauffeur', employeeId: 'CH-4492', password: '123', phone: '0470 12 34 56', email: 'jan.devries@example.com', isActive: true },
+  { id: '2', name: 'Sarah de Groot', role: 'planner', employeeId: 'PL-1102', password: '123', phone: '0480 98 76 54', email: 'sarah.degroot@example.com', isActive: true },
+  { id: '3', name: 'Mark Admin', role: 'admin', employeeId: 'AD-0001', password: '123', phone: '0490 55 44 33', email: 'mark.admin@example.com', isActive: true },
 ];
 
 const DEFAULT_SERVICES = [
@@ -258,6 +262,84 @@ const saveServicesData = async (data: any) => {
   fs.writeFileSync(SERVICES_FILE, JSON.stringify(data, null, 2));
 };
 
+const getUpdatesData = async () => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('updates').select('*');
+      if (error) console.error("Supabase error fetching updates:", error);
+      else if (data) return data;
+    } catch (e) {
+      console.error("Unexpected error fetching updates:", e);
+    }
+  }
+  if (fs.existsSync(UPDATES_FILE)) {
+    return JSON.parse(fs.readFileSync(UPDATES_FILE, "utf-8"));
+  }
+  return [];
+};
+
+const saveUpdatesData = async (data: any) => {
+  if (supabase) {
+    const { error } = await supabase.from('updates').upsert(data);
+    if (error) throw error;
+    return;
+  }
+  if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
+  fs.writeFileSync(UPDATES_FILE, JSON.stringify(data, null, 2));
+};
+
+const getSwapsData = async () => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('swaps').select('*');
+      if (error) console.error("Supabase error fetching swaps:", error);
+      else if (data) return data;
+    } catch (e) {
+      console.error("Unexpected error fetching swaps:", e);
+    }
+  }
+  if (fs.existsSync(SWAPS_FILE)) {
+    return JSON.parse(fs.readFileSync(SWAPS_FILE, "utf-8"));
+  }
+  return [];
+};
+
+const saveSwapsData = async (data: any) => {
+  if (supabase) {
+    const { error } = await supabase.from('swaps').upsert(data);
+    if (error) throw error;
+    return;
+  }
+  if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
+  fs.writeFileSync(SWAPS_FILE, JSON.stringify(data, null, 2));
+};
+
+const getLeaveData = async () => {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('leave').select('*');
+      if (error) console.error("Supabase error fetching leave:", error);
+      else if (data) return data;
+    } catch (e) {
+      console.error("Unexpected error fetching leave:", e);
+    }
+  }
+  if (fs.existsSync(LEAVE_FILE)) {
+    return JSON.parse(fs.readFileSync(LEAVE_FILE, "utf-8"));
+  }
+  return [];
+};
+
+const saveLeaveData = async (data: any) => {
+  if (supabase) {
+    const { error } = await supabase.from('leave').upsert(data);
+    if (error) throw error;
+    return;
+  }
+  if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
+  fs.writeFileSync(LEAVE_FILE, JSON.stringify(data, null, 2));
+};
+
 const app = express();
 const PORT = 3000;
 
@@ -413,6 +495,144 @@ app.post("/api/services", async (req, res) => {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving services data:", errorMessage);
     res.status(500).json({ error: "Failed to save data", details: errorMessage });
+  }
+});
+
+app.get("/api/updates", async (req, res) => {
+  try {
+    const data = await getUpdatesData();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read updates" });
+  }
+});
+
+app.post("/api/updates", async (req, res) => {
+  try {
+    const newData = req.body;
+    await saveUpdatesData(newData);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to save updates", details: err.message });
+  }
+});
+
+app.get("/api/swaps", async (req, res) => {
+  try {
+    const data = await getSwapsData();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read swaps" });
+  }
+});
+
+app.post("/api/swaps", async (req, res) => {
+  try {
+    const newData = req.body;
+    await saveSwapsData(newData);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to save swaps", details: err.message });
+  }
+});
+
+app.get("/api/leave", async (req, res) => {
+  try {
+    const data = await getLeaveData();
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to read leave" });
+  }
+});
+
+app.post("/api/leave", async (req, res) => {
+  try {
+    const newData = req.body;
+    await saveLeaveData(newData);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to save leave", details: err.message });
+  }
+});
+
+app.post("/api/send-urgent-update-email", async (req, res) => {
+  const { update, recipients } = req.body;
+  
+  if (!update || !recipients || !Array.isArray(recipients)) {
+    return res.status(400).json({ error: "Missing update or recipients" });
+  }
+
+  const emails = recipients.map((u: any) => u.email).filter(Boolean);
+  
+  if (emails.length === 0) {
+    return res.json({ success: true, message: "No recipients with email found" });
+  }
+
+  console.log(`Attempting to send urgent email for: ${update.title} to ${emails.length} recipients`);
+
+  // SMTP Configuration from environment variables
+  const smtpConfig = {
+    host: process.env.SMTP_HOST || 'smtp.example.com',
+    port: parseInt(process.env.SMTP_PORT || '587'),
+    secure: process.env.SMTP_SECURE === 'true',
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  };
+
+  const hasSmtp = process.env.SMTP_USER && process.env.SMTP_PASS;
+
+  if (!hasSmtp) {
+    console.warn("SMTP credentials missing. Logging email content instead of sending.");
+    console.log("--- URGENT EMAIL CONTENT ---");
+    console.log("To:", emails.join(", "));
+    console.log("Subject: DRINGENDE UPDATE: " + update.title);
+    console.log("Body:", update.content);
+    console.log("----------------------------");
+    return res.json({ 
+      success: true, 
+      message: "Email gelogd (geen SMTP geconfigureerd)", 
+      mocked: true,
+      content: {
+        to: emails,
+        subject: "DRINGENDE UPDATE: " + update.title,
+        body: update.content
+      }
+    });
+  }
+
+  try {
+    const transporter = nodemailer.createTransport(smtpConfig);
+    
+    await transporter.sendMail({
+      from: `"VHB Portaal" <${process.env.SMTP_FROM || smtpConfig.auth.user}>`,
+      to: emails.join(", "),
+      subject: `DRINGENDE UPDATE: ${update.title}`,
+      text: `${update.content}\n\nBekijk de volledige update in het VHB Portaal.`,
+      html: `
+        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+          <div style="background-color: #f59e0b; color: white; padding: 20px; text-align: center;">
+            <h1 style="margin: 0; font-size: 24px;">DRINGENDE UPDATE</h1>
+          </div>
+          <div style="padding: 30px;">
+            <h2 style="color: #1e293b; margin-top: 0;">${update.title}</h2>
+            <p style="color: #475569; line-height: 1.6;">${update.content}</p>
+            <div style="margin-top: 30px; text-align: center;">
+              <a href="${process.env.APP_URL || '#'}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Open VHB Portaal</a>
+            </div>
+          </div>
+          <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
+            Dit is een automatisch bericht van het VHB Portaal.
+          </div>
+        </div>
+      `,
+    });
+
+    res.json({ success: true, message: "Emails succesvol verzonden" });
+  } catch (error: any) {
+    console.error("Error sending email:", error);
+    res.status(500).json({ error: "Fout bij verzenden email", details: error.message });
   }
 });
 
