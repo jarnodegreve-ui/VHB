@@ -2549,6 +2549,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
     startTime3: '',
     endTime3: ''
   });
+  const [isImporting, setIsImporting] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
