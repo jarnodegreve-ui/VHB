@@ -1707,19 +1707,43 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
           const detectedHeaders = keys.join(', ');
           alert(`Geen geldige gebruikers gevonden. \n\nGevonden kolommen: ${detectedHeaders}\n\nZorg dat er een kolom is met "Naam", "Wachtwoord" en "Rol".`);
         } else {
-          // Merge with existing users, avoiding duplicates by name
-          const existingUserNames = new Set(users.map(u => u.name.toLowerCase()));
-          
-          const uniqueNewUsers = importedUsers.filter(u => 
-            !existingUserNames.has(u.name.toLowerCase())
-          );
+          // Smart merge: update existing users by name, add new ones
+          const newUsersList = [...users];
+          let updatedCount = 0;
+          let addedCount = 0;
 
-          if (uniqueNewUsers.length === 0) {
-            alert('Alle gebruikers uit dit bestand bestaan al in het systeem (gecontroleerd op naam).');
+          importedUsers.forEach(impUser => {
+            const existingIdx = newUsersList.findIndex(u => u.name.toLowerCase() === impUser.name.toLowerCase());
+            if (existingIdx !== -1) {
+              // Update existing user
+              newUsersList[existingIdx] = {
+                ...newUsersList[existingIdx],
+                phone: impUser.phone || newUsersList[existingIdx].phone,
+                role: impUser.role || newUsersList[existingIdx].role,
+                employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId,
+                // Update password only if provided and not default '123'
+                password: (impUser.password && impUser.password !== '123') ? impUser.password : newUsersList[existingIdx].password
+              };
+              updatedCount++;
+            } else {
+              // Add as new user
+              newUsersList.push(impUser);
+              addedCount++;
+            }
+          });
+
+          if (addedCount === 0 && updatedCount === 0) {
+            alert('Geen nieuwe gegevens of wijzigingen gevonden in het bestand.');
           } else {
-            const success = await onSave([...users, ...uniqueNewUsers]);
-            if (success) {
-              alert(`${uniqueNewUsers.length} nieuwe gebruikers succesvol toegevoegd!`);
+            const confirmMsg = updatedCount > 0 
+              ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die worden bijgewerkt. Wilt u doorgaan?`
+              : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
+
+            if (confirm(confirmMsg)) {
+              const success = await onSave(newUsersList);
+              if (success) {
+                alert(`Import succesvol! ${addedCount} toegevoegd, ${updatedCount} bijgewerkt.`);
+              }
             }
           }
         }
