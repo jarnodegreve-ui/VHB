@@ -47,6 +47,10 @@ export interface Service {
   serviceNumber: string;
   startTime: string;
   endTime: string;
+  startTime2?: string;
+  endTime2?: string;
+  startTime3?: string;
+  endTime3?: string;
 }
 
 export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst';

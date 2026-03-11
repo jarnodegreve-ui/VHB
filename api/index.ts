@@ -41,13 +41,13 @@ const DEFAULT_USERS = [
 ];
 
 const DEFAULT_SERVICES = [
-  { id: '1', serviceNumber: 'D-101', startTime: '05:30', endTime: '13:45' },
-  { id: '2', serviceNumber: 'D-102', startTime: '06:15', endTime: '14:30' },
-  { id: '3', serviceNumber: 'D-201', startTime: '13:30', endTime: '21:45' },
-  { id: '4', serviceNumber: 'D-202', startTime: '14:15', endTime: '22:30' },
-  { id: '5', serviceNumber: 'D-301', startTime: '21:30', endTime: '05:45' },
-  { id: '6', serviceNumber: 'D-103', startTime: '07:00', endTime: '15:15' },
-  { id: '7', serviceNumber: 'D-104', startTime: '08:30', endTime: '16:45' },
+  { id: '1', serviceNumber: 'D-101', startTime: '05:30', endTime: '13:45', startTime2: '', endTime2: '', startTime3: '', endTime3: '' },
+  { id: '2', serviceNumber: 'D-102', startTime: '06:15', endTime: '14:30', startTime2: '', endTime2: '', startTime3: '', endTime3: '' },
+  { id: '3', serviceNumber: 'D-201', startTime: '13:30', endTime: '21:45', startTime2: '', endTime2: '', startTime3: '', endTime3: '' },
+  { id: '4', serviceNumber: 'D-202', startTime: '14:15', endTime: '22:30', startTime2: '', endTime2: '', startTime3: '', endTime3: '' },
+  { id: '5', serviceNumber: 'D-301', startTime: '21:30', endTime: '05:45', startTime2: '', endTime2: '', startTime3: '', endTime3: '' },
+  { id: '6', serviceNumber: 'D-103', startTime: '07:00', endTime: '15:15', startTime2: '', endTime2: '', startTime3: '', endTime3: '' },
+  { id: '7', serviceNumber: 'D-104', startTime: '08:30', endTime: '16:45', startTime2: '', endTime2: '', startTime3: '', endTime3: '' },
 ];
 
 // Helper to read/write data
@@ -185,14 +185,31 @@ const getServicesData = async () => {
     try {
       const { data, error } = await supabase.from('services').select('*');
       if (error) {
-        // If it's a missing table error (42P01 in Postgres), we just log a warning and fallback
         if (error.code === '42P01') {
           console.warn("Supabase 'services' table not found. Falling back to local/mock data.");
         } else {
           console.error("Supabase error fetching services:", error);
         }
-      } else if (data && data.length > 0) {
-        return data;
+      } else if (data) {
+        // If we got a response from Supabase, even if empty, return it
+        // unless we want to force defaults on first run.
+        // Let's say if it's empty, we check local file, then defaults.
+        if (data.length > 0) return data;
+        
+        // Check if we have local data to bootstrap
+        if (fs.existsSync(SERVICES_FILE)) {
+          const content = fs.readFileSync(SERVICES_FILE, "utf-8");
+          if (content.trim()) {
+            const localData = JSON.parse(content);
+            if (Array.isArray(localData) && localData.length > 0) return localData;
+          }
+        }
+        
+        // If we are connected to Supabase and it's empty, we might want to return empty
+        // but for the very first time, mock data is better.
+        // However, if the user explicitly cleared it, we should respect that.
+        // For now, let's return data if it's an array.
+        return data; 
       }
     } catch (e) {
       console.error("Unexpected error fetching services:", e);
@@ -214,9 +231,26 @@ const getServicesData = async () => {
 
 const saveServicesData = async (data: any) => {
   if (supabase) {
-    const { error } = await supabase.from('services').upsert(data);
-    if (error) throw error;
-    return;
+    // To handle deletions (replace all logic), we first delete all then insert
+    // This is the most reliable way for a "manage list" interface
+    try {
+      // Delete all existing services
+      const { error: deleteError } = await supabase.from('services').delete().neq('id', '0');
+      if (deleteError) {
+        console.error("Error deleting services for replace:", deleteError);
+        // Fallback to upsert if delete fails
+        const { error: upsertError } = await supabase.from('services').upsert(data);
+        if (upsertError) throw upsertError;
+      } else if (data.length > 0) {
+        // Insert new services
+        const { error: insertError } = await supabase.from('services').insert(data);
+        if (insertError) throw insertError;
+      }
+      return;
+    } catch (e) {
+      console.error("Error in saveServicesData:", e);
+      throw e;
+    }
   }
   if (process.env.VERCEL) {
     throw new Error("Supabase is niet geconfigureerd op Vercel.");

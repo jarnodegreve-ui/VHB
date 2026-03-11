@@ -133,7 +133,7 @@ export default function App() {
       const response = await fetch('/api/services');
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setServices(data.length > 0 ? data : MOCK_SERVICES);
+        setServices(data);
       }
     } catch (error) {
       console.error('Error fetching services:', error);
@@ -766,11 +766,15 @@ function ServicesView({ services }: { services: Service[] }) {
   ).sort((a, b) => a.serviceNumber.localeCompare(b.serviceNumber));
 
   const downloadCSV = () => {
-    const headers = ['Dienstnummer', 'Starttijd', 'Eindtijd'];
+    const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Start 2', 'Eind 2', 'Start 3', 'Eind 3'];
     const rows = filteredServices.map(s => [
       `"${s.serviceNumber}"`, 
       `"${s.startTime}"`, 
-      `"${s.endTime}"`
+      `"${s.endTime}"`,
+      `"${s.startTime2 || ''}"`,
+      `"${s.endTime2 || ''}"`,
+      `"${s.startTime3 || ''}"`,
+      `"${s.endTime3 || ''}"`
     ]);
     
     const csvContent = [
@@ -825,9 +829,10 @@ function ServicesView({ services }: { services: Service[] }) {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienstnummer</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Starttijd</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Eindtijd</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienst</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 1</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 2</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 3</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -837,22 +842,36 @@ function ServicesView({ services }: { services: Service[] }) {
                     <span className="font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
                   </td>
                   <td className="px-8 py-5">
-                    <div className="flex items-center gap-2 text-slate-600 font-bold">
+                    <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
                       <Clock size={14} className="text-oker-500" />
-                      {s.startTime}
+                      {s.startTime} - {s.endTime}
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    <div className="flex items-center gap-2 text-slate-600 font-bold">
-                      <Clock size={14} className="text-oker-500" />
-                      {s.endTime}
-                    </div>
+                    {s.startTime2 ? (
+                      <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
+                        <Clock size={14} className="text-oker-500" />
+                        {s.startTime2} - {s.endTime2}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300 text-xs">-</span>
+                    )}
+                  </td>
+                  <td className="px-8 py-5">
+                    {s.startTime3 ? (
+                      <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
+                        <Clock size={14} className="text-oker-500" />
+                        {s.startTime3} - {s.endTime3}
+                      </div>
+                    ) : (
+                      <span className="text-slate-300 text-xs">-</span>
+                    )}
                   </td>
                 </tr>
               ))}
               {filteredServices.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-8 py-12 text-center text-slate-400 font-medium">
+                  <td colSpan={4} className="px-8 py-12 text-center text-slate-400 font-medium">
                     Geen diensten gevonden voor "{searchQuery}"
                   </td>
                 </tr>
@@ -2521,14 +2540,104 @@ function Input({ label, type, placeholder, options }: { label: string, type: str
 function ManageServicesView({ services, onSave }: { services: Service[], onSave: (s: Service[]) => void }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ serviceNumber: '', startTime: '', endTime: '' });
+  const [formData, setFormData] = useState({ 
+    serviceNumber: '', 
+    startTime: '', 
+    endTime: '',
+    startTime2: '',
+    endTime2: '',
+    startTime3: '',
+    endTime3: ''
+  });
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
+
+        if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
+          alert('Het Excel-bestand lijkt leeg te zijn.');
+          setIsImporting(false);
+          return;
+        }
+
+        const importedServices: Service[] = jsonData.map((row: any, index) => {
+          const rowKeys = Object.keys(row);
+          const findValue = (patterns: string[]) => {
+            const foundKey = rowKeys.find(k => {
+              const cleanK = k.toString().trim().toLowerCase();
+              return patterns.some(p => cleanK.includes(p));
+            });
+            return foundKey ? row[foundKey] : undefined;
+          };
+
+          const serviceNumber = findValue(['dienst', 'nummer', 'service', 'nr']);
+          
+          // Part 1
+          const startTime = findValue(['start 1', 'begin 1', 'van 1', 'starttijd 1', 'start (deel 1)']);
+          const endTime = findValue(['eind 1', 'stop 1', 'tot 1', 'eindtijd 1', 'einde (deel 1)']);
+          
+          // Part 2
+          const startTime2 = findValue(['start 2', 'begin 2', 'van 2', 'starttijd 2', 'start (deel 2)']);
+          const endTime2 = findValue(['eind 2', 'stop 2', 'tot 2', 'eindtijd 2', 'einde (deel 2)']);
+          
+          // Part 3
+          const startTime3 = findValue(['start 3', 'begin 3', 'van 3', 'starttijd 3', 'start (deel 3)']);
+          const endTime3 = findValue(['eind 3', 'stop 3', 'tot 3', 'eindtijd 3', 'einde (deel 3)']);
+
+          // Fallback for simple start/end if part 1 is missing
+          const finalStart = startTime || findValue(['start', 'begin', 'van']);
+          const finalEnd = endTime || findValue(['eind', 'stop', 'tot']);
+
+          return {
+            id: (Date.now() + index).toString(),
+            serviceNumber: serviceNumber?.toString().trim() || '',
+            startTime: finalStart?.toString().trim() || '',
+            endTime: finalEnd?.toString().trim() || '',
+            startTime2: startTime2?.toString().trim() || '',
+            endTime2: endTime2?.toString().trim() || '',
+            startTime3: startTime3?.toString().trim() || '',
+            endTime3: endTime3?.toString().trim() || ''
+          };
+        }).filter(s => s.serviceNumber);
+
+        if (importedServices.length > 0) {
+          if (confirm(`Er zijn ${importedServices.length} diensten gevonden. Wilt u de huidige lijst vervangen?`)) {
+            onSave(importedServices);
+          }
+        } else {
+          alert('Geen geldige diensten gevonden in het bestand. Zorg dat de kolommen namen hebben als "Dienst", "Start" en "Eind".');
+        }
+      } catch (error) {
+        console.error('Error parsing Excel:', error);
+        alert('Fout bij het verwerken van het Excel-bestand.');
+      } finally {
+        setIsImporting(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
 
   const downloadCSV = () => {
-    const headers = ['Dienstnummer', 'Starttijd', 'Eindtijd'];
+    const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Start 2', 'Eind 2', 'Start 3', 'Eind 3'];
     const rows = services.map(s => [
       `"${s.serviceNumber}"`, 
       `"${s.startTime}"`, 
-      `"${s.endTime}"`
+      `"${s.endTime}"`,
+      `"${s.startTime2 || ''}"`,
+      `"${s.endTime2 || ''}"`,
+      `"${s.startTime3 || ''}"`,
+      `"${s.endTime3 || ''}"`
     ]);
     
     const csvContent = [
@@ -2549,7 +2658,15 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
 
   const handleEdit = (service: Service) => {
     setEditingId(service.id);
-    setFormData({ serviceNumber: service.serviceNumber, startTime: service.startTime, endTime: service.endTime });
+    setFormData({ 
+      serviceNumber: service.serviceNumber, 
+      startTime: service.startTime, 
+      endTime: service.endTime,
+      startTime2: service.startTime2 || '',
+      endTime2: service.endTime2 || '',
+      startTime3: service.startTime3 || '',
+      endTime3: service.endTime3 || ''
+    });
     setShowModal(true);
   };
 
@@ -2562,7 +2679,15 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
     }
     setShowModal(false);
     setEditingId(null);
-    setFormData({ serviceNumber: '', startTime: '', endTime: '' });
+    setFormData({ 
+      serviceNumber: '', 
+      startTime: '', 
+      endTime: '',
+      startTime2: '',
+      endTime2: '',
+      startTime3: '',
+      endTime3: ''
+    });
   };
 
   const handleDelete = (id: string) => {
@@ -2579,6 +2704,25 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
           <p className="text-sm text-slate-500 font-medium">Voeg diensten toe, bewerk of verwijder ze.</p>
         </div>
         <div className="flex items-center gap-3">
+          <input
+            type="file"
+            accept=".xlsx, .xls"
+            className="hidden"
+            id="services-upload"
+            onChange={handleFileUpload}
+            disabled={isImporting}
+          />
+          <label
+            htmlFor="services-upload"
+            className={cn(
+              "flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm cursor-pointer active:scale-95",
+              isImporting && "opacity-50 cursor-not-allowed"
+            )}
+            title="Importeer vanuit Excel"
+          >
+            <Upload size={20} className="text-oker-500" />
+            {isImporting ? 'Importeren...' : 'Excel Import'}
+          </label>
           <button
             onClick={downloadCSV}
             className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm active:scale-95"
@@ -2588,7 +2732,19 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
             Download CSV
           </button>
           <button 
-            onClick={() => { setEditingId(null); setFormData({ serviceNumber: '', startTime: '', endTime: '' }); setShowModal(true); }}
+            onClick={() => { 
+              setEditingId(null); 
+              setFormData({ 
+                serviceNumber: '', 
+                startTime: '', 
+                endTime: '',
+                startTime2: '',
+                endTime2: '',
+                startTime3: '',
+                endTime3: ''
+              }); 
+              setShowModal(true); 
+            }}
             className="bg-oker-500 text-white font-black px-6 py-3 rounded-2xl hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20 active:scale-95 flex items-center gap-2"
           >
             <Plus size={20} />
@@ -2601,19 +2757,27 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/50">
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienstnummer</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Starttijd</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Eindtijd</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Acties</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienst</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 1</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 2</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 3</th>
+              <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100 text-right">Acties</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {services.map(s => (
               <tr key={s.id} className="hover:bg-slate-50/50 transition-colors">
-                <td className="px-8 py-5 font-black text-slate-800">{s.serviceNumber}</td>
-                <td className="px-8 py-5 text-slate-600 font-bold">{s.startTime}</td>
-                <td className="px-8 py-5 text-slate-600 font-bold">{s.endTime}</td>
-                <td className="px-8 py-5 text-right">
+                <td className="px-6 py-5 font-black text-slate-800">{s.serviceNumber}</td>
+                <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                  {s.startTime} - {s.endTime}
+                </td>
+                <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                  {s.startTime2 ? `${s.startTime2} - ${s.endTime2}` : '-'}
+                </td>
+                <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                  {s.startTime3 ? `${s.startTime3} - ${s.endTime3}` : '-'}
+                </td>
+                <td className="px-6 py-5 text-right">
                   <div className="flex items-center justify-end gap-2">
                     <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
                     <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
@@ -2649,7 +2813,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 1)</label>
                     <input 
                       type="time" required value={formData.startTime}
                       onChange={(e) => setFormData({...formData, startTime: e.target.value})}
@@ -2657,10 +2821,48 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 1)</label>
                     <input 
                       type="time" required value={formData.endTime}
                       onChange={(e) => setFormData({...formData, endTime: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 2)</label>
+                    <input 
+                      type="time" value={formData.startTime2}
+                      onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 2)</label>
+                    <input 
+                      type="time" value={formData.endTime2}
+                      onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 3)</label>
+                    <input 
+                      type="time" value={formData.startTime3}
+                      onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 3)</label>
+                    <input 
+                      type="time" value={formData.endTime3}
+                      onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
                       className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
                     />
                   </div>
