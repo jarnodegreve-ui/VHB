@@ -2571,6 +2571,18 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
           return;
         }
 
+        const formatExcelTime = (val: any) => {
+          if (val === undefined || val === null || val === "") return "";
+          if (typeof val === 'number') {
+            // Excel stores time as a fraction of 24 hours (0.5 = 12:00)
+            const totalSeconds = Math.round(val * 24 * 3600);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+          }
+          return val.toString().trim();
+        };
+
         const importedServices: Service[] = jsonData.map((row: any, index) => {
           const rowKeys = Object.keys(row);
           const findValue = (patterns: string[]) => {
@@ -2602,12 +2614,12 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
           return {
             id: (Date.now() + index).toString(),
             serviceNumber: serviceNumber?.toString().trim() || '',
-            startTime: finalStart?.toString().trim() || '',
-            endTime: finalEnd?.toString().trim() || '',
-            startTime2: startTime2?.toString().trim() || '',
-            endTime2: endTime2?.toString().trim() || '',
-            startTime3: startTime3?.toString().trim() || '',
-            endTime3: endTime3?.toString().trim() || ''
+            startTime: formatExcelTime(finalStart),
+            endTime: formatExcelTime(finalEnd),
+            startTime2: formatExcelTime(startTime2),
+            endTime2: formatExcelTime(endTime2),
+            startTime3: formatExcelTime(startTime3),
+            endTime3: formatExcelTime(endTime3)
           };
         }).filter(s => s.serviceNumber);
 
