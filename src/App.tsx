@@ -619,18 +619,18 @@ export default function App() {
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
             >
-              {currentView === 'dashboard' && <DashboardView user={currentUser} shifts={shifts} diversions={diversions} />}
+              {currentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
               {currentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
-              {currentView === 'rooster' && <ScheduleView user={currentUser} shifts={shifts} />}
+              {currentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} />}
               {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {currentView === 'updates' && <UpdatesView updates={updates} />}
-              {currentView === 'contacten' && <ContactsView users={users} />}
+              {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} />}
               {currentView === 'beheer-updates' && <ManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} />}
-              {currentView === 'gebruikers' && <ManageUsersView users={users} onSave={saveUsers} />}
+              {currentView === 'gebruikers' && <ManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} />}
               {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {currentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
-              {currentView === 'beheer-contactlijst' && <ManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" />}
+              {currentView === 'beheer-contactlijst' && <ManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} />}
               {currentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
               {(currentView === 'verlof' || currentView === 'verlof-beheer') && <LeaveManagementView user={currentUser} leaveRequests={leaveRequests} users={users} onSave={saveLeave} />}
               {currentView === 'beheer-debug' && <DebugView />}
@@ -824,13 +824,19 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
   );
 }
 
-function ContactsView({ users }: { users: User[] }) {
+function ContactsView({ users, currentUser }: { users: User[], currentUser: User }) {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredUsers = users.filter(u => 
-    u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    (u.phone && u.phone.includes(searchQuery))
-  ).sort((a, b) => a.name.localeCompare(b.name));
+  const filteredUsers = users.filter(u => {
+    // Hide 'beheerder' from others, but let 'beheerder' see themselves
+    const isBeheerder = u.name.toLowerCase() === 'beheerder';
+    const isMe = u.id === currentUser.id;
+    
+    if (isBeheerder && !isMe) return false;
+    
+    return u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+           (u.phone && u.phone.includes(searchQuery));
+  }).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
     <div className="max-w-4xl space-y-6">
@@ -1099,15 +1105,82 @@ function ServicesView({ services }: { services: Service[] }) {
   );
 }
 
-function DashboardView({ user, shifts, diversions }: { user: User, shifts: Shift[], diversions: Diversion[] }) {
+function DashboardView({ user, shifts, diversions, users }: { user: User, shifts: Shift[], diversions: Diversion[], users: User[] }) {
+  const [now, setNow] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), 60000); // Update every minute
+    return () => clearInterval(timer);
+  }, []);
+
+  const myShifts = shifts.filter(s => s.driverId === user.id);
+  
+  const nextShift = myShifts
+    .map(s => {
+      const [year, month, day] = s.date.split('-').map(Number);
+      const [hours, minutes] = s.startTime.split(':').map(Number);
+      return { ...s, startDateTime: new Date(year, month - 1, day, hours, minutes) };
+    })
+    .filter(s => s.startDateTime > now)
+    .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
+
+  const getCountdown = (target: Date) => {
+    const diff = target.getTime() - now.getTime();
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    
+    if (hours > 24) return `${Math.floor(hours / 24)} dagen`;
+    if (hours > 0) return `${hours}u ${minutes}m`;
+    return `${minutes} minuten`;
+  };
+
   return (
     <div className="space-y-8">
+      {/* Prominent Next Shift Card */}
+      {nextShift && user.role === 'chauffeur' && (
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="relative overflow-hidden bg-slate-900 rounded-[40px] p-8 md:p-12 text-white shadow-2xl shadow-slate-900/20"
+        >
+          {/* Decorative background elements */}
+          <div className="absolute top-0 right-0 w-64 h-64 bg-oker-500/10 rounded-full -mr-32 -mt-32 blur-3xl" />
+          <div className="absolute bottom-0 left-0 w-64 h-64 bg-oker-500/5 rounded-full -ml-32 -mb-32 blur-3xl" />
+          
+          <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
+            <div className="space-y-4 text-center md:text-left">
+              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/10">
+                <div className="w-2 h-2 bg-oker-500 rounded-full animate-pulse" />
+                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-500">Volgende Dienst</span>
+              </div>
+              <h3 className="text-4xl md:text-6xl font-black tracking-tighter">
+                Over <span className="text-oker-500">{getCountdown(nextShift.startDateTime)}</span>
+              </h3>
+              <p className="text-slate-400 font-medium text-lg">
+                Je begint op {nextShift.startDateTime.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} om {nextShift.startTime}u.
+              </p>
+            </div>
+
+            <div className="flex gap-4">
+              <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[120px]">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Lijn</p>
+                <p className="text-3xl font-black text-oker-500">{nextShift.line}</p>
+              </div>
+              <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[120px]">
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Bus</p>
+                <p className="text-3xl font-black text-white font-mono">{nextShift.busNumber}</p>
+              </div>
+            </div>
+          </div>
+        </motion.div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
         <StatCard 
           icon={<Clock className="text-oker-600" />} 
-          label="Volgende Dienst" 
-          value={shifts.find(s => s.driverId === user.id)?.startTime || '--:--'} 
-          subValue={shifts.find(s => s.driverId === user.id)?.line ? `Dienst ${shifts.find(s => s.driverId === user.id)?.line}` : 'Geen dienst'} 
+          label="Vandaag" 
+          value={myShifts.find(s => s.date === now.toISOString().split('T')[0])?.startTime || '--:--'} 
+          subValue={myShifts.find(s => s.date === now.toISOString().split('T')[0])?.line ? `Lijn ${myShifts.find(s => s.date === now.toISOString().split('T')[0])?.line}` : 'Geen dienst vandaag'} 
         />
         <StatCard 
           icon={<AlertTriangle className="text-red-500" />} 
@@ -1130,7 +1203,21 @@ function DashboardView({ user, shifts, diversions }: { user: User, shifts: Shift
             <span className="text-[10px] font-black bg-oker-50 text-oker-700 px-4 py-1.5 rounded-full uppercase tracking-widest">5 Maart 2024</span>
           </div>
           <div className="space-y-4">
-            {shifts.filter(s => s.driverId === user.id || user.role !== 'chauffeur').slice(0, 2).map(shift => (
+            {shifts.filter(s => {
+              const isMe = s.driverId === user.id;
+              const isPlanner = user.role !== 'chauffeur';
+              
+              if (isMe) return true;
+              if (!isPlanner) return false;
+
+              // If planner, check if driver is beheerder
+              const driver = users.find(u => u.id === s.driverId);
+              const isBeheerder = driver?.name.toLowerCase() === 'beheerder';
+              
+              if (isBeheerder) return false;
+              
+              return true;
+            }).slice(0, 2).map(shift => (
               <div key={shift.id} className="flex items-center gap-5 p-5 bg-slate-50/50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all duration-300">
                 <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center font-black text-xl text-oker-600 shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
                   {shift.line}
@@ -1387,13 +1474,76 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
 );
 }
 
-function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[] }) {
-  const shifts = allShifts.filter(s => s.driverId === user.id || user.role !== 'chauffeur');
+function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: Shift[], users: User[] }) {
+  const shifts = allShifts.filter(s => {
+    const isMe = s.driverId === user.id;
+    const isPlanner = user.role !== 'chauffeur';
+    
+    if (isMe) return true;
+    if (!isPlanner) return false;
+
+    const driver = users.find(u => u.id === s.driverId);
+    if (driver?.name.toLowerCase() === 'beheerder') return false;
+    
+    return true;
+  });
+
+  const exportToICS = () => {
+    const calendarHeader = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//VHB Portaal//NL',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH'
+    ].join('\r\n');
+
+    const calendarFooter = 'END:VCALENDAR';
+
+    const events = shifts.map(shift => {
+      const [year, month, day] = shift.date.split('-').map(Number);
+      const [startH, startM] = shift.startTime.split(':').map(Number);
+      const [endH, endM] = shift.endTime.split(':').map(Number);
+
+      const startDate = new Date(year, month - 1, day, startH, startM);
+      const endDate = new Date(year, month - 1, day, endH, endM);
+
+      const formatICSDate = (date: Date) => {
+        return date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+      };
+
+      return [
+        'BEGIN:VEVENT',
+        `UID:${shift.id}@vhb-portaal.be`,
+        `DTSTAMP:${formatICSDate(new Date())}`,
+        `DTSTART:${formatICSDate(startDate)}`,
+        `DTEND:${formatICSDate(endDate)}`,
+        `SUMMARY:VHB Dienst - Lijn ${shift.line}`,
+        `DESCRIPTION:Bus: ${shift.busNumber}\\nLoopnr: ${shift.loopnr}`,
+        'END:VEVENT'
+      ].join('\r\n');
+    }).join('\r\n');
+
+    const fullCalendar = `${calendarHeader}\r\n${events}\r\n${calendarFooter}`;
+    const blob = new Blob([fullCalendar], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `VHB_Rooster_${user.name.replace(/\s+/g, '_')}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="max-w-4xl space-y-6">
       <div className="flex items-center justify-between">
         <h3 className="text-2xl font-black tracking-tight">Mijn Werkrooster</h3>
+        <button 
+          onClick={exportToICS}
+          className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+        >
+          <Download size={16} className="text-oker-500" />
+          Export naar Agenda
+        </button>
       </div>
 
       {/* Desktop Table */}
@@ -1850,7 +2000,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
 
       <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
         <h3 className="text-xl font-bold mb-6">Huidige Planning</h3>
-        <ScheduleView user={{ id: '0', name: 'Admin', role: 'admin', employeeId: 'ADMIN' }} shifts={shifts} />
+        <ScheduleView user={{ id: '0', name: 'Admin', role: 'admin', employeeId: 'ADMIN' }} shifts={shifts} users={users} />
       </div>
     </div>
   );
@@ -1952,7 +2102,7 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
   );
 }
 
-function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users: User[], onSave: (u: User[]) => Promise<boolean>, title?: string }) {
+function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUser }: { users: User[], onSave: (u: User[]) => Promise<boolean>, title?: string, currentUser: User }) {
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -1963,6 +2113,12 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer" }: { users:
   const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
 
   const filteredUsers = users
+    .filter(u => {
+      const isBeheerder = u.name.toLowerCase() === 'beheerder';
+      const isMe = u.id === currentUser.id;
+      if (isBeheerder && !isMe) return false;
+      return true;
+    })
     .filter(u => roleFilter === 'all' || u.role === roleFilter)
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -3415,7 +3571,16 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const myShifts = shifts.filter(s => s.driverId === user.id);
   const mySwaps = swaps.filter(s => s.requesterId === user.id);
-  const availableSwaps = swaps.filter(s => s.status === 'pending' && s.requesterId !== user.id);
+  const availableSwaps = swaps.filter(s => {
+    if (s.status !== 'pending' || s.requesterId === user.id) return false;
+    
+    const requester = users.find(u => u.id === s.requesterId);
+    const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+    const isMe = s.requesterId === user.id; // Already covered by s.requesterId !== user.id but for clarity
+
+    if (isBeheerder && !isMe) return false;
+    return true;
+  });
 
   const handleOfferShift = (e: React.FormEvent) => {
     e.preventDefault();
@@ -3523,7 +3688,14 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
-                {swaps.filter(s => s.status === 'pending').map(swap => {
+                {swaps.filter(s => {
+                  if (s.status !== 'pending') return false;
+                  const requester = users.find(u => u.id === s.requesterId);
+                  const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+                  const isMe = s.requesterId === user.id;
+                  if (isBeheerder && !isMe) return false;
+                  return true;
+                }).map(swap => {
                   const shift = shifts.find(s => s.id === swap.shiftId);
                   const requester = users.find(u => u.id === swap.requesterId);
                   return (
@@ -3623,7 +3795,19 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
       const start = new Date(r.startDate);
       const end = new Date(r.endDate);
       const current = new Date(dateStr);
-      return r.status === 'approved' && current >= start && current <= end;
+      const isApproved = r.status === 'approved';
+      
+      if (!isApproved) return false;
+      if (current < start || current > end) return false;
+
+      // Hide 'beheerder' requests from others
+      const requester = users.find(u => u.id === r.userId);
+      const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+      const isMe = r.userId === user.id;
+
+      if (isBeheerder && !isMe) return false;
+
+      return true;
     });
   };
 
@@ -3759,8 +3943,22 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
             <div className="space-y-4">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Wachtend op Goedkeuring</h4>
               <div className="space-y-4">
-                {leaveRequests.filter(r => r.status === 'pending').length > 0 ? (
-                  leaveRequests.filter(r => r.status === 'pending').map(req => {
+                {leaveRequests.filter(r => {
+                  if (r.status !== 'pending') return false;
+                  const requester = users.find(u => u.id === r.userId);
+                  const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+                  const isMe = r.userId === user.id;
+                  if (isBeheerder && !isMe) return false;
+                  return true;
+                }).length > 0 ? (
+                  leaveRequests.filter(r => {
+                    if (r.status !== 'pending') return false;
+                    const requester = users.find(u => u.id === r.userId);
+                    const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+                    const isMe = r.userId === user.id;
+                    if (isBeheerder && !isMe) return false;
+                    return true;
+                  }).map(req => {
                     const requester = users.find(u => u.id === req.userId);
                     return (
                       <div key={req.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
