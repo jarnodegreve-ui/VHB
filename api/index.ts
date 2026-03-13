@@ -56,10 +56,10 @@ const toPublicUser = (user: any): AppUser => ({
   id: String(user.id),
   name: user.name,
   role: user.role,
-  employeeId: user.employeeId,
-  lastLogin: user.lastLogin,
-  activeSessions: user.activeSessions,
-  isActive: user.isActive,
+  employeeId: user.employeeId ?? user.employeeid,
+  lastLogin: user.lastLogin ?? user.lastlogin,
+  activeSessions: user.activeSessions ?? user.activesessions,
+  isActive: user.isActive ?? user.isactive,
   phone: user.phone,
   email: user.email,
 });
@@ -73,6 +73,18 @@ const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   activeSessions: user.activeSessions ?? 0,
   isActive: user.isActive !== false,
   phone: user.phone?.trim() || undefined,
+  email: normalizeEmail(user.email),
+});
+
+const toDatabaseUser = (user: AppUser) => ({
+  id: String(user.id),
+  name: user.name,
+  role: user.role,
+  employeeid: user.employeeId,
+  lastlogin: user.lastLogin,
+  activesessions: user.activeSessions ?? 0,
+  isactive: user.isActive !== false,
+  phone: user.phone,
   email: normalizeEmail(user.email),
 });
 
@@ -309,7 +321,9 @@ const saveUsersData = async (incomingUsers: IncomingUser[]) => {
       }
     }
 
-    const { error } = await db.from('users').upsert(sanitizedUsers);
+    const databaseUsers = sanitizedUsers.map(toDatabaseUser);
+
+    const { error } = await db.from('users').upsert(databaseUsers);
     if (error) {
       console.error("Supabase upsert error:", error);
       throw error;
