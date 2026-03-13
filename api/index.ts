@@ -66,11 +66,11 @@ const toPublicUser = (user: any): AppUser => ({
 
 const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   id: String(user.id),
-  name: user.name?.trim(),
-  role: user.role,
-  employeeId: user.employeeId?.trim(),
+  name: user.name?.trim() || "Onbekende gebruiker",
+  role: user.role || "chauffeur",
+  employeeId: user.employeeId?.trim() || `VHB-${String(user.id).slice(-6)}`,
   lastLogin: user.lastLogin,
-  activeSessions: user.activeSessions,
+  activeSessions: user.activeSessions ?? 0,
   isActive: user.isActive !== false,
   phone: user.phone?.trim() || undefined,
   email: normalizeEmail(user.email),
@@ -248,6 +248,10 @@ const saveUsersData = async (incomingUsers: IncomingUser[]) => {
       }
     }
 
+    const removedUserIds = currentUsers
+      .map((user) => String(user.id))
+      .filter((id) => !incomingIds.has(id));
+
     for (const incomingUser of incomingUsers) {
       const sanitizedUser = sanitizeIncomingUser(incomingUser);
       const previousUser = currentById.get(String(sanitizedUser.id));
@@ -294,6 +298,14 @@ const saveUsersData = async (incomingUsers: IncomingUser[]) => {
           user_metadata: { name: sanitizedUser.name, role: sanitizedUser.role },
         });
         if (error) throw error;
+      }
+    }
+
+    if (removedUserIds.length > 0) {
+      const { error } = await db.from('users').delete().in('id', removedUserIds);
+      if (error) {
+        console.error("Supabase delete error:", error);
+        throw error;
       }
     }
 
