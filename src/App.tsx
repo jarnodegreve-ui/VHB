@@ -2532,7 +2532,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
             >
               <div className="p-8 border-b border-slate-100">
                 <h4 className="text-xl font-bold">Nieuwe Gebruiker</h4>
@@ -2631,7 +2631,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md overflow-hidden"
+              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
             >
               <div className="p-8 border-b border-slate-100 flex justify-between items-center">
                 <div>
