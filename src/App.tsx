@@ -38,8 +38,10 @@ import { motion, AnimatePresence } from 'motion/react';
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import * as XLSX from 'xlsx';
+import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest } from './types';
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
+import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -55,6 +57,14 @@ L.Icon.Default.mergeOptions({
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
+}
+
+async function getSupabaseAuthHeaders() {
+  const accessToken = (await supabase?.auth.getSession())?.data.session?.access_token;
+  return {
+    'Content-Type': 'application/json',
+    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+  };
 }
 
 function ConfirmationModal({ 
@@ -124,7 +134,8 @@ function ConfirmationModal({
 }
 
 export default function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
   const [shifts, setShifts] = useState<Shift[]>(MOCK_SHIFTS);
@@ -138,18 +149,98 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   useEffect(() => {
-    fetchPlanning();
-    fetchUsers();
-    fetchDiversions();
-    fetchServices();
-    fetchUpdates();
-    fetchSwaps();
-    fetchLeave();
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      if (!supabase) {
+        setAuthReady(true);
+        return;
+      }
+
+      const { data } = await supabase.auth.getSession();
+      if (!isMounted) return;
+
+      setSession(data.session);
+      if (data.session) {
+        await initializeAuthenticatedApp(data.session.access_token);
+      }
+      setAuthReady(true);
+    };
+
+    bootstrap();
+
+    const { data: authListener } = supabase?.auth.onAuthStateChange(async (_event, nextSession) => {
+      if (!isMounted) return;
+
+      setSession(nextSession);
+      if (nextSession) {
+        await initializeAuthenticatedApp(nextSession.access_token);
+      } else {
+        setCurrentUser(null);
+        setUsers(MOCK_USERS);
+        setShifts(MOCK_SHIFTS);
+        setDiversions(MOCK_DIVERSIONS);
+        setServices(MOCK_SERVICES);
+        setUpdates(MOCK_UPDATES);
+        setSwaps([]);
+        setLeaveRequests([]);
+        setCurrentView('dashboard');
+      }
+      setAuthReady(true);
+    });
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
 
-  const fetchUpdates = async () => {
+  const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token) => {
+    const headers = new Headers(init.headers || {});
+    if (!headers.has('Content-Type') && init.body) {
+      headers.set('Content-Type', 'application/json');
+    }
+    if (accessToken) {
+      headers.set('Authorization', `Bearer ${accessToken}`);
+    }
+
+    const response = await fetch(url, { ...init, headers });
+    if (response.status === 401 || response.status === 403) {
+      throw new Error('Je sessie is verlopen of je hebt geen toegang.');
+    }
+    return response;
+  };
+
+  const fetchCurrentUser = async (accessToken = session?.access_token) => {
+    const response = await apiFetch('/api/me', {}, accessToken);
+    const data = await response.json();
+    setCurrentUser(data);
+    return data as User;
+  };
+
+  const initializeAuthenticatedApp = async (accessToken: string) => {
     try {
-      const response = await fetch('/api/updates');
+      setIsLoading(true);
+      await Promise.all([
+        fetchCurrentUser(accessToken),
+        fetchPlanning(accessToken),
+        fetchUsers(accessToken),
+        fetchDiversions(accessToken),
+        fetchServices(accessToken),
+        fetchUpdates(accessToken),
+        fetchSwaps(accessToken),
+        fetchLeave(accessToken),
+      ]);
+    } catch (error) {
+      console.error('Error initializing app:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const fetchUpdates = async (accessToken = session?.access_token) => {
+    try {
+      const response = await apiFetch('/api/updates', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) setUpdates(data.length > 0 ? data : MOCK_UPDATES);
     } catch (error) {
@@ -159,9 +250,8 @@ export default function App() {
 
   const saveUpdates = async (newUpdates: Update[]) => {
     try {
-      const response = await fetch('/api/updates', {
+      const response = await apiFetch('/api/updates', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUpdates),
       });
       if (response.ok) setUpdates(newUpdates);
@@ -174,9 +264,8 @@ export default function App() {
 
   const sendUrgentEmail = async (update: Update) => {
     try {
-      const response = await fetch('/api/send-urgent-update-email', {
+      const response = await apiFetch('/api/send-urgent-update-email', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           update,
           recipients: users.filter(u => u.email)
@@ -191,9 +280,9 @@ export default function App() {
     }
   };
 
-  const fetchSwaps = async () => {
+  const fetchSwaps = async (accessToken = session?.access_token) => {
     try {
-      const response = await fetch('/api/swaps');
+      const response = await apiFetch('/api/swaps', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) setSwaps(data);
     } catch (error) {
@@ -203,9 +292,8 @@ export default function App() {
 
   const saveSwaps = async (newSwaps: SwapRequest[]) => {
     try {
-      const response = await fetch('/api/swaps', {
+      const response = await apiFetch('/api/swaps', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newSwaps),
       });
       if (response.ok) setSwaps(newSwaps);
@@ -214,9 +302,9 @@ export default function App() {
     }
   };
 
-  const fetchLeave = async () => {
+  const fetchLeave = async (accessToken = session?.access_token) => {
     try {
-      const response = await fetch('/api/leave');
+      const response = await apiFetch('/api/leave', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) setLeaveRequests(data);
     } catch (error) {
@@ -226,9 +314,8 @@ export default function App() {
 
   const saveLeave = async (newLeave: LeaveRequest[]) => {
     try {
-      const response = await fetch('/api/leave', {
+      const response = await apiFetch('/api/leave', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newLeave),
       });
       if (response.ok) setLeaveRequests(newLeave);
@@ -237,10 +324,10 @@ export default function App() {
     }
   };
 
-  const fetchServices = async () => {
+  const fetchServices = async (accessToken = session?.access_token) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/services');
+      const response = await apiFetch('/api/services', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setServices(data);
@@ -255,9 +342,8 @@ export default function App() {
   const saveServices = async (newServices: Service[]) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/services', {
+      const response = await apiFetch('/api/services', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newServices),
       });
       if (response.ok) {
@@ -270,10 +356,10 @@ export default function App() {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchUsers = async (accessToken = session?.access_token) => {
     try {
       console.log('Fetching users...');
-      const response = await fetch('/api/users');
+      const response = await apiFetch('/api/users', {}, accessToken);
       const data = await response.json();
       console.log('Users fetched:', data?.length);
       if (data && Array.isArray(data)) {
@@ -284,18 +370,17 @@ export default function App() {
     }
   };
 
-  const saveUsers = async (newUsers: User[]) => {
+  const saveUsers = async (newUsers: Array<User & { password?: string }>) => {
     try {
       console.log('Saving users, count:', newUsers.length);
       setIsLoading(true);
-      const response = await fetch('/api/users', {
+      const response = await apiFetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newUsers),
       });
       if (response.ok) {
         console.log('Users saved successfully');
-        setUsers(newUsers);
+        await fetchUsers();
         return true;
       } else {
         const text = await response.text();
@@ -324,10 +409,10 @@ export default function App() {
     }
   };
 
-  const fetchPlanning = async () => {
+  const fetchPlanning = async (accessToken = session?.access_token) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/planning');
+      const response = await apiFetch('/api/planning', {}, accessToken);
       const data = await response.json();
       if (data && data.length > 0) {
         setShifts(data);
@@ -342,9 +427,8 @@ export default function App() {
   const savePlanning = async (newShifts: Shift[]) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/planning', {
+      const response = await apiFetch('/api/planning', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newShifts),
       });
       if (response.ok) {
@@ -357,10 +441,10 @@ export default function App() {
     }
   };
 
-  const fetchDiversions = async () => {
+  const fetchDiversions = async (accessToken = session?.access_token) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/diversions');
+      const response = await apiFetch('/api/diversions', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setDiversions(data.length > 0 ? data : MOCK_DIVERSIONS);
@@ -375,9 +459,8 @@ export default function App() {
   const saveDiversions = async (newDiversions: Diversion[]) => {
     try {
       setIsLoading(true);
-      const response = await fetch('/api/diversions', {
+      const response = await apiFetch('/api/diversions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(newDiversions),
       });
       if (response.ok) {
@@ -390,36 +473,47 @@ export default function App() {
     }
   };
 
-  const handleLogin = (user: User) => {
-    const now = new Date().toLocaleString('nl-BE');
-    const updatedUsers = users.map(u => 
-      u.id === user.id 
-        ? { ...u, lastLogin: now, activeSessions: (u.activeSessions || 0) + 1 } 
-        : u
-    );
-    saveUsers(updatedUsers);
-    
-    const updatedUser = updatedUsers.find(u => u.id === user.id) || user;
-    setCurrentUser(updatedUser);
-    setIsLoggedIn(true);
+  const handleLogin = async (accessToken?: string) => {
+    const token = accessToken || session?.access_token;
+    if (!token) return;
+
+    const response = await apiFetch('/api/auth/session', {
+      method: 'POST',
+      body: JSON.stringify({ action: 'start' }),
+    }, token);
+    const user = await response.json();
+    setCurrentUser(user);
+    await fetchUsers(token);
     setCurrentView('dashboard');
   };
 
-  const handleLogout = () => {
-    if (currentUser) {
-      const updatedUsers = users.map(u => 
-        u.id === currentUser.id 
-          ? { ...u, activeSessions: Math.max(0, (u.activeSessions || 1) - 1) } 
-          : u
-      );
-      saveUsers(updatedUsers);
+  const handleLogout = async () => {
+    try {
+      if (session?.access_token) {
+        await apiFetch('/api/auth/session', {
+          method: 'POST',
+          body: JSON.stringify({ action: 'end' }),
+        });
+      }
+    } catch (error) {
+      console.error('Error ending session:', error);
+    } finally {
+      await supabase?.auth.signOut();
+      setSession(null);
+      setCurrentUser(null);
     }
-    setIsLoggedIn(false);
-    setCurrentUser(null);
   };
 
-  if (!isLoggedIn || !currentUser) {
-    return <LoginView onLogin={handleLogin} users={users} />;
+  if (!authReady) {
+    return <div className="min-h-screen bg-oker-50 flex items-center justify-center text-slate-600 font-bold">Sessie laden...</div>;
+  }
+
+  if (!isSupabaseConfigured || !supabase) {
+    return <div className="min-h-screen bg-oker-50 flex items-center justify-center p-6 text-center text-slate-700 font-bold">Supabase client-configuratie ontbreekt. Voeg `VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY` toe in Vercel en lokaal.</div>;
+  }
+
+  if (!session || !currentUser) {
+    return <LoginView onLogin={handleLogin} />;
   }
 
   const isPlanner = currentUser.role === 'planner' || currentUser.role === 'admin';
@@ -730,24 +824,40 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
   );
 }
 
-function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: User[] }) {
-  const [selectedUser, setSelectedUser] = useState<string>('');
+function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<void> }) {
+  const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [error, setError] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const user = users.find(u => u.id === selectedUser);
-    if (user) {
-      if (user.isActive === false) {
-        setError('Dit account is inactief');
-        return;
-      }
-      if (user.password === password || (!user.password && password === '123')) {
-        onLogin(user);
-      } else {
-        setError('Onjuist wachtwoord');
-      }
+    setIsSubmitting(true);
+    setError('');
+
+    if (!supabase) {
+      setError('Supabase is niet geconfigureerd.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const { data, error: signInError } = await supabase.auth.signInWithPassword({
+      email: email.trim().toLowerCase(),
+      password,
+    });
+
+    if (signInError) {
+      setError('Inloggen mislukt. Controleer je e-mailadres en wachtwoord.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    try {
+      await onLogin(data.session?.access_token);
+    } catch (loginError: any) {
+      setError(loginError.message || 'Je account is aangemeld, maar het portaalprofiel kon niet geladen worden.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -769,21 +879,18 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
         
         <form onSubmit={handleSubmit} className="p-10 pt-0 space-y-6">
           <div className="space-y-2">
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Gebruiker</label>
-            <select 
-              value={selectedUser}
+            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">E-mailadres</label>
+            <input
+              type="email"
+              value={email}
               onChange={(e) => {
-                setSelectedUser(e.target.value);
+                setEmail(e.target.value);
                 setError('');
               }}
-              className="w-full px-6 py-4 rounded-2xl border border-slate-100 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all bg-white/80 backdrop-blur-sm shadow-inner appearance-none cursor-pointer font-bold text-slate-700"
+              className="w-full px-6 py-4 rounded-2xl border border-slate-100 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all bg-white/80 backdrop-blur-sm shadow-inner font-bold text-slate-700"
               required
-            >
-              <option value="">Selecteer medewerker...</option>
-              {[...users].filter(u => u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)).map(u => (
-                <option key={u.id} value={u.id}>{u.name}</option>
-              ))}
-            </select>
+              placeholder="naam@bedrijf.be"
+            />
           </div>
 
           <div className="space-y-2">
@@ -813,10 +920,11 @@ function LoginView({ onLogin, users }: { onLogin: (user: User) => void, users: U
 
           <button 
             type="submit"
+            disabled={isSubmitting}
             className="w-full bg-oker-500 text-white font-black py-5 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/30 relative group overflow-hidden"
           >
             <div className="absolute inset-0 glass-oker opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-2xl" />
-            <span className="relative z-10">INLOGGEN</span>
+            <span className="relative z-10">{isSubmitting ? 'BEZIG...' : 'INLOGGEN'}</span>
           </button>
         </form>
       </motion.div>
@@ -1654,7 +1762,7 @@ function DebugView() {
       // First test general POST
       const testResponse = await fetch('/api/test', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({ test: true })
       });
       
@@ -1665,12 +1773,14 @@ function DebugView() {
 
       const response = await fetch('/api/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify([{
           id: 'test-' + Date.now(),
           name: 'Test Gebruiker',
           role: 'chauffeur',
           employeeId: 'TEST-000',
+          email: `test-${Date.now()}@example.com`,
+          password: 'Test1234!',
           isActive: false
         }])
       });
@@ -1897,7 +2007,10 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
     
     try {
       setIsSyncing(true);
-      const response = await fetch('/api/admin/sync', { method: 'POST' });
+      const response = await fetch('/api/admin/sync', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+      });
       const text = await response.text();
       
       if (!response.ok && !text.startsWith('{')) {
@@ -2102,10 +2215,12 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
   );
 }
 
-function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUser }: { users: User[], onSave: (u: User[]) => Promise<boolean>, title?: string, currentUser: User }) {
+type UserDraft = User & { password?: string };
+
+function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUser }: { users: User[], onSave: (u: UserDraft[]) => Promise<boolean>, title?: string, currentUser: User }) {
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   
@@ -2125,13 +2240,21 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
   const handleAddUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.name) return;
+    if (!newUser.email) {
+      alert('Een e-mailadres is verplicht voor Supabase login.');
+      return;
+    }
+    if (newUser.password.length < 8) {
+      alert('Gebruik een tijdelijk wachtwoord van minstens 8 tekens.');
+      return;
+    }
 
-    const userToAdd: User = {
+    const userToAdd: UserDraft = {
       id: Date.now().toString(),
       name: newUser.name,
       role: newUser.role as any,
       employeeId: newUser.employeeId || `VHB-${Math.floor(1000 + Math.random() * 9000)}`,
-      password: newUser.password || '123',
+      password: newUser.password,
       phone: newUser.phone,
       email: newUser.email,
       isActive: true
@@ -2145,6 +2268,14 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
   const handleUpdateUser = (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
+    if (!editingUser.email) {
+      alert('Een e-mailadres is verplicht voor Supabase login.');
+      return;
+    }
+    if (editingUser.password && editingUser.password.length < 8) {
+      alert('Een nieuw wachtwoord moet minstens 8 tekens hebben.');
+      return;
+    }
 
     const updatedUsers = users.map(u => u.id === editingUser.id ? editingUser : u);
     onSave(updatedUsers);
@@ -2159,15 +2290,30 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
     }
   };
 
-  const handleResetPassword = () => {
-    if (confirmResetUser) {
-      const updatedUsers = users.map(u => 
-        u.id === confirmResetUser.id ? { ...u, password: '123' } : u
-      );
-      onSave(updatedUsers);
-      setConfirmResetUser(null);
-      alert(`Wachtwoord voor ${confirmResetUser.name} is gereset naar '123'`);
+  const handleResetPassword = async () => {
+    if (!confirmResetUser) return;
+
+    const password = prompt(`Geef een nieuw tijdelijk wachtwoord voor ${confirmResetUser.name} (minstens 8 tekens):`);
+    if (!password) return;
+    if (password.length < 8) {
+      alert('Gebruik minstens 8 tekens.');
+      return;
     }
+
+    const response = await fetch('/api/admin/users/reset-password', {
+      method: 'POST',
+      headers: await getSupabaseAuthHeaders(),
+      body: JSON.stringify({ userId: confirmResetUser.id, password }),
+    });
+
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      alert(data.details || data.error || 'Reset mislukt.');
+      return;
+    }
+
+    setConfirmResetUser(null);
+    alert(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2199,7 +2345,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
         console.log('Excel Headers found:', keys);
 
         // Map Excel columns to User type
-        const importedUsers: User[] = jsonData.map((row: any, index) => {
+        const importedUsers: UserDraft[] = jsonData.map((row: any, index) => {
           const rowKeys = Object.keys(row);
           
           // Helper to find key by partial match
@@ -2230,7 +2376,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
             name: userName?.toString().trim() || '',
             role: role,
             employeeId: employeeId?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
-            password: password?.toString() || '123',
+            password: password?.toString() || '',
             phone: phone?.toString().trim() || undefined,
             email: email?.toString().trim() || undefined,
             isActive: true
@@ -2239,10 +2385,10 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
 
         if (importedUsers.length === 0) {
           const detectedHeaders = keys.join(', ');
-          alert(`Geen geldige gebruikers gevonden. \n\nGevonden kolommen: ${detectedHeaders}\n\nZorg dat er een kolom is met "Naam", "Wachtwoord" en "Rol".`);
+          alert(`Geen geldige gebruikers gevonden. \n\nGevonden kolommen: ${detectedHeaders}\n\nZorg dat er minstens een kolom is met "Naam", "E-mail" en "Rol".`);
         } else {
           // Smart merge: update existing users by name, add new ones
-          const newUsersList = [...users];
+          const newUsersList: UserDraft[] = [...users];
           let updatedCount = 0;
           let addedCount = 0;
 
@@ -2256,8 +2402,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                 email: impUser.email || newUsersList[existingIdx].email,
                 role: impUser.role || newUsersList[existingIdx].role,
                 employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId,
-                // Update password only if provided and not default '123'
-                password: (impUser.password && impUser.password !== '123') ? impUser.password : newUsersList[existingIdx].password
+                password: impUser.password || newUsersList[existingIdx].password
               };
               updatedCount++;
             } else {
@@ -2304,7 +2449,10 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
     
     try {
       setIsSyncing(true);
-      const response = await fetch('/api/admin/sync', { method: 'POST' });
+      const response = await fetch('/api/admin/sync', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+      });
       const text = await response.text();
       
       if (!response.ok && !text.startsWith('{')) {
@@ -2425,13 +2573,13 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Wachtwoord</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tijdelijk Wachtwoord</label>
                   <input 
                     type="password" 
                     value={newUser.password}
                     onChange={(e) => setNewUser({...newUser, password: e.target.value})}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
-                    placeholder="Standaard: 123"
+                    placeholder="Minstens 8 tekens"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2445,9 +2593,10 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">E-mailadres (Optioneel)</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">E-mailadres</label>
                   <input 
                     type="email" 
+                    required
                     value={newUser.email}
                     onChange={(e) => setNewUser({...newUser, email: e.target.value})}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
@@ -2530,13 +2679,13 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                   />
                 </div>
                 <div className="space-y-2">
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Wachtwoord</label>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nieuw Wachtwoord (Optioneel)</label>
                   <input 
                     type="password" 
                     value={editingUser.password || ''}
                     onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
-                    placeholder="Wachtwoord ongewijzigd laten indien leeg"
+                    placeholder="Leeg laten om niet te wijzigen"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2613,7 +2762,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
 
       <div className="bg-white p-6 rounded-3xl border border-oker-100 bg-oker-50/30 text-sm">
         <p className="font-bold text-oker-800 mb-2">Excel Instructies:</p>
-        <p className="text-oker-700">Zorg dat je Excel de volgende kolommen heeft: <span className="font-mono font-bold">Naam, Rol, Wachtwoord</span>. De rollen kunnen zijn: chauffeur, planner, admin. De ID's worden automatisch gegenereerd als ze ontbreken.</p>
+        <p className="text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-bold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-bold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
       </div>
 
       <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
@@ -2660,7 +2809,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                       <button 
                         onClick={() => setConfirmResetUser(u)}
                         className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-xl transition-all"
-                        title="Reset wachtwoord naar 123"
+                        title="Stel nieuw tijdelijk wachtwoord in"
                       >
                         <RotateCcw size={18} />
                       </button>
@@ -2716,7 +2865,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                 <button 
                   onClick={() => setConfirmResetUser(u)}
                   className="px-4 bg-slate-100 text-slate-500 rounded-2xl active:scale-95 transition-all"
-                  title="Reset wachtwoord"
+                  title="Stel nieuw tijdelijk wachtwoord in"
                 >
                   <RotateCcw size={20} />
                 </button>
@@ -2739,7 +2888,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
         onClose={() => setConfirmResetUser(null)}
         onConfirm={handleResetPassword}
         title="Wachtwoord Resetten"
-        message={`Weet je zeker dat je het wachtwoord van ${confirmResetUser?.name} wilt resetten naar '123'?`}
+        message={`Je stelt straks handmatig een nieuw tijdelijk wachtwoord in voor ${confirmResetUser?.name}.`}
         confirmText="Resetten"
         variant="warning"
       />
@@ -2758,7 +2907,10 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
     
     try {
       setIsSyncing(true);
-      const response = await fetch('/api/admin/sync', { method: 'POST' });
+      const response = await fetch('/api/admin/sync', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+      });
       const text = await response.text();
       
       if (!response.ok && !text.startsWith('{')) {
@@ -4102,4 +4254,3 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
     </div>
   );
 }
-

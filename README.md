@@ -15,6 +15,8 @@ View your app in AI Studio: https://ai.studio/apps/139b0755-a643-442b-bf5a-f0762
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` in [.env.local](.env.local) to your Gemini API key
-3. Run the app:
+2. Configure Supabase and SMTP variables in `.env.local` based on `.env.example`.
+3. For browser auth, set both server and Vite variables:
+   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
+4. Run the app:
    `npm run dev`

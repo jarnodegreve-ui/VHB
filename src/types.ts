@@ -5,7 +5,6 @@ export interface User {
   name: string;
   role: Role;
   employeeId: string;
-  password?: string;
   lastLogin?: string;
   activeSessions?: number;
   isActive?: boolean;

@@ -4,7 +4,7 @@ import cors from "cors";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
@@ -13,6 +13,7 @@ dotenv.config();
 console.log("Server starting in environment:", process.env.NODE_ENV);
 console.log("Supabase URL present:", !!process.env.SUPABASE_URL);
 console.log("Supabase Key present:", !!process.env.SUPABASE_ANON_KEY);
+console.log("Supabase Service Role present:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -26,10 +27,82 @@ const UPDATES_FILE = path.join(process.cwd(), "updates_data.json");
 const SWAPS_FILE = path.join(process.cwd(), "swaps_data.json");
 const LEAVE_FILE = path.join(process.cwd(), "leave_data.json");
 
+type Role = "chauffeur" | "planner" | "admin";
+
+interface AppUser {
+  id: string;
+  name: string;
+  role: Role;
+  employeeId: string;
+  lastLogin?: string;
+  activeSessions?: number;
+  isActive?: boolean;
+  phone?: string;
+  email?: string;
+}
+
+interface IncomingUser extends AppUser {
+  password?: string;
+}
+
+type AuthenticatedRequest = express.Request & {
+  authUser?: SupabaseAuthUser;
+  appUser?: AppUser;
+  accessToken?: string;
+};
+
+const normalizeEmail = (email?: string | null) => email?.trim().toLowerCase() || undefined;
+const toPublicUser = (user: any): AppUser => ({
+  id: String(user.id),
+  name: user.name,
+  role: user.role,
+  employeeId: user.employeeId,
+  lastLogin: user.lastLogin,
+  activeSessions: user.activeSessions,
+  isActive: user.isActive,
+  phone: user.phone,
+  email: user.email,
+});
+
+const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
+  id: String(user.id),
+  name: user.name?.trim(),
+  role: user.role,
+  employeeId: user.employeeId?.trim(),
+  lastLogin: user.lastLogin,
+  activeSessions: user.activeSessions,
+  isActive: user.isActive !== false,
+  phone: user.phone?.trim() || undefined,
+  email: normalizeEmail(user.email),
+});
+
+const ensureUniqueUserEmails = (users: IncomingUser[]) => {
+  const seen = new Set<string>();
+
+  for (const user of users) {
+    const email = normalizeEmail(user.email);
+    if (!email) continue;
+
+    if (seen.has(email)) {
+      throw new Error(`E-mailadres ${email} komt meerdere keren voor.`);
+    }
+
+    seen.add(email);
+  }
+};
+
+const randomPassword = () => Math.random().toString(36).slice(-10) + "A1!";
+
 // Supabase Client
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseKey = process.env.SUPABASE_ANON_KEY;
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+const supabaseAdmin = (supabaseUrl && process.env.SUPABASE_SERVICE_ROLE_KEY)
+  ? createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    })
+  : null;
+const db = supabaseAdmin ?? supabase;
 
 if (!supabase) {
   console.warn("Supabase configuration missing. Falling back to local JSON files.");
@@ -38,10 +111,10 @@ if (!supabase) {
 }
 
 // Default Mock Data
-const DEFAULT_USERS = [
-  { id: '1', name: 'Jan de Vries', role: 'chauffeur', employeeId: 'CH-4492', password: '123', phone: '0470 12 34 56', email: 'jan.devries@example.com', isActive: true },
-  { id: '2', name: 'Sarah de Groot', role: 'planner', employeeId: 'PL-1102', password: '123', phone: '0480 98 76 54', email: 'sarah.degroot@example.com', isActive: true },
-  { id: '3', name: 'Mark Admin', role: 'admin', employeeId: 'AD-0001', password: '123', phone: '0490 55 44 33', email: 'mark.admin@example.com', isActive: true },
+const DEFAULT_USERS: AppUser[] = [
+  { id: '1', name: 'Jan de Vries', role: 'chauffeur', employeeId: 'CH-4492', phone: '0470 12 34 56', email: 'jan.devries@example.com', isActive: true },
+  { id: '2', name: 'Sarah de Groot', role: 'planner', employeeId: 'PL-1102', phone: '0480 98 76 54', email: 'sarah.degroot@example.com', isActive: true },
+  { id: '3', name: 'Mark Admin', role: 'admin', employeeId: 'AD-0001', phone: '0490 55 44 33', email: 'mark.admin@example.com', isActive: true },
 ];
 
 const DEFAULT_SERVICES = [
@@ -56,9 +129,9 @@ const DEFAULT_SERVICES = [
 
 // Helper to read/write data
 const getPlanningData = async () => {
-  if (supabase) {
+  if (db) {
     try {
-      const { data, error } = await supabase.from('planning').select('*');
+      const { data, error } = await db.from('planning').select('*');
       if (error) {
         console.error("Supabase error fetching planning:", error);
       } else if (data && data.length > 0) {
@@ -75,8 +148,8 @@ const getPlanningData = async () => {
 };
 
 const savePlanningData = async (data: any) => {
-  if (supabase) {
-    const { error } = await supabase.from('planning').upsert(data);
+  if (db) {
+    const { error } = await db.from('planning').upsert(data);
     if (error) throw error;
     return;
   }
@@ -86,18 +159,18 @@ const savePlanningData = async (data: any) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
-const getUsersData = async () => {
+const getUsersData = async (): Promise<AppUser[]> => {
   console.log("getUsersData called. Supabase configured:", !!supabase);
-  if (supabase) {
+  if (db) {
     try {
-      const { data, error } = await supabase.from('users').select('*');
+      const { data, error } = await db.from('users').select('*');
       if (error) {
         console.error("Supabase error fetching users:", error);
       } else if (data) {
         console.log(`Supabase returned ${data.length} users`);
         // If we have a connection to Supabase, it's the source of truth.
         // We only fall back to local/defaults if Supabase is empty AND we have local data.
-        if (data.length > 0) return data;
+        if (data.length > 0) return data.map(toPublicUser);
         
         // If Supabase is empty, check if we have local data to "bootstrap" from
         if (fs.existsSync(USERS_FILE)) {
@@ -106,7 +179,7 @@ const getUsersData = async () => {
             const localData = JSON.parse(content);
             if (Array.isArray(localData) && localData.length > 0) {
               console.log("Supabase empty, using local file data");
-              return localData;
+              return localData.map(toPublicUser);
             }
           }
         }
@@ -124,7 +197,7 @@ const getUsersData = async () => {
       const content = fs.readFileSync(USERS_FILE, "utf-8");
       if (content.trim()) {
         const data = JSON.parse(content);
-        if (Array.isArray(data) && data.length > 0) return data;
+        if (Array.isArray(data) && data.length > 0) return data.map(toPublicUser);
       }
     } catch (e) {
       console.error("Error reading users file:", e);
@@ -134,10 +207,97 @@ const getUsersData = async () => {
   return DEFAULT_USERS;
 };
 
-const saveUsersData = async (data: any) => {
-  console.log(`saveUsersData called with ${data.length} items. Supabase:`, !!supabase);
-  if (supabase) {
-    const { error } = await supabase.from('users').upsert(data);
+const saveUsersData = async (incomingUsers: IncomingUser[]) => {
+  console.log(`saveUsersData called with ${incomingUsers.length} items. Supabase:`, !!supabase);
+  ensureUniqueUserEmails(incomingUsers);
+
+  const sanitizedUsers = incomingUsers.map(sanitizeIncomingUser);
+
+  if (db) {
+    if (!supabaseAdmin) {
+      throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt. Gebruikersbeheer vereist een service role key.");
+    }
+
+    const currentUsers = await getUsersData();
+    const currentById = new Map<string, AppUser>(currentUsers.map((user): [string, AppUser] => [String(user.id), user]));
+    const incomingIds = new Set(sanitizedUsers.map((user) => String(user.id)));
+
+    const { data: authPage, error: authListError } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (authListError) {
+      throw authListError;
+    }
+
+    const authUsersByEmail = new Map<string, SupabaseAuthUser>(
+      (authPage.users || [])
+        .filter((user) => user.email)
+        .map((user): [string, SupabaseAuthUser] => [normalizeEmail(user.email) as string, user]),
+    );
+
+    for (const currentUser of currentUsers) {
+      if (incomingIds.has(String(currentUser.id))) continue;
+      const existingAuth = normalizeEmail(currentUser.email)
+        ? authUsersByEmail.get(normalizeEmail(currentUser.email) as string)
+        : null;
+
+      if (existingAuth) {
+        const { error } = await supabaseAdmin.auth.admin.deleteUser(existingAuth.id);
+        if (error) throw error;
+      }
+    }
+
+    for (const incomingUser of incomingUsers) {
+      const sanitizedUser = sanitizeIncomingUser(incomingUser);
+      const previousUser = currentById.get(String(sanitizedUser.id));
+      const currentEmail = normalizeEmail(sanitizedUser.email);
+      const previousEmail = normalizeEmail(previousUser?.email);
+
+      if (!currentEmail) {
+        continue;
+      }
+
+      const previousAuthUser = previousEmail ? authUsersByEmail.get(previousEmail) : null;
+      const currentAuthUser = authUsersByEmail.get(currentEmail) ?? previousAuthUser;
+
+      if (!currentAuthUser) {
+        const { data, error } = await supabaseAdmin.auth.admin.createUser({
+          email: currentEmail,
+          password: incomingUser.password || randomPassword(),
+          email_confirm: true,
+          user_metadata: { name: sanitizedUser.name, role: sanitizedUser.role },
+        });
+        if (error) throw error;
+        if (data.user?.email) {
+          authUsersByEmail.set(normalizeEmail(data.user.email) as string, data.user);
+        }
+        continue;
+      }
+
+      if (previousEmail && previousEmail !== currentEmail) {
+        const { data, error } = await supabaseAdmin.auth.admin.updateUserById(currentAuthUser.id, {
+          email: currentEmail,
+          email_confirm: true,
+          user_metadata: { name: sanitizedUser.name, role: sanitizedUser.role },
+        });
+        if (error) throw error;
+        authUsersByEmail.delete(previousEmail);
+        if (data.user?.email) {
+          authUsersByEmail.set(normalizeEmail(data.user.email) as string, data.user);
+        }
+      }
+
+      if (incomingUser.password) {
+        const { error } = await supabaseAdmin.auth.admin.updateUserById(currentAuthUser.id, {
+          password: incomingUser.password,
+          user_metadata: { name: sanitizedUser.name, role: sanitizedUser.role },
+        });
+        if (error) throw error;
+      }
+    }
+
+    const { error } = await db.from('users').upsert(sanitizedUsers);
     if (error) {
       console.error("Supabase upsert error:", error);
       throw error;
@@ -145,18 +305,18 @@ const saveUsersData = async (data: any) => {
     console.log("Supabase upsert successful");
     return;
   }
-  
+
   if (process.env.VERCEL) {
-    throw new Error("Supabase is niet geconfigureerd op Vercel. Controleer de omgevingsvariabelen (SUPABASE_URL en SUPABASE_ANON_KEY) in het Vercel dashboard.");
+    throw new Error("Supabase is niet geconfigureerd op Vercel. Controleer de omgevingsvariabelen.");
   }
-  
-  fs.writeFileSync(USERS_FILE, JSON.stringify(data, null, 2));
+
+  fs.writeFileSync(USERS_FILE, JSON.stringify(sanitizedUsers, null, 2));
 };
 
 const getDiversionsData = async () => {
-  if (supabase) {
+  if (db) {
     try {
-      const { data, error } = await supabase.from('diversions').select('*');
+      const { data, error } = await db.from('diversions').select('*');
       if (error) {
         console.error("Supabase error fetching diversions:", error);
       } else if (data && data.length > 0) {
@@ -173,8 +333,8 @@ const getDiversionsData = async () => {
 };
 
 const saveDiversionsData = async (data: any) => {
-  if (supabase) {
-    const { error } = await supabase.from('diversions').upsert(data);
+  if (db) {
+    const { error } = await db.from('diversions').upsert(data);
     if (error) throw error;
     return;
   }
@@ -185,9 +345,9 @@ const saveDiversionsData = async (data: any) => {
 };
 
 const getServicesData = async () => {
-  if (supabase) {
+  if (db) {
     try {
-      const { data, error } = await supabase.from('services').select('*');
+      const { data, error } = await db.from('services').select('*');
       if (error) {
         if (error.code === '42P01') {
           console.warn("Supabase 'services' table not found. Falling back to local/mock data.");
@@ -234,20 +394,20 @@ const getServicesData = async () => {
 };
 
 const saveServicesData = async (data: any) => {
-  if (supabase) {
+  if (db) {
     // To handle deletions (replace all logic), we first delete all then insert
     // This is the most reliable way for a "manage list" interface
     try {
       // Delete all existing services
-      const { error: deleteError } = await supabase.from('services').delete().neq('id', '0');
+      const { error: deleteError } = await db.from('services').delete().neq('id', '0');
       if (deleteError) {
         console.error("Error deleting services for replace:", deleteError);
         // Fallback to upsert if delete fails
-        const { error: upsertError } = await supabase.from('services').upsert(data);
+        const { error: upsertError } = await db.from('services').upsert(data);
         if (upsertError) throw upsertError;
       } else if (data.length > 0) {
         // Insert new services
-        const { error: insertError } = await supabase.from('services').insert(data);
+        const { error: insertError } = await db.from('services').insert(data);
         if (insertError) throw insertError;
       }
       return;
@@ -263,9 +423,9 @@ const saveServicesData = async (data: any) => {
 };
 
 const getUpdatesData = async () => {
-  if (supabase) {
+  if (db) {
     try {
-      const { data, error } = await supabase.from('updates').select('*');
+      const { data, error } = await db.from('updates').select('*');
       if (error) console.error("Supabase error fetching updates:", error);
       else if (data) return data;
     } catch (e) {
@@ -279,8 +439,8 @@ const getUpdatesData = async () => {
 };
 
 const saveUpdatesData = async (data: any) => {
-  if (supabase) {
-    const { error } = await supabase.from('updates').upsert(data);
+  if (db) {
+    const { error } = await db.from('updates').upsert(data);
     if (error) throw error;
     return;
   }
@@ -289,9 +449,9 @@ const saveUpdatesData = async (data: any) => {
 };
 
 const getSwapsData = async () => {
-  if (supabase) {
+  if (db) {
     try {
-      const { data, error } = await supabase.from('swaps').select('*');
+      const { data, error } = await db.from('swaps').select('*');
       if (error) console.error("Supabase error fetching swaps:", error);
       else if (data) return data;
     } catch (e) {
@@ -305,8 +465,8 @@ const getSwapsData = async () => {
 };
 
 const saveSwapsData = async (data: any) => {
-  if (supabase) {
-    const { error } = await supabase.from('swaps').upsert(data);
+  if (db) {
+    const { error } = await db.from('swaps').upsert(data);
     if (error) throw error;
     return;
   }
@@ -315,9 +475,9 @@ const saveSwapsData = async (data: any) => {
 };
 
 const getLeaveData = async () => {
-  if (supabase) {
+  if (db) {
     try {
-      const { data, error } = await supabase.from('leave').select('*');
+      const { data, error } = await db.from('leave').select('*');
       if (error) console.error("Supabase error fetching leave:", error);
       else if (data) return data;
     } catch (e) {
@@ -331,13 +491,71 @@ const getLeaveData = async () => {
 };
 
 const saveLeaveData = async (data: any) => {
-  if (supabase) {
-    const { error } = await supabase.from('leave').upsert(data);
+  if (db) {
+    const { error } = await db.from('leave').upsert(data);
     if (error) throw error;
     return;
   }
   if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
   fs.writeFileSync(LEAVE_FILE, JSON.stringify(data, null, 2));
+};
+
+const getBearerToken = (req: express.Request) => {
+  const header = req.headers.authorization;
+  if (!header?.startsWith("Bearer ")) return null;
+  return header.slice("Bearer ".length);
+};
+
+const findUserByEmail = async (email?: string | null): Promise<AppUser | null> => {
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return null;
+
+  const users = await getUsersData();
+  return users.find((user) => normalizeEmail(user.email) === normalizedEmail) || null;
+};
+
+const authenticate = async (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
+  if (!supabase) {
+    return res.status(500).json({ error: "Supabase Auth is niet geconfigureerd." });
+  }
+
+  const accessToken = getBearerToken(req);
+  if (!accessToken) {
+    return res.status(401).json({ error: "Niet aangemeld." });
+  }
+
+  const { data, error } = await supabase.auth.getUser(accessToken);
+  if (error || !data.user) {
+    return res.status(401).json({ error: "Ongeldige sessie." });
+  }
+
+  const appUser = await findUserByEmail(data.user.email);
+  if (!appUser) {
+    return res.status(403).json({ error: "Geen gebruikersprofiel gevonden voor dit account." });
+  }
+
+  if (appUser.isActive === false) {
+    return res.status(403).json({ error: "Dit account is gedeactiveerd." });
+  }
+
+  req.accessToken = accessToken;
+  req.authUser = data.user;
+  req.appUser = appUser;
+  next();
+};
+
+const requireRole = (...roles: Role[]) => {
+  return (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
+    if (!req.appUser) {
+      return res.status(401).json({ error: "Niet aangemeld." });
+    }
+
+    if (!roles.includes(req.appUser.role)) {
+      return res.status(403).json({ error: "Onvoldoende rechten." });
+    }
+
+    next();
+  };
 };
 
 const app = express();
@@ -361,7 +579,7 @@ app.get("/api/health", async (req, res) => {
     try {
       const checkTable = async (name: string) => {
         try {
-          const { error } = await supabase.from(name).select('*').limit(0);
+          const { error } = await db!.from(name).select('*').limit(0);
           return error ? `Error: ${error.message}` : "OK";
         } catch (e: any) {
           return `Exception: ${e.message}`;
@@ -391,7 +609,75 @@ app.post("/api/test", (req, res) => {
   res.json({ success: true, message: "POST method is working", body: req.body });
 });
 
-app.get("/api/planning", async (req, res) => {
+app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
+  res.json(req.appUser);
+});
+
+app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const action = req.body?.action;
+    const currentUser = req.appUser;
+
+    if (!currentUser || (action !== "start" && action !== "end")) {
+      return res.status(400).json({ error: "Ongeldige sessieactie." });
+    }
+
+    const nextUser: AppUser = {
+      ...currentUser,
+      lastLogin: action === "start" ? new Date().toLocaleString("nl-BE") : currentUser.lastLogin,
+      activeSessions: action === "start"
+        ? (currentUser.activeSessions || 0) + 1
+        : Math.max(0, (currentUser.activeSessions || 1) - 1),
+    };
+
+    const allUsers = await getUsersData();
+    const updatedUsers = allUsers.map((user) => user.id === nextUser.id ? nextUser : user);
+    await saveUsersData(updatedUsers);
+    res.json(nextUser);
+  } catch (error: any) {
+    res.status(500).json({ error: "Kon sessie niet bijwerken.", details: error.message });
+  }
+});
+
+app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
+    }
+
+    const userId = String(req.body?.userId || "");
+    const password = String(req.body?.password || "");
+    if (!userId || password.length < 8) {
+      return res.status(400).json({ error: "Geef een gebruiker en een wachtwoord van minstens 8 tekens." });
+    }
+
+    const users = await getUsersData();
+    const targetUser = users.find((user) => String(user.id) === userId);
+    if (!targetUser?.email) {
+      return res.status(404).json({ error: "Gebruiker met e-mailadres niet gevonden." });
+    }
+
+    const { data: authPage, error: authListError } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+    if (authListError) throw authListError;
+
+    const authUser = authPage.users.find((user) => normalizeEmail(user.email) === normalizeEmail(targetUser.email));
+    if (!authUser) {
+      return res.status(404).json({ error: "Geen gekoppeld auth-account gevonden." });
+    }
+
+    const { error } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password });
+    if (error) throw error;
+
+    res.json({ success: true });
+  } catch (error: any) {
+    res.status(500).json({ error: "Wachtwoord reset mislukt.", details: error.message });
+  }
+});
+
+app.get("/api/planning", authenticate, async (req, res) => {
   try {
     const data = await getPlanningData();
     res.json(data);
@@ -401,7 +687,7 @@ app.get("/api/planning", async (req, res) => {
   }
 });
 
-app.post("/api/planning", async (req, res) => {
+app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
@@ -417,7 +703,7 @@ app.post("/api/planning", async (req, res) => {
   }
 });
 
-app.get("/api/users", async (req, res) => {
+app.get("/api/users", authenticate, async (req, res) => {
   try {
     const users = await getUsersData();
     res.json(users);
@@ -427,7 +713,7 @@ app.get("/api/users", async (req, res) => {
   }
 });
 
-app.post("/api/users", async (req, res) => {
+app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
   console.log("POST /api/users called. Body size:", req.body?.length);
   try {
     const newData = req.body;
@@ -446,7 +732,7 @@ app.post("/api/users", async (req, res) => {
   }
 });
 
-app.get("/api/diversions", async (req, res) => {
+app.get("/api/diversions", authenticate, async (req, res) => {
   try {
     const data = await getDiversionsData();
     res.json(data);
@@ -456,7 +742,7 @@ app.get("/api/diversions", async (req, res) => {
   }
 });
 
-app.post("/api/diversions", async (req, res) => {
+app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
@@ -472,7 +758,7 @@ app.post("/api/diversions", async (req, res) => {
   }
 });
 
-app.get("/api/services", async (req, res) => {
+app.get("/api/services", authenticate, async (req, res) => {
   try {
     const data = await getServicesData();
     res.json(data);
@@ -482,7 +768,7 @@ app.get("/api/services", async (req, res) => {
   }
 });
 
-app.post("/api/services", async (req, res) => {
+app.post("/api/services", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
@@ -498,7 +784,7 @@ app.post("/api/services", async (req, res) => {
   }
 });
 
-app.get("/api/updates", async (req, res) => {
+app.get("/api/updates", authenticate, async (req, res) => {
   try {
     const data = await getUpdatesData();
     res.json(data);
@@ -507,7 +793,7 @@ app.get("/api/updates", async (req, res) => {
   }
 });
 
-app.post("/api/updates", async (req, res) => {
+app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const newData = req.body;
     await saveUpdatesData(newData);
@@ -517,7 +803,7 @@ app.post("/api/updates", async (req, res) => {
   }
 });
 
-app.get("/api/swaps", async (req, res) => {
+app.get("/api/swaps", authenticate, async (req, res) => {
   try {
     const data = await getSwapsData();
     res.json(data);
@@ -526,7 +812,7 @@ app.get("/api/swaps", async (req, res) => {
   }
 });
 
-app.post("/api/swaps", async (req, res) => {
+app.post("/api/swaps", authenticate, async (req, res) => {
   try {
     const newData = req.body;
     await saveSwapsData(newData);
@@ -536,7 +822,7 @@ app.post("/api/swaps", async (req, res) => {
   }
 });
 
-app.get("/api/leave", async (req, res) => {
+app.get("/api/leave", authenticate, async (req, res) => {
   try {
     const data = await getLeaveData();
     res.json(data);
@@ -545,7 +831,7 @@ app.get("/api/leave", async (req, res) => {
   }
 });
 
-app.post("/api/leave", async (req, res) => {
+app.post("/api/leave", authenticate, async (req, res) => {
   try {
     const newData = req.body;
     await saveLeaveData(newData);
@@ -555,7 +841,7 @@ app.post("/api/leave", async (req, res) => {
   }
 });
 
-app.post("/api/send-urgent-update-email", async (req, res) => {
+app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "admin"), async (req, res) => {
   const { update, recipients } = req.body;
   
   if (!update || !recipients || !Array.isArray(recipients)) {
@@ -641,7 +927,7 @@ app.get("/api/test", (req, res) => {
 });
 
 // Admin endpoint to sync local JSON to Supabase
-app.post("/api/admin/sync", async (req, res) => {
+app.post("/api/admin/sync", authenticate, requireRole("admin"), async (req, res) => {
   console.log("Sync request received");
   if (!supabase) {
     console.error("Sync failed: Supabase not configured");
@@ -666,7 +952,7 @@ app.post("/api/admin/sync", async (req, res) => {
         const localPlanning = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
         console.log(`Found ${localPlanning.length} planning items`);
         if (localPlanning.length > 0) {
-          const { error } = await supabase.from('planning').upsert(localPlanning);
+          const { error } = await db!.from('planning').upsert(localPlanning);
           if (error) console.error("Planning sync error:", error);
           results.planning = error ? `Error: ${error.message}` : `Synced ${localPlanning.length} items`;
         } else {
@@ -687,7 +973,7 @@ app.post("/api/admin/sync", async (req, res) => {
         const localUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
         console.log(`Found ${localUsers.length} users`);
         if (localUsers.length > 0) {
-          const { error } = await supabase.from('users').upsert(localUsers);
+          const { error } = await db!.from('users').upsert(localUsers.map(toPublicUser));
           if (error) console.error("Users sync error:", error);
           results.users = error ? `Error: ${error.message}` : `Synced ${localUsers.length} items`;
         } else {
@@ -708,7 +994,7 @@ app.post("/api/admin/sync", async (req, res) => {
         const localDiversions = JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
         console.log(`Found ${localDiversions.length} diversions`);
         if (localDiversions.length > 0) {
-          const { error } = await supabase.from('diversions').upsert(localDiversions);
+          const { error } = await db!.from('diversions').upsert(localDiversions);
           if (error) console.error("Diversions sync error:", error);
           results.diversions = error ? `Error: ${error.message}` : `Synced ${localDiversions.length} items`;
         } else {
@@ -729,7 +1015,7 @@ app.post("/api/admin/sync", async (req, res) => {
         const localServices = JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
         console.log(`Found ${localServices.length} services`);
         if (localServices.length > 0) {
-          const { error } = await supabase.from('services').upsert(localServices);
+          const { error } = await db!.from('services').upsert(localServices);
           if (error) console.error("Services sync error:", error);
           results.services = error ? `Error: ${error.message}` : `Synced ${localServices.length} items`;
         } else {
