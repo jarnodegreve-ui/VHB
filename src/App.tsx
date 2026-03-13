@@ -2226,6 +2226,8 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
   
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
+  const activeAdmins = users.filter(u => u.role === 'admin' && u.isActive !== false);
+  const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
 
   const filteredUsers = users
     .filter(u => {
@@ -2276,6 +2278,13 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
       alert('Een nieuw wachtwoord moet minstens 8 tekens hebben.');
       return;
     }
+    const originalUser = users.find(u => u.id === editingUser.id);
+    const isOnlyActiveAdmin = originalUser?.role === 'admin' && originalUser.isActive !== false && activeAdmins.length === 1;
+    const adminWouldBeRemoved = editingUser.role !== 'admin' || editingUser.isActive === false;
+    if (isOnlyActiveAdmin && adminWouldBeRemoved) {
+      alert('Je kunt de laatste actieve admin niet degraderen of deactiveren.');
+      return;
+    }
 
     const updatedUsers = users.map(u => u.id === editingUser.id ? editingUser : u);
     onSave(updatedUsers);
@@ -2284,6 +2293,13 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
 
   const handleDeleteUser = () => {
     if (confirmDeleteId) {
+      const userToDelete = users.find(u => u.id === confirmDeleteId);
+      const isOnlyActiveAdmin = userToDelete?.role === 'admin' && userToDelete.isActive !== false && activeAdmins.length === 1;
+      if (isOnlyActiveAdmin) {
+        alert('Je kunt de laatste actieve admin niet verwijderen.');
+        setConfirmDeleteId(null);
+        return;
+      }
       onSave(users.filter(u => u.id !== confirmDeleteId));
       if (editingUser?.id === confirmDeleteId) setEditingUser(null);
       setConfirmDeleteId(null);
@@ -2639,9 +2655,15 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                   <p className="text-sm text-slate-500">Pas de gegevens van {editingUser.name} aan.</p>
                 </div>
                 <button 
-                  onClick={() => setConfirmDeleteId(editingUser.id)}
-                  className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                  title="Verwijder gebruiker"
+                  onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)}
+                  disabled={isProtectedAdmin(editingUser)}
+                  className={cn(
+                    "p-2 rounded-lg transition-colors",
+                    isProtectedAdmin(editingUser)
+                      ? "text-slate-300 cursor-not-allowed"
+                      : "text-red-500 hover:bg-red-50"
+                  )}
+                  title={isProtectedAdmin(editingUser) ? "Laatste actieve admin kan niet verwijderd worden" : "Verwijder gebruiker"}
                 >
                   <Trash2 size={20} />
                 </button>
@@ -2819,6 +2841,19 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                       >
                         Bewerken
                       </button>
+                      <button 
+                        onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)}
+                        disabled={isProtectedAdmin(u)}
+                        className={cn(
+                          "p-2 rounded-xl transition-all",
+                          isProtectedAdmin(u)
+                            ? "text-slate-300 cursor-not-allowed"
+                            : "text-red-500 hover:bg-red-50"
+                        )}
+                        title={isProtectedAdmin(u) ? "Laatste actieve admin kan niet verwijderd worden" : "Verwijder gebruiker"}
+                      >
+                        <Trash2 size={18} />
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -2861,6 +2896,19 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                   className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest active:scale-95 transition-all"
                 >
                   Bewerken
+                </button>
+                <button 
+                  onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)}
+                  disabled={isProtectedAdmin(u)}
+                  className={cn(
+                    "px-4 rounded-2xl active:scale-95 transition-all",
+                    isProtectedAdmin(u)
+                      ? "bg-slate-50 text-slate-300 cursor-not-allowed"
+                      : "bg-red-50 text-red-500"
+                  )}
+                  title={isProtectedAdmin(u) ? "Laatste actieve admin kan niet verwijderd worden" : "Verwijder gebruiker"}
+                >
+                  <Trash2 size={20} />
                 </button>
                 <button 
                   onClick={() => setConfirmResetUser(u)}

@@ -103,6 +103,9 @@ const ensureUniqueUserEmails = (users: IncomingUser[]) => {
   }
 };
 
+const countAdmins = (users: Array<Pick<AppUser, "role" | "isActive">>) =>
+  users.filter((user) => user.role === "admin" && user.isActive !== false).length;
+
 const randomPassword = () => Math.random().toString(36).slice(-10) + "A1!";
 
 // Supabase Client
@@ -224,6 +227,9 @@ const saveUsersData = async (incomingUsers: IncomingUser[]) => {
   ensureUniqueUserEmails(incomingUsers);
 
   const sanitizedUsers = incomingUsers.map(sanitizeIncomingUser);
+  if (countAdmins(sanitizedUsers) === 0) {
+    throw new Error("Er moet minstens 1 actieve admin overblijven.");
+  }
 
   if (db) {
     if (!supabaseAdmin) {
