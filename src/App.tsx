@@ -133,6 +133,83 @@ function ConfirmationModal({
   );
 }
 
+type Toast = {
+  id: number;
+  message: string;
+  tone?: 'success' | 'error' | 'info';
+};
+
+function notify(message: string, tone: Toast['tone'] = 'info') {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent('vhb-toast', { detail: { message, tone } }));
+}
+
+function ToastStack({
+  toasts,
+  onDismiss,
+}: {
+  toasts: Toast[];
+  onDismiss: (id: number) => void;
+}) {
+  return (
+    <div className="fixed top-4 right-4 z-[120] w-[calc(100vw-2rem)] max-w-sm space-y-3">
+      <AnimatePresence>
+        {toasts.map((toast) => (
+          <motion.div
+            key={toast.id}
+            initial={{ opacity: 0, y: -12, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -12, scale: 0.96 }}
+            className={cn(
+              'rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-sm',
+              toast.tone === 'success' && 'border-emerald-200 bg-emerald-50/95 text-emerald-900',
+              toast.tone === 'error' && 'border-red-200 bg-red-50/95 text-red-900',
+              (!toast.tone || toast.tone === 'info') && 'border-slate-200 bg-white/95 text-slate-900'
+            )}
+          >
+            <div className="flex items-start gap-3">
+              <div className={cn(
+                'mt-0.5 h-2.5 w-2.5 rounded-full',
+                toast.tone === 'success' && 'bg-emerald-500',
+                toast.tone === 'error' && 'bg-red-500',
+                (!toast.tone || toast.tone === 'info') && 'bg-oker-500'
+              )} />
+              <p className="flex-1 text-sm font-bold leading-5">{toast.message}</p>
+              <button
+                onClick={() => onDismiss(toast.id)}
+                className="rounded-full p-1 text-slate-400 transition-colors hover:bg-black/5 hover:text-slate-700"
+                aria-label="Sluit melding"
+              >
+                <X size={16} />
+              </button>
+            </div>
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function EmptyState({
+  icon,
+  title,
+  message,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  message: string;
+}) {
+  return (
+    <div className="text-center py-12 bg-white rounded-[32px] border border-dashed border-slate-200">
+      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
+        {icon}
+      </div>
+      <h4 className="text-lg font-black text-slate-800 tracking-tight">{title}</h4>
+      <p className="mt-2 text-sm font-medium text-slate-400">{message}</p>
+    </div>
+  );
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -147,6 +224,19 @@ export default function App() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const dismissToast = (id: number) => {
+    setToasts((current) => current.filter((toast) => toast.id !== id));
+  };
+
+  const showToast = (message: string, tone: Toast['tone'] = 'info') => {
+    const id = Date.now() + Math.floor(Math.random() * 1000);
+    setToasts((current) => [...current, { id, message, tone }]);
+    window.setTimeout(() => {
+      setToasts((current) => current.filter((toast) => toast.id !== id));
+    }, 4200);
+  };
 
   useEffect(() => {
     let isMounted = true;
@@ -193,6 +283,16 @@ export default function App() {
       isMounted = false;
       authListener?.subscription.unsubscribe();
     };
+  }, []);
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      const customEvent = event as CustomEvent<{ message: string; tone?: Toast['tone'] }>;
+      showToast(customEvent.detail.message, customEvent.detail.tone);
+    };
+
+    window.addEventListener('vhb-toast', handler as EventListener);
+    return () => window.removeEventListener('vhb-toast', handler as EventListener);
   }, []);
 
   const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token) => {
@@ -258,6 +358,7 @@ export default function App() {
       return response.ok;
     } catch (error) {
       console.error('Error saving updates:', error);
+      showToast('Opslaan van updates is mislukt.', 'error');
       return false;
     }
   };
@@ -273,10 +374,11 @@ export default function App() {
       });
       const data = await response.json();
       if (data.success) {
-        alert(data.mocked ? `E-mail gelogd: ${data.message}` : "E-mails succesvol verzonden naar alle chauffeurs!");
+        showToast(data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails succesvol verzonden naar alle chauffeurs!', 'success');
       }
     } catch (error) {
       console.error('Error sending urgent email:', error);
+      showToast('Verzenden van de e-mailupdate is mislukt.', 'error');
     }
   };
 
@@ -296,9 +398,13 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(newSwaps),
       });
-      if (response.ok) setSwaps(newSwaps);
+      if (response.ok) {
+        setSwaps(newSwaps);
+        showToast('Ruilverzoek bijgewerkt.', 'success');
+      }
     } catch (error) {
       console.error('Error saving swaps:', error);
+      showToast('Opslaan van ruilverzoeken is mislukt.', 'error');
     }
   };
 
@@ -318,9 +424,13 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(newLeave),
       });
-      if (response.ok) setLeaveRequests(newLeave);
+      if (response.ok) {
+        setLeaveRequests(newLeave);
+        showToast('Verlofaanvraag bijgewerkt.', 'success');
+      }
     } catch (error) {
       console.error('Error saving leave:', error);
+      showToast('Opslaan van verlofaanvragen is mislukt.', 'error');
     }
   };
 
@@ -348,9 +458,11 @@ export default function App() {
       });
       if (response.ok) {
         setServices(newServices);
+        showToast('Diensten succesvol opgeslagen.', 'success');
       }
     } catch (error) {
       console.error('Error saving services:', error);
+      showToast('Opslaan van diensten is mislukt.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -381,6 +493,7 @@ export default function App() {
       if (response.ok) {
         console.log('Users saved successfully');
         await fetchUsers();
+        showToast('Gebruikers succesvol opgeslagen.', 'success');
         return true;
       } else {
         const text = await response.text();
@@ -402,7 +515,7 @@ export default function App() {
       }
     } catch (error: any) {
       console.error('Error saving users:', error);
-      alert('Fout bij het opslaan van gebruikers: ' + error.message);
+      showToast('Fout bij het opslaan van gebruikers: ' + error.message, 'error');
       return false;
     } finally {
       setIsLoading(false);
@@ -433,9 +546,11 @@ export default function App() {
       });
       if (response.ok) {
         setShifts(newShifts);
+        showToast('Planning succesvol opgeslagen.', 'success');
       }
     } catch (error) {
       console.error('Error saving planning:', error);
+      showToast('Opslaan van planning is mislukt.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -465,9 +580,11 @@ export default function App() {
       });
       if (response.ok) {
         setDiversions(newDiversions);
+        showToast('Omleidingen succesvol opgeslagen.', 'success');
       }
     } catch (error) {
       console.error('Error saving diversions:', error);
+      showToast('Opslaan van omleidingen is mislukt.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -520,7 +637,29 @@ export default function App() {
   const isAdmin = currentUser.role === 'admin';
 
   return (
-    <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+    <>
+      <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <AnimatePresence>
+        {isLoading && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px]"
+          >
+            <div className="rounded-[28px] border border-white/60 bg-white/95 px-6 py-5 shadow-2xl">
+              <div className="flex items-center gap-4">
+                <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-oker-500" />
+                <div>
+                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Bezig</p>
+                  <p className="text-sm font-bold text-slate-800">Gegevens verwerken...</p>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+      <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -772,7 +911,8 @@ export default function App() {
           </button>
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -921,7 +1061,12 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
           <button 
             type="submit"
             disabled={isSubmitting}
-            className="w-full bg-oker-500 text-white font-black py-5 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/30 relative group overflow-hidden"
+            className={cn(
+              "w-full font-black py-5 rounded-2xl transition-all shadow-xl relative group overflow-hidden",
+              isSubmitting
+                ? "bg-slate-300 text-white cursor-not-allowed shadow-none"
+                : "bg-oker-500 text-white hover:bg-oker-600 shadow-oker-500/30"
+            )}
           >
             <div className="absolute inset-0 glass-oker opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-2xl" />
             <span className="relative z-10">{isSubmitting ? 'BEZIG...' : 'INLOGGEN'}</span>
@@ -993,8 +1138,12 @@ function ContactsView({ users, currentUser }: { users: User[], currentUser: User
           </div>
         ))}
         {filteredUsers.length === 0 && (
-          <div className="col-span-full text-center py-12 bg-white rounded-[32px] border border-dashed border-slate-200">
-            <p className="text-slate-400 font-medium">Geen contacten gevonden.</p>
+          <div className="col-span-full">
+            <EmptyState
+              icon={<Users size={28} />}
+              title="Geen contacten gevonden"
+              message="Pas je zoekopdracht aan om medewerkers terug te vinden."
+            />
           </div>
         )}
       </div>
@@ -1204,8 +1353,12 @@ function ServicesView({ services }: { services: Service[] }) {
         </div>
 
         {filteredServices.length === 0 && (
-          <div className="px-8 py-12 text-center text-slate-400 font-medium">
-            Geen diensten gevonden voor "{searchQuery}"
+          <div className="px-6 py-6">
+            <EmptyState
+              icon={<Clock size={28} />}
+              title="Geen diensten gevonden"
+              message={searchQuery ? `Geen diensten gevonden voor "${searchQuery}".` : 'Er zijn nog geen diensten beschikbaar.'}
+            />
           </div>
         )}
       </div>
@@ -1656,41 +1809,51 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
 
       {/* Desktop Table */}
       <div className="hidden md:block bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-slate-50/50 border-b border-slate-100">
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijd</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Loopnr</th>
-              <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Bus</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {shifts.map(shift => (
-              <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors group">
-                <td className="px-8 py-6 font-black text-slate-800">{shift.date}</td>
-                <td className="px-8 py-6">
-                  <div className="flex items-center gap-3 text-slate-600 font-bold">
-                    <Clock size={16} className="text-oker-400" />
-                    {shift.startTime} - {shift.endTime}
-                  </div>
-                </td>
-                <td className="px-8 py-6">
-                  <span className="px-4 py-1.5 bg-oker-50 text-oker-700 rounded-xl font-black text-xs uppercase tracking-wider">
-                    Lijn {shift.line}
-                  </span>
-                </td>
-                <td className="px-8 py-6">
-                  <span className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-wider">
-                    #{shift.loopnr}
-                  </span>
-                </td>
-                <td className="px-8 py-6 font-mono text-xs font-bold text-slate-400">{shift.busNumber}</td>
+        {shifts.length > 0 ? (
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijd</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Loopnr</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Bus</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {shifts.map(shift => (
+                <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-6 font-black text-slate-800">{shift.date}</td>
+                  <td className="px-8 py-6">
+                    <div className="flex items-center gap-3 text-slate-600 font-bold">
+                      <Clock size={16} className="text-oker-400" />
+                      {shift.startTime} - {shift.endTime}
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="px-4 py-1.5 bg-oker-50 text-oker-700 rounded-xl font-black text-xs uppercase tracking-wider">
+                      Lijn {shift.line}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6">
+                    <span className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-wider">
+                      #{shift.loopnr}
+                    </span>
+                  </td>
+                  <td className="px-8 py-6 font-mono text-xs font-bold text-slate-400">{shift.busNumber}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div className="p-6">
+            <EmptyState
+              icon={<Calendar size={28} />}
+              title="Geen diensten gepland"
+              message="Zodra er planning beschikbaar is, verschijnt die hier."
+            />
+          </div>
+        )}
       </div>
 
       {/* Mobile Cards */}
@@ -1730,6 +1893,13 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
             </div>
           </div>
         ))}
+        {shifts.length === 0 && (
+          <EmptyState
+            icon={<Calendar size={28} />}
+            title="Geen diensten gepland"
+            message="Zodra er planning beschikbaar is, verschijnt die hier."
+          />
+        )}
       </div>
     </div>
   );
@@ -1991,12 +2161,12 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
       if (Array.isArray(data)) {
         onSave(data);
         setJsonInput('');
-        alert('Planning succesvol geïmporteerd!');
+        notify('Planning succesvol geïmporteerd!', 'success');
       } else {
-        alert('Ongeldig formaat. Zorg dat het een array van diensten is.');
+        notify('Ongeldig formaat. Zorg dat het een array van diensten is.', 'error');
       }
     } catch (e) {
-      alert('Fout bij het parsen van JSON. Controleer de syntax.');
+      notify('Fout bij het parsen van JSON. Controleer de syntax.', 'error');
     }
   };
 
@@ -2026,13 +2196,13 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
       }
 
       if (data.success) {
-        alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
+        notify('Synchronisatie voltooid.', 'success');
       } else {
-        alert('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'));
+        notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
       }
     } catch (error: any) {
       console.error('Sync error:', error);
-      alert('Er is een fout opgetreden bij het synchroniseren: ' + error.message);
+      notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -2143,7 +2313,7 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
         await onSendUrgentEmail(updateToAdd);
       }
       setNewUpdate({ title: '', category: 'algemeen', content: '', isUrgent: false });
-      alert('Update succesvol gepubliceerd!');
+      notify('Update succesvol gepubliceerd!', 'success');
     }
     setIsPublishing(false);
   };
@@ -2243,11 +2413,11 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
     e.preventDefault();
     if (!newUser.name) return;
     if (!newUser.email) {
-      alert('Een e-mailadres is verplicht voor Supabase login.');
+      notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
       return;
     }
     if (newUser.password.length < 8) {
-      alert('Gebruik een tijdelijk wachtwoord van minstens 8 tekens.');
+      notify('Gebruik een tijdelijk wachtwoord van minstens 8 tekens.', 'error');
       return;
     }
 
@@ -2271,18 +2441,18 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
     e.preventDefault();
     if (!editingUser) return;
     if (!editingUser.email) {
-      alert('Een e-mailadres is verplicht voor Supabase login.');
+      notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
       return;
     }
     if (editingUser.password && editingUser.password.length < 8) {
-      alert('Een nieuw wachtwoord moet minstens 8 tekens hebben.');
+      notify('Een nieuw wachtwoord moet minstens 8 tekens hebben.', 'error');
       return;
     }
     const originalUser = users.find(u => u.id === editingUser.id);
     const isOnlyActiveAdmin = originalUser?.role === 'admin' && originalUser.isActive !== false && activeAdmins.length === 1;
     const adminWouldBeRemoved = editingUser.role !== 'admin' || editingUser.isActive === false;
     if (isOnlyActiveAdmin && adminWouldBeRemoved) {
-      alert('Je kunt de laatste actieve admin niet degraderen of deactiveren.');
+      notify('Je kunt de laatste actieve admin niet degraderen of deactiveren.', 'error');
       return;
     }
 
@@ -2296,7 +2466,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
       const userToDelete = users.find(u => u.id === confirmDeleteId);
       const isOnlyActiveAdmin = userToDelete?.role === 'admin' && userToDelete.isActive !== false && activeAdmins.length === 1;
       if (isOnlyActiveAdmin) {
-        alert('Je kunt de laatste actieve admin niet verwijderen.');
+        notify('Je kunt de laatste actieve admin niet verwijderen.', 'error');
         setConfirmDeleteId(null);
         return;
       }
@@ -2312,7 +2482,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
     const password = prompt(`Geef een nieuw tijdelijk wachtwoord voor ${confirmResetUser.name} (minstens 8 tekens):`);
     if (!password) return;
     if (password.length < 8) {
-      alert('Gebruik minstens 8 tekens.');
+      notify('Gebruik minstens 8 tekens.', 'error');
       return;
     }
 
@@ -2324,12 +2494,12 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
 
     const data = await response.json().catch(() => ({}));
     if (!response.ok) {
-      alert(data.details || data.error || 'Reset mislukt.');
+      notify(data.details || data.error || 'Reset mislukt.', 'error');
       return;
     }
 
     setConfirmResetUser(null);
-    alert(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`);
+    notify(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`, 'success');
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2349,7 +2519,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
         if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
-          alert('Het Excel-bestand lijkt leeg te zijn of heeft geen herkenbare gegevens.');
+          notify('Het Excel-bestand lijkt leeg te zijn of heeft geen herkenbare gegevens.', 'error');
           setIsImporting(false);
           return;
         }
@@ -2401,7 +2571,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
 
         if (importedUsers.length === 0) {
           const detectedHeaders = keys.join(', ');
-          alert(`Geen geldige gebruikers gevonden. \n\nGevonden kolommen: ${detectedHeaders}\n\nZorg dat er minstens een kolom is met "Naam", "E-mail" en "Rol".`);
+          notify(`Geen geldige gebruikers gevonden. Gevonden kolommen: ${detectedHeaders}`, 'error');
         } else {
           // Smart merge: update existing users by name, add new ones
           const newUsersList: UserDraft[] = [...users];
@@ -2429,7 +2599,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
           });
 
           if (addedCount === 0 && updatedCount === 0) {
-            alert('Geen nieuwe gegevens of wijzigingen gevonden in het bestand.');
+            notify('Geen nieuwe gegevens of wijzigingen gevonden in het bestand.', 'info');
           } else {
             const confirmMsg = updatedCount > 0 
               ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die worden bijgewerkt. Wilt u doorgaan?`
@@ -2438,21 +2608,21 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
             if (confirm(confirmMsg)) {
               const success = await onSave(newUsersList);
               if (success) {
-                alert(`Import succesvol! ${addedCount} toegevoegd, ${updatedCount} bijgewerkt.`);
+                notify(`Import succesvol: ${addedCount} toegevoegd, ${updatedCount} bijgewerkt.`, 'success');
               }
             }
           }
         }
       } catch (error) {
         console.error('Error parsing Excel:', error);
-        alert('Fout bij het verwerken van het Excel-bestand. Zorg dat het een geldig Excel-bestand (.xlsx of .xls) is.');
+        notify('Fout bij het verwerken van het Excel-bestand. Controleer of het een geldig Excel-bestand is.', 'error');
       } finally {
         setIsImporting(false);
         if (e.target) e.target.value = '';
       }
     };
     reader.onerror = () => {
-      alert('Fout bij het lezen van het bestand.');
+      notify('Fout bij het lezen van het bestand.', 'error');
       setIsImporting(false);
     };
     reader.readAsArrayBuffer(file);
@@ -2484,13 +2654,13 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
       }
 
       if (data.success) {
-        alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
+        notify('Synchronisatie voltooid.', 'success');
       } else {
-        alert('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'));
+        notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
       }
     } catch (error: any) {
       console.error('Sync error:', error);
-      alert('Er is een fout opgetreden bij het synchroniseren: ' + error.message);
+      notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -2921,6 +3091,15 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
             </div>
           ))}
         </div>
+        {filteredUsers.length === 0 && (
+          <div className="p-6">
+            <EmptyState
+              icon={<Users size={28} />}
+              title="Geen gebruikers gevonden"
+              message="Pas je filter aan of voeg een nieuwe gebruiker toe."
+            />
+          </div>
+        )}
       </div>
 
       <ConfirmationModal 
@@ -2974,13 +3153,13 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
       }
 
       if (data.success) {
-        alert('Synchronisatie voltooid!\n\n' + JSON.stringify(data.results, null, 2));
+        notify('Synchronisatie voltooid.', 'success');
       } else {
-        alert('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'));
+        notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
       }
     } catch (error: any) {
       console.error('Sync error:', error);
-      alert('Er is een fout opgetreden bij het synchroniseren: ' + error.message);
+      notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
     } finally {
       setIsSyncing(false);
     }
@@ -3150,9 +3329,11 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
           </div>
         ))}
         {diversions.length === 0 && (
-          <div className="text-center py-12 bg-white rounded-[32px] border border-dashed border-slate-200">
-            <p className="text-slate-400 font-medium">Geen actieve omleidingen.</p>
-          </div>
+          <EmptyState
+            icon={<MapPin size={28} />}
+            title="Geen actieve omleidingen"
+            message="Er staan momenteel geen omleidingen in het systeem."
+          />
         )}
       </div>
 
@@ -3367,7 +3548,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
         const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: "" });
 
         if (!jsonData || !Array.isArray(jsonData) || jsonData.length === 0) {
-          alert('Het Excel-bestand lijkt leeg te zijn.');
+          notify('Het Excel-bestand lijkt leeg te zijn.', 'error');
           setIsImporting(false);
           return;
         }
@@ -3429,11 +3610,11 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
             onSave(importedServices);
           }
         } else {
-          alert('Geen geldige diensten gevonden in het bestand. Zorg dat de kolommen namen hebben als "Dienst", "Start" en "Eind".');
+          notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
         }
       } catch (error) {
         console.error('Error parsing Excel:', error);
-        alert('Fout bij het verwerken van het Excel-bestand.');
+        notify('Fout bij het verwerken van het Excel-bestand.', 'error');
       } finally {
         setIsImporting(false);
         if (e.target) e.target.value = '';
@@ -3651,8 +3832,12 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
         </div>
 
         {services.length === 0 && (
-          <div className="px-8 py-12 text-center text-slate-400 font-medium">
-            Geen diensten geconfigureerd.
+          <div className="p-6">
+            <EmptyState
+              icon={<Clock size={28} />}
+              title="Geen diensten geconfigureerd"
+              message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
+            />
           </div>
         )}
       </div>
