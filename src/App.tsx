@@ -595,10 +595,7 @@ export default function App() {
           >
             <X size={20} />
           </button>
-          <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/75 text-oker-600 ring-1 ring-white/80 shadow-sm">
-              <Bus size={24} />
-            </div>
+          <div className="w-full text-center">
             <div>
               <h1 className="text-2xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
