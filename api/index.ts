@@ -45,6 +45,27 @@ interface IncomingUser extends AppUser {
   password?: string;
 }
 
+interface SwapRecord {
+  id: string;
+  shiftId: string;
+  requesterId: string;
+  targetDriverId?: string;
+  status: "pending" | "approved" | "rejected" | "completed";
+  createdAt: string;
+  reason?: string;
+}
+
+interface LeaveRecord {
+  id: string;
+  userId: string;
+  startDate: string;
+  endDate: string;
+  type: "vakantie" | "ziekte" | "persoonlijk" | "overig";
+  status: "pending" | "approved" | "rejected";
+  comment?: string;
+  createdAt: string;
+}
+
 type AuthenticatedRequest = express.Request & {
   authUser?: SupabaseAuthUser;
   appUser?: AppUser;
@@ -86,6 +107,48 @@ const toDatabaseUser = (user: AppUser) => ({
   isactive: user.isActive !== false,
   phone: user.phone,
   email: normalizeEmail(user.email),
+});
+
+const toPublicSwap = (swap: any): SwapRecord => ({
+  id: String(swap.id),
+  shiftId: String(swap.shiftId ?? swap.shiftid),
+  requesterId: String(swap.requesterId ?? swap.requesterid),
+  targetDriverId: swap.targetDriverId ?? swap.targetdriverid ?? undefined,
+  status: swap.status,
+  createdAt: String(swap.createdAt ?? swap.createdat),
+  reason: swap.reason ?? undefined,
+});
+
+const toDatabaseSwap = (swap: SwapRecord) => ({
+  id: String(swap.id),
+  shiftid: String(swap.shiftId),
+  requesterid: String(swap.requesterId),
+  targetdriverid: swap.targetDriverId || null,
+  status: swap.status,
+  createdat: String(swap.createdAt),
+  reason: swap.reason || null,
+});
+
+const toPublicLeave = (leave: any): LeaveRecord => ({
+  id: String(leave.id),
+  userId: String(leave.userId ?? leave.userid),
+  startDate: String(leave.startDate ?? leave.startdate),
+  endDate: String(leave.endDate ?? leave.enddate),
+  type: leave.type,
+  status: leave.status,
+  comment: leave.comment ?? undefined,
+  createdAt: String(leave.createdAt ?? leave.createdat),
+});
+
+const toDatabaseLeave = (leave: LeaveRecord) => ({
+  id: String(leave.id),
+  userid: String(leave.userId),
+  startdate: String(leave.startDate),
+  enddate: String(leave.endDate),
+  type: leave.type,
+  status: leave.status,
+  comment: leave.comment || null,
+  createdat: String(leave.createdAt),
 });
 
 const ensureUniqueUserEmails = (users: IncomingUser[]) => {
@@ -485,25 +548,26 @@ const getSwapsData = async () => {
     try {
       const { data, error } = await db.from('swaps').select('*');
       if (error) console.error("Supabase error fetching swaps:", error);
-      else if (data) return data;
+      else if (data) return data.map(toPublicSwap);
     } catch (e) {
       console.error("Unexpected error fetching swaps:", e);
     }
   }
   if (fs.existsSync(SWAPS_FILE)) {
-    return JSON.parse(fs.readFileSync(SWAPS_FILE, "utf-8"));
+    return JSON.parse(fs.readFileSync(SWAPS_FILE, "utf-8")).map(toPublicSwap);
   }
   return [];
 };
 
 const saveSwapsData = async (data: any) => {
+  const normalizedData = Array.isArray(data) ? data.map(toPublicSwap) : [];
   if (db) {
-    const { error } = await db.from('swaps').upsert(data);
+    const { error } = await db.from('swaps').upsert(normalizedData.map(toDatabaseSwap));
     if (error) throw error;
     return;
   }
   if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
-  fs.writeFileSync(SWAPS_FILE, JSON.stringify(data, null, 2));
+  fs.writeFileSync(SWAPS_FILE, JSON.stringify(normalizedData, null, 2));
 };
 
 const getLeaveData = async () => {
@@ -511,25 +575,26 @@ const getLeaveData = async () => {
     try {
       const { data, error } = await db.from('leave').select('*');
       if (error) console.error("Supabase error fetching leave:", error);
-      else if (data) return data;
+      else if (data) return data.map(toPublicLeave);
     } catch (e) {
       console.error("Unexpected error fetching leave:", e);
     }
   }
   if (fs.existsSync(LEAVE_FILE)) {
-    return JSON.parse(fs.readFileSync(LEAVE_FILE, "utf-8"));
+    return JSON.parse(fs.readFileSync(LEAVE_FILE, "utf-8")).map(toPublicLeave);
   }
   return [];
 };
 
 const saveLeaveData = async (data: any) => {
+  const normalizedData = Array.isArray(data) ? data.map(toPublicLeave) : [];
   if (db) {
-    const { error } = await db.from('leave').upsert(data);
+    const { error } = await db.from('leave').upsert(normalizedData.map(toDatabaseLeave));
     if (error) throw error;
     return;
   }
   if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
-  fs.writeFileSync(LEAVE_FILE, JSON.stringify(data, null, 2));
+  fs.writeFileSync(LEAVE_FILE, JSON.stringify(normalizedData, null, 2));
 };
 
 const getBearerToken = (req: express.Request) => {
