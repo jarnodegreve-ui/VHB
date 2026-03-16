@@ -604,11 +604,6 @@ export default function App() {
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
             </div>
           </div>
-          <div className="mt-8 w-full rounded-[24px] bg-white/62 p-4 ring-1 ring-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_16px_28px_rgba(15,23,42,0.08)] backdrop-blur-xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Actieve Sessie</p>
-            <p className="mt-2 text-lg font-black text-slate-900">{currentUser.name}</p>
-            <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-oker-700">{currentUser.role} • {currentUser.employeeId}</p>
-          </div>
         </div>
 
         <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
@@ -958,9 +953,9 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
         animate={{ opacity: 1, scale: 1, y: 0 }}
         className="w-full max-w-md glass rounded-[40px] shadow-2xl overflow-hidden relative z-10"
       >
-        <div className="p-10 text-center">
+        <div className="p-10 text-center flex flex-col items-center">
           <h1 className="text-4xl font-black tracking-tighter text-slate-900 mb-2">VHB <span className="text-oker-500">PORTAAL</span></h1>
-          <p className="text-slate-500 font-bold uppercase text-xs tracking-[0.2em]">Van Hoorebeke en Zoon</p>
+          <p className="w-full text-center text-slate-500 font-bold uppercase text-xs tracking-[0.2em]">Van Hoorebeke en Zoon</p>
         </div>
         
         <form onSubmit={handleSubmit} className="p-10 pt-0 space-y-6">
@@ -1341,28 +1336,8 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
     return `${minutes} minuten`;
   };
 
-  const todaysShift = myShifts.find(s => s.date === now.toISOString().split('T')[0]);
-  const totalDrivers = users.filter(u => u.role === 'chauffeur' && u.isActive !== false).length;
-  const activeDriverCount = shifts.filter(s => s.date === now.toISOString().split('T')[0]).length;
-
   return (
     <div className="space-y-8">
-      <section className="panel rounded-[36px] p-7 md:p-9">
-        <div className="flex justify-end">
-          <div className="grid grid-cols-2 gap-4 md:min-w-[420px]">
-            <div className="rounded-[28px] bg-slate-900 px-5 py-5 text-white shadow-xl">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vandaag</p>
-              <p className="mt-3 text-3xl font-black">{todaysShift ? todaysShift.startTime : '--:--'}</p>
-              <p className="mt-2 text-sm font-medium text-slate-400">{todaysShift ? `Bus ${todaysShift.busNumber} op lijn ${todaysShift.line}` : 'Geen dienst ingepland'}</p>
-            </div>
-            <div className="rounded-[28px] bg-oker-50 px-5 py-5 ring-1 ring-oker-100">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-700">Actieve bezetting</p>
-              <p className="mt-3 text-3xl font-black text-slate-900">{activeDriverCount}/{totalDrivers}</p>
-              <p className="mt-2 text-sm font-medium text-slate-500">Chauffeurs met een dienst vandaag</p>
-            </div>
-          </div>
-        </div>
-      </section>
       {/* Prominent Next Shift Card */}
       {nextShift && user.role === 'chauffeur' && (
         <motion.div 
