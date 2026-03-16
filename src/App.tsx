@@ -531,7 +531,7 @@ export default function App() {
     dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
-    'ruil-verzoeken': { title: 'Dienstwissels', subtitle: 'Beheer openstaande ruilverzoeken en aanbiedingen.' },
+    'ruil-verzoeken': { title: 'Wissel-Verzoeken', subtitle: 'Beheer openstaande ruilverzoeken en aanbiedingen.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
     'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
@@ -611,22 +611,28 @@ export default function App() {
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
-            icon={<MapPin size={20} />} 
-            label="Omleidingen" 
-            active={currentView === 'omleidingen'} 
-            onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
-          />
-          <NavItem 
             icon={<Calendar size={20} />} 
             label="Mijn Rooster" 
             active={currentView === 'rooster'} 
             onClick={() => { setCurrentView('rooster'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
+            icon={<MapPin size={20} />} 
+            label="Omleidingen" 
+            active={currentView === 'omleidingen'} 
+            onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem 
             icon={<Bus size={20} />} 
             label="Dienstoverzicht" 
             active={currentView === 'dienstoverzicht'} 
             onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem 
+            icon={<RotateCcw size={20} />} 
+            label="Wissel Aanvragen" 
+            active={currentView === 'ruil-verzoeken'} 
+            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
             icon={<Phone size={20} />} 
@@ -639,12 +645,6 @@ export default function App() {
             label="Updates" 
             active={currentView === 'updates'} 
             onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
-          />
-          <NavItem 
-            icon={<RotateCcw size={20} />} 
-            label="Dienstwissels" 
-            active={currentView === 'ruil-verzoeken'} 
-            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
             icon={<Calendar size={20} />} 
@@ -1227,7 +1227,7 @@ function ServicesView({ services }: { services: Service[] }) {
                         {s.startTime2} - {s.endTime2}
                       </div>
                     ) : (
-                      <span className="text-slate-300 text-xs">-</span>
+                      <span />
                     )}
                   </td>
                   <td className="px-8 py-5">
@@ -1237,7 +1237,7 @@ function ServicesView({ services }: { services: Service[] }) {
                         {s.startTime3} - {s.endTime3}
                       </div>
                     ) : (
-                      <span className="text-slate-300 text-xs">-</span>
+                      <span />
                     )}
                   </td>
                 </tr>
@@ -4064,7 +4064,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
   return (
     <div className="max-w-4xl space-y-8">
       <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-black tracking-tight">Dienstwissels</h3>
+        <h3 className="text-2xl font-black tracking-tight">Wissel Aanvragen</h3>
         {!isPlanner && (
           <button 
             onClick={() => setShowOfferModal(true)}
