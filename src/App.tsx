@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect } from 'react';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -35,114 +35,23 @@ import {
   Activity
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { clsx, type ClassValue } from 'clsx';
-import { twMerge } from 'tailwind-merge';
-import * as XLSX from 'xlsx';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest } from './types';
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMapEvents } from 'react-leaflet';
-import 'leaflet/dist/leaflet.css';
-import L from 'leaflet';
-
-// Fix for default marker icons in Leaflet
-// @ts-ignore
-delete L.Icon.Default.prototype._getIconUrl;
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-});
-
-function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs));
-}
-
-async function getSupabaseAuthHeaders() {
-  const accessToken = (await supabase?.auth.getSession())?.data.session?.access_token;
-  return {
-    'Content-Type': 'application/json',
-    ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-  };
-}
-
-function ConfirmationModal({ 
-  isOpen, 
-  onClose, 
-  onConfirm, 
-  title, 
-  message, 
-  confirmText = "Verwijderen", 
-  cancelText = "Annuleren",
-  variant = "danger"
-}: { 
-  isOpen: boolean, 
-  onClose: () => void, 
-  onConfirm: () => void, 
-  title: string, 
-  message: string,
-  confirmText?: string,
-  cancelText?: string,
-  variant?: "danger" | "warning"
-}) {
-  return (
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div 
-            initial={{ opacity: 0, scale: 0.95, y: 20 }}
-            animate={{ opacity: 1, scale: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden"
-          >
-            <div className="p-8 border-b border-slate-100">
-              <div className={cn(
-                "w-12 h-12 rounded-2xl flex items-center justify-center mb-4",
-                variant === 'danger' ? "bg-red-100 text-red-600" : "bg-amber-100 text-amber-600"
-              )}>
-                <AlertTriangle size={24} />
-              </div>
-              <h4 className="text-xl font-black">{title}</h4>
-              <p className="text-sm text-slate-500 font-medium mt-2">{message}</p>
-            </div>
-            <div className="p-8 bg-slate-50 flex gap-3">
-              <button 
-                onClick={onClose}
-                className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-400 hover:bg-white transition-all uppercase tracking-widest text-xs border border-transparent hover:border-slate-200"
-              >
-                {cancelText}
-              </button>
-              <button 
-                onClick={() => {
-                  onConfirm();
-                  onClose();
-                }}
-                className={cn(
-                  "flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-widest text-xs",
-                  variant === 'danger' ? "bg-red-500 hover:bg-red-600 shadow-red-500/20" : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
-                )}
-              >
-                {confirmText}
-              </button>
-            </div>
-          </motion.div>
-        </div>
-      )}
-    </AnimatePresence>
-  );
-}
+import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
+import { ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
+const DiversionMap = lazy(() => import('./components/DiversionMap').then((module) => ({ default: module.DiversionMap })));
+const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
+const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
+const LazyManageUsersView = lazy(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
+const LazyLeaveManagementView = lazy(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
 
 type Toast = {
   id: number;
   message: string;
   tone?: 'success' | 'error' | 'info';
 };
-
-function notify(message: string, tone: Toast['tone'] = 'info') {
-  if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('vhb-toast', { detail: { message, tone } }));
-}
 
 function ToastStack({
   toasts,
@@ -186,26 +95,6 @@ function ToastStack({
           </motion.div>
         ))}
       </AnimatePresence>
-    </div>
-  );
-}
-
-function EmptyState({
-  icon,
-  title,
-  message,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  message: string;
-}) {
-  return (
-    <div className="text-center py-12 bg-white rounded-[32px] border border-dashed border-slate-200">
-      <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300">
-        {icon}
-      </div>
-      <h4 className="text-lg font-black text-slate-800 tracking-tight">{title}</h4>
-      <p className="mt-2 text-sm font-medium text-slate-400">{message}</p>
     </div>
   );
 }
@@ -709,7 +598,7 @@ export default function App() {
               <Bus size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">VHB Portaal</h1>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
             </div>
           </div>
@@ -897,14 +786,34 @@ export default function App() {
               {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} />}
-              {currentView === 'beheer-updates' && <ManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} />}
-              {currentView === 'gebruikers' && <ManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} />}
+              {currentView === 'beheer-updates' && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} />
+                </Suspense>
+              )}
+              {currentView === 'gebruikers' && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} />
+                </Suspense>
+              )}
               {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {currentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
-              {currentView === 'beheer-contactlijst' && <ManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} />}
+              {currentView === 'beheer-contactlijst' && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} />
+                </Suspense>
+              )}
               {currentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
-              {(currentView === 'verlof' || currentView === 'verlof-beheer') && <LeaveManagementView user={currentUser} leaveRequests={leaveRequests} users={users} onSave={saveLeave} />}
-              {currentView === 'beheer-debug' && <DebugView />}
+              {(currentView === 'verlof' || currentView === 'verlof-beheer') && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyLeaveManagementView user={currentUser} leaveRequests={leaveRequests} users={users} onSave={saveLeave} />
+                </Suspense>
+              )}
+              {currentView === 'beheer-debug' && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyDebugView />
+                </Suspense>
+              )}
             </motion.div>
           </AnimatePresence>
         </div>
@@ -1140,14 +1049,14 @@ function ContactsView({ users, currentUser }: { users: User[], currentUser: User
             placeholder="Zoek op naam of nummer..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
+            className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
           />
         </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {filteredUsers.map(u => (
-          <div key={u.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between group hover:shadow-md transition-all">
+          <div key={u.id} className="surface-card surface-card-hover p-6 rounded-[32px] flex items-center justify-between group">
             <div className="flex items-center gap-4">
               <div className="w-12 h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-black text-lg">
                 {u.name.charAt(0)}
@@ -1251,7 +1160,7 @@ function ServicesView({ services }: { services: Service[] }) {
               onClick={() => toggleSort('number')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                sortBy === 'number' ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                sortBy === 'number' ? "bg-white/85 text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
               Dienst #
@@ -1261,7 +1170,7 @@ function ServicesView({ services }: { services: Service[] }) {
               onClick={() => toggleSort('time')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                sortBy === 'time' ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                sortBy === 'time' ? "bg-white/85 text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
               Starttijd
@@ -1270,7 +1179,7 @@ function ServicesView({ services }: { services: Service[] }) {
           </div>
           <button
             onClick={downloadCSV}
-            className="flex items-center gap-2 px-4 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+            className="control-button-soft flex items-center gap-2 px-4 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
             title="Download als CSV"
           >
             <Download size={18} className="text-oker-500" />
@@ -1285,13 +1194,13 @@ function ServicesView({ services }: { services: Service[] }) {
               placeholder="Zoek..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
+              className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
             />
           </div>
         </div>
       </div>
 
-      <div className="bg-white md:bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+      <div className="surface-table rounded-[40px] overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -1624,7 +1533,7 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
             <select
               value={selectedLine}
               onChange={(e) => setSelectedLine(e.target.value)}
-              className="appearance-none w-full sm:w-40 pl-4 pr-10 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-bold text-sm shadow-sm cursor-pointer"
+              className="control-input appearance-none w-full sm:w-40 pl-4 pr-10 py-3 rounded-2xl focus:outline-none transition-all font-bold text-sm cursor-pointer"
             >
               <option value="all">Alle Lijnen</option>
               {uniqueLines.map(line => (
@@ -1644,7 +1553,7 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
               placeholder="Zoek..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-11 pr-4 py-3 bg-white rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all font-medium text-sm shadow-sm"
+              className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
             />
             {searchQuery && (
               <button 
@@ -1661,7 +1570,7 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
       <div className="space-y-4">
         {filteredDiversions.length > 0 ? (
           filteredDiversions.map(div => (
-            <div key={div.id} className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden group transition-all duration-300 hover:shadow-md">
+            <div key={div.id} className="surface-card surface-card-hover rounded-[32px] overflow-hidden group duration-300">
             <div 
               onClick={() => setSelectedDiversion(selectedDiversion?.id === div.id ? null : div)}
               className="p-6 md:p-8 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-start justify-between gap-4"
@@ -1698,7 +1607,7 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden bg-slate-50/50 border-t border-slate-100"
+                  className="overflow-hidden bg-white/35 border-t border-white/60"
                 >
                   <div className="p-6 md:p-8 space-y-6">
                     <div className="grid md:grid-cols-2 gap-8">
@@ -1726,7 +1635,7 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                               href={div.pdfUrl} 
                               target="_blank" 
                               rel="noopener noreferrer"
-                              className="flex-1 flex items-center justify-center gap-3 px-6 py-4 bg-white border border-slate-200 rounded-2xl text-sm font-black text-slate-700 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+                              className="control-button-soft flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-sm font-black text-slate-700 transition-all active:scale-95"
                             >
                               <FileText size={18} className="text-red-500" />
                               BEKIJK PDF
@@ -1751,29 +1660,18 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                         <div className="space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Visuele Omleiding</p>
                           <div className="h-64 rounded-3xl overflow-hidden border border-slate-100 shadow-inner z-0">
-                            <MapContainer 
-                              center={JSON.parse(div.mapCoordinates)[0]} 
-                              zoom={13} 
-                              style={{ height: '100%', width: '100%' }}
-                              scrollWheelZoom={false}
+                            <Suspense
+                              fallback={
+                                <div className="flex h-full items-center justify-center bg-white/60 text-sm font-bold text-slate-500">
+                                  Kaart laden...
+                                </div>
+                              }
                             >
-                              <TileLayer
-                                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                                attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+                              <DiversionMap
+                                coordinates={JSON.parse(div.mapCoordinates)}
+                                severity={div.severity}
                               />
-                              <Polyline 
-                                positions={JSON.parse(div.mapCoordinates)} 
-                                color={div.severity === 'high' ? '#ef4444' : div.severity === 'medium' ? '#f59e0b' : '#3b82f6'} 
-                                weight={5}
-                                opacity={0.7}
-                              />
-                              <Marker position={JSON.parse(div.mapCoordinates)[0]}>
-                                <Popup>Start Omleiding</Popup>
-                              </Marker>
-                              <Marker position={JSON.parse(div.mapCoordinates)[JSON.parse(div.mapCoordinates).length - 1]}>
-                                <Popup>Eind Omleiding</Popup>
-                              </Marker>
-                            </MapContainer>
+                            </Suspense>
                           </div>
                         </div>
                       )}
@@ -1785,7 +1683,7 @@ function DiversionsView({ diversions }: { diversions: Diversion[] }) {
           </div>
         ))
       ) : (
-        <div className="text-center py-20 bg-white rounded-[40px] border border-dashed border-slate-200">
+        <div className="text-center py-20 surface-card rounded-[40px] border border-dashed border-white/80">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Search size={32} className="text-slate-300" />
           </div>
@@ -1869,7 +1767,7 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
         <h3 className="text-2xl font-black tracking-tight">Mijn Werkrooster</h3>
         <button 
           onClick={exportToICS}
-          className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+          className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 transition-all active:scale-95"
         >
           <Download size={16} className="text-oker-500" />
           Export naar Agenda
@@ -1877,7 +1775,7 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
       </div>
 
       {/* Desktop Table */}
-      <div className="hidden md:block bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+      <div className="hidden md:block surface-table rounded-[32px] overflow-hidden">
         {shifts.length > 0 ? (
           <table className="w-full text-left border-collapse">
             <thead>
@@ -1928,7 +1826,7 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
       {/* Mobile Cards */}
       <div className="md:hidden space-y-4">
         {shifts.map(shift => (
-          <div key={shift.id} className="bg-white p-6 rounded-[32px] shadow-sm border border-slate-100 space-y-4">
+          <div key={shift.id} className="surface-card p-6 rounded-[32px] space-y-4">
             <div className="flex justify-between items-start">
               <div>
                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Datum</p>
@@ -1940,8 +1838,8 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
               </div>
             </div>
             
-            <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl">
-              <div className="w-12 h-12 bg-white rounded-xl flex items-center justify-center shadow-sm border border-slate-100">
+            <div className="flex items-center gap-4 p-4 surface-muted rounded-2xl">
+              <div className="w-12 h-12 bg-white/80 rounded-xl flex items-center justify-center shadow-sm ring-1 ring-white/80">
                 <Clock size={20} className="text-oker-500" />
               </div>
               <div>
@@ -2075,7 +1973,7 @@ function DebugView() {
               {healthData && (
                 <div className="space-y-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+                    <div className="surface-card p-6 rounded-[32px]">
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Supabase Status</h4>
                       <div className="space-y-3">
                         <div className="flex justify-between items-center">
@@ -2095,7 +1993,7 @@ function DebugView() {
                       </div>
                     </div>
 
-                    <div className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm">
+                    <div className="surface-card p-6 rounded-[32px]">
                       <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Tabel Status</h4>
                       <div className="space-y-3">
                         {Object.entries(healthData.tables || {}).map(([name, status]: [string, any]) => (
@@ -2170,7 +2068,7 @@ function UpdatesView({ updates }: { updates: Update[] }) {
       <div className="space-y-6">
         {filteredUpdates.length > 0 ? (
           filteredUpdates.map(update => (
-            <div key={update.id} className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100 relative overflow-hidden group transition-all duration-300 hover:shadow-md">
+            <div key={update.id} className="surface-card surface-card-hover p-6 md:p-8 rounded-[32px] relative overflow-hidden group duration-300">
               <div className={cn(
                 "absolute top-0 left-0 w-1.5 h-full",
                 update.isUrgent ? "bg-red-600" :
@@ -2210,7 +2108,7 @@ function UpdatesView({ updates }: { updates: Update[] }) {
             </div>
           ))
         ) : (
-          <div className="bg-white p-12 rounded-[32px] text-center border border-slate-100">
+          <div className="surface-card p-12 rounded-[32px] text-center">
             <Info size={48} className="mx-auto text-slate-200 mb-4" />
             <p className="text-slate-400 font-bold">Geen updates gevonden in deze categorie.</p>
           </div>
@@ -2223,6 +2121,7 @@ function UpdatesView({ updates }: { updates: Update[] }) {
 function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[] }) {
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
+  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
   const handleImport = () => {
     try {
@@ -2242,8 +2141,6 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleSync = async () => {
-    if (!confirm('Weet je zeker dat je de lokale gegevens wilt synchroniseren naar de database? Dit overschrijft bestaande gegevens in de database met dezelfde ID.')) return;
-    
     try {
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', {
@@ -2282,7 +2179,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h3 className="text-2xl font-black tracking-tight">Beheer Roosters</h3>
         <button 
-          onClick={handleSync}
+          onClick={() => setConfirmSyncOpen(true)}
           disabled={isSyncing}
           className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
           title="Synchroniseer lokale JSON data naar Supabase"
@@ -2291,7 +2188,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
           {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
         </button>
       </div>
-      <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100">
+      <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-black flex items-center gap-3 tracking-tight">
             <FileText size={24} className="text-oker-500" />
@@ -2306,18 +2203,18 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
         </div>
 
         {showExcelInfo && (
-          <div className="mb-6 p-6 bg-oker-50 rounded-2xl border border-oker-100 text-sm space-y-3">
+          <div className="mb-6 p-6 glass-oker rounded-2xl text-sm space-y-3">
             <p className="font-bold text-oker-800">Koppeling met Excel:</p>
             <ol className="list-decimal list-inside space-y-2 text-oker-700">
               <li>Gebruik een Excel-script of Power Automate om je Excel-data om te zetten naar JSON.</li>
               <li>Plak de JSON hieronder om de planning direct bij te werken.</li>
-              <li>Voor automatische synchronisatie kan je Excel-bestand direct naar de API pushen op: <code className="bg-white px-2 py-0.5 rounded border break-all">{window.location.origin}/api/planning</code></li>
+              <li>Voor automatische synchronisatie kan je Excel-bestand direct naar de API pushen op: <code className="bg-white/80 px-2 py-0.5 rounded border border-white/80 break-all">{window.location.origin}/api/planning</code></li>
             </ol>
           </div>
         )}
 
         <textarea 
-          className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 transition-all min-h-[150px] font-mono text-sm mb-4"
+          className="control-input w-full px-4 py-3 rounded-xl focus:outline-none transition-all min-h-[150px] font-mono text-sm mb-4"
           placeholder='Plak hier de JSON data uit Excel... e.g. [{"id": "1", "line": "12", ...}]'
           value={jsonInput}
           onChange={(e) => setJsonInput(e.target.value)}
@@ -2331,7 +2228,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
         </button>
       </div>
 
-      <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100">
+      <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Plus size={24} className="text-emerald-500" />
           Handmatig Toevoegen
@@ -2350,10 +2247,20 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
         </button>
       </div>
 
-      <div className="bg-white p-8 rounded-3xl shadow-sm border border-slate-100">
+      <div className="surface-card p-8 rounded-3xl">
         <h3 className="text-xl font-bold mb-6">Huidige Planning</h3>
         <ScheduleView user={{ id: '0', name: 'Admin', role: 'admin', employeeId: 'ADMIN' }} shifts={shifts} users={users} />
       </div>
+
+      <ConfirmationModal
+        isOpen={confirmSyncOpen}
+        onClose={() => setConfirmSyncOpen(false)}
+        onConfirm={handleSync}
+        title="Planning synchroniseren"
+        message="Deze actie schrijft de lokale planning weg naar de database en kan bestaande records met dezelfde ID overschrijven."
+        confirmText="Synchroniseren"
+        variant="warning"
+      />
     </div>
   );
 }
@@ -2390,7 +2297,7 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
   return (
     <div className="max-w-3xl space-y-6 md:space-y-8">
       <h3 className="text-2xl font-black tracking-tight">Beheer Updates</h3>
-      <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100">
+      <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-emerald-500" />
           Nieuwe Update Publiceren
@@ -2465,6 +2372,11 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
   
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
+  const [pendingImportUsers, setPendingImportUsers] = useState<UserDraft[] | null>(null);
+  const [pendingImportMessage, setPendingImportMessage] = useState('');
   const activeAdmins = users.filter(u => u.role === 'admin' && u.isActive !== false);
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
 
@@ -2547,28 +2459,31 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
 
   const handleResetPassword = async () => {
     if (!confirmResetUser) return;
-
-    const password = prompt(`Geef een nieuw tijdelijk wachtwoord voor ${confirmResetUser.name} (minstens 8 tekens):`);
-    if (!password) return;
-    if (password.length < 8) {
+    if (resetPasswordValue.length < 8) {
       notify('Gebruik minstens 8 tekens.', 'error');
       return;
     }
 
-    const response = await fetch('/api/admin/users/reset-password', {
-      method: 'POST',
-      headers: await getSupabaseAuthHeaders(),
-      body: JSON.stringify({ userId: confirmResetUser.id, password }),
-    });
+    try {
+      setIsResettingPassword(true);
+      const response = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+        body: JSON.stringify({ userId: confirmResetUser.id, password: resetPasswordValue }),
+      });
 
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      notify(data.details || data.error || 'Reset mislukt.', 'error');
-      return;
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        notify(data.details || data.error || 'Reset mislukt.', 'error');
+        return;
+      }
+
+      notify(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`, 'success');
+      setConfirmResetUser(null);
+      setResetPasswordValue('');
+    } finally {
+      setIsResettingPassword(false);
     }
-
-    setConfirmResetUser(null);
-    notify(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`, 'success');
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2579,6 +2494,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
+        const XLSX = await import('xlsx');
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
@@ -2674,12 +2590,8 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
               ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die worden bijgewerkt. Wilt u doorgaan?`
               : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
 
-            if (confirm(confirmMsg)) {
-              const success = await onSave(newUsersList);
-              if (success) {
-                notify(`Import succesvol: ${addedCount} toegevoegd, ${updatedCount} bijgewerkt.`, 'success');
-              }
-            }
+            setPendingImportUsers(newUsersList);
+            setPendingImportMessage(confirmMsg);
           }
         }
       } catch (error) {
@@ -2699,9 +2611,17 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
 
   const [isSyncing, setIsSyncing] = useState(false);
 
+  const handleConfirmImport = async () => {
+    if (!pendingImportUsers) return;
+    const success = await onSave(pendingImportUsers);
+    if (success) {
+      notify('Import succesvol verwerkt.', 'success');
+    }
+    setPendingImportUsers(null);
+    setPendingImportMessage('');
+  };
+
   const handleSync = async () => {
-    if (!confirm('Weet je zeker dat je de lokale gegevens wilt synchroniseren naar de database? Dit overschrijft bestaande gegevens in de database met dezelfde ID.')) return;
-    
     try {
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', {
@@ -2744,7 +2664,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <button 
-            onClick={handleSync}
+            onClick={() => setConfirmSyncOpen(true)}
             disabled={isSyncing}
             className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50"
             title="Synchroniseer lokale JSON data naar Supabase"
@@ -2759,7 +2679,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                 onClick={() => setRoleFilter(role)}
                 className={cn(
                   "px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize",
-                  roleFilter === role ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  roleFilter === role ? "bg-white/85 text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
                 {role === 'all' ? 'Alles' : role}
@@ -2787,9 +2707,9 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+              className="glass-modal rounded-[32px] w-full max-w-md max-h-[90vh] overflow-y-auto"
             >
-              <div className="p-8 border-b border-slate-100">
+              <div className="p-8 border-b border-white/70">
                 <h4 className="text-xl font-bold">Nieuwe Gebruiker</h4>
                 <p className="text-sm text-slate-500">Voeg handmatig een medewerker toe.</p>
               </div>
@@ -2801,7 +2721,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     required
                     value={newUser.name}
                     onChange={(e) => setNewUser({...newUser, name: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="bijv. Jan Janssen"
                   />
                 </div>
@@ -2810,7 +2730,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                   <select 
                     value={newUser.role}
                     onChange={(e) => setNewUser({...newUser, role: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all bg-white"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all bg-white/60"
                   >
                     <option value="chauffeur">Chauffeur</option>
                     <option value="planner">Planner</option>
@@ -2823,7 +2743,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     type="text" 
                     value={newUser.employeeId}
                     onChange={(e) => setNewUser({...newUser, employeeId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="bijv. VHB-1234"
                   />
                 </div>
@@ -2833,7 +2753,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     type="password" 
                     value={newUser.password}
                     onChange={(e) => setNewUser({...newUser, password: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="Minstens 8 tekens"
                   />
                 </div>
@@ -2843,7 +2763,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     type="text" 
                     value={newUser.phone}
                     onChange={(e) => setNewUser({...newUser, phone: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="bijv. 0470 12 34 56"
                   />
                 </div>
@@ -2854,7 +2774,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     required
                     value={newUser.email}
                     onChange={(e) => setNewUser({...newUser, email: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="bijv. jan@voorbeeld.be"
                   />
                 </div>
@@ -2886,9 +2806,9 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[32px] shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto"
+              className="glass-modal rounded-[32px] w-full max-w-md max-h-[90vh] overflow-y-auto"
             >
-              <div className="p-8 border-b border-slate-100 flex justify-between items-center">
+              <div className="p-8 border-b border-white/70 flex justify-between items-center">
                 <div>
                   <h4 className="text-xl font-bold">Gebruiker Bewerken</h4>
                   <p className="text-sm text-slate-500">Pas de gegevens van {editingUser.name} aan.</p>
@@ -2915,7 +2835,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     required
                     value={editingUser.name}
                     onChange={(e) => setEditingUser({...editingUser, name: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2923,7 +2843,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                   <select 
                     value={editingUser.role}
                     onChange={(e) => setEditingUser({...editingUser, role: e.target.value as any})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all bg-white"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all bg-white/60"
                   >
                     <option value="chauffeur">Chauffeur</option>
                     <option value="planner">Planner</option>
@@ -2936,7 +2856,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     type="text" 
                     value={editingUser.employeeId}
                     onChange={(e) => setEditingUser({...editingUser, employeeId: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                   />
                 </div>
                 <div className="space-y-2">
@@ -2945,7 +2865,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     type="password" 
                     value={editingUser.password || ''}
                     onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="Leeg laten om niet te wijzigen"
                   />
                 </div>
@@ -2955,7 +2875,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     type="text" 
                     value={editingUser.phone || ''}
                     onChange={(e) => setEditingUser({...editingUser, phone: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="bijv. 0470 12 34 56"
                   />
                 </div>
@@ -2965,12 +2885,12 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                     type="email" 
                     value={editingUser.email || ''}
                     onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
-                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:ring-2 focus:ring-oker-500/20 focus:border-oker-500 outline-none transition-all"
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
                     placeholder="bijv. jan@voorbeeld.be"
                   />
                 </div>
 
-                <div className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl">
+                <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
                   <div>
                     <p className="text-sm font-bold text-slate-700">Account Actief</p>
                     <p className="text-[10px] text-slate-400 font-medium">Inactieve gebruikers kunnen niet inloggen.</p>
@@ -2991,11 +2911,11 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
                 </div>
 
                 <div className="pt-2 grid grid-cols-2 gap-4">
-                  <div className="p-3 bg-slate-50 rounded-xl">
+                  <div className="p-3 surface-muted rounded-xl">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Laatst Ingelogd</p>
                     <p className="text-xs font-bold text-slate-700 mt-1">{editingUser.lastLogin || 'Nooit'}</p>
                   </div>
-                  <div className="p-3 bg-slate-50 rounded-xl">
+                  <div className="p-3 surface-muted rounded-xl">
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actieve Sessies</p>
                     <p className="text-xs font-bold text-slate-700 mt-1">{editingUser.activeSessions || 0}</p>
                   </div>
@@ -3021,12 +2941,12 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
         )}
       </AnimatePresence>
 
-      <div className="bg-white p-6 rounded-3xl border border-oker-100 bg-oker-50/30 text-sm">
+      <div className="glass-oker p-6 rounded-3xl text-sm">
         <p className="font-bold text-oker-800 mb-2">Excel Instructies:</p>
         <p className="text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-bold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-bold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
       </div>
 
-      <div className="bg-white rounded-[32px] shadow-sm border border-slate-100 overflow-hidden">
+      <div className="surface-table rounded-[32px] overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -3179,13 +3099,85 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
         message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
       />
 
-      <ConfirmationModal 
-        isOpen={!!confirmResetUser}
-        onClose={() => setConfirmResetUser(null)}
-        onConfirm={handleResetPassword}
-        title="Wachtwoord Resetten"
-        message={`Je stelt straks handmatig een nieuw tijdelijk wachtwoord in voor ${confirmResetUser?.name}.`}
-        confirmText="Resetten"
+      <AnimatePresence>
+        {confirmResetUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="glass-modal rounded-[32px] w-full max-w-md overflow-hidden"
+            >
+              <div className="p-8 border-b border-white/70">
+                <h4 className="text-xl font-black">Wachtwoord resetten</h4>
+                <p className="mt-2 text-sm text-slate-500 font-medium">
+                  Stel een nieuw tijdelijk wachtwoord in voor {confirmResetUser.name}.
+                </p>
+              </div>
+              <div className="p-8 space-y-5">
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tijdelijk wachtwoord</label>
+                  <input
+                    type="password"
+                    value={resetPasswordValue}
+                    onChange={(e) => setResetPasswordValue(e.target.value)}
+                    className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all"
+                    placeholder="Minstens 8 tekens"
+                    autoFocus
+                  />
+                </div>
+                <p className="text-xs text-slate-400 font-medium">
+                  De gebruiker logt daarna in met dit nieuwe wachtwoord.
+                </p>
+                <div className="flex gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfirmResetUser(null);
+                      setResetPasswordValue('');
+                    }}
+                    className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-colors"
+                  >
+                    Annuleren
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleResetPassword}
+                    disabled={isResettingPassword}
+                    className={cn(
+                      "flex-1 px-4 py-3 rounded-xl font-bold text-white shadow-lg transition-colors",
+                      isResettingPassword ? "bg-amber-300 cursor-not-allowed" : "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                    )}
+                  >
+                    {isResettingPassword ? 'Bezig...' : 'Resetten'}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <ConfirmationModal
+        isOpen={confirmSyncOpen}
+        onClose={() => setConfirmSyncOpen(false)}
+        onConfirm={handleSync}
+        title="Gebruikers synchroniseren"
+        message="Deze actie schrijft de lokale gebruikersgegevens weg naar de database en kan bestaande records met dezelfde ID overschrijven."
+        confirmText="Synchroniseren"
+        variant="warning"
+      />
+
+      <ConfirmationModal
+        isOpen={!!pendingImportUsers}
+        onClose={() => {
+          setPendingImportUsers(null);
+          setPendingImportMessage('');
+        }}
+        onConfirm={handleConfirmImport}
+        title="Gebruikers importeren"
+        message={pendingImportMessage || 'Wil je deze import toepassen?'}
+        confirmText="Importeren"
         variant="warning"
       />
     </div>
@@ -3197,10 +3189,9 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
   const handleSync = async () => {
-    if (!confirm('Weet je zeker dat je de lokale gegevens wilt synchroniseren naar de database? Dit overschrijft bestaande gegevens in de database met dezelfde ID.')) return;
-    
     try {
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', {
@@ -3326,7 +3317,7 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h3 className="text-2xl font-black tracking-tight">Beheer Omleidingen</h3>
         <button 
-          onClick={handleSync}
+          onClick={() => setConfirmSyncOpen(true)}
           disabled={isSyncing}
           className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
           title="Synchroniseer lokale JSON data naar Supabase"
@@ -3336,7 +3327,7 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
         </button>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm">
+      <div className="surface-card p-6 md:p-8 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h4 className="text-lg font-black text-slate-800 tracking-tight">Nieuwe Omleiding</h4>
           <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Voeg een omleiding toe voor de chauffeurs</p>
@@ -3351,7 +3342,7 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
 
       <div className="grid grid-cols-1 gap-4">
         {diversions.map(div => (
-          <div key={div.id} className="bg-white p-6 md:p-8 rounded-[32px] border border-slate-100 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group transition-all hover:shadow-md">
+          <div key={div.id} className="surface-card surface-card-hover p-6 md:p-8 rounded-[32px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group">
             <div className="flex items-start gap-5">
               <div className={cn(
                 "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110",
@@ -3413,9 +3404,9 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden"
+              className="glass-modal rounded-[40px] w-full max-w-lg overflow-hidden"
             >
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+              <div className="p-8 border-b border-white/70 flex items-center justify-between">
                 <div>
                   <h4 className="text-xl font-black">{editingId ? 'Omleiding Bewerken' : 'Nieuwe Omleiding'}</h4>
                   <p className="text-sm text-slate-500 font-medium">Vul de details in en upload eventueel een PDF.</p>
@@ -3442,7 +3433,7 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
                     <select 
                       value={formData.severity}
                       onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm bg-white"
+                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm bg-white/60"
                     >
                       <option value="low">Laag (Informatief)</option>
                       <option value="medium">Medium (Vertraging)</option>
@@ -3559,6 +3550,16 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
         title="Omleiding Verwijderen"
         message="Weet je zeker dat je deze omleiding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
       />
+
+      <ConfirmationModal
+        isOpen={confirmSyncOpen}
+        onClose={() => setConfirmSyncOpen(false)}
+        onConfirm={handleSync}
+        title="Omleidingen synchroniseren"
+        message="Deze actie schrijft de lokale omleidingen weg naar de database en kan bestaande records met dezelfde ID overschrijven."
+        confirmText="Synchroniseren"
+        variant="warning"
+      />
     </div>
   );
 }
@@ -3591,7 +3592,10 @@ function Input({ label, type, placeholder, options, value, onChange }: { label: 
 function ManageServicesView({ services, onSave }: { services: Service[], onSave: (s: Service[]) => void }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ 
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [pendingImportedServices, setPendingImportedServices] = useState<Service[] | null>(null);
+  const [pendingImportCount, setPendingImportCount] = useState(0);
+  const [formData, setFormData] = useState({
     serviceNumber: '', 
     startTime: '', 
     endTime: '',
@@ -3610,6 +3614,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
     const reader = new FileReader();
     reader.onload = async (event) => {
       try {
+        const XLSX = await import('xlsx');
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const firstSheetName = workbook.SheetNames[0];
@@ -3675,9 +3680,8 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
         }).filter(s => s.serviceNumber);
 
         if (importedServices.length > 0) {
-          if (confirm(`Er zijn ${importedServices.length} diensten gevonden. Wilt u de huidige lijst vervangen?`)) {
-            onSave(importedServices);
-          }
+          setPendingImportedServices(importedServices);
+          setPendingImportCount(importedServices.length);
         } else {
           notify('Geen geldige diensten gevonden in het bestand. Controleer de kolommen Dienst, Start en Eind.', 'error');
         }
@@ -3755,9 +3759,20 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
   };
 
   const handleDelete = (id: string) => {
-    if (confirm('Weet u zeker dat u deze dienst wilt verwijderen?')) {
-      onSave(services.filter(s => s.id !== id));
-    }
+    setConfirmDeleteId(id);
+  };
+
+  const handleConfirmDelete = () => {
+    if (!confirmDeleteId) return;
+    onSave(services.filter(s => s.id !== confirmDeleteId));
+    setConfirmDeleteId(null);
+  };
+
+  const handleConfirmImport = () => {
+    if (!pendingImportedServices) return;
+    onSave(pendingImportedServices);
+    setPendingImportedServices(null);
+    setPendingImportCount(0);
   };
 
   return (
@@ -3779,7 +3794,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
           <label
             htmlFor="services-upload"
             className={cn(
-              "flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm cursor-pointer active:scale-95",
+              "control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all cursor-pointer active:scale-95",
               isImporting && "opacity-50 cursor-not-allowed"
             )}
             title="Importeer vanuit Excel"
@@ -3789,7 +3804,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
           </label>
           <button
             onClick={downloadCSV}
-            className="flex items-center gap-2 px-6 py-3 bg-white border border-slate-200 rounded-2xl text-slate-600 font-bold text-sm hover:bg-slate-50 transition-all shadow-sm active:scale-95"
+            className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
             title="Download als CSV"
           >
             <Download size={20} className="text-oker-500" />
@@ -3817,7 +3832,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
         </div>
       </div>
 
-      <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm overflow-hidden">
+      <div className="surface-table rounded-[40px] overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -3918,9 +3933,9 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[40px] shadow-2xl w-full max-w-lg overflow-hidden"
+              className="glass-modal rounded-[40px] w-full max-w-lg overflow-hidden"
             >
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+              <div className="p-8 border-b border-white/70 flex items-center justify-between">
                 <h4 className="text-xl font-black">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
                 <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
               </div>
@@ -3930,7 +3945,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                   <input 
                     type="text" required value={formData.serviceNumber}
                     onChange={(e) => setFormData({...formData, serviceNumber: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -3939,7 +3954,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                     <input 
                       type="time" required value={formData.startTime}
                       onChange={(e) => setFormData({...formData, startTime: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
                     />
                   </div>
                   <div className="space-y-2">
@@ -3947,7 +3962,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                     <input 
                       type="time" required value={formData.endTime}
                       onChange={(e) => setFormData({...formData, endTime: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
                     />
                   </div>
                 </div>
@@ -3958,7 +3973,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                     <input 
                       type="time" value={formData.startTime2}
                       onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
                     />
                   </div>
                   <div className="space-y-2">
@@ -3966,7 +3981,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                     <input 
                       type="time" value={formData.endTime2}
                       onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
                     />
                   </div>
                 </div>
@@ -3977,7 +3992,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                     <input 
                       type="time" value={formData.startTime3}
                       onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
                     />
                   </div>
                   <div className="space-y-2">
@@ -3997,6 +4012,27 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
           </div>
         )}
       </AnimatePresence>
+
+      <ConfirmationModal
+        isOpen={!!pendingImportedServices}
+        onClose={() => {
+          setPendingImportedServices(null);
+          setPendingImportCount(0);
+        }}
+        onConfirm={handleConfirmImport}
+        title="Diensten importeren"
+        message={`Er zijn ${pendingImportCount} diensten gevonden. De huidige lijst wordt vervangen door deze import.`}
+        confirmText="Importeren"
+        variant="warning"
+      />
+
+      <ConfirmationModal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={handleConfirmDelete}
+        title="Dienst verwijderen"
+        message="Weet je zeker dat je deze dienst wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+      />
     </div>
   );
 }
@@ -4081,7 +4117,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
             mySwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
               return (
-                <div key={swap.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm flex items-center justify-between">
+                <div key={swap.id} className="surface-card p-6 rounded-[32px] flex items-center justify-between">
                   <div>
                     <p className="font-black text-slate-800">{shift?.line} - {shift?.date}</p>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
@@ -4108,7 +4144,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
               const shift = shifts.find(s => s.id === swap.shiftId);
               const requester = users.find(u => u.id === swap.requesterId);
               return (
-                <div key={swap.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
+                <div key={swap.id} className="surface-card p-6 rounded-[32px] space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="font-black text-slate-800">{shift?.line} - {shift?.date}</p>
@@ -4131,7 +4167,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
       {isPlanner && (
         <div className="space-y-4 pt-8">
           <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Goedkeuring Planner</h4>
-          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
+          <div className="surface-table rounded-[32px] overflow-hidden">
             <table className="w-full text-left">
               <thead className="bg-slate-50 border-b border-slate-100">
                 <tr>
@@ -4175,8 +4211,8 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
       <AnimatePresence>
         {showOfferModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden">
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-[40px] w-full max-w-md overflow-hidden">
+              <div className="p-8 border-b border-white/70 flex items-center justify-between">
                 <h4 className="text-xl font-black">Dienst Aanbieden</h4>
                 <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
               </div>
@@ -4186,7 +4222,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
                   <select 
                     value={selectedShift} 
                     onChange={(e) => setSelectedShift(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:border-oker-400"
+                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none"
                     required
                   >
                     <option value="">Kies een dienst...</option>
@@ -4200,7 +4236,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
                   <textarea 
                     value={reason} 
                     onChange={(e) => setReason(e.target.value)}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:border-oker-400 h-24 resize-none"
+                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none h-24 resize-none"
                     placeholder="Waarom wil je ruilen?"
                   />
                 </div>
@@ -4299,7 +4335,7 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
       <div className="grid lg:grid-cols-12 gap-8">
         {/* Left Column: Calendar & Occupancy */}
         <div className="lg:col-span-8 space-y-6">
-          <div className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm">
+          <div className="surface-card p-8 rounded-[40px]">
             <div className="flex items-center justify-between mb-8">
               <h4 className="text-lg font-black tracking-tight capitalize">{monthName}</h4>
               <div className="flex gap-4">
@@ -4358,7 +4394,7 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
             <motion.div 
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              className="bg-white p-8 rounded-[40px] border border-slate-100 shadow-sm"
+              className="surface-card p-8 rounded-[40px]"
             >
               <div className="flex items-center justify-between mb-6">
                 <h4 className="font-black text-slate-800">Afwezigheid op {new Date(selectedDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
@@ -4415,7 +4451,7 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
                   }).map(req => {
                     const requester = users.find(u => u.id === req.userId);
                     return (
-                      <div key={req.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm space-y-4">
+                      <div key={req.id} className="surface-card p-6 rounded-[32px] space-y-4">
                         <div className="flex items-center gap-3">
                           <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500">
                             <UserIcon size={24} />
@@ -4452,7 +4488,7 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
                     );
                   })
                 ) : (
-                  <div className="bg-white p-8 rounded-[32px] border border-slate-100 text-center">
+                  <div className="surface-card p-8 rounded-[32px] text-center">
                     <p className="text-slate-400 font-bold text-sm">Geen openstaande aanvragen.</p>
                   </div>
                 )}
@@ -4465,7 +4501,7 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
             <div className="space-y-4">
               {myRequests.length > 0 ? (
                 myRequests.map(req => (
-                  <div key={req.id} className="bg-white p-6 rounded-[32px] border border-slate-100 shadow-sm relative overflow-hidden">
+                  <div key={req.id} className="surface-card p-6 rounded-[32px] relative overflow-hidden">
                     <div className={cn(
                       "absolute top-0 left-0 w-1 h-full",
                       req.status === 'approved' ? "bg-emerald-500" : req.status === 'rejected' ? "bg-red-500" : "bg-amber-500"
@@ -4482,7 +4518,7 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
                   </div>
                 ))
               ) : (
-                <div className="bg-white p-8 rounded-[32px] border border-slate-100 text-center">
+                <div className="surface-card p-8 rounded-[32px] text-center">
                   <p className="text-slate-400 font-bold text-sm">Nog geen verlof aangevraagd.</p>
                 </div>
               )}
@@ -4498,9 +4534,9 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-[40px] shadow-2xl w-full max-w-md overflow-hidden"
+              className="glass-modal rounded-[40px] w-full max-w-md overflow-hidden"
             >
-              <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+              <div className="p-8 border-b border-white/70 flex items-center justify-between">
                 <h4 className="text-xl font-black">Verlof Aanvragen</h4>
                 <button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
               </div>
@@ -4528,7 +4564,7 @@ function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: Use
                   <select 
                     value={formData.type} 
                     onChange={(e) => setFormData({...formData, type: e.target.value as any})} 
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all bg-white"
+                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"
                   >
                     <option value="vakantie">Vakantie</option>
                     <option value="ziekte">Ziekte</option>

@@ -1,0 +1,387 @@
+import React, { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { Plus, RotateCcw, Trash2, Upload, Users, X } from 'lucide-react';
+import type { User } from '../../types';
+import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { ConfirmationModal, CredentialsModal, EmptyState } from '../../components/ui';
+
+export type UserDraft = User & { password?: string };
+
+export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', currentUser }: { users: User[]; onSave: (u: UserDraft[]) => Promise<boolean>; title?: string; currentUser: User }) {
+  const [isImporting, setIsImporting] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
+  const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
+  const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
+  const [resetPasswordValue, setResetPasswordValue] = useState('');
+  const [isResettingPassword, setIsResettingPassword] = useState(false);
+  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
+  const [pendingImportUsers, setPendingImportUsers] = useState<UserDraft[] | null>(null);
+  const [pendingImportMessage, setPendingImportMessage] = useState('');
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [credentialsModal, setCredentialsModal] = useState<{ title: string; email: string; password: string } | null>(null);
+
+  const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
+  const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
+
+  const filteredUsers = users
+    .filter((u) => {
+      const isBeheerder = u.name.toLowerCase() === 'beheerder';
+      const isMe = u.id === currentUser.id;
+      if (isBeheerder && !isMe) return false;
+      return true;
+    })
+    .filter((u) => roleFilter === 'all' || u.role === roleFilter)
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const handleAddUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUser.name) return;
+    if (!newUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
+    if (newUser.password.length < 8) return notify('Gebruik een tijdelijk wachtwoord van minstens 8 tekens.', 'error');
+
+    const userToAdd: UserDraft = {
+      id: Date.now().toString(),
+      name: newUser.name,
+      role: newUser.role as any,
+      employeeId: newUser.employeeId || `VHB-${Math.floor(1000 + Math.random() * 9000)}`,
+      password: newUser.password,
+      phone: newUser.phone,
+      email: newUser.email,
+      isActive: true,
+    };
+
+    onSave([...users, userToAdd]);
+    setShowAddModal(false);
+    setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
+    setCredentialsModal({
+      title: 'Nieuwe gebruiker aangemaakt',
+      email: userToAdd.email || '',
+      password: userToAdd.password || '',
+    });
+  };
+
+  const handleUpdateUser = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingUser) return;
+    if (!editingUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
+    if (editingUser.password && editingUser.password.length < 8) return notify('Een nieuw wachtwoord moet minstens 8 tekens hebben.', 'error');
+
+    const originalUser = users.find((u) => u.id === editingUser.id);
+    const isOnlyActiveAdmin = originalUser?.role === 'admin' && originalUser.isActive !== false && activeAdmins.length === 1;
+    const adminWouldBeRemoved = editingUser.role !== 'admin' || editingUser.isActive === false;
+    if (isOnlyActiveAdmin && adminWouldBeRemoved) return notify('Je kunt de laatste actieve admin niet degraderen of deactiveren.', 'error');
+
+    onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u)));
+    setEditingUser(null);
+  };
+
+  const handleDeleteUser = () => {
+    if (!confirmDeleteId) return;
+    const userToDelete = users.find((u) => u.id === confirmDeleteId);
+    const isOnlyActiveAdmin = userToDelete?.role === 'admin' && userToDelete.isActive !== false && activeAdmins.length === 1;
+    if (isOnlyActiveAdmin) {
+      notify('Je kunt de laatste actieve admin niet verwijderen.', 'error');
+      setConfirmDeleteId(null);
+      return;
+    }
+    onSave(users.filter((u) => u.id !== confirmDeleteId));
+    if (editingUser?.id === confirmDeleteId) setEditingUser(null);
+    setConfirmDeleteId(null);
+  };
+
+  const handleResetPassword = async () => {
+    if (!confirmResetUser) return;
+    if (resetPasswordValue.length < 8) return notify('Gebruik minstens 8 tekens.', 'error');
+    try {
+      setIsResettingPassword(true);
+      const response = await fetch('/api/admin/users/reset-password', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+        body: JSON.stringify({ userId: confirmResetUser.id, password: resetPasswordValue }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) return notify(data.details || data.error || 'Reset mislukt.', 'error');
+      notify(`Wachtwoord voor ${confirmResetUser.name} is bijgewerkt.`, 'success');
+      setCredentialsModal({
+        title: `Wachtwoord reset voor ${confirmResetUser.name}`,
+        email: confirmResetUser.email || '',
+        password: resetPasswordValue,
+      });
+      setConfirmResetUser(null);
+      setResetPasswordValue('');
+    } finally {
+      setIsResettingPassword(false);
+    }
+  };
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setIsImporting(true);
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      try {
+        const XLSX = await import('xlsx');
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        if (!Array.isArray(jsonData) || jsonData.length === 0) return notify('Het Excel-bestand lijkt leeg te zijn of heeft geen herkenbare gegevens.', 'error');
+
+        const keys = Object.keys(jsonData[0] as any);
+        const importedUsers: UserDraft[] = jsonData
+          .map((row: any, index) => {
+            const rowKeys = Object.keys(row);
+            const findValue = (patterns: string[]) => {
+              const foundKey = rowKeys.find((k) => patterns.some((p) => k.toString().trim().toLowerCase().includes(p)));
+              return foundKey ? row[foundKey] : undefined;
+            };
+            const rawRole = (findValue(['rol', 'role', 'functie', 'type']) || 'chauffeur').toString().toLowerCase();
+            let role: 'admin' | 'planner' | 'chauffeur' = 'chauffeur';
+            if (rawRole.includes('admin') || rawRole.includes('beheer')) role = 'admin';
+            else if (rawRole.includes('plan') || rawRole.includes('dispo')) role = 'planner';
+
+            const generatedId = (Date.now() + index).toString();
+            return {
+              id: generatedId,
+              name: findValue(['naam', 'name', 'voornaam', 'achternaam', 'medewerker', 'chauffeur', 'gebruiker', 'user'])?.toString().trim() || '',
+              role,
+              employeeId: findValue(['id', 'employee', 'personeel', 'nummer', 'code', 'nr'])?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
+              password: findValue(['wachtwoord', 'password', 'pass', 'wacht', 'pw'])?.toString() || '',
+              phone: findValue(['gsm', 'telefoon', 'phone', 'mobiel', 'gsm-nummer', 'tel'])?.toString().trim() || undefined,
+              email: findValue(['email', 'mail', 'e-mail', 'adres'])?.toString().trim() || undefined,
+              isActive: true,
+            };
+          })
+          .filter((u) => u.name && u.name.length > 1);
+
+        if (importedUsers.length === 0) {
+          return notify(`Geen geldige gebruikers gevonden. Gevonden kolommen: ${keys.join(', ')}`, 'error');
+        }
+
+        const newUsersList: UserDraft[] = [...users];
+        let updatedCount = 0;
+        let addedCount = 0;
+        importedUsers.forEach((impUser) => {
+          const existingIdx = newUsersList.findIndex((u) => u.name.toLowerCase() === impUser.name.toLowerCase());
+          if (existingIdx !== -1) {
+            newUsersList[existingIdx] = { ...newUsersList[existingIdx], phone: impUser.phone || newUsersList[existingIdx].phone, email: impUser.email || newUsersList[existingIdx].email, role: impUser.role || newUsersList[existingIdx].role, employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId, password: impUser.password || newUsersList[existingIdx].password };
+            updatedCount++;
+          } else {
+            newUsersList.push(impUser);
+            addedCount++;
+          }
+        });
+
+        if (addedCount === 0 && updatedCount === 0) {
+          notify('Geen nieuwe gegevens of wijzigingen gevonden in het bestand.', 'info');
+        } else {
+          setPendingImportUsers(newUsersList);
+          setPendingImportMessage(updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die worden bijgewerkt. Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`);
+        }
+      } catch (error) {
+        console.error('Error parsing Excel:', error);
+        notify('Fout bij het verwerken van het Excel-bestand. Controleer of het een geldig Excel-bestand is.', 'error');
+      } finally {
+        setIsImporting(false);
+        if (e.target) e.target.value = '';
+      }
+    };
+    reader.onerror = () => {
+      notify('Fout bij het lezen van het bestand.', 'error');
+      setIsImporting(false);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleConfirmImport = async () => {
+    if (!pendingImportUsers) return;
+    const success = await onSave(pendingImportUsers);
+    if (success) notify('Import succesvol verwerkt.', 'success');
+    setPendingImportUsers(null);
+    setPendingImportMessage('');
+  };
+
+  const handleSync = async () => {
+    try {
+      setIsSyncing(true);
+      const response = await fetch('/api/admin/sync', { method: 'POST', headers: await getSupabaseAuthHeaders() });
+      const text = await response.text();
+      if (!response.ok && !text.startsWith('{')) throw new Error(`Server fout (${response.status}): ${text.slice(0, 200) || 'Lege response'}`);
+      const data = JSON.parse(text);
+      if (data.success) notify('Synchronisatie voltooid.', 'success');
+      else notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
+    } catch (error: any) {
+      console.error('Sync error:', error);
+      notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  return (
+    <div className="max-w-4xl space-y-8">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-2xl font-bold">{title}</h3>
+          <p className="text-sm text-slate-500 font-medium">Beheer medewerkers en hun toegangsrechten.</p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <button onClick={() => setConfirmSyncOpen(true)} disabled={isSyncing} className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50" title="Synchroniseer lokale JSON data naar Supabase">
+            <RotateCcw size={18} className={isSyncing ? 'animate-spin' : ''} />
+            {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+          </button>
+          <div className="flex bg-slate-100 p-1 rounded-xl mr-2">
+            {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
+              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize', roleFilter === role ? 'bg-white/85 text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+                {role === 'all' ? 'Alles' : role}
+              </button>
+            ))}
+          </div>
+          <label className="bg-oker-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer hover:bg-oker-600 transition-colors shadow-lg shadow-oker-500/20">
+            <Upload size={18} />
+            {isImporting ? 'Bezig...' : 'Excel Upload'}
+            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
+          </label>
+          <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors">
+            <Plus size={18} /> Gebruiker Toevoegen
+          </button>
+        </div>
+      </div>
+
+      <div className="glass-oker p-6 rounded-3xl text-sm">
+        <p className="font-bold text-oker-800 mb-2">Excel Instructies:</p>
+        <p className="text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-bold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-bold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
+      </div>
+
+      <div className="surface-table rounded-[32px] overflow-hidden">
+        <div className="hidden md:block overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/50 border-b border-slate-100">
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Medewerker</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Laatst Actief</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Sessies</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Acties</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {filteredUsers.map((u) => (
+                <tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
+                  <td className="px-8 py-6"><div className="font-black text-slate-800 tracking-tight text-lg">{u.name}</div><div className="text-[10px] text-oker-500 font-black uppercase tracking-widest mt-0.5">{u.role}</div></td>
+                  <td className="px-8 py-6"><span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', u.isActive !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span></td>
+                  <td className="px-8 py-6 text-sm font-bold text-slate-500">{u.lastLogin ? u.lastLogin : <span className="text-slate-300 italic font-medium">Nooit</span>}</td>
+                  <td className="px-8 py-6 text-center"><span className={cn('w-8 h-8 inline-flex items-center justify-center rounded-xl text-xs font-black', (u.activeSessions || 0) > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-400 border border-slate-100')}>{u.activeSessions || 0}</span></td>
+                  <td className="px-8 py-6 text-right">
+                    <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setConfirmResetUser(u)} className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-xl transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={18} /></button>
+                      <button onClick={() => setEditingUser(u)} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-oker-500 transition-all active:scale-95">Bewerken</button>
+                      <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('p-2 rounded-xl transition-all', isProtectedAdmin(u) ? 'text-slate-300 cursor-not-allowed' : 'text-red-500 hover:bg-red-50')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={18} /></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="md:hidden divide-y divide-slate-100">
+          {filteredUsers.map((u) => (
+            <div key={u.id} className="p-6 space-y-4 active:bg-slate-50 transition-colors">
+              <div className="flex justify-between items-start">
+                <div><div className="font-black text-slate-800 tracking-tight text-lg leading-tight">{u.name}</div><div className="text-[10px] text-oker-500 font-black uppercase tracking-widest mt-1">{u.role}</div></div>
+                <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', u.isActive !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-4 pt-2">
+                <div className="p-3 bg-slate-50 rounded-2xl"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Laatst Actief</p><p className="text-xs font-bold text-slate-700 mt-1">{u.lastLogin || 'Nooit'}</p></div>
+                <div className="p-3 bg-slate-50 rounded-2xl"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sessies</p><p className="text-xs font-bold text-slate-700 mt-1">{u.activeSessions || 0}</p></div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={() => setEditingUser(u)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest active:scale-95 transition-all">Bewerken</button>
+                <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('px-4 rounded-2xl active:scale-95 transition-all', isProtectedAdmin(u) ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-red-50 text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={20} /></button>
+                <button onClick={() => setConfirmResetUser(u)} className="px-4 bg-slate-100 text-slate-500 rounded-2xl active:scale-95 transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={20} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {filteredUsers.length === 0 && <div className="p-6"><EmptyState icon={<Users size={28} />} title="Geen gebruikers gevonden" message="Pas je filter aan of voeg een nieuwe gebruiker toe." /></div>}
+      </div>
+
+      <ConfirmationModal isOpen={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker Verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
+      <ConfirmationModal isOpen={confirmSyncOpen} onClose={() => setConfirmSyncOpen(false)} onConfirm={handleSync} title="Gebruikers synchroniseren" message="Deze actie schrijft de lokale gebruikersgegevens weg naar de database en kan bestaande records met dezelfde ID overschrijven." confirmText="Synchroniseren" variant="warning" />
+      <ConfirmationModal isOpen={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
+
+      <AnimatePresence>
+        {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[32px] w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="p-8 border-b border-white/70"><h4 className="text-xl font-bold">Nieuwe Gebruiker</h4><p className="text-sm text-slate-500">Voeg handmatig een medewerker toe.</p></div>
+              <form onSubmit={handleAddUser} className="p-8 space-y-5">
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Volledige Naam</label><input type="text" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="bijv. Jan Janssen" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Rol</label><select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all bg-white/60"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Personeelsnummer (Optioneel)</label><input type="text" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="bijv. VHB-1234" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tijdelijk Wachtwoord</label><input type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="Minstens 8 tekens" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">GSM Nummer (Optioneel)</label><input type="text" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="bijv. 0470 12 34 56" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">E-mailadres</label><input type="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="bijv. jan@voorbeeld.be" /></div>
+                <div className="flex gap-3 pt-4"><button type="button" onClick={() => setShowAddModal(false)} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-colors">Annuleren</button><button type="submit" className="flex-1 px-4 py-3 rounded-xl font-bold bg-oker-500 text-white hover:bg-oker-600 transition-colors shadow-lg shadow-oker-500/20">Toevoegen</button></div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {editingUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[32px] w-full max-w-md max-h-[90vh] overflow-y-auto">
+              <div className="p-8 border-b border-white/70 flex justify-between items-center">
+                <div><h4 className="text-xl font-bold">Gebruiker Bewerken</h4><p className="text-sm text-slate-500">Pas de gegevens van {editingUser.name} aan.</p></div>
+                <button onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)} className={cn('p-2 rounded-lg transition-colors', isProtectedAdmin(editingUser) ? 'text-slate-300 cursor-not-allowed' : 'text-red-500 hover:bg-red-50')} title={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={20} /></button>
+              </div>
+              <form onSubmit={handleUpdateUser} className="p-8 space-y-5">
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Volledige Naam</label><input type="text" required value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Rol</label><select value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all bg-white/60"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Personeelsnummer</label><input type="text" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nieuw Wachtwoord (Optioneel)</label><input type="password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="Leeg laten om niet te wijzigen" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">GSM Nummer</label><input type="text" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="bijv. 0470 12 34 56" /></div>
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">E-mailadres</label><input type="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="bijv. jan@voorbeeld.be" /></div>
+                <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
+                  <div><p className="text-sm font-bold text-slate-700">Account Actief</p><p className="text-[10px] text-slate-400 font-medium">Inactieve gebruikers kunnen niet inloggen.</p></div>
+                  <button type="button" onClick={() => setEditingUser({ ...editingUser, isActive: editingUser.isActive === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.isActive !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-white rounded-full transition-all', editingUser.isActive !== false ? 'left-7' : 'left-1')} /></button>
+                </div>
+                <div className="pt-2 grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Laatst Ingelogd</p><p className="text-xs font-bold text-slate-700 mt-1">{editingUser.lastLogin || 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actieve Sessies</p><p className="text-xs font-bold text-slate-700 mt-1">{editingUser.activeSessions || 0}</p></div></div>
+                <div className="flex gap-3 pt-4"><button type="button" onClick={() => setEditingUser(null)} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-colors">Annuleren</button><button type="submit" className="flex-1 px-4 py-3 rounded-xl font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-lg">Opslaan</button></div>
+              </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {confirmResetUser && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[32px] w-full max-w-md overflow-hidden">
+              <div className="p-8 border-b border-white/70"><h4 className="text-xl font-black">Wachtwoord resetten</h4><p className="mt-2 text-sm text-slate-500 font-medium">Stel een nieuw tijdelijk wachtwoord in voor {confirmResetUser.name}.</p></div>
+              <div className="p-8 space-y-5">
+                <div className="space-y-2"><label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Tijdelijk wachtwoord</label><input type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} className="control-input w-full px-4 py-3 rounded-xl outline-none transition-all" placeholder="Minstens 8 tekens" autoFocus /></div>
+                <p className="text-xs text-slate-400 font-medium">De gebruiker logt daarna in met dit nieuwe wachtwoord.</p>
+                <div className="flex gap-3 pt-2"><button type="button" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-500 hover:bg-slate-50 transition-colors">Annuleren</button><button type="button" onClick={handleResetPassword} disabled={isResettingPassword} className={cn('flex-1 px-4 py-3 rounded-xl font-bold text-white shadow-lg transition-colors', isResettingPassword ? 'bg-amber-300 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20')}>{isResettingPassword ? 'Bezig...' : 'Resetten'}</button></div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      <CredentialsModal
+        isOpen={!!credentialsModal}
+        onClose={() => setCredentialsModal(null)}
+        title={credentialsModal?.title || 'Toegangsgegevens'}
+        email={credentialsModal?.email || ''}
+        password={credentialsModal?.password || ''}
+      />
+    </div>
+  );
+}
