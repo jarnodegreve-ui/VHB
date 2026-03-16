@@ -1315,7 +1315,6 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
   const myShifts = shifts.filter(s => s.driverId === user.id);
   const today = now.toISOString().split('T')[0];
   const todaysShift = myShifts.find((shift) => shift.date === today);
-  const totalDrivers = users.filter((candidate) => candidate.role === 'chauffeur' && candidate.isActive).length;
   
   const nextShift = myShifts
     .map(s => {
@@ -1377,7 +1376,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <StatCard 
           icon={<Clock className="text-oker-600" />} 
           label="Vandaag" 
@@ -1389,12 +1388,6 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
           label="Actieve Omleidingen" 
           value={diversions.length.toString()} 
           subValue="Totaal aantal" 
-        />
-        <StatCard 
-          icon={<Users className="text-oker-500" />} 
-          label="Beschikbare Chauffeurs" 
-          value={totalDrivers.toString()} 
-          subValue="Actieve medewerkers in het systeem" 
         />
       </div>
 
