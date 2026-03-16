@@ -700,23 +700,23 @@ export default function App() {
         <div className="p-8 flex flex-col items-start border-b border-white/8 relative">
           <button 
             onClick={() => setIsSidebarOpen(false)}
-            className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white lg:hidden"
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 lg:hidden"
           >
             <X size={20} />
           </button>
           <div className="flex items-center gap-4">
-            <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/8 text-oker-300 ring-1 ring-white/8">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/75 text-oker-600 ring-1 ring-white/80 shadow-sm">
               <Bus size={24} />
             </div>
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-white">VHB Portaal</h1>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900">VHB Portaal</h1>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
             </div>
           </div>
-          <div className="mt-8 w-full rounded-[24px] bg-white/6 p-4 ring-1 ring-white/8">
+          <div className="mt-8 w-full rounded-[24px] bg-white/70 p-4 ring-1 ring-white/80 shadow-sm">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Actieve Sessie</p>
-            <p className="mt-2 text-lg font-black text-white">{currentUser.name}</p>
-            <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-oker-300">{currentUser.role} • {currentUser.employeeId}</p>
+            <p className="mt-2 text-lg font-black text-slate-900">{currentUser.name}</p>
+            <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-oker-700">{currentUser.role} • {currentUser.employeeId}</p>
           </div>
         </div>
 
@@ -834,7 +834,7 @@ export default function App() {
         <div className="p-6 border-t border-white/8">
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:text-red-300 hover:bg-white/6 rounded-2xl transition-all duration-300 font-bold text-sm"
+            className="flex items-center gap-3 w-full px-4 py-3 text-slate-500 hover:text-red-500 hover:bg-white/65 rounded-2xl transition-all duration-300 font-bold text-sm"
           >
             <LogOut size={20} />
             <span>Uitloggen</span>
@@ -884,10 +884,10 @@ export default function App() {
           <AnimatePresence mode="wait">
             <motion.div
               key={currentView}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
+              initial={{ opacity: 0, y: 18, scale: 0.985, filter: 'blur(8px)' }}
+              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+              exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(6px)' }}
+              transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto max-w-[1440px]"
             >
               {currentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
@@ -982,12 +982,12 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
         "flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden text-left",
         active 
           ? "bg-white text-slate-900 shadow-lg shadow-black/10 font-bold" 
-          : "text-slate-400 hover:text-white hover:bg-white/6 font-medium"
+          : "text-slate-500 hover:text-slate-900 hover:bg-white/55 font-medium"
       )}
     >
       <span className={cn(
         "relative z-10 transition-transform duration-300 group-hover:scale-110",
-        active ? "text-oker-600" : "text-slate-500 group-hover:text-oker-300"
+        active ? "text-oker-600" : "text-slate-400 group-hover:text-oker-600"
       )}>
         {icon}
       </span>
