@@ -629,12 +629,6 @@ export default function App() {
             onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
-            icon={<RotateCcw size={20} />} 
-            label="Wissel Aanvragen" 
-            active={currentView === 'ruil-verzoeken'} 
-            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }} 
-          />
-          <NavItem 
             icon={<Phone size={20} />} 
             label="Contactlijst" 
             active={currentView === 'contacten'} 
@@ -645,6 +639,12 @@ export default function App() {
             label="Updates" 
             active={currentView === 'updates'} 
             onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem 
+            icon={<RotateCcw size={20} />} 
+            label="Wissel Aanvragen" 
+            active={currentView === 'ruil-verzoeken'} 
+            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
             icon={<Calendar size={20} />} 
@@ -1226,9 +1226,7 @@ function ServicesView({ services }: { services: Service[] }) {
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime2} - {s.endTime2}
                       </div>
-                    ) : (
-                      <span />
-                    )}
+                    ) : null}
                   </td>
                   <td className="px-8 py-5">
                     {s.startTime3 ? (
@@ -1236,9 +1234,7 @@ function ServicesView({ services }: { services: Service[] }) {
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime3} - {s.endTime3}
                       </div>
-                    ) : (
-                      <span />
-                    )}
+                    ) : null}
                   </td>
                 </tr>
               ))}
