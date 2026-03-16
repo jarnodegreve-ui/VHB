@@ -1316,6 +1316,9 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
   }, []);
 
   const myShifts = shifts.filter(s => s.driverId === user.id);
+  const today = now.toISOString().split('T')[0];
+  const todaysShift = myShifts.find((shift) => shift.date === today);
+  const totalDrivers = users.filter((candidate) => candidate.role === 'chauffeur' && candidate.isActive).length;
   
   const nextShift = myShifts
     .map(s => {
