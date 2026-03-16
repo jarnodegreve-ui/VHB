@@ -15,10 +15,41 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
 
   const handleRequestLeave = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!formData.startDate || !formData.endDate) {
+      return;
+    }
     onSave([...leaveRequests, { id: Date.now().toString(), userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]);
     setShowRequestModal(false);
     setFormData({ startDate: '', endDate: '', type: 'vakantie', comment: '' });
   };
+
+  const handleCalendarDateClick = (dateStr: string) => {
+    if (!showRequestModal || isPlanner) {
+      setSelectedDate((current) => (current === dateStr ? null : dateStr));
+      return;
+    }
+
+    setFormData((current) => {
+      if (!current.startDate || (current.startDate && current.endDate)) {
+        return { ...current, startDate: dateStr, endDate: '' };
+      }
+
+      if (dateStr < current.startDate) {
+        return { ...current, startDate: dateStr, endDate: current.startDate };
+      }
+
+      return { ...current, endDate: dateStr };
+    });
+  };
+
+  const isDateWithinDraftRange = (dateStr: string) => {
+    if (!showRequestModal || !formData.startDate) return false;
+    if (!formData.endDate) return dateStr === formData.startDate;
+    return dateStr >= formData.startDate && dateStr <= formData.endDate;
+  };
+
+  const isDraftBoundary = (dateStr: string) =>
+    showRequestModal && (dateStr === formData.startDate || dateStr === formData.endDate);
 
   const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status']) => {
     onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus } : r)));
@@ -78,9 +109,21 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
                 const occupancyCount = getRequestsForDate(dateStr).length;
                 const statusColor = occupancyCount >= 3 ? 'bg-red-500' : occupancyCount >= 2 ? 'bg-amber-500' : occupancyCount >= 1 ? 'bg-emerald-500' : 'bg-slate-100';
                 const isSelected = selectedDate === dateStr;
+                const isInDraftRange = isDateWithinDraftRange(dateStr);
+                const isDraftEdge = isDraftBoundary(dateStr);
                 return (
-                  <button key={day} onClick={() => setSelectedDate(isSelected ? null : dateStr)} className={cn('aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group', isSelected ? 'border-oker-500 bg-oker-50 ring-4 ring-oker-500/10' : 'border-slate-50 hover:border-slate-200 bg-white')}>
-                    <span className={cn('text-sm font-black transition-colors', isSelected ? 'text-oker-600' : 'text-slate-400 group-hover:text-slate-600')}>{day}</span>
+                  <button
+                    key={day}
+                    onClick={() => handleCalendarDateClick(dateStr)}
+                    className={cn(
+                      'aspect-square rounded-2xl border transition-all flex flex-col items-center justify-center relative group',
+                      isSelected && 'border-oker-500 bg-oker-50 ring-4 ring-oker-500/10',
+                      !isSelected && !isInDraftRange && 'border-slate-50 hover:border-slate-200 bg-white',
+                      isInDraftRange && 'border-oker-200 bg-oker-50/70',
+                      isDraftEdge && 'border-oker-500 bg-oker-100 ring-4 ring-oker-500/10'
+                    )}
+                  >
+                    <span className={cn('text-sm font-black transition-colors', (isSelected || isInDraftRange) ? 'text-oker-600' : 'text-slate-400 group-hover:text-slate-600')}>{day}</span>
                     {occupancyCount > 0 && <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} />}
                   </button>
                 );
@@ -146,13 +189,20 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[40px] w-full max-w-md overflow-hidden">
               <div className="p-8 border-b border-white/70 flex items-center justify-between"><h4 className="text-xl font-black">Verlof Aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Startdatum</label><input type="date" required value={formData.startDate} onChange={(e) => setFormData({ ...formData, startDate: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all" /></div>
-                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Einddatum</label><input type="date" required value={formData.endDate} onChange={(e) => setFormData({ ...formData, endDate: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all" /></div>
+                <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
+                  <p className="font-black text-oker-700 uppercase tracking-[0.18em] text-[10px]">Periode kiezen</p>
+                  <p className="mt-2 font-medium">Klik in de kalender eerst op de startdatum en daarna op de einddatum.</p>
                 </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Startdatum</label><input type="text" readOnly value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Einddatum</label><input type="text" readOnly value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
+                </div>
+                <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">
+                  Periode wissen
+                </button>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as any })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="vakantie">Vakantie</option><option value="ziekte">Ziekte</option><option value="persoonlijk">Persoonlijk</option><option value="overig">Overig</option></select></div>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
-                <button type="submit" className="w-full bg-oker-500 text-white font-black py-4 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 active:scale-[0.98]">Aanvraag Indienen</button>
+                <button type="submit" disabled={!formData.startDate || !formData.endDate} className={cn("w-full font-black py-4 rounded-2xl transition-all shadow-xl active:scale-[0.98]", formData.startDate && formData.endDate ? "bg-oker-500 text-white hover:bg-oker-600 shadow-oker-500/20" : "bg-slate-200 text-slate-400 shadow-none cursor-not-allowed")}>Aanvraag Indienen</button>
               </form>
             </motion.div>
           </div>
