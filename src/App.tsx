@@ -635,6 +635,25 @@ export default function App() {
 
   const isPlanner = currentUser.role === 'planner' || currentUser.role === 'admin';
   const isAdmin = currentUser.role === 'admin';
+  const viewMeta: Record<string, { title: string; subtitle: string }> = {
+    dashboard: { title: 'Dashboard', subtitle: 'Overzicht van planning, updates en operationele status.' },
+    omleidingen: { title: 'Omleidingen', subtitle: 'Actuele hinder en routewijzigingen voor chauffeurs.' },
+    rooster: { title: 'Mijn Rooster', subtitle: 'Je komende diensten en export naar agenda.' },
+    dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
+    contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
+    updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
+    'ruil-verzoeken': { title: 'Dienstwissels', subtitle: 'Beheer openstaande ruilverzoeken en aanbiedingen.' },
+    verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
+    'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
+    'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
+    'beheer-updates': { title: 'Nieuwe Update', subtitle: 'Publiceer updates en stuur dringende meldingen uit.' },
+    gebruikers: { title: 'Gebruikers', subtitle: 'Beheer accounts, rollen en toegangsrechten.' },
+    'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
+    'beheer-dienstoverzicht': { title: 'Beheer Dienstoverzicht', subtitle: 'Onderhoud het dienstschema en importeer uit Excel.' },
+    'beheer-contactlijst': { title: 'Beheer Contactlijst', subtitle: 'Werk medewerkers, rollen en gegevens bij.' },
+    'beheer-debug': { title: 'Systeem Status', subtitle: 'Controleer koppelingen, tabellen en health checks.' },
+  };
+  const currentMeta = viewMeta[currentView] || { title: 'VHB Portaal', subtitle: 'Interne operationele omgeving.' };
 
   return (
     <>
@@ -659,7 +678,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="flex h-screen bg-slate-50 text-slate-900 font-sans overflow-hidden">
+      <div className="flex h-screen bg-transparent text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -675,19 +694,29 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 w-72 bg-white border-r border-slate-200 flex flex-col shadow-sm z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0",
+        "fixed inset-y-0 left-0 w-80 panel-dark m-3 mr-0 rounded-[34px] flex flex-col z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="p-8 flex flex-col items-center border-b border-slate-100 relative">
+        <div className="p-8 flex flex-col items-start border-b border-white/8 relative">
           <button 
             onClick={() => setIsSidebarOpen(false)}
-            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 lg:hidden"
+            className="absolute top-4 right-4 p-2 text-slate-500 hover:text-white lg:hidden"
           >
             <X size={20} />
           </button>
-          <div className="text-center">
-            <h1 className="font-black text-2xl tracking-tighter text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">Van Hoorebeke en Zoon</p>
+          <div className="flex items-center gap-4">
+            <div className="flex h-14 w-14 items-center justify-center rounded-[20px] bg-white/8 text-oker-300 ring-1 ring-white/8">
+              <Bus size={24} />
+            </div>
+            <div>
+              <h1 className="text-2xl font-black tracking-tight text-white">VHB Portaal</h1>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
+            </div>
+          </div>
+          <div className="mt-8 w-full rounded-[24px] bg-white/6 p-4 ring-1 ring-white/8">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Actieve Sessie</p>
+            <p className="mt-2 text-lg font-black text-white">{currentUser.name}</p>
+            <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-oker-300">{currentUser.role} • {currentUser.employeeId}</p>
           </div>
         </div>
 
@@ -743,7 +772,7 @@ export default function App() {
 
           {isPlanner && (
             <>
-              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Beheer</div>
+              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Beheer</div>
               <NavItem 
                 icon={<Calendar size={20} />} 
                 label="Verlofbeheer" 
@@ -785,7 +814,7 @@ export default function App() {
 
           {isAdmin && (
             <>
-              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">Admin</div>
+              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Admin</div>
               <NavItem 
                 icon={<Users size={20} />} 
                 label="Gebruikers" 
@@ -802,10 +831,10 @@ export default function App() {
           )}
         </nav>
 
-        <div className="p-6 border-t border-slate-100">
+        <div className="p-6 border-t border-white/8">
           <button 
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-2xl transition-all duration-300 font-bold text-sm"
+            className="flex items-center gap-3 w-full px-4 py-3 text-slate-400 hover:text-red-300 hover:bg-white/6 rounded-2xl transition-all duration-300 font-bold text-sm"
           >
             <LogOut size={20} />
             <span>Uitloggen</span>
@@ -816,34 +845,42 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
-        <header className="h-16 md:h-20 bg-white border-b border-slate-200 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
+        <header className="mx-3 mt-3 rounded-[30px] panel h-20 md:h-24 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-500 hover:bg-slate-50 rounded-xl lg:hidden transition-colors"
+              className="p-2 text-slate-500 hover:bg-slate-100 rounded-xl lg:hidden transition-colors"
             >
               <Menu size={24} />
             </button>
             <div className="flex flex-col">
-              <h2 className="text-lg md:text-xl font-black capitalize truncate tracking-tight">
-                {currentView.replace('-', ' ')}
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.24em]">Operations</p>
+              <h2 className="text-xl md:text-2xl font-black tracking-tight">
+                {currentMeta.title}
               </h2>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest lg:hidden">VHB Portaal</p>
+              <p className="hidden md:block text-sm font-medium text-slate-500">{currentMeta.subtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2 md:gap-4">
+          <div className="flex items-center gap-3 md:gap-4">
+            <div className="hidden xl:flex items-center gap-3 rounded-[22px] bg-slate-100/80 px-4 py-3">
+              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Systeem</p>
+                <p className="text-sm font-black text-slate-700">Online en gesynchroniseerd</p>
+              </div>
+            </div>
             <div className="text-right hidden sm:block">
               <p className="text-sm font-black text-slate-800">{currentUser.name}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{currentUser.role} • {currentUser.employeeId}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{currentUser.role} • {currentUser.employeeId}</p>
             </div>
-            <div className="w-10 h-10 md:w-12 md:h-12 bg-slate-100 rounded-2xl flex items-center justify-center text-slate-600 shadow-inner border border-white">
+            <div className="w-11 h-11 md:w-12 md:h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-700 shadow-inner border border-white">
               <UserIcon size={20} />
             </div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 lg:pb-8">
+        <div className="flex-1 overflow-y-auto px-4 pb-24 pt-5 md:px-8 lg:pb-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentView}
@@ -851,6 +888,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -10 }}
               transition={{ duration: 0.2 }}
+              className="mx-auto max-w-[1440px]"
             >
               {currentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
               {currentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
@@ -922,7 +960,7 @@ function MobileNavItem({ icon, active, onClick }: { icon: React.ReactNode, activ
       onClick={onClick}
       className={cn(
         "p-3 rounded-2xl transition-all duration-300 relative",
-        active ? "text-oker-500 bg-oker-50 shadow-inner" : "text-slate-400"
+        active ? "text-oker-600 bg-oker-50 shadow-inner" : "text-slate-400 hover:text-slate-600"
       )}
     >
       {active && (
@@ -941,25 +979,20 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
     <button 
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 w-full px-4 py-3 rounded-2xl transition-all duration-300 group relative overflow-hidden",
+        "flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden text-left",
         active 
-          ? "bg-oker-400 text-white shadow-lg shadow-oker-400/30 font-bold" 
-          : "text-slate-500 hover:text-oker-600 hover:bg-oker-50 font-medium"
+          ? "bg-white text-slate-900 shadow-lg shadow-black/10 font-bold" 
+          : "text-slate-400 hover:text-white hover:bg-white/6 font-medium"
       )}
     >
-      {/* Liquid Glass Effect Overlay */}
-      <div className={cn(
-        "absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none rounded-2xl",
-        active ? "glass-oker" : "glass"
-      )} />
-      
       <span className={cn(
         "relative z-10 transition-transform duration-300 group-hover:scale-110",
-        active ? "text-white" : "text-slate-400 group-hover:text-oker-500"
+        active ? "text-oker-600" : "text-slate-500 group-hover:text-oker-300"
       )}>
         {icon}
       </span>
       <span className="relative z-10">{label}</span>
+      {active && <div className="ml-auto h-2.5 w-2.5 rounded-full bg-oker-500" />}
     </button>
   );
 }
@@ -1395,14 +1428,41 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
     return `${minutes} minuten`;
   };
 
+  const todaysShift = myShifts.find(s => s.date === now.toISOString().split('T')[0]);
+  const totalDrivers = users.filter(u => u.role === 'chauffeur' && u.isActive !== false).length;
+  const activeDriverCount = shifts.filter(s => s.date === now.toISOString().split('T')[0]).length;
+
   return (
     <div className="space-y-8">
+      <section className="panel rounded-[36px] p-7 md:p-9">
+        <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
+          <div className="max-w-3xl">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-oker-600">Operationeel Overzicht</p>
+            <h3 className="mt-3 text-3xl md:text-5xl font-black text-slate-900">Rust in de dispatch, overzicht in één oogopslag.</h3>
+            <p className="mt-4 text-sm md:text-base font-medium leading-7 text-slate-500">
+              Bekijk je volgende dienst, openstaande hinder en de actuele bezetting zonder door meerdere schermen te zoeken.
+            </p>
+          </div>
+          <div className="grid grid-cols-2 gap-4 md:min-w-[420px]">
+            <div className="rounded-[28px] bg-slate-900 px-5 py-5 text-white shadow-xl">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vandaag</p>
+              <p className="mt-3 text-3xl font-black">{todaysShift ? todaysShift.startTime : '--:--'}</p>
+              <p className="mt-2 text-sm font-medium text-slate-400">{todaysShift ? `Bus ${todaysShift.busNumber} op lijn ${todaysShift.line}` : 'Geen dienst ingepland'}</p>
+            </div>
+            <div className="rounded-[28px] bg-oker-50 px-5 py-5 ring-1 ring-oker-100">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-700">Actieve bezetting</p>
+              <p className="mt-3 text-3xl font-black text-slate-900">{activeDriverCount}/{totalDrivers}</p>
+              <p className="mt-2 text-sm font-medium text-slate-500">Chauffeurs met een dienst vandaag</p>
+            </div>
+          </div>
+        </div>
+      </section>
       {/* Prominent Next Shift Card */}
       {nextShift && user.role === 'chauffeur' && (
         <motion.div 
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden bg-slate-900 rounded-[40px] p-8 md:p-12 text-white shadow-2xl shadow-slate-900/20"
+          className="panel-dark relative overflow-hidden rounded-[40px] p-8 md:p-12 text-white"
         >
           {/* Decorative background elements */}
           <div className="absolute top-0 right-0 w-64 h-64 bg-oker-500/10 rounded-full -mr-32 -mt-32 blur-3xl" />
@@ -1436,12 +1496,12 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <StatCard 
           icon={<Clock className="text-oker-600" />} 
           label="Vandaag" 
-          value={myShifts.find(s => s.date === now.toISOString().split('T')[0])?.startTime || '--:--'} 
-          subValue={myShifts.find(s => s.date === now.toISOString().split('T')[0])?.line ? `Lijn ${myShifts.find(s => s.date === now.toISOString().split('T')[0])?.line}` : 'Geen dienst vandaag'} 
+          value={todaysShift?.startTime || '--:--'} 
+          subValue={todaysShift?.line ? `Lijn ${todaysShift.line}` : 'Geen dienst vandaag'} 
         />
         <StatCard 
           icon={<AlertTriangle className="text-red-500" />} 
@@ -1450,18 +1510,20 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
           subValue="Totaal aantal" 
         />
         <StatCard 
-          icon={<Bell className="text-oker-500" />} 
-          label="Nieuwe Updates" 
-          value="2" 
-          subValue="Sinds gisteren" 
+          icon={<Users className="text-oker-500" />} 
+          label="Beschikbare Chauffeurs" 
+          value={totalDrivers.toString()} 
+          subValue="Actieve medewerkers in het systeem" 
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        <section className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8">
+        <section className="panel p-8 rounded-[32px]">
           <div className="flex items-center justify-between mb-8">
             <h3 className="font-black text-xl tracking-tight">Planning voor vandaag</h3>
-            <span className="text-[10px] font-black bg-oker-50 text-oker-700 px-4 py-1.5 rounded-full uppercase tracking-widest">5 Maart 2024</span>
+            <span className="text-[10px] font-black bg-oker-50 text-oker-700 px-4 py-1.5 rounded-full uppercase tracking-widest">
+              {now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'short' })}
+            </span>
           </div>
           <div className="space-y-4">
             {shifts.filter(s => {
@@ -1504,10 +1566,10 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
           </div>
         </section>
 
-        <section className="bg-white p-8 rounded-[32px] shadow-sm border border-slate-100">
-          <h3 className="font-black text-xl tracking-tight mb-8">Belangrijke Omleidingen</h3>
+        <section className="panel p-8 rounded-[32px]">
+          <h3 className="font-black text-xl tracking-tight mb-8">Belangrijkste Omleidingen</h3>
           <div className="space-y-4">
-            {MOCK_DIVERSIONS.slice(0, 2).map(div => (
+            {diversions.slice(0, 3).map(div => (
               <div key={div.id} className="flex gap-5 p-5 border-l-4 border-oker-400 bg-oker-50/20 rounded-r-2xl group hover:bg-oker-50/40 transition-all">
                 <div className="shrink-0 mt-1">
                   <AlertTriangle size={24} className="text-oker-600" />
@@ -1521,6 +1583,13 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
                 </div>
               </div>
             ))}
+            {diversions.length === 0 && (
+              <EmptyState
+                icon={<MapPin size={28} />}
+                title="Geen actieve hinder"
+                message="Er zijn momenteel geen omleidingen geregistreerd."
+              />
+            )}
           </div>
         </section>
       </div>
@@ -3934,15 +4003,15 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
 
 function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string, subValue: string }) {
   return (
-    <div className="bg-white p-6 md:p-8 rounded-[32px] shadow-sm border border-slate-100 flex items-center gap-4 md:gap-6 group hover:shadow-xl hover:shadow-oker-500/5 transition-all duration-500 relative overflow-hidden">
-      <div className="absolute top-0 right-0 w-32 h-32 bg-oker-50 rounded-full -mr-16 -mt-16 opacity-50 group-hover:scale-150 transition-transform duration-700" />
-      <div className="p-3 md:p-4 bg-oker-50 rounded-2xl relative z-10 group-hover:scale-110 transition-transform">
+    <div className="panel p-6 md:p-7 rounded-[30px] flex items-center gap-4 md:gap-5 group transition-all duration-500 relative overflow-hidden hover:-translate-y-0.5">
+      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-oker-300 via-oker-500 to-amber-200 opacity-70" />
+      <div className="p-3 md:p-4 bg-oker-50 rounded-2xl relative z-10 group-hover:scale-105 transition-transform ring-1 ring-oker-100">
         {icon}
       </div>
       <div className="relative z-10">
-        <p className="text-[10px] md:text-xs font-black text-slate-500 uppercase tracking-widest">{label}</p>
-        <p className="text-xl md:text-3xl font-black text-slate-900 mt-0.5 md:mt-1 tracking-tight">{value}</p>
-        <p className="text-[10px] md:text-xs text-slate-500 mt-0.5 md:mt-1 font-medium">{subValue}</p>
+        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.22em]">{label}</p>
+        <p className="text-2xl md:text-3xl font-black text-slate-900 mt-1 tracking-tight">{value}</p>
+        <p className="text-[11px] md:text-xs text-slate-500 mt-1.5 font-medium">{subValue}</p>
       </div>
     </div>
   );

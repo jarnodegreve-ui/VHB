@@ -1,6 +1,9 @@
+@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
+  --font-sans: "Manrope", sans-serif;
+  --font-display: "Sora", sans-serif;
   --color-oker-50: #fffbeb;
   --color-oker-100: #fef3c7;
   --color-oker-200: #fde68a;
@@ -13,7 +16,42 @@
   --color-oker-900: #78350f;
 }
 
+@layer base {
+  html {
+    background:
+      radial-gradient(circle at top left, rgba(245, 158, 11, 0.12), transparent 28%),
+      linear-gradient(180deg, #f8f6f2 0%, #f3efe7 100%);
+  }
+
+  body {
+    font-family: var(--font-sans);
+    color: #0f172a;
+    background: transparent;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-display);
+    letter-spacing: -0.03em;
+  }
+}
+
 @layer utilities {
+  .panel {
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.07);
+  }
+
+  .panel-dark {
+    background:
+      radial-gradient(circle at top right, rgba(245, 158, 11, 0.18), transparent 28%),
+      linear-gradient(180deg, #1f2937 0%, #111827 100%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 24px 70px rgba(15, 23, 42, 0.24);
+  }
+
   .glass {
     background: rgba(255, 255, 255, 0.7);
     backdrop-filter: blur(12px);
