@@ -234,9 +234,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <RotateCcw size={18} className={isSyncing ? 'animate-spin' : ''} />
             {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
           </button>
-          <div className="flex bg-slate-100 p-1 rounded-xl mr-2">
+          <div className="glass-segmented flex p-1 rounded-xl mr-2">
             {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize', roleFilter === role ? 'bg-white/85 text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
                 {role === 'all' ? 'Alles' : role}
               </button>
             ))}
@@ -278,9 +278,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <td className="px-8 py-6 text-center"><span className={cn('w-8 h-8 inline-flex items-center justify-center rounded-xl text-xs font-black', (u.activeSessions || 0) > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-400 border border-slate-100')}>{u.activeSessions || 0}</span></td>
                   <td className="px-8 py-6 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => setConfirmResetUser(u)} className="p-2 text-slate-400 hover:text-oker-600 hover:bg-oker-50 rounded-xl transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={18} /></button>
+                      <button onClick={() => setConfirmResetUser(u)} className="glass-icon-button p-2 text-slate-400 hover:text-oker-600 rounded-xl transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={18} /></button>
                       <button onClick={() => setEditingUser(u)} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-oker-500 transition-all active:scale-95">Bewerken</button>
-                      <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('p-2 rounded-xl transition-all', isProtectedAdmin(u) ? 'text-slate-300 cursor-not-allowed' : 'text-red-500 hover:bg-red-50')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={18} /></button>
+                      <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('p-2 rounded-xl transition-all', isProtectedAdmin(u) ? 'bg-white/30 text-slate-300 cursor-not-allowed' : 'glass-icon-button text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={18} /></button>
                     </div>
                   </td>
                 </tr>
@@ -293,7 +293,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <div key={u.id} className="p-6 space-y-4 active:bg-slate-50 transition-colors">
               <div className="flex justify-between items-start">
                 <div><div className="font-black text-slate-800 tracking-tight text-lg leading-tight">{u.name}</div><div className="text-[10px] text-oker-500 font-black uppercase tracking-widest mt-1">{u.role}</div></div>
-                <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', u.isActive !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span>
+                <span className={cn('glass-chip px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', u.isActive !== false ? 'text-emerald-600' : 'text-red-600')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-2">
                 <div className="p-3 bg-slate-50 rounded-2xl"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Laatst Actief</p><p className="text-xs font-bold text-slate-700 mt-1">{u.lastLogin || 'Nooit'}</p></div>
@@ -301,8 +301,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => setEditingUser(u)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest active:scale-95 transition-all">Bewerken</button>
-                <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('px-4 rounded-2xl active:scale-95 transition-all', isProtectedAdmin(u) ? 'bg-slate-50 text-slate-300 cursor-not-allowed' : 'bg-red-50 text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={20} /></button>
-                <button onClick={() => setConfirmResetUser(u)} className="px-4 bg-slate-100 text-slate-500 rounded-2xl active:scale-95 transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={20} /></button>
+                <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('px-4 rounded-2xl active:scale-95 transition-all', isProtectedAdmin(u) ? 'bg-white/30 text-slate-300 cursor-not-allowed' : 'glass-icon-button text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={20} /></button>
+                <button onClick={() => setConfirmResetUser(u)} className="glass-icon-button px-4 text-slate-500 rounded-2xl active:scale-95 transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={20} /></button>
               </div>
             </div>
           ))}

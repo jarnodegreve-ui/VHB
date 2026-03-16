@@ -583,9 +583,11 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 w-80 panel-dark m-3 mr-0 rounded-[34px] flex flex-col z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0",
+        "fixed inset-y-0 left-0 w-80 panel-dark m-3 mr-0 rounded-[34px] flex flex-col z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0 overflow-hidden",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
+        <div className="pointer-events-none absolute inset-x-5 top-0 h-24 rounded-b-[32px] bg-white/35 blur-2xl opacity-90" />
+        <div className="pointer-events-none absolute -right-10 top-20 h-48 w-48 rounded-full bg-oker-200/20 blur-3xl" />
         <div className="p-8 flex flex-col items-start border-b border-white/8 relative">
           <button 
             onClick={() => setIsSidebarOpen(false)}
@@ -602,7 +604,7 @@ export default function App() {
               <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
             </div>
           </div>
-          <div className="mt-8 w-full rounded-[24px] bg-white/70 p-4 ring-1 ring-white/80 shadow-sm">
+          <div className="mt-8 w-full rounded-[24px] bg-white/62 p-4 ring-1 ring-white/85 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_16px_28px_rgba(15,23,42,0.08)] backdrop-blur-xl">
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Actieve Sessie</p>
             <p className="mt-2 text-lg font-black text-slate-900">{currentUser.name}</p>
             <p className="mt-1 text-xs font-bold uppercase tracking-[0.18em] text-oker-700">{currentUser.role} • {currentUser.employeeId}</p>
@@ -734,7 +736,9 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
-        <header className="mx-3 mt-3 rounded-[30px] panel h-20 md:h-24 flex items-center justify-between px-4 md:px-8 shrink-0 z-30">
+        <header className="mx-3 mt-3 rounded-[30px] panel h-20 md:h-24 flex items-center justify-between px-4 md:px-8 shrink-0 z-30 overflow-hidden relative">
+          <div className="pointer-events-none absolute inset-x-10 top-0 h-12 rounded-b-[28px] bg-white/40 blur-2xl" />
+          <div className="pointer-events-none absolute right-8 top-2 h-16 w-28 rounded-full bg-oker-200/20 blur-2xl" />
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -751,7 +755,7 @@ export default function App() {
             </div>
           </div>
           <div className="flex items-center gap-3 md:gap-4">
-            <div className="hidden xl:flex items-center gap-3 rounded-[22px] bg-slate-100/80 px-4 py-3">
+            <div className="hidden xl:flex items-center gap-3 rounded-[22px] bg-white/52 px-4 py-3 ring-1 ring-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
               <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Systeem</p>
@@ -762,7 +766,7 @@ export default function App() {
               <p className="text-sm font-black text-slate-800">{currentUser.name}</p>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{currentUser.role} • {currentUser.employeeId}</p>
             </div>
-            <div className="w-11 h-11 md:w-12 md:h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-700 shadow-inner border border-white">
+            <div className="w-11 h-11 md:w-12 md:h-12 bg-white/58 rounded-2xl flex items-center justify-center text-oker-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(245,158,11,0.12)] border border-white/85 backdrop-blur-xl">
               <UserIcon size={20} />
             </div>
           </div>
@@ -1155,12 +1159,12 @@ function ServicesView({ services }: { services: Service[] }) {
           <p className="text-sm text-slate-500 font-medium">Overzicht van alle diensten en bijbehorende uren.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <div className="flex bg-slate-100 p-1 rounded-xl">
+          <div className="glass-segmented flex p-1 rounded-xl">
             <button
               onClick={() => toggleSort('number')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                sortBy === 'number' ? "bg-white/85 text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                sortBy === 'number' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
               Dienst #
@@ -1170,7 +1174,7 @@ function ServicesView({ services }: { services: Service[] }) {
               onClick={() => toggleSort('time')}
               className={cn(
                 "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                sortBy === 'time' ? "bg-white/85 text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                sortBy === 'time' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
               Starttijd
@@ -1256,7 +1260,7 @@ function ServicesView({ services }: { services: Service[] }) {
             <div key={s.id} className="p-6 space-y-4 hover:bg-slate-50/50 transition-colors">
               <div className="flex justify-between items-center">
                 <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
-                <div className="px-3 py-1 bg-oker-50 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                <div className="glass-chip px-3 py-1 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-widest">
                   Dienst
                 </div>
               </div>
@@ -1344,14 +1348,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
   return (
     <div className="space-y-8">
       <section className="panel rounded-[36px] p-7 md:p-9">
-        <div className="flex flex-col gap-8 xl:flex-row xl:items-end xl:justify-between">
-          <div className="max-w-3xl">
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-oker-600">Operationeel Overzicht</p>
-            <h3 className="mt-3 text-3xl md:text-5xl font-black text-slate-900">Rust in de dispatch, overzicht in één oogopslag.</h3>
-            <p className="mt-4 text-sm md:text-base font-medium leading-7 text-slate-500">
-              Bekijk je volgende dienst, openstaande hinder en de actuele bezetting zonder door meerdere schermen te zoeken.
-            </p>
-          </div>
+        <div className="flex justify-end">
           <div className="grid grid-cols-2 gap-4 md:min-w-[420px]">
             <div className="rounded-[28px] bg-slate-900 px-5 py-5 text-white shadow-xl">
               <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">Vandaag</p>
@@ -2049,14 +2046,14 @@ function UpdatesView({ updates }: { updates: Update[] }) {
     <div className="max-w-3xl space-y-6">
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <h3 className="text-2xl font-black tracking-tight">Updates & Nieuws</h3>
-        <div className="flex bg-slate-100 p-1 rounded-xl">
+          <div className="glass-segmented flex p-1 rounded-xl">
           {(['all', 'algemeen', 'veiligheid', 'technisch'] as const).map(cat => (
             <button
               key={cat}
               onClick={() => setFilter(cat)}
               className={cn(
                 "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                filter === cat ? "bg-white text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                filter === cat ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
               )}
             >
               {cat === 'all' ? 'Alles' : cat}
