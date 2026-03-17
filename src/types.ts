@@ -84,4 +84,13 @@ export interface PlanningMatrixRow {
   raw_row: string;
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof' | 'planning-matrix';
+export interface PlanningCode {
+  code: string;
+  category: 'service' | 'absence' | 'leave' | 'training' | 'unknown';
+  description: string;
+  countsAsShift: boolean;
+  isPaidAbsence: boolean;
+  isDayOff: boolean;
+}
+
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof' | 'planning-matrix' | 'planning-codes';

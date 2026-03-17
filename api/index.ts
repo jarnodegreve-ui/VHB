@@ -27,6 +27,7 @@ const UPDATES_FILE = path.join(process.cwd(), "updates_data.json");
 const SWAPS_FILE = path.join(process.cwd(), "swaps_data.json");
 const LEAVE_FILE = path.join(process.cwd(), "leave_data.json");
 const PLANNING_MATRIX_FILE = path.join(process.cwd(), "planning_matrix_rows.json");
+const PLANNING_CODES_FILE = path.join(process.cwd(), "planning_codes.json");
 
 type Role = "chauffeur" | "planner" | "admin";
 
@@ -73,6 +74,15 @@ interface PlanningMatrixRow {
   day_type: string;
   assignments: Record<string, string>;
   raw_row: string;
+}
+
+interface PlanningCodeRecord {
+  code: string;
+  category: "service" | "absence" | "leave" | "training" | "unknown";
+  description: string;
+  countsAsShift: boolean;
+  isPaidAbsence: boolean;
+  isDayOff: boolean;
 }
 
 type AuthenticatedRequest = express.Request & {
@@ -158,6 +168,24 @@ const toDatabaseLeave = (leave: LeaveRecord) => ({
   status: leave.status,
   comment: leave.comment || null,
   createdat: String(leave.createdAt),
+});
+
+const toPublicPlanningCode = (code: any): PlanningCodeRecord => ({
+  code: String(code.code || "").trim().toLowerCase(),
+  category: code.category || "unknown",
+  description: code.description || "",
+  countsAsShift: Boolean(code.countsAsShift ?? code.counts_as_shift),
+  isPaidAbsence: Boolean(code.isPaidAbsence ?? code.is_paid_absence),
+  isDayOff: Boolean(code.isDayOff ?? code.is_day_off),
+});
+
+const toDatabasePlanningCode = (code: PlanningCodeRecord) => ({
+  code: String(code.code || "").trim().toLowerCase(),
+  category: code.category,
+  description: code.description?.trim() || "",
+  counts_as_shift: code.countsAsShift === true,
+  is_paid_absence: code.isPaidAbsence === true,
+  is_day_off: code.isDayOff === true,
 });
 
 const ensureUniqueUserEmails = (users: IncomingUser[]) => {
@@ -349,6 +377,61 @@ const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
   }
 
   fs.writeFileSync(PLANNING_MATRIX_FILE, JSON.stringify(rows, null, 2));
+};
+
+const getPlanningCodesData = async (): Promise<PlanningCodeRecord[]> => {
+  if (db) {
+    try {
+      const { data, error } = await db.from('planning_codes').select('*').order('code', { ascending: true });
+      if (error) {
+        console.error("Supabase error fetching planning codes:", error);
+      } else if (data) {
+        return data.map(toPublicPlanningCode);
+      }
+    } catch (e) {
+      console.error("Unexpected error fetching planning codes:", e);
+    }
+  }
+
+  if (fs.existsSync(PLANNING_CODES_FILE)) {
+    return JSON.parse(fs.readFileSync(PLANNING_CODES_FILE, "utf-8")).map(toPublicPlanningCode);
+  }
+
+  return [];
+};
+
+const savePlanningCodesData = async (codes: PlanningCodeRecord[]) => {
+  const normalizedCodes = codes
+    .map(toPublicPlanningCode)
+    .filter((code) => code.code.length > 0);
+
+  const uniqueCodes = Array.from(
+    new Map(normalizedCodes.map((code) => [code.code, code])).values(),
+  );
+
+  if (db) {
+    const currentCodes = await getPlanningCodesData();
+    const currentCodeSet = new Set(currentCodes.map((code) => code.code));
+    const nextCodeSet = new Set(uniqueCodes.map((code) => code.code));
+    const removedCodes = Array.from(currentCodeSet).filter((code) => !nextCodeSet.has(code));
+
+    if (removedCodes.length > 0) {
+      const { error: deleteError } = await db.from('planning_codes').delete().in('code', removedCodes);
+      if (deleteError) throw deleteError;
+    }
+
+    if (uniqueCodes.length > 0) {
+      const { error } = await db.from('planning_codes').upsert(uniqueCodes.map(toDatabasePlanningCode));
+      if (error) throw error;
+    }
+    return;
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error("Supabase is niet geconfigureerd op Vercel.");
+  }
+
+  fs.writeFileSync(PLANNING_CODES_FILE, JSON.stringify(uniqueCodes, null, 2));
 };
 
 const getUsersData = async (): Promise<AppUser[]> => {
@@ -940,6 +1023,29 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to import planning matrix", details: err.message });
+  }
+});
+
+app.get("/api/planning-codes", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const codes = await getPlanningCodesData();
+    res.json(codes);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to read planning codes", details: err.message });
+  }
+});
+
+app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const codes = req.body;
+    if (!Array.isArray(codes)) {
+      return res.status(400).json({ error: "Invalid data format. Expected an array." });
+    }
+
+    await savePlanningCodesData(codes);
+    res.json({ success: true, count: codes.length });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to save planning codes", details: err.message });
   }
 });
 
