@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { parsePlanningMatrixCsv } from '../lib/planningMatrix.ts';
+import { parsePlanningMatrixCsv } from '../api/planningMatrix.ts';
 
 function csvEscape(value: unknown) {
   const stringValue = String(value ?? '');

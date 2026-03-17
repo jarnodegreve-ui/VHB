@@ -487,7 +487,13 @@ export default function App() {
       method: 'POST',
       body: JSON.stringify({ action: 'start' }),
     }, token);
-    const user = await response.json();
+    const text = await response.text();
+    let user;
+    try {
+      user = JSON.parse(text);
+    } catch {
+      throw new Error('De server gaf geen geldig antwoord terug. Controleer of de nieuwste backend deploy actief is.');
+    }
     setCurrentUser(user);
     await fetchUsers(token);
     setCurrentView('dashboard');

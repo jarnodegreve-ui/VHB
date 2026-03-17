@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 import { createClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
-import { parsePlanningMatrixCsv, type PlanningMatrixRow } from "../lib/planningMatrix.ts";
+import { parsePlanningMatrixCsv, type PlanningMatrixRow } from "./planningMatrix.ts";
 
 dotenv.config();
 
