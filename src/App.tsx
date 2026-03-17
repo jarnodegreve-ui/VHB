@@ -2083,6 +2083,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
+  const [isMatrixImporting, setIsMatrixImporting] = useState(false);
 
   const handleImport = () => {
     try {
@@ -2100,6 +2101,33 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
   };
 
   const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleMatrixFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsMatrixImporting(true);
+      const csvContent = await file.text();
+      const response = await fetch('/api/planning-matrix/import', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+        body: JSON.stringify({ csvContent }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.details || data.error || 'Import mislukt.');
+      }
+
+      notify(`Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen verwerkt.`, 'success');
+    } catch (error: any) {
+      notify(`CSV-import mislukt: ${error.message}`, 'error');
+    } finally {
+      setIsMatrixImporting(false);
+      if (event.target) event.target.value = '';
+    }
+  };
 
   const handleSync = async () => {
     try {
@@ -2167,12 +2195,39 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
           <div className="mb-6 p-6 glass-oker rounded-2xl text-sm space-y-3">
             <p className="font-bold text-oker-800">Koppeling met Excel:</p>
             <ol className="list-decimal list-inside space-y-2 text-oker-700">
-              <li>Gebruik een Excel-script of Power Automate om je Excel-data om te zetten naar JSON.</li>
-              <li>Plak de JSON hieronder om de planning direct bij te werken.</li>
-              <li>Voor automatische synchronisatie kan je Excel-bestand direct naar de API pushen op: <code className="bg-white/80 px-2 py-0.5 rounded border border-white/80 break-all">{window.location.origin}/api/planning</code></li>
+              <li>Voor jouw originele matrixplanning gebruik je de CSV-upload hieronder.</li>
+              <li>De app schrijft die ruwe planning rechtstreeks weg naar de staging-tabel in Supabase.</li>
+              <li>De JSON-import hieronder blijft beschikbaar voor het bestaande rij-per-dienst formaat.</li>
             </ol>
           </div>
         )}
+
+        <div className="mb-6 rounded-3xl border border-white/70 bg-white/45 p-5">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Matrix CSV Upload</p>
+              <p className="mt-2 text-sm font-medium text-slate-500">
+                Upload je originele dagmatrix met chauffeurs als kolommen. De app zet die automatisch in de juiste staging-tabel.
+              </p>
+            </div>
+            <label
+              className={cn(
+                "inline-flex cursor-pointer items-center justify-center gap-3 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest transition-all",
+                isMatrixImporting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-900 text-white hover:bg-slate-800"
+              )}
+            >
+              <Upload size={18} />
+              {isMatrixImporting ? 'Importeren...' : 'CSV Matrix Upload'}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={handleMatrixFileUpload}
+                disabled={isMatrixImporting}
+              />
+            </label>
+          </div>
+        </div>
 
         <textarea 
           className="control-input w-full px-4 py-3 rounded-xl focus:outline-none transition-all min-h-[150px] font-mono text-sm mb-4"

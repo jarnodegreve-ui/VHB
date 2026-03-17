@@ -10,7 +10,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
-    "convert:planning-matrix": "node scripts/convert-planning-matrix.mjs"
+    "convert:planning-matrix": "tsx scripts/convert-planning-matrix.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",

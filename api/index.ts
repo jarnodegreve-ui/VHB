@@ -7,6 +7,7 @@ import { fileURLToPath } from "url";
 import { createClient, type User as SupabaseAuthUser } from "@supabase/supabase-js";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+import { parsePlanningMatrixCsv, type PlanningMatrixRow } from "../lib/planningMatrix.ts";
 
 dotenv.config();
 
@@ -26,6 +27,7 @@ const SERVICES_FILE = path.join(process.cwd(), "services_data.json");
 const UPDATES_FILE = path.join(process.cwd(), "updates_data.json");
 const SWAPS_FILE = path.join(process.cwd(), "swaps_data.json");
 const LEAVE_FILE = path.join(process.cwd(), "leave_data.json");
+const PLANNING_MATRIX_FILE = path.join(process.cwd(), "planning_matrix_rows.json");
 
 type Role = "chauffeur" | "planner" | "admin";
 
@@ -235,6 +237,41 @@ const savePlanningData = async (data: any) => {
     throw new Error("Supabase is niet geconfigureerd op Vercel.");
   }
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+};
+
+const getPlanningMatrixRows = async (): Promise<PlanningMatrixRow[]> => {
+  if (db) {
+    try {
+      const { data, error } = await db.from('planning_matrix_rows').select('*').order('source_date', { ascending: true });
+      if (error) {
+        console.error("Supabase error fetching planning matrix rows:", error);
+      } else if (data) {
+        return data as PlanningMatrixRow[];
+      }
+    } catch (e) {
+      console.error("Unexpected error fetching planning matrix rows:", e);
+    }
+  }
+
+  if (fs.existsSync(PLANNING_MATRIX_FILE)) {
+    return JSON.parse(fs.readFileSync(PLANNING_MATRIX_FILE, "utf-8"));
+  }
+
+  return [];
+};
+
+const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
+  if (db) {
+    const { error } = await db.from('planning_matrix_rows').upsert(rows);
+    if (error) throw error;
+    return;
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error("Supabase is niet geconfigureerd op Vercel.");
+  }
+
+  fs.writeFileSync(PLANNING_MATRIX_FILE, JSON.stringify(rows, null, 2));
 };
 
 const getUsersData = async (): Promise<AppUser[]> => {
@@ -797,6 +834,35 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving planning data:", errorMessage);
     res.status(500).json({ error: "Failed to save data", details: errorMessage });
+  }
+});
+
+app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const rows = await getPlanningMatrixRows();
+    res.json(rows);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to read planning matrix", details: err.message });
+  }
+});
+
+app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const csvContent = String(req.body?.csvContent || "");
+    if (!csvContent.trim()) {
+      return res.status(400).json({ error: "CSV-inhoud ontbreekt." });
+    }
+
+    const rows = parsePlanningMatrixCsv(csvContent);
+    await savePlanningMatrixRows(rows);
+
+    res.json({
+      success: true,
+      importedDays: rows.length,
+      detectedDrivers: rows[0] ? Object.keys(rows[0].assignments).length : 0,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to import planning matrix", details: err.message });
   }
 });
 
