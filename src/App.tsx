@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
-import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest } from './types';
+import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow } from './types';
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
@@ -111,6 +111,7 @@ export default function App() {
   const [updates, setUpdates] = useState<Update[]>(MOCK_UPDATES);
   const [swaps, setSwaps] = useState<SwapRequest[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -163,6 +164,7 @@ export default function App() {
         setUpdates(MOCK_UPDATES);
         setSwaps([]);
         setLeaveRequests([]);
+        setPlanningMatrixRows([]);
         setCurrentView('dashboard');
       }
       setAuthReady(true);
@@ -210,8 +212,8 @@ export default function App() {
   const initializeAuthenticatedApp = async (accessToken: string) => {
     try {
       setIsLoading(true);
+      const appUser = await fetchCurrentUser(accessToken);
       await Promise.all([
-        fetchCurrentUser(accessToken),
         fetchPlanning(accessToken),
         fetchUsers(accessToken),
         fetchDiversions(accessToken),
@@ -219,6 +221,7 @@ export default function App() {
         fetchUpdates(accessToken),
         fetchSwaps(accessToken),
         fetchLeave(accessToken),
+        ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrix(accessToken)] : []),
       ]);
     } catch (error) {
       console.error('Error initializing app:', error);
@@ -304,6 +307,16 @@ export default function App() {
       if (data && Array.isArray(data)) setLeaveRequests(data);
     } catch (error) {
       console.error('Error fetching leave:', error);
+    }
+  };
+
+  const fetchPlanningMatrix = async (accessToken = session?.access_token) => {
+    try {
+      const response = await apiFetch('/api/planning-matrix', {}, accessToken);
+      const data = await response.json();
+      if (data && Array.isArray(data)) setPlanningMatrixRows(data);
+    } catch (error) {
+      console.error('Error fetching planning matrix:', error);
     }
   };
 
@@ -541,6 +554,7 @@ export default function App() {
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
     'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
+    'planning-matrix': { title: 'Planning Overzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
     'beheer-updates': { title: 'Nieuwe Update', subtitle: 'Publiceer updates en stuur dringende meldingen uit.' },
     gebruikers: { title: 'Gebruikers', subtitle: 'Beheer accounts, rollen en toegangsrechten.' },
     'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
@@ -675,6 +689,12 @@ export default function App() {
                 onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
+                icon={<FileText size={20} />} 
+                label="Planning Overzicht" 
+                active={currentView === 'planning-matrix'} 
+                onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} 
+              />
+              <NavItem 
                 icon={<Plus size={20} />} 
                 label="Nieuwe Update" 
                 active={currentView === 'beheer-updates'} 
@@ -787,7 +807,8 @@ export default function App() {
               {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
-              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} />}
+              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} onMatrixImported={fetchPlanningMatrix} />}
+              {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} />}
               {currentView === 'beheer-updates' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} />
@@ -2085,7 +2106,7 @@ function UpdatesView({ updates }: { updates: Update[] }) {
   );
 }
 
-function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[] }) {
+function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[], onMatrixImported: () => Promise<void> }) {
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
@@ -2127,6 +2148,7 @@ function ManageSchedulesView({ shifts, onSave, users }: { shifts: Shift[], onSav
       }
 
       notify(`Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen verwerkt.`, 'success');
+      await onMatrixImported();
     } catch (error: any) {
       notify(`CSV-import mislukt: ${error.message}`, 'error');
     } finally {
@@ -2378,6 +2400,156 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
             {isPublishing ? 'Publiceren...' : 'Update Publiceren'}
           </button>
         </form>
+      </div>
+    </div>
+  );
+}
+
+function PlanningMatrixView({ rows }: { rows: PlanningMatrixRow[] }) {
+  const [selectedDate, setSelectedDate] = useState<string | null>(rows[0]?.source_date || null);
+
+  useEffect(() => {
+    if (!selectedDate && rows[0]?.source_date) {
+      setSelectedDate(rows[0].source_date);
+    }
+    if (selectedDate && !rows.some((row) => row.source_date === selectedDate) && rows[0]?.source_date) {
+      setSelectedDate(rows[0].source_date);
+    }
+  }, [rows, selectedDate]);
+
+  const selectedRow = rows.find((row) => row.source_date === selectedDate) || null;
+  const assignments = selectedRow
+    ? Object.entries(selectedRow.assignments).sort((a, b) => a[0].localeCompare(b[0]))
+    : [];
+
+  const rowsWithAssignments = rows.filter((row) => Object.keys(row.assignments || {}).length > 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <section className="surface-card rounded-[32px] p-6">
+          <div className="mb-5">
+            <h3 className="text-lg font-black tracking-tight">Geuploade Dagen</h3>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              {rows.length} dagen in staging, {rowsWithAssignments.length} met effectieve assignments.
+            </p>
+          </div>
+          <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-2">
+            {rows.length > 0 ? rows.map((row) => {
+              const assignmentCount = Object.keys(row.assignments || {}).length;
+              const isActive = row.source_date === selectedDate;
+              return (
+                <button
+                  key={row.id}
+                  onClick={() => setSelectedDate(row.source_date)}
+                  className={cn(
+                    "w-full rounded-2xl border px-4 py-4 text-left transition-all",
+                    isActive ? "border-oker-400 bg-oker-50 ring-2 ring-oker-500/10" : "border-white/70 bg-white/45 hover:bg-white/75"
+                  )}
+                >
+                  <p className="text-sm font-black text-slate-800">
+                    {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <span>Dagtype {row.day_type || '-'}</span>
+                    <span>{assignmentCount} codes</span>
+                  </div>
+                </button>
+              );
+            }) : (
+              <EmptyState
+                icon={<Calendar size={28} />}
+                title="Nog geen matrixplanning"
+                message="Upload eerst een matrix-CSV via Beheer Roosters om hier een overzicht te zien."
+              />
+            )}
+          </div>
+        </section>
+
+        <section className="surface-card rounded-[32px] p-6">
+          {selectedRow ? (
+            <>
+              <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h3 className="text-2xl font-black tracking-tight">
+                    {new Date(selectedRow.source_date).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+                  </h3>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    Dagtype {selectedRow.day_type || '-'} met {assignments.length} ingevulde chauffeurcodes.
+                  </p>
+                </div>
+                <div className="glass-chip rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-oker-700">
+                  Matrix staging
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <StatCard
+                  icon={<Users className="text-oker-600" />}
+                  label="Chauffeurs"
+                  value={assignments.length.toString()}
+                  subValue="Met een ingevulde code"
+                />
+                <StatCard
+                  icon={<Calendar className="text-emerald-600" />}
+                  label="Dagtype"
+                  value={selectedRow.day_type || '-'}
+                  subValue="Overgenomen uit bronbestand"
+                />
+                <StatCard
+                  icon={<FileText className="text-slate-600" />}
+                  label="Bronrij"
+                  value={selectedRow.raw_row.split(';').length.toString()}
+                  subValue="Kolommen in de originele rij"
+                />
+              </div>
+
+              <div className="mt-6 surface-table rounded-[28px] overflow-hidden">
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead className="bg-slate-50/60">
+                      <tr>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Chauffeur</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Code</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-50">
+                      {assignments.map(([driver, code]) => (
+                        <tr key={driver} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4 text-sm font-bold text-slate-800">{driver}</td>
+                          <td className="px-6 py-4">
+                            <span className="glass-chip rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest text-oker-700">
+                              {code}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="divide-y divide-slate-50 md:hidden">
+                  {assignments.map(([driver, code]) => (
+                    <div key={driver} className="p-5">
+                      <p className="text-sm font-black text-slate-800">{driver}</p>
+                      <div className="mt-3">
+                        <span className="glass-chip rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest text-oker-700">
+                          {code}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          ) : (
+            <EmptyState
+              icon={<FileText size={28} />}
+              title="Geen dag geselecteerd"
+              message="Kies links een geüploade dag om de actuele matrixplanning te bekijken."
+            />
+          )}
+        </section>
       </div>
     </div>
   );
