@@ -1385,15 +1385,9 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               </p>
             </div>
 
-            <div className="flex gap-4">
-              <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[120px]">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Lijn</p>
-                <p className="text-3xl font-black text-oker-500">{nextShift.line}</p>
-              </div>
-              <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[120px]">
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Bus</p>
-                <p className="text-3xl font-black text-white font-mono">{nextShift.busNumber}</p>
-              </div>
+            <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[120px]">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Lijn</p>
+              <p className="text-3xl font-black text-oker-500">{nextShift.line}</p>
             </div>
           </div>
         </motion.div>
@@ -1444,11 +1438,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
                 </div>
                 <div className="flex-1">
                   <p className="font-black text-lg text-slate-800">{shift.startTime} - {shift.endTime}</p>
-                  <p className="text-sm text-slate-400 font-medium">Loopnr: {shift.loopnr}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest">Bus</p>
-                  <p className="text-sm font-bold text-slate-500 font-mono">{shift.busNumber}</p>
+                  <p className="text-sm text-slate-400 font-medium">Lijn {shift.line}</p>
                 </div>
               </div>
             ))}
@@ -1734,7 +1724,7 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
         `DTSTART:${formatICSDate(startDate)}`,
         `DTEND:${formatICSDate(endDate)}`,
         `SUMMARY:VHB Dienst - Lijn ${shift.line}`,
-        `DESCRIPTION:Bus: ${shift.busNumber}\\nLoopnr: ${shift.loopnr}`,
+        `DESCRIPTION:Lijn ${shift.line}`,
         'END:VEVENT'
       ].join('\r\n');
     }).join('\r\n');
@@ -1771,8 +1761,6 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijd</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Loopnr</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Bus</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -1790,12 +1778,6 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
                       Lijn {shift.line}
                     </span>
                   </td>
-                  <td className="px-8 py-6">
-                    <span className="px-4 py-1.5 bg-slate-100 text-slate-600 rounded-xl font-black text-xs uppercase tracking-wider">
-                      #{shift.loopnr}
-                    </span>
-                  </td>
-                  <td className="px-8 py-6 font-mono text-xs font-bold text-slate-400">{shift.busNumber}</td>
                 </tr>
               ))}
             </tbody>
@@ -1815,15 +1797,9 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
       <div className="md:hidden space-y-4">
         {shifts.map(shift => (
           <div key={shift.id} className="surface-card p-6 rounded-[32px] space-y-4">
-            <div className="flex justify-between items-start">
-              <div>
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Datum</p>
-                <p className="font-black text-slate-800">{shift.date}</p>
-              </div>
-              <div className="text-right">
-                <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Bus</p>
-                <p className="font-mono text-xs font-bold text-slate-400">{shift.busNumber}</p>
-              </div>
+            <div>
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Datum</p>
+              <p className="font-black text-slate-800">{shift.date}</p>
             </div>
             
             <div className="flex items-center gap-4 p-4 surface-muted rounded-2xl">
@@ -1836,14 +1812,10 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3">
               <div className="p-4 bg-oker-50 rounded-2xl border border-oker-100">
                 <p className="text-[10px] font-black text-oker-400 uppercase tracking-widest mb-1">Lijn</p>
                 <p className="font-black text-oker-700">{shift.line}</p>
-              </div>
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Loopnr</p>
-                <p className="font-black text-slate-700">#{shift.loopnr}</p>
               </div>
             </div>
           </div>
@@ -2283,8 +2255,6 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
           <Input label="Start Tijd" type="time" />
           <Input label="Eind Tijd" type="time" />
           <Input label="Dienst" type="text" placeholder="Bijv. 12" />
-          <Input label="Loopnr" type="text" placeholder="Bijv. L-101" />
-          <Input label="Bus Nummer" type="text" placeholder="Bijv. 8421" />
         </div>
         <button className="w-full mt-8 bg-emerald-500 text-white font-black px-8 py-4 rounded-2xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase tracking-widest text-xs">
           Dienst Opslaan
