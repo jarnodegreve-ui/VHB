@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { Suspense, lazy, useState, useEffect } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useDeferredValue, useMemo } from 'react';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -2840,6 +2840,7 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
   const [selectedDate, setSelectedDate] = useState<string | null>(rows[0]?.source_date || null);
   const [showOnlyIssues, setShowOnlyIssues] = useState(false);
   const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
+  const deferredRows = useDeferredValue(rows);
 
   useEffect(() => {
     if (!selectedDate && rows[0]?.source_date) {
@@ -2850,102 +2851,129 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
     }
   }, [rows, selectedDate]);
 
-  const selectedRow = rows.find((row) => row.source_date === selectedDate) || null;
-  const serviceCodeLookup = new Set(services.map((service) => normalizePlanningToken(service.serviceNumber)));
-  const planningCodeLookup = new Set(planningCodes.map((code) => normalizePlanningToken(code.code)));
-  const knownDriverLookup = new Set(
-    users
-      .map((user) => normalizePlanningToken(user.name))
-      .filter((value) => value.length > 0)
-  );
+  const derived = useMemo(() => {
+    const serviceCodeLookup = new Set(services.map((service) => normalizePlanningToken(service.serviceNumber)));
+    const planningCodeLookup = new Set(planningCodes.map((code) => normalizePlanningToken(code.code)));
+    const knownDriverLookup = new Set(
+      users
+        .map((user) => normalizePlanningToken(user.name))
+        .filter((value) => value.length > 0)
+    );
 
-  const globalUnknownCodes = Array.from(new Set(
-    rows.flatMap((row) => Object.values(row.assignments || {}))
-      .map((code) => normalizePlanningToken(code))
-      .filter((code) => code.length > 0 && !serviceCodeLookup.has(code) && !planningCodeLookup.has(code))
-  )).sort((a, b) => a.localeCompare(b));
+    const globalUnknownCodeSet = new Set<string>();
+    const globalUnmatchedDriverSet = new Set<string>();
+    const generatedServicesPerDay = new Map<string, number>();
+    const daySummaryByDate = new Map<string, {
+      assignmentCount: number;
+      generatedServices: number;
+      unknownCodeCount: number;
+      unmatchedDriverCount: number;
+      unmatchedDrivers: string[];
+    }>();
+    const problemReportRows: Array<{
+      date: string;
+      dayType: string;
+      type: string;
+      driver: string;
+      code: string;
+      details: string;
+    }> = [];
 
-  const globalUnmatchedDrivers = Array.from(new Set(
-    rows.flatMap((row) => Object.keys(row.assignments || {}))
-      .filter((driver) => {
+    for (const row of deferredRows) {
+      const assignmentsEntries = Object.entries(row.assignments || {}) as Array<[string, string]>;
+      let generatedServices = 0;
+      let unknownCodeCount = 0;
+      let unmatchedDriverCount = 0;
+      const unmatchedDrivers: string[] = [];
+
+      for (const [driver, code] of assignmentsEntries) {
+        const normalizedCode = normalizePlanningToken(code);
         const normalizedDriver = normalizePlanningToken(driver);
-        return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
-      })
-  )).sort((a, b) => a.localeCompare(b));
+        const hasKnownDriver = normalizedDriver.length > 0 && knownDriverLookup.has(normalizedDriver);
+        const isKnownService = normalizedCode.length > 0 && serviceCodeLookup.has(normalizedCode);
+        const isKnownPlanningCode = normalizedCode.length > 0 && planningCodeLookup.has(normalizedCode);
 
-  const generatedServicesPerDay = new Map(
-    rows.map((row) => [
-      row.source_date,
-      Object.values(row.assignments || {}).filter((code) => serviceCodeLookup.has(normalizePlanningToken(code))).length,
-    ])
+        if (isKnownService) {
+          generatedServices += 1;
+        }
+
+        if (normalizedCode.length > 0 && !isKnownService && !isKnownPlanningCode) {
+          unknownCodeCount += 1;
+          globalUnknownCodeSet.add(normalizedCode);
+          problemReportRows.push({
+            date: new Date(row.source_date).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            dayType: row.day_type || '',
+            type: 'onbekende_code',
+            driver,
+            code,
+            details: 'Geen match in Dienstoverzicht of Planningscodes',
+          });
+        }
+
+        if (normalizedDriver.length > 0 && !hasKnownDriver) {
+          unmatchedDriverCount += 1;
+          unmatchedDrivers.push(driver);
+          globalUnmatchedDriverSet.add(driver);
+          problemReportRows.push({
+            date: new Date(row.source_date).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            dayType: row.day_type || '',
+            type: 'niet_gematchte_chauffeur',
+            driver,
+            code,
+            details: 'Geen match met gebruikerslijst',
+          });
+        }
+      }
+
+      generatedServicesPerDay.set(row.source_date, generatedServices);
+      daySummaryByDate.set(row.source_date, {
+        assignmentCount: assignmentsEntries.length,
+        generatedServices,
+        unknownCodeCount,
+        unmatchedDriverCount,
+        unmatchedDrivers: unmatchedDrivers.sort((a, b) => a.localeCompare(b)),
+      });
+    }
+
+    const rowsWithAssignments = deferredRows.filter((row) => (daySummaryByDate.get(row.source_date)?.assignmentCount || 0) > 0);
+    const rowsWithIssues = deferredRows.filter((row) => {
+      const summary = daySummaryByDate.get(row.source_date);
+      return !!summary && (summary.unknownCodeCount > 0 || summary.unmatchedDriverCount > 0);
+    });
+
+    return {
+      serviceCodeLookup,
+      planningCodeLookup,
+      daySummaryByDate,
+      generatedServicesPerDay,
+      globalUnknownCodes: Array.from(globalUnknownCodeSet).sort((a, b) => a.localeCompare(b)),
+      globalUnmatchedDrivers: Array.from(globalUnmatchedDriverSet).sort((a, b) => a.localeCompare(b)),
+      rowsWithAssignments,
+      rowsWithIssues,
+      problemReportRows,
+      totalGeneratedServices: Array.from<number>(generatedServicesPerDay.values()).reduce<number>((sum, value) => sum + value, 0),
+    };
+  }, [deferredRows, services, planningCodes, users]);
+
+  const selectedRow = deferredRows.find((row) => row.source_date === selectedDate) || null;
+  const assignments = useMemo(
+    () => selectedRow
+      ? ((Object.entries(selectedRow.assignments) as Array<[string, string]>)
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .map(([driver, code]) => resolvePlanningAssignment(driver, code, services, planningCodes)))
+      : [],
+    [selectedRow, services, planningCodes]
   );
-
-  const assignments = selectedRow
-    ? Object.entries(selectedRow.assignments)
-        .sort((a, b) => a[0].localeCompare(b[0]))
-        .map(([driver, code]) => resolvePlanningAssignment(driver, code, services, planningCodes))
-    : [];
-
-  const rowsWithAssignments = rows.filter((row) => Object.keys(row.assignments || {}).length > 0);
-  const rowsWithIssues = rows.filter((row) => {
-    const rowUnknownCodes = Object.values(row.assignments || {}).some((code) => {
-      const normalizedCode = normalizePlanningToken(code);
-      return normalizedCode.length > 0 && !serviceCodeLookup.has(normalizedCode) && !planningCodeLookup.has(normalizedCode);
-    });
-    const rowUnmatchedDrivers = Object.keys(row.assignments || {}).some((driver) => {
-      const normalizedDriver = normalizePlanningToken(driver);
-      return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
-    });
-    return rowUnknownCodes || rowUnmatchedDrivers;
-  });
-  const visibleRows = showOnlyIssues ? rowsWithIssues : rows;
+  const visibleRows = showOnlyIssues ? derived.rowsWithIssues : deferredRows;
   const serviceAssignments = assignments.filter((assignment) => assignment.kind === 'service').length;
   const unknownAssignments = assignments.filter((assignment) => assignment.kind === 'unknown').length;
-  const totalGeneratedServices = rows.reduce((count, row) => count + (generatedServicesPerDay.get(row.source_date) || 0), 0);
-  const unmatchedDriversForSelectedDay = selectedRow
-    ? Object.keys(selectedRow.assignments || {})
-        .filter((driver) => {
-          const normalizedDriver = normalizePlanningToken(driver);
-          return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
-        })
-        .sort((a, b) => a.localeCompare(b))
-    : [];
+  const unmatchedDriversForSelectedDay = selectedRow ? (derived.daySummaryByDate.get(selectedRow.source_date)?.unmatchedDrivers || []) : [];
   const filteredAssignments = highlightedCode
     ? assignments.filter((assignment) => normalizePlanningToken(assignment.code) === highlightedCode)
     : assignments;
-  const problemReportRows = rows.flatMap((row) => {
-    const formattedDate = new Date(row.source_date).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
-    const unknownRows = Object.entries(row.assignments || {})
-      .filter(([, code]) => {
-        const normalizedCode = normalizePlanningToken(code);
-        return normalizedCode.length > 0 && !serviceCodeLookup.has(normalizedCode) && !planningCodeLookup.has(normalizedCode);
-      })
-      .map(([driver, code]) => ({
-        date: formattedDate,
-        dayType: row.day_type || '',
-        type: 'onbekende_code',
-        driver,
-        code,
-        details: 'Geen match in Dienstoverzicht of Planningscodes',
-      }));
-    const unmatchedRows = Object.keys(row.assignments || {})
-      .filter((driver) => {
-        const normalizedDriver = normalizePlanningToken(driver);
-        return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
-      })
-      .map((driver) => ({
-        date: formattedDate,
-        dayType: row.day_type || '',
-        type: 'niet_gematchte_chauffeur',
-        driver,
-        code: row.assignments?.[driver] || '',
-        details: 'Geen match met gebruikerslijst',
-      }));
-    return [...unknownRows, ...unmatchedRows];
-  });
 
   const exportProblemReport = () => {
-    if (problemReportRows.length === 0) {
+    if (derived.problemReportRows.length === 0) {
       notify('Er zijn momenteel geen problemen om te exporteren.', 'info');
       return;
     }
@@ -2953,7 +2981,7 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
     const header = ['datum', 'dagtype', 'type', 'chauffeur', 'code', 'details'];
     const csvRows = [
       header.join(';'),
-      ...problemReportRows.map((row) => [
+      ...derived.problemReportRows.map((row) => [
         row.date,
         row.dayType,
         row.type,
@@ -2980,20 +3008,20 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
         <StatCard
           icon={<Clock className="text-emerald-600" />}
           label="Gegenereerde Diensten"
-          value={totalGeneratedServices.toString()}
+          value={derived.totalGeneratedServices.toString()}
           subValue="Gematcht vanuit Dienstoverzicht"
         />
         <StatCard
           icon={<AlertTriangle className="text-slate-600" />}
           label="Onbekende Codes"
-          value={globalUnknownCodes.length.toString()}
-          subValue={globalUnknownCodes.length === 0 ? 'Alles herkend' : globalUnknownCodes.slice(0, 3).join(' • ')}
+          value={derived.globalUnknownCodes.length.toString()}
+          subValue={derived.globalUnknownCodes.length === 0 ? 'Alles herkend' : derived.globalUnknownCodes.slice(0, 3).join(' • ')}
         />
         <StatCard
           icon={<Users className="text-oker-600" />}
           label="Niet-Gematchte Chauffeurs"
-          value={globalUnmatchedDrivers.length.toString()}
-          subValue={globalUnmatchedDrivers.length === 0 ? 'Alles gekoppeld' : globalUnmatchedDrivers.slice(0, 2).join(' • ')}
+          value={derived.globalUnmatchedDrivers.length.toString()}
+          subValue={derived.globalUnmatchedDrivers.length === 0 ? 'Alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' • ')}
         />
       </div>
 
@@ -3025,10 +3053,10 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
             ) : null}
             <button
               onClick={exportProblemReport}
-              disabled={problemReportRows.length === 0}
+              disabled={derived.problemReportRows.length === 0}
               className={cn(
                 "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] transition-all",
-                problemReportRows.length === 0
+                derived.problemReportRows.length === 0
                   ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
                   : "border-white/70 bg-white/55 text-slate-600 hover:bg-white/80"
               )}
@@ -3040,7 +3068,7 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
         </div>
 
         <div className="mt-4 flex flex-wrap gap-2">
-          {globalUnknownCodes.length > 0 ? globalUnknownCodes.map((code) => (
+          {derived.globalUnknownCodes.length > 0 ? derived.globalUnknownCodes.map((code) => (
             <button
               key={code}
               onClick={() => setHighlightedCode(code)}
@@ -3063,11 +3091,11 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Onbekende Codes</p>
               <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-700">
-                {globalUnknownCodes.length}
+                {derived.globalUnknownCodes.length}
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {globalUnknownCodes.length > 0 ? globalUnknownCodes.map((code) => (
+              {derived.globalUnknownCodes.length > 0 ? derived.globalUnknownCodes.map((code) => (
                 <button
                   key={`list-${code}`}
                   onClick={() => setHighlightedCode(code)}
@@ -3088,11 +3116,11 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
               <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
-                {globalUnmatchedDrivers.length}
+                {derived.globalUnmatchedDrivers.length}
               </span>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {globalUnmatchedDrivers.length > 0 ? globalUnmatchedDrivers.map((driver) => (
+              {derived.globalUnmatchedDrivers.length > 0 ? derived.globalUnmatchedDrivers.map((driver) => (
                 <span key={driver} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
                   {driver}
                 </span>
@@ -3109,21 +3137,16 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
           <div className="mb-5">
             <h3 className="text-lg font-black tracking-tight">Geuploade Dagen</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
-              {visibleRows.length} getoond, {rowsWithAssignments.length} met effectieve assignments en {rowsWithIssues.length} met controlepunten.
+              {visibleRows.length} getoond, {derived.rowsWithAssignments.length} met effectieve assignments en {derived.rowsWithIssues.length} met controlepunten.
             </p>
           </div>
           <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-2">
             {visibleRows.length > 0 ? visibleRows.map((row) => {
-              const assignmentCount = Object.keys(row.assignments || {}).length;
-              const generatedServices = generatedServicesPerDay.get(row.source_date) || 0;
-              const rowUnknownCodes = Object.values(row.assignments || {}).filter((code) => {
-                const normalizedCode = normalizePlanningToken(code);
-                return normalizedCode.length > 0 && !serviceCodeLookup.has(normalizedCode) && !planningCodeLookup.has(normalizedCode);
-              }).length;
-              const rowUnmatchedDrivers = Object.keys(row.assignments || {}).filter((driver) => {
-                const normalizedDriver = normalizePlanningToken(driver);
-                return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
-              }).length;
+              const summary = derived.daySummaryByDate.get(row.source_date);
+              const assignmentCount = summary?.assignmentCount || 0;
+              const generatedServices = summary?.generatedServices || 0;
+              const rowUnknownCodes = summary?.unknownCodeCount || 0;
+              const rowUnmatchedDrivers = summary?.unmatchedDriverCount || 0;
               const isActive = row.source_date === selectedDate;
               return (
                 <button
