@@ -1556,6 +1556,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
                 </div>
                 <div className="flex-1">
                   <p className="font-black text-lg text-slate-800">{shift.startTime} - {shift.endTime}</p>
+                  <p className="text-xs font-black uppercase tracking-[0.14em] text-oker-500">Dienst {shift.line || '--'}</p>
                   <p className="text-sm text-slate-400 font-medium">{shift.date}</p>
                 </div>
               </div>
@@ -1877,6 +1878,7 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
             <thead>
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijd</th>
               </tr>
             </thead>
@@ -1884,6 +1886,11 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
               {shifts.map(shift => (
                 <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-8 py-6 font-black text-slate-800">{shift.date}</td>
+                  <td className="px-8 py-6">
+                    <span className="inline-flex rounded-xl bg-oker-50 px-4 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-oker-700">
+                      {shift.line || '--'}
+                    </span>
+                  </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-3 text-slate-600 font-bold">
                       <Clock size={16} className="text-oker-400" />
@@ -1912,6 +1919,11 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
             <div>
               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Datum</p>
               <p className="font-black text-slate-800">{shift.date}</p>
+            </div>
+
+            <div>
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Dienst</p>
+              <p className="font-black text-oker-700">{shift.line || '--'}</p>
             </div>
             
             <div className="flex items-center gap-4 p-4 surface-muted rounded-2xl">
