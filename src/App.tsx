@@ -1510,7 +1510,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
         </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         <StatCard 
           icon={<Clock className="text-oker-600" />} 
           label="Vandaag" 
@@ -1525,15 +1525,15 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
         />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-8">
-        <section className="panel p-8 rounded-[32px]">
-          <div className="flex items-center justify-between mb-8">
+      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-stretch">
+        <section className="panel flex h-full min-h-[31rem] flex-col rounded-[32px] p-8">
+          <div className="mb-8 flex items-center justify-between">
             <h3 className="font-black text-xl tracking-tight">Planning voor vandaag</h3>
             <span className="text-[10px] font-black bg-oker-50 text-oker-700 px-4 py-1.5 rounded-full uppercase tracking-widest">
               {now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'short' })}
             </span>
           </div>
-          <div className="space-y-4">
+          <div className="flex flex-1 flex-col gap-4">
             {shifts.filter(s => {
               const isMe = s.driverId === user.id;
               const isPlanner = user.role !== 'chauffeur';
@@ -1549,7 +1549,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               
               return true;
             }).slice(0, 2).map(shift => (
-              <div key={shift.id} className="flex items-center gap-5 p-5 bg-slate-50/50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all duration-300">
+              <div key={shift.id} className="flex min-h-[8.25rem] items-center gap-5 rounded-[28px] border border-slate-100 bg-slate-50/50 p-5 group transition-all duration-300 hover:bg-white hover:shadow-md">
                 <div className="min-w-16 h-16 px-3 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
                   <span className="text-base font-black text-oker-500">
                     {shift.line || '--'}
@@ -1563,7 +1563,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               </div>
             ))}
             {shifts.filter(s => s.driverId === user.id).length === 0 && user.role === 'chauffeur' && (
-              <div className="text-center py-12">
+              <div className="flex flex-1 items-center justify-center text-center py-12">
                 <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Calendar className="text-slate-200" size={32} />
                 </div>
@@ -1573,15 +1573,20 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
           </div>
         </section>
 
-        <section className="panel p-8 rounded-[32px]">
-          <h3 className="font-black text-xl tracking-tight mb-8">Belangrijkste Omleidingen</h3>
-          <div className="space-y-4">
+        <section className="panel flex h-full min-h-[31rem] flex-col rounded-[32px] p-8">
+          <div className="mb-8 flex items-center justify-between">
+            <h3 className="font-black text-xl tracking-tight">Belangrijkste Omleidingen</h3>
+            <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-4 py-1.5 rounded-full uppercase tracking-widest">
+              {Math.min(diversions.length, 3)} getoond
+            </span>
+          </div>
+          <div className="flex flex-1 flex-col gap-4">
             {diversions.slice(0, 3).map(div => (
-              <div key={div.id} className="flex gap-5 p-5 border-l-4 border-oker-400 bg-oker-50/20 rounded-r-2xl group hover:bg-oker-50/40 transition-all">
+              <div key={div.id} className="flex min-h-[8.25rem] gap-5 rounded-[28px] border border-oker-100/80 bg-oker-50/25 p-5 transition-all group hover:bg-oker-50/45">
                 <div className="shrink-0 mt-1">
                   <AlertTriangle size={24} className="text-oker-600" />
                 </div>
-                <div>
+                <div className="flex min-w-0 flex-1 flex-col justify-between">
                   <p className="font-black text-lg text-slate-900">{div.title}</p>
                   <p className="text-sm text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">{div.description}</p>
                   <div className="flex items-center gap-2 mt-3">
@@ -1591,11 +1596,13 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               </div>
             ))}
             {diversions.length === 0 && (
-              <EmptyState
-                icon={<MapPin size={28} />}
-                title="Geen actieve hinder"
-                message="Er zijn momenteel geen omleidingen geregistreerd."
-              />
+              <div className="flex flex-1 items-center justify-center">
+                <EmptyState
+                  icon={<MapPin size={28} />}
+                  title="Geen actieve hinder"
+                  message="Er zijn momenteel geen omleidingen geregistreerd."
+                />
+              </div>
             )}
           </div>
         </section>
@@ -4604,7 +4611,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
 
 function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string, subValue: string }) {
   return (
-    <div className="panel p-5 md:p-6 rounded-[26px] flex items-center gap-4 md:gap-5 group transition-all duration-300 relative overflow-hidden hover:-translate-y-0.5">
+    <div className="panel relative flex min-h-[9.5rem] items-center gap-4 overflow-hidden rounded-[26px] p-5 transition-all duration-300 group hover:-translate-y-0.5 md:gap-5 md:p-6">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/0 via-white/90 to-white/0" />
       <div className="p-3 md:p-3.5 bg-oker-50/85 rounded-[18px] relative z-10 group-hover:scale-[1.03] transition-transform ring-1 ring-oker-100/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
         {icon}
