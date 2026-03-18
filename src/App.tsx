@@ -99,6 +99,76 @@ function ToastStack({
   );
 }
 
+type ResolvedPlanningAssignment = {
+  driver: string;
+  code: string;
+  kind: 'service' | 'leave' | 'absence' | 'training' | 'unknown';
+  label: string;
+  details: string;
+  segments: string[];
+};
+
+const normalizePlanningToken = (value: string) => value.trim().toLowerCase();
+
+const getServiceSegments = (service: Service) => (
+  [
+    service.startTime && service.endTime ? `${service.startTime} - ${service.endTime}` : '',
+    service.startTime2 && service.endTime2 ? `${service.startTime2} - ${service.endTime2}` : '',
+    service.startTime3 && service.endTime3 ? `${service.startTime3} - ${service.endTime3}` : '',
+  ].filter(Boolean)
+);
+
+const resolvePlanningAssignment = (
+  driver: string,
+  rawCode: string,
+  services: Service[],
+  planningCodes: PlanningCode[],
+): ResolvedPlanningAssignment => {
+  const normalizedCode = normalizePlanningToken(rawCode);
+  const matchedService = services.find((service) => normalizePlanningToken(service.serviceNumber) === normalizedCode);
+  if (matchedService) {
+    const segments = getServiceSegments(matchedService);
+    return {
+      driver,
+      code: rawCode,
+      kind: 'service',
+      label: `Dienst ${matchedService.serviceNumber}`,
+      details: segments.length > 0 ? segments.join(' | ') : 'Dienst herkend, maar zonder uren.',
+      segments,
+    };
+  }
+
+  const matchedCode = planningCodes.find((planningCode) => normalizePlanningToken(planningCode.code) === normalizedCode);
+  if (matchedCode) {
+    return {
+      driver,
+      code: rawCode,
+      kind: matchedCode.category,
+      label: matchedCode.description || matchedCode.code.toUpperCase(),
+      details:
+        matchedCode.category === 'leave'
+          ? 'Gekoppeld als verlofcode.'
+          : matchedCode.category === 'training'
+            ? 'Gekoppeld als opleidingscode.'
+            : matchedCode.category === 'absence'
+              ? 'Gekoppeld als afwezigheid.'
+              : matchedCode.category === 'service'
+                ? 'Gemarkeerd als dienstcode zonder uren in Dienstoverzicht.'
+                : 'Code bestaat in Planningscodes, maar is nog niet verder verfijnd.',
+      segments: [],
+    };
+  }
+
+  return {
+    driver,
+    code: rawCode,
+    kind: 'unknown',
+    label: 'Onbekende code',
+    details: 'Geen match gevonden in Dienstoverzicht of Planningscodes.',
+    segments: [],
+  };
+};
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -853,7 +923,7 @@ export default function App() {
               {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} onMatrixImported={fetchPlanningMatrix} />}
-              {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} />}
+              {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} />}
               {currentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
               {currentView === 'beheer-updates' && (
                 <Suspense fallback={<ViewLoader />}>
@@ -2421,7 +2491,7 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
   );
 }
 
-function PlanningMatrixView({ rows }: { rows: PlanningMatrixRow[] }) {
+function PlanningMatrixView({ rows, services, planningCodes }: { rows: PlanningMatrixRow[]; services: Service[]; planningCodes: PlanningCode[] }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(rows[0]?.source_date || null);
 
   useEffect(() => {
@@ -2435,10 +2505,14 @@ function PlanningMatrixView({ rows }: { rows: PlanningMatrixRow[] }) {
 
   const selectedRow = rows.find((row) => row.source_date === selectedDate) || null;
   const assignments = selectedRow
-    ? Object.entries(selectedRow.assignments).sort((a, b) => a[0].localeCompare(b[0]))
+    ? Object.entries(selectedRow.assignments)
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([driver, code]) => resolvePlanningAssignment(driver, code, services, planningCodes))
     : [];
 
   const rowsWithAssignments = rows.filter((row) => Object.keys(row.assignments || {}).length > 0);
+  const serviceAssignments = assignments.filter((assignment) => assignment.kind === 'service').length;
+  const unknownAssignments = assignments.filter((assignment) => assignment.kind === 'unknown').length;
 
   return (
     <div className="space-y-6">
@@ -2507,16 +2581,16 @@ function PlanningMatrixView({ rows }: { rows: PlanningMatrixRow[] }) {
                   subValue="Met een ingevulde code"
                 />
                 <StatCard
-                  icon={<Calendar className="text-emerald-600" />}
-                  label="Dagtype"
-                  value={selectedRow.day_type || '-'}
-                  subValue="Overgenomen uit bronbestand"
+                  icon={<Clock className="text-emerald-600" />}
+                  label="Herkende Diensten"
+                  value={serviceAssignments.toString()}
+                  subValue="Gematcht met Dienstoverzicht"
                 />
                 <StatCard
-                  icon={<FileText className="text-slate-600" />}
-                  label="Bronrij"
-                  value={selectedRow.raw_row.split(';').length.toString()}
-                  subValue="Kolommen in de originele rij"
+                  icon={<AlertTriangle className="text-slate-600" />}
+                  label="Onbekende Codes"
+                  value={unknownAssignments.toString()}
+                  subValue={unknownAssignments === 0 ? 'Alles herkend' : 'Nog te mappen'}
                 />
               </div>
 
@@ -2527,17 +2601,28 @@ function PlanningMatrixView({ rows }: { rows: PlanningMatrixRow[] }) {
                       <tr>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Chauffeur</th>
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Code</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Interpretatie</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Uren / status</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {assignments.map(([driver, code]) => (
-                        <tr key={driver} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-bold text-slate-800">{driver}</td>
+                      {assignments.map((assignment) => (
+                        <tr key={assignment.driver} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-6 py-4 text-sm font-bold text-slate-800">{assignment.driver}</td>
                           <td className="px-6 py-4">
-                            <span className="glass-chip rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest text-oker-700">
-                              {code}
+                            <span className={cn(
+                              'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest',
+                              assignment.kind === 'service' && 'glass-chip text-emerald-700',
+                              assignment.kind === 'leave' && 'glass-chip text-sky-700',
+                              assignment.kind === 'training' && 'glass-chip text-violet-700',
+                              assignment.kind === 'absence' && 'glass-chip text-amber-700',
+                              assignment.kind === 'unknown' && 'border border-red-200 bg-red-50 text-red-700'
+                            )}>
+                              {assignment.code}
                             </span>
                           </td>
+                          <td className="px-6 py-4 text-sm font-bold text-slate-800">{assignment.label}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-slate-500">{assignment.details}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -2545,14 +2630,23 @@ function PlanningMatrixView({ rows }: { rows: PlanningMatrixRow[] }) {
                 </div>
 
                 <div className="divide-y divide-slate-50 md:hidden">
-                  {assignments.map(([driver, code]) => (
-                    <div key={driver} className="p-5">
-                      <p className="text-sm font-black text-slate-800">{driver}</p>
-                      <div className="mt-3">
-                        <span className="glass-chip rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest text-oker-700">
-                          {code}
+                  {assignments.map((assignment) => (
+                    <div key={assignment.driver} className="p-5">
+                      <p className="text-sm font-black text-slate-800">{assignment.driver}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <span className={cn(
+                          'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest',
+                          assignment.kind === 'service' && 'glass-chip text-emerald-700',
+                          assignment.kind === 'leave' && 'glass-chip text-sky-700',
+                          assignment.kind === 'training' && 'glass-chip text-violet-700',
+                          assignment.kind === 'absence' && 'glass-chip text-amber-700',
+                          assignment.kind === 'unknown' && 'border border-red-200 bg-red-50 text-red-700'
+                        )}>
+                          {assignment.code}
                         </span>
+                        <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{assignment.label}</span>
                       </div>
+                      <p className="mt-3 text-sm font-medium text-slate-500">{assignment.details}</p>
                     </div>
                   ))}
                 </div>
