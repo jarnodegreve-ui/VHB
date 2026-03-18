@@ -1549,14 +1549,14 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               return true;
             }).slice(0, 2).map(shift => (
               <div key={shift.id} className="flex items-center gap-5 p-5 bg-slate-50/50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all duration-300">
-                <div className="min-w-14 h-14 px-3 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
+                <div className="min-w-16 h-16 px-3 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
                   <span className="text-base font-black text-oker-500">
                     {shift.line || '--'}
                   </span>
                 </div>
                 <div className="flex-1">
-                  <p className="font-black text-lg text-slate-800">{shift.startTime} - {shift.endTime}</p>
-                  <p className="text-xs font-black uppercase tracking-[0.14em] text-oker-500">Dienst {shift.line || '--'}</p>
+                  <p className="font-black text-lg text-slate-800">Dienst {shift.line || '--'}</p>
+                  <p className="text-sm font-black text-slate-700">{shift.startTime} - {shift.endTime}</p>
                   <p className="text-sm text-slate-400 font-medium">{shift.date}</p>
                 </div>
               </div>
@@ -1887,9 +1887,10 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
                 <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-8 py-6 font-black text-slate-800">{shift.date}</td>
                   <td className="px-8 py-6">
-                    <span className="inline-flex rounded-xl bg-oker-50 px-4 py-1.5 text-xs font-black uppercase tracking-[0.16em] text-oker-700">
-                      {shift.line || '--'}
-                    </span>
+                    <div className="space-y-1">
+                      <p className="font-black text-oker-700">Dienst {shift.line || '--'}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Dienstnummer</p>
+                    </div>
                   </td>
                   <td className="px-8 py-6">
                     <div className="flex items-center gap-3 text-slate-600 font-bold">
@@ -1923,7 +1924,7 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
 
             <div>
               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Dienst</p>
-              <p className="font-black text-oker-700">{shift.line || '--'}</p>
+              <p className="font-black text-oker-700">Dienst {shift.line || '--'}</p>
             </div>
             
             <div className="flex items-center gap-4 p-4 surface-muted rounded-2xl">
