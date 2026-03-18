@@ -1100,11 +1100,6 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
 
         {/* Brand */}
         <div className="relative z-10">
-          <div className="inline-flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 bg-oker-500 rounded-2xl flex items-center justify-center shadow-lg shadow-oker-500/30">
-              <Bus size={22} className="text-white" />
-            </div>
-          </div>
           <h1 className="text-4xl font-black tracking-tight text-white">VHB <span className="text-oker-400">Portaal</span></h1>
           <p className="mt-2 text-slate-400 font-medium text-sm tracking-wide">Van Hoorebeke en Zoon</p>
         </div>
@@ -1139,11 +1134,6 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
         >
           {/* Mobile-only brand */}
           <div className="lg:hidden text-center mb-10">
-            <div className="inline-flex items-center gap-2.5 mb-3">
-              <div className="w-9 h-9 bg-oker-500 rounded-xl flex items-center justify-center">
-                <Bus size={18} className="text-white" />
-              </div>
-            </div>
             <h1 className="text-3xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
             <p className="mt-1 text-slate-400 text-xs font-medium tracking-widest uppercase">Van Hoorebeke en Zoon</p>
           </div>
