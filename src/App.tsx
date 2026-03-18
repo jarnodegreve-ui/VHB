@@ -1107,7 +1107,7 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
         {/* Feature list */}
         <div className="relative z-10 space-y-5">
           {[
-            { icon: <Calendar size={18} />, label: 'Roosters & Planning', desc: 'Bekijk je diensten en planningsmatrix.' },
+            { icon: <Calendar size={18} />, label: 'Roosters & Planning', desc: 'Bekijk je diensten en planning.' },
             { icon: <MapPin size={18} />, label: 'Omleidingen', desc: 'Realtime routewijzigingen voor chauffeurs.' },
             { icon: <Bell size={18} />, label: 'Updates & Meldingen', desc: 'Nieuws, veiligheid en technische info.' },
           ].map(f => (
