@@ -928,7 +928,7 @@ export default function App() {
               {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
-              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} onMatrixImported={fetchPlanningMatrix} />}
+              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} onMatrixImported={async () => { await Promise.all([fetchPlanningMatrix(), fetchPlanning()]); }} />}
               {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} />}
               {currentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
               {currentView === 'beheer-updates' && (
@@ -2301,7 +2301,18 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
         throw new Error(data.details || data.error || 'Import mislukt.');
       }
 
-      notify(`Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen verwerkt.`, 'success');
+      const syncNotes: string[] = [];
+      if (Array.isArray(data.unknownCodes) && data.unknownCodes.length > 0) {
+        syncNotes.push(`${data.unknownCodes.length} onbekende code${data.unknownCodes.length === 1 ? '' : 's'}`);
+      }
+      if (Array.isArray(data.unmatchedDrivers) && data.unmatchedDrivers.length > 0) {
+        syncNotes.push(`${data.unmatchedDrivers.length} niet-gematchte chauffeur${data.unmatchedDrivers.length === 1 ? '' : 's'}`);
+      }
+
+      notify(
+        `Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen, ${data.generatedShifts || 0} roosterregels opgebouwd${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`,
+        'success'
+      );
       await onMatrixImported();
     } catch (error: any) {
       notify(`CSV-import mislukt: ${error.message}`, 'error');
@@ -2314,7 +2325,7 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
   const handleSync = async () => {
     try {
       setIsSyncing(true);
-      const response = await fetch('/api/admin/sync', {
+      const response = await fetch('/api/planning/sync-from-matrix', {
         method: 'POST',
         headers: await getSupabaseAuthHeaders(),
       });
@@ -2333,7 +2344,15 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
       }
 
       if (data.success) {
-        notify('Synchronisatie voltooid.', 'success');
+        const syncNotes: string[] = [];
+        if (Array.isArray(data.unknownCodes) && data.unknownCodes.length > 0) {
+          syncNotes.push(`${data.unknownCodes.length} onbekende code${data.unknownCodes.length === 1 ? '' : 's'}`);
+        }
+        if (Array.isArray(data.unmatchedDrivers) && data.unmatchedDrivers.length > 0) {
+          syncNotes.push(`${data.unmatchedDrivers.length} niet-gematchte chauffeur${data.unmatchedDrivers.length === 1 ? '' : 's'}`);
+        }
+        notify(`Planning opnieuw opgebouwd: ${data.generatedShifts || 0} roosterregels${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`, 'success');
+        await onMatrixImported();
       } else {
         notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
       }

@@ -85,6 +85,28 @@ interface PlanningCodeRecord {
   isDayOff: boolean;
 }
 
+interface ServiceRecord {
+  id: string;
+  serviceNumber: string;
+  startTime: string;
+  endTime: string;
+  startTime2?: string;
+  endTime2?: string;
+  startTime3?: string;
+  endTime3?: string;
+}
+
+interface ShiftRecord {
+  id: string;
+  date: string;
+  startTime: string;
+  endTime: string;
+  line: string;
+  busNumber: string;
+  loopnr: string;
+  driverId: string;
+}
+
 type AuthenticatedRequest = express.Request & {
   authUser?: SupabaseAuthUser;
   appUser?: AppUser;
@@ -187,6 +209,14 @@ const toDatabasePlanningCode = (code: PlanningCodeRecord) => ({
   is_paid_absence: code.isPaidAbsence === true,
   is_day_off: code.isDayOff === true,
 });
+
+const toLookupToken = (value?: string | null) =>
+  String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 
 const ensureUniqueUserEmails = (users: IncomingUser[]) => {
   const seen = new Set<string>();
@@ -344,6 +374,25 @@ const savePlanningData = async (data: any) => {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 };
 
+const replacePlanningData = async (data: ShiftRecord[]) => {
+  if (db) {
+    const { error: deleteError } = await db.from('planning').delete().neq('id', '__never__');
+    if (deleteError) throw deleteError;
+
+    if (data.length > 0) {
+      const { error: insertError } = await db.from('planning').insert(data);
+      if (insertError) throw insertError;
+    }
+    return;
+  }
+
+  if (process.env.VERCEL) {
+    throw new Error("Supabase is niet geconfigureerd op Vercel.");
+  }
+
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+};
+
 const getPlanningMatrixRows = async (): Promise<PlanningMatrixRow[]> => {
   if (db) {
     try {
@@ -432,6 +481,93 @@ const savePlanningCodesData = async (codes: PlanningCodeRecord[]) => {
   }
 
   fs.writeFileSync(PLANNING_CODES_FILE, JSON.stringify(uniqueCodes, null, 2));
+};
+
+const getServiceSegments = (service: ServiceRecord) => (
+  [
+    service.startTime && service.endTime ? { startTime: service.startTime, endTime: service.endTime, segment: 1 } : null,
+    service.startTime2 && service.endTime2 ? { startTime: service.startTime2, endTime: service.endTime2, segment: 2 } : null,
+    service.startTime3 && service.endTime3 ? { startTime: service.startTime3, endTime: service.endTime3, segment: 3 } : null,
+  ].filter(Boolean) as Array<{ startTime: string; endTime: string; segment: number }>
+);
+
+const buildPlanningFromMatrix = async () => {
+  const [rows, users, services, planningCodes] = await Promise.all([
+    getPlanningMatrixRows(),
+    getUsersData(),
+    getServicesData(),
+    getPlanningCodesData(),
+  ]);
+
+  const usersByName = new Map(users.map((user): [string, AppUser] => [toLookupToken(user.name), user]));
+  const servicesByNumber = new Map(
+    (services as ServiceRecord[]).map((service): [string, ServiceRecord] => [toLookupToken(service.serviceNumber), service]),
+  );
+  const planningCodesByCode = new Map(planningCodes.map((code): [string, PlanningCodeRecord] => [toLookupToken(code.code), code]));
+
+  const generatedShifts: ShiftRecord[] = [];
+  const unknownCodes = new Set<string>();
+  const unmatchedDrivers = new Set<string>();
+  let matchedServices = 0;
+  let skippedAbsences = 0;
+
+  for (const row of rows) {
+    for (const [driverName, rawCode] of Object.entries(row.assignments || {})) {
+      const driver = usersByName.get(toLookupToken(driverName));
+      if (!driver) {
+        unmatchedDrivers.add(driverName);
+        continue;
+      }
+
+      const normalizedCode = toLookupToken(rawCode);
+      const matchedService = servicesByNumber.get(normalizedCode);
+      if (matchedService) {
+        const segments = getServiceSegments(matchedService);
+        for (const segment of segments) {
+          generatedShifts.push({
+            id: `${row.source_date}-${driver.id}-${matchedService.serviceNumber}-${segment.segment}`,
+            date: row.source_date,
+            startTime: segment.startTime,
+            endTime: segment.endTime,
+            line: matchedService.serviceNumber,
+            busNumber: "",
+            loopnr: "",
+            driverId: driver.id,
+          });
+        }
+        matchedServices += 1;
+        continue;
+      }
+
+      const matchedCode = planningCodesByCode.get(normalizedCode);
+      if (matchedCode) {
+        if (!matchedCode.isDayOff && !matchedCode.countsAsShift) {
+          skippedAbsences += 1;
+        }
+        continue;
+      }
+
+      unknownCodes.add(rawCode);
+    }
+  }
+
+  generatedShifts.sort((a, b) => {
+    const left = `${a.date} ${a.startTime} ${a.driverId}`;
+    const right = `${b.date} ${b.startTime} ${b.driverId}`;
+    return left.localeCompare(right);
+  });
+
+  return {
+    shifts: generatedShifts,
+    summary: {
+      importedDays: rows.length,
+      generatedShifts: generatedShifts.length,
+      matchedServices,
+      skippedAbsences,
+      unknownCodes: Array.from(unknownCodes).sort(),
+      unmatchedDrivers: Array.from(unmatchedDrivers).sort(),
+    },
+  };
 };
 
 const getUsersData = async (): Promise<AppUser[]> => {
@@ -1015,14 +1151,31 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
 
     const rows = parsePlanningMatrixCsv(csvContent);
     await savePlanningMatrixRows(rows);
+    const generatedPlanning = await buildPlanningFromMatrix();
+    await replacePlanningData(generatedPlanning.shifts);
 
     res.json({
       success: true,
       importedDays: rows.length,
       detectedDrivers: rows[0] ? Object.keys(rows[0].assignments).length : 0,
+      generatedShifts: generatedPlanning.summary.generatedShifts,
+      matchedServices: generatedPlanning.summary.matchedServices,
+      skippedAbsences: generatedPlanning.summary.skippedAbsences,
+      unknownCodes: generatedPlanning.summary.unknownCodes,
+      unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to import planning matrix", details: err.message });
+  }
+});
+
+app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const generatedPlanning = await buildPlanningFromMatrix();
+    await replacePlanningData(generatedPlanning.shifts);
+    res.json({ success: true, ...generatedPlanning.summary });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to sync planning from matrix", details: err.message });
   }
 });
 
