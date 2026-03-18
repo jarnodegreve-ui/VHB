@@ -93,4 +93,16 @@ export interface PlanningCode {
   isDayOff: boolean;
 }
 
+export interface PlanningMatrixImportHistory {
+  id: string;
+  createdAt: string;
+  importedDays: number;
+  detectedDrivers: number;
+  generatedShifts: number;
+  matchedServices: number;
+  skippedAbsences: number;
+  unknownCodes: string[];
+  unmatchedDrivers: string[];
+}
+
 export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof' | 'planning-matrix' | 'planning-codes';

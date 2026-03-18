@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
-import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode } from './types';
+import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory } from './types';
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
@@ -183,6 +183,7 @@ export default function App() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
+  const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -237,6 +238,7 @@ export default function App() {
         setLeaveRequests([]);
         setPlanningMatrixRows([]);
         setPlanningCodes([]);
+        setPlanningMatrixHistory([]);
         setCurrentView('dashboard');
       }
       setAuthReady(true);
@@ -295,6 +297,7 @@ export default function App() {
         fetchLeave(accessToken),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrix(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningCodes(accessToken)] : []),
+        ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrixHistory(accessToken)] : []),
       ]);
     } catch (error) {
       console.error('Error initializing app:', error);
@@ -402,6 +405,18 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching planning codes:', error);
+    }
+  };
+
+  const fetchPlanningMatrixHistory = async (accessToken = session?.access_token) => {
+    try {
+      const response = await apiFetch('/api/planning-matrix/history', {}, accessToken);
+      const data = await response.json();
+      if (data && Array.isArray(data)) {
+        setPlanningMatrixHistory(data);
+      }
+    } catch (error) {
+      console.error('Error fetching planning matrix history:', error);
     }
   };
 
@@ -928,7 +943,7 @@ export default function App() {
               {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
-              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} onMatrixImported={async () => { await Promise.all([fetchPlanningMatrix(), fetchPlanning()]); }} />}
+              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} onMatrixImported={async () => { await Promise.all([fetchPlanningMatrix(), fetchPlanning(), fetchPlanningMatrixHistory()]); }} />}
               {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} users={users} />}
               {currentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
               {currentView === 'beheer-updates' && (
@@ -2250,11 +2265,23 @@ function UpdatesView({ updates }: { updates: Update[] }) {
   );
 }
 
-function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[], onMatrixImported: () => Promise<void> }) {
+function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[], history: PlanningMatrixImportHistory[], onMatrixImported: () => Promise<void> }) {
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
   const [isMatrixImporting, setIsMatrixImporting] = useState(false);
+  const [matrixPreviewOpen, setMatrixPreviewOpen] = useState(false);
+  const [pendingMatrixCsv, setPendingMatrixCsv] = useState('');
+  const [matrixPreview, setMatrixPreview] = useState<null | {
+    importedDays: number;
+    detectedDrivers: number;
+    generatedShifts: number;
+    matchedServices: number;
+    skippedAbsences: number;
+    unknownCodes: string[];
+    unmatchedDrivers: string[];
+  }>(null);
+  const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0);
 
   const handleImport = () => {
     try {
@@ -2280,10 +2307,48 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
     try {
       setIsMatrixImporting(true);
       const csvContent = await file.text();
-      const response = await fetch('/api/planning-matrix/import', {
+      const response = await fetch('/api/planning-matrix/preview', {
         method: 'POST',
         headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({ csvContent }),
+      });
+
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.details || data.error || 'Import mislukt.');
+      }
+
+      setPendingMatrixCsv(csvContent);
+      setMatrixPreview({
+        importedDays: data.importedDays || 0,
+        detectedDrivers: data.detectedDrivers || 0,
+        generatedShifts: data.generatedShifts || 0,
+        matchedServices: data.matchedServices || 0,
+        skippedAbsences: data.skippedAbsences || 0,
+        unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
+        unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
+      });
+      setMatrixPreviewOpen(true);
+    } catch (error: any) {
+      notify(`CSV-preview mislukt: ${error.message}`, 'error');
+    } finally {
+      setIsMatrixImporting(false);
+      if (event.target) event.target.value = '';
+    }
+  };
+
+  const confirmMatrixImport = async () => {
+    if (!pendingMatrixCsv.trim()) {
+      notify('Er is geen matrixbestand klaar om te importeren.', 'error');
+      return;
+    }
+
+    try {
+      setIsMatrixImporting(true);
+      const response = await fetch('/api/planning-matrix/import', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+        body: JSON.stringify({ csvContent: pendingMatrixCsv }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -2303,12 +2368,14 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
         `Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen, ${data.generatedShifts || 0} roosterregels opgebouwd${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`,
         'success'
       );
+      setMatrixPreviewOpen(false);
+      setPendingMatrixCsv('');
+      setMatrixPreview(null);
       await onMatrixImported();
     } catch (error: any) {
       notify(`CSV-import mislukt: ${error.message}`, 'error');
     } finally {
       setIsMatrixImporting(false);
-      if (event.target) event.target.value = '';
     }
   };
 
@@ -2452,6 +2519,76 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
         </button>
       </div>
 
+      <div className="surface-card p-6 md:p-8 rounded-[32px]">
+        <div className="flex items-center justify-between gap-4 mb-6">
+          <div>
+            <h3 className="text-lg font-black tracking-tight">Recente Matriximports</h3>
+            <p className="mt-1 text-sm font-medium text-slate-500">Laatste importmomenten met de belangrijkste controlecijfers.</p>
+          </div>
+          <div className="rounded-full border border-white/70 bg-white/50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            {history.length} logs
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {history.length > 0 ? history.slice(0, 8).map((entry) => {
+            const hasIssues = entry.unknownCodes.length > 0 || entry.unmatchedDrivers.length > 0;
+            return (
+              <div key={entry.id} className="rounded-[24px] border border-white/70 bg-white/45 p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className={cn(
+                        "h-2.5 w-2.5 rounded-full",
+                        hasIssues ? "bg-amber-500" : "bg-emerald-500"
+                      )} />
+                      <p className="text-sm font-black text-slate-800">
+                        {new Date(entry.createdAt).toLocaleString('nl-BE', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </p>
+                    </div>
+                    <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                      {hasIssues ? 'Controle nodig' : 'Volledig herkenbaar'}
+                    </p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
+                    <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      {entry.importedDays} dagen
+                    </span>
+                    <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      {entry.generatedShifts} diensten
+                    </span>
+                    <span className={cn(
+                      "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
+                      entry.unknownCodes.length > 0 ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    )}>
+                      {entry.unknownCodes.length} onbekend
+                    </span>
+                    <span className={cn(
+                      "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
+                      entry.unmatchedDrivers.length > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    )}>
+                      {entry.unmatchedDrivers.length} chauffeur
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          }) : (
+            <EmptyState
+              icon={<Activity size={28} />}
+              title="Nog geen importhistoriek"
+              message="Na je eerste bevestigde matrix-import verschijnt hier automatisch een historiek."
+            />
+          )}
+        </div>
+      </div>
+
       <div className="surface-card p-8 rounded-3xl">
         <h3 className="text-xl font-bold mb-6">Huidige Planning</h3>
         <ScheduleView user={{ id: '0', name: 'Admin', role: 'admin', employeeId: 'ADMIN' }} shifts={shifts} users={users} />
@@ -2466,6 +2603,139 @@ function ManageSchedulesView({ shifts, onSave, users, onMatrixImported }: { shif
         confirmText="Synchroniseren"
         variant="warning"
       />
+
+      <AnimatePresence>
+        {matrixPreviewOpen && matrixPreview && (
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="glass-modal rounded-[36px] w-full max-w-2xl overflow-hidden"
+            >
+              <div className="p-8 border-b border-white/70">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-600">Matrix Import Preview</p>
+                <h4 className="mt-3 text-2xl font-black tracking-tight">Controleer voor je de planning vervangt</h4>
+                <p className="mt-2 text-sm font-medium text-slate-500">
+                  Deze stap schrijft nog niets weg. Bevestig pas als dagen, diensten en probleempunten correct ogen.
+                </p>
+              </div>
+
+              <div className="p-8 space-y-6">
+                <div className={cn(
+                  "rounded-[24px] border p-5",
+                  matrixPreviewHasIssues ? "border-amber-200 bg-amber-50/80" : "border-emerald-200 bg-emerald-50/80"
+                )}>
+                  <div className="flex items-start gap-3">
+                    <div className={cn(
+                      "mt-0.5 h-3 w-3 rounded-full shrink-0",
+                      matrixPreviewHasIssues ? "bg-amber-500" : "bg-emerald-500"
+                    )} />
+                    <div>
+                      <p className={cn(
+                        "text-xs font-black uppercase tracking-[0.2em]",
+                        matrixPreviewHasIssues ? "text-amber-700" : "text-emerald-700"
+                      )}>
+                        {matrixPreviewHasIssues ? 'Controle Nodig' : 'Klaar Voor Import'}
+                      </p>
+                      <p className={cn(
+                        "mt-2 text-sm font-medium",
+                        matrixPreviewHasIssues ? "text-amber-800" : "text-emerald-800"
+                      )}>
+                        {matrixPreviewHasIssues
+                          ? 'Deze matrix bevat nog onbekende codes of niet-gematchte chauffeurs. Je kunt nog steeds importeren, maar controleer dit eerst.'
+                          : 'Geen onbekende codes of niet-gematchte chauffeurs gevonden. Deze import is klaar om de planning te vervangen.'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-4">
+                  <div className="surface-muted rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dagen</p>
+                    <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.importedDays}</p>
+                  </div>
+                  <div className="surface-muted rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Chauffeurs</p>
+                    <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.detectedDrivers}</p>
+                  </div>
+                  <div className="surface-muted rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Diensten</p>
+                    <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.generatedShifts}</p>
+                  </div>
+                  <div className="surface-muted rounded-2xl p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Afwezigheden</p>
+                    <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.skippedAbsences}</p>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Onbekende Codes</p>
+                      <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-700">
+                        {matrixPreview.unknownCodes.length}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {matrixPreview.unknownCodes.length > 0 ? matrixPreview.unknownCodes.map((code) => (
+                        <span key={code} className="rounded-full border border-red-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-red-700">
+                          {code}
+                        </span>
+                      )) : (
+                        <span className="text-sm font-medium text-red-700">Geen onbekende codes.</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
+                      <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                        {matrixPreview.unmatchedDrivers.length}
+                      </span>
+                    </div>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {matrixPreview.unmatchedDrivers.length > 0 ? matrixPreview.unmatchedDrivers.map((driver) => (
+                        <span key={driver} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
+                          {driver}
+                        </span>
+                      )) : (
+                        <span className="text-sm font-medium text-amber-700">Alle chauffeurs werden herkend.</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-8 bg-white/40 flex gap-3 backdrop-blur-sm">
+                <button
+                  onClick={() => {
+                    setMatrixPreviewOpen(false);
+                    setPendingMatrixCsv('');
+                    setMatrixPreview(null);
+                  }}
+                  className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-widest text-xs border border-transparent hover:border-white/80"
+                >
+                  Annuleren
+                </button>
+                <button
+                  onClick={confirmMatrixImport}
+                  disabled={isMatrixImporting}
+                  className={cn(
+                    "flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-widest text-xs disabled:opacity-50",
+                    matrixPreviewHasIssues
+                      ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                      : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
+                  )}
+                >
+                  {isMatrixImporting ? 'Importeren...' : matrixPreviewHasIssues ? 'Toch Importeren' : 'Planning Vervangen'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
@@ -2643,6 +2913,66 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
   const filteredAssignments = highlightedCode
     ? assignments.filter((assignment) => normalizePlanningToken(assignment.code) === highlightedCode)
     : assignments;
+  const problemReportRows = rows.flatMap((row) => {
+    const formattedDate = new Date(row.source_date).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const unknownRows = Object.entries(row.assignments || {})
+      .filter(([, code]) => {
+        const normalizedCode = normalizePlanningToken(code);
+        return normalizedCode.length > 0 && !serviceCodeLookup.has(normalizedCode) && !planningCodeLookup.has(normalizedCode);
+      })
+      .map(([driver, code]) => ({
+        date: formattedDate,
+        dayType: row.day_type || '',
+        type: 'onbekende_code',
+        driver,
+        code,
+        details: 'Geen match in Dienstoverzicht of Planningscodes',
+      }));
+    const unmatchedRows = Object.keys(row.assignments || {})
+      .filter((driver) => {
+        const normalizedDriver = normalizePlanningToken(driver);
+        return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
+      })
+      .map((driver) => ({
+        date: formattedDate,
+        dayType: row.day_type || '',
+        type: 'niet_gematchte_chauffeur',
+        driver,
+        code: row.assignments?.[driver] || '',
+        details: 'Geen match met gebruikerslijst',
+      }));
+    return [...unknownRows, ...unmatchedRows];
+  });
+
+  const exportProblemReport = () => {
+    if (problemReportRows.length === 0) {
+      notify('Er zijn momenteel geen problemen om te exporteren.', 'info');
+      return;
+    }
+
+    const header = ['datum', 'dagtype', 'type', 'chauffeur', 'code', 'details'];
+    const csvRows = [
+      header.join(';'),
+      ...problemReportRows.map((row) => [
+        row.date,
+        row.dayType,
+        row.type,
+        row.driver,
+        row.code,
+        row.details,
+      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';')),
+    ];
+
+    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'planning-matrix-problemen.csv';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
@@ -2693,6 +3023,19 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
                 Reset Codefilter
               </button>
             ) : null}
+            <button
+              onClick={exportProblemReport}
+              disabled={problemReportRows.length === 0}
+              className={cn(
+                "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] transition-all",
+                problemReportRows.length === 0
+                  ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
+                  : "border-white/70 bg-white/55 text-slate-600 hover:bg-white/80"
+              )}
+            >
+              <Download size={14} />
+              Exporteer Problemen
+            </button>
           </div>
         </div>
 
@@ -2713,6 +3056,51 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
               Geen onbekende codes
             </span>
           )}
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Onbekende Codes</p>
+              <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-700">
+                {globalUnknownCodes.length}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {globalUnknownCodes.length > 0 ? globalUnknownCodes.map((code) => (
+                <button
+                  key={`list-${code}`}
+                  onClick={() => setHighlightedCode(code)}
+                  className={cn(
+                    "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all",
+                    highlightedCode === code ? "border-red-300 bg-red-100 text-red-800" : "border-red-200 bg-white/80 text-red-700 hover:bg-red-100"
+                  )}
+                >
+                  {code}
+                </button>
+              )) : (
+                <span className="text-sm font-medium text-red-700">Geen onbekende codes gevonden.</span>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
+              <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                {globalUnmatchedDrivers.length}
+              </span>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              {globalUnmatchedDrivers.length > 0 ? globalUnmatchedDrivers.map((driver) => (
+                <span key={driver} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
+                  {driver}
+                </span>
+              )) : (
+                <span className="text-sm font-medium text-amber-700">Alle chauffeurs zijn gekoppeld.</span>
+              )}
+            </div>
+          </div>
         </div>
       </section>
 

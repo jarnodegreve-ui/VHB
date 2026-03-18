@@ -28,6 +28,7 @@ const SWAPS_FILE = path.join(process.cwd(), "swaps_data.json");
 const LEAVE_FILE = path.join(process.cwd(), "leave_data.json");
 const PLANNING_MATRIX_FILE = path.join(process.cwd(), "planning_matrix_rows.json");
 const PLANNING_CODES_FILE = path.join(process.cwd(), "planning_codes.json");
+const PLANNING_MATRIX_HISTORY_FILE = path.join(process.cwd(), "planning_matrix_history.json");
 
 type Role = "chauffeur" | "planner" | "admin";
 
@@ -84,6 +85,30 @@ interface PlanningCodeRecord {
   isPaidAbsence: boolean;
   isDayOff: boolean;
 }
+
+interface PlanningMatrixImportHistoryRecord {
+  id: string;
+  createdAt: string;
+  importedDays: number;
+  detectedDrivers: number;
+  generatedShifts: number;
+  matchedServices: number;
+  skippedAbsences: number;
+  unknownCodes: string[];
+  unmatchedDrivers: string[];
+}
+
+type PlanningMatrixImportHistoryRow = {
+  id: string;
+  created_at: string;
+  imported_days: number;
+  detected_drivers: number;
+  generated_shifts: number;
+  matched_services: number;
+  skipped_absences: number;
+  unknown_codes: string[];
+  unmatched_drivers: string[];
+};
 
 interface ServiceRecord {
   id: string;
@@ -483,6 +508,78 @@ const savePlanningCodesData = async (codes: PlanningCodeRecord[]) => {
   fs.writeFileSync(PLANNING_CODES_FILE, JSON.stringify(uniqueCodes, null, 2));
 };
 
+const toPublicPlanningMatrixHistory = (row: PlanningMatrixImportHistoryRow | PlanningMatrixImportHistoryRecord): PlanningMatrixImportHistoryRecord => ({
+  id: row.id,
+  createdAt: 'createdAt' in row ? row.createdAt : row.created_at,
+  importedDays: 'importedDays' in row ? row.importedDays : row.imported_days,
+  detectedDrivers: 'detectedDrivers' in row ? row.detectedDrivers : row.detected_drivers,
+  generatedShifts: 'generatedShifts' in row ? row.generatedShifts : row.generated_shifts,
+  matchedServices: 'matchedServices' in row ? row.matchedServices : row.matched_services,
+  skippedAbsences: 'skippedAbsences' in row ? row.skippedAbsences : row.skipped_absences,
+  unknownCodes: 'unknownCodes' in row ? row.unknownCodes : row.unknown_codes,
+  unmatchedDrivers: 'unmatchedDrivers' in row ? row.unmatchedDrivers : row.unmatched_drivers,
+});
+
+const getPlanningMatrixHistory = async (): Promise<PlanningMatrixImportHistoryRecord[]> => {
+  if (db) {
+    try {
+      const { data, error } = await db
+        .from('planning_matrix_import_history')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      if (error) {
+        console.error("Supabase error fetching planning matrix history:", error);
+      } else if (data) {
+        return (data as PlanningMatrixImportHistoryRow[]).map(toPublicPlanningMatrixHistory);
+      }
+    } catch (e) {
+      console.error("Unexpected error fetching planning matrix history:", e);
+    }
+  }
+
+  if (fs.existsSync(PLANNING_MATRIX_HISTORY_FILE)) {
+    return JSON.parse(fs.readFileSync(PLANNING_MATRIX_HISTORY_FILE, "utf-8")).map(toPublicPlanningMatrixHistory);
+  }
+
+  return [];
+};
+
+const savePlanningMatrixHistoryEntry = async (entry: PlanningMatrixImportHistoryRecord) => {
+  if (db) {
+    try {
+      const historyRow: PlanningMatrixImportHistoryRow = {
+        id: entry.id,
+        created_at: entry.createdAt,
+        imported_days: entry.importedDays,
+        detected_drivers: entry.detectedDrivers,
+        generated_shifts: entry.generatedShifts,
+        matched_services: entry.matchedServices,
+        skipped_absences: entry.skippedAbsences,
+        unknown_codes: entry.unknownCodes,
+        unmatched_drivers: entry.unmatchedDrivers,
+      };
+      const { error } = await db.from('planning_matrix_import_history').insert(historyRow);
+      if (!error) {
+        return;
+      }
+      console.error("Supabase error saving planning matrix history:", error);
+    } catch (e) {
+      console.error("Unexpected error saving planning matrix history:", e);
+    }
+  }
+
+  if (process.env.VERCEL) {
+    return;
+  }
+
+  const existing = fs.existsSync(PLANNING_MATRIX_HISTORY_FILE)
+    ? JSON.parse(fs.readFileSync(PLANNING_MATRIX_HISTORY_FILE, "utf-8"))
+    : [];
+  const nextHistory = [entry, ...existing].slice(0, 20);
+  fs.writeFileSync(PLANNING_MATRIX_HISTORY_FILE, JSON.stringify(nextHistory, null, 2));
+};
+
 const getServiceSegments = (service: ServiceRecord) => (
   [
     service.startTime && service.endTime ? { startTime: service.startTime, endTime: service.endTime, segment: 1 } : null,
@@ -491,13 +588,13 @@ const getServiceSegments = (service: ServiceRecord) => (
   ].filter(Boolean) as Array<{ startTime: string; endTime: string; segment: number }>
 );
 
-const buildPlanningFromMatrix = async () => {
-  const [rows, users, services, planningCodes] = await Promise.all([
-    getPlanningMatrixRows(),
+const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) => {
+  const [users, services, planningCodes] = await Promise.all([
     getUsersData(),
     getServicesData(),
     getPlanningCodesData(),
   ]);
+  const rows = inputRows ?? await getPlanningMatrixRows();
 
   const usersByName = new Map(users.map((user): [string, AppUser] => [toLookupToken(user.name), user]));
   const servicesByNumber = new Map(
@@ -512,7 +609,7 @@ const buildPlanningFromMatrix = async () => {
   let skippedAbsences = 0;
 
   for (const row of rows) {
-    for (const [driverName, rawCode] of Object.entries(row.assignments || {})) {
+    for (const [driverName, rawCode] of Object.entries(row.assignments || {}) as Array<[string, string]>) {
       const driver = usersByName.get(toLookupToken(driverName));
       if (!driver) {
         unmatchedDrivers.add(driverName);
@@ -1142,6 +1239,15 @@ app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), a
   }
 });
 
+app.get("/api/planning-matrix/history", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const history = await getPlanningMatrixHistory();
+    res.json(history);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to read planning matrix history", details: err.message });
+  }
+});
+
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const csvContent = String(req.body?.csvContent || "");
@@ -1151,8 +1257,19 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
 
     const rows = parsePlanningMatrixCsv(csvContent);
     await savePlanningMatrixRows(rows);
-    const generatedPlanning = await buildPlanningFromMatrix();
+    const generatedPlanning = await buildPlanningFromMatrix(rows);
     await replacePlanningData(generatedPlanning.shifts);
+    await savePlanningMatrixHistoryEntry({
+      id: `${Date.now()}`,
+      createdAt: new Date().toISOString(),
+      importedDays: rows.length,
+      detectedDrivers: rows[0] ? Object.keys(rows[0].assignments).length : 0,
+      generatedShifts: generatedPlanning.summary.generatedShifts,
+      matchedServices: generatedPlanning.summary.matchedServices,
+      skippedAbsences: generatedPlanning.summary.skippedAbsences,
+      unknownCodes: generatedPlanning.summary.unknownCodes,
+      unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+    });
 
     res.json({
       success: true,
@@ -1166,6 +1283,31 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to import planning matrix", details: err.message });
+  }
+});
+
+app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const csvContent = String(req.body?.csvContent || "");
+    if (!csvContent.trim()) {
+      return res.status(400).json({ error: "CSV-inhoud ontbreekt." });
+    }
+
+    const rows = parsePlanningMatrixCsv(csvContent);
+    const generatedPlanning = await buildPlanningFromMatrix(rows);
+
+    res.json({
+      success: true,
+      importedDays: rows.length,
+      detectedDrivers: rows[0] ? Object.keys(rows[0].assignments).length : 0,
+      generatedShifts: generatedPlanning.summary.generatedShifts,
+      matchedServices: generatedPlanning.summary.matchedServices,
+      skippedAbsences: generatedPlanning.summary.skippedAbsences,
+      unknownCodes: generatedPlanning.summary.unknownCodes,
+      unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to preview planning matrix", details: err.message });
   }
 });
 
