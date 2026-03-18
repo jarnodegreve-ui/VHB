@@ -719,11 +719,8 @@ export default function App() {
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
         <div className="p-6 flex items-center justify-between border-b fine-divider relative">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-oker-500 rounded-[14px] flex items-center justify-center shadow-md shadow-oker-500/30 shrink-0">
-              <Bus size={20} className="text-white" />
-            </div>
             <div>
-              <h1 className="section-title text-[1.25rem] font-black tracking-tight text-slate-900 leading-none">VHB <span className="text-oker-500">Portaal</span></h1>
+              <h1 className="section-title text-[1.25rem] font-black tracking-tight text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
             </div>
           </div>
