@@ -929,7 +929,7 @@ export default function App() {
               {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} onMatrixImported={async () => { await Promise.all([fetchPlanningMatrix(), fetchPlanning()]); }} />}
-              {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} />}
+              {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} users={users} />}
               {currentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
               {currentView === 'beheer-updates' && (
                 <Suspense fallback={<ViewLoader />}>
@@ -2576,7 +2576,7 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
   );
 }
 
-function PlanningMatrixView({ rows, services, planningCodes }: { rows: PlanningMatrixRow[]; services: Service[]; planningCodes: PlanningCode[] }) {
+function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: PlanningMatrixRow[]; services: Service[]; planningCodes: PlanningCode[]; users: User[] }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(rows[0]?.source_date || null);
 
   useEffect(() => {
@@ -2589,6 +2589,35 @@ function PlanningMatrixView({ rows, services, planningCodes }: { rows: PlanningM
   }, [rows, selectedDate]);
 
   const selectedRow = rows.find((row) => row.source_date === selectedDate) || null;
+  const serviceCodeLookup = new Set(services.map((service) => normalizePlanningToken(service.serviceNumber)));
+  const planningCodeLookup = new Set(planningCodes.map((code) => normalizePlanningToken(code.code)));
+  const knownDriverLookup = new Set(
+    users
+      .map((user) => normalizePlanningToken(user.name))
+      .filter((value) => value.length > 0)
+  );
+
+  const globalUnknownCodes = Array.from(new Set(
+    rows.flatMap((row) => Object.values(row.assignments || {}))
+      .map((code) => normalizePlanningToken(code))
+      .filter((code) => code.length > 0 && !serviceCodeLookup.has(code) && !planningCodeLookup.has(code))
+  )).sort((a, b) => a.localeCompare(b));
+
+  const globalUnmatchedDrivers = Array.from(new Set(
+    rows.flatMap((row) => Object.keys(row.assignments || {}))
+      .filter((driver) => {
+        const normalizedDriver = normalizePlanningToken(driver);
+        return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
+      })
+  )).sort((a, b) => a.localeCompare(b));
+
+  const generatedServicesPerDay = new Map(
+    rows.map((row) => [
+      row.source_date,
+      Object.values(row.assignments || {}).filter((code) => serviceCodeLookup.has(normalizePlanningToken(code))).length,
+    ])
+  );
+
   const assignments = selectedRow
     ? Object.entries(selectedRow.assignments)
         .sort((a, b) => a[0].localeCompare(b[0]))
@@ -2598,9 +2627,31 @@ function PlanningMatrixView({ rows, services, planningCodes }: { rows: PlanningM
   const rowsWithAssignments = rows.filter((row) => Object.keys(row.assignments || {}).length > 0);
   const serviceAssignments = assignments.filter((assignment) => assignment.kind === 'service').length;
   const unknownAssignments = assignments.filter((assignment) => assignment.kind === 'unknown').length;
+  const totalGeneratedServices = rows.reduce((count, row) => count + (generatedServicesPerDay.get(row.source_date) || 0), 0);
 
   return (
     <div className="space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard
+          icon={<Clock className="text-emerald-600" />}
+          label="Gegenereerde Diensten"
+          value={totalGeneratedServices.toString()}
+          subValue="Gematcht vanuit Dienstoverzicht"
+        />
+        <StatCard
+          icon={<AlertTriangle className="text-slate-600" />}
+          label="Onbekende Codes"
+          value={globalUnknownCodes.length.toString()}
+          subValue={globalUnknownCodes.length === 0 ? 'Alles herkend' : globalUnknownCodes.slice(0, 3).join(' • ')}
+        />
+        <StatCard
+          icon={<Users className="text-oker-600" />}
+          label="Niet-Gematchte Chauffeurs"
+          value={globalUnmatchedDrivers.length.toString()}
+          subValue={globalUnmatchedDrivers.length === 0 ? 'Alles gekoppeld' : globalUnmatchedDrivers.slice(0, 2).join(' • ')}
+        />
+      </div>
+
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <section className="surface-card rounded-[32px] p-6">
           <div className="mb-5">
@@ -2612,6 +2663,7 @@ function PlanningMatrixView({ rows, services, planningCodes }: { rows: PlanningM
           <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-2">
             {rows.length > 0 ? rows.map((row) => {
               const assignmentCount = Object.keys(row.assignments || {}).length;
+              const generatedServices = generatedServicesPerDay.get(row.source_date) || 0;
               const isActive = row.source_date === selectedDate;
               return (
                 <button
@@ -2628,6 +2680,10 @@ function PlanningMatrixView({ rows, services, planningCodes }: { rows: PlanningM
                   <div className="mt-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
                     <span>Dagtype {row.day_type || '-'}</span>
                     <span>{assignmentCount} codes</span>
+                  </div>
+                  <div className="mt-1 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    <span>{generatedServices} diensten</span>
+                    {generatedServices === 0 && assignmentCount > 0 ? <span>controle nodig</span> : <span>&nbsp;</span>}
                   </div>
                 </button>
               );
