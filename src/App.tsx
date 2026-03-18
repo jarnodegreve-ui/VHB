@@ -1501,9 +1501,9 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               </p>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[120px]">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Lijn</p>
-              <p className="text-3xl font-black text-oker-500">{nextShift.line}</p>
+            <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[180px]">
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Tijd</p>
+              <p className="text-3xl font-black text-oker-500">{nextShift.startTime}</p>
             </div>
           </div>
         </motion.div>
@@ -1514,7 +1514,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
           icon={<Clock className="text-oker-600" />} 
           label="Vandaag" 
           value={todaysShift?.startTime || '--:--'} 
-          subValue={todaysShift?.line ? `Lijn ${todaysShift.line}` : 'Geen dienst vandaag'} 
+          subValue={todaysShift ? `${todaysShift.startTime} - ${todaysShift.endTime}` : 'Geen dienst vandaag'} 
         />
         <StatCard 
           icon={<AlertTriangle className="text-red-500" />} 
@@ -1549,12 +1549,12 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               return true;
             }).slice(0, 2).map(shift => (
               <div key={shift.id} className="flex items-center gap-5 p-5 bg-slate-50/50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all duration-300">
-                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center font-black text-xl text-oker-600 shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
-                  {shift.line}
+                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
+                  <Clock size={20} className="text-oker-500" />
                 </div>
                 <div className="flex-1">
                   <p className="font-black text-lg text-slate-800">{shift.startTime} - {shift.endTime}</p>
-                  <p className="text-sm text-slate-400 font-medium">Lijn {shift.line}</p>
+                  <p className="text-sm text-slate-400 font-medium">{shift.date}</p>
                 </div>
               </div>
             ))}
@@ -1839,8 +1839,8 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
         `DTSTAMP:${formatICSDate(new Date())}`,
         `DTSTART:${formatICSDate(startDate)}`,
         `DTEND:${formatICSDate(endDate)}`,
-        `SUMMARY:VHB Dienst - Lijn ${shift.line}`,
-        `DESCRIPTION:Lijn ${shift.line}`,
+        `SUMMARY:VHB Dienst`,
+        `DESCRIPTION:Dienst ${shift.startTime} - ${shift.endTime}`,
         'END:VEVENT'
       ].join('\r\n');
     }).join('\r\n');
@@ -1876,7 +1876,6 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
               <tr className="bg-slate-50/50 border-b border-slate-100">
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijd</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -1888,11 +1887,6 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
                       <Clock size={16} className="text-oker-400" />
                       {shift.startTime} - {shift.endTime}
                     </div>
-                  </td>
-                  <td className="px-8 py-6">
-                    <span className="px-4 py-1.5 bg-oker-50 text-oker-700 rounded-xl font-black text-xs uppercase tracking-wider">
-                      Lijn {shift.line}
-                    </span>
                   </td>
                 </tr>
               ))}
@@ -1925,13 +1919,6 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
               <div>
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tijdstip</p>
                 <p className="font-black text-slate-800">{shift.startTime} - {shift.endTime}</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3">
-              <div className="p-4 bg-oker-50 rounded-2xl border border-oker-100">
-                <p className="text-[10px] font-black text-oker-400 uppercase tracking-widest mb-1">Lijn</p>
-                <p className="font-black text-oker-700">{shift.line}</p>
               </div>
             </div>
           </div>
@@ -4681,7 +4668,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
               return (
                 <div key={swap.id} className="surface-card p-6 rounded-[32px] flex items-center justify-between">
                   <div>
-                    <p className="font-black text-slate-800">{shift?.line} - {shift?.date}</p>
+                    <p className="font-black text-slate-800">{shift?.date}</p>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
                   </div>
                   <span className={cn(
@@ -4709,7 +4696,8 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
                 <div key={swap.id} className="surface-card p-6 rounded-[32px] space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-black text-slate-800">{shift?.line} - {shift?.date}</p>
+                      <p className="font-black text-slate-800">{shift?.date}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Door: {requester?.name}</p>
                     </div>
                     <button className="px-4 py-2 bg-oker-50 text-oker-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-oker-100 transition-all">
@@ -4753,7 +4741,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
                   return (
                     <tr key={swap.id}>
                       <td className="px-6 py-4 font-bold text-sm">{requester?.name}</td>
-                      <td className="px-6 py-4 text-xs font-medium">{shift?.line} ({shift?.date})</td>
+                      <td className="px-6 py-4 text-xs font-medium">{shift?.date} ({shift?.startTime} - {shift?.endTime})</td>
                       <td className="px-6 py-4">
                         <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-widest">Pending</span>
                       </td>
@@ -4789,7 +4777,7 @@ function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, 
                   >
                     <option value="">Kies een dienst...</option>
                     {myShifts.map(s => (
-                      <option key={s.id} value={s.id}>{s.date} - {s.line} ({s.startTime})</option>
+                      <option key={s.id} value={s.id}>{s.date} ({s.startTime} - {s.endTime})</option>
                     ))}
                   </select>
                 </div>
