@@ -712,12 +712,12 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 w-80 panel-dark m-3 mr-0 rounded-[34px] flex flex-col z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0 overflow-hidden",
+        "fixed inset-y-0 left-0 w-[19rem] panel-dark m-3 mr-0 rounded-[30px] flex flex-col z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0 overflow-hidden",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
-        <div className="pointer-events-none absolute inset-x-5 top-0 h-24 rounded-b-[32px] bg-white/35 blur-2xl opacity-90" />
-        <div className="pointer-events-none absolute -right-10 top-20 h-48 w-48 rounded-full bg-oker-200/20 blur-3xl" />
-        <div className="p-8 flex flex-col items-start border-b border-white/8 relative">
+        <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
+        <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
+        <div className="p-7 flex flex-col items-start border-b fine-divider relative">
           <button 
             onClick={() => setIsSidebarOpen(false)}
             className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 lg:hidden"
@@ -726,13 +726,13 @@ export default function App() {
           </button>
           <div className="w-full text-center">
             <div>
-              <h1 className="text-2xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1">Van Hoorebeke en Zoon</p>
+              <h1 className="section-title text-[2rem] font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
+              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1.5">Van Hoorebeke en Zoon</p>
             </div>
           </div>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
           <NavItem 
             icon={<LayoutDashboard size={20} />} 
             label="Dashboard" 
@@ -784,7 +784,7 @@ export default function App() {
 
           {isPlanner && (
             <>
-              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Beheer</div>
+              <div className="pt-5 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Beheer</div>
               <NavItem 
                 icon={<Calendar size={20} />} 
                 label="Verlofbeheer" 
@@ -838,7 +838,7 @@ export default function App() {
 
           {isAdmin && (
             <>
-              <div className="pt-6 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Admin</div>
+              <div className="pt-5 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Admin</div>
               <NavItem 
                 icon={<Users size={20} />} 
                 label="Gebruikers" 
@@ -855,7 +855,7 @@ export default function App() {
           )}
         </nav>
 
-        <div className="p-6 border-t border-white/8">
+        <div className="p-5 border-t fine-divider">
           <button 
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-4 py-3 text-slate-500 hover:text-red-500 hover:bg-white/65 rounded-2xl transition-all duration-300 font-bold text-sm"
@@ -869,9 +869,9 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
-        <header className="mx-3 mt-3 rounded-[30px] panel h-20 md:h-24 flex items-center justify-between px-4 md:px-8 shrink-0 z-30 overflow-hidden relative">
-          <div className="pointer-events-none absolute inset-x-10 top-0 h-12 rounded-b-[28px] bg-white/40 blur-2xl" />
-          <div className="pointer-events-none absolute right-8 top-2 h-16 w-28 rounded-full bg-oker-200/20 blur-2xl" />
+        <header className="mx-3 mt-3 rounded-[28px] panel h-20 md:h-22 flex items-center justify-between px-5 md:px-7 shrink-0 z-30 overflow-hidden relative">
+          <div className="pointer-events-none absolute inset-x-10 top-0 h-10 rounded-b-[24px] bg-white/38 blur-2xl" />
+          <div className="pointer-events-none absolute right-8 top-2 h-14 w-24 rounded-full bg-oker-200/16 blur-2xl" />
           <div className="flex items-center gap-3">
             <button 
               onClick={() => setIsSidebarOpen(true)}
@@ -881,14 +881,14 @@ export default function App() {
             </button>
             <div className="flex flex-col">
               <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.24em]">Operations</p>
-              <h2 className="text-xl md:text-2xl font-black tracking-tight">
+              <h2 className="section-title text-xl md:text-[1.8rem] font-black tracking-tight">
                 {currentMeta.title}
               </h2>
-              <p className="hidden md:block text-sm font-medium text-slate-500">{currentMeta.subtitle}</p>
+              <p className="hidden md:block text-sm font-medium text-slate-500 max-w-2xl">{currentMeta.subtitle}</p>
             </div>
           </div>
           <div className="flex items-center gap-3 md:gap-4">
-            <div className="hidden xl:flex items-center gap-3 rounded-[22px] bg-white/52 px-4 py-3 ring-1 ring-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_10px_24px_rgba(15,23,42,0.06)] backdrop-blur-xl">
+            <div className="hidden xl:flex items-center gap-3 rounded-[20px] bg-white/52 px-4 py-2.5 ring-1 ring-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_rgba(15,23,42,0.05)] backdrop-blur-xl">
               <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
               <div>
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Systeem</p>
@@ -899,14 +899,14 @@ export default function App() {
               <p className="text-sm font-black text-slate-800">{currentUser.name}</p>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{currentUser.role} • {currentUser.employeeId}</p>
             </div>
-            <div className="w-11 h-11 md:w-12 md:h-12 bg-white/58 rounded-2xl flex items-center justify-center text-oker-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_10px_22px_rgba(245,158,11,0.12)] border border-white/85 backdrop-blur-xl">
+            <div className="w-11 h-11 md:w-12 md:h-12 bg-white/58 rounded-[18px] flex items-center justify-center text-oker-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_8px_18px_rgba(245,158,11,0.1)] border border-white/85 backdrop-blur-xl">
               <UserIcon size={20} />
             </div>
           </div>
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto px-4 pb-24 pt-5 md:px-8 lg:pb-8">
+        <div className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-7 lg:pb-8">
           <AnimatePresence mode="wait">
             <motion.div
               key={currentView}
@@ -914,7 +914,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(6px)' }}
               transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto max-w-[1440px]"
+              className="mx-auto max-w-[1360px]"
             >
               {currentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
               {currentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
@@ -1027,19 +1027,20 @@ function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, labe
     <button 
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 w-full px-4 py-3.5 rounded-2xl transition-all duration-300 group relative overflow-hidden text-left",
+        "flex items-center gap-3.5 w-full px-4 py-3 rounded-[20px] transition-all duration-300 group relative overflow-hidden text-left",
         active 
-          ? "bg-white text-slate-900 shadow-lg shadow-black/10 font-bold" 
-          : "text-slate-500 hover:text-slate-900 hover:bg-white/55 font-medium"
+          ? "bg-white/88 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.08)] font-bold ring-1 ring-white/90" 
+          : "text-slate-500 hover:text-slate-900 hover:bg-white/52 font-medium"
       )}
     >
+      {active && <div className="absolute inset-y-3 left-0 w-1 rounded-full bg-oker-500" />}
       <span className={cn(
         "relative z-10 transition-transform duration-300 group-hover:scale-110",
         active ? "text-oker-600" : "text-slate-400 group-hover:text-oker-600"
       )}>
         {icon}
       </span>
-      <span className="relative z-10">{label}</span>
+      <span className="relative z-10 text-[15px]">{label}</span>
       {active && <div className="ml-auto h-2.5 w-2.5 rounded-full bg-oker-500" />}
     </button>
   );
@@ -4603,15 +4604,15 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
 
 function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string, subValue: string }) {
   return (
-    <div className="panel p-6 md:p-7 rounded-[30px] flex items-center gap-4 md:gap-5 group transition-all duration-500 relative overflow-hidden hover:-translate-y-0.5">
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-oker-300 via-oker-500 to-amber-200 opacity-70" />
-      <div className="p-3 md:p-4 bg-oker-50 rounded-2xl relative z-10 group-hover:scale-105 transition-transform ring-1 ring-oker-100">
+    <div className="panel p-5 md:p-6 rounded-[26px] flex items-center gap-4 md:gap-5 group transition-all duration-300 relative overflow-hidden hover:-translate-y-0.5">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/0 via-white/90 to-white/0" />
+      <div className="p-3 md:p-3.5 bg-oker-50/85 rounded-[18px] relative z-10 group-hover:scale-[1.03] transition-transform ring-1 ring-oker-100/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
         {icon}
       </div>
-      <div className="relative z-10">
-        <p className="text-[10px] md:text-xs font-black text-slate-400 uppercase tracking-[0.22em]">{label}</p>
-        <p className="text-2xl md:text-3xl font-black text-slate-900 mt-1 tracking-tight">{value}</p>
-        <p className="text-[11px] md:text-xs text-slate-500 mt-1.5 font-medium">{subValue}</p>
+      <div className="relative z-10 min-w-0">
+        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.22em]">{label}</p>
+        <p className="section-title text-[1.7rem] md:text-[2rem] font-black text-slate-900 mt-1 tracking-tight">{value}</p>
+        <p className="text-[11px] md:text-xs text-slate-500 mt-1 font-medium leading-5">{subValue}</p>
       </div>
     </div>
   );
