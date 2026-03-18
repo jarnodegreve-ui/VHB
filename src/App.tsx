@@ -2578,6 +2578,8 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
 
 function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: PlanningMatrixRow[]; services: Service[]; planningCodes: PlanningCode[]; users: User[] }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(rows[0]?.source_date || null);
+  const [showOnlyIssues, setShowOnlyIssues] = useState(false);
+  const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
 
   useEffect(() => {
     if (!selectedDate && rows[0]?.source_date) {
@@ -2625,9 +2627,32 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
     : [];
 
   const rowsWithAssignments = rows.filter((row) => Object.keys(row.assignments || {}).length > 0);
+  const rowsWithIssues = rows.filter((row) => {
+    const rowUnknownCodes = Object.values(row.assignments || {}).some((code) => {
+      const normalizedCode = normalizePlanningToken(code);
+      return normalizedCode.length > 0 && !serviceCodeLookup.has(normalizedCode) && !planningCodeLookup.has(normalizedCode);
+    });
+    const rowUnmatchedDrivers = Object.keys(row.assignments || {}).some((driver) => {
+      const normalizedDriver = normalizePlanningToken(driver);
+      return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
+    });
+    return rowUnknownCodes || rowUnmatchedDrivers;
+  });
+  const visibleRows = showOnlyIssues ? rowsWithIssues : rows;
   const serviceAssignments = assignments.filter((assignment) => assignment.kind === 'service').length;
   const unknownAssignments = assignments.filter((assignment) => assignment.kind === 'unknown').length;
   const totalGeneratedServices = rows.reduce((count, row) => count + (generatedServicesPerDay.get(row.source_date) || 0), 0);
+  const unmatchedDriversForSelectedDay = selectedRow
+    ? Object.keys(selectedRow.assignments || {})
+        .filter((driver) => {
+          const normalizedDriver = normalizePlanningToken(driver);
+          return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
+        })
+        .sort((a, b) => a.localeCompare(b))
+    : [];
+  const filteredAssignments = highlightedCode
+    ? assignments.filter((assignment) => normalizePlanningToken(assignment.code) === highlightedCode)
+    : assignments;
 
   return (
     <div className="space-y-6">
@@ -2652,18 +2677,75 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
         />
       </div>
 
+      <section className="surface-card rounded-[32px] p-5 md:p-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h3 className="text-lg font-black tracking-tight">Controlefilters</h3>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              Filter op probleemdagen of klik een onbekende code om enkel die assignments te bekijken.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setShowOnlyIssues((current) => !current)}
+              className={cn(
+                "rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] transition-all",
+                showOnlyIssues ? "border-red-200 bg-red-50 text-red-700" : "border-white/70 bg-white/55 text-slate-500 hover:bg-white/80"
+              )}
+            >
+              {showOnlyIssues ? 'Alleen Probleemdagen' : 'Toon Alle Dagen'}
+            </button>
+            {highlightedCode ? (
+              <button
+                onClick={() => setHighlightedCode(null)}
+                className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] text-oker-700 transition-all hover:bg-oker-100"
+              >
+                Reset Codefilter
+              </button>
+            ) : null}
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
+          {globalUnknownCodes.length > 0 ? globalUnknownCodes.map((code) => (
+            <button
+              key={code}
+              onClick={() => setHighlightedCode(code)}
+              className={cn(
+                "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all",
+                highlightedCode === code ? "border-red-300 bg-red-100 text-red-800" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+              )}
+            >
+              {code}
+            </button>
+          )) : (
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700">
+              Geen onbekende codes
+            </span>
+          )}
+        </div>
+      </section>
+
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <section className="surface-card rounded-[32px] p-6">
           <div className="mb-5">
             <h3 className="text-lg font-black tracking-tight">Geuploade Dagen</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
-              {rows.length} dagen in staging, {rowsWithAssignments.length} met effectieve assignments.
+              {visibleRows.length} getoond, {rowsWithAssignments.length} met effectieve assignments en {rowsWithIssues.length} met controlepunten.
             </p>
           </div>
           <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-2">
-            {rows.length > 0 ? rows.map((row) => {
+            {visibleRows.length > 0 ? visibleRows.map((row) => {
               const assignmentCount = Object.keys(row.assignments || {}).length;
               const generatedServices = generatedServicesPerDay.get(row.source_date) || 0;
+              const rowUnknownCodes = Object.values(row.assignments || {}).filter((code) => {
+                const normalizedCode = normalizePlanningToken(code);
+                return normalizedCode.length > 0 && !serviceCodeLookup.has(normalizedCode) && !planningCodeLookup.has(normalizedCode);
+              }).length;
+              const rowUnmatchedDrivers = Object.keys(row.assignments || {}).filter((driver) => {
+                const normalizedDriver = normalizePlanningToken(driver);
+                return normalizedDriver.length > 0 && !knownDriverLookup.has(normalizedDriver);
+              }).length;
               const isActive = row.source_date === selectedDate;
               return (
                 <button
@@ -2683,15 +2765,31 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
                   </div>
                   <div className="mt-1 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
                     <span>{generatedServices} diensten</span>
-                    {generatedServices === 0 && assignmentCount > 0 ? <span>controle nodig</span> : <span>&nbsp;</span>}
+                    {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
+                      ? <span>controle nodig</span>
+                      : <span>&nbsp;</span>}
                   </div>
+                  {(rowUnknownCodes > 0 || rowUnmatchedDrivers > 0) ? (
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {rowUnknownCodes > 0 ? (
+                        <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-700">
+                          {rowUnknownCodes} onbekend
+                        </span>
+                      ) : null}
+                      {rowUnmatchedDrivers > 0 ? (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                          {rowUnmatchedDrivers} chauffeur
+                        </span>
+                      ) : null}
+                    </div>
+                  ) : null}
                 </button>
               );
             }) : (
               <EmptyState
                 icon={<Calendar size={28} />}
-                title="Nog geen matrixplanning"
-                message="Upload eerst een matrix-CSV via Beheer Roosters om hier een overzicht te zien."
+                title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
+                message={showOnlyIssues ? "Alle geüploade dagen zijn momenteel volledig herkenbaar." : "Upload eerst een matrix-CSV via Beheer Roosters om hier een overzicht te zien."}
               />
             )}
           </div>
@@ -2735,6 +2833,29 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
                 />
               </div>
 
+              {(unmatchedDriversForSelectedDay.length > 0 || highlightedCode) ? (
+                <div className="mt-6 grid gap-4 lg:grid-cols-2">
+                  <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {unmatchedDriversForSelectedDay.length > 0 ? unmatchedDriversForSelectedDay.map((driver) => (
+                        <span key={driver} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
+                          {driver}
+                        </span>
+                      )) : (
+                        <span className="text-sm font-medium text-amber-700">Geen niet-gematchte chauffeurs voor deze dag.</span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Codefilter</p>
+                    <p className="mt-3 text-sm font-medium text-red-700">
+                      {highlightedCode ? `Je bekijkt nu enkel assignments met code ${highlightedCode}.` : 'Geen actieve codefilter.'}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mt-6 surface-table rounded-[28px] overflow-hidden">
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left">
@@ -2747,7 +2868,7 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-50">
-                      {assignments.map((assignment) => (
+                      {filteredAssignments.map((assignment) => (
                         <tr key={assignment.driver} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4 text-sm font-bold text-slate-800">{assignment.driver}</td>
                           <td className="px-6 py-4">
@@ -2771,7 +2892,7 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
                 </div>
 
                 <div className="divide-y divide-slate-50 md:hidden">
-                  {assignments.map((assignment) => (
+                  {filteredAssignments.map((assignment) => (
                     <div key={assignment.driver} className="p-5">
                       <p className="text-sm font-black text-slate-800">{assignment.driver}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
