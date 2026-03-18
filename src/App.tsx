@@ -712,24 +712,27 @@ export default function App() {
 
       {/* Sidebar */}
       <aside className={cn(
-        "fixed inset-y-0 left-0 w-[19rem] panel-dark m-3 mr-0 rounded-[30px] flex flex-col z-50 transition-transform duration-300 transform lg:relative lg:translate-x-0 overflow-hidden",
+        "fixed inset-y-0 left-0 w-[19rem] panel-dark ios-soft-panel m-3 mr-0 rounded-[30px] flex flex-col z-50 transition-transform duration-500 transform lg:relative lg:translate-x-0 overflow-hidden",
         isSidebarOpen ? "translate-x-0" : "-translate-x-full"
       )}>
         <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
-        <div className="p-7 flex flex-col items-start border-b fine-divider relative">
-          <button 
-            onClick={() => setIsSidebarOpen(false)}
-            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 lg:hidden"
-          >
-            <X size={20} />
-          </button>
-          <div className="w-full text-center">
+        <div className="p-6 flex items-center justify-between border-b fine-divider relative">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-oker-500 rounded-[14px] flex items-center justify-center shadow-md shadow-oker-500/30 shrink-0">
+              <Bus size={20} className="text-white" />
+            </div>
             <div>
-              <h1 className="section-title text-[2rem] font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-[0.24em] mt-1.5">Van Hoorebeke en Zoon</p>
+              <h1 className="section-title text-[1.25rem] font-black tracking-tight text-slate-900 leading-none">VHB <span className="text-oker-500">Portaal</span></h1>
+              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
             </div>
           </div>
+          <button
+            onClick={() => setIsSidebarOpen(false)}
+            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors lg:hidden"
+          >
+            <X size={18} />
+          </button>
         </div>
 
         <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
@@ -855,12 +858,22 @@ export default function App() {
           )}
         </nav>
 
-        <div className="p-5 border-t fine-divider">
-          <button 
+        <div className="p-4 border-t fine-divider space-y-2">
+          {/* User profile card */}
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-white/40">
+            <div className="w-8 h-8 rounded-xl bg-oker-100 flex items-center justify-center text-oker-700 shrink-0">
+              <UserIcon size={16} />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-bold text-slate-800 truncate leading-tight">{currentUser.name}</p>
+              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{currentUser.role}</p>
+            </div>
+          </div>
+          <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-4 py-3 text-slate-500 hover:text-red-500 hover:bg-white/65 rounded-2xl transition-all duration-300 font-bold text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
           >
-            <LogOut size={20} />
+            <LogOut size={16} />
             <span>Uitloggen</span>
           </button>
         </div>
@@ -869,38 +882,34 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
-        <header className="mx-3 mt-3 rounded-[28px] panel h-20 md:h-22 flex items-center justify-between px-5 md:px-7 shrink-0 z-30 overflow-hidden relative">
-          <div className="pointer-events-none absolute inset-x-10 top-0 h-10 rounded-b-[24px] bg-white/38 blur-2xl" />
-          <div className="pointer-events-none absolute right-8 top-2 h-14 w-24 rounded-full bg-oker-200/16 blur-2xl" />
+        <header className="mx-3 mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 shrink-0 z-30 relative">
           <div className="flex items-center gap-3">
-            <button 
+            <button
               onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-500 hover:bg-slate-100 rounded-xl lg:hidden transition-colors"
+              className="p-2 text-slate-400 hover:bg-slate-100/70 rounded-xl lg:hidden transition-colors"
             >
-              <Menu size={24} />
+              <Menu size={22} />
             </button>
-            <div className="flex flex-col">
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.24em]">Operations</p>
-              <h2 className="section-title text-xl md:text-[1.8rem] font-black tracking-tight">
+            <div>
+              <h2 className="section-title text-xl md:text-2xl font-black tracking-tight text-slate-900 leading-tight">
                 {currentMeta.title}
               </h2>
-              <p className="hidden md:block text-sm font-medium text-slate-500 max-w-2xl">{currentMeta.subtitle}</p>
+              <p className="hidden md:block text-xs font-medium text-slate-400 mt-0.5 max-w-xl">{currentMeta.subtitle}</p>
             </div>
           </div>
-          <div className="flex items-center gap-3 md:gap-4">
-            <div className="hidden xl:flex items-center gap-3 rounded-[20px] bg-white/52 px-4 py-2.5 ring-1 ring-white/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9),0_8px_20px_rgba(15,23,42,0.05)] backdrop-blur-xl">
-              <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-              <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">Systeem</p>
-                <p className="text-sm font-black text-slate-700">Online en gesynchroniseerd</p>
+          <div className="flex items-center gap-2.5">
+            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100">
+              <div className="h-2 w-2 rounded-full bg-emerald-500" />
+              <p className="text-xs font-semibold text-emerald-700">Online</p>
+            </div>
+            <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-100">
+              <div className="w-9 h-9 bg-oker-50 rounded-xl flex items-center justify-center text-oker-600 border border-oker-100/60">
+                <UserIcon size={17} />
               </div>
-            </div>
-            <div className="text-right hidden sm:block">
-              <p className="text-sm font-black text-slate-800">{currentUser.name}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.16em]">{currentUser.role} • {currentUser.employeeId}</p>
-            </div>
-            <div className="w-11 h-11 md:w-12 md:h-12 bg-white/58 rounded-[18px] flex items-center justify-center text-oker-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.95),0_8px_18px_rgba(245,158,11,0.1)] border border-white/85 backdrop-blur-xl">
-              <UserIcon size={20} />
+              <div className="text-left">
+                <p className="text-sm font-bold text-slate-800 leading-tight">{currentUser.name}</p>
+                <p className="text-[10px] text-slate-400 uppercase tracking-wide">{currentUser.role}</p>
+              </div>
             </div>
           </div>
         </header>
@@ -913,7 +922,7 @@ export default function App() {
               initial={{ opacity: 0, y: 18, scale: 0.985, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(6px)' }}
-              transition={{ duration: 0.34, ease: [0.22, 1, 0.36, 1] }}
+              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto max-w-[1360px]"
             >
               {currentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
@@ -991,7 +1000,7 @@ export default function App() {
           />
           <button 
             onClick={() => setIsSidebarOpen(true)}
-            className="p-3 text-slate-400 hover:text-oker-500 transition-colors"
+            className="ios-pressable p-3 text-slate-400 hover:text-oker-500 transition-colors"
           >
             <Menu size={20} />
           </button>
@@ -1007,13 +1016,14 @@ function MobileNavItem({ icon, active, onClick }: { icon: React.ReactNode, activ
     <button 
       onClick={onClick}
       className={cn(
-        "p-3 rounded-2xl transition-all duration-300 relative",
+        "ios-pressable p-3 rounded-2xl transition-all duration-300 relative",
         active ? "text-oker-600 bg-oker-50 shadow-inner" : "text-slate-400 hover:text-slate-600"
       )}
     >
       {active && (
         <motion.div 
           layoutId="activeTab"
+          transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.8 }}
           className="absolute inset-0 bg-oker-500/10 rounded-2xl -z-10"
         />
       )}
@@ -1024,24 +1034,22 @@ function MobileNavItem({ icon, active, onClick }: { icon: React.ReactNode, activ
 
 function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
   return (
-    <button 
+    <button
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3.5 w-full px-4 py-3 rounded-[20px] transition-all duration-300 group relative overflow-hidden text-left",
-        active 
-          ? "bg-white/88 text-slate-900 shadow-[0_10px_24px_rgba(15,23,42,0.08)] font-bold ring-1 ring-white/90" 
-          : "text-slate-500 hover:text-slate-900 hover:bg-white/52 font-medium"
+        "ios-pressable flex items-center gap-3 w-full px-3 py-2.5 rounded-2xl transition-all duration-300 group text-left",
+        active
+          ? "bg-white/90 text-slate-900 shadow-sm font-semibold"
+          : "text-slate-500 hover:text-slate-800 hover:bg-white/50 font-medium"
       )}
     >
-      {active && <div className="absolute inset-y-3 left-0 w-1 rounded-full bg-oker-500" />}
       <span className={cn(
-        "relative z-10 transition-transform duration-300 group-hover:scale-110",
-        active ? "text-oker-600" : "text-slate-400 group-hover:text-oker-600"
+        "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-200",
+        active ? "bg-oker-500 text-white shadow-sm shadow-oker-500/30" : "text-slate-400 group-hover:text-oker-500"
       )}>
         {icon}
       </span>
-      <span className="relative z-10 text-[15px]">{label}</span>
-      {active && <div className="ml-auto h-2.5 w-2.5 rounded-full bg-oker-500" />}
+      <span className="text-[14px] leading-none">{label}</span>
     </button>
   );
 }
@@ -1084,77 +1092,121 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
   };
 
   return (
-    <div className="min-h-screen bg-oker-50 flex items-center justify-center p-6 relative overflow-hidden">
-      {/* Decorative background elements */}
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-oker-200/20 rounded-full blur-3xl animate-pulse" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-oker-300/20 rounded-full blur-3xl animate-pulse delay-1000" />
+    <div className="min-h-screen flex relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #f8f6f0 0%, #f1ede4 100%)' }}>
+      {/* Left brand panel — hidden on mobile */}
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden" style={{ background: 'linear-gradient(160deg, #1e293b 0%, #0f172a 60%, #1a1208 100%)' }}>
+        {/* Decorative glows */}
+        <div className="absolute top-0 right-0 w-[60%] h-[50%] rounded-full blur-3xl opacity-30" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.4) 0%, transparent 70%)' }} />
+        <div className="absolute bottom-0 left-0 w-[50%] h-[40%] rounded-full blur-3xl opacity-20" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.3) 0%, transparent 70%)' }} />
+        {/* Grid pattern overlay */}
+        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
 
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
-        animate={{ opacity: 1, scale: 1, y: 0 }}
-        className="w-full max-w-md glass rounded-[40px] shadow-2xl overflow-hidden relative z-10"
-      >
-        <div className="p-10 text-center flex flex-col items-center">
-          <h1 className="text-4xl font-black tracking-tighter text-slate-900 mb-2">VHB <span className="text-oker-500">PORTAAL</span></h1>
-          <p className="w-full text-center text-slate-500 font-bold uppercase text-xs tracking-[0.2em]">Van Hoorebeke en Zoon</p>
+        {/* Brand */}
+        <div className="relative z-10">
+          <div className="inline-flex items-center gap-3 mb-3">
+            <div className="w-10 h-10 bg-oker-500 rounded-2xl flex items-center justify-center shadow-lg shadow-oker-500/30">
+              <Bus size={22} className="text-white" />
+            </div>
+          </div>
+          <h1 className="text-4xl font-black tracking-tight text-white">VHB <span className="text-oker-400">Portaal</span></h1>
+          <p className="mt-2 text-slate-400 font-medium text-sm tracking-wide">Van Hoorebeke en Zoon</p>
         </div>
-        
-        <form onSubmit={handleSubmit} className="p-10 pt-0 space-y-6">
-          <div className="space-y-2">
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">E-mailadres</label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => {
-                setEmail(e.target.value);
-                setError('');
-              }}
-              className="w-full px-6 py-4 rounded-2xl border border-slate-100 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all bg-white/80 backdrop-blur-sm shadow-inner font-bold text-slate-700"
-              required
-              placeholder="naam@bedrijf.be"
-            />
+
+        {/* Feature list */}
+        <div className="relative z-10 space-y-5">
+          {[
+            { icon: <Calendar size={18} />, label: 'Roosters & Planning', desc: 'Bekijk je diensten en planningsmatrix.' },
+            { icon: <MapPin size={18} />, label: 'Omleidingen', desc: 'Realtime routewijzigingen voor chauffeurs.' },
+            { icon: <Bell size={18} />, label: 'Updates & Meldingen', desc: 'Nieuws, veiligheid en technische info.' },
+          ].map(f => (
+            <div key={f.label} className="flex items-start gap-4">
+              <div className="w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center text-oker-400 shrink-0">{f.icon}</div>
+              <div>
+                <p className="text-sm font-bold text-white">{f.label}</p>
+                <p className="text-xs text-slate-500 mt-0.5">{f.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        <p className="relative z-10 text-xs text-slate-600">© {new Date().getFullYear()} Van Hoorebeke en Zoon. Intern gebruik.</p>
+      </div>
+
+      {/* Right form panel */}
+      <div className="flex-1 flex items-center justify-center p-8">
+        <motion.div
+          initial={{ opacity: 0, y: 16, scale: 0.985, filter: 'blur(8px)' }}
+          animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          className="w-full max-w-sm"
+        >
+          {/* Mobile-only brand */}
+          <div className="lg:hidden text-center mb-10">
+            <div className="inline-flex items-center gap-2.5 mb-3">
+              <div className="w-9 h-9 bg-oker-500 rounded-xl flex items-center justify-center">
+                <Bus size={18} className="text-white" />
+              </div>
+            </div>
+            <h1 className="text-3xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
+            <p className="mt-1 text-slate-400 text-xs font-medium tracking-widest uppercase">Van Hoorebeke en Zoon</p>
           </div>
 
-          <div className="space-y-2">
-            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Wachtwoord</label>
-            <input 
-              type="password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                setError('');
-              }}
-              placeholder="••••••"
-              className="w-full px-6 py-4 rounded-2xl border border-slate-100 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all bg-white/80 backdrop-blur-sm shadow-inner font-bold text-slate-700"
-              required
-            />
+          <div className="mb-8">
+            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Welkom terug</h2>
+            <p className="mt-1 text-sm text-slate-500 font-medium">Meld je aan om verder te gaan.</p>
           </div>
 
-          {error && (
-            <motion.p 
-              initial={{ opacity: 0, y: -10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-red-500 text-xs font-bold text-center"
-            >
-              {error}
-            </motion.p>
-          )}
+          <form onSubmit={handleSubmit} className="space-y-5">
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">E-mailadres</label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => { setEmail(e.target.value); setError(''); }}
+                className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-oker-400/40 focus:border-oker-400 transition-all bg-white shadow-sm font-medium text-slate-800 placeholder:text-slate-300"
+                required
+                placeholder="naam@bedrijf.be"
+              />
+            </div>
 
-          <button 
-            type="submit"
-            disabled={isSubmitting}
-            className={cn(
-              "w-full font-black py-5 rounded-2xl transition-all shadow-xl relative group overflow-hidden",
-              isSubmitting
-                ? "bg-slate-300 text-white cursor-not-allowed shadow-none"
-                : "bg-oker-500 text-white hover:bg-oker-600 shadow-oker-500/30"
+            <div className="space-y-1.5">
+              <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Wachtwoord</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => { setPassword(e.target.value); setError(''); }}
+                placeholder="••••••••"
+                className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-oker-400/40 focus:border-oker-400 transition-all bg-white shadow-sm font-medium text-slate-800 placeholder:text-slate-300"
+                required
+              />
+            </div>
+
+            {error && (
+              <motion.div
+                initial={{ opacity: 0, y: -6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl"
+              >
+                <AlertTriangle size={14} className="text-red-400 shrink-0" />
+                <p className="text-red-600 text-sm font-medium">{error}</p>
+              </motion.div>
             )}
-          >
-            <div className="absolute inset-0 glass-oker opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none rounded-2xl" />
-            <span className="relative z-10">{isSubmitting ? 'BEZIG...' : 'INLOGGEN'}</span>
-          </button>
-        </form>
-      </motion.div>
+
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className={cn(
+                "ios-pressable w-full font-bold py-4 rounded-2xl transition-all mt-2 text-sm tracking-wide",
+                isSubmitting
+                  ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                  : "bg-oker-500 text-white hover:bg-oker-600 shadow-lg shadow-oker-500/25 hover:shadow-oker-500/35"
+              )}
+            >
+              {isSubmitting ? 'Bezig met inloggen...' : 'Inloggen'}
+            </button>
+          </form>
+        </motion.div>
+      </div>
     </div>
   );
 }
@@ -1464,6 +1516,7 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
     })
     .filter(s => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
+  const newestDiversions = [...diversions].reverse().slice(0, 3);
 
   const getCountdown = (target: Date) => {
     const diff = target.getTime() - now.getTime();
@@ -1477,34 +1530,40 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
 
   return (
     <div className="space-y-8">
-      {/* Prominent Next Shift Card */}
+      {/* Next Shift Hero */}
       {nextShift && user.role === 'chauffeur' && (
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          className="panel-dark relative overflow-hidden rounded-[40px] p-8 md:p-12 text-white"
+          className="relative overflow-hidden rounded-[28px] p-7 md:p-9"
+          style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 60%, #231509 100%)' }}
         >
-          {/* Decorative background elements */}
-          <div className="absolute top-0 right-0 w-64 h-64 bg-oker-500/10 rounded-full -mr-32 -mt-32 blur-3xl" />
-          <div className="absolute bottom-0 left-0 w-64 h-64 bg-oker-500/5 rounded-full -ml-32 -mb-32 blur-3xl" />
-          
-          <div className="relative flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="space-y-4 text-center md:text-left">
-              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-full border border-white/10">
-                <div className="w-2 h-2 bg-oker-500 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-500">Volgende Dienst</span>
+          <div className="absolute top-0 right-0 w-80 h-80 rounded-full -mr-40 -mt-40 blur-3xl" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.18) 0%, transparent 70%)' }} />
+          <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 blur-3xl" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)' }} />
+
+          <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-oker-500/15 border border-oker-500/20 rounded-full mb-4">
+                <div className="w-1.5 h-1.5 bg-oker-400 rounded-full animate-pulse" />
+                <span className="text-[11px] font-bold text-oker-400 uppercase tracking-widest">Volgende dienst</span>
               </div>
-              <h3 className="text-4xl md:text-6xl font-black tracking-tighter">
-                Over <span className="text-oker-500">{getCountdown(nextShift.startDateTime)}</span>
+              <h3 className="text-3xl md:text-4xl font-black tracking-tight text-white">
+                Over <span className="text-oker-400">{getCountdown(nextShift.startDateTime)}</span>
               </h3>
-              <p className="text-slate-400 font-medium text-lg">
-                Je begint op {nextShift.startDateTime.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} om {nextShift.startTime}u.
+              <p className="text-slate-400 text-sm font-medium mt-2">
+                {nextShift.startDateTime.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} · aanvang {nextShift.startTime}
               </p>
             </div>
 
-            <div className="bg-white/5 backdrop-blur-xl p-6 rounded-[32px] border border-white/10 text-center min-w-[180px]">
-              <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-2">Tijd</p>
-              <p className="text-3xl font-black text-oker-500">{nextShift.startTime}</p>
+            <div className="flex gap-3 shrink-0">
+              <div className="bg-white/6 border border-white/10 rounded-2xl px-6 py-4 text-center">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Start</p>
+                <p className="text-2xl font-black text-oker-400">{nextShift.startTime}</p>
+              </div>
+              <div className="bg-white/6 border border-white/10 rounded-2xl px-6 py-4 text-center">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Einde</p>
+                <p className="text-2xl font-black text-white">{nextShift.endTime}</p>
+              </div>
             </div>
           </div>
         </motion.div>
@@ -1575,13 +1634,13 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
 
         <section className="panel flex h-full min-h-[31rem] flex-col rounded-[32px] p-8">
           <div className="mb-8 flex items-center justify-between">
-            <h3 className="font-black text-xl tracking-tight">Belangrijkste Omleidingen</h3>
+            <h3 className="font-black text-xl tracking-tight">Nieuwe Omleidingen</h3>
             <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-4 py-1.5 rounded-full uppercase tracking-widest">
-              {Math.min(diversions.length, 3)} getoond
+              {Math.min(newestDiversions.length, 3)} getoond
             </span>
           </div>
           <div className="flex flex-1 flex-col gap-4">
-            {diversions.slice(0, 3).map(div => (
+            {newestDiversions.map(div => (
               <div key={div.id} className="flex min-h-[8.25rem] gap-5 rounded-[28px] border border-oker-100/80 bg-oker-50/25 p-5 transition-all group hover:bg-oker-50/45">
                 <div className="shrink-0 mt-1">
                   <AlertTriangle size={24} className="text-oker-600" />
@@ -4611,15 +4670,15 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
 
 function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string, subValue: string }) {
   return (
-    <div className="panel relative flex min-h-[9.5rem] items-center gap-4 overflow-hidden rounded-[26px] p-5 transition-all duration-300 group hover:-translate-y-0.5 md:gap-5 md:p-6">
-      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/0 via-white/90 to-white/0" />
-      <div className="p-3 md:p-3.5 bg-oker-50/85 rounded-[18px] relative z-10 group-hover:scale-[1.03] transition-transform ring-1 ring-oker-100/80 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
+    <div className="panel relative flex items-center gap-4 overflow-hidden rounded-[22px] p-5 transition-all duration-200 group hover:-translate-y-0.5 md:p-6">
+      <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/0 via-white/80 to-white/0" />
+      <div className="p-3 bg-slate-50/90 rounded-2xl relative z-10 ring-1 ring-slate-100 shadow-sm shrink-0">
         {icon}
       </div>
-      <div className="relative z-10 min-w-0">
-        <p className="text-[10px] md:text-[11px] font-black text-slate-400 uppercase tracking-[0.22em]">{label}</p>
-        <p className="section-title text-[1.7rem] md:text-[2rem] font-black text-slate-900 mt-1 tracking-tight">{value}</p>
-        <p className="text-[11px] md:text-xs text-slate-500 mt-1 font-medium leading-5">{subValue}</p>
+      <div className="relative z-10 min-w-0 flex-1">
+        <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest">{label}</p>
+        <p className="section-title text-2xl md:text-[1.75rem] font-black text-slate-900 mt-1 tracking-tight leading-none">{value}</p>
+        <p className="text-xs text-slate-500 mt-1.5 font-medium">{subValue}</p>
       </div>
     </div>
   );
