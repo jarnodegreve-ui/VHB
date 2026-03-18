@@ -1549,9 +1549,9 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
               return true;
             }).slice(0, 2).map(shift => (
               <div key={shift.id} className="flex items-center gap-5 p-5 bg-slate-50/50 rounded-2xl border border-slate-100 group hover:bg-white hover:shadow-md transition-all duration-300">
-                <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
-                  <span className="text-xl font-black text-oker-500">
-                    {shift.line?.slice(-2) || '--'}
+                <div className="min-w-14 h-14 px-3 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
+                  <span className="text-base font-black text-oker-500">
+                    {shift.line || '--'}
                   </span>
                 </div>
                 <div className="flex-1">
