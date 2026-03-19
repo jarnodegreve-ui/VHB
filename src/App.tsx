@@ -736,7 +736,7 @@ export default function App() {
         <div className="p-6 flex items-center justify-between border-b fine-divider relative">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="brand-wordmark section-title text-[1.25rem] font-black text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
+              <h1 className="brand-wordmark section-title text-[1.25rem] text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
             </div>
           </div>
@@ -1107,17 +1107,16 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
   return (
     <div className="min-h-screen flex relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #f8f6f0 0%, #f1ede4 100%)' }}>
       {/* Left brand panel — hidden on mobile */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden" style={{ background: 'linear-gradient(160deg, #fff7e6 0%, #fdf1cf 52%, #f7e7be 100%)' }}>
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden rounded-r-[44px] shadow-[18px_0_50px_rgba(217,119,6,0.08)]" style={{ background: 'linear-gradient(160deg, #fff7e6 0%, #fdf1cf 52%, #f7e7be 100%)' }}>
         {/* Decorative glows */}
         <div className="absolute top-0 right-0 w-[60%] h-[50%] rounded-full blur-3xl opacity-40" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.28) 0%, transparent 72%)' }} />
         <div className="absolute bottom-0 left-0 w-[50%] h-[40%] rounded-full blur-3xl opacity-25" style={{ background: 'radial-gradient(circle, rgba(217,119,6,0.18) 0%, transparent 72%)' }} />
         {/* Grid pattern overlay */}
         <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(rgba(180,83,9,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(180,83,9,0.12) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
-        <div className="absolute inset-y-0 right-0 w-20" style={{ background: 'linear-gradient(90deg, rgba(255,247,230,0) 0%, rgba(255,250,242,0.58) 58%, rgba(248,246,240,0.96) 100%)' }} />
 
         {/* Brand */}
         <div className="relative z-10">
-          <h1 className="brand-wordmark text-4xl font-black text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
+          <h1 className="brand-wordmark text-4xl text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
           <p className="mt-2 text-slate-500 font-medium text-sm tracking-wide">Van Hoorebeke en Zoon</p>
         </div>
 
@@ -1147,11 +1146,11 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
           initial={{ opacity: 0, y: 16, scale: 0.985, filter: 'blur(8px)' }}
           animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          className="w-full max-w-sm"
+          className="w-full max-w-sm lg:pl-6"
         >
           {/* Mobile-only brand */}
           <div className="lg:hidden text-center mb-10">
-            <h1 className="brand-wordmark text-3xl font-black text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
+            <h1 className="brand-wordmark text-3xl text-slate-900">VHB <span className="text-oker-500">PORTAAL</span></h1>
             <p className="mt-1 text-slate-400 text-xs font-medium tracking-widest uppercase">Van Hoorebeke en Zoon</p>
           </div>
 
