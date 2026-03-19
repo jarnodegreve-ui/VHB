@@ -1107,12 +1107,13 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
   return (
     <div className="min-h-screen flex relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #f8f6f0 0%, #f1ede4 100%)' }}>
       {/* Left brand panel — hidden on mobile */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden border-r border-white/70" style={{ background: 'linear-gradient(160deg, #fff7e6 0%, #fdf1cf 52%, #f7e7be 100%)' }}>
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden" style={{ background: 'linear-gradient(160deg, #fff7e6 0%, #fdf1cf 52%, #f7e7be 100%)' }}>
         {/* Decorative glows */}
         <div className="absolute top-0 right-0 w-[60%] h-[50%] rounded-full blur-3xl opacity-40" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.28) 0%, transparent 72%)' }} />
         <div className="absolute bottom-0 left-0 w-[50%] h-[40%] rounded-full blur-3xl opacity-25" style={{ background: 'radial-gradient(circle, rgba(217,119,6,0.18) 0%, transparent 72%)' }} />
         {/* Grid pattern overlay */}
         <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(rgba(180,83,9,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(180,83,9,0.12) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
+        <div className="absolute inset-y-0 right-0 w-20" style={{ background: 'linear-gradient(90deg, rgba(255,247,230,0) 0%, rgba(255,250,242,0.58) 58%, rgba(248,246,240,0.96) 100%)' }} />
 
         {/* Brand */}
         <div className="relative z-10">
