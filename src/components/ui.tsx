@@ -28,6 +28,29 @@ export function AdminPageHeader({
   );
 }
 
+export function AdminSubsectionHeader({
+  eyebrow,
+  title,
+  description,
+  aside,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: string;
+  aside?: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <div className="max-w-3xl">
+        {eyebrow ? <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{eyebrow}</p> : null}
+        <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900 md:text-xl">{title}</h3>
+        {description ? <p className="mt-1 text-sm font-medium text-slate-500">{description}</p> : null}
+      </div>
+      {aside ? <div className="flex flex-wrap items-center gap-3">{aside}</div> : null}
+    </div>
+  );
+}
+
 export function ConfirmationModal({
   isOpen,
   onClose,

@@ -40,7 +40,7 @@ import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveReques
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
-import { AdminPageHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
+import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
 const DiversionMap = lazy(() => import('./components/DiversionMap').then((module) => ({ default: module.DiversionMap })));
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
@@ -2440,102 +2440,154 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
           </button>
         )}
       />
-      <div className="surface-card p-6 md:p-8 rounded-[32px]">
-        <div className="flex items-center justify-between mb-6">
-          <h3 className="text-lg font-black flex items-center gap-3 tracking-tight">
-            <FileText size={24} className="text-oker-500" />
-            Excel / JSON Import
-          </h3>
-          <button 
-            onClick={() => setShowExcelInfo(!showExcelInfo)}
-            className="text-[10px] font-black text-oker-600 hover:underline uppercase tracking-widest"
-          >
-            Info
-          </button>
-        </div>
+      <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">
+        <div className="surface-card rounded-[32px] p-6 md:p-8">
+          <AdminSubsectionHeader
+            eyebrow="Importbronnen"
+            title="Matrix en fallback-import"
+            description="Gebruik matrix CSV als primaire bron. JSON-import blijft beschikbaar voor oudere rij-per-dienst exports."
+            aside={showExcelInfo ? (
+              <button
+                onClick={() => setShowExcelInfo(false)}
+                className="rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:text-slate-800"
+              >
+                Info verbergen
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowExcelInfo(true)}
+                className="rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:text-slate-800"
+              >
+                Info tonen
+              </button>
+            )}
+          />
 
-        {showExcelInfo && (
-          <div className="mb-6 p-6 glass-oker rounded-2xl text-sm space-y-3">
-            <p className="font-bold text-oker-800">Koppeling met Excel:</p>
-            <ol className="list-decimal list-inside space-y-2 text-oker-700">
-              <li>Voor jouw originele matrixplanning gebruik je de CSV-upload hieronder.</li>
-              <li>De app schrijft die ruwe planning rechtstreeks weg naar de staging-tabel in Supabase.</li>
-              <li>De JSON-import hieronder blijft beschikbaar voor het bestaande rij-per-dienst formaat.</li>
-            </ol>
-          </div>
-        )}
-
-        <div className="mb-6 rounded-3xl border border-white/70 bg-white/45 p-5">
-          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <div>
-              <p className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">Matrix CSV Upload</p>
-              <p className="mt-2 text-sm font-medium text-slate-500">
-                Upload je originele dagmatrix met chauffeurs als kolommen. De app zet die automatisch in de juiste staging-tabel.
-              </p>
+          {showExcelInfo && (
+            <div className="mt-5 rounded-[24px] border border-oker-100 bg-oker-50/80 p-5 text-sm">
+              <p className="font-bold text-oker-800">Importvolgorde</p>
+              <ol className="mt-3 list-decimal space-y-2 pl-5 text-oker-700">
+                <li>Gebruik matrix CSV voor de originele dagplanning per chauffeur.</li>
+                <li>Controleer eerst de preview op onbekende codes en niet-gematchte chauffeurs.</li>
+                <li>Gebruik JSON alleen voor oudere exports in rij-per-dienst formaat.</li>
+              </ol>
             </div>
-            <label
-              className={cn(
-                "inline-flex cursor-pointer items-center justify-center gap-3 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest transition-all",
-                isMatrixImporting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-900 text-white hover:bg-slate-800"
-              )}
-            >
-              <Upload size={18} />
-              {isMatrixImporting ? 'Importeren...' : 'CSV Matrix Upload'}
-              <input
-                type="file"
-                accept=".csv,text/csv"
-                className="hidden"
-                onChange={handleMatrixFileUpload}
-                disabled={isMatrixImporting}
+          )}
+
+          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-[28px] border border-emerald-100 bg-emerald-50/70 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Primair</p>
+                  <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">Matrix CSV Upload</h4>
+                  <p className="mt-2 text-sm font-medium text-slate-600">
+                    Upload je originele dagmatrix. De app toont eerst een preview en vervangt daarna pas de planning.
+                  </p>
+                </div>
+                <span className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                  Aangeraden
+                </span>
+              </div>
+              <label
+                className={cn(
+                  "mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest transition-all",
+                  isMatrixImporting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-900 text-white hover:bg-slate-800"
+                )}
+              >
+                <Upload size={18} />
+                {isMatrixImporting ? 'Importeren...' : 'CSV Matrix Upload'}
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={handleMatrixFileUpload}
+                  disabled={isMatrixImporting}
+                />
+              </label>
+            </div>
+
+            <div className="rounded-[28px] border border-white/70 bg-white/45 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Fallback</p>
+                  <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">JSON Import</h4>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    Gebruik dit alleen als je planning al per dienst in JSON is geëxporteerd. Dit pad is bedoeld voor oudere dataflows.
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/70 bg-white/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Legacy
+                </span>
+              </div>
+              <textarea
+                className="control-input mt-5 min-h-[170px] w-full rounded-2xl px-4 py-3 font-mono text-sm transition-all focus:outline-none"
+                placeholder='Plak hier de JSON data uit Excel... e.g. [{"id":"1","date":"2026-03-01",...}]'
+                value={jsonInput}
+                onChange={(e) => setJsonInput(e.target.value)}
               />
-            </label>
+              <button
+                onClick={handleImport}
+                className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-oker-500 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-oker-500/20 transition hover:bg-oker-600"
+              >
+                Importeer JSON Planning
+              </button>
+            </div>
           </div>
         </div>
 
-        <textarea 
-          className="control-input w-full px-4 py-3 rounded-xl focus:outline-none transition-all min-h-[150px] font-mono text-sm mb-4"
-          placeholder='Plak hier de JSON data uit Excel... e.g. [{"id": "1", "line": "12", ...}]'
-          value={jsonInput}
-          onChange={(e) => setJsonInput(e.target.value)}
-        />
-        
-        <button 
-          onClick={handleImport}
-          className="bg-oker-500 text-white font-bold px-8 py-3 rounded-xl hover:bg-oker-600 transition-colors shadow-lg shadow-oker-500/20"
-        >
-          Importeer Planning
-        </button>
+        <div className="surface-card rounded-[32px] p-6 md:p-8">
+          <AdminSubsectionHeader
+            eyebrow="Database"
+            title="Actieve planning herschrijven"
+            description="Gebruik sync alleen om de huidige lokale planning expliciet opnieuw naar Supabase te schrijven."
+          />
+          <div className="mt-5 rounded-[24px] border border-white/70 bg-white/45 p-5">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Handmatige actie</p>
+            <p className="mt-2 text-sm font-medium text-slate-500">
+              Dit pad overschrijft bestaande records met dezelfde ID. Gebruik het enkel wanneer je de actieve planning bewust wilt vervangen zonder matrix-preview.
+            </p>
+            <button
+              onClick={() => setConfirmSyncOpen(true)}
+              disabled={isSyncing}
+              className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600 disabled:opacity-50 active:scale-95"
+              title="Synchroniseer lokale JSON data naar Supabase"
+            >
+              <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
+              {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
-        <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
-          <Plus size={24} className="text-emerald-500" />
-          Handmatig Toevoegen
-        </h3>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 md:gap-6">
+        <AdminSubsectionHeader
+          eyebrow="Correcties"
+          title="Handmatig toevoegen"
+          description="Gebruik dit alleen voor uitzonderingen of snelle correcties buiten de matrixflow."
+        />
+        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5 md:gap-6">
           <Input label="Datum" type="date" />
           <Input label="Chauffeur" type="select" options={[...users].filter(u => u.role === 'chauffeur' && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)).map(u => ({ label: u.name, value: u.id }))} />
           <Input label="Start Tijd" type="time" />
           <Input label="Eind Tijd" type="time" />
           <Input label="Dienst" type="text" placeholder="Bijv. 12" />
         </div>
-        <button className="w-full mt-8 bg-emerald-500 text-white font-black px-8 py-4 rounded-2xl hover:bg-emerald-600 transition-all shadow-xl shadow-emerald-500/20 active:scale-95 uppercase tracking-widest text-xs">
-          Dienst Opslaan
-        </button>
+        <div className="mt-6 flex justify-end">
+          <button className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-emerald-500/20 transition-all hover:bg-emerald-600 active:scale-95 sm:w-auto">
+            Dienst Opslaan
+          </button>
+        </div>
       </div>
 
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
-        <div className="flex items-center justify-between gap-4 mb-6">
-          <div>
-            <h3 className="text-lg font-black tracking-tight">Recente Matriximports</h3>
-            <p className="mt-1 text-sm font-medium text-slate-500">Laatste importmomenten met de belangrijkste controlecijfers.</p>
-          </div>
-          <div className="rounded-full border border-white/70 bg-white/50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-            {history.length} logs
-          </div>
-        </div>
+        <AdminSubsectionHeader
+          eyebrow="Historiek"
+          title="Recente Matriximports"
+          description="Laatste importmomenten met de belangrijkste controlecijfers."
+          aside={<div className="rounded-full border border-white/70 bg-white/50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{history.length} logs</div>}
+        />
 
-        <div className="space-y-3">
+        <div className="mt-6 space-y-3">
           {history.length > 0 ? history.slice(0, 8).map((entry) => {
             const hasIssues = entry.unknownCodes.length > 0 || entry.unmatchedDrivers.length > 0;
             return (
@@ -2595,8 +2647,14 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
       </div>
 
       <div className="surface-card p-8 rounded-3xl">
-        <h3 className="text-xl font-bold mb-6">Huidige Planning</h3>
+        <AdminSubsectionHeader
+          eyebrow="Controle"
+          title="Huidige Planning"
+          description="Bekijk de actieve planning zoals die nu in het portaal beschikbaar is."
+        />
+        <div className="mt-6">
         <ScheduleView user={{ id: '0', name: 'Admin', role: 'admin', employeeId: 'ADMIN' }} shifts={shifts} users={users} />
+        </div>
       </div>
 
       <ConfirmationModal
@@ -3467,15 +3525,17 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
       </div>
 
       <section className="surface-card rounded-[32px] p-6">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h3 className="text-xl font-black tracking-tight">Codebeheer</h3>
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              Voeg matrixcodes toe, wijzig hun betekenis en bepaal of ze als dienst, verlof of afwezigheid tellen.
-            </p>
-          </div>
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="glass segmented-control p-1">
+        <AdminSubsectionHeader
+          eyebrow="Werkset"
+          title="Codebeheer"
+          description="Voeg matrixcodes toe, wijzig hun betekenis en bepaal of ze als dienst, verlof of afwezigheid tellen."
+          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredCodes.length} zichtbaar</div>}
+        />
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto]">
+          <div className="rounded-[24px] border border-white/70 bg-white/45 p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Filter</p>
+            <div className="mt-3 glass segmented-control inline-flex p-1">
               {[
                 { key: 'all', label: 'Alles' },
                 { key: 'service', label: 'Dienst' },
@@ -3496,6 +3556,12 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
                 </button>
               ))}
             </div>
+          </div>
+          <div className="rounded-[24px] border border-white/70 bg-white/45 p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Interpretatie</p>
+            <p className="mt-3 text-sm font-medium text-slate-500">
+              Dienstcodes worden doorgegeven aan de roosteropbouw. Verlof-, afwezigheids- en opleidingscodes blijven buiten de dienstgeneratie.
+            </p>
           </div>
         </div>
 

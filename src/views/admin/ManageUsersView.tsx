@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, RotateCcw, Trash2, Upload, Users, X } from 'lucide-react';
 import type { User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { AdminPageHeader, ConfirmationModal, CredentialsModal, EmptyState } from '../../components/ui';
+import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState } from '../../components/ui';
 
 export type UserDraft = User & { password?: string };
 
@@ -246,27 +246,38 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         )}
       />
 
-      <div className="surface-card rounded-[32px] p-6">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="glass-segmented flex p-1 rounded-2xl">
+      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.9fr]">
+        <div className="surface-card rounded-[32px] p-6">
+          <AdminSubsectionHeader
+            eyebrow="Werkset"
+            title="Zichtbare gebruikers"
+            description="Filter de huidige lijst per rol voordat je wijzigingen doorvoert."
+            aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredUsers.length} zichtbaar</div>}
+          />
+          <div className="mt-5 glass-segmented inline-flex rounded-2xl p-1">
             {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
               <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-4 py-2 rounded-[18px] text-xs font-black uppercase tracking-[0.16em] transition-all', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
                 {role === 'all' ? 'Alles' : role}
               </button>
             ))}
           </div>
-          <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
-            {filteredUsers.length} zichtbaar
-          </div>
+        </div>
+
+        <div className="rounded-[32px] border border-oker-100 bg-oker-50/80 p-6 text-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-oker-700">Bronimport</p>
+          <p className="mt-3 font-bold text-oker-800">Excel Instructies</p>
+          <p className="mt-2 text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-bold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-bold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
         </div>
       </div>
 
-      <div className="glass-oker p-6 rounded-3xl text-sm">
-        <p className="font-bold text-oker-800 mb-2">Excel Instructies:</p>
-        <p className="text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-bold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-bold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
-      </div>
-
       <div className="surface-table rounded-[32px] overflow-hidden">
+        <div className="border-b border-white/70 px-6 py-5 md:px-8">
+          <AdminSubsectionHeader
+            eyebrow="Overzicht"
+            title="Gebruikerslijst"
+            description="Controleer status, sessies en accountacties per medewerker."
+          />
+        </div>
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
