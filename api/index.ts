@@ -283,7 +283,8 @@ const PLANNING_MATRIX_MONTHS: Record<string, string> = {
 
 const normalizePlanningMatrixDate = (raw: string) => {
   const value = String(raw || "").trim();
-  const parts = value.split("-");
+  const normalizedValue = value.replace(/\//g, "-");
+  const parts = normalizedValue.split("-");
   if (parts.length !== 3) return value;
 
   const [day, monthRaw, yearRaw] = parts;
