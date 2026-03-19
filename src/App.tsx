@@ -40,7 +40,7 @@ import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveReques
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
-import { ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
+import { AdminPageHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
 const DiversionMap = lazy(() => import('./components/DiversionMap').then((module) => ({ default: module.DiversionMap })));
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
@@ -2424,18 +2424,22 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
 
   return (
     <div className="max-w-4xl space-y-6 md:space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="text-2xl font-black tracking-tight">Beheer Roosters</h3>
-        <button 
-          onClick={() => setConfirmSyncOpen(true)}
-          disabled={isSyncing}
-          className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
-          title="Synchroniseer lokale JSON data naar Supabase"
-        >
-          <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
-          {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
-        </button>
-      </div>
+      <AdminPageHeader
+        eyebrow="Planningbeheer"
+        title="Beheer Roosters"
+        description="Importeer matrixplanning, bouw de actieve planning opnieuw op en controleer recente imports op problemen voordat je iets overschrijft."
+        actions={(
+          <button 
+            onClick={() => setConfirmSyncOpen(true)}
+            disabled={isSyncing}
+            className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
+            title="Synchroniseer lokale JSON data naar Supabase"
+          >
+            <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
+            {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+          </button>
+        )}
+      />
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-lg font-black flex items-center gap-3 tracking-tight">
@@ -3438,6 +3442,22 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
 
   return (
     <div className="space-y-6">
+      <AdminPageHeader
+        eyebrow="Planningsmatrix"
+        title="Planningscodes"
+        description="Beheer de betekenis van matrixcodes en bepaal welke codes als dienst, verlof of afwezigheid verwerkt mogen worden."
+        actions={(
+          <>
+            <button onClick={addCode} className="glass-button rounded-[20px] px-5 py-3 text-sm font-black text-slate-800">
+              <span className="inline-flex items-center gap-2"><Plus size={16} /> Code Toevoegen</span>
+            </button>
+            <button onClick={handleSave} disabled={isSaving} className="rounded-[20px] bg-oker-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-oker-500/20 transition hover:bg-oker-600 disabled:cursor-not-allowed disabled:opacity-60">
+              {isSaving ? 'Opslaan...' : 'Opslaan'}
+            </button>
+          </>
+        )}
+      />
+
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <StatCard icon={<FileText className="text-oker-600" />} label="Totaal" value={draftCodes.length.toString()} subValue="Actieve mappings" />
         <StatCard icon={<Bus className="text-slate-600" />} label="Diensten" value={summary.service.toString()} subValue="Codes met shiftstatus" />
@@ -3476,12 +3496,6 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
                 </button>
               ))}
             </div>
-            <button onClick={addCode} className="glass-button rounded-[20px] px-5 py-3 text-sm font-black text-slate-800">
-              <span className="inline-flex items-center gap-2"><Plus size={16} /> Code Toevoegen</span>
-            </button>
-            <button onClick={handleSave} disabled={isSaving} className="rounded-[20px] bg-oker-500 px-5 py-3 text-sm font-black text-white shadow-lg shadow-oker-500/20 transition hover:bg-oker-600 disabled:cursor-not-allowed disabled:opacity-60">
-              {isSaving ? 'Opslaan...' : 'Opslaan'}
-            </button>
           </div>
         </div>
 

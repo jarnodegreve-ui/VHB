@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, RotateCcw, Trash2, Upload, Users, X } from 'lucide-react';
 import type { User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { ConfirmationModal, CredentialsModal, EmptyState } from '../../components/ui';
+import { AdminPageHeader, ConfirmationModal, CredentialsModal, EmptyState } from '../../components/ui';
 
 export type UserDraft = User & { password?: string };
 
@@ -224,31 +224,40 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
 
   return (
     <div className="max-w-4xl space-y-8">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-2xl font-bold">{title}</h3>
-          <p className="text-sm text-slate-500 font-medium">Beheer medewerkers en hun toegangsrechten.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button onClick={() => setConfirmSyncOpen(true)} disabled={isSyncing} className="bg-emerald-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50" title="Synchroniseer lokale JSON data naar Supabase">
-            <RotateCcw size={18} className={isSyncing ? 'animate-spin' : ''} />
-            {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
-          </button>
-          <div className="glass-segmented flex p-1 rounded-xl mr-2">
+      <AdminPageHeader
+        eyebrow="Gebruikersbeheer"
+        title={title}
+        description="Beheer medewerkers, rollen en accountacties vanuit een consistente beheershell. Gebruik sync en Excel-import alleen wanneer de brongegevens al gevalideerd zijn."
+        actions={(
+          <>
+            <button onClick={() => setConfirmSyncOpen(true)} disabled={isSyncing} className="bg-emerald-500 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50" title="Synchroniseer lokale JSON data naar Supabase">
+              <RotateCcw size={18} className={isSyncing ? 'animate-spin' : ''} />
+              {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
+            </button>
+            <label className="bg-oker-500 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 cursor-pointer hover:bg-oker-600 transition-colors shadow-lg shadow-oker-500/20">
+              <Upload size={18} />
+              {isImporting ? 'Bezig...' : 'Excel Upload'}
+              <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
+            </label>
+            <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-colors">
+              <Plus size={18} /> Gebruiker Toevoegen
+            </button>
+          </>
+        )}
+      />
+
+      <div className="surface-card rounded-[32px] p-6">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="glass-segmented flex p-1 rounded-2xl">
             {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-3 py-1.5 rounded-lg text-xs font-bold transition-all capitalize', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-4 py-2 rounded-[18px] text-xs font-black uppercase tracking-[0.16em] transition-all', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
                 {role === 'all' ? 'Alles' : role}
               </button>
             ))}
           </div>
-          <label className="bg-oker-500 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 cursor-pointer hover:bg-oker-600 transition-colors shadow-lg shadow-oker-500/20">
-            <Upload size={18} />
-            {isImporting ? 'Bezig...' : 'Excel Upload'}
-            <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
-          </label>
-          <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 hover:bg-slate-800 transition-colors">
-            <Plus size={18} /> Gebruiker Toevoegen
-          </button>
+          <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            {filteredUsers.length} zichtbaar
+          </div>
         </div>
       </div>
 

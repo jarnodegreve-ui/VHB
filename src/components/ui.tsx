@@ -3,6 +3,31 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 
+export function AdminPageHeader({
+  eyebrow = 'Beheer',
+  title,
+  description,
+  actions,
+}: {
+  eyebrow?: string;
+  title: string;
+  description: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <section className="surface-card rounded-[32px] px-6 py-6 md:px-8">
+      <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+        <div className="max-w-3xl">
+          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">{eyebrow}</p>
+          <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900 md:text-3xl">{title}</h3>
+          <p className="mt-2 text-sm font-medium leading-7 text-slate-500 md:text-base">{description}</p>
+        </div>
+        {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
+      </div>
+    </section>
+  );
+}
+
 export function ConfirmationModal({
   isOpen,
   onClose,
