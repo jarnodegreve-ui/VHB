@@ -108,7 +108,7 @@ type ResolvedPlanningAssignment = {
   segments: string[];
 };
 
-const normalizePlanningToken = (value: string) => value.trim().toLowerCase();
+const normalizePlanningToken = (value: unknown) => String(value ?? '').trim().toLowerCase();
 
 const getServiceSegments = (service: Service) => (
   [
