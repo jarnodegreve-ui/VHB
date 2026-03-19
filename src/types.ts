@@ -105,4 +105,14 @@ export interface PlanningMatrixImportHistory {
   unmatchedDrivers: string[];
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof' | 'planning-matrix' | 'planning-codes';
+export interface ActivityLogEntry {
+  id: string;
+  createdAt: string;
+  actorName: string;
+  actorRole: Role;
+  category: 'users' | 'planning' | 'planning_codes' | 'services' | 'diversions' | 'updates' | 'auth';
+  action: string;
+  details: string;
+}
+
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit';

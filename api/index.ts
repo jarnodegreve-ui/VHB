@@ -29,6 +29,7 @@ const LEAVE_FILE = path.join(process.cwd(), "leave_data.json");
 const PLANNING_MATRIX_FILE = path.join(process.cwd(), "planning_matrix_rows.json");
 const PLANNING_CODES_FILE = path.join(process.cwd(), "planning_codes.json");
 const PLANNING_MATRIX_HISTORY_FILE = path.join(process.cwd(), "planning_matrix_history.json");
+const ACTIVITY_LOG_FILE = path.join(process.cwd(), "activity_log.json");
 
 type Role = "chauffeur" | "planner" | "admin";
 
@@ -97,6 +98,26 @@ interface PlanningMatrixImportHistoryRecord {
   unknownCodes: string[];
   unmatchedDrivers: string[];
 }
+
+interface ActivityLogRecord {
+  id: string;
+  createdAt: string;
+  actorName: string;
+  actorRole: Role;
+  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth";
+  action: string;
+  details: string;
+}
+
+type ActivityLogRow = {
+  id: string;
+  created_at: string;
+  actor_name: string;
+  actor_role: Role;
+  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth";
+  action: string;
+  details: string;
+};
 
 type PlanningMatrixImportHistoryRow = {
   id: string;
@@ -579,6 +600,91 @@ const savePlanningMatrixHistoryEntry = async (entry: PlanningMatrixImportHistory
     : [];
   const nextHistory = [entry, ...existing].slice(0, 20);
   fs.writeFileSync(PLANNING_MATRIX_HISTORY_FILE, JSON.stringify(nextHistory, null, 2));
+};
+
+const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): ActivityLogRecord => ({
+  id: row.id,
+  createdAt: "createdAt" in row ? row.createdAt : row.created_at,
+  actorName: "actorName" in row ? row.actorName : row.actor_name,
+  actorRole: "actorRole" in row ? row.actorRole : row.actor_role,
+  category: row.category,
+  action: row.action,
+  details: row.details,
+});
+
+const getActivityLog = async (): Promise<ActivityLogRecord[]> => {
+  if (db) {
+    try {
+      const { data, error } = await db
+        .from("activity_log")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(100);
+      if (error) {
+        console.error("Supabase error fetching activity log:", error);
+      } else if (data) {
+        return (data as ActivityLogRow[]).map(toPublicActivityLog);
+      }
+    } catch (e) {
+      console.error("Unexpected error fetching activity log:", e);
+    }
+  }
+
+  if (fs.existsSync(ACTIVITY_LOG_FILE)) {
+    return JSON.parse(fs.readFileSync(ACTIVITY_LOG_FILE, "utf-8")).map(toPublicActivityLog);
+  }
+
+  return [];
+};
+
+const saveActivityLogEntry = async (entry: ActivityLogRecord) => {
+  if (db) {
+    try {
+      const row: ActivityLogRow = {
+        id: entry.id,
+        created_at: entry.createdAt,
+        actor_name: entry.actorName,
+        actor_role: entry.actorRole,
+        category: entry.category,
+        action: entry.action,
+        details: entry.details,
+      };
+      const { error } = await db.from("activity_log").insert(row);
+      if (!error) return;
+      console.error("Supabase error saving activity log:", error);
+    } catch (e) {
+      console.error("Unexpected error saving activity log:", e);
+    }
+  }
+
+  if (process.env.VERCEL) {
+    return;
+  }
+
+  const existing = fs.existsSync(ACTIVITY_LOG_FILE)
+    ? JSON.parse(fs.readFileSync(ACTIVITY_LOG_FILE, "utf-8"))
+    : [];
+  const nextEntries = [entry, ...existing].slice(0, 100);
+  fs.writeFileSync(ACTIVITY_LOG_FILE, JSON.stringify(nextEntries, null, 2));
+};
+
+const logActivity = async (
+  req: AuthenticatedRequest,
+  category: ActivityLogRecord["category"],
+  action: string,
+  details: string,
+) => {
+  if (!req.appUser) return;
+
+  await saveActivityLogEntry({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+    createdAt: new Date().toISOString(),
+    actorName: req.appUser.name,
+    actorRole: req.appUser.role,
+    category,
+    action,
+    details,
+  });
 };
 
 const getServiceSegments = (service: ServiceRecord) => (
@@ -1199,6 +1305,7 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password });
     if (error) throw error;
 
+    await logActivity(req, "auth", "Wachtwoord gereset", `Wachtwoord opnieuw ingesteld voor ${targetUser.name}.`);
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: "Wachtwoord reset mislukt.", details: error.message });
@@ -1220,6 +1327,7 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
     const newData = req.body;
     if (Array.isArray(newData)) {
       await savePlanningData(newData);
+      await logActivity(req, "planning", "Planning opgeslagen", `${newData.length} planningregels handmatig opgeslagen.`);
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1249,6 +1357,15 @@ app.get("/api/planning-matrix/history", authenticate, requireRole("planner", "ad
   }
 });
 
+app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) => {
+  try {
+    const activity = await getActivityLog();
+    res.json(activity);
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to read activity log", details: err.message });
+  }
+});
+
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const csvContent = String(req.body?.csvContent || "");
@@ -1271,6 +1388,12 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
     });
+    await logActivity(
+      req,
+      "planning",
+      "Matrix import bevestigd",
+      `${rows.length} dagen verwerkt, ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${generatedPlanning.summary.unknownCodes.length} onbekende codes, ${generatedPlanning.summary.unmatchedDrivers.length} niet-gematchte chauffeurs.`,
+    );
 
     res.json({
       success: true,
@@ -1316,6 +1439,7 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
   try {
     const generatedPlanning = await buildPlanningFromMatrix();
     await replacePlanningData(generatedPlanning.shifts);
+    await logActivity(_req, "planning", "Planning opnieuw opgebouwd", `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix.`);
     res.json({ success: true, ...generatedPlanning.summary });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to sync planning from matrix", details: err.message });
@@ -1339,6 +1463,7 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
     }
 
     await savePlanningCodesData(codes);
+    await logActivity(req, "planning_codes", "Planningscodes opgeslagen", `${codes.length} planningscodes opgeslagen.`);
     res.json({ success: true, count: codes.length });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save planning codes", details: err.message });
@@ -1362,6 +1487,7 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
     if (Array.isArray(newData)) {
       await saveUsersData(newData);
       console.log("Users saved successfully. Count:", newData.length);
+      await logActivity(req, "users", "Gebruikers opgeslagen", `${newData.length} gebruikers verwerkt in gebruikersbeheer.`);
       res.json({ success: true, count: newData.length });
     } else {
       console.warn("Invalid data format for POST /api/users:", typeof newData);
@@ -1389,6 +1515,7 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
     const newData = req.body;
     if (Array.isArray(newData)) {
       await saveDiversionsData(newData);
+      await logActivity(req, "diversions", "Omleidingen opgeslagen", `${newData.length} omleidingen opgeslagen.`);
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1415,6 +1542,7 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
     const newData = req.body;
     if (Array.isArray(newData)) {
       await saveServicesData(newData);
+      await logActivity(req, "services", "Diensten opgeslagen", `${newData.length} diensten opgeslagen.`);
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1439,6 +1567,7 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
   try {
     const newData = req.body;
     await saveUpdatesData(newData);
+    await logActivity(req, "updates", "Updates opgeslagen", `${Array.isArray(newData) ? newData.length : 0} updates opgeslagen.`);
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save updates", details: err.message });

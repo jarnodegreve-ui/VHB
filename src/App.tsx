@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
-import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory } from './types';
+import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry } from './types';
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
@@ -185,6 +185,7 @@ export default function App() {
   const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
+  const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
@@ -240,6 +241,7 @@ export default function App() {
         setPlanningMatrixRows([]);
         setPlanningCodes([]);
         setPlanningMatrixHistory([]);
+        setActivityLog([]);
         setCurrentView('dashboard');
       }
       setAuthReady(true);
@@ -260,6 +262,12 @@ export default function App() {
     window.addEventListener('vhb-toast', handler as EventListener);
     return () => window.removeEventListener('vhb-toast', handler as EventListener);
   }, []);
+
+  useEffect(() => {
+    if (currentView === 'activiteit' && currentUser?.role === 'admin') {
+      fetchActivityLog();
+    }
+  }, [currentView, currentUser?.role]);
 
   const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token) => {
     const headers = new Headers(init.headers || {});
@@ -299,6 +307,7 @@ export default function App() {
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrix(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningCodes(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrixHistory(accessToken)] : []),
+        ...(appUser.role === 'admin' ? [fetchActivityLog(accessToken)] : []),
       ]);
     } catch (error) {
       console.error('Error initializing app:', error);
@@ -323,7 +332,12 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(newUpdates),
       });
-      if (response.ok) setUpdates(newUpdates);
+      if (response.ok) {
+        setUpdates(newUpdates);
+        if (currentUser?.role === 'admin') {
+          await fetchActivityLog();
+        }
+      }
       return response.ok;
     } catch (error) {
       console.error('Error saving updates:', error);
@@ -421,6 +435,18 @@ export default function App() {
     }
   };
 
+  const fetchActivityLog = async (accessToken = session?.access_token) => {
+    try {
+      const response = await apiFetch('/api/activity', {}, accessToken);
+      const data = await response.json();
+      if (data && Array.isArray(data)) {
+        setActivityLog(data);
+      }
+    } catch (error) {
+      console.error('Error fetching activity log:', error);
+    }
+  };
+
   const savePlanningCodes = async (newCodes: PlanningCode[]) => {
     try {
       setIsLoading(true);
@@ -433,6 +459,9 @@ export default function App() {
         throw new Error(data?.details || data?.error || 'Opslaan mislukt.');
       }
       setPlanningCodes(newCodes);
+      if (currentUser?.role === 'admin') {
+        await fetchActivityLog();
+      }
       showToast('Planningscodes succesvol opgeslagen.', 'success');
       return true;
     } catch (error: any) {
@@ -484,6 +513,9 @@ export default function App() {
       });
       if (response.ok) {
         setServices(newServices);
+        if (currentUser?.role === 'admin') {
+          await fetchActivityLog();
+        }
         showToast('Diensten succesvol opgeslagen.', 'success');
       }
     } catch (error) {
@@ -519,6 +551,9 @@ export default function App() {
       if (response.ok) {
         console.log('Users saved successfully');
         await fetchUsers();
+        if (currentUser?.role === 'admin') {
+          await fetchActivityLog();
+        }
         showToast('Gebruikers succesvol opgeslagen.', 'success');
         return true;
       } else {
@@ -572,6 +607,9 @@ export default function App() {
       });
       if (response.ok) {
         setShifts(newShifts);
+        if (currentUser?.role === 'admin') {
+          await fetchActivityLog();
+        }
         showToast('Planning succesvol opgeslagen.', 'success');
       }
     } catch (error) {
@@ -606,6 +644,9 @@ export default function App() {
       });
       if (response.ok) {
         setDiversions(newDiversions);
+        if (currentUser?.role === 'admin') {
+          await fetchActivityLog();
+        }
         showToast('Omleidingen succesvol opgeslagen.', 'success');
       }
     } catch (error) {
@@ -680,6 +721,7 @@ export default function App() {
     'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
     'planning-matrix': { title: 'Planning Overzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
     'planning-codes': { title: 'Planningscodes', subtitle: 'Beheer de betekenis van matrixcodes zonder SQL of handmatige scripts.' },
+    activiteit: { title: 'Activiteit', subtitle: 'Recente beheeracties en wijzigingen in het portaal.' },
     'beheer-updates': { title: 'Nieuwe Update', subtitle: 'Publiceer updates en stuur dringende meldingen uit.' },
     gebruikers: { title: 'Gebruikers', subtitle: 'Beheer accounts, rollen en toegangsrechten.' },
     'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
@@ -863,6 +905,12 @@ export default function App() {
               />
               <NavItem 
                 icon={<Activity size={20} />} 
+                label="Activiteit" 
+                active={currentView === 'activiteit'} 
+                onClick={() => { setCurrentView('activiteit'); setIsSidebarOpen(false); }} 
+              />
+              <NavItem 
+                icon={<Activity size={20} />} 
                 label="Systeem Status" 
                 active={currentView === 'beheer-debug'} 
                 onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} 
@@ -944,7 +992,14 @@ export default function App() {
               {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {currentView === 'updates' && <UpdatesView updates={updates} />}
               {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
-              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} onMatrixImported={async () => { await Promise.all([fetchPlanningMatrix(), fetchPlanning(), fetchPlanningMatrixHistory()]); }} />}
+              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} onMatrixImported={async () => {
+                await Promise.all([
+                  fetchPlanningMatrix(),
+                  fetchPlanning(),
+                  fetchPlanningMatrixHistory(),
+                  ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
+                ]);
+              }} />}
               {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} users={users} />}
               {currentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
               {currentView === 'beheer-updates' && (
@@ -957,6 +1012,7 @@ export default function App() {
                   <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} />
                 </Suspense>
               )}
+              {currentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
               {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {currentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
               {currentView === 'beheer-contactlijst' && (
@@ -2047,6 +2103,74 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
           />
         )}
       </div>
+    </div>
+  );
+}
+
+function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
+  const categoryLabels: Record<ActivityLogEntry['category'], string> = {
+    users: 'Gebruikers',
+    planning: 'Planning',
+    planning_codes: 'Planningscodes',
+    services: 'Diensten',
+    diversions: 'Omleidingen',
+    updates: 'Updates',
+    auth: 'Authenticatie',
+  };
+
+  return (
+    <div className="max-w-5xl space-y-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard icon={<Activity className="text-oker-600" />} label="Acties" value={entries.length.toString()} subValue="Laatste 100 wijzigingen" />
+        <StatCard icon={<Users className="text-slate-600" />} label="Gebruikersacties" value={entries.filter((entry) => entry.category === 'users').length.toString()} subValue="Accounts en rollen" />
+        <StatCard icon={<Calendar className="text-emerald-600" />} label="Planning" value={entries.filter((entry) => entry.category === 'planning' || entry.category === 'planning_codes').length.toString()} subValue="Imports, sync en codes" />
+      </div>
+
+      <section className="surface-card rounded-[32px] p-6 md:p-8">
+        <AdminSubsectionHeader
+          eyebrow="Auditspoor"
+          title="Recente activiteit"
+          description="Alleen admins zien hier recente beheeracties en belangrijke wijzigingen."
+          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{entries.length} items</div>}
+        />
+
+        <div className="mt-6 space-y-3">
+          {entries.length > 0 ? entries.map((entry) => (
+            <div key={entry.id} className="rounded-[26px] border border-white/70 bg-white/50 p-5">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                      {categoryLabels[entry.category]}
+                    </span>
+                    <p className="text-sm font-black text-slate-900">{entry.action}</p>
+                  </div>
+                  <p className="mt-2 text-sm font-medium leading-6 text-slate-500">{entry.details}</p>
+                </div>
+                <div className="shrink-0 text-left md:text-right">
+                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{entry.actorRole}</p>
+                  <p className="mt-1 text-sm font-bold text-slate-800">{entry.actorName}</p>
+                  <p className="mt-1 text-xs font-medium text-slate-400">
+                    {new Date(entry.createdAt).toLocaleString('nl-BE', {
+                      day: '2-digit',
+                      month: '2-digit',
+                      year: 'numeric',
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )) : (
+            <EmptyState
+              icon={<Activity size={28} />}
+              title="Nog geen activiteit gelogd"
+              message="Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch."
+            />
+          )}
+        </div>
+      </section>
     </div>
   );
 }
