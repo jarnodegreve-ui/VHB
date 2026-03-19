@@ -36,7 +36,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     .filter((u) => roleFilter === 'all' || u.role === roleFilter)
     .sort((a, b) => a.name.localeCompare(b.name));
 
-  const handleAddUser = (e: React.FormEvent) => {
+  const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.name) return;
     if (!newUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
@@ -53,7 +53,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       isActive: true,
     };
 
-    onSave([...users, userToAdd]);
+    const success = await onSave([...users, userToAdd]);
+    if (!success) return;
     setShowAddModal(false);
     setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
     setCredentialsModal({
@@ -63,7 +64,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     });
   };
 
-  const handleUpdateUser = (e: React.FormEvent) => {
+  const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingUser) return;
     if (!editingUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
@@ -74,11 +75,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     const adminWouldBeRemoved = editingUser.role !== 'admin' || editingUser.isActive === false;
     if (isOnlyActiveAdmin && adminWouldBeRemoved) return notify('Je kunt de laatste actieve admin niet degraderen of deactiveren.', 'error');
 
-    onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u)));
+    const success = await onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u)));
+    if (!success) return;
     setEditingUser(null);
   };
 
-  const handleDeleteUser = () => {
+  const handleDeleteUser = async () => {
     if (!confirmDeleteId) return;
     const userToDelete = users.find((u) => u.id === confirmDeleteId);
     const isOnlyActiveAdmin = userToDelete?.role === 'admin' && userToDelete.isActive !== false && activeAdmins.length === 1;
@@ -87,7 +89,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       setConfirmDeleteId(null);
       return;
     }
-    onSave(users.filter((u) => u.id !== confirmDeleteId));
+    const success = await onSave(users.filter((u) => u.id !== confirmDeleteId));
+    if (!success) return;
     if (editingUser?.id === confirmDeleteId) setEditingUser(null);
     setConfirmDeleteId(null);
   };
