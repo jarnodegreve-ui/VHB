@@ -2117,6 +2117,28 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
     updates: 'Updates',
     auth: 'Authenticatie',
   };
+  const [activeCategory, setActiveCategory] = useState<'all' | ActivityLogEntry['category']>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  const filteredEntries = useMemo(() => {
+    const normalizedSearch = searchTerm.trim().toLowerCase();
+
+    return entries.filter((entry) => {
+      const categoryMatch = activeCategory === 'all' || entry.category === activeCategory;
+      if (!categoryMatch) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const haystack = [entry.action, entry.details, entry.actorName, categoryLabels[entry.category]]
+        .join(' ')
+        .toLowerCase();
+      return haystack.includes(normalizedSearch);
+    });
+  }, [activeCategory, entries, searchTerm]);
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -2131,11 +2153,50 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
           eyebrow="Auditspoor"
           title="Recente activiteit"
           description="Alleen admins zien hier recente beheeracties en belangrijke wijzigingen."
-          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{entries.length} items</div>}
+          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredEntries.length} items</div>}
         />
 
+        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
+          <label className="surface-muted flex items-center gap-3 rounded-[24px] px-4 py-3">
+            <Search size={18} className="text-slate-400" />
+            <input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Zoek op actie, details of actor..."
+              className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+            />
+          </label>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setActiveCategory('all')}
+              className={cn(
+                'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
+                activeCategory === 'all'
+                  ? 'border-oker-200 bg-oker-50 text-oker-700'
+                  : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
+              )}
+            >
+              Alles
+            </button>
+            {(Object.keys(categoryLabels) as ActivityLogEntry['category'][]).map((category) => (
+              <button
+                key={category}
+                onClick={() => setActiveCategory(category)}
+                className={cn(
+                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
+                  activeCategory === category
+                    ? 'border-oker-200 bg-oker-50 text-oker-700'
+                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
+                )}
+              >
+                {categoryLabels[category]}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <div className="mt-6 space-y-3">
-          {entries.length > 0 ? entries.map((entry) => (
+          {filteredEntries.length > 0 ? filteredEntries.map((entry) => (
             <div key={entry.id} className="rounded-[26px] border border-white/70 bg-white/50 p-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
@@ -2165,8 +2226,8 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
           )) : (
             <EmptyState
               icon={<Activity size={28} />}
-              title="Nog geen activiteit gelogd"
-              message="Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch."
+              title={entries.length > 0 ? 'Geen resultaten voor deze filter' : 'Nog geen activiteit gelogd'}
+              message={entries.length > 0 ? 'Pas je categorie of zoekterm aan om andere activiteiten te tonen.' : 'Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch.'}
             />
           )}
         </div>

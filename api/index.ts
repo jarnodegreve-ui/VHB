@@ -687,6 +687,20 @@ const logActivity = async (
   });
 };
 
+const summarizeTokens = (values: Array<string | undefined | null>, limit = 4) => {
+  const normalized = values
+    .map((value) => String(value ?? "").trim())
+    .filter(Boolean);
+
+  if (normalized.length === 0) {
+    return "geen details";
+  }
+
+  const unique = Array.from(new Set(normalized));
+  const visible = unique.slice(0, limit).join(", ");
+  return unique.length > limit ? `${visible} +${unique.length - limit}` : visible;
+};
+
 const getServiceSegments = (service: ServiceRecord) => (
   [
     service.startTime && service.endTime ? { startTime: service.startTime, endTime: service.endTime, segment: 1 } : null,
@@ -1327,7 +1341,12 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
     const newData = req.body;
     if (Array.isArray(newData)) {
       await savePlanningData(newData);
-      await logActivity(req, "planning", "Planning opgeslagen", `${newData.length} planningregels handmatig opgeslagen.`);
+      await logActivity(
+        req,
+        "planning",
+        "Planning opgeslagen",
+        `${newData.length} planningregels handmatig opgeslagen. Voorbeeld: ${summarizeTokens(newData.map((shift: any) => `dienst ${shift.line || shift.id}`))}.`,
+      );
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1392,7 +1411,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       req,
       "planning",
       "Matrix import bevestigd",
-      `${rows.length} dagen verwerkt, ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${generatedPlanning.summary.unknownCodes.length} onbekende codes, ${generatedPlanning.summary.unmatchedDrivers.length} niet-gematchte chauffeurs.`,
+      `${rows.length} dagen verwerkt, ${generatedPlanning.summary.generatedShifts} diensten opgebouwd. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
     );
 
     res.json({
@@ -1439,7 +1458,12 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
   try {
     const generatedPlanning = await buildPlanningFromMatrix();
     await replacePlanningData(generatedPlanning.shifts);
-    await logActivity(_req, "planning", "Planning opnieuw opgebouwd", `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix.`);
+    await logActivity(
+      _req,
+      "planning",
+      "Planning opnieuw opgebouwd",
+      `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}.`,
+    );
     res.json({ success: true, ...generatedPlanning.summary });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to sync planning from matrix", details: err.message });
@@ -1463,7 +1487,12 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
     }
 
     await savePlanningCodesData(codes);
-    await logActivity(req, "planning_codes", "Planningscodes opgeslagen", `${codes.length} planningscodes opgeslagen.`);
+    await logActivity(
+      req,
+      "planning_codes",
+      "Planningscodes opgeslagen",
+      `${codes.length} planningscodes opgeslagen. Codes: ${summarizeTokens(codes.map((code: any) => code.code))}.`,
+    );
     res.json({ success: true, count: codes.length });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save planning codes", details: err.message });
@@ -1487,7 +1516,12 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
     if (Array.isArray(newData)) {
       await saveUsersData(newData);
       console.log("Users saved successfully. Count:", newData.length);
-      await logActivity(req, "users", "Gebruikers opgeslagen", `${newData.length} gebruikers verwerkt in gebruikersbeheer.`);
+      await logActivity(
+        req,
+        "users",
+        "Gebruikers opgeslagen",
+        `${newData.length} gebruikers verwerkt in gebruikersbeheer. Voorbeeld: ${summarizeTokens(newData.map((user: any) => user.name))}.`,
+      );
       res.json({ success: true, count: newData.length });
     } else {
       console.warn("Invalid data format for POST /api/users:", typeof newData);
@@ -1515,7 +1549,12 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
     const newData = req.body;
     if (Array.isArray(newData)) {
       await saveDiversionsData(newData);
-      await logActivity(req, "diversions", "Omleidingen opgeslagen", `${newData.length} omleidingen opgeslagen.`);
+      await logActivity(
+        req,
+        "diversions",
+        "Omleidingen opgeslagen",
+        `${newData.length} omleidingen opgeslagen. Voorbeeld: ${summarizeTokens(newData.map((item: any) => item.title))}.`,
+      );
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1542,7 +1581,12 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
     const newData = req.body;
     if (Array.isArray(newData)) {
       await saveServicesData(newData);
-      await logActivity(req, "services", "Diensten opgeslagen", `${newData.length} diensten opgeslagen.`);
+      await logActivity(
+        req,
+        "services",
+        "Diensten opgeslagen",
+        `${newData.length} diensten opgeslagen. Dienstnummers: ${summarizeTokens(newData.map((service: any) => service.serviceNumber))}.`,
+      );
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1567,7 +1611,12 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
   try {
     const newData = req.body;
     await saveUpdatesData(newData);
-    await logActivity(req, "updates", "Updates opgeslagen", `${Array.isArray(newData) ? newData.length : 0} updates opgeslagen.`);
+    await logActivity(
+      req,
+      "updates",
+      "Updates opgeslagen",
+      `${Array.isArray(newData) ? newData.length : 0} updates opgeslagen. Voorbeeld: ${summarizeTokens(Array.isArray(newData) ? newData.map((update: any) => update.title) : [])}.`,
+    );
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save updates", details: err.message });
