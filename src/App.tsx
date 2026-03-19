@@ -28,7 +28,7 @@ import {
   RotateCcw,
   Menu,
   X,
-  Map,
+  Map as MapIcon,
   Pencil,
   Search,
   Phone,
@@ -832,7 +832,7 @@ export default function App() {
                 onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
-                icon={<Map size={20} />} 
+                icon={<MapIcon size={20} />} 
                 label="Beheer Omleidingen" 
                 active={currentView === 'beheer-omleidingen'} 
                 onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} 
