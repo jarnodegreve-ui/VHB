@@ -1520,6 +1520,24 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
     .filter(s => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
   const newestDiversions = [...diversions].reverse().slice(0, 3);
+  const visibleShifts = shifts.filter(s => {
+    const isMe = s.driverId === user.id;
+    const isPlanner = user.role !== 'chauffeur';
+
+    if (isMe) return true;
+    if (!isPlanner) return false;
+
+    const driver = users.find(u => u.id === s.driverId);
+    return driver?.name.toLowerCase() !== 'beheerder';
+  }).slice(0, 2);
+
+  const formatShiftDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  });
+
+  const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
   const getCountdown = (target: Date) => {
     const diff = target.getTime() - now.getTime();
@@ -1596,31 +1614,25 @@ function DashboardView({ user, shifts, diversions, users }: { user: User, shifts
             </span>
           </div>
           <div className="flex flex-1 flex-col gap-4">
-            {shifts.filter(s => {
-              const isMe = s.driverId === user.id;
-              const isPlanner = user.role !== 'chauffeur';
-              
-              if (isMe) return true;
-              if (!isPlanner) return false;
-
-              // If planner, check if driver is beheerder
-              const driver = users.find(u => u.id === s.driverId);
-              const isBeheerder = driver?.name.toLowerCase() === 'beheerder';
-              
-              if (isBeheerder) return false;
-              
-              return true;
-            }).slice(0, 2).map(shift => (
-              <div key={shift.id} className="flex min-h-[8.25rem] items-center gap-5 rounded-[28px] border border-slate-100 bg-slate-50/50 p-5 group transition-all duration-300 hover:bg-white hover:shadow-md">
-                <div className="min-w-16 h-16 px-3 bg-white rounded-2xl flex items-center justify-center shadow-sm border border-slate-50 group-hover:scale-110 transition-transform">
-                  <span className="text-base font-black text-oker-500">
-                    {shift.line || '--'}
-                  </span>
+            {visibleShifts.map(shift => (
+              <div key={shift.id} className="grid min-h-[8.25rem] grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-5 rounded-[28px] border border-slate-100 bg-slate-50/55 p-5 transition-all duration-300 hover:bg-white hover:shadow-md">
+                <div className="flex h-20 flex-col items-center justify-center rounded-[24px] border border-white/80 bg-white shadow-sm">
+                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Dienst</p>
+                  <p className="mt-1 text-xl font-black text-oker-500">{getServiceNumber(shift)}</p>
                 </div>
-                <div className="flex-1">
-                  <p className="font-black text-lg text-slate-800">Dienst {shift.line || '--'}</p>
-                  <p className="text-sm font-black text-slate-700">{shift.startTime} - {shift.endTime}</p>
-                  <p className="text-sm text-slate-400 font-medium">{shift.date}</p>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{formatShiftDate(shift.date)}</p>
+                    <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
+                      {shift.startTime} - {shift.endTime}
+                    </span>
+                  </div>
+                  <p className="mt-3 text-xl font-black tracking-tight text-slate-900">{shift.startTime} - {shift.endTime}</p>
+                  <p className="mt-1 text-sm font-medium text-slate-500">
+                    {user.role === 'chauffeur'
+                      ? 'Jouw eerstvolgende zichtbare inzet.'
+                      : `Chauffeur: ${users.find(u => u.id === shift.driverId)?.name || 'Onbekend'}`}
+                  </p>
                 </div>
               </div>
             ))}
@@ -1882,6 +1894,13 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
     
     return true;
   });
+  const formatShiftDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
+    weekday: 'long',
+    day: '2-digit',
+    month: 'long',
+    year: 'numeric',
+  });
+  const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
   const exportToICS = () => {
     const calendarHeader = [
@@ -1930,8 +1949,11 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
 
   return (
     <div className="max-w-4xl space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-black tracking-tight">Mijn Werkrooster</h3>
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h3 className="text-2xl font-black tracking-tight">Mijn Werkrooster</h3>
+          <p className="mt-1 text-sm font-medium text-slate-500">Overzicht van je komende diensten, met dienstnummer en tijdsvenster.</p>
+        </div>
         <button 
           onClick={exportToICS}
           className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 transition-all active:scale-95"
@@ -1955,17 +1977,25 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
             <tbody className="divide-y divide-slate-50">
               {shifts.map(shift => (
                 <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-8 py-6 font-black text-slate-800">{shift.date}</td>
                   <td className="px-8 py-6">
                     <div className="space-y-1">
-                      <p className="font-black text-oker-700">Dienst {shift.line || '--'}</p>
-                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Dienstnummer</p>
+                      <p className="font-black text-slate-800">{formatShiftDate(shift.date)}</p>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{shift.date}</p>
                     </div>
                   </td>
                   <td className="px-8 py-6">
-                    <div className="flex items-center gap-3 text-slate-600 font-bold">
-                      <Clock size={16} className="text-oker-400" />
-                      {shift.startTime} - {shift.endTime}
+                    <div className="inline-flex min-w-[7rem] flex-col rounded-[22px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Dienstnummer</p>
+                      <p className="mt-1 font-black text-oker-700">{getServiceNumber(shift)}</p>
+                    </div>
+                  </td>
+                  <td className="px-8 py-6">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-3 text-slate-700 font-bold">
+                        <Clock size={16} className="text-oker-400" />
+                        {shift.startTime} - {shift.endTime}
+                      </div>
+                      <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Geplande inzet</p>
                     </div>
                   </td>
                 </tr>
@@ -1989,12 +2019,13 @@ function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: 
           <div key={shift.id} className="surface-card p-6 rounded-[32px] space-y-4">
             <div>
               <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Datum</p>
-              <p className="font-black text-slate-800">{shift.date}</p>
+              <p className="font-black text-slate-800">{formatShiftDate(shift.date)}</p>
+              <p className="mt-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{shift.date}</p>
             </div>
 
-            <div>
-              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Dienst</p>
-              <p className="font-black text-oker-700">Dienst {shift.line || '--'}</p>
+            <div className="rounded-[24px] border border-white/80 bg-white/75 px-4 py-4">
+              <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest mb-1">Dienstnummer</p>
+              <p className="font-black text-oker-700">{getServiceNumber(shift)}</p>
             </div>
             
             <div className="flex items-center gap-4 p-4 surface-muted rounded-2xl">
