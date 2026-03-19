@@ -733,16 +733,16 @@ export default function App() {
       )}>
         <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
-        <div className="p-6 flex items-center justify-between border-b fine-divider relative">
-          <div className="flex items-center gap-3">
-            <div>
+        <div className="p-6 flex items-center justify-center border-b fine-divider relative text-center">
+          <div className="flex items-center justify-center gap-3">
+            <div className="w-full">
               <h1 className="brand-wordmark section-title text-[1.25rem] text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
             </div>
           </div>
           <button
             onClick={() => setIsSidebarOpen(false)}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors lg:hidden"
+            className="absolute right-6 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors lg:hidden"
           >
             <X size={18} />
           </button>
