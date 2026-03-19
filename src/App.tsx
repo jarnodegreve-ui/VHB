@@ -53,6 +53,7 @@ type Toast = {
   tone?: 'success' | 'error' | 'info';
 };
 
+
 function ToastStack({
   toasts,
   onDismiss,
@@ -2841,29 +2842,41 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
   const [showOnlyIssues, setShowOnlyIssues] = useState(false);
   const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
   const [visibleDayCount, setVisibleDayCount] = useState(60);
-  const deferredRows = useDeferredValue(rows);
+  const safeRows = useMemo(
+    () => rows.map((row) => ({
+      ...row,
+      source_date: String(row.source_date ?? ''),
+      day_type: String(row.day_type ?? ''),
+      assignments: row.assignments && typeof row.assignments === 'object' && !Array.isArray(row.assignments)
+        ? Object.fromEntries(Object.entries(row.assignments).map(([driver, code]) => [String(driver), String(code ?? '')]))
+        : {},
+    })),
+    [rows]
+  );
+  const deferredRows = useDeferredValue(safeRows);
 
   useEffect(() => {
-    if (!selectedDate && rows[0]?.source_date) {
-      setSelectedDate(rows[0].source_date);
+    if (!selectedDate && safeRows[0]?.source_date) {
+      setSelectedDate(safeRows[0].source_date);
     }
-    if (selectedDate && !rows.some((row) => row.source_date === selectedDate) && rows[0]?.source_date) {
-      setSelectedDate(rows[0].source_date);
+    if (selectedDate && !safeRows.some((row) => row.source_date === selectedDate) && safeRows[0]?.source_date) {
+      setSelectedDate(safeRows[0].source_date);
     }
-  }, [rows, selectedDate]);
+  }, [safeRows, selectedDate]);
 
   useEffect(() => {
     setVisibleDayCount(60);
   }, [showOnlyIssues]);
 
-  const derived = useMemo(() => {
-    const serviceCodeLookup = new Set(services.map((service) => normalizePlanningToken(service.serviceNumber)));
-    const planningCodeLookup = new Set(planningCodes.map((code) => normalizePlanningToken(code.code)));
-    const knownDriverLookup = new Set(
-      users
-        .map((user) => normalizePlanningToken(user.name))
-        .filter((value) => value.length > 0)
-    );
+  try {
+    const derived = useMemo(() => {
+      const serviceCodeLookup = new Set(services.map((service) => normalizePlanningToken(service.serviceNumber)));
+      const planningCodeLookup = new Set(planningCodes.map((code) => normalizePlanningToken(code.code)));
+      const knownDriverLookup = new Set(
+        users
+          .map((user) => normalizePlanningToken(user.name))
+          .filter((value) => value.length > 0)
+      );
 
     const globalUnknownCodeSet = new Set<string>();
     const globalUnmatchedDriverSet = new Set<string>();
@@ -2932,27 +2945,27 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
       rowsWithIssues,
       totalGeneratedServices: Array.from<number>(generatedServicesPerDay.values()).reduce<number>((sum, value) => sum + value, 0),
     };
-  }, [deferredRows, services, planningCodes, users]);
+    }, [deferredRows, services, planningCodes, users]);
 
-  const selectedRow = deferredRows.find((row) => row.source_date === selectedDate) || null;
-  const assignments = useMemo(
-    () => selectedRow
-      ? ((Object.entries(selectedRow.assignments) as Array<[string, string]>)
-          .sort((a, b) => a[0].localeCompare(b[0]))
-          .map(([driver, code]) => resolvePlanningAssignment(driver, code, services, planningCodes)))
-      : [],
-    [selectedRow, services, planningCodes]
-  );
-  const visibleRows = showOnlyIssues ? derived.rowsWithIssues : deferredRows;
-  const serviceAssignments = assignments.filter((assignment) => assignment.kind === 'service').length;
-  const unknownAssignments = assignments.filter((assignment) => assignment.kind === 'unknown').length;
-  const unmatchedDriversForSelectedDay = selectedRow ? (derived.daySummaryByDate.get(selectedRow.source_date)?.unmatchedDrivers || []) : [];
-  const filteredAssignments = highlightedCode
-    ? assignments.filter((assignment) => normalizePlanningToken(assignment.code) === highlightedCode)
-    : assignments;
-  const visibleDayRows = visibleRows.slice(0, visibleDayCount);
+    const selectedRow = deferredRows.find((row) => row.source_date === selectedDate) || null;
+    const assignments = useMemo(
+      () => selectedRow
+        ? ((Object.entries(selectedRow.assignments) as Array<[string, string]>)
+            .sort((a, b) => a[0].localeCompare(b[0]))
+            .map(([driver, code]) => resolvePlanningAssignment(driver, code, services, planningCodes)))
+        : [],
+      [selectedRow, services, planningCodes]
+    );
+    const visibleRows = showOnlyIssues ? derived.rowsWithIssues : deferredRows;
+    const serviceAssignments = assignments.filter((assignment) => assignment.kind === 'service').length;
+    const unknownAssignments = assignments.filter((assignment) => assignment.kind === 'unknown').length;
+    const unmatchedDriversForSelectedDay = selectedRow ? (derived.daySummaryByDate.get(selectedRow.source_date)?.unmatchedDrivers || []) : [];
+    const filteredAssignments = highlightedCode
+      ? assignments.filter((assignment) => normalizePlanningToken(assignment.code) === highlightedCode)
+      : assignments;
+    const visibleDayRows = visibleRows.slice(0, visibleDayCount);
 
-  const exportProblemReport = () => {
+    const exportProblemReport = () => {
     const problemReportRows = deferredRows.flatMap((row) => {
       const formattedDate = new Date(row.source_date).toLocaleDateString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric' });
       const unknownRows = (Object.entries(row.assignments || {}) as Array<[string, string]>)
@@ -3010,7 +3023,7 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
     URL.revokeObjectURL(url);
   };
 
-  return (
+    return (
     <div className="space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
@@ -3341,7 +3354,21 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
         </section>
       </div>
     </div>
-  );
+    );
+  } catch (error) {
+    console.error('Planning Overzicht renderfout:', error);
+    return (
+      <div className="surface-card rounded-[32px] p-8">
+        <div className="rounded-[24px] border border-red-200 bg-red-50/80 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Schermfout</p>
+          <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">Planning Overzicht kon niet geladen worden</h3>
+          <p className="mt-2 text-sm font-medium text-slate-600">
+            {error instanceof Error ? error.message : 'Onbekende renderfout'}
+          </p>
+        </div>
+      </div>
+    );
+  }
 }
 
 function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (codes: PlanningCode[]) => Promise<boolean> }) {
