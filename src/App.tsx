@@ -1107,17 +1107,17 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
   return (
     <div className="min-h-screen flex relative overflow-hidden" style={{ background: 'linear-gradient(135deg, #f8f6f0 0%, #f1ede4 100%)' }}>
       {/* Left brand panel — hidden on mobile */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden" style={{ background: 'linear-gradient(160deg, #1e293b 0%, #0f172a 60%, #1a1208 100%)' }}>
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden border-r border-white/70" style={{ background: 'linear-gradient(160deg, #fff7e6 0%, #fdf1cf 52%, #f7e7be 100%)' }}>
         {/* Decorative glows */}
-        <div className="absolute top-0 right-0 w-[60%] h-[50%] rounded-full blur-3xl opacity-30" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.4) 0%, transparent 70%)' }} />
-        <div className="absolute bottom-0 left-0 w-[50%] h-[40%] rounded-full blur-3xl opacity-20" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.3) 0%, transparent 70%)' }} />
+        <div className="absolute top-0 right-0 w-[60%] h-[50%] rounded-full blur-3xl opacity-40" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.28) 0%, transparent 72%)' }} />
+        <div className="absolute bottom-0 left-0 w-[50%] h-[40%] rounded-full blur-3xl opacity-25" style={{ background: 'radial-gradient(circle, rgba(217,119,6,0.18) 0%, transparent 72%)' }} />
         {/* Grid pattern overlay */}
-        <div className="absolute inset-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
+        <div className="absolute inset-0 opacity-[0.05]" style={{ backgroundImage: 'linear-gradient(rgba(180,83,9,0.12) 1px, transparent 1px), linear-gradient(90deg, rgba(180,83,9,0.12) 1px, transparent 1px)', backgroundSize: '48px 48px' }} />
 
         {/* Brand */}
         <div className="relative z-10">
-          <h1 className="text-4xl font-black tracking-tight text-white">VHB <span className="text-oker-400">Portaal</span></h1>
-          <p className="mt-2 text-slate-400 font-medium text-sm tracking-wide">Van Hoorebeke en Zoon</p>
+          <h1 className="text-4xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
+          <p className="mt-2 text-slate-500 font-medium text-sm tracking-wide">Van Hoorebeke en Zoon</p>
         </div>
 
         {/* Feature list */}
@@ -1128,16 +1128,16 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
             { icon: <Bell size={18} />, label: 'Updates & Meldingen', desc: 'Nieuws, veiligheid en technische info.' },
           ].map(f => (
             <div key={f.label} className="flex items-start gap-4">
-              <div className="w-9 h-9 rounded-xl bg-white/8 border border-white/10 flex items-center justify-center text-oker-400 shrink-0">{f.icon}</div>
+              <div className="w-9 h-9 rounded-xl bg-white/55 border border-white/75 flex items-center justify-center text-oker-500 shadow-sm shrink-0">{f.icon}</div>
               <div>
-                <p className="text-sm font-bold text-white">{f.label}</p>
+                <p className="text-sm font-bold text-slate-900">{f.label}</p>
                 <p className="text-xs text-slate-500 mt-0.5">{f.desc}</p>
               </div>
             </div>
           ))}
         </div>
 
-        <p className="relative z-10 text-xs text-slate-600">© {new Date().getFullYear()} Van Hoorebeke en Zoon. Intern gebruik.</p>
+        <p className="relative z-10 text-xs text-slate-500">© {new Date().getFullYear()} Van Hoorebeke en Zoon. Intern gebruik.</p>
       </div>
 
       {/* Right form panel */}
