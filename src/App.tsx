@@ -736,7 +736,7 @@ export default function App() {
         <div className="p-6 flex items-center justify-between border-b fine-divider relative">
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="section-title text-[1.25rem] font-black tracking-tight text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
+              <h1 className="brand-wordmark section-title text-[1.25rem] font-black text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
               <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
             </div>
           </div>
@@ -1117,7 +1117,7 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
 
         {/* Brand */}
         <div className="relative z-10">
-          <h1 className="text-4xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
+          <h1 className="brand-wordmark text-4xl font-black text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
           <p className="mt-2 text-slate-500 font-medium text-sm tracking-wide">Van Hoorebeke en Zoon</p>
         </div>
 
@@ -1151,7 +1151,7 @@ function LoginView({ onLogin }: { onLogin: (accessToken?: string) => Promise<voi
         >
           {/* Mobile-only brand */}
           <div className="lg:hidden text-center mb-10">
-            <h1 className="text-3xl font-black tracking-tight text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
+            <h1 className="brand-wordmark text-3xl font-black text-slate-900">VHB <span className="text-oker-500">Portaal</span></h1>
             <p className="mt-1 text-slate-400 text-xs font-medium tracking-widest uppercase">Van Hoorebeke en Zoon</p>
           </div>
 

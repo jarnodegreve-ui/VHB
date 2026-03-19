@@ -1,9 +1,10 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700;800&family=Manrope:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap");
 @import "tailwindcss";
 
 @theme {
   --font-sans: "Manrope", sans-serif;
   --font-display: "Sora", sans-serif;
+  --font-brand: "Inter Tight", sans-serif;
   --color-oker-50: #fffbeb;
   --color-oker-100: #fef3c7;
   --color-oker-200: #fde68a;
@@ -59,6 +60,12 @@
 }
 
 @layer utilities {
+  .brand-wordmark {
+    font-family: var(--font-brand);
+    letter-spacing: -0.055em;
+    line-height: 0.96;
+  }
+
   .panel {
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(255, 255, 255, 0.62) 100%);
