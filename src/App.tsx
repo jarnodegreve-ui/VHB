@@ -2118,14 +2118,30 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
     auth: 'Authenticatie',
   };
   const [activeCategory, setActiveCategory] = useState<'all' | ActivityLogEntry['category']>('all');
+  const [dateWindow, setDateWindow] = useState<'all' | 'today' | '7d' | '30d'>('7d');
   const [searchTerm, setSearchTerm] = useState('');
 
   const filteredEntries = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
+    const now = Date.now();
+    const startOfToday = new Date();
+    startOfToday.setHours(0, 0, 0, 0);
 
     return entries.filter((entry) => {
       const categoryMatch = activeCategory === 'all' || entry.category === activeCategory;
       if (!categoryMatch) {
+        return false;
+      }
+
+      const createdAt = new Date(entry.createdAt).getTime();
+      const dateMatch = dateWindow === 'all'
+        ? true
+        : dateWindow === 'today'
+          ? createdAt >= startOfToday.getTime()
+          : dateWindow === '7d'
+            ? createdAt >= now - (7 * 24 * 60 * 60 * 1000)
+            : createdAt >= now - (30 * 24 * 60 * 60 * 1000);
+      if (!dateMatch) {
         return false;
       }
 
@@ -2138,7 +2154,7 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
         .toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [activeCategory, entries, searchTerm]);
+  }, [activeCategory, categoryLabels, dateWindow, entries, searchTerm]);
 
   return (
     <div className="max-w-5xl space-y-6">
@@ -2157,15 +2173,63 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
         />
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-          <label className="surface-muted flex items-center gap-3 rounded-[24px] px-4 py-3">
-            <Search size={18} className="text-slate-400" />
-            <input
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              placeholder="Zoek op actie, details of actor..."
-              className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
-            />
-          </label>
+          <div className="space-y-4">
+            <label className="surface-muted flex items-center gap-3 rounded-[24px] px-4 py-3">
+              <Search size={18} className="text-slate-400" />
+              <input
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                placeholder="Zoek op actie, details of actor..."
+                className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+              />
+            </label>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={() => setDateWindow('today')}
+                className={cn(
+                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
+                  dateWindow === 'today'
+                    ? 'border-oker-200 bg-oker-50 text-oker-700'
+                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
+                )}
+              >
+                Vandaag
+              </button>
+              <button
+                onClick={() => setDateWindow('7d')}
+                className={cn(
+                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
+                  dateWindow === '7d'
+                    ? 'border-oker-200 bg-oker-50 text-oker-700'
+                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
+                )}
+              >
+                7 dagen
+              </button>
+              <button
+                onClick={() => setDateWindow('30d')}
+                className={cn(
+                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
+                  dateWindow === '30d'
+                    ? 'border-oker-200 bg-oker-50 text-oker-700'
+                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
+                )}
+              >
+                30 dagen
+              </button>
+              <button
+                onClick={() => setDateWindow('all')}
+                className={cn(
+                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
+                  dateWindow === 'all'
+                    ? 'border-oker-200 bg-oker-50 text-oker-700'
+                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
+                )}
+              >
+                Alles
+              </button>
+            </div>
+          </div>
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActiveCategory('all')}
