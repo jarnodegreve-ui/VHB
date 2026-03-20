@@ -2156,6 +2156,35 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
     });
   }, [activeCategory, categoryLabels, dateWindow, entries, searchTerm]);
 
+  const exportFilteredActivity = () => {
+    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const rows = filteredEntries.map((entry) => [
+      entry.createdAt,
+      categoryLabels[entry.category],
+      entry.action,
+      entry.actorName,
+      entry.actorRole,
+      entry.details,
+    ]);
+    const csv = [
+      ['tijdstip', 'categorie', 'actie', 'actor', 'rol', 'details'],
+      ...rows,
+    ]
+      .map((row) => row.map((cell) => escapeCsv(String(cell ?? ''))).join(','))
+      .join('\n');
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const dateSuffix = new Date().toISOString().slice(0, 10);
+    link.href = url;
+    link.download = `vhb-activiteit-${dateWindow}-${dateSuffix}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="max-w-5xl space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
@@ -2230,7 +2259,7 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
               </button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 lg:max-w-[32rem] lg:justify-end">
             <button
               onClick={() => setActiveCategory('all')}
               className={cn(
@@ -2256,6 +2285,19 @@ function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
                 {categoryLabels[category]}
               </button>
             ))}
+            <button
+              onClick={exportFilteredActivity}
+              disabled={filteredEntries.length === 0}
+              className={cn(
+                'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
+                filteredEntries.length === 0
+                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300'
+                  : 'border-white/80 bg-white/80 text-slate-600 hover:text-slate-900',
+              )}
+            >
+              <Download size={14} />
+              Exporteer CSV
+            </button>
           </div>
         </div>
 
