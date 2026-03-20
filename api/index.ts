@@ -701,6 +701,143 @@ const summarizeTokens = (values: Array<string | undefined | null>, limit = 4) =>
   return unique.length > limit ? `${visible} +${unique.length - limit}` : visible;
 };
 
+const summarizeUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUser[]) => {
+  const normalizedNextUsers = nextUsers.map(sanitizeIncomingUser);
+  const previousById = new Map(previousUsers.map((user): [string, AppUser] => [String(user.id), user]));
+  const nextById = new Map(normalizedNextUsers.map((user): [string, AppUser] => [String(user.id), user]));
+
+  const added = normalizedNextUsers.filter((user) => !previousById.has(String(user.id))).map((user) => user.name);
+  const removed = previousUsers.filter((user) => !nextById.has(String(user.id))).map((user) => user.name);
+  const roleChanges = normalizedNextUsers
+    .filter((user) => {
+      const previous = previousById.get(String(user.id));
+      return previous && previous.role !== user.role;
+    })
+    .map((user) => {
+      const previous = previousById.get(String(user.id))!;
+      return `${user.name} ${previous.role}->${user.role}`;
+    });
+  const statusChanges = normalizedNextUsers
+    .filter((user) => {
+      const previous = previousById.get(String(user.id));
+      return previous && Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true);
+    })
+    .map((user) => {
+      const previous = previousById.get(String(user.id))!;
+      return `${user.name} ${previous.isActive === false ? "inactief" : "actief"}->${user.isActive === false ? "inactief" : "actief"}`;
+    });
+
+  return [
+    `toegevoegd: ${summarizeTokens(added)}`,
+    `verwijderd: ${summarizeTokens(removed)}`,
+    `rolwijzigingen: ${summarizeTokens(roleChanges)}`,
+    `statuswijzigingen: ${summarizeTokens(statusChanges)}`,
+  ].join(" · ");
+};
+
+const summarizePlanningCodeChanges = (previousCodes: PlanningCodeRecord[], nextCodes: PlanningCodeRecord[]) => {
+  const previousByCode = new Map(previousCodes.map((code): [string, PlanningCodeRecord] => [toLookupToken(code.code), code]));
+  const nextByCode = new Map(nextCodes.map((code): [string, PlanningCodeRecord] => [toLookupToken(code.code), code]));
+
+  const added = nextCodes.filter((code) => !previousByCode.has(toLookupToken(code.code))).map((code) => code.code);
+  const removed = previousCodes.filter((code) => !nextByCode.has(toLookupToken(code.code))).map((code) => code.code);
+  const changed = nextCodes
+    .filter((code) => {
+      const previous = previousByCode.get(toLookupToken(code.code));
+      return previous && (
+        previous.category !== code.category ||
+        previous.description !== code.description ||
+        previous.countsAsShift !== code.countsAsShift ||
+        previous.isPaidAbsence !== code.isPaidAbsence ||
+        previous.isDayOff !== code.isDayOff
+      );
+    })
+    .map((code) => code.code);
+
+  return [
+    `toegevoegd: ${summarizeTokens(added)}`,
+    `verwijderd: ${summarizeTokens(removed)}`,
+    `gewijzigd: ${summarizeTokens(changed)}`,
+  ].join(" · ");
+};
+
+const summarizeServiceChanges = (previousServices: ServiceRecord[], nextServices: ServiceRecord[]) => {
+  const previousById = new Map(previousServices.map((service): [string, ServiceRecord] => [String(service.id), service]));
+  const nextById = new Map(nextServices.map((service): [string, ServiceRecord] => [String(service.id), service]));
+
+  const added = nextServices.filter((service) => !previousById.has(String(service.id))).map((service) => service.serviceNumber);
+  const removed = previousServices.filter((service) => !nextById.has(String(service.id))).map((service) => service.serviceNumber);
+  const changed = nextServices
+    .filter((service) => {
+      const previous = previousById.get(String(service.id));
+      return previous && (
+        previous.serviceNumber !== service.serviceNumber ||
+        previous.startTime !== service.startTime ||
+        previous.endTime !== service.endTime ||
+        previous.startTime2 !== service.startTime2 ||
+        previous.endTime2 !== service.endTime2 ||
+        previous.startTime3 !== service.startTime3 ||
+        previous.endTime3 !== service.endTime3
+      );
+    })
+    .map((service) => service.serviceNumber);
+
+  return [
+    `toegevoegd: ${summarizeTokens(added)}`,
+    `verwijderd: ${summarizeTokens(removed)}`,
+    `gewijzigd: ${summarizeTokens(changed)}`,
+  ].join(" · ");
+};
+
+const summarizeDiversionChanges = (previousDiversions: any[], nextDiversions: any[]) => {
+  const previousById = new Map(previousDiversions.map((item): [string, any] => [String(item.id), item]));
+  const nextById = new Map(nextDiversions.map((item): [string, any] => [String(item.id), item]));
+  const added = nextDiversions.filter((item) => !previousById.has(String(item.id))).map((item) => item.title);
+  const removed = previousDiversions.filter((item) => !nextById.has(String(item.id))).map((item) => item.title);
+  const changed = nextDiversions
+    .filter((item) => {
+      const previous = previousById.get(String(item.id));
+      return previous && (
+        previous.title !== item.title ||
+        previous.description !== item.description ||
+        previous.startDate !== item.startDate ||
+        previous.endDate !== item.endDate ||
+        previous.severity !== item.severity
+      );
+    })
+    .map((item) => item.title);
+
+  return [
+    `toegevoegd: ${summarizeTokens(added)}`,
+    `verwijderd: ${summarizeTokens(removed)}`,
+    `gewijzigd: ${summarizeTokens(changed)}`,
+  ].join(" · ");
+};
+
+const summarizeUpdateChanges = (previousUpdates: any[], nextUpdates: any[]) => {
+  const previousById = new Map(previousUpdates.map((item): [string, any] => [String(item.id), item]));
+  const nextById = new Map(nextUpdates.map((item): [string, any] => [String(item.id), item]));
+  const added = nextUpdates.filter((item) => !previousById.has(String(item.id))).map((item) => item.title);
+  const removed = previousUpdates.filter((item) => !nextById.has(String(item.id))).map((item) => item.title);
+  const changed = nextUpdates
+    .filter((item) => {
+      const previous = previousById.get(String(item.id));
+      return previous && (
+        previous.title !== item.title ||
+        previous.content !== item.content ||
+        previous.category !== item.category ||
+        Boolean(previous.isUrgent) !== Boolean(item.isUrgent)
+      );
+    })
+    .map((item) => item.title);
+
+  return [
+    `toegevoegd: ${summarizeTokens(added)}`,
+    `verwijderd: ${summarizeTokens(removed)}`,
+    `gewijzigd: ${summarizeTokens(changed)}`,
+  ].join(" · ");
+};
+
 const getServiceSegments = (service: ServiceRecord) => (
   [
     service.startTime && service.endTime ? { startTime: service.startTime, endTime: service.endTime, segment: 1 } : null,
@@ -1411,7 +1548,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       req,
       "planning",
       "Matrix import bevestigd",
-      `${rows.length} dagen verwerkt, ${generatedPlanning.summary.generatedShifts} diensten opgebouwd. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
+      `${rows.length} dagen verwerkt (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
     );
 
     res.json({
@@ -1486,12 +1623,13 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
       return res.status(400).json({ error: "Invalid data format. Expected an array." });
     }
 
+    const previousCodes = await getPlanningCodesData();
     await savePlanningCodesData(codes);
     await logActivity(
       req,
       "planning_codes",
       "Planningscodes opgeslagen",
-      `${codes.length} planningscodes opgeslagen. Codes: ${summarizeTokens(codes.map((code: any) => code.code))}.`,
+      `${codes.length} planningscodes opgeslagen. ${summarizePlanningCodeChanges(previousCodes, codes)}.`,
     );
     res.json({ success: true, count: codes.length });
   } catch (err: any) {
@@ -1514,13 +1652,14 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
+      const previousUsers = await getUsersData();
       await saveUsersData(newData);
       console.log("Users saved successfully. Count:", newData.length);
       await logActivity(
         req,
         "users",
         "Gebruikers opgeslagen",
-        `${newData.length} gebruikers verwerkt in gebruikersbeheer. Voorbeeld: ${summarizeTokens(newData.map((user: any) => user.name))}.`,
+        `${newData.length} gebruikers verwerkt in gebruikersbeheer. ${summarizeUserChanges(previousUsers, newData)}.`,
       );
       res.json({ success: true, count: newData.length });
     } else {
@@ -1548,12 +1687,13 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
+      const previousDiversions = await getDiversionsData();
       await saveDiversionsData(newData);
       await logActivity(
         req,
         "diversions",
         "Omleidingen opgeslagen",
-        `${newData.length} omleidingen opgeslagen. Voorbeeld: ${summarizeTokens(newData.map((item: any) => item.title))}.`,
+        `${newData.length} omleidingen opgeslagen. ${summarizeDiversionChanges(previousDiversions, newData)}.`,
       );
       res.json({ success: true, count: newData.length });
     } else {
@@ -1580,12 +1720,13 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
+      const previousServices = await getServicesData();
       await saveServicesData(newData);
       await logActivity(
         req,
         "services",
         "Diensten opgeslagen",
-        `${newData.length} diensten opgeslagen. Dienstnummers: ${summarizeTokens(newData.map((service: any) => service.serviceNumber))}.`,
+        `${newData.length} diensten opgeslagen. ${summarizeServiceChanges(previousServices, newData)}.`,
       );
       res.json({ success: true, count: newData.length });
     } else {
@@ -1610,12 +1751,13 @@ app.get("/api/updates", authenticate, async (req, res) => {
 app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const newData = req.body;
+    const previousUpdates = await getUpdatesData();
     await saveUpdatesData(newData);
     await logActivity(
       req,
       "updates",
       "Updates opgeslagen",
-      `${Array.isArray(newData) ? newData.length : 0} updates opgeslagen. Voorbeeld: ${summarizeTokens(Array.isArray(newData) ? newData.map((update: any) => update.title) : [])}.`,
+      `${Array.isArray(newData) ? newData.length : 0} updates opgeslagen. ${summarizeUpdateChanges(previousUpdates, Array.isArray(newData) ? newData : [])}.`,
     );
     res.json({ success: true });
   } catch (err: any) {
