@@ -36,7 +36,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
-import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry } from './types';
+import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
@@ -51,6 +51,49 @@ type Toast = {
   id: number;
   message: string;
   tone?: 'success' | 'error' | 'info';
+};
+
+const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
+  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'dienstoverzicht', 'contacten', 'updates', 'ruil-verzoeken', 'verlof'],
+  planner: [
+    'dashboard',
+    'rooster',
+    'omleidingen',
+    'dienstoverzicht',
+    'contacten',
+    'updates',
+    'ruil-verzoeken',
+    'verlof',
+    'verlof-beheer',
+    'beheer-roosters',
+    'planning-matrix',
+    'planning-codes',
+    'beheer-updates',
+    'beheer-omleidingen',
+    'beheer-dienstoverzicht',
+    'beheer-contactlijst',
+  ],
+  admin: [
+    'dashboard',
+    'rooster',
+    'omleidingen',
+    'dienstoverzicht',
+    'contacten',
+    'updates',
+    'ruil-verzoeken',
+    'verlof',
+    'verlof-beheer',
+    'beheer-roosters',
+    'planning-matrix',
+    'planning-codes',
+    'beheer-updates',
+    'beheer-omleidingen',
+    'beheer-dienstoverzicht',
+    'beheer-contactlijst',
+    'gebruikers',
+    'activiteit',
+    'beheer-debug',
+  ],
 };
 
 
@@ -268,6 +311,18 @@ export default function App() {
       fetchActivityLog();
     }
   }, [currentView, currentUser?.role]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      return;
+    }
+
+    const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
+    if (!allowedViews.includes(currentView)) {
+      setCurrentView('dashboard');
+      showToast('Dit scherm is niet beschikbaar voor jouw rol.', 'info');
+    }
+  }, [currentUser, currentView]);
 
   const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token) => {
     const headers = new Headers(init.headers || {});
@@ -708,6 +763,8 @@ export default function App() {
 
   const isPlanner = currentUser.role === 'planner' || currentUser.role === 'admin';
   const isAdmin = currentUser.role === 'admin';
+  const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
+  const resolvedCurrentView = allowedViews.includes(currentView) ? currentView : 'dashboard';
   const viewMeta: Record<string, { title: string; subtitle: string }> = {
     dashboard: { title: 'Dashboard', subtitle: 'Overzicht van planning, updates en operationele status.' },
     omleidingen: { title: 'Omleidingen', subtitle: 'Actuele hinder en routewijzigingen voor chauffeurs.' },
@@ -729,7 +786,7 @@ export default function App() {
     'beheer-contactlijst': { title: 'Beheer Contactlijst', subtitle: 'Werk medewerkers, rollen en gegevens bij.' },
     'beheer-debug': { title: 'Systeem Status', subtitle: 'Controleer koppelingen, tabellen en health checks.' },
   };
-  const currentMeta = viewMeta[currentView] || { title: 'VHB Portaal', subtitle: 'Interne operationele omgeving.' };
+  const currentMeta = viewMeta[resolvedCurrentView] || { title: 'VHB Portaal', subtitle: 'Interne operationele omgeving.' };
 
   return (
     <>
@@ -979,20 +1036,20 @@ export default function App() {
         <div className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-7 lg:pb-8">
           <AnimatePresence mode="wait">
             <motion.div
-              key={currentView}
+              key={resolvedCurrentView}
               initial={{ opacity: 0, y: 18, scale: 0.985, filter: 'blur(8px)' }}
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(6px)' }}
               transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto max-w-[1360px]"
             >
-              {currentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
-              {currentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
-              {currentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} />}
-              {currentView === 'dienstoverzicht' && <ServicesView services={services} />}
-              {currentView === 'updates' && <UpdatesView updates={updates} />}
-              {currentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
-              {currentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} onMatrixImported={async () => {
+              {resolvedCurrentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
+              {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
+              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} />}
+              {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
+              {resolvedCurrentView === 'updates' && <UpdatesView updates={updates} />}
+              {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
+              {resolvedCurrentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} onMatrixImported={async () => {
                 await Promise.all([
                   fetchPlanningMatrix(),
                   fetchPlanning(),
@@ -1000,33 +1057,33 @@ export default function App() {
                   ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
                 ]);
               }} />}
-              {currentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} users={users} />}
-              {currentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
-              {currentView === 'beheer-updates' && (
+              {resolvedCurrentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} users={users} />}
+              {resolvedCurrentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
+              {resolvedCurrentView === 'beheer-updates' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} />
                 </Suspense>
               )}
-              {currentView === 'gebruikers' && (
+              {resolvedCurrentView === 'gebruikers' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} />
                 </Suspense>
               )}
-              {currentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
-              {currentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
-              {currentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
-              {currentView === 'beheer-contactlijst' && (
+              {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
+              {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
+              {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
+              {resolvedCurrentView === 'beheer-contactlijst' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} />
                 </Suspense>
               )}
-              {currentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
-              {(currentView === 'verlof' || currentView === 'verlof-beheer') && (
+              {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
+              {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView user={currentUser} leaveRequests={leaveRequests} users={users} onSave={saveLeave} />
                 </Suspense>
               )}
-              {currentView === 'beheer-debug' && (
+              {resolvedCurrentView === 'beheer-debug' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDebugView />
                 </Suspense>
