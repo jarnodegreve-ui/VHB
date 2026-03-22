@@ -172,6 +172,29 @@ const toPublicUser = (user: any): AppUser => ({
   email: user.email,
 });
 
+const toRoleScopedUser = (user: AppUser, role: Role): AppUser => {
+  if (role === "admin") {
+    return user;
+  }
+
+  if (role === "planner") {
+    return {
+      ...user,
+      lastLogin: undefined,
+      activeSessions: undefined,
+    };
+  }
+
+  return {
+    id: user.id,
+    name: user.name,
+    role: user.role,
+    employeeId: "",
+    phone: user.phone,
+    email: user.email,
+  };
+};
+
 const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   id: String(user.id),
   name: user.name?.trim() || "Onbekende gebruiker",
@@ -1637,10 +1660,10 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
   }
 });
 
-app.get("/api/users", authenticate, async (req, res) => {
+app.get("/api/users", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const users = await getUsersData();
-    res.json(users);
+    res.json(users.map((user) => toRoleScopedUser(user, req.appUser!.role)));
   } catch (err) {
     console.error("Error reading users data:", err);
     res.status(500).json({ error: "Failed to read data" });
