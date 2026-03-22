@@ -71,7 +71,6 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-updates',
     'beheer-omleidingen',
     'beheer-dienstoverzicht',
-    'beheer-contactlijst',
   ],
   admin: [
     'dashboard',
@@ -942,12 +941,6 @@ export default function App() {
                 active={currentView === 'beheer-dienstoverzicht'} 
                 onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} 
               />
-              <NavItem 
-                icon={<Phone size={20} />} 
-                label="Beheer Contactlijst" 
-                active={currentView === 'beheer-contactlijst'} 
-                onClick={() => { setCurrentView('beheer-contactlijst'); setIsSidebarOpen(false); }} 
-              />
             </>
           )}
 
@@ -1070,7 +1063,7 @@ export default function App() {
                 </Suspense>
               )}
               {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
-              {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
+              {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} canAdminSync={isAdmin} />}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
               {resolvedCurrentView === 'beheer-contactlijst' && (
                 <Suspense fallback={<ViewLoader />}>
@@ -4911,7 +4904,7 @@ function ManageUsersView({ users, onSave, title = "Gebruikersbeheer", currentUse
   );
 }
 
-function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
+function ManageDiversionsView({ diversions, onSave, canAdminSync }: { diversions: Diversion[], onSave: (d: Diversion[]) => void, canAdminSync: boolean }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -4919,6 +4912,10 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
 
   const handleSync = async () => {
+    if (!canAdminSync) {
+      notify('Deze synchronisatie is alleen beschikbaar voor admins.', 'error');
+      return;
+    }
     try {
       setIsSyncing(true);
       const response = await fetch('/api/admin/sync', {
@@ -5043,15 +5040,17 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
     <div className="max-w-4xl space-y-6 md:space-y-8">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h3 className="text-2xl font-black tracking-tight">Beheer Omleidingen</h3>
-        <button 
-          onClick={() => setConfirmSyncOpen(true)}
-          disabled={isSyncing}
-          className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
-          title="Synchroniseer lokale JSON data naar Supabase"
-        >
-          <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
-          {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
-        </button>
+        {canAdminSync ? (
+          <button 
+            onClick={() => setConfirmSyncOpen(true)}
+            disabled={isSyncing}
+            className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
+            title="Synchroniseer lokale JSON data naar Supabase"
+          >
+            <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
+            {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
+          </button>
+        ) : null}
       </div>
 
       <div className="surface-card p-6 md:p-8 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -5278,15 +5277,17 @@ function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[],
         message="Weet je zeker dat je deze omleiding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
       />
 
-      <ConfirmationModal
-        isOpen={confirmSyncOpen}
-        onClose={() => setConfirmSyncOpen(false)}
-        onConfirm={handleSync}
-        title="Omleidingen synchroniseren"
-        message="Deze actie schrijft de lokale omleidingen weg naar de database en kan bestaande records met dezelfde ID overschrijven."
-        confirmText="Synchroniseren"
-        variant="warning"
-      />
+      {canAdminSync ? (
+        <ConfirmationModal
+          isOpen={confirmSyncOpen}
+          onClose={() => setConfirmSyncOpen(false)}
+          onConfirm={handleSync}
+          title="Omleidingen synchroniseren"
+          message="Deze actie schrijft de lokale omleidingen weg naar de database en kan bestaande records met dezelfde ID overschrijven."
+          confirmText="Synchroniseren"
+          variant="warning"
+        />
+      ) : null}
     </div>
   );
 }
