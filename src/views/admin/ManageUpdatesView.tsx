@@ -46,10 +46,12 @@ export function ManageUpdatesView({
   updates,
   onSave,
   onSendUrgentEmail,
+  canSendUrgentEmail,
 }: {
   updates: Update[];
   onSave: (u: Update[]) => Promise<boolean>;
   onSendUrgentEmail: (u: Update) => Promise<void>;
+  canSendUrgentEmail: boolean;
 }) {
   const [newUpdate, setNewUpdate] = useState({ title: '', category: 'algemeen', content: '', isUrgent: false });
   const [isPublishing, setIsPublishing] = useState(false);
@@ -70,7 +72,7 @@ export function ManageUpdatesView({
 
     const success = await onSave([updateToAdd, ...updates]);
     if (success) {
-      if (newUpdate.isUrgent) {
+      if (newUpdate.isUrgent && canSendUrgentEmail) {
         await onSendUrgentEmail(updateToAdd);
       }
       setNewUpdate({ title: '', category: 'algemeen', content: '', isUrgent: false });
@@ -101,17 +103,30 @@ export function ManageUpdatesView({
             onChange={(e) => setNewUpdate({ ...newUpdate, category: e.target.value })}
           />
 
-          <div className="flex items-center gap-3 p-4 bg-red-50 rounded-2xl border border-red-100">
-            <input
-              type="checkbox"
-              id="isUrgent"
-              className="w-5 h-5 rounded border-red-300 text-red-600 focus:ring-red-500"
-              checked={newUpdate.isUrgent}
-              onChange={(e) => setNewUpdate({ ...newUpdate, isUrgent: e.target.checked })}
-            />
-            <label htmlFor="isUrgent" className="text-sm font-black text-red-700 uppercase tracking-widest cursor-pointer flex items-center gap-2">
-              <AlertTriangle size={16} /> Markeer als DRINGEND (verstuurt automatische e-mail)
-            </label>
+          <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
+            {canSendUrgentEmail ? (
+              <div className="flex items-center gap-3">
+                <input
+                  type="checkbox"
+                  id="isUrgent"
+                  className="w-5 h-5 rounded border-red-300 text-red-600 focus:ring-red-500"
+                  checked={newUpdate.isUrgent}
+                  onChange={(e) => setNewUpdate({ ...newUpdate, isUrgent: e.target.checked })}
+                />
+                <label htmlFor="isUrgent" className="text-sm font-black text-red-700 uppercase tracking-widest cursor-pointer flex items-center gap-2">
+                  <AlertTriangle size={16} /> Markeer als DRINGEND (verstuurt automatische e-mail)
+                </label>
+              </div>
+            ) : (
+              <div>
+                <p className="text-sm font-black uppercase tracking-widest text-red-700 flex items-center gap-2">
+                  <AlertTriangle size={16} /> Dringende verzending admin-only
+                </p>
+                <p className="mt-2 text-sm font-medium text-red-700/80">
+                  Planners kunnen updates publiceren, maar geen dringende e-mails uitsturen naar alle gebruikers.
+                </p>
+              </div>
+            )}
           </div>
 
           <div>

@@ -1042,7 +1042,7 @@ export default function App() {
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {resolvedCurrentView === 'updates' && <UpdatesView updates={updates} />}
               {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
-              {resolvedCurrentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} onMatrixImported={async () => {
+              {resolvedCurrentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
                 await Promise.all([
                   fetchPlanningMatrix(),
                   fetchPlanning(),
@@ -1051,10 +1051,10 @@ export default function App() {
                 ]);
               }} />}
               {resolvedCurrentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} users={users} />}
-              {resolvedCurrentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} />}
+              {resolvedCurrentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} />}
               {resolvedCurrentView === 'beheer-updates' && (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} />
+                  <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
                 </Suspense>
               )}
               {resolvedCurrentView === 'gebruikers' && (
@@ -1064,7 +1064,7 @@ export default function App() {
               )}
               {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
               {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} canAdminSync={isAdmin} />}
-              {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} />}
+              {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} />}
               {resolvedCurrentView === 'beheer-contactlijst' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} />
@@ -2638,7 +2638,7 @@ function UpdatesView({ updates }: { updates: Update[] }) {
   );
 }
 
-function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[], history: PlanningMatrixImportHistory[], onMatrixImported: () => Promise<void> }) {
+function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
@@ -2657,6 +2657,10 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
   const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0);
 
   const handleImport = () => {
+    if (!canAdminOverride) {
+      notify('JSON fallback-import is alleen beschikbaar voor admins.', 'error');
+      return;
+    }
     try {
       const data = JSON.parse(jsonInput);
       if (Array.isArray(data)) {
@@ -2753,6 +2757,10 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
   };
 
   const handleSync = async () => {
+    if (!canAdminOverride) {
+      notify('Deze synchronisatie is alleen beschikbaar voor admins.', 'error');
+      return;
+    }
     try {
       setIsSyncing(true);
       const response = await fetch('/api/planning/sync-from-matrix', {
@@ -2800,7 +2808,7 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
         eyebrow="Planningbeheer"
         title="Beheer Roosters"
         description="Importeer matrixplanning, bouw de actieve planning opnieuw op en controleer recente imports op problemen voordat je iets overschrijft."
-        actions={(
+        actions={canAdminOverride ? (
           <button 
             onClick={() => setConfirmSyncOpen(true)}
             disabled={isSyncing}
@@ -2810,7 +2818,7 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
             <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
             {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
           </button>
-        )}
+        ) : null}
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">
         <div className="surface-card rounded-[32px] p-6 md:p-8">
@@ -2878,6 +2886,7 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
               </label>
             </div>
 
+            {canAdminOverride ? (
             <div className="rounded-[28px] border border-white/70 bg-white/45 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -2904,9 +2913,26 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
                 Importeer JSON Planning
               </button>
             </div>
+            ) : (
+            <div className="rounded-[28px] border border-white/70 bg-white/45 p-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Admin pad</p>
+                  <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">Fallback en sync</h4>
+                  <p className="mt-2 text-sm font-medium text-slate-500">
+                    JSON fallback-import, handmatige planning sync en directe overschrijvingen zijn afgeschermd voor admins. Gebruik als planner de matrix-upload hierboven.
+                  </p>
+                </div>
+                <span className="rounded-full border border-white/70 bg-white/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                  Admin only
+                </span>
+              </div>
+            </div>
+            )}
           </div>
         </div>
 
+        {canAdminOverride ? (
         <div className="surface-card rounded-[32px] p-6 md:p-8">
           <AdminSubsectionHeader
             eyebrow="Database"
@@ -2929,8 +2955,10 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
             </button>
           </div>
         </div>
+        ) : null}
       </div>
 
+      {canAdminOverride ? (
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <AdminSubsectionHeader
           eyebrow="Correcties"
@@ -2950,6 +2978,7 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
           </button>
         </div>
       </div>
+      ) : null}
 
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <AdminSubsectionHeader
@@ -3029,15 +3058,17 @@ function ManageSchedulesView({ shifts, onSave, users, history, onMatrixImported 
         </div>
       </div>
 
-      <ConfirmationModal
-        isOpen={confirmSyncOpen}
-        onClose={() => setConfirmSyncOpen(false)}
-        onConfirm={handleSync}
-        title="Planning synchroniseren"
-        message="Deze actie schrijft de lokale planning weg naar de database en kan bestaande records met dezelfde ID overschrijven."
-        confirmText="Synchroniseren"
-        variant="warning"
-      />
+      {canAdminOverride ? (
+        <ConfirmationModal
+          isOpen={confirmSyncOpen}
+          onClose={() => setConfirmSyncOpen(false)}
+          onConfirm={handleSync}
+          title="Planning synchroniseren"
+          message="Deze actie schrijft de lokale planning weg naar de database en kan bestaande records met dezelfde ID overschrijven."
+          confirmText="Synchroniseren"
+          variant="warning"
+        />
+      ) : null}
 
       <AnimatePresence>
         {matrixPreviewOpen && matrixPreview && (
@@ -3805,7 +3836,7 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
   }
 }
 
-function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (codes: PlanningCode[]) => Promise<boolean> }) {
+function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: PlanningCode[]; onSave: (codes: PlanningCode[]) => Promise<boolean>; canAdminDelete: boolean }) {
   const [draftCodes, setDraftCodes] = useState<PlanningCode[]>(codes);
   const [isSaving, setIsSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | PlanningCode['category']>('all');
@@ -3835,6 +3866,10 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
   };
 
   const removeCode = (index: number) => {
+    if (!canAdminDelete) {
+      notify('Codes verwijderen is alleen beschikbaar voor admins.', 'error');
+      return;
+    }
     setDraftCodes((current) => current.filter((_, currentIndex) => currentIndex !== index));
   };
 
@@ -3901,7 +3936,14 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
           eyebrow="Werkset"
           title="Codebeheer"
           description="Voeg matrixcodes toe, wijzig hun betekenis en bepaal of ze als dienst, verlof of afwezigheid tellen."
-          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredCodes.length} zichtbaar</div>}
+          aside={
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredCodes.length} zichtbaar</div>
+              {!canAdminDelete ? (
+                <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Delete admin-only</div>
+              ) : null}
+            </div>
+          }
         />
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto]">
@@ -4003,9 +4045,15 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
                             </label>
                           </td>
                           <td className="px-5 py-4">
-                            <button onClick={() => removeCode(index)} className="glass-button rounded-2xl p-3 text-red-500 hover:text-red-600" aria-label="Verwijder code">
-                              <Trash2 size={16} />
-                            </button>
+                            {canAdminDelete ? (
+                              <button onClick={() => removeCode(index)} className="glass-button rounded-2xl p-3 text-red-500 hover:text-red-600" aria-label="Verwijder code">
+                                <Trash2 size={16} />
+                              </button>
+                            ) : (
+                              <span className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-300">
+                                Admin
+                              </span>
+                            )}
                           </td>
                         </tr>
                       );
@@ -4058,9 +4106,15 @@ function PlanningCodesView({ codes, onSave }: { codes: PlanningCode[]; onSave: (
                           <input type="checkbox" checked={code.isDayOff} onChange={(event) => updateCode(index, { isDayOff: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                         </label>
                       </div>
-                      <button onClick={() => removeCode(index)} className="glass-button rounded-2xl px-4 py-3 text-sm font-black text-red-500 hover:text-red-600">
-                        Verwijder Code
-                      </button>
+                      {canAdminDelete ? (
+                        <button onClick={() => removeCode(index)} className="glass-button rounded-2xl px-4 py-3 text-sm font-black text-red-500 hover:text-red-600">
+                          Verwijder Code
+                        </button>
+                      ) : (
+                        <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-300">
+                          Verwijderen admin-only
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -5317,7 +5371,7 @@ function Input({ label, type, placeholder, options, value, onChange }: { label: 
   );
 }
 
-function ManageServicesView({ services, onSave }: { services: Service[], onSave: (s: Service[]) => void }) {
+function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[]) => void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -5335,6 +5389,11 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
   const [isImporting, setIsImporting] = useState(false);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!canAdminOverride) {
+      notify('Excel-import is alleen beschikbaar voor admins.', 'error');
+      if (e.target) e.target.value = '';
+      return;
+    }
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -5487,6 +5546,10 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
   };
 
   const handleDelete = (id: string) => {
+    if (!canAdminOverride) {
+      notify('Diensten verwijderen is alleen beschikbaar voor admins.', 'error');
+      return;
+    }
     setConfirmDeleteId(id);
   };
 
@@ -5497,6 +5560,12 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
   };
 
   const handleConfirmImport = () => {
+    if (!canAdminOverride) {
+      notify('Excel-import is alleen beschikbaar voor admins.', 'error');
+      setPendingImportedServices(null);
+      setPendingImportCount(0);
+      return;
+    }
     if (!pendingImportedServices) return;
     onSave(pendingImportedServices);
     setPendingImportedServices(null);
@@ -5511,25 +5580,33 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
           <p className="text-sm text-slate-500 font-medium">Voeg diensten toe, bewerk of verwijder ze.</p>
         </div>
         <div className="flex items-center gap-3">
-          <input
-            type="file"
-            accept=".xlsx, .xls"
-            className="hidden"
-            id="services-upload"
-            onChange={handleFileUpload}
-            disabled={isImporting}
-          />
-          <label
-            htmlFor="services-upload"
-            className={cn(
-              "control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all cursor-pointer active:scale-95",
-              isImporting && "opacity-50 cursor-not-allowed"
-            )}
-            title="Importeer vanuit Excel"
-          >
-            <Upload size={20} className="text-oker-500" />
-            {isImporting ? 'Importeren...' : 'Excel Import'}
-          </label>
+          {canAdminOverride ? (
+            <>
+              <input
+                type="file"
+                accept=".xlsx, .xls"
+                className="hidden"
+                id="services-upload"
+                onChange={handleFileUpload}
+                disabled={isImporting}
+              />
+              <label
+                htmlFor="services-upload"
+                className={cn(
+                  "control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all cursor-pointer active:scale-95",
+                  isImporting && "opacity-50 cursor-not-allowed"
+                )}
+                title="Importeer vanuit Excel"
+              >
+                <Upload size={20} className="text-oker-500" />
+                {isImporting ? 'Importeren...' : 'Excel Import'}
+              </label>
+            </>
+          ) : (
+            <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              Excel import admin-only
+            </div>
+          )}
           <button
             onClick={downloadCSV}
             className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
@@ -5589,7 +5666,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
-                      <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                      {canAdminOverride ? <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button> : null}
                     </div>
                   </td>
                 </tr>
@@ -5606,7 +5683,7 @@ function ManageServicesView({ services, onSave }: { services: Service[], onSave:
                 <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
                 <div className="flex items-center gap-2">
                   <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
-                  <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button>
+                  {canAdminOverride ? <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button> : null}
                 </div>
               </div>
               
