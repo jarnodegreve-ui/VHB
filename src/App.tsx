@@ -386,16 +386,18 @@ export default function App() {
         method: 'POST',
         body: JSON.stringify(newUpdates),
       });
-      if (response.ok) {
-        setUpdates(newUpdates);
-        if (currentUser?.role === 'admin') {
-          await fetchActivityLog();
-        }
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data?.details || data?.error || 'Opslaan mislukt.');
       }
-      return response.ok;
+      setUpdates(newUpdates);
+      if (currentUser?.role === 'admin') {
+        await fetchActivityLog();
+      }
+      return true;
     } catch (error) {
       console.error('Error saving updates:', error);
-      showToast('Opslaan van updates is mislukt.', 'error');
+      showToast(`Opslaan van updates is mislukt: ${error instanceof Error ? error.message : 'Onbekende fout'}`, 'error');
       return false;
     }
   };

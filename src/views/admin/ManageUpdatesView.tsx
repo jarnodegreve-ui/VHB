@@ -77,6 +77,8 @@ export function ManageUpdatesView({
       }
       setNewUpdate({ title: '', category: 'algemeen', content: '', isUrgent: false });
       notify('Update succesvol gepubliceerd!', 'success');
+    } else {
+      notify('Update kon niet worden opgeslagen. Controleer de foutmelding hierboven en probeer opnieuw.', 'error');
     }
     setIsPublishing(false);
   };
