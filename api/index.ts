@@ -1274,11 +1274,22 @@ const saveUpdatesData = async (data: any) => {
         ...toDatabaseUpdate(update),
         isUrgent: Boolean(update.isUrgent),
       }));
-      delete (camelCasePayload[0] as any)?.isurgent;
       ({ error } = await db.from('updates').upsert(camelCasePayload.map((update) => {
         const { isurgent, ...rest } = update as any;
         return rest;
       })));
+    }
+
+    // Old production schemas may not have an urgent column at all.
+    if (error && /isurgent/i.test(String(error.message || ""))) {
+      const payloadWithoutUrgent = normalizedData.map((update) => ({
+        id: String(update.id),
+        date: String(update.date || ""),
+        title: update.title || "",
+        category: update.category || "algemeen",
+        content: update.content || "",
+      }));
+      ({ error } = await db.from('updates').upsert(payloadWithoutUrgent));
     }
 
     if (error) throw error;
