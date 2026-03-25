@@ -294,7 +294,7 @@ const toDatabaseUpdate = (update: any) => ({
   title: update.title || "",
   category: update.category || "algemeen",
   content: update.content || "",
-  isurgent: Boolean(update.isUrgent),
+  isUrgent: Boolean(update.isUrgent),
 });
 
 const toLookupToken = (value?: string | null) =>
