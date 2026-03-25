@@ -2564,8 +2564,14 @@ function DebugView() {
 
 function UpdatesView({ updates }: { updates: Update[] }) {
   const [filter, setFilter] = useState<'all' | 'algemeen' | 'veiligheid' | 'technisch'>('all');
+  const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);
 
   const filteredUpdates = updates.filter(u => filter === 'all' || u.category === filter);
+  const toggleExpanded = (id: string) => {
+    setExpandedUpdateIds((current) => (
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
+    ));
+  };
 
   return (
     <div className="max-w-3xl space-y-6">
@@ -2589,7 +2595,14 @@ function UpdatesView({ updates }: { updates: Update[] }) {
 
       <div className="space-y-6">
         {filteredUpdates.length > 0 ? (
-          filteredUpdates.map(update => (
+          filteredUpdates.map(update => {
+            const isExpanded = expandedUpdateIds.includes(update.id);
+            const shouldTruncate = update.content.length > 220;
+            const visibleContent = shouldTruncate && !isExpanded
+              ? `${update.content.slice(0, 220).trimEnd()}...`
+              : update.content;
+
+            return (
             <div key={update.id} className="surface-card surface-card-hover p-6 md:p-8 rounded-[32px] relative overflow-hidden group duration-300">
               <div className={cn(
                 "absolute top-0 left-0 w-1.5 h-full",
@@ -2620,15 +2633,23 @@ function UpdatesView({ updates }: { updates: Update[] }) {
               </div>
               
               <h4 className="text-xl font-black text-slate-800 mb-4 group-hover:text-oker-500 transition-colors leading-tight">{update.title}</h4>
-              <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base">{update.content}</p>
+              <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base whitespace-pre-wrap">{visibleContent}</p>
               
-              <div className="mt-6 pt-6 border-t border-slate-50 flex justify-end">
-                <button className="text-[10px] font-black text-oker-500 uppercase tracking-widest hover:text-oker-600 transition-colors flex items-center gap-2">
-                  Lees meer <ChevronRight size={14} />
-                </button>
-              </div>
+              {shouldTruncate ? (
+                <div className="mt-6 pt-6 border-t border-slate-50 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => toggleExpanded(update.id)}
+                    className="text-[10px] font-black text-oker-500 uppercase tracking-widest hover:text-oker-600 transition-colors flex items-center gap-2"
+                  >
+                    {isExpanded ? 'Toon minder' : 'Lees meer'}
+                    <ChevronRight size={14} className={cn("transition-transform", isExpanded && "rotate-90")} />
+                  </button>
+                </div>
+              ) : null}
             </div>
-          ))
+          );
+          })
         ) : (
           <div className="surface-card p-12 rounded-[32px] text-center">
             <Info size={48} className="mx-auto text-slate-200 mb-4" />
