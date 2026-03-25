@@ -279,6 +279,24 @@ const toDatabasePlanningCode = (code: PlanningCodeRecord) => ({
   is_day_off: code.isDayOff === true,
 });
 
+const toPublicUpdate = (update: any) => ({
+  id: String(update.id),
+  date: String(update.date || ""),
+  title: update.title || "",
+  category: update.category || "algemeen",
+  content: update.content || "",
+  isUrgent: Boolean(update.isUrgent ?? update.isurgent),
+});
+
+const toDatabaseUpdate = (update: any) => ({
+  id: String(update.id),
+  date: String(update.date || ""),
+  title: update.title || "",
+  category: update.category || "algemeen",
+  content: update.content || "",
+  isurgent: Boolean(update.isUrgent),
+});
+
 const toLookupToken = (value?: string | null) =>
   String(value || "")
     .normalize("NFD")
@@ -1233,25 +1251,26 @@ const getUpdatesData = async () => {
     try {
       const { data, error } = await db.from('updates').select('*');
       if (error) console.error("Supabase error fetching updates:", error);
-      else if (data) return data;
+      else if (data) return data.map(toPublicUpdate);
     } catch (e) {
       console.error("Unexpected error fetching updates:", e);
     }
   }
   if (fs.existsSync(UPDATES_FILE)) {
-    return JSON.parse(fs.readFileSync(UPDATES_FILE, "utf-8"));
+    return JSON.parse(fs.readFileSync(UPDATES_FILE, "utf-8")).map(toPublicUpdate);
   }
   return [];
 };
 
 const saveUpdatesData = async (data: any) => {
+  const normalizedData = Array.isArray(data) ? data.map(toPublicUpdate) : [];
   if (db) {
-    const { error } = await db.from('updates').upsert(data);
+    const { error } = await db.from('updates').upsert(normalizedData.map(toDatabaseUpdate));
     if (error) throw error;
     return;
   }
   if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
-  fs.writeFileSync(UPDATES_FILE, JSON.stringify(data, null, 2));
+  fs.writeFileSync(UPDATES_FILE, JSON.stringify(normalizedData, null, 2));
 };
 
 const getSwapsData = async () => {
