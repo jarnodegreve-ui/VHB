@@ -294,7 +294,7 @@ const toDatabaseUpdate = (update: any) => ({
   title: update.title || "",
   category: update.category || "algemeen",
   content: update.content || "",
-  isUrgent: Boolean(update.isUrgent),
+  isurgent: Boolean(update.isUrgent),
 });
 
 const toLookupToken = (value?: string | null) =>
@@ -1265,7 +1265,22 @@ const getUpdatesData = async () => {
 const saveUpdatesData = async (data: any) => {
   const normalizedData = Array.isArray(data) ? data.map(toPublicUpdate) : [];
   if (db) {
-    const { error } = await db.from('updates').upsert(normalizedData.map(toDatabaseUpdate));
+    const lowerCasePayload = normalizedData.map(toDatabaseUpdate);
+    let { error } = await db.from('updates').upsert(lowerCasePayload);
+
+    // Some deployed databases expose the column as camelCase in the PostgREST schema cache.
+    if (error && /isurgent/i.test(String(error.message || ""))) {
+      const camelCasePayload = normalizedData.map((update) => ({
+        ...toDatabaseUpdate(update),
+        isUrgent: Boolean(update.isUrgent),
+      }));
+      delete (camelCasePayload[0] as any)?.isurgent;
+      ({ error } = await db.from('updates').upsert(camelCasePayload.map((update) => {
+        const { isurgent, ...rest } = update as any;
+        return rest;
+      })));
+    }
+
     if (error) throw error;
     return;
   }
