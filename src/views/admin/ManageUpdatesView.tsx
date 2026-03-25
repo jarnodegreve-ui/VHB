@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Bell } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 
@@ -55,6 +55,7 @@ export function ManageUpdatesView({
 }) {
   const [newUpdate, setNewUpdate] = useState({ title: '', category: 'algemeen', content: '', isUrgent: false });
   const [isPublishing, setIsPublishing] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,9 +84,22 @@ export function ManageUpdatesView({
     setIsPublishing(false);
   };
 
+  const handleDelete = async (id: string) => {
+    setDeletingId(id);
+    const success = await onSave(updates.filter((update) => update.id !== id));
+    if (success) {
+      notify('Update verwijderd.', 'success');
+    } else {
+      notify('Update kon niet worden verwijderd.', 'error');
+    }
+    setDeletingId(null);
+  };
+
   return (
-    <div className="max-w-3xl space-y-6 md:space-y-8">
-      <h3 className="text-2xl font-black tracking-tight">Beheer Updates</h3>
+    <div className="space-y-6 md:space-y-8">
+      <div className="max-w-3xl">
+        <h3 className="text-2xl font-black tracking-tight">Beheer Updates</h3>
+      </div>
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-emerald-500" />
@@ -152,6 +166,65 @@ export function ManageUpdatesView({
             {isPublishing ? 'Publiceren...' : 'Update Publiceren'}
           </button>
         </form>
+      </div>
+
+      <div className="surface-card p-6 md:p-8 rounded-[32px]">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <h3 className="text-lg font-black tracking-tight">Bestaande Updates</h3>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              Beheer gepubliceerde berichten en verwijder updates die niet meer zichtbaar mogen zijn.
+            </p>
+          </div>
+          <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+            {updates.length} zichtbaar
+          </div>
+        </div>
+
+        <div className="mt-6 space-y-3">
+          {updates.length > 0 ? updates.map((update) => (
+            <div key={update.id} className="rounded-[24px] border border-white/70 bg-white/45 p-5">
+              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={cn(
+                      'rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest',
+                      update.isUrgent ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-white/80 text-slate-500 border border-white/70'
+                    )}>
+                      {update.isUrgent ? 'Dringend' : update.category}
+                    </span>
+                    <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                      <CalendarDays size={13} />
+                      {update.date}
+                    </span>
+                  </div>
+                  <h4 className="mt-3 text-lg font-black tracking-tight text-slate-900">{update.title}</h4>
+                  <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-7 text-slate-600">
+                    {update.content}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(update.id)}
+                  disabled={deletingId === update.id}
+                  className={cn(
+                    'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all',
+                    deletingId === update.id
+                      ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                      : 'glass-button text-red-500 hover:text-red-600'
+                  )}
+                >
+                  <Trash2 size={14} />
+                  {deletingId === update.id ? 'Verwijderen...' : 'Verwijder'}
+                </button>
+              </div>
+            </div>
+          )) : (
+            <div className="rounded-[24px] border border-white/70 bg-white/45 p-6 text-sm font-medium text-slate-500">
+              Er zijn nog geen updates gepubliceerd.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );

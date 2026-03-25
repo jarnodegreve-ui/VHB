@@ -780,7 +780,7 @@ export default function App() {
     'planning-matrix': { title: 'Planning Overzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
     'planning-codes': { title: 'Planningscodes', subtitle: 'Beheer de betekenis van matrixcodes zonder SQL of handmatige scripts.' },
     activiteit: { title: 'Activiteit', subtitle: 'Recente beheeracties en wijzigingen in het portaal.' },
-    'beheer-updates': { title: 'Nieuwe Update', subtitle: 'Publiceer updates en stuur dringende meldingen uit.' },
+    'beheer-updates': { title: 'Beheer Updates', subtitle: 'Publiceer, controleer en verwijder updates en dringende meldingen.' },
     gebruikers: { title: 'Gebruikers', subtitle: 'Beheer accounts, rollen en toegangsrechten.' },
     'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
     'beheer-dienstoverzicht': { title: 'Beheer Dienstoverzicht', subtitle: 'Onderhoud het dienstschema en importeer uit Excel.' },
@@ -927,7 +927,7 @@ export default function App() {
               />
               <NavItem 
                 icon={<Plus size={20} />} 
-                label="Nieuwe Update" 
+                label="Beheer Updates" 
                 active={currentView === 'beheer-updates'} 
                 onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} 
               />
