@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Bell, CalendarDays, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 
@@ -53,35 +53,59 @@ export function ManageUpdatesView({
   onSendUrgentEmail: (u: Update) => Promise<void>;
   canSendUrgentEmail: boolean;
 }) {
-  const [newUpdate, setNewUpdate] = useState({ title: '', category: 'algemeen', content: '', isUrgent: false });
+  const emptyUpdateForm = { title: '', category: 'algemeen', content: '', isUrgent: false };
+  const [updateForm, setUpdateForm] = useState(emptyUpdateForm);
   const [isPublishing, setIsPublishing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newUpdate.title || !newUpdate.content) return;
+    if (!updateForm.title || !updateForm.content) return;
 
     setIsPublishing(true);
-    const updateToAdd: Update = {
-      id: Date.now().toString(),
-      date: new Date().toLocaleDateString('nl-BE'),
-      title: newUpdate.title,
-      category: newUpdate.category as any,
-      content: newUpdate.content,
-      isUrgent: newUpdate.isUrgent,
+    const updateToSave: Update = {
+      id: editingId || Date.now().toString(),
+      date: editingId
+        ? (updates.find((update) => update.id === editingId)?.date || new Date().toLocaleDateString('nl-BE'))
+        : new Date().toLocaleDateString('nl-BE'),
+      title: updateForm.title,
+      category: updateForm.category as any,
+      content: updateForm.content,
+      isUrgent: updateForm.isUrgent,
     };
 
-    const success = await onSave([updateToAdd, ...updates]);
+    const success = await onSave(
+      editingId
+        ? updates.map((update) => update.id === editingId ? updateToSave : update)
+        : [updateToSave, ...updates]
+    );
     if (success) {
-      if (newUpdate.isUrgent && canSendUrgentEmail) {
-        await onSendUrgentEmail(updateToAdd);
+      if (updateForm.isUrgent && canSendUrgentEmail) {
+        await onSendUrgentEmail(updateToSave);
       }
-      setNewUpdate({ title: '', category: 'algemeen', content: '', isUrgent: false });
-      notify('Update succesvol gepubliceerd!', 'success');
+      setUpdateForm(emptyUpdateForm);
+      setEditingId(null);
+      notify(editingId ? 'Update succesvol bijgewerkt!' : 'Update succesvol gepubliceerd!', 'success');
     } else {
       notify('Update kon niet worden opgeslagen. Controleer de foutmelding hierboven en probeer opnieuw.', 'error');
     }
     setIsPublishing(false);
+  };
+
+  const handleEdit = (update: Update) => {
+    setEditingId(update.id);
+    setUpdateForm({
+      title: update.title,
+      category: update.category,
+      content: update.content,
+      isUrgent: Boolean(update.isUrgent),
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setUpdateForm(emptyUpdateForm);
   };
 
   const handleDelete = async (id: string) => {
@@ -103,10 +127,10 @@ export function ManageUpdatesView({
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-emerald-500" />
-          Nieuwe Update Publiceren
+          {editingId ? 'Update Bewerken' : 'Nieuwe Update Publiceren'}
         </h3>
         <form onSubmit={handlePublish} className="space-y-6">
-          <Input label="Titel" type="text" placeholder="Onderwerp van de update" value={newUpdate.title} onChange={(e) => setNewUpdate({ ...newUpdate, title: e.target.value })} />
+          <Input label="Titel" type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
           <Input
             label="Categorie"
             type="select"
@@ -115,8 +139,8 @@ export function ManageUpdatesView({
               { label: 'Veiligheid', value: 'veiligheid' },
               { label: 'Technisch', value: 'technisch' },
             ]}
-            value={newUpdate.category}
-            onChange={(e) => setNewUpdate({ ...newUpdate, category: e.target.value })}
+            value={updateForm.category}
+            onChange={(e) => setUpdateForm({ ...updateForm, category: e.target.value })}
           />
 
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
@@ -126,8 +150,8 @@ export function ManageUpdatesView({
                   type="checkbox"
                   id="isUrgent"
                   className="w-5 h-5 rounded border-red-300 text-red-600 focus:ring-red-500"
-                  checked={newUpdate.isUrgent}
-                  onChange={(e) => setNewUpdate({ ...newUpdate, isUrgent: e.target.checked })}
+                  checked={updateForm.isUrgent}
+                  onChange={(e) => setUpdateForm({ ...updateForm, isUrgent: e.target.checked })}
                 />
                 <label htmlFor="isUrgent" className="text-sm font-black text-red-700 uppercase tracking-widest cursor-pointer flex items-center gap-2">
                   <AlertTriangle size={16} /> Markeer als DRINGEND (verstuurt automatische e-mail)
@@ -150,21 +174,32 @@ export function ManageUpdatesView({
             <textarea
               className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
               placeholder="Schrijf hier het bericht voor de chauffeurs..."
-              value={newUpdate.content}
-              onChange={(e) => setNewUpdate({ ...newUpdate, content: e.target.value })}
+              value={updateForm.content}
+              onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={isPublishing}
-            className={cn(
-              'w-full mt-8 font-black px-8 py-4 rounded-2xl transition-all shadow-xl uppercase tracking-widest text-xs active:scale-95',
-              isPublishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20'
-            )}
-          >
-            {isPublishing ? 'Publiceren...' : 'Update Publiceren'}
-          </button>
+          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+            <button
+              type="submit"
+              disabled={isPublishing}
+              className={cn(
+                'w-full font-black px-8 py-4 rounded-2xl transition-all shadow-xl uppercase tracking-widest text-xs active:scale-95',
+                isPublishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20'
+              )}
+            >
+              {isPublishing ? (editingId ? 'Bijwerken...' : 'Publiceren...') : (editingId ? 'Update Bijwerken' : 'Update Publiceren')}
+            </button>
+            {editingId ? (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="w-full rounded-2xl border border-white/70 bg-white/55 px-8 py-4 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-white/80 sm:w-auto"
+              >
+                Annuleren
+              </button>
+            ) : null}
+          </div>
         </form>
       </div>
 
@@ -203,20 +238,30 @@ export function ManageUpdatesView({
                     {update.content}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => handleDelete(update.id)}
-                  disabled={deletingId === update.id}
-                  className={cn(
-                    'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all',
-                    deletingId === update.id
-                      ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                      : 'glass-button text-red-500 hover:text-red-600'
-                  )}
-                >
-                  <Trash2 size={14} />
-                  {deletingId === update.id ? 'Verwijderen...' : 'Verwijder'}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleEdit(update)}
+                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:text-oker-600"
+                  >
+                    <Pencil size={14} />
+                    Bewerk
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(update.id)}
+                    disabled={deletingId === update.id}
+                    className={cn(
+                      'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all',
+                      deletingId === update.id
+                        ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                        : 'glass-button text-red-500 hover:text-red-600'
+                    )}
+                  >
+                    <Trash2 size={14} />
+                    {deletingId === update.id ? 'Verwijderen...' : 'Verwijder'}
+                  </button>
+                </div>
               </div>
             </div>
           )) : (
