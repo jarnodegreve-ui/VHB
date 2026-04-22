@@ -1052,7 +1052,18 @@ export default function App() {
                   ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
                 ]);
               }} />}
-              {resolvedCurrentView === 'planning-matrix' && <PlanningMatrixView rows={planningMatrixRows} services={services} planningCodes={planningCodes} users={users} />}
+              {resolvedCurrentView === 'planning-matrix' && (
+                <PlanningMatrixView
+                  rows={planningMatrixRows}
+                  services={services}
+                  planningCodes={planningCodes}
+                  users={users}
+                  canOpenUserManagement={isAdmin}
+                  onOpenPlanningCodes={() => setCurrentView('planning-codes')}
+                  onOpenServiceOverview={() => setCurrentView('beheer-dienstoverzicht')}
+                  onOpenUserManagement={() => setCurrentView('gebruikers')}
+                />
+              )}
               {resolvedCurrentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} />}
               {resolvedCurrentView === 'beheer-updates' && (
                 <Suspense fallback={<ViewLoader />}>
@@ -3325,7 +3336,25 @@ function ManageUpdatesView({ updates, onSave, onSendUrgentEmail }: { updates: Up
   );
 }
 
-function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: PlanningMatrixRow[]; services: Service[]; planningCodes: PlanningCode[]; users: User[] }) {
+function PlanningMatrixView({
+  rows,
+  services,
+  planningCodes,
+  users,
+  canOpenUserManagement,
+  onOpenPlanningCodes,
+  onOpenServiceOverview,
+  onOpenUserManagement,
+}: {
+  rows: PlanningMatrixRow[];
+  services: Service[];
+  planningCodes: PlanningCode[];
+  users: User[];
+  canOpenUserManagement: boolean;
+  onOpenPlanningCodes: () => void;
+  onOpenServiceOverview: () => void;
+  onOpenUserManagement: () => void;
+}) {
   const [selectedDate, setSelectedDate] = useState<string | null>(rows[0]?.source_date || null);
   const [showOnlyIssues, setShowOnlyIssues] = useState(false);
   const [highlightedCode, setHighlightedCode] = useState<string | null>(null);
@@ -3619,6 +3648,24 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
                 <span className="text-sm font-medium text-red-700">Geen onbekende codes gevonden.</span>
               )}
             </div>
+            {derived.globalUnknownCodes.length > 0 ? (
+              <div className="mt-4 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={onOpenPlanningCodes}
+                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                >
+                  Open Planningscodes
+                </button>
+                <button
+                  type="button"
+                  onClick={onOpenServiceOverview}
+                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                >
+                  Open Dienstoverzicht
+                </button>
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
@@ -3637,6 +3684,23 @@ function PlanningMatrixView({ rows, services, planningCodes, users }: { rows: Pl
                 <span className="text-sm font-medium text-amber-700">Alle chauffeurs zijn gekoppeld.</span>
               )}
             </div>
+            {derived.globalUnmatchedDrivers.length > 0 ? (
+              <div className="mt-4">
+                {canOpenUserManagement ? (
+                  <button
+                    type="button"
+                    onClick={onOpenUserManagement}
+                    className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 transition-all hover:bg-amber-100"
+                  >
+                    Open Gebruikersbeheer
+                  </button>
+                ) : (
+                  <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                    Gebruikersbeheer admin-only
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </div>
       </section>
