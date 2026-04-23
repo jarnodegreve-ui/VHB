@@ -2672,10 +2672,11 @@ function UpdatesView({ updates }: { updates: Update[] }) {
   );
 }
 
-function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
+function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | Promise<void>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
+  const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [isMatrixImporting, setIsMatrixImporting] = useState(false);
   const [matrixPreviewOpen, setMatrixPreviewOpen] = useState(false);
   const [pendingMatrixCsv, setPendingMatrixCsv] = useState('');
@@ -2710,6 +2711,7 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
   };
 
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isClearingPlanning, setIsClearingPlanning] = useState(false);
 
   const handleMatrixFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -2833,6 +2835,23 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
       notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  const handleClearPlanning = async () => {
+    if (!canAdminOverride) {
+      notify('Planning wissen is alleen beschikbaar voor admins.', 'error');
+      return;
+    }
+    try {
+      setIsClearingPlanning(true);
+      await Promise.resolve(onSave([]));
+      notify('Actieve planning gewist.', 'success');
+      setConfirmClearOpen(false);
+    } catch (error: any) {
+      notify(`Planning wissen mislukt: ${error.message || 'Onbekende fout'}`, 'error');
+    } finally {
+      setIsClearingPlanning(false);
     }
   };
 
@@ -2971,22 +2990,39 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
           <AdminSubsectionHeader
             eyebrow="Database"
             title="Actieve planning herschrijven"
-            description="Gebruik sync alleen om de huidige lokale planning expliciet opnieuw naar Supabase te schrijven."
+            description="Gebruik sync om de actuele planning opnieuw op te bouwen of wis de planning volledig wanneer een nieuwe planning later volgt."
           />
-          <div className="mt-5 rounded-[24px] border border-white/70 bg-white/45 p-5">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Handmatige actie</p>
-            <p className="mt-2 text-sm font-medium text-slate-500">
-              Dit pad overschrijft bestaande records met dezelfde ID. Gebruik het enkel wanneer je de actieve planning bewust wilt vervangen zonder matrix-preview.
-            </p>
-            <button
-              onClick={() => setConfirmSyncOpen(true)}
-              disabled={isSyncing}
-              className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600 disabled:opacity-50 active:scale-95"
-              title="Synchroniseer lokale JSON data naar Supabase"
-            >
-              <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
-              {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
-            </button>
+          <div className="mt-5 space-y-4">
+            <div className="rounded-[24px] border border-white/70 bg-white/45 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Opnieuw opbouwen</p>
+              <p className="mt-2 text-sm font-medium text-slate-500">
+                Dit pad vervangt de actieve planning met de recentste matrixopbouw. Gebruik dit als je de matrix al gecontroleerd hebt en de actuele planning wilt overschrijven.
+              </p>
+              <button
+                onClick={() => setConfirmSyncOpen(true)}
+                disabled={isSyncing}
+                className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600 disabled:opacity-50 active:scale-95"
+                title="Synchroniseer lokale JSON data naar Supabase"
+              >
+                <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
+                {isSyncing ? 'Synchroniseren...' : 'Planning Overschrijven'}
+              </button>
+            </div>
+
+            <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-700">Leegmaken</p>
+              <p className="mt-2 text-sm font-medium text-red-700/80">
+                Wis alle actieve roosterregels in het portaal. Handig wanneer de planning volledig vervangen wordt en je eerst een lege toestand wilt.
+              </p>
+              <button
+                onClick={() => setConfirmClearOpen(true)}
+                disabled={isClearingPlanning}
+                className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-red-200 bg-white px-6 py-4 text-xs font-black uppercase tracking-widest text-red-700 transition-all hover:bg-red-100 disabled:opacity-50 active:scale-95"
+              >
+                <Trash2 size={18} />
+                {isClearingPlanning ? 'Wissen...' : 'Planning Wissen'}
+              </button>
+            </div>
           </div>
         </div>
         ) : null}
@@ -3101,6 +3137,18 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
           message="Deze actie schrijft de lokale planning weg naar de database en kan bestaande records met dezelfde ID overschrijven."
           confirmText="Synchroniseren"
           variant="warning"
+        />
+      ) : null}
+
+      {canAdminOverride ? (
+        <ConfirmationModal
+          isOpen={confirmClearOpen}
+          onClose={() => setConfirmClearOpen(false)}
+          onConfirm={handleClearPlanning}
+          title="Planning wissen"
+          message="Deze actie verwijdert alle actieve roosterregels uit het portaal. Gebruik dit alleen als je bewust met een lege planning wilt starten."
+          confirmText={isClearingPlanning ? "Wissen..." : "Planning Wissen"}
+          variant="danger"
         />
       ) : null}
 
@@ -3815,7 +3863,7 @@ function PlanningMatrixView({
                 />
               </div>
 
-              {(unmatchedDriversForSelectedDay.length > 0 || highlightedCode) ? (
+              {(unknownAssignments > 0 || unmatchedDriversForSelectedDay.length > 0 || highlightedCode) ? (
                 <div className="mt-6 grid gap-4 lg:grid-cols-2">
                   <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
                     <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
@@ -3828,12 +3876,53 @@ function PlanningMatrixView({
                         <span className="text-sm font-medium text-amber-700">Geen niet-gematchte chauffeurs voor deze dag.</span>
                       )}
                     </div>
+                    {unmatchedDriversForSelectedDay.length > 0 ? (
+                      <div className="mt-4">
+                        {canOpenUserManagement ? (
+                          <button
+                            type="button"
+                            onClick={onOpenUserManagement}
+                            className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 transition-all hover:bg-amber-100"
+                          >
+                            Open Gebruikersbeheer
+                          </button>
+                        ) : (
+                          <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-amber-700">
+                            Gebruikersbeheer admin-only
+                          </div>
+                        )}
+                      </div>
+                    ) : null}
                   </div>
                   <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Codefilter</p>
-                    <p className="mt-3 text-sm font-medium text-red-700">
-                      {highlightedCode ? `Je bekijkt nu enkel assignments met code ${highlightedCode}.` : 'Geen actieve codefilter.'}
+                    <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">
+                      {unknownAssignments > 0 ? 'Onbekende Codes' : 'Codefilter'}
                     </p>
+                    <p className="mt-3 text-sm font-medium text-red-700">
+                      {unknownAssignments > 0
+                        ? `${unknownAssignments} assignment${unknownAssignments === 1 ? '' : 's'} op deze dag vragen nog interpretatie via Planningscodes of Dienstoverzicht.`
+                        : highlightedCode
+                          ? `Je bekijkt nu enkel assignments met code ${highlightedCode}.`
+                          : 'Geen actieve codefilter.'}
+                    </p>
+                    {unknownAssignments > 0 ? (
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={onOpenPlanningCodes}
+                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                        >
+                          Open Planningscodes
+                        </button>
+                        <button
+                          type="button"
+                          onClick={onOpenServiceOverview}
+                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                        >
+                          Open Dienstoverzicht
+                        </button>
+                      </div>
+                    ) : null}
                   </div>
                 </div>
               ) : null}
