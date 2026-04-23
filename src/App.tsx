@@ -2686,10 +2686,32 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
     generatedShifts: number;
     matchedServices: number;
     skippedAbsences: number;
+    startDate: string | null;
+    endDate: string | null;
+    importedDates: string[];
     unknownCodes: string[];
     unmatchedDrivers: string[];
   }>(null);
   const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0);
+  const matrixOverwriteSummary = useMemo(() => {
+    if (!matrixPreview) return null;
+
+    const importedDateSet = new Set(matrixPreview.importedDates);
+    const existingDates = shifts.map((shift) => shift.date).filter(Boolean).sort();
+    const currentStartDate = existingDates[0] || null;
+    const currentEndDate = existingDates[existingDates.length - 1] || null;
+    const affectedExistingShifts = importedDateSet.size > 0
+      ? shifts.filter((shift) => importedDateSet.has(shift.date)).length
+      : 0;
+
+    return {
+      currentShiftCount: shifts.length,
+      affectedExistingShifts,
+      incomingShiftCount: matrixPreview.generatedShifts,
+      currentStartDate,
+      currentEndDate,
+    };
+  }, [matrixPreview, shifts]);
 
   const handleImport = () => {
     if (!canAdminOverride) {
@@ -2738,6 +2760,9 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
         generatedShifts: data.generatedShifts || 0,
         matchedServices: data.matchedServices || 0,
         skippedAbsences: data.skippedAbsences || 0,
+        startDate: data.startDate || null,
+        endDate: data.endDate || null,
+        importedDates: Array.isArray(data.importedDates) ? data.importedDates : [],
         unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
         unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
       });
@@ -3218,6 +3243,46 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-[24px] border border-white/70 bg-white/50 p-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Importbereik</p>
+                    <p className="mt-2 text-lg font-black text-slate-900">
+                      {matrixPreview.startDate
+                        ? `${new Date(matrixPreview.startDate).toLocaleDateString('nl-BE')} ${matrixPreview.endDate && matrixPreview.endDate !== matrixPreview.startDate ? `t/m ${new Date(matrixPreview.endDate).toLocaleDateString('nl-BE')}` : ''}`
+                        : 'Onbekend'}
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-slate-500">
+                      {matrixPreview.importedDays} dagen uit de nieuwe matrix worden in dit bereik verwerkt.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[24px] border border-white/70 bg-white/50 p-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Impact op actieve planning</p>
+                    <p className="mt-2 text-lg font-black text-slate-900">
+                      {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels geraakt
+                    </p>
+                    <p className="mt-2 text-sm font-medium text-slate-500">
+                      {matrixOverwriteSummary?.currentShiftCount || 0} actieve regels in totaal, {matrixOverwriteSummary?.incomingShiftCount || 0} nieuwe regels komen binnen.
+                    </p>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-oker-100 bg-oker-50/80 p-5">
+                  <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div>
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-oker-700">Wat wordt overschreven</p>
+                      <p className="mt-2 text-sm font-medium text-oker-900">
+                        {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels binnen het importbereik worden vervangen door {matrixPreview.generatedShifts} nieuw opgebouwde roosterregels.
+                      </p>
+                    </div>
+                    <div className="rounded-full border border-oker-200 bg-white/80 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-oker-700">
+                      {matrixOverwriteSummary?.currentStartDate
+                        ? `Actief: ${new Date(matrixOverwriteSummary.currentStartDate).toLocaleDateString('nl-BE')}${matrixOverwriteSummary.currentEndDate && matrixOverwriteSummary.currentEndDate !== matrixOverwriteSummary.currentStartDate ? ` t/m ${new Date(matrixOverwriteSummary.currentEndDate).toLocaleDateString('nl-BE')}` : ''}`
+                        : 'Nog geen actieve planning'}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Onbekende Codes</p>
@@ -3277,7 +3342,7 @@ function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride,
                       : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
                   )}
                 >
-                  {isMatrixImporting ? 'Importeren...' : matrixPreviewHasIssues ? 'Toch Importeren' : 'Planning Vervangen'}
+                  {isMatrixImporting ? 'Importeren...' : matrixPreviewHasIssues ? 'Toch Importeren' : 'Vervang Huidige Planning'}
                 </button>
               </div>
             </motion.div>

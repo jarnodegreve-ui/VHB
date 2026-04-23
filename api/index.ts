@@ -1597,6 +1597,9 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     }
 
     const rows = parsePlanningMatrixCsv(csvContent);
+    const importedDates = rows.map((row) => row.source_date).filter(Boolean);
+    const startDate = importedDates[0] || null;
+    const endDate = importedDates[importedDates.length - 1] || null;
     await savePlanningMatrixRows(rows);
     const generatedPlanning = await buildPlanningFromMatrix(rows);
     await replacePlanningData(generatedPlanning.shifts);
@@ -1641,6 +1644,9 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     }
 
     const rows = parsePlanningMatrixCsv(csvContent);
+    const importedDates = rows.map((row) => row.source_date).filter(Boolean);
+    const startDate = importedDates[0] || null;
+    const endDate = importedDates[importedDates.length - 1] || null;
     const generatedPlanning = await buildPlanningFromMatrix(rows);
 
     res.json({
@@ -1650,6 +1656,9 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       generatedShifts: generatedPlanning.summary.generatedShifts,
       matchedServices: generatedPlanning.summary.matchedServices,
       skippedAbsences: generatedPlanning.summary.skippedAbsences,
+      startDate,
+      endDate,
+      importedDates,
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
     });
