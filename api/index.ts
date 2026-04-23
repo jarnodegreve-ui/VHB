@@ -1265,34 +1265,33 @@ const getUpdatesData = async () => {
 const saveUpdatesData = async (data: any) => {
   const normalizedData = Array.isArray(data) ? data.map(toPublicUpdate) : [];
   if (db) {
-    const lowerCasePayload = normalizedData.map(toDatabaseUpdate);
-    let { error } = await db.from('updates').upsert(lowerCasePayload);
+    const payloadWithoutUrgent = normalizedData.map((update) => ({
+      id: String(update.id),
+      date: String(update.date || ""),
+      title: update.title || "",
+      category: update.category || "algemeen",
+      content: update.content || "",
+    }));
+    let { error } = await db.from('updates').upsert(payloadWithoutUrgent);
+    if (error) throw error;
 
-    // Some deployed databases expose the column as camelCase in the PostgREST schema cache.
-    if (error && /isurgent/i.test(String(error.message || ""))) {
+    // Best-effort: persist the urgent flag only when the production schema supports it.
+    if (normalizedData.some((update) => Boolean(update.isUrgent))) {
+      const lowerCasePayload = normalizedData.map(toDatabaseUpdate);
       const camelCasePayload = normalizedData.map((update) => ({
-        ...toDatabaseUpdate(update),
+        ...payloadWithoutUrgent.find((item) => item.id === String(update.id)),
         isUrgent: Boolean(update.isUrgent),
       }));
-      ({ error } = await db.from('updates').upsert(camelCasePayload.map((update) => {
-        const { isurgent, ...rest } = update as any;
-        return rest;
-      })));
+
+      let urgentError = (await db.from('updates').upsert(lowerCasePayload)).error;
+      if (urgentError && /isurgent/i.test(String(urgentError.message || ""))) {
+        urgentError = (await db.from('updates').upsert(camelCasePayload)).error;
+      }
+      if (urgentError) {
+        console.warn("Urgent flag for updates kon niet worden opgeslagen. Update zelf is wel bewaard.", urgentError);
+      }
     }
 
-    // Old production schemas may not have an urgent column at all.
-    if (error && /isurgent/i.test(String(error.message || ""))) {
-      const payloadWithoutUrgent = normalizedData.map((update) => ({
-        id: String(update.id),
-        date: String(update.date || ""),
-        title: update.title || "",
-        category: update.category || "algemeen",
-        content: update.content || "",
-      }));
-      ({ error } = await db.from('updates').upsert(payloadWithoutUrgent));
-    }
-
-    if (error) throw error;
     return;
   }
   if (process.env.VERCEL) throw new Error("Supabase is niet geconfigureerd op Vercel.");
