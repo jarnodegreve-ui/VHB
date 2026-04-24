@@ -53,7 +53,7 @@ const app = express();
 const PORT = 3000;
 
 app.use(cors());
-app.use(express.json({ limit: '10mb' }));
+app.use(express.json({ limit: '25mb' }));
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -596,6 +596,113 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
   } catch (error: any) {
     console.error("Error sending email:", error);
     res.status(500).json({ error: "Fout bij verzenden email", details: error.message });
+  }
+});
+
+// --- Ritblaadjes ---
+
+const RITBLAADJE_BUCKET = "ritblaadjes";
+
+const ritblaadjeRowToPublic = (row: any, publicUrl: string) => ({
+  filename: row.filename as string,
+  storagePath: row.storage_path as string,
+  uploadedAt: row.uploaded_at as string,
+  uploadedBy: row.uploaded_by as string | null,
+  sizeBytes: row.size_bytes as number | null,
+  url: publicUrl,
+});
+
+app.get("/api/ritblaadje", authenticate, async (_req, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Supabase is niet geconfigureerd." });
+
+    const { data, error } = await db.from("ritblaadje").select("*").eq("id", "current").maybeSingle();
+    if (error) throw error;
+    if (!data) return res.json(null);
+
+    const { data: publicData } = db.storage.from(RITBLAADJE_BUCKET).getPublicUrl(data.storage_path);
+    return res.json(ritblaadjeRowToPublic(data, publicData.publicUrl));
+  } catch (err: any) {
+    console.error("Ritblaadje fetch error:", err);
+    res.status(500).json({ error: "Kon ritblaadje niet ophalen.", details: err.message });
+  }
+});
+
+app.post("/api/ritblaadje", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
+    }
+
+    const filename = String(req.body?.filename || "").trim();
+    const dataUrl = String(req.body?.dataUrl || "");
+    if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
+      return res.status(400).json({ error: "Geef een PDF-bestand met een .pdf extensie." });
+    }
+    const base64Match = dataUrl.match(/^data:application\/pdf;base64,(.+)$/);
+    if (!base64Match) {
+      return res.status(400).json({ error: "Bestand is geen geldige PDF (base64 data URL verwacht)." });
+    }
+    const buffer = Buffer.from(base64Match[1], "base64");
+    if (buffer.length === 0) {
+      return res.status(400).json({ error: "Bestand is leeg." });
+    }
+
+    // Stable storage path so public URLs stay valid across uploads.
+    const storagePath = "current.pdf";
+
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(RITBLAADJE_BUCKET)
+      .upload(storagePath, buffer, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    if (uploadError) throw uploadError;
+
+    const row = {
+      id: "current",
+      filename,
+      storage_path: storagePath,
+      uploaded_at: new Date().toISOString(),
+      uploaded_by: req.appUser?.name ?? null,
+      size_bytes: buffer.length,
+    };
+    const { error: upsertError } = await supabaseAdmin.from("ritblaadje").upsert(row);
+    if (upsertError) throw upsertError;
+
+    await logActivity(req, "planning", "Ritblaadje vervangen", `${filename} (${Math.round(buffer.length / 1024)} KB) geüpload.`);
+
+    const { data: publicData } = supabaseAdmin.storage.from(RITBLAADJE_BUCKET).getPublicUrl(storagePath);
+    res.json(ritblaadjeRowToPublic(row, publicData.publicUrl));
+  } catch (err: any) {
+    console.error("Ritblaadje upload error:", err);
+    res.status(500).json({ error: "Kon ritblaadje niet uploaden.", details: err.message });
+  }
+});
+
+app.delete("/api/ritblaadje", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
+    }
+
+    const { data: existing } = await supabaseAdmin.from("ritblaadje").select("*").eq("id", "current").maybeSingle();
+    if (!existing) return res.json({ success: true });
+
+    const { error: removeError } = await supabaseAdmin.storage
+      .from(RITBLAADJE_BUCKET)
+      .remove([existing.storage_path]);
+    if (removeError) console.warn("Storage remove error:", removeError);
+
+    const { error: deleteError } = await supabaseAdmin.from("ritblaadje").delete().eq("id", "current");
+    if (deleteError) throw deleteError;
+
+    await logActivity(req, "planning", "Ritblaadje verwijderd", `${existing.filename} verwijderd.`);
+
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Ritblaadje delete error:", err);
+    res.status(500).json({ error: "Kon ritblaadje niet verwijderen.", details: err.message });
   }
 });
 

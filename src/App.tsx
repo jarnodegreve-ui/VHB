@@ -61,6 +61,7 @@ import { PlanningMatrixView } from './views/admin/PlanningMatrixView';
 import { PlanningCodesView } from './views/admin/PlanningCodesView';
 import { ManageDiversionsView } from './views/admin/ManageDiversionsView';
 import { ManageServicesView } from './views/admin/ManageServicesView';
+import { RitblaadjesView } from './views/RitblaadjesView';
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazy(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -68,12 +69,13 @@ const LazyLeaveManagementView = lazy(() => import('./views/LeaveManagementView')
 
 
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
-  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'dienstoverzicht', 'contacten', 'updates', 'ruil-verzoeken', 'verlof'],
+  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'dienstoverzicht', 'ritblaadjes', 'contacten', 'updates', 'ruil-verzoeken', 'verlof'],
   planner: [
     'dashboard',
     'rooster',
     'omleidingen',
     'dienstoverzicht',
+    'ritblaadjes',
     'contacten',
     'updates',
     'ruil-verzoeken',
@@ -91,6 +93,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'rooster',
     'omleidingen',
     'dienstoverzicht',
+    'ritblaadjes',
     'contacten',
     'updates',
     'ruil-verzoeken',
@@ -705,6 +708,7 @@ export default function App() {
     omleidingen: { title: 'Omleidingen', subtitle: 'Actuele hinder en routewijzigingen voor chauffeurs.' },
     rooster: { title: 'Mijn Rooster', subtitle: 'Je komende diensten en export naar agenda.' },
     dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
+    ritblaadjes: { title: 'Ritblaadjes', subtitle: 'Actuele rit-informatie als PDF voor alle chauffeurs.' },
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Wissel-Verzoeken', subtitle: 'Beheer openstaande ruilverzoeken en aanbiedingen.' },
@@ -809,17 +813,23 @@ export default function App() {
             active={currentView === 'omleidingen'} 
             onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
           />
-          <NavItem 
-            icon={<Bus size={20} />} 
-            label="Dienstoverzicht" 
-            active={currentView === 'dienstoverzicht'} 
-            onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} 
+          <NavItem
+            icon={<Bus size={20} />}
+            label="Dienstoverzicht"
+            active={currentView === 'dienstoverzicht'}
+            onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }}
           />
-          <NavItem 
-            icon={<Phone size={20} />} 
-            label="Contactlijst" 
-            active={currentView === 'contacten'} 
-            onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }} 
+          <NavItem
+            icon={<FileText size={20} />}
+            label="Ritblaadjes"
+            active={currentView === 'ritblaadjes'}
+            onClick={() => { setCurrentView('ritblaadjes'); setIsSidebarOpen(false); }}
+          />
+          <NavItem
+            icon={<Phone size={20} />}
+            label="Contactlijst"
+            active={currentView === 'contacten'}
+            onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }}
           />
           <NavItem 
             icon={<Bell size={20} />} 
@@ -1000,6 +1010,7 @@ export default function App() {
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
+              {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'updates' && <UpdatesView updates={updates} />}
               {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {resolvedCurrentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
