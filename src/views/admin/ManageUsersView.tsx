@@ -17,10 +17,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState('');
   const [isResettingPassword, setIsResettingPassword] = useState(false);
-  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
   const [pendingImportUsers, setPendingImportUsers] = useState<UserDraft[] | null>(null);
   const [pendingImportMessage, setPendingImportMessage] = useState('');
-  const [isSyncing, setIsSyncing] = useState(false);
   const [credentialsModal, setCredentialsModal] = useState<{ title: string; email: string; password: string } | null>(null);
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
@@ -208,35 +206,14 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     setPendingImportMessage('');
   };
 
-  const handleSync = async () => {
-    try {
-      setIsSyncing(true);
-      const response = await fetch('/api/admin/sync', { method: 'POST', headers: await getSupabaseAuthHeaders() });
-      const text = await response.text();
-      if (!response.ok && !text.startsWith('{')) throw new Error(`Server fout (${response.status}): ${text.slice(0, 200) || 'Lege response'}`);
-      const data = JSON.parse(text);
-      if (data.success) notify('Synchronisatie voltooid.', 'success');
-      else notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
-    } catch (error: any) {
-      console.error('Sync error:', error);
-      notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
-
   return (
     <PageShell>
       <PageHeader
         eyebrow="Gebruikersbeheer"
         title={title}
-        description="Beheer medewerkers, rollen en accountacties vanuit een consistente beheershell. Gebruik sync en Excel-import alleen wanneer de brongegevens al gevalideerd zijn."
+        description="Beheer medewerkers, rollen en accountacties vanuit een consistente beheershell. Gebruik Excel-import alleen wanneer de brongegevens al gevalideerd zijn."
         actions={(
           <>
-            <button onClick={() => setConfirmSyncOpen(true)} disabled={isSyncing} className="bg-emerald-500 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg shadow-emerald-500/20 disabled:opacity-50" title="Synchroniseer lokale JSON data naar Supabase">
-              <RotateCcw size={18} className={isSyncing ? 'animate-spin' : ''} />
-              {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
-            </button>
             <label className="btn-primary ios-pressable px-4 py-3 text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer">
               <Upload size={18} />
               {isImporting ? 'Bezig...' : 'Excel Upload'}
@@ -334,7 +311,6 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       </div>
 
       <ConfirmationModal isOpen={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker Verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
-      <ConfirmationModal isOpen={confirmSyncOpen} onClose={() => setConfirmSyncOpen(false)} onConfirm={handleSync} title="Gebruikers synchroniseren" message="Deze actie schrijft de lokale gebruikersgegevens weg naar de database en kan bestaande records met dezelfde ID overschrijven." confirmText="Synchroniseren" variant="warning" />
       <ConfirmationModal isOpen={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
 
       <AnimatePresence>

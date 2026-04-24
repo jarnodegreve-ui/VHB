@@ -1021,7 +1021,7 @@ export default function App() {
                 </Suspense>
               )}
               {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
-              {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} canAdminSync={isAdmin} />}
+              {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} />}
               {resolvedCurrentView === 'beheer-contactlijst' && (
                 <Suspense fallback={<ViewLoader />}>

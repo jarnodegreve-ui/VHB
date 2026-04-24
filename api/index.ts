@@ -8,19 +8,8 @@ import nodemailer from "nodemailer";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
-import { normalizeEmail, parsePlanningMatrixCsv, toPublicUser, toRoleScopedUser } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixCsv, toRoleScopedUser } from "./helpers.js";
 import {
-  ACTIVITY_LOG_FILE,
-  DATA_FILE,
-  DIVERSIONS_FILE,
-  LEAVE_FILE,
-  PLANNING_CODES_FILE,
-  PLANNING_MATRIX_FILE,
-  PLANNING_MATRIX_HISTORY_FILE,
-  SERVICES_FILE,
-  SWAPS_FILE,
-  UPDATES_FILE,
-  USERS_FILE,
   buildPlanningFromMatrix,
   getActivityLog,
   getDiversionsData,
@@ -612,117 +601,6 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
 
 app.get("/api/test", (req, res) => {
   res.send("VHB Portaal API is active");
-});
-
-// Admin endpoint to sync local JSON to Supabase
-app.post("/api/admin/sync", authenticate, requireRole("admin"), async (req, res) => {
-  console.log("Sync request received");
-  if (!supabase) {
-    console.error("Sync failed: Supabase not configured");
-    return res.status(400).json({ error: "Supabase not configured. Cannot sync." });
-  }
-
-  try {
-    const results: any = {};
-    const cwd = process.cwd();
-    console.log("Current working directory:", cwd);
-    
-    try {
-      console.log("Files in CWD:", fs.readdirSync(cwd).join(", "));
-    } catch (e) {
-      console.error("Error reading CWD:", e);
-    }
-
-    // Sync Planning
-    try {
-      console.log("Checking planning file:", DATA_FILE);
-      if (fs.existsSync(DATA_FILE)) {
-        const localPlanning = JSON.parse(fs.readFileSync(DATA_FILE, "utf-8"));
-        console.log(`Found ${localPlanning.length} planning items`);
-        if (localPlanning.length > 0) {
-          const { error } = await db!.from('planning').upsert(localPlanning);
-          if (error) console.error("Planning sync error:", error);
-          results.planning = error ? `Error: ${error.message}` : `Synced ${localPlanning.length} items`;
-        } else {
-          results.planning = "Empty file";
-        }
-      } else {
-        console.warn("Planning file not found");
-        results.planning = "File not found";
-      }
-    } catch (e: any) {
-      results.planning = `Exception: ${e.message}`;
-    }
-
-    // Sync Users
-    try {
-      console.log("Checking users file:", USERS_FILE);
-      if (fs.existsSync(USERS_FILE)) {
-        const localUsers = JSON.parse(fs.readFileSync(USERS_FILE, "utf-8"));
-        console.log(`Found ${localUsers.length} users`);
-        if (localUsers.length > 0) {
-          const { error } = await db!.from('users').upsert(localUsers.map(toPublicUser));
-          if (error) console.error("Users sync error:", error);
-          results.users = error ? `Error: ${error.message}` : `Synced ${localUsers.length} items`;
-        } else {
-          results.users = "Empty file";
-        }
-      } else {
-        console.warn("Users file not found");
-        results.users = "File not found";
-      }
-    } catch (e: any) {
-      results.users = `Exception: ${e.message}`;
-    }
-
-    // Sync Diversions
-    try {
-      console.log("Checking diversions file:", DIVERSIONS_FILE);
-      if (fs.existsSync(DIVERSIONS_FILE)) {
-        const localDiversions = JSON.parse(fs.readFileSync(DIVERSIONS_FILE, "utf-8"));
-        console.log(`Found ${localDiversions.length} diversions`);
-        if (localDiversions.length > 0) {
-          const { error } = await db!.from('diversions').upsert(localDiversions);
-          if (error) console.error("Diversions sync error:", error);
-          results.diversions = error ? `Error: ${error.message}` : `Synced ${localDiversions.length} items`;
-        } else {
-          results.diversions = "Empty file";
-        }
-      } else {
-        console.warn("Diversions file not found");
-        results.diversions = "File not found";
-      }
-    } catch (e: any) {
-      results.diversions = `Exception: ${e.message}`;
-    }
-
-    // Sync Services
-    try {
-      console.log("Checking services file:", SERVICES_FILE);
-      if (fs.existsSync(SERVICES_FILE)) {
-        const localServices = JSON.parse(fs.readFileSync(SERVICES_FILE, "utf-8"));
-        console.log(`Found ${localServices.length} services`);
-        if (localServices.length > 0) {
-          const { error } = await db!.from('services').upsert(localServices);
-          if (error) console.error("Services sync error:", error);
-          results.services = error ? `Error: ${error.message}` : `Synced ${localServices.length} items`;
-        } else {
-          results.services = "Empty file";
-        }
-      } else {
-        console.warn("Services file not found");
-        results.services = "File not found";
-      }
-    } catch (e: any) {
-      results.services = `Exception: ${e.message}`;
-    }
-
-    console.log("Sync completed with results:", results);
-    res.json({ success: true, results });
-  } catch (err: any) {
-    console.error("Global sync error:", err);
-    res.status(500).json({ error: "Sync failed", details: err.message });
-  }
 });
 
 app.all("/api/*", (req, res) => {

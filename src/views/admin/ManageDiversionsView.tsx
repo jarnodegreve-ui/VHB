@@ -1,54 +1,14 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, FileText, MapPin, Pencil, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react';
+import { Calendar, FileText, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 
-export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { diversions: Diversion[], onSave: (d: Diversion[]) => void, canAdminSync: boolean }) {
+export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
-
-  const handleSync = async () => {
-    if (!canAdminSync) {
-      notify('Deze synchronisatie is alleen beschikbaar voor admins.', 'error');
-      return;
-    }
-    try {
-      setIsSyncing(true);
-      const response = await fetch('/api/admin/sync', {
-        method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
-      });
-      const text = await response.text();
-      
-      if (!response.ok && !text.startsWith('{')) {
-        throw new Error(`Server fout (${response.status}): ${text.slice(0, 200) || 'Lege response'}`);
-      }
-
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch (e) {
-        console.error('Failed to parse JSON. Response text:', text);
-        throw new Error('Server gaf geen geldig JSON-antwoord terug. Controleer de console voor details.');
-      }
-
-      if (data.success) {
-        notify('Synchronisatie voltooid.', 'success');
-      } else {
-        notify('Synchronisatie mislukt: ' + (data.error || 'Onbekende fout'), 'error');
-      }
-    } catch (error: any) {
-      console.error('Sync error:', error);
-      notify('Er is een fout opgetreden bij het synchroniseren: ' + error.message, 'error');
-    } finally {
-      setIsSyncing(false);
-    }
-  };
 
   const [formData, setFormData] = useState<Partial<Diversion>>({
     line: '',
@@ -142,17 +102,6 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
       <PageHeader
         eyebrow="Beheer"
         title="Beheer Omleidingen"
-        actions={canAdminSync ? (
-          <button
-            onClick={() => setConfirmSyncOpen(true)}
-            disabled={isSyncing}
-            className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
-            title="Synchroniseer lokale JSON data naar Supabase"
-          >
-            <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
-            {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
-          </button>
-        ) : undefined}
       />
 
       <div className="surface-card p-6 md:p-8 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -379,17 +328,6 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
         message="Weet je zeker dat je deze omleiding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
       />
 
-      {canAdminSync ? (
-        <ConfirmationModal
-          isOpen={confirmSyncOpen}
-          onClose={() => setConfirmSyncOpen(false)}
-          onConfirm={handleSync}
-          title="Omleidingen synchroniseren"
-          message="Deze actie schrijft de lokale omleidingen weg naar de database en kan bestaande records met dezelfde ID overschrijven."
-          confirmText="Synchroniseren"
-          variant="warning"
-        />
-      ) : null}
     </PageShell>
   );
 }
