@@ -83,7 +83,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
         title="Verlof & Afwezigheid"
         description="Beheer verlofaanvragen en bekijk de bezetting."
         actions={!isPlanner ? (
-          <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 rounded-2xl text-sm flex items-center gap-2">
+          <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
             <Plus size={20} /> Verlof Aanvragen
           </button>
         ) : undefined}
@@ -201,7 +201,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
                 </button>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as any })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="vakantie">Vakantie</option><option value="ziekte">Ziekte</option><option value="persoonlijk">Persoonlijk</option><option value="overig">Overig</option></select></div>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
-                <button type="submit" disabled={!formData.startDate || !formData.endDate} className="btn-primary ios-pressable w-full py-4 rounded-2xl">Aanvraag Indienen</button>
+                <button type="submit" disabled={!formData.startDate || !formData.endDate} className="btn-primary ios-pressable w-full py-4">Aanvraag Indienen</button>
               </form>
             </motion.div>
           </div>

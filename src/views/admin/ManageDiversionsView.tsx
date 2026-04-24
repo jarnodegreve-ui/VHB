@@ -162,7 +162,7 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
         </div>
         <button 
           onClick={handleOpenAdd}
-          className="btn-primary ios-pressable w-full sm:w-auto px-8 py-4 rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-3"
+          className="btn-primary ios-pressable w-full sm:w-auto px-8 py-4 text-xs uppercase tracking-widest flex items-center justify-center gap-3"
         >
           <Plus size={20} /> TOEVOEGEN
         </button>
@@ -360,7 +360,7 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
                   </button>
                   <button 
                     type="submit"
-                    className="btn-primary ios-pressable flex-1 px-4 py-4 rounded-2xl uppercase tracking-widest text-xs"
+                    className="btn-primary ios-pressable flex-1 px-4 py-4 uppercase tracking-widest text-xs"
                   >
                     {editingId ? 'Opslaan' : 'Toevoegen'}
                   </button>

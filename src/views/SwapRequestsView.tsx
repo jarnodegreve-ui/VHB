@@ -55,7 +55,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         actions={!isPlanner ? (
           <button
             onClick={() => setShowOfferModal(true)}
-            className="btn-primary ios-pressable px-6 py-3 rounded-2xl text-sm"
+            className="btn-primary ios-pressable px-6 py-3 text-sm"
           >
             Dienst Aanbieden
           </button>
@@ -193,7 +193,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     placeholder="Waarom wil je ruilen?"
                   />
                 </div>
-                <button type="submit" className="btn-primary ios-pressable w-full py-4 rounded-2xl">
+                <button type="submit" className="btn-primary ios-pressable w-full py-4">
                   Aanbieden
                 </button>
               </form>

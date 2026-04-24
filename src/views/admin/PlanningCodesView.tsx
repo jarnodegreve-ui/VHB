@@ -85,7 +85,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             <button onClick={addCode} className="glass-button rounded-[20px] px-5 py-3 text-sm font-black text-slate-800">
               <span className="inline-flex items-center gap-2"><Plus size={16} /> Code Toevoegen</span>
             </button>
-            <button onClick={handleSave} disabled={isSaving} className="btn-primary ios-pressable rounded-2xl px-5 py-3 text-sm">
+            <button onClick={handleSave} disabled={isSaving} className="btn-primary ios-pressable px-5 py-3 text-sm">
               {isSaving ? 'Opslaan...' : 'Opslaan'}
             </button>
           </>

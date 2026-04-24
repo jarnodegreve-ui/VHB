@@ -81,7 +81,7 @@ export function DebugView() {
             <button
               onClick={testWrite}
               disabled={isTesting}
-              className="btn-primary ios-pressable px-4 py-2 rounded-xl text-sm"
+              className="btn-primary ios-pressable px-4 py-2 text-sm"
             >
               {isTesting ? 'Testen...' : 'Test Schrijven'}
             </button>

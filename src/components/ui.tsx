@@ -18,7 +18,7 @@ export function PageShell({
     '5xl': 'max-w-5xl',
     '6xl': 'max-w-6xl',
   }[width];
-  return <div className={cn(widthClass, 'space-y-6 md:space-y-8', className)}>{children}</div>;
+  return <div className={cn(widthClass, 'mx-auto space-y-6 md:space-y-8', className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -203,7 +203,7 @@ export function CredentialsModal({
                 <button onClick={handleCopy} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-700 control-button-soft transition-all">
                   Kopieer gegevens
                 </button>
-                <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3 rounded-xl">
+                <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3">
                   Sluiten
                 </button>
               </div>

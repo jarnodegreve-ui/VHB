@@ -237,7 +237,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               <RotateCcw size={18} className={isSyncing ? 'animate-spin' : ''} />
               {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
             </button>
-            <label className="btn-primary ios-pressable px-4 py-3 rounded-2xl text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer">
+            <label className="btn-primary ios-pressable px-4 py-3 text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer">
               <Upload size={18} />
               {isImporting ? 'Bezig...' : 'Excel Upload'}
               <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
@@ -356,7 +356,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button>
-                  <button type="submit" className="btn-primary ios-pressable flex-1 rounded-2xl px-4 py-3 text-xs uppercase tracking-widest">Toevoegen</button>
+                  <button type="submit" className="btn-primary ios-pressable flex-1 px-4 py-3 text-xs uppercase tracking-widest">Toevoegen</button>
                 </div>
               </form>
             </motion.div>

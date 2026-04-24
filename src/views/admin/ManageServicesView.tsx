@@ -263,7 +263,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 });
                 setShowModal(true);
               }}
-              className="btn-primary ios-pressable px-6 py-3 rounded-2xl flex items-center gap-2"
+              className="btn-primary ios-pressable px-6 py-3 flex items-center gap-2"
             >
               <Plus size={20} />
               Nieuwe Dienst
@@ -444,7 +444,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                     />
                   </div>
                 </div>
-                <button type="submit" className="btn-primary ios-pressable w-full py-4 rounded-2xl mt-4">
+                <button type="submit" className="btn-primary ios-pressable w-full py-4 mt-4">
                   {editingId ? 'Dienst Bijwerken' : 'Dienst Toevoegen'}
                 </button>
               </form>
