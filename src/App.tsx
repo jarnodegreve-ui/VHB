@@ -133,6 +133,7 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  const [isScrolled, setIsScrolled] = useState(false);
   const isPasswordRecoveryRef = useRef(false);
   const setRecoveryMode = (v: boolean) => {
     isPasswordRecoveryRef.current = v;
@@ -765,10 +766,13 @@ export default function App() {
       </AnimatePresence>
 
       {/* Sidebar */}
-      <aside className={cn(
-        "fixed inset-y-0 left-0 w-[19rem] panel-dark ios-soft-panel m-3 mr-0 rounded-[30px] flex flex-col z-50 transition-transform duration-500 transform lg:relative lg:translate-x-0 overflow-hidden",
-        isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-      )}>
+      <aside
+        className={cn(
+          "fixed inset-y-0 left-0 w-[19rem] panel-dark ios-soft-panel m-3 mr-0 rounded-[30px] flex flex-col z-50 transition-transform duration-500 transform lg:relative lg:translate-x-0 overflow-hidden",
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+        style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.28, 0.64, 1)' }}
+      >
         <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
         <div className="p-6 flex items-center justify-center border-b fine-divider relative text-center">
@@ -940,7 +944,10 @@ export default function App() {
       {/* Main Content */}
       <main className="flex-1 flex flex-col overflow-hidden relative">
         {/* Header */}
-        <header className="mx-3 mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 shrink-0 z-30 relative">
+        <header className={cn(
+          "mx-3 mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 shrink-0 z-30 relative transition-shadow duration-500",
+          isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
+        )}>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setIsSidebarOpen(true)}
@@ -973,7 +980,13 @@ export default function App() {
         </header>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-7 lg:pb-8">
+        <div
+          className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-7 lg:pb-8"
+          onScroll={(e) => {
+            const next = (e.currentTarget.scrollTop ?? 0) > 8;
+            setIsScrolled((current) => (current === next ? current : next));
+          }}
+        >
           <AnimatePresence mode="wait">
             <motion.div
               key={resolvedCurrentView}
