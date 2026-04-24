@@ -36,13 +36,13 @@ export function PageHeader({
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
         {eyebrow ? (
-          <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">{eyebrow}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{eyebrow}</p>
         ) : null}
-        <h3 className={cn('section-title font-black tracking-tight text-slate-900', eyebrow ? 'mt-2 text-2xl md:text-3xl' : 'text-2xl md:text-3xl')}>
+        <h3 className={cn('section-title font-black tracking-tight text-slate-900 leading-[1.05]', eyebrow ? 'mt-2 text-[32px] md:text-[40px]' : 'text-[32px] md:text-[40px]')}>
           {title}
         </h3>
         {description ? (
-          <p className="mt-2 text-sm font-medium leading-7 text-slate-500 md:text-base">{description}</p>
+          <p className="mt-3 text-[15px] font-medium leading-relaxed text-slate-500 md:text-base">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
@@ -100,7 +100,7 @@ export function ConfirmationModal({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[40px] w-full max-w-md overflow-hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[28px] w-full max-w-md overflow-hidden">
             <div className="p-8 border-b border-white/70">
               <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600')}>
                 <AlertTriangle size={24} />
@@ -203,7 +203,7 @@ export function CredentialsModal({
                 <button onClick={handleCopy} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-700 control-button-soft transition-all">
                   Kopieer gegevens
                 </button>
-                <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-bold bg-oker-500 text-white hover:bg-oker-600 transition-colors shadow-lg shadow-oker-500/20">
+                <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3 rounded-xl">
                   Sluiten
                 </button>
               </div>

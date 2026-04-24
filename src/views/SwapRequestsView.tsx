@@ -55,7 +55,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         actions={!isPlanner ? (
           <button
             onClick={() => setShowOfferModal(true)}
-            className="px-6 py-3 bg-oker-500 text-white rounded-2xl font-black text-sm hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20"
+            className="btn-primary ios-pressable px-6 py-3 rounded-2xl text-sm"
           >
             Dienst Aanbieden
           </button>
@@ -164,7 +164,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
       <AnimatePresence>
         {showOfferModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-[40px] w-full max-w-md overflow-hidden">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-[28px] w-full max-w-md overflow-hidden">
               <div className="p-8 border-b border-white/70 flex items-center justify-between">
                 <h4 className="text-xl font-black">Dienst Aanbieden</h4>
                 <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
@@ -193,7 +193,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     placeholder="Waarom wil je ruilen?"
                   />
                 </div>
-                <button type="submit" className="w-full bg-oker-500 text-white font-black py-4 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20">
+                <button type="submit" className="btn-primary ios-pressable w-full py-4 rounded-2xl">
                   Aanbieden
                 </button>
               </form>

@@ -111,7 +111,7 @@ export function ServicesView({ services }: { services: Service[] }) {
         )}
       />
 
-      <div className="surface-table rounded-[40px] overflow-hidden">
+      <div className="surface-table rounded-[28px] overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">

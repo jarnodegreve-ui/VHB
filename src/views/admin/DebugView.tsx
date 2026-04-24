@@ -81,7 +81,7 @@ export function DebugView() {
             <button
               onClick={testWrite}
               disabled={isTesting}
-              className="px-4 py-2 bg-oker-500 text-white rounded-xl font-bold text-sm hover:bg-oker-600 disabled:opacity-50"
+              className="btn-primary ios-pressable px-4 py-2 rounded-xl text-sm"
             >
               {isTesting ? 'Testen...' : 'Test Schrijven'}
             </button>
@@ -157,7 +157,7 @@ export function DebugView() {
         </div>
       )}
 
-      <div className="bg-oker-50 p-8 rounded-[40px] border border-oker-100">
+      <div className="bg-oker-50 p-8 rounded-[28px] border border-oker-100">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-oker-500 text-white rounded-2xl shadow-lg shadow-oker-500/20">
             <Activity size={24} />

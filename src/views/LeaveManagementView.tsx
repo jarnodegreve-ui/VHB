@@ -83,7 +83,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
         title="Verlof & Afwezigheid"
         description="Beheer verlofaanvragen en bekijk de bezetting."
         actions={!isPlanner ? (
-          <button onClick={() => setShowRequestModal(true)} className="px-8 py-4 bg-oker-500 text-white rounded-2xl font-black text-sm hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 active:scale-95 flex items-center gap-2">
+          <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 rounded-2xl text-sm flex items-center gap-2">
             <Plus size={20} /> Verlof Aanvragen
           </button>
         ) : undefined}
@@ -91,7 +91,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
 
       <div className="grid lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-6">
-          <div className="surface-card p-8 rounded-[40px]">
+          <div className="surface-card p-8 rounded-[28px]">
             <div className="flex items-center justify-between mb-8">
               <h4 className="text-lg font-black tracking-tight capitalize">{monthName}</h4>
               <div className="flex gap-4">
@@ -131,7 +131,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
           </div>
 
           {selectedDate && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-8 rounded-[40px]">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-8 rounded-[28px]">
               <div className="flex items-center justify-between mb-6">
                 <h4 className="font-black text-slate-800">Afwezigheid op {new Date(selectedDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
                 <button onClick={() => setSelectedDate(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
@@ -185,7 +185,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
       <AnimatePresence>
         {showRequestModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[40px] w-full max-w-md overflow-hidden">
+            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[28px] w-full max-w-md overflow-hidden">
               <div className="p-8 border-b border-white/70 flex items-center justify-between"><h4 className="text-xl font-black">Verlof Aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5">
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
@@ -201,7 +201,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
                 </button>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as any })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="vakantie">Vakantie</option><option value="ziekte">Ziekte</option><option value="persoonlijk">Persoonlijk</option><option value="overig">Overig</option></select></div>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
-                <button type="submit" disabled={!formData.startDate || !formData.endDate} className={cn("w-full font-black py-4 rounded-2xl transition-all shadow-xl active:scale-[0.98]", formData.startDate && formData.endDate ? "bg-oker-500 text-white hover:bg-oker-600 shadow-oker-500/20" : "bg-slate-200 text-slate-400 shadow-none cursor-not-allowed")}>Aanvraag Indienen</button>
+                <button type="submit" disabled={!formData.startDate || !formData.endDate} className="btn-primary ios-pressable w-full py-4 rounded-2xl">Aanvraag Indienen</button>
               </form>
             </motion.div>
           </div>

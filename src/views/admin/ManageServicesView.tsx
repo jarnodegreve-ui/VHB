@@ -263,7 +263,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 });
                 setShowModal(true);
               }}
-              className="bg-oker-500 text-white font-black px-6 py-3 rounded-2xl hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20 active:scale-95 flex items-center gap-2"
+              className="btn-primary ios-pressable px-6 py-3 rounded-2xl flex items-center gap-2"
             >
               <Plus size={20} />
               Nieuwe Dienst
@@ -272,7 +272,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         )}
       />
 
-      <div className="surface-table rounded-[40px] overflow-hidden">
+      <div className="surface-table rounded-[28px] overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
@@ -373,7 +373,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[40px] w-full max-w-lg overflow-hidden"
+              className="glass-modal rounded-[28px] w-full max-w-lg overflow-hidden"
             >
               <div className="p-8 border-b border-white/70 flex items-center justify-between">
                 <h4 className="text-xl font-black">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
@@ -444,7 +444,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                     />
                   </div>
                 </div>
-                <button type="submit" className="w-full bg-oker-500 text-white font-black py-4 rounded-2xl hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 mt-4">
+                <button type="submit" className="btn-primary ios-pressable w-full py-4 rounded-2xl mt-4">
                   {editingId ? 'Dienst Bijwerken' : 'Dienst Toevoegen'}
                 </button>
               </form>

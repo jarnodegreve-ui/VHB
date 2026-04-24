@@ -162,7 +162,7 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
         </div>
         <button 
           onClick={handleOpenAdd}
-          className="w-full sm:w-auto bg-oker-500 text-white px-8 py-4 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 active:scale-95"
+          className="btn-primary ios-pressable w-full sm:w-auto px-8 py-4 rounded-2xl text-xs uppercase tracking-widest flex items-center justify-center gap-3"
         >
           <Plus size={20} /> TOEVOEGEN
         </button>
@@ -232,7 +232,7 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[40px] w-full max-w-lg overflow-hidden"
+              className="glass-modal rounded-[28px] w-full max-w-lg overflow-hidden"
             >
               <div className="p-8 border-b border-white/70 flex items-center justify-between">
                 <div>
@@ -360,7 +360,7 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
                   </button>
                   <button 
                     type="submit"
-                    className="flex-1 px-4 py-4 rounded-2xl font-black bg-oker-500 text-white hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 uppercase tracking-widest text-xs"
+                    className="btn-primary ios-pressable flex-1 px-4 py-4 rounded-2xl uppercase tracking-widest text-xs"
                   >
                     {editingId ? 'Opslaan' : 'Toevoegen'}
                   </button>

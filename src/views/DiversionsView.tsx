@@ -186,7 +186,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
           </div>
         ))
       ) : (
-        <div className="text-center py-20 surface-card rounded-[40px] border border-dashed border-white/80">
+        <div className="text-center py-20 surface-card rounded-[28px] border border-dashed border-white/80">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Search size={32} className="text-slate-300" />
           </div>

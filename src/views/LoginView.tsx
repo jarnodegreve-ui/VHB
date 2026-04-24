@@ -178,7 +178,7 @@ export function LoginView({
                   type="password"
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); resetFeedback(); }}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-oker-400/40 focus:border-oker-400 transition-all bg-white shadow-sm font-medium text-slate-800 placeholder:text-slate-300"
+                  className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
                   required
                   minLength={6}
                   placeholder="Minstens 6 tekens"
@@ -202,10 +202,7 @@ export function LoginView({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={cn(
-                  "ios-pressable w-full font-bold py-4 rounded-2xl transition-all mt-2 text-sm tracking-wide",
-                  isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-oker-500 text-white hover:bg-oker-600 shadow-lg shadow-oker-500/25 hover:shadow-oker-500/35"
-                )}
+                className="btn-primary ios-pressable w-full py-4 mt-2 text-sm tracking-wide"
               >
                 {isSubmitting ? 'Bezig met opslaan...' : 'Wachtwoord opslaan'}
               </button>
@@ -218,7 +215,7 @@ export function LoginView({
                   type="email"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); resetFeedback(); }}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-oker-400/40 focus:border-oker-400 transition-all bg-white shadow-sm font-medium text-slate-800 placeholder:text-slate-300"
+                  className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
                   required
                   placeholder="naam@bedrijf.be"
                 />
@@ -241,10 +238,7 @@ export function LoginView({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={cn(
-                  "ios-pressable w-full font-bold py-4 rounded-2xl transition-all mt-2 text-sm tracking-wide",
-                  isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-oker-500 text-white hover:bg-oker-600 shadow-lg shadow-oker-500/25 hover:shadow-oker-500/35"
-                )}
+                className="btn-primary ios-pressable w-full py-4 mt-2 text-sm tracking-wide"
               >
                 {isSubmitting ? 'Bezig met versturen...' : 'Verstuur reset-link'}
               </button>
@@ -265,7 +259,7 @@ export function LoginView({
                   type="email"
                   value={email}
                   onChange={(e) => { setEmail(e.target.value); resetFeedback(); }}
-                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-oker-400/40 focus:border-oker-400 transition-all bg-white shadow-sm font-medium text-slate-800 placeholder:text-slate-300"
+                  className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
                   required
                   placeholder="naam@bedrijf.be"
                 />
@@ -287,7 +281,7 @@ export function LoginView({
                   value={password}
                   onChange={(e) => { setPassword(e.target.value); resetFeedback(); }}
                   placeholder="••••••••"
-                  className="w-full px-4 py-3.5 rounded-2xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-oker-400/40 focus:border-oker-400 transition-all bg-white shadow-sm font-medium text-slate-800 placeholder:text-slate-300"
+                  className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
                   required
                 />
               </div>
@@ -309,10 +303,7 @@ export function LoginView({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className={cn(
-                  "ios-pressable w-full font-bold py-4 rounded-2xl transition-all mt-2 text-sm tracking-wide",
-                  isSubmitting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-oker-500 text-white hover:bg-oker-600 shadow-lg shadow-oker-500/25 hover:shadow-oker-500/35"
-                )}
+                className="btn-primary ios-pressable w-full py-4 mt-2 text-sm tracking-wide"
               >
                 {isSubmitting ? 'Bezig met inloggen...' : 'Inloggen'}
               </button>

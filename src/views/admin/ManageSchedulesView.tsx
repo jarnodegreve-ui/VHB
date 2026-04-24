@@ -321,7 +321,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               />
               <button
                 onClick={handleImport}
-                className="mt-4 inline-flex w-full items-center justify-center rounded-2xl bg-oker-500 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-oker-500/20 transition hover:bg-oker-600"
+                className="btn-primary ios-pressable mt-4 inline-flex w-full items-center justify-center rounded-2xl px-6 py-4 text-xs uppercase tracking-widest"
               >
                 Importeer JSON Planning
               </button>
