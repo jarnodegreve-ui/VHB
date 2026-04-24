@@ -117,49 +117,86 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         </div>
       </div>
 
-      {isPlanner && (
-        <div className="space-y-4 pt-8">
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Goedkeuring Planner</h4>
-          <div className="surface-table rounded-[32px] overflow-hidden">
-            <table className="w-full text-left">
-              <thead className="bg-slate-50 border-b border-slate-100">
-                <tr>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chauffeur</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acties</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {swaps.filter(s => {
-                  if (s.status !== 'pending') return false;
-                  const requester = users.find(u => u.id === s.requesterId);
-                  const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
-                  const isMe = s.requesterId === user.id;
-                  if (isBeheerder && !isMe) return false;
-                  return true;
-                }).map(swap => {
+      {isPlanner && (() => {
+        const pendingSwaps = swaps.filter(s => {
+          if (s.status !== 'pending') return false;
+          const requester = users.find(u => u.id === s.requesterId);
+          const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+          const isMe = s.requesterId === user.id;
+          if (isBeheerder && !isMe) return false;
+          return true;
+        });
+
+        return (
+          <div className="space-y-4 pt-8">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Goedkeuring Planner</h4>
+            <div className="surface-table rounded-[32px] overflow-hidden">
+              {/* Desktop table */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-slate-50 border-b border-slate-100">
+                    <tr>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chauffeur</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acties</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-50">
+                    {pendingSwaps.map(swap => {
+                      const shift = shifts.find(s => s.id === swap.shiftId);
+                      const requester = users.find(u => u.id === swap.requesterId);
+                      return (
+                        <tr key={swap.id}>
+                          <td className="px-6 py-4 font-bold text-sm">{requester?.name}</td>
+                          <td className="px-6 py-4 text-xs font-medium">{shift?.date} ({shift?.startTime} - {shift?.endTime})</td>
+                          <td className="px-6 py-4">
+                            <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-widest">Pending</span>
+                          </td>
+                          <td className="px-6 py-4 flex gap-2">
+                            <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Plus size={18} /></button>
+                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Mobile cards */}
+              <div className="md:hidden divide-y divide-slate-100">
+                {pendingSwaps.map(swap => {
                   const shift = shifts.find(s => s.id === swap.shiftId);
                   const requester = users.find(u => u.id === swap.requesterId);
                   return (
-                    <tr key={swap.id}>
-                      <td className="px-6 py-4 font-bold text-sm">{requester?.name}</td>
-                      <td className="px-6 py-4 text-xs font-medium">{shift?.date} ({shift?.startTime} - {shift?.endTime})</td>
-                      <td className="px-6 py-4">
-                        <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-widest">Pending</span>
-                      </td>
-                      <td className="px-6 py-4 flex gap-2">
-                        <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Plus size={18} /></button>
-                        <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
-                      </td>
-                    </tr>
+                    <div key={swap.id} className="p-5 space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-black text-slate-800 tracking-tight">{requester?.name}</p>
+                          <p className="text-xs font-medium text-slate-500 mt-1">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
+                        </div>
+                        <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0">Pending</span>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-green-50 text-green-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                          <Plus size={16} /> Goedkeuren
+                        </button>
+                        <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                          <X size={16} /> Afwijzen
+                        </button>
+                      </div>
+                    </div>
                   );
                 })}
-              </tbody>
-            </table>
+                {pendingSwaps.length === 0 && (
+                  <p className="text-center text-slate-400 font-medium italic py-8">Geen openstaande aanvragen.</p>
+                )}
+              </div>
+            </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       <AnimatePresence>
         {showOfferModal && (
