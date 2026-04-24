@@ -97,21 +97,21 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
       )}
 
       <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <StatCard 
-          icon={<Clock className="text-oker-600" />} 
-          label="Vandaag" 
-          value={todaysShift?.startTime || '--:--'} 
-          subValue={todaysShift ? `${todaysShift.startTime} - ${todaysShift.endTime}` : 'Geen dienst vandaag'} 
+        <StatCard
+          icon={<Clock className="text-oker-600" />}
+          label="Vandaag"
+          value={todaysShift?.startTime || '--:--'}
+          subValue={todaysShift ? `${todaysShift.startTime} - ${todaysShift.endTime}` : 'Geen dienst vandaag'}
         />
-        <StatCard 
-          icon={<AlertTriangle className="text-red-500" />} 
-          label="Actieve Omleidingen" 
-          value={diversions.length.toString()} 
-          subValue="Totaal aantal" 
+        <StatCard
+          icon={<AlertTriangle className="text-red-500" />}
+          label="Actieve Omleidingen"
+          value={diversions.length.toString()}
+          subValue="Totaal aantal"
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:items-stretch">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
         <section className="panel flex h-full min-h-[31rem] flex-col rounded-[32px] p-8">
           <div className="mb-8 flex items-center justify-between">
             <h3 className="font-black text-xl tracking-tight">Planning voor vandaag</h3>
