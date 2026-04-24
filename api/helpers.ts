@@ -6,7 +6,7 @@ import type {
   PlanningMatrixRow,
   Role,
   SwapRecord,
-} from "./types";
+} from "./types.js";
 
 export const normalizeEmail = (email?: string | null) => email?.trim().toLowerCase() || undefined;
 

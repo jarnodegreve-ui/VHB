@@ -16,7 +16,7 @@ import type {
   ServiceRecord,
   ShiftRecord,
   SwapRecord,
-} from "./types";
+} from "./types.js";
 import {
   countAdmins,
   ensureUniqueUserEmails,
@@ -35,8 +35,8 @@ import {
   toPublicSwap,
   toPublicUpdate,
   toPublicUser,
-} from "./helpers";
-import { db, supabase, supabaseAdmin } from "./db";
+} from "./helpers.js";
+import { db, supabase, supabaseAdmin } from "./db.js";
 
 export const DATA_FILE = path.join(process.cwd(), "planning_data.json");
 export const USERS_FILE = path.join(process.cwd(), "users_data.json");

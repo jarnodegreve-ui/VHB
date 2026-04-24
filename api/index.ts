@@ -5,10 +5,10 @@ import path from "path";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
-import type { AppUser, AuthenticatedRequest } from "./types";
-import { db, supabase, supabaseAdmin } from "./db";
-import { authenticate, requireRole } from "./middleware";
-import { normalizeEmail, parsePlanningMatrixCsv, toPublicUser, toRoleScopedUser } from "./helpers";
+import type { AppUser, AuthenticatedRequest } from "./types.js";
+import { db, supabase, supabaseAdmin } from "./db.js";
+import { authenticate, requireRole } from "./middleware.js";
+import { normalizeEmail, parsePlanningMatrixCsv, toPublicUser, toRoleScopedUser } from "./helpers.js";
 import {
   ACTIVITY_LOG_FILE,
   DATA_FILE,
@@ -51,7 +51,7 @@ import {
   summarizeTokens,
   summarizeUpdateChanges,
   summarizeUserChanges,
-} from "./storage";
+} from "./storage.js";
 
 dotenv.config();
 

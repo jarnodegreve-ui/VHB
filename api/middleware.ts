@@ -1,8 +1,8 @@
 import type express from "express";
-import { supabase } from "./db";
-import { getUsersData } from "./storage";
-import { normalizeEmail } from "./helpers";
-import type { AppUser, AuthenticatedRequest, Role } from "./types";
+import { supabase } from "./db.js";
+import { getUsersData } from "./storage.js";
+import { normalizeEmail } from "./helpers.js";
+import type { AppUser, AuthenticatedRequest, Role } from "./types.js";
 
 export const getBearerToken = (req: express.Request) => {
   const header = req.headers.authorization;
