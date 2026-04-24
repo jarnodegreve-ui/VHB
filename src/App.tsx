@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { Suspense, lazy, useState, useEffect, useDeferredValue, useMemo } from 'react';
+import React, { Suspense, lazy, useState, useEffect, useDeferredValue, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -129,6 +129,12 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const isPasswordRecoveryRef = useRef(false);
+  const setRecoveryMode = (v: boolean) => {
+    isPasswordRecoveryRef.current = v;
+    setIsPasswordRecovery(v);
+  };
 
   const dismissToast = (id: number) => {
     setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -163,13 +169,29 @@ export default function App() {
 
     bootstrap();
 
-    const { data: authListener } = supabase?.auth.onAuthStateChange(async (_event, nextSession) => {
+    const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, nextSession) => {
       if (!isMounted) return;
+
+      if (event === 'PASSWORD_RECOVERY') {
+        setRecoveryMode(true);
+        setSession(nextSession);
+        setAuthReady(true);
+        return;
+      }
+
+      // While user is completing a password reset, skip the normal profile
+      // bootstrap — the recovery form handles sign-out itself when done.
+      if (isPasswordRecoveryRef.current && nextSession) {
+        setSession(nextSession);
+        setAuthReady(true);
+        return;
+      }
 
       setSession(nextSession);
       if (nextSession) {
         await initializeAuthenticatedApp(nextSession.access_token);
       } else {
+        setRecoveryMode(false);
         setCurrentUser(null);
         setUsers(MOCK_USERS);
         setShifts(MOCK_SHIFTS);
@@ -654,6 +676,16 @@ export default function App() {
 
   if (!isSupabaseConfigured || !supabase) {
     return <div className="min-h-screen bg-oker-50 flex items-center justify-center p-6 text-center text-slate-700 font-bold">Supabase client-configuratie ontbreekt. Voeg `VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY` toe in Vercel en lokaal.</div>;
+  }
+
+  if (isPasswordRecovery) {
+    return (
+      <LoginView
+        onLogin={handleLogin}
+        recoveryMode
+        onRecoveryComplete={async () => { setRecoveryMode(false); }}
+      />
+    );
   }
 
   if (!session || !currentUser) {
