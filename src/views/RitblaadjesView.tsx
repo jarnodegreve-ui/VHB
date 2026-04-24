@@ -42,7 +42,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   const [isUploading, setIsUploading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
 
-  const canEdit = currentUser.role === 'planner' || currentUser.role === 'admin';
+  const canEdit = currentUser.role === 'admin';
   const canDelete = currentUser.role === 'admin';
 
   const fetchCurrent = async () => {
@@ -129,7 +129,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
     <PageShell width="5xl">
       <PageHeader
         title="Ritblaadjes"
-        description="De actuele rit-informatie voor alle chauffeurs. Planners en admins kunnen de PDF vervangen wanneer de dienstregeling wijzigt."
+        description="De actuele rit-informatie voor alle chauffeurs. Admins vervangen de PDF wanneer de dienstregeling wijzigt."
         actions={canEdit ? (
           <label className={cn(
             'btn-primary ios-pressable px-6 py-3 text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer',

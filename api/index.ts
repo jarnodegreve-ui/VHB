@@ -628,7 +628,7 @@ app.get("/api/ritblaadje", authenticate, async (_req, res) => {
   }
 });
 
-app.post("/api/ritblaadje", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
   try {
     if (!supabaseAdmin) {
       return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
