@@ -391,3 +391,306 @@
     }
   }
 }
+
+/* ==========================================================================
+   DARK MODE
+   Activated by adding `dark` class to <html>. A global toggle in the sidebar
+   persists the choice in localStorage. Most of the app uses Tailwind utility
+   classes directly; we override the high-traffic ones below plus the custom
+   glass-morphism classes above.
+   ========================================================================== */
+
+html.dark {
+  background:
+    radial-gradient(ellipse at top left, rgba(245, 158, 11, 0.05) 0%, transparent 45%),
+    radial-gradient(ellipse at bottom right, rgba(59, 130, 246, 0.06) 0%, transparent 45%),
+    linear-gradient(180deg, #0b1220 0%, #0f172a 50%, #111827 100%);
+  color-scheme: dark;
+}
+
+.dark body {
+  color: #e2e8f0;
+}
+
+.dark *::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.55);
+}
+
+/* --- Custom glass-morphism classes --- */
+
+.dark .panel {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.72) 0%, rgba(15, 23, 42, 0.58) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.12),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.05),
+    0 8px 24px rgba(0, 0, 0, 0.32);
+}
+
+.dark .panel-dark {
+  background:
+    radial-gradient(circle at top right, rgba(245, 158, 11, 0.10), transparent 38%),
+    linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(11, 18, 32, 0.92) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 10px 28px rgba(0, 0, 0, 0.38);
+}
+
+.dark .glass {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 10px 24px rgba(0, 0, 0, 0.28);
+}
+
+.dark .glass-oker {
+  background:
+    linear-gradient(180deg, rgba(245, 158, 11, 0.14) 0%, rgba(60, 30, 2, 0.48) 100%);
+  border: 1px solid rgba(245, 158, 11, 0.24);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 14px 36px rgba(245, 158, 11, 0.1);
+}
+
+.dark .surface-card {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.68) 0%, rgba(15, 23, 42, 0.52) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.04),
+    0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+.dark .surface-card-hover:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.14),
+    0 10px 26px rgba(0, 0, 0, 0.32);
+}
+
+.dark .surface-table {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.68) 0%, rgba(15, 23, 42, 0.52) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.dark .glass-modal {
+  background:
+    radial-gradient(circle at top left, rgba(71, 85, 105, 0.24), transparent 40%),
+    linear-gradient(180deg, rgba(30, 41, 59, 0.88) 0%, rgba(15, 23, 42, 0.78) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.36);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.12),
+    0 24px 64px rgba(0, 0, 0, 0.55);
+}
+
+.dark .surface-muted {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(71, 85, 105, 0.28);
+}
+
+.dark .control-input {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.68) 0%, rgba(15, 23, 42, 0.52) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.34);
+  color: #e2e8f0;
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 6px 16px rgba(0, 0, 0, 0.22);
+}
+
+.dark .control-input::placeholder {
+  color: rgba(148, 163, 184, 0.55);
+}
+
+.dark .control-input:focus {
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(245, 158, 11, 0.14),
+    inset 0 1px 0 rgba(148, 163, 184, 0.12),
+    0 12px 24px rgba(245, 158, 11, 0.08);
+}
+
+.dark .control-button-soft {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.32);
+  color: #e2e8f0;
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 8px 20px rgba(0, 0, 0, 0.22);
+}
+
+.dark .control-button-soft:hover {
+  background:
+    linear-gradient(180deg, rgba(51, 65, 85, 0.72) 0%, rgba(30, 41, 59, 0.56) 100%);
+}
+
+.dark .glass-chip {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 8px 16px rgba(0, 0, 0, 0.22);
+}
+
+.dark .glass-segmented {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.52) 0%, rgba(15, 23, 42, 0.38) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.30);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 10px 24px rgba(0, 0, 0, 0.22);
+}
+
+.dark .glass-icon-button {
+  background:
+    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.32);
+  box-shadow:
+    inset 0 1px 0 rgba(148, 163, 184, 0.10),
+    0 10px 20px rgba(0, 0, 0, 0.22);
+}
+
+.dark .fine-divider { border-color: rgba(148, 163, 184, 0.12); }
+.dark .hairline { border-color: rgba(148, 163, 184, 0.18); }
+
+/* --- Tailwind utility overrides (most-used) --- */
+
+/* White backgrounds */
+.dark .bg-white { background-color: rgba(30, 41, 59, 0.85); }
+.dark .bg-white\/30 { background-color: rgba(30, 41, 59, 0.40); }
+.dark .bg-white\/35 { background-color: rgba(30, 41, 59, 0.45); }
+.dark .bg-white\/40 { background-color: rgba(30, 41, 59, 0.50); }
+.dark .bg-white\/42 { background-color: rgba(30, 41, 59, 0.52); }
+.dark .bg-white\/45 { background-color: rgba(30, 41, 59, 0.55); }
+.dark .bg-white\/50 { background-color: rgba(30, 41, 59, 0.60); }
+.dark .bg-white\/55 { background-color: rgba(30, 41, 59, 0.65); }
+.dark .bg-white\/58 { background-color: rgba(30, 41, 59, 0.68); }
+.dark .bg-white\/60 { background-color: rgba(30, 41, 59, 0.68); }
+.dark .bg-white\/62 { background-color: rgba(30, 41, 59, 0.70); }
+.dark .bg-white\/65 { background-color: rgba(30, 41, 59, 0.72); }
+.dark .bg-white\/70 { background-color: rgba(30, 41, 59, 0.74); }
+.dark .bg-white\/74 { background-color: rgba(30, 41, 59, 0.76); }
+.dark .bg-white\/75 { background-color: rgba(30, 41, 59, 0.78); }
+.dark .bg-white\/80 { background-color: rgba(30, 41, 59, 0.82); }
+.dark .bg-white\/84 { background-color: rgba(30, 41, 59, 0.85); }
+.dark .bg-white\/88 { background-color: rgba(30, 41, 59, 0.88); }
+.dark .bg-white\/90 { background-color: rgba(30, 41, 59, 0.90); }
+.dark .bg-white\/95 { background-color: rgba(30, 41, 59, 0.92); }
+.dark .hover\:bg-white\/50:hover { background-color: rgba(51, 65, 85, 0.60); }
+.dark .hover\:bg-white\/70:hover { background-color: rgba(51, 65, 85, 0.72); }
+
+/* Slate surfaces */
+.dark .bg-slate-50 { background-color: rgba(30, 41, 59, 0.60); }
+.dark .bg-slate-50\/50 { background-color: rgba(30, 41, 59, 0.30); }
+.dark .bg-slate-50\/55 { background-color: rgba(30, 41, 59, 0.32); }
+.dark .bg-slate-50\/60 { background-color: rgba(30, 41, 59, 0.36); }
+.dark .bg-slate-50\/80 { background-color: rgba(30, 41, 59, 0.50); }
+.dark .bg-slate-50\/90 { background-color: rgba(30, 41, 59, 0.55); }
+.dark .bg-slate-100 { background-color: rgba(51, 65, 85, 0.60); }
+.dark .bg-slate-100\/60 { background-color: rgba(51, 65, 85, 0.38); }
+.dark .bg-slate-100\/70 { background-color: rgba(51, 65, 85, 0.45); }
+.dark .hover\:bg-slate-50:hover { background-color: rgba(51, 65, 85, 0.40); }
+.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(51, 65, 85, 0.26); }
+.dark .hover\:bg-slate-100:hover { background-color: rgba(51, 65, 85, 0.55); }
+.dark .hover\:bg-slate-100\/60:hover { background-color: rgba(71, 85, 105, 0.48); }
+.dark .hover\:bg-slate-100\/70:hover { background-color: rgba(71, 85, 105, 0.52); }
+.dark .hover\:bg-slate-200:hover { background-color: rgba(71, 85, 105, 0.55); }
+.dark .bg-slate-200 { background-color: rgba(71, 85, 105, 0.45); }
+
+/* Deep-dark backgrounds (sign-in buttons, countdown hero) */
+.dark .bg-slate-900 { background-color: rgb(2, 6, 23); }
+.dark .bg-slate-900\/20 { background-color: rgba(0, 0, 0, 0.40); }
+.dark .bg-slate-900\/40 { background-color: rgba(0, 0, 0, 0.55); }
+.dark .bg-slate-900\/60 { background-color: rgba(0, 0, 0, 0.70); }
+.dark .hover\:bg-slate-800:hover { background-color: rgb(15, 23, 42); }
+
+/* Text colors */
+.dark .text-slate-900 { color: #f1f5f9; }
+.dark .text-slate-800 { color: #e2e8f0; }
+.dark .text-slate-700 { color: #cbd5e1; }
+.dark .text-slate-600 { color: #94a3b8; }
+.dark .text-slate-500 { color: #94a3b8; }
+.dark .text-slate-400 { color: #64748b; }
+.dark .text-slate-300 { color: #475569; }
+.dark .text-slate-200 { color: #334155; }
+.dark .hover\:text-slate-500:hover { color: #cbd5e1; }
+.dark .hover\:text-slate-600:hover { color: #cbd5e1; }
+.dark .hover\:text-slate-700:hover { color: #e2e8f0; }
+.dark .hover\:text-slate-800:hover { color: #f1f5f9; }
+.dark .group-focus-within\:text-oker-500 { color: rgb(252, 176, 64); }
+.dark .group-hover\:text-slate-600 { color: #cbd5e1; }
+
+/* Borders */
+.dark .border-slate-50 { border-color: rgba(71, 85, 105, 0.20); }
+.dark .border-slate-100 { border-color: rgba(71, 85, 105, 0.28); }
+.dark .border-slate-200 { border-color: rgba(71, 85, 105, 0.38); }
+.dark .border-slate-300 { border-color: rgba(100, 116, 139, 0.45); }
+.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.20); }
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.28); }
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.38); }
+.dark .border-white\/60 { border-color: rgba(148, 163, 184, 0.18); }
+.dark .border-white\/70 { border-color: rgba(148, 163, 184, 0.20); }
+.dark .border-white\/75 { border-color: rgba(148, 163, 184, 0.22); }
+.dark .border-white\/80 { border-color: rgba(148, 163, 184, 0.22); }
+.dark .border-white\/88 { border-color: rgba(148, 163, 184, 0.25); }
+.dark .border-white\/92 { border-color: rgba(148, 163, 184, 0.26); }
+.dark .hover\:border-slate-200:hover { border-color: rgba(71, 85, 105, 0.42); }
+.dark .hover\:border-white\/80:hover { border-color: rgba(148, 163, 184, 0.26); }
+
+/* Rings */
+.dark .ring-slate-100 { --tw-ring-color: rgba(71, 85, 105, 0.32); }
+.dark .ring-white\/60 { --tw-ring-color: rgba(148, 163, 184, 0.18); }
+.dark .ring-white\/80 { --tw-ring-color: rgba(148, 163, 184, 0.22); }
+.dark .ring-oker-100 { --tw-ring-color: rgba(245, 158, 11, 0.30); }
+
+/* Oker accents */
+.dark .bg-oker-50 { background-color: rgba(245, 158, 11, 0.10); }
+.dark .bg-oker-50\/80 { background-color: rgba(245, 158, 11, 0.08); }
+.dark .bg-oker-100 { background-color: rgba(245, 158, 11, 0.18); }
+.dark .bg-oker-500\/15 { background-color: rgba(245, 158, 11, 0.14); }
+.dark .bg-oker-500\/10 { background-color: rgba(245, 158, 11, 0.10); }
+.dark .border-oker-100 { border-color: rgba(245, 158, 11, 0.28); }
+.dark .border-oker-100\/60 { border-color: rgba(245, 158, 11, 0.20); }
+.dark .border-oker-200 { border-color: rgba(245, 158, 11, 0.32); }
+.dark .border-oker-200\/70 { border-color: rgba(245, 158, 11, 0.26); }
+.dark .border-oker-500\/20 { border-color: rgba(245, 158, 11, 0.28); }
+.dark .text-oker-600 { color: rgb(252, 176, 64); }
+.dark .text-oker-700 { color: rgb(252, 176, 64); }
+.dark .text-oker-800 { color: rgb(254, 215, 170); }
+.dark .text-oker-900 { color: rgb(255, 237, 213); }
+.dark .hover\:bg-oker-50\/70:hover { background-color: rgba(245, 158, 11, 0.10); }
+.dark .hover\:bg-oker-100:hover { background-color: rgba(245, 158, 11, 0.24); }
+
+/* Emerald / red / amber / blue / green status tints */
+.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
+.dark .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.12); }
+.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.14); }
+.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.22); }
+.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.14); }
+.dark .bg-amber-50\/80 { background-color: rgba(245, 158, 11, 0.14); }
+.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.22); }
+.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
+.dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.14); }
+.dark .border-emerald-100 { border-color: rgba(16, 185, 129, 0.30); }
+.dark .border-red-100 { border-color: rgba(239, 68, 68, 0.30); }
+.dark .border-amber-100 { border-color: rgba(245, 158, 11, 0.30); }
+.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.38); }
+.dark .border-amber-200\/70 { border-color: rgba(245, 158, 11, 0.30); }
+.dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.30); }
+.dark .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.18); }
+.dark .hover\:bg-red-50\/70:hover { background-color: rgba(239, 68, 68, 0.16); }
+.dark .hover\:bg-green-50:hover { background-color: rgba(34, 197, 94, 0.18); }
+
+/* Login panel soft cream gradient stays light — users expect a familiar
+   brand landing on the login screen. If you want it dark, wire a different
+   style override for .min-h-screen inside LoginView. */

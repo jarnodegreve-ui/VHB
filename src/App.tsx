@@ -33,7 +33,9 @@ import {
   Search,
   Phone,
   Activity,
-  KeyRound
+  KeyRound,
+  Moon,
+  Sun
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
@@ -137,10 +139,36 @@ export default function App() {
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const isPasswordRecoveryRef = useRef(false);
   const setRecoveryMode = (v: boolean) => {
     isPasswordRecoveryRef.current = v;
     setIsPasswordRecovery(v);
+  };
+
+  // Initialize theme from localStorage, falling back to system preference.
+  useEffect(() => {
+    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-theme') : null;
+    const initial: 'light' | 'dark' = stored === 'dark' || stored === 'light'
+      ? stored
+      : typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
+        ? 'dark'
+        : 'light';
+    setTheme(initial);
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', initial === 'dark');
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    setTheme((current) => {
+      const next = current === 'light' ? 'dark' : 'light';
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('vhb-theme', next);
+        document.documentElement.classList.toggle('dark', next === 'dark');
+      }
+      return next;
+    });
   };
 
   const dismissToast = (id: number) => {
@@ -937,6 +965,13 @@ export default function App() {
               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{currentUser.role}</p>
             </div>
           </div>
+          <button
+            onClick={toggleTheme}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+          >
+            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            <span>{theme === 'light' ? 'Donkere modus' : 'Lichte modus'}</span>
+          </button>
           <button
             onClick={() => setShowChangePassword(true)}
             className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
