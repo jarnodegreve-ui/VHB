@@ -44,8 +44,8 @@ export function ChangePasswordModal({
       return;
     }
 
-    if (newPassword.length < 5) {
-      setError('Nieuw wachtwoord moet minstens 5 tekens zijn.');
+    if (newPassword.length < 6) {
+      setError('Nieuw wachtwoord moet minstens 6 tekens zijn.');
       return;
     }
 
@@ -127,8 +127,8 @@ export function ChangePasswordModal({
                   onChange={(e) => { setNewPassword(e.target.value); setError(''); }}
                   className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
                   required
-                  minLength={5}
-                  placeholder="Minstens 5 tekens"
+                  minLength={6}
+                  placeholder="Minstens 6 tekens"
                 />
               </div>
 
@@ -140,7 +140,7 @@ export function ChangePasswordModal({
                   onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
                   className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
                   required
-                  minLength={5}
+                  minLength={6}
                   placeholder="Herhaal nieuw wachtwoord"
                 />
               </div>

@@ -38,7 +38,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     e.preventDefault();
     if (!newUser.name) return;
     if (!newUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
-    if (newUser.password.length < 5) return notify('Gebruik een tijdelijk wachtwoord van minstens 5 tekens.', 'error');
+    if (newUser.password.length < 6) return notify('Gebruik een tijdelijk wachtwoord van minstens 6 tekens.', 'error');
 
     const userToAdd: UserDraft = {
       id: Date.now().toString(),
@@ -66,7 +66,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     e.preventDefault();
     if (!editingUser) return;
     if (!editingUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
-    if (editingUser.password && editingUser.password.length < 5) return notify('Een nieuw wachtwoord moet minstens 5 tekens hebben.', 'error');
+    if (editingUser.password && editingUser.password.length < 6) return notify('Een nieuw wachtwoord moet minstens 6 tekens hebben.', 'error');
 
     const originalUser = users.find((u) => u.id === editingUser.id);
     const isOnlyActiveAdmin = originalUser?.role === 'admin' && originalUser.isActive !== false && activeAdmins.length === 1;
@@ -95,7 +95,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
 
   const handleResetPassword = async () => {
     if (!confirmResetUser) return;
-    if (resetPasswordValue.length < 5) return notify('Gebruik minstens 5 tekens.', 'error');
+    if (resetPasswordValue.length < 6) return notify('Gebruik minstens 6 tekens.', 'error');
     try {
       setIsResettingPassword(true);
       const response = await fetch('/api/admin/users/reset-password', {
@@ -327,7 +327,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Rol</label><select value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-white/60 text-sm font-medium"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
                   <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Personeelsnummer</label><input type="text" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
                   <div className="space-y-1.5 sm:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">E-mailadres</label><input type="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
-                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Tijdelijk Wachtwoord</label><input type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 5 tekens" /></div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Tijdelijk Wachtwoord</label><input type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 6 tekens" /></div>
                   <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">GSM Nummer</label><input type="text" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
                 </div>
                 <div className="flex gap-3 pt-2">
@@ -375,7 +375,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[32px] w-full max-w-md overflow-hidden">
               <div className="p-6 border-b border-white/70"><h4 className="text-xl font-black">Wachtwoord resetten</h4><p className="mt-1 text-sm text-slate-500 font-medium">Stel een nieuw tijdelijk wachtwoord in voor {confirmResetUser.name}.</p></div>
               <div className="p-6 space-y-4">
-                <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Tijdelijk wachtwoord</label><input type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 5 tekens" autoFocus /></div>
+                <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Tijdelijk wachtwoord</label><input type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 6 tekens" autoFocus /></div>
                 <p className="text-xs text-slate-400 font-medium">De gebruiker logt daarna in met dit nieuwe wachtwoord.</p>
                 <div className="flex gap-3 pt-2"><button type="button" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button><button type="button" onClick={handleResetPassword} disabled={isResettingPassword} className={cn('flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-colors', isResettingPassword ? 'bg-amber-300 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20')}>{isResettingPassword ? 'Bezig...' : 'Resetten'}</button></div>
               </div>

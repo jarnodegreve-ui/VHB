@@ -93,8 +93,8 @@ export function LoginView({
       return;
     }
 
-    if (newPassword.length < 5) {
-      setError('Kies een wachtwoord van minstens 5 tekens.');
+    if (newPassword.length < 6) {
+      setError('Kies een wachtwoord van minstens 6 tekens.');
       setIsSubmitting(false);
       return;
     }
@@ -180,8 +180,8 @@ export function LoginView({
                   onChange={(e) => { setNewPassword(e.target.value); resetFeedback(); }}
                   className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
                   required
-                  minLength={5}
-                  placeholder="Minstens 5 tekens"
+                  minLength={6}
+                  placeholder="Minstens 6 tekens"
                 />
               </div>
 
