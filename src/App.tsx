@@ -32,7 +32,8 @@ import {
   Pencil,
   Search,
   Phone,
-  Activity
+  Activity,
+  KeyRound
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
@@ -45,6 +46,7 @@ import { Toast, ToastStack } from './components/ToastStack';
 import { MobileNavItem, NavItem } from './components/Navigation';
 import { Input } from './components/Input';
 import { StatCard } from './components/StatCard';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
 import { ContactsView } from './views/ContactsView';
 import { ServicesView } from './views/ServicesView';
@@ -130,6 +132,7 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
+  const [showChangePassword, setShowChangePassword] = useState(false);
   const isPasswordRecoveryRef = useRef(false);
   const setRecoveryMode = (v: boolean) => {
     isPasswordRecoveryRef.current = v;
@@ -722,6 +725,11 @@ export default function App() {
   return (
     <>
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <ChangePasswordModal
+        isOpen={showChangePassword}
+        onClose={() => setShowChangePassword(false)}
+        email={currentUser?.email || session?.user?.email || ''}
+      />
       <AnimatePresence>
         {isLoading && (
           <motion.div
@@ -912,6 +920,13 @@ export default function App() {
               <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{currentUser.role}</p>
             </div>
           </div>
+          <button
+            onClick={() => setShowChangePassword(true)}
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+          >
+            <KeyRound size={16} />
+            <span>Wachtwoord wijzigen</span>
+          </button>
           <button
             onClick={handleLogout}
             className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
