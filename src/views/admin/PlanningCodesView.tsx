@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Bus, Calendar, FileText, Filter, Info, Plus, Settings, Trash2 } from 'lucide-react';
 import type { PlanningCode, User } from '../../types';
 import { cn, notify } from '../../lib/ui';
-import { AdminPageHeader, AdminSubsectionHeader, EmptyState } from '../../components/ui';
+import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 
 export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: PlanningCode[]; onSave: (codes: PlanningCode[]) => Promise<boolean>; canAdminDelete: boolean }) {
@@ -75,8 +75,8 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
   };
 
   return (
-    <div className="space-y-6">
-      <AdminPageHeader
+    <PageShell>
+      <PageHeader
         eyebrow="Planningsmatrix"
         title="Planningscodes"
         description="Beheer de betekenis van matrixcodes en bepaal welke codes als dienst, verlof of afwezigheid verwerkt mogen worden."
@@ -300,7 +300,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           )}
         </div>
       </section>
-    </div>
+    </PageShell>
   );
 }
 

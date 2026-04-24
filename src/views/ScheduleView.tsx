@@ -1,6 +1,6 @@
 import { Calendar, Clock, Download } from 'lucide-react';
 import type { Shift, User } from '../types';
-import { EmptyState } from '../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../components/ui';
 
 export function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: Shift[], users: User[] }) {
   const shifts = allShifts.filter(s => {
@@ -69,20 +69,20 @@ export function ScheduleView({ user, shifts: allShifts, users }: { user: User, s
   };
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-        <div>
-          <h3 className="text-2xl font-black tracking-tight">Mijn Werkrooster</h3>
-          <p className="mt-1 text-sm font-medium text-slate-500">Overzicht van je komende diensten, met dienstnummer en tijdsvenster.</p>
-        </div>
-        <button 
-          onClick={exportToICS}
-          className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 transition-all active:scale-95"
-        >
-          <Download size={16} className="text-oker-500" />
-          Export naar Agenda
-        </button>
-      </div>
+    <PageShell>
+      <PageHeader
+        title="Mijn Werkrooster"
+        description="Overzicht van je komende diensten, met dienstnummer en tijdsvenster."
+        actions={(
+          <button
+            onClick={exportToICS}
+            className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 transition-all active:scale-95"
+          >
+            <Download size={16} className="text-oker-500" />
+            Export naar Agenda
+          </button>
+        )}
+      />
 
       {/* Desktop Table */}
       <div className="hidden md:block surface-table rounded-[32px] overflow-hidden">
@@ -168,7 +168,7 @@ export function ScheduleView({ user, shifts: allShifts, users }: { user: User, s
           />
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Activity, Calendar, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn } from '../../lib/ui';
-import { AdminSubsectionHeader, EmptyState } from '../../components/ui';
+import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 
 export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
@@ -84,7 +84,7 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
   };
 
   return (
-    <div className="max-w-5xl space-y-6">
+    <PageShell width="5xl">
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard icon={<Activity className="text-oker-600" />} label="Acties" value={entries.length.toString()} subValue="Laatste 100 wijzigingen" />
         <StatCard icon={<Users className="text-slate-600" />} label="Gebruikersacties" value={entries.filter((entry) => entry.category === 'users').length.toString()} subValue="Accounts en rollen" />
@@ -236,7 +236,7 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
           )}
         </div>
       </section>
-    </div>
+    </PageShell>
   );
 }
 

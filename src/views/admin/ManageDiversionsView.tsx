@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, FileText, MapPin, Pencil, Plus, RotateCcw, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { ConfirmationModal, EmptyState } from '../../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 
 export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { diversions: Diversion[], onSave: (d: Diversion[]) => void, canAdminSync: boolean }) {
   const [showModal, setShowModal] = useState(false);
@@ -138,11 +138,12 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
   };
 
   return (
-    <div className="max-w-4xl space-y-6 md:space-y-8">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h3 className="text-2xl font-black tracking-tight">Beheer Omleidingen</h3>
-        {canAdminSync ? (
-          <button 
+    <PageShell>
+      <PageHeader
+        eyebrow="Beheer"
+        title="Beheer Omleidingen"
+        actions={canAdminSync ? (
+          <button
             onClick={() => setConfirmSyncOpen(true)}
             disabled={isSyncing}
             className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
@@ -151,8 +152,8 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
             <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
             {isSyncing ? 'SYNCHRONISEREN...' : 'SYNC NAAR DB'}
           </button>
-        ) : null}
-      </div>
+        ) : undefined}
+      />
 
       <div className="surface-card p-6 md:p-8 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
@@ -389,7 +390,7 @@ export function ManageDiversionsView({ diversions, onSave, canAdminSync }: { div
           variant="warning"
         />
       ) : null}
-    </div>
+    </PageShell>
   );
 }
 

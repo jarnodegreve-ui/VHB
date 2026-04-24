@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Activity } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
+import { PageHeader, PageShell } from '../../components/ui';
 
 export function DebugView() {
   const [healthData, setHealthData] = useState<any>(null);
@@ -71,26 +72,29 @@ export function DebugView() {
   }, []);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-black tracking-tight">Systeem Status (Debug)</h3>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={testWrite}
-            disabled={isTesting}
-            className="px-4 py-2 bg-oker-500 text-white rounded-xl font-bold text-sm hover:bg-oker-600 disabled:opacity-50"
-          >
-            {isTesting ? 'Testen...' : 'Test Schrijven'}
-          </button>
-          <button
-            onClick={checkHealth}
-            disabled={isCheckingHealth}
-            className="px-4 py-2 bg-slate-100 rounded-xl text-slate-600 font-bold text-sm hover:bg-slate-200 disabled:opacity-50"
-          >
-            {isCheckingHealth ? 'Controleren...' : 'Ververs Status'}
-          </button>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Systeem"
+        title="Systeem Status (Debug)"
+        actions={(
+          <div className="flex items-center gap-3">
+            <button
+              onClick={testWrite}
+              disabled={isTesting}
+              className="px-4 py-2 bg-oker-500 text-white rounded-xl font-bold text-sm hover:bg-oker-600 disabled:opacity-50"
+            >
+              {isTesting ? 'Testen...' : 'Test Schrijven'}
+            </button>
+            <button
+              onClick={checkHealth}
+              disabled={isCheckingHealth}
+              className="px-4 py-2 bg-slate-100 rounded-xl text-slate-600 font-bold text-sm hover:bg-slate-200 disabled:opacity-50"
+            >
+              {isCheckingHealth ? 'Controleren...' : 'Ververs Status'}
+            </button>
+          </div>
+        )}
+      />
 
       {testResult && (
         <div
@@ -167,6 +171,6 @@ export function DebugView() {
           </div>
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Activity, Database, Info, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState } from '../../components/ui';
+import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Input } from '../../components/Input';
 import { ScheduleView } from '../ScheduleView';
 
@@ -216,8 +216,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   };
 
   return (
-    <div className="max-w-4xl space-y-6 md:space-y-8">
-      <AdminPageHeader
+    <PageShell>
+      <PageHeader
         eyebrow="Planningbeheer"
         title="Beheer Roosters"
         description="Importeer matrixplanning, bouw de actieve planning opnieuw op en controleer recente imports op problemen voordat je iets overschrijft."
@@ -684,7 +684,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </PageShell>
   );
 }
 

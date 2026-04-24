@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, Download, Search } from 'lucide-react';
 import type { Service, View } from '../types';
 import { cn } from '../lib/ui';
-import { EmptyState } from '../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../components/ui';
 
 export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -59,57 +59,57 @@ export function ServicesView({ services }: { services: Service[] }) {
   };
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-2xl font-black tracking-tight">Dienstoverzicht</h3>
-          <p className="text-sm text-slate-500 font-medium">Overzicht van alle diensten en bijbehorende uren.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
-          <div className="glass-segmented flex p-1 rounded-xl">
-            <button
-              onClick={() => toggleSort('number')}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                sortBy === 'number' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Dienst #
-              {sortBy === 'number' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
-            </button>
-            <button
-              onClick={() => toggleSort('time')}
-              className={cn(
-                "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
-                sortBy === 'time' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              Starttijd
-              {sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
-            </button>
-          </div>
-          <button
-            onClick={downloadCSV}
-            className="control-button-soft flex items-center gap-2 px-4 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
-            title="Download als CSV"
-          >
-            <Download size={18} className="text-oker-500" />
-            <span className="hidden sm:inline">CSV</span>
-          </button>
-          <div className="relative flex-1 md:w-64 group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+    <PageShell>
+      <PageHeader
+        title="Dienstoverzicht"
+        description="Overzicht van alle diensten en bijbehorende uren."
+        actions={(
+          <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+            <div className="glass-segmented flex p-1 rounded-xl">
+              <button
+                onClick={() => toggleSort('number')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  sortBy === 'number' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Dienst #
+                {sortBy === 'number' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+              </button>
+              <button
+                onClick={() => toggleSort('time')}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  sortBy === 'time' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                Starttijd
+                {sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+              </button>
             </div>
-            <input
-              type="text"
-              placeholder="Zoek..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
-            />
+            <button
+              onClick={downloadCSV}
+              className="control-button-soft flex items-center gap-2 px-4 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
+              title="Download als CSV"
+            >
+              <Download size={18} className="text-oker-500" />
+              <span className="hidden sm:inline">CSV</span>
+            </button>
+            <div className="relative flex-1 md:w-64 group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Zoek..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
+              />
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      />
 
       <div className="surface-table rounded-[40px] overflow-hidden">
         {/* Desktop Table View */}
@@ -211,7 +211,7 @@ export function ServicesView({ services }: { services: Service[] }) {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 

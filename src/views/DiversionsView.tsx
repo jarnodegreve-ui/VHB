@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import type { Diversion } from '../types';
 import { cn } from '../lib/ui';
+import { PageHeader, PageShell } from '../components/ui';
 
 const DiversionMap = lazy(() => import('../components/DiversionMap').then((module) => ({ default: module.DiversionMap })));
 
@@ -25,47 +26,49 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
   });
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h3 className="text-2xl font-black tracking-tight">Actuele Omleidingen</h3>
-        <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-          <div className="relative group">
-            <select
-              value={selectedLine}
-              onChange={(e) => setSelectedLine(e.target.value)}
-              className="control-input appearance-none w-full sm:w-40 pl-4 pr-10 py-3 rounded-2xl focus:outline-none transition-all font-bold text-sm cursor-pointer"
-            >
-              <option value="all">Alle Lijnen</option>
-              {uniqueLines.map(line => (
-                <option key={line} value={line}>Lijn {line}</option>
-              ))}
-            </select>
-            <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-400">
-              <ChevronDown size={16} />
-            </div>
-          </div>
-          <div className="relative flex-1 md:w-72 group">
-            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-              <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
-            </div>
-            <input
-              type="text"
-              placeholder="Zoek..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
-            />
-            {searchQuery && (
-              <button 
-                onClick={() => setSearchQuery('')}
-                className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-300 hover:text-slate-500"
+    <PageShell>
+      <PageHeader
+        title="Actuele Omleidingen"
+        actions={(
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <div className="relative group">
+              <select
+                value={selectedLine}
+                onChange={(e) => setSelectedLine(e.target.value)}
+                className="control-input appearance-none w-full sm:w-40 pl-4 pr-10 py-3 rounded-2xl focus:outline-none transition-all font-bold text-sm cursor-pointer"
               >
-                <X size={16} />
-              </button>
-            )}
+                <option value="all">Alle Lijnen</option>
+                {uniqueLines.map(line => (
+                  <option key={line} value={line}>Lijn {line}</option>
+                ))}
+              </select>
+              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-400">
+                <ChevronDown size={16} />
+              </div>
+            </div>
+            <div className="relative flex-1 md:w-72 group">
+              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+              </div>
+              <input
+                type="text"
+                placeholder="Zoek..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery('')}
+                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-300 hover:text-slate-500"
+                >
+                  <X size={16} />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+        )}
+      />
       
       <div className="space-y-4">
         {filteredDiversions.length > 0 ? (
@@ -198,7 +201,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
         </div>
       )}
     </div>
-  </div>
+  </PageShell>
 );
 }
 

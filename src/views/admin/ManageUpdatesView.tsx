@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, Bell, CalendarDays, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
+import { PageHeader, PageShell } from '../../components/ui';
 
 function Input({
   label,
@@ -120,10 +121,8 @@ export function ManageUpdatesView({
   };
 
   return (
-    <div className="space-y-6 md:space-y-8">
-      <div className="max-w-3xl">
-        <h3 className="text-2xl font-black tracking-tight">Beheer Updates</h3>
-      </div>
+    <PageShell>
+      <PageHeader eyebrow="Beheer" title="Beheer Updates" />
       <div className="surface-card p-6 md:p-8 rounded-[32px]">
         <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-emerald-500" />
@@ -271,6 +270,6 @@ export function ManageUpdatesView({
           )}
         </div>
       </div>
-    </div>
+    </PageShell>
   );
 }

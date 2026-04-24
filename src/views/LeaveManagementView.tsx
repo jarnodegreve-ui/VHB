@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, User } from '../types';
 import { cn } from '../lib/ui';
+import { PageHeader, PageShell } from '../components/ui';
 
 export function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -77,18 +78,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
   for (let i = 1; i <= daysInMonth; i++) calendarDays.push(i);
 
   return (
-    <div className="max-w-6xl space-y-8 pb-20">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-2xl font-black tracking-tight">Verlof & Afwezigheid</h3>
-          <p className="text-sm text-slate-500 font-medium">Beheer verlofaanvragen en bekijk de bezetting.</p>
-        </div>
-        {!isPlanner && (
+    <PageShell width="6xl" className="pb-20">
+      <PageHeader
+        title="Verlof & Afwezigheid"
+        description="Beheer verlofaanvragen en bekijk de bezetting."
+        actions={!isPlanner ? (
           <button onClick={() => setShowRequestModal(true)} className="px-8 py-4 bg-oker-500 text-white rounded-2xl font-black text-sm hover:bg-oker-600 transition-all shadow-xl shadow-oker-500/20 active:scale-95 flex items-center gap-2">
             <Plus size={20} /> Verlof Aanvragen
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       <div className="grid lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-6">
@@ -208,6 +207,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </PageShell>
   );
 }

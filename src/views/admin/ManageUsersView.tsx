@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, RotateCcw, Trash2, Upload, Users, X } from 'lucide-react';
 import type { User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState } from '../../components/ui';
+import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 
 export type UserDraft = User & { password?: string };
 
@@ -226,8 +226,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   };
 
   return (
-    <div className="max-w-4xl space-y-8">
-      <AdminPageHeader
+    <PageShell>
+      <PageHeader
         eyebrow="Gebruikersbeheer"
         title={title}
         description="Beheer medewerkers, rollen en accountacties vanuit een consistente beheershell. Gebruik sync en Excel-import alleen wanneer de brongegevens al gevalideerd zijn."
@@ -415,6 +415,6 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         email={credentialsModal?.email || ''}
         password={credentialsModal?.password || ''}
       />
-    </div>
+    </PageShell>
   );
 }

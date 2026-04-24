@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Phone, Search, Users } from 'lucide-react';
 import type { User } from '../types';
-import { EmptyState } from '../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../components/ui';
 
 export function ContactsView({ users, currentUser }: { users: User[], currentUser: User }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,25 +18,25 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <div className="max-w-4xl space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h3 className="text-2xl font-black tracking-tight">Contactlijst</h3>
-          <p className="text-sm text-slate-500 font-medium">Contactgegevens van alle medewerkers.</p>
-        </div>
-        <div className="relative w-full md:w-72 group">
-          <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-            <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+    <PageShell>
+      <PageHeader
+        title="Contactlijst"
+        description="Contactgegevens van alle medewerkers."
+        actions={(
+          <div className="relative w-full md:w-72 group">
+            <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+              <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+            </div>
+            <input
+              type="text"
+              placeholder="Zoek op naam of nummer..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
+            />
           </div>
-          <input
-            type="text"
-            placeholder="Zoek op naam of nummer..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
-          />
-        </div>
-      </div>
+        )}
+      />
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {filteredUsers.map(u => (
@@ -73,7 +73,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 

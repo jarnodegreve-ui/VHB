@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Download, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Service, View } from '../../types';
 import { cn, notify } from '../../lib/ui';
-import { ConfirmationModal, EmptyState } from '../../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 
 export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[]) => void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
@@ -207,69 +207,70 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h3 className="text-2xl font-black tracking-tight">Beheer Dienstoverzicht</h3>
-          <p className="text-sm text-slate-500 font-medium">Voeg diensten toe, bewerk of verwijder ze.</p>
-        </div>
-        <div className="flex items-center gap-3">
-          {canAdminOverride ? (
-            <>
-              <input
-                type="file"
-                accept=".xlsx, .xls"
-                className="hidden"
-                id="services-upload"
-                onChange={handleFileUpload}
-                disabled={isImporting}
-              />
-              <label
-                htmlFor="services-upload"
-                className={cn(
-                  "control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all cursor-pointer active:scale-95",
-                  isImporting && "opacity-50 cursor-not-allowed"
-                )}
-                title="Importeer vanuit Excel"
-              >
-                <Upload size={20} className="text-oker-500" />
-                {isImporting ? 'Importeren...' : 'Excel Import'}
-              </label>
-            </>
-          ) : (
-            <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-              Excel import admin-only
-            </div>
-          )}
-          <button
-            onClick={downloadCSV}
-            className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
-            title="Download als CSV"
-          >
-            <Download size={20} className="text-oker-500" />
-            Download CSV
-          </button>
-          <button 
-            onClick={() => { 
-              setEditingId(null); 
-              setFormData({ 
-                serviceNumber: '', 
-                startTime: '', 
-                endTime: '',
-                startTime2: '',
-                endTime2: '',
-                startTime3: '',
-                endTime3: ''
-              }); 
-              setShowModal(true); 
-            }}
-            className="bg-oker-500 text-white font-black px-6 py-3 rounded-2xl hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20 active:scale-95 flex items-center gap-2"
-          >
-            <Plus size={20} />
-            Nieuwe Dienst
-          </button>
-        </div>
-      </div>
+    <PageShell>
+      <PageHeader
+        eyebrow="Beheer"
+        title="Beheer Dienstoverzicht"
+        description="Voeg diensten toe, bewerk of verwijder ze."
+        actions={(
+          <div className="flex items-center gap-3">
+            {canAdminOverride ? (
+              <>
+                <input
+                  type="file"
+                  accept=".xlsx, .xls"
+                  className="hidden"
+                  id="services-upload"
+                  onChange={handleFileUpload}
+                  disabled={isImporting}
+                />
+                <label
+                  htmlFor="services-upload"
+                  className={cn(
+                    "control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all cursor-pointer active:scale-95",
+                    isImporting && "opacity-50 cursor-not-allowed"
+                  )}
+                  title="Importeer vanuit Excel"
+                >
+                  <Upload size={20} className="text-oker-500" />
+                  {isImporting ? 'Importeren...' : 'Excel Import'}
+                </label>
+              </>
+            ) : (
+              <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+                Excel import admin-only
+              </div>
+            )}
+            <button
+              onClick={downloadCSV}
+              className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
+              title="Download als CSV"
+            >
+              <Download size={20} className="text-oker-500" />
+              Download CSV
+            </button>
+            <button
+              onClick={() => {
+                setEditingId(null);
+                setFormData({
+                  serviceNumber: '',
+                  startTime: '',
+                  endTime: '',
+                  startTime2: '',
+                  endTime2: '',
+                  startTime3: '',
+                  endTime3: ''
+                });
+                setShowModal(true);
+              }}
+              className="bg-oker-500 text-white font-black px-6 py-3 rounded-2xl hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20 active:scale-95 flex items-center gap-2"
+            >
+              <Plus size={20} />
+              Nieuwe Dienst
+            </button>
+          </div>
+        )}
+      />
 
       <div className="surface-table rounded-[40px] overflow-hidden">
         {/* Desktop Table View */}
@@ -472,7 +473,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         title="Dienst verwijderen"
         message="Weet je zeker dat je deze dienst wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
       />
-    </div>
+    </PageShell>
   );
 }
 

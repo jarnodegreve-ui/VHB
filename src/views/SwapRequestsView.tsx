@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X } from 'lucide-react';
 import type { Shift, SwapRequest, User } from '../types';
 import { cn } from '../lib/ui';
+import { PageHeader, PageShell } from '../components/ui';
 
 export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -48,18 +49,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   };
 
   return (
-    <div className="max-w-4xl space-y-8">
-      <div className="flex items-center justify-between">
-        <h3 className="text-2xl font-black tracking-tight">Wissel Aanvragen</h3>
-        {!isPlanner && (
-          <button 
+    <PageShell>
+      <PageHeader
+        title="Wissel Aanvragen"
+        actions={!isPlanner ? (
+          <button
             onClick={() => setShowOfferModal(true)}
             className="px-6 py-3 bg-oker-500 text-white rounded-2xl font-black text-sm hover:bg-oker-600 transition-all shadow-lg shadow-oker-500/20"
           >
             Dienst Aanbieden
           </button>
-        )}
-      </div>
+        ) : undefined}
+      />
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
@@ -200,6 +201,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
           </div>
         )}
       </AnimatePresence>
-    </div>
+    </PageShell>
   );
 }

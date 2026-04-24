@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AlertTriangle, ChevronRight, Clock, Info } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
+import { PageHeader, PageShell } from '../components/ui';
 
 export function UpdatesView({ updates }: { updates: Update[] }) {
   const [filter, setFilter] = useState<'all' | 'algemeen' | 'veiligheid' | 'technisch'>('all');
@@ -15,24 +16,26 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
   };
 
   return (
-    <div className="max-w-3xl space-y-6">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <h3 className="text-2xl font-black tracking-tight">Updates & Nieuws</h3>
+    <PageShell width="3xl">
+      <PageHeader
+        title="Updates & Nieuws"
+        actions={(
           <div className="glass-segmented flex p-1 rounded-xl">
-          {(['all', 'algemeen', 'veiligheid', 'technisch'] as const).map(cat => (
-            <button
-              key={cat}
-              onClick={() => setFilter(cat)}
-              className={cn(
-                "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
-                filter === cat ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
-              )}
-            >
-              {cat === 'all' ? 'Alles' : cat}
-            </button>
-          ))}
-        </div>
-      </div>
+            {(['all', 'algemeen', 'veiligheid', 'technisch'] as const).map(cat => (
+              <button
+                key={cat}
+                onClick={() => setFilter(cat)}
+                className={cn(
+                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  filter === cat ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                )}
+              >
+                {cat === 'all' ? 'Alles' : cat}
+              </button>
+            ))}
+          </div>
+        )}
+      />
 
       <div className="space-y-6">
         {filteredUpdates.length > 0 ? (
@@ -98,7 +101,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
           </div>
         )}
       </div>
-    </div>
+    </PageShell>
   );
 }
 
