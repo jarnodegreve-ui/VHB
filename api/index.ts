@@ -138,8 +138,8 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
 
     const userId = String(req.body?.userId || "");
     const password = String(req.body?.password || "");
-    if (!userId || password.length < 8) {
-      return res.status(400).json({ error: "Geef een gebruiker en een wachtwoord van minstens 8 tekens." });
+    if (!userId || password.length < 5) {
+      return res.status(400).json({ error: "Geef een gebruiker en een wachtwoord van minstens 5 tekens." });
     }
 
     const users = await getUsersData();
