@@ -170,7 +170,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                   <FileText size={22} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Huidig ritblaadje</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Huidige ritblaadjes</p>
                   <h4 className="mt-1 text-lg font-black text-slate-900 tracking-tight break-all">{current.filename}</h4>
                   <p className="mt-1 text-xs font-medium text-slate-500">
                     Geüpload {current.uploadedBy ? `door ${current.uploadedBy} ` : ''}op {formatUploadedAt(current.uploadedAt)}
