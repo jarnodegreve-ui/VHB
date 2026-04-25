@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Clock, Download, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Service, View } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { Modal } from '../../components/Modal';
 
 export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[]) => void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
@@ -366,92 +366,81 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         )}
       </div>
 
-      <AnimatePresence>
-        {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[28px] w-full max-w-lg overflow-hidden"
-            >
-              <div className="p-8 border-b border-white/70 flex items-center justify-between">
-                <h4 className="text-xl font-black">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
-                <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
-              </div>
-              <form onSubmit={handleSubmit} className="p-8 space-y-5">
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dienstnummer</label>
-                  <input 
-                    type="text" required value={formData.serviceNumber}
-                    onChange={(e) => setFormData({...formData, serviceNumber: e.target.value})}
-                    className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 1)</label>
-                    <input 
-                      type="time" required value={formData.startTime}
-                      onChange={(e) => setFormData({...formData, startTime: e.target.value})}
-                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 1)</label>
-                    <input 
-                      type="time" required value={formData.endTime}
-                      onChange={(e) => setFormData({...formData, endTime: e.target.value})}
-                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 2)</label>
-                    <input 
-                      type="time" value={formData.startTime2}
-                      onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
-                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 2)</label>
-                    <input 
-                      type="time" value={formData.endTime2}
-                      onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
-                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 3)</label>
-                    <input 
-                      type="time" value={formData.startTime3}
-                      onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
-                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 3)</label>
-                    <input 
-                      type="time" value={formData.endTime3}
-                      onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
-                    />
-                  </div>
-                </div>
-                <button type="submit" className="btn-primary ios-pressable w-full py-4 mt-4">
-                  {editingId ? 'Dienst Bijwerken' : 'Dienst Toevoegen'}
-                </button>
-              </form>
-            </motion.div>
+      <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg">
+        <div className="p-8 border-b border-white/70 flex items-center justify-between">
+          <h4 className="text-xl font-black">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
+          <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dienstnummer</label>
+            <input
+              type="text" required value={formData.serviceNumber}
+              onChange={(e) => setFormData({...formData, serviceNumber: e.target.value})}
+              className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+            />
           </div>
-        )}
-      </AnimatePresence>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 1)</label>
+              <input
+                type="time" required value={formData.startTime}
+                onChange={(e) => setFormData({...formData, startTime: e.target.value})}
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 1)</label>
+              <input
+                type="time" required value={formData.endTime}
+                onChange={(e) => setFormData({...formData, endTime: e.target.value})}
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 2)</label>
+              <input
+                type="time" value={formData.startTime2}
+                onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 2)</label>
+              <input
+                type="time" value={formData.endTime2}
+                onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 3)</label>
+              <input
+                type="time" value={formData.startTime3}
+                onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 3)</label>
+              <input
+                type="time" value={formData.endTime3}
+                onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+              />
+            </div>
+          </div>
+          <button type="submit" className="btn-primary ios-pressable w-full py-4 mt-4">
+            {editingId ? 'Dienst Bijwerken' : 'Dienst Toevoegen'}
+          </button>
+        </form>
+      </Modal>
 
       <ConfirmationModal
         isOpen={!!pendingImportedServices}
