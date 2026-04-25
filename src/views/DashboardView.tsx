@@ -26,16 +26,7 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
     .filter(s => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
   const newestDiversions = [...diversions].reverse().slice(0, 3);
-  const visibleShifts = shifts.filter(s => {
-    const isMe = s.driverId === user.id;
-    const isPlanner = user.role !== 'chauffeur';
-
-    if (isMe) return true;
-    if (!isPlanner) return false;
-
-    const driver = users.find(u => u.id === s.driverId);
-    return driver?.name.toLowerCase() !== 'beheerder';
-  }).slice(0, 2);
+  const visibleShifts = myShifts.slice(0, 2);
 
   const formatShiftDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
     weekday: 'short',
@@ -142,8 +133,8 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
                 </div>
               </div>
             ))}
-            {shifts.filter(s => s.driverId === user.id).length === 0 && user.role === 'chauffeur' && (
-              <div className="flex flex-1 items-center justify-center text-center py-12">
+            {myShifts.length === 0 && (
+              <div className="flex flex-1 flex-col items-center justify-center text-center py-12">
                 <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
                   <Calendar className="text-slate-200" size={32} />
                 </div>
