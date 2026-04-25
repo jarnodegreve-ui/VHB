@@ -24,7 +24,6 @@
       radial-gradient(ellipse at bottom right, rgba(148, 163, 184, 0.07) 0%, transparent 40%),
       linear-gradient(180deg, #f9f8f5 0%, #f4f1eb 50%, #f0ede6 100%);
     min-height: 100vh;
-    scroll-behavior: smooth;
   }
 
   body {
@@ -34,15 +33,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
-    overscroll-behavior-y: none;
-  }
-
-  /* iOS momentum scrolling + contained overscroll inside any scroll container */
-  .overflow-y-auto,
-  .overflow-auto,
-  .overflow-x-auto {
-    -webkit-overflow-scrolling: touch;
-    overscroll-behavior: contain;
   }
 
   /* Apple-style focus rings: subtle colored halo instead of harsh outline. */
