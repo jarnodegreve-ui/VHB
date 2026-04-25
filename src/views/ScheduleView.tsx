@@ -89,13 +89,13 @@ export function ScheduleView({ user, shifts: allShifts, users }: { user: User, s
         {shifts.length > 0 ? (
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-slate-50/50 border-b border-slate-100">
+              <tr className="bg-slate-50/50">
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijd</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody>
               {shifts.map(shift => (
                 <tr key={shift.id} className="hover:bg-slate-50/50 transition-colors group">
                   <td className="px-8 py-6">

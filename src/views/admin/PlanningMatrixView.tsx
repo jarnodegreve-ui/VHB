@@ -560,7 +560,7 @@ export function PlanningMatrixView({
                         <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Uren / status</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-50">
+                    <tbody>
                       {filteredAssignments.map((assignment) => (
                         <tr key={assignment.driver} className="hover:bg-slate-50/50 transition-colors">
                           <td className="px-6 py-4 text-sm font-bold text-slate-800">{assignment.driver}</td>
