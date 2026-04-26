@@ -586,8 +586,25 @@ export const getDiversionsData = async () => {
 
 export const saveDiversionsData = async (data: any) => {
   const client = requireDb();
-  const { error } = await client.from('diversions').upsert(data);
-  if (error) throw error;
+  const incoming = Array.isArray(data) ? data : [];
+  const incomingIds = new Set(incoming.map((d: any) => String(d.id)));
+
+  const { data: existing, error: fetchError } = await client.from('diversions').select('id');
+  if (fetchError) throw fetchError;
+
+  const idsToDelete = (existing ?? [])
+    .map((row: any) => String(row.id))
+    .filter((id) => !incomingIds.has(id));
+
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('diversions').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
+  }
+
+  if (incoming.length > 0) {
+    const { error: upsertError } = await client.from('diversions').upsert(incoming);
+    if (upsertError) throw upsertError;
+  }
 };
 
 // --- Services ---
@@ -628,6 +645,19 @@ export const saveUpdatesData = async (data: any) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicUpdate) : [];
 
+  const incomingIds = new Set(normalizedData.map((u) => String(u.id)));
+  const { data: existing, error: fetchError } = await client.from('updates').select('id');
+  if (fetchError) throw fetchError;
+
+  const idsToDelete = (existing ?? [])
+    .map((row: any) => String(row.id))
+    .filter((id) => !incomingIds.has(id));
+
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('updates').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
+  }
+
   const payloadWithoutUrgent = normalizedData.map((update) => ({
     id: String(update.id),
     date: String(update.date || ""),
@@ -635,8 +665,10 @@ export const saveUpdatesData = async (data: any) => {
     category: update.category || "algemeen",
     content: update.content || "",
   }));
-  const { error } = await client.from('updates').upsert(payloadWithoutUrgent);
-  if (error) throw error;
+  if (payloadWithoutUrgent.length > 0) {
+    const { error } = await client.from('updates').upsert(payloadWithoutUrgent);
+    if (error) throw error;
+  }
 
   // Best-effort: persist the urgent flag only when the production schema supports it.
   if (normalizedData.some((update) => Boolean(update.isUrgent))) {
