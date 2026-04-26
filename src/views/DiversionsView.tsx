@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import type { Diversion } from '../types';
-import { cn } from '../lib/ui';
+import { cn, openPdfInNewTab } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 
 const DiversionMap = lazy(() => import('../components/DiversionMap').then((module) => ({ default: module.DiversionMap })));
@@ -134,15 +134,14 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                         
                         {div.pdfUrl ? (
                           <div className="pt-2 flex flex-col sm:flex-row gap-3">
-                            <a 
-                              href={div.pdfUrl} 
-                              target="_blank" 
-                              rel="noopener noreferrer"
+                            <button
+                              type="button"
+                              onClick={() => openPdfInNewTab(div.pdfUrl)}
                               className="control-button-soft flex-1 flex items-center justify-center gap-3 px-6 py-4 rounded-2xl text-sm font-black text-slate-700 transition-all active:scale-95"
                             >
                               <FileText size={18} className="text-red-500" />
                               BEKIJK PDF
-                            </a>
+                            </button>
                             <a 
                               href={div.pdfUrl} 
                               download
