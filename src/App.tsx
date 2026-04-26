@@ -880,14 +880,6 @@ export default function App() {
             active={currentView === 'omleidingen'} 
             onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
           />
-          {isPlanner && (
-            <NavItem
-              icon={<Bus size={20} />}
-              label="Dienstoverzicht"
-              active={currentView === 'dienstoverzicht'}
-              onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }}
-            />
-          )}
           <NavItem
             icon={<FileText size={20} />}
             label="Ritblaadjes"
@@ -959,11 +951,17 @@ export default function App() {
                 active={currentView === 'beheer-omleidingen'} 
                 onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} 
               />
-              <NavItem 
-                icon={<Bus size={20} />} 
-                label="Beheer Dienstoverzicht" 
-                active={currentView === 'beheer-dienstoverzicht'} 
-                onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} 
+              <NavItem
+                icon={<Bus size={20} />}
+                label="Dienstoverzicht"
+                active={currentView === 'dienstoverzicht'}
+                onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }}
+              />
+              <NavItem
+                icon={<Bus size={20} />}
+                label="Beheer Dienstoverzicht"
+                active={currentView === 'beheer-dienstoverzicht'}
+                onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }}
               />
             </>
           )}
