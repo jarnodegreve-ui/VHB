@@ -39,8 +39,8 @@ export interface LeaveRequest {
   userId: string;
   startDate: string;
   endDate: string;
-  type: 'vakantie' | 'ziekte' | 'persoonlijk' | 'overig';
-  status: 'pending' | 'approved' | 'rejected';
+  type: 'betaald_verlof' | 'klein_verlet';
+  status: 'pending' | 'approved' | 'rejected' | 'cancelled';
   comment?: string;
   createdAt: string;
   decidedAt?: string;

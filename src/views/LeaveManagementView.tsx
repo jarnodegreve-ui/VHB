@@ -5,10 +5,16 @@ import type { LeaveRequest, User } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 
+const LEAVE_TYPE_LABELS: Record<string, string> = {
+  betaald_verlof: 'Betaald verlof',
+  klein_verlet: 'Klein verlet',
+};
+const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
+
 export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSeenDecisionAt, onMarkDecisionsSeen }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'vakantie' as LeaveRequest['type'], comment: '' });
+  const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -35,7 +41,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
     .filter((r) => r.status === 'approved' && r.endDate >= today)
     .sort((a, b) => a.startDate.localeCompare(b.startDate));
   const myHistory = myRequests
-    .filter((r) => r.status === 'rejected' || (r.status === 'approved' && r.endDate < today))
+    .filter((r) => r.status === 'rejected' || r.status === 'cancelled' || (r.status === 'approved' && r.endDate < today))
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
   const handleRequestLeave = (e: React.FormEvent) => {
@@ -45,7 +51,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
     }
     onSave([...leaveRequests, { id: Date.now().toString(), userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]);
     setShowRequestModal(false);
-    setFormData({ startDate: '', endDate: '', type: 'vakantie', comment: '' });
+    setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
   };
 
   const handleCalendarDateClick = (dateStr: string) => {
@@ -82,6 +88,19 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status']) => {
     const decidedAt = new Date().toISOString();
     onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus, decidedAt } : r)));
+  };
+
+  const handleCancel = (requestId: string) => {
+    const target = leaveRequests.find((r) => r.id === requestId);
+    if (!target) return;
+    const cancelledByOther = target.userId !== user.id;
+    const message = cancelledByOther
+      ? 'Deze goedgekeurde verlofaanvraag annuleren? De aanvrager ziet dit terug onder zijn historiek.'
+      : 'Eigen verlofaanvraag annuleren?';
+    if (!window.confirm(message)) return;
+    const update: Partial<LeaveRequest> = { status: 'cancelled' };
+    if (cancelledByOther) update.decidedAt = new Date().toISOString();
+    onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, ...update } : r)));
   };
 
   const initialLastSeen = useRef(lastSeenDecisionAt ?? null).current;
@@ -210,7 +229,29 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
               <div className="space-y-3">
                 {getRequestsForDate(selectedDate).length > 0 ? getRequestsForDate(selectedDate).map((req) => {
                   const requester = users.find((u) => u.id === req.userId);
-                  return <div key={req.id} className="flex items-center justify-between p-4 bg-slate-50 rounded-2xl"><div className="flex items-center gap-3"><div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div><div><p className="font-black text-slate-800 text-sm">{requester?.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{req.type}</p></div></div><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{req.startDate} - {req.endDate}</span></div>;
+                  return (
+                    <div key={req.id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-slate-50 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
+                        <div>
+                          <p className="font-black text-slate-800 text-sm">{requester?.name}</p>
+                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{formatLeaveType(req.type)}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{req.startDate} - {req.endDate}</span>
+                        {isPlanner && (
+                          <button
+                            type="button"
+                            onClick={() => handleCancel(req.id)}
+                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-white text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors"
+                          >
+                            Annuleren
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
                 }) : <p className="text-center py-4 text-slate-400 font-medium italic">Geen afwezigen op deze dag.</p>}
               </div>
             </motion.div>
@@ -258,6 +299,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
             emptyText="Geen goedgekeurd verlof gepland."
             requests={myUpcoming}
             isNew={isNewlyDecided}
+            onCancel={isPlanner ? handleCancel : undefined}
           />
 
           <MyLeaveSection
@@ -343,7 +385,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                 <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">
                   Periode wissen
                 </button>
-                <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as any })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="vakantie">Vakantie</option><option value="ziekte">Ziekte</option><option value="persoonlijk">Persoonlijk</option><option value="overig">Overig</option></select></div>
+                <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
                 <button type="submit" disabled={!formData.startDate || !formData.endDate} className="btn-primary ios-pressable w-full py-4">Aanvraag Indienen</button>
               </form>
@@ -355,7 +397,20 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   );
 }
 
-function MyLeaveSection({ title, count, emptyText, requests, isNew }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean }) {
+function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void }) {
+  const statusLabels: Record<LeaveRequest['status'], string> = {
+    pending: 'In behandeling',
+    approved: 'Goedgekeurd',
+    rejected: 'Afgewezen',
+    cancelled: 'Geannuleerd',
+  };
+  const statusColors: Record<LeaveRequest['status'], { accent: string; text: string }> = {
+    pending: { accent: 'bg-amber-500', text: 'text-amber-500' },
+    approved: { accent: 'bg-emerald-500', text: 'text-emerald-500' },
+    rejected: { accent: 'bg-red-500', text: 'text-red-500' },
+    cancelled: { accent: 'bg-slate-400', text: 'text-slate-500' },
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between ml-2">
@@ -365,19 +420,29 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew }: { title: s
       <div className="space-y-4">
         {requests.length > 0 ? requests.map((req) => {
           const fresh = isNew?.(req) ?? false;
+          const colors = statusColors[req.status];
           return (
             <div key={req.id} className={cn('surface-card p-6 rounded-[32px] relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
-              <div className={cn('absolute top-0 left-0 w-1 h-full', req.status === 'approved' ? 'bg-emerald-500' : req.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500')} />
-              <div className="flex justify-between items-start mb-4">
-                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[8px] font-black uppercase tracking-widest">{req.type}</span>
+              <div className={cn('absolute top-0 left-0 w-1 h-full', colors.accent)} />
+              <div className="flex justify-between items-start mb-4 gap-3">
+                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[8px] font-black uppercase tracking-widest">{formatLeaveType(req.type)}</span>
                 <div className="flex items-center gap-2">
                   {fresh && <span className="px-2 py-1 bg-oker-500 text-white rounded-full text-[8px] font-black uppercase tracking-widest">Nieuw</span>}
-                  <span className={cn('text-[10px] font-black uppercase tracking-widest', req.status === 'approved' ? 'text-emerald-500' : req.status === 'rejected' ? 'text-red-500' : 'text-amber-500')}>{req.status}</span>
+                  <span className={cn('text-[10px] font-black uppercase tracking-widest', colors.text)}>{statusLabels[req.status]}</span>
                 </div>
               </div>
               <p className="font-black text-slate-800 text-sm mb-1">{new Date(req.startDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} - {new Date(req.endDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
               <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aangevraagd op {req.createdAt.split('T')[0]}</p>
               {req.comment && <p className="text-xs text-slate-500 italic mt-3">"{req.comment}"</p>}
+              {onCancel && req.status === 'approved' && (
+                <button
+                  type="button"
+                  onClick={() => onCancel(req.id)}
+                  className="ios-pressable mt-4 w-full rounded-2xl border border-red-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors"
+                >
+                  Verlof annuleren
+                </button>
+              )}
             </div>
           );
         }) : (

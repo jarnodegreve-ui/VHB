@@ -521,30 +521,40 @@ app.post("/api/leave", authenticate, async (req, res) => {
     const users = await getUsersData();
     const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
     const formatPeriod = (start: string, end: string) => start === end ? start : `${start} t/m ${end}`;
+    const leaveTypeLabels: Record<string, string> = {
+      betaald_verlof: "Betaald verlof",
+      klein_verlet: "Klein verlet",
+    };
+    const formatLeaveType = (t: string) => leaveTypeLabels[t] ?? t;
 
     await saveLeaveData(newData);
 
     for (const next of newData) {
       const prev = previousById.get(next.id);
       const period = formatPeriod(next.startDate, next.endDate);
+      const typeLabel = formatLeaveType(next.type);
 
       if (!prev) {
         await logActivity(
           req,
           "leave",
           "Verlof aangevraagd",
-          `${userName(next.userId)} vroeg ${next.type} aan voor ${period}.`,
+          `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
         );
         continue;
       }
 
       if (prev.status !== next.status && next.status !== "pending") {
-        const action = next.status === "approved" ? "Verlof goedgekeurd" : "Verlof afgewezen";
+        let action: string | null = null;
+        if (next.status === "approved") action = "Verlof goedgekeurd";
+        else if (next.status === "rejected") action = "Verlof afgewezen";
+        else if (next.status === "cancelled") action = "Verlof geannuleerd";
+        if (!action) continue;
         await logActivity(
           req,
           "leave",
           action,
-          `${userName(next.userId)} — ${next.type} (${period}).`,
+          `${userName(next.userId)} — ${typeLabel} (${period}).`,
         );
       }
     }
