@@ -71,7 +71,7 @@ const LazyLeaveManagementView = lazy(() => import('./views/LeaveManagementView')
 
 
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
-  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'dienstoverzicht', 'ritblaadjes', 'contacten', 'updates', 'ruil-verzoeken', 'verlof'],
+  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'contacten', 'updates', 'ruil-verzoeken', 'verlof'],
   planner: [
     'dashboard',
     'rooster',
@@ -880,12 +880,14 @@ export default function App() {
             active={currentView === 'omleidingen'} 
             onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
           />
-          <NavItem
-            icon={<Bus size={20} />}
-            label="Dienstoverzicht"
-            active={currentView === 'dienstoverzicht'}
-            onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }}
-          />
+          {isPlanner && (
+            <NavItem
+              icon={<Bus size={20} />}
+              label="Dienstoverzicht"
+              active={currentView === 'dienstoverzicht'}
+              onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }}
+            />
+          )}
           <NavItem
             icon={<FileText size={20} />}
             label="Ritblaadjes"
@@ -1166,11 +1168,13 @@ export default function App() {
             active={currentView === 'rooster'} 
             onClick={() => setCurrentView('rooster')} 
           />
-          <MobileNavItem 
-            icon={<Bus size={20} />} 
-            active={currentView === 'dienstoverzicht'} 
-            onClick={() => setCurrentView('dienstoverzicht')} 
-          />
+          {isPlanner && (
+            <MobileNavItem
+              icon={<Bus size={20} />}
+              active={currentView === 'dienstoverzicht'}
+              onClick={() => setCurrentView('dienstoverzicht')}
+            />
+          )}
           <MobileNavItem 
             icon={<Phone size={20} />} 
             active={currentView === 'contacten'} 
