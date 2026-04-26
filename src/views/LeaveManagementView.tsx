@@ -1,18 +1,28 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, User } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSeenDecisionAt, onMarkDecisionsSeen }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'vakantie' as LeaveRequest['type'], comment: '' });
   const [viewMonth] = useState(new Date(2026, 2, 1));
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
-  const myRequests = leaveRequests.filter((r) => r.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const today = new Date().toISOString().split('T')[0];
+  const myRequests = leaveRequests.filter((r) => r.userId === user.id);
+  const myPending = myRequests
+    .filter((r) => r.status === 'pending')
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const myUpcoming = myRequests
+    .filter((r) => r.status === 'approved' && r.endDate >= today)
+    .sort((a, b) => a.startDate.localeCompare(b.startDate));
+  const myHistory = myRequests
+    .filter((r) => r.status === 'rejected' || (r.status === 'approved' && r.endDate < today))
+    .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
   const handleRequestLeave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,14 +41,17 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
     }
 
     setFormData((current) => {
-      if (!current.startDate || (current.startDate && current.endDate)) {
+      // Geen actief bereik (nog niets, of allebei al gevuld) → start een nieuw bereik.
+      if (!current.startDate || current.endDate) {
         return { ...current, startDate: dateStr, endDate: '' };
       }
 
+      // Tweede klik vóór de startdatum → herstart vanaf deze datum als nieuwe start.
       if (dateStr < current.startDate) {
-        return { ...current, startDate: dateStr, endDate: current.startDate };
+        return { ...current, startDate: dateStr, endDate: '' };
       }
 
+      // Geldige tweede klik (zelfde dag = één-dag verlof, latere dag = einde van bereik).
       return { ...current, endDate: dateStr };
     });
   };
@@ -53,8 +66,25 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
     showRequestModal && (dateStr === formData.startDate || dateStr === formData.endDate);
 
   const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status']) => {
-    onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus } : r)));
+    const decidedAt = new Date().toISOString();
+    onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus, decidedAt } : r)));
   };
+
+  const initialLastSeen = useRef(lastSeenDecisionAt ?? null).current;
+  const isNewlyDecided = (req: LeaveRequest) =>
+    req.userId === user.id &&
+    !!req.decidedAt &&
+    req.status !== 'pending' &&
+    (!initialLastSeen || req.decidedAt > initialLastSeen);
+
+  useEffect(() => {
+    if (!onMarkDecisionsSeen) return;
+    const hasUnseen = myRequests.some(
+      (r) => r.decidedAt && r.status !== 'pending' && (!initialLastSeen || r.decidedAt > initialLastSeen),
+    );
+    if (hasUnseen) onMarkDecisionsSeen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const getRequestsForDate = (dateStr: string) =>
     leaveRequests.filter((r) => {
@@ -173,12 +203,29 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
             </div>
           )}
 
-          <div className="space-y-4">
-            <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Mijn Verlof Historie</h4>
-            <div className="space-y-4">
-              {myRequests.length > 0 ? myRequests.map((req) => <div key={req.id} className="surface-card p-6 rounded-[32px] relative overflow-hidden"><div className={cn('absolute top-0 left-0 w-1 h-full', req.status === 'approved' ? 'bg-emerald-500' : req.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500')} /><div className="flex justify-between items-start mb-4"><span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[8px] font-black uppercase tracking-widest">{req.type}</span><span className={cn('text-[10px] font-black uppercase tracking-widest', req.status === 'approved' ? 'text-emerald-500' : req.status === 'rejected' ? 'text-red-500' : 'text-amber-500')}>{req.status}</span></div><p className="font-black text-slate-800 text-sm mb-1">{new Date(req.startDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} - {new Date(req.endDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aangevraagd op {req.createdAt.split('T')[0]}</p></div>) : <div className="surface-card p-8 rounded-[32px] text-center"><p className="text-slate-400 font-bold text-sm">Nog geen verlof aangevraagd.</p></div>}
-            </div>
-          </div>
+          <MyLeaveSection
+            title="Mijn Openstaande Aanvragen"
+            count={myPending.length}
+            emptyText="Geen openstaande aanvragen."
+            requests={myPending}
+            isNew={isNewlyDecided}
+          />
+
+          <MyLeaveSection
+            title="Mijn Geplande Verloven"
+            count={myUpcoming.length}
+            emptyText="Geen goedgekeurd verlof gepland."
+            requests={myUpcoming}
+            isNew={isNewlyDecided}
+          />
+
+          <MyLeaveSection
+            title="Mijn Historiek"
+            count={myHistory.length}
+            emptyText="Nog geen afgehandelde aanvragen."
+            requests={myHistory}
+            isNew={isNewlyDecided}
+          />
         </div>
       </div>
 
@@ -190,7 +237,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5">
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
                   <p className="font-black text-oker-700 uppercase tracking-[0.18em] text-[10px]">Periode kiezen</p>
-                  <p className="mt-2 font-medium">Klik in de kalender eerst op de startdatum en daarna op de einddatum.</p>
+                  <p className="mt-2 font-medium">
+                    {!formData.startDate
+                      ? 'Klik in de kalender op de startdatum.'
+                      : !formData.endDate
+                        ? 'Klik nu op de einddatum (of dezelfde dag voor één dag verlof).'
+                        : 'Periode geselecteerd. Pas aan via "Periode wissen" of klik een nieuwe startdatum aan.'}
+                  </p>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Startdatum</label><input type="text" readOnly value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
@@ -208,5 +261,40 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
         )}
       </AnimatePresence>
     </PageShell>
+  );
+}
+
+function MyLeaveSection({ title, count, emptyText, requests, isNew }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean }) {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between ml-2">
+        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">{title}</h4>
+        <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em]">{count}</span>
+      </div>
+      <div className="space-y-4">
+        {requests.length > 0 ? requests.map((req) => {
+          const fresh = isNew?.(req) ?? false;
+          return (
+            <div key={req.id} className={cn('surface-card p-6 rounded-[32px] relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
+              <div className={cn('absolute top-0 left-0 w-1 h-full', req.status === 'approved' ? 'bg-emerald-500' : req.status === 'rejected' ? 'bg-red-500' : 'bg-amber-500')} />
+              <div className="flex justify-between items-start mb-4">
+                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[8px] font-black uppercase tracking-widest">{req.type}</span>
+                <div className="flex items-center gap-2">
+                  {fresh && <span className="px-2 py-1 bg-oker-500 text-white rounded-full text-[8px] font-black uppercase tracking-widest">Nieuw</span>}
+                  <span className={cn('text-[10px] font-black uppercase tracking-widest', req.status === 'approved' ? 'text-emerald-500' : req.status === 'rejected' ? 'text-red-500' : 'text-amber-500')}>{req.status}</span>
+                </div>
+              </div>
+              <p className="font-black text-slate-800 text-sm mb-1">{new Date(req.startDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} - {new Date(req.endDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Aangevraagd op {req.createdAt.split('T')[0]}</p>
+              {req.comment && <p className="text-xs text-slate-500 italic mt-3">"{req.comment}"</p>}
+            </div>
+          );
+        }) : (
+          <div className="surface-card p-8 rounded-[32px] text-center">
+            <p className="text-slate-400 font-bold text-sm">{emptyText}</p>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

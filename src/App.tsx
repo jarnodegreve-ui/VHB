@@ -129,6 +129,7 @@ export default function App() {
   const [updates, setUpdates] = useState<Update[]>(MOCK_UPDATES);
   const [swaps, setSwaps] = useState<SwapRequest[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
+  const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
   const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
@@ -277,6 +278,18 @@ export default function App() {
       showToast('Dit scherm is niet beschikbaar voor jouw rol.', 'info');
     }
   }, [currentUser, currentView]);
+
+  useEffect(() => {
+    if (!currentUser) {
+      setLastSeenLeaveDecisionAt(null);
+      return;
+    }
+    try {
+      setLastSeenLeaveDecisionAt(localStorage.getItem(`planx-leave-lastseen-${currentUser.id}`));
+    } catch {
+      setLastSeenLeaveDecisionAt(null);
+    }
+  }, [currentUser?.id]);
 
   const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token) => {
     const headers = new Headers(init.headers || {});
@@ -484,6 +497,26 @@ export default function App() {
     }
   };
 
+  const markLeaveDecisionsSeen = () => {
+    if (!currentUser) return;
+    const now = new Date().toISOString();
+    setLastSeenLeaveDecisionAt(now);
+    try {
+      localStorage.setItem(`planx-leave-lastseen-${currentUser.id}`, now);
+    } catch {
+      // ignore quota / unavailable storage
+    }
+  };
+
+  const unseenLeaveDecisionCount = currentUser
+    ? leaveRequests.filter((r) =>
+        r.userId === currentUser.id &&
+        !!r.decidedAt &&
+        r.status !== 'pending' &&
+        (!lastSeenLeaveDecisionAt || r.decidedAt > lastSeenLeaveDecisionAt),
+      ).length
+    : 0;
+
   const saveLeave = async (newLeave: LeaveRequest[]) => {
     try {
       const response = await apiFetch('/api/leave', {
@@ -492,6 +525,9 @@ export default function App() {
       });
       if (response.ok) {
         setLeaveRequests(newLeave);
+        if (currentUser?.role === 'admin') {
+          await fetchActivityLog();
+        }
         showToast('Verlofaanvraag bijgewerkt.', 'success');
       }
     } catch (error) {
@@ -874,11 +910,12 @@ export default function App() {
             active={currentView === 'ruil-verzoeken'} 
             onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }} 
           />
-          <NavItem 
-            icon={<Calendar size={20} />} 
-            label="Verlof Aanvragen" 
-            active={currentView === 'verlof'} 
-            onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }} 
+          <NavItem
+            icon={<Calendar size={20} />}
+            label="Verlof Aanvragen"
+            active={currentView === 'verlof'}
+            onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }}
+            badge={unseenLeaveDecisionCount}
           />
 
           {isPlanner && (
@@ -1093,7 +1130,14 @@ export default function App() {
               {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyLeaveManagementView user={currentUser} leaveRequests={leaveRequests} users={users} onSave={saveLeave} />
+                  <LazyLeaveManagementView
+                    user={currentUser}
+                    leaveRequests={leaveRequests}
+                    users={users}
+                    onSave={saveLeave}
+                    lastSeenDecisionAt={lastSeenLeaveDecisionAt}
+                    onMarkDecisionsSeen={markLeaveDecisionsSeen}
+                  />
                 </Suspense>
               )}
               {resolvedCurrentView === 'beheer-debug' && (

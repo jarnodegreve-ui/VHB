@@ -14,6 +14,7 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
     diversions: 'Omleidingen',
     updates: 'Updates',
     auth: 'Authenticatie',
+    leave: 'Verlof',
   };
   const [activeCategory, setActiveCategory] = useState<'all' | ActivityLogEntry['category']>('all');
   const [dateWindow, setDateWindow] = useState<'all' | 'today' | '7d' | '30d'>('7d');

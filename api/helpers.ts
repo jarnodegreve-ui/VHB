@@ -98,6 +98,7 @@ export const toPublicLeave = (leave: any): LeaveRecord => ({
   status: leave.status,
   comment: leave.comment ?? undefined,
   createdAt: String(leave.createdAt ?? leave.createdat),
+  decidedAt: leave.decidedAt ?? leave.decidedat ?? undefined,
 });
 
 export const toDatabaseLeave = (leave: LeaveRecord) => ({
@@ -109,6 +110,7 @@ export const toDatabaseLeave = (leave: LeaveRecord) => ({
   status: leave.status,
   comment: leave.comment || null,
   createdat: String(leave.createdAt),
+  decidedat: leave.decidedAt || null,
 });
 
 export const toPublicPlanningCode = (code: any): PlanningCodeRecord => ({

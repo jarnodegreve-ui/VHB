@@ -23,7 +23,7 @@ export function MobileNavItem({ icon, active, onClick }: { icon: React.ReactNode
   );
 }
 
-export function NavItem({ icon, label, active, onClick }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void }) {
+export function NavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, badge?: number }) {
   return (
     <button
       onClick={onClick}
@@ -40,7 +40,12 @@ export function NavItem({ icon, label, active, onClick }: { icon: React.ReactNod
       )}>
         {icon}
       </span>
-      <span className="text-[14px] leading-none">{label}</span>
+      <span className="text-[14px] leading-none flex-1">{label}</span>
+      {badge !== undefined && badge > 0 && (
+        <span className="ml-auto inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-[10px] font-black bg-oker-500 text-white rounded-full shadow-sm shadow-oker-500/30">
+          {badge}
+        </span>
+      )}
     </button>
   );
 }

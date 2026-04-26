@@ -511,7 +511,44 @@ app.get("/api/leave", authenticate, async (req, res) => {
 app.post("/api/leave", authenticate, async (req, res) => {
   try {
     const newData = req.body;
+    if (!Array.isArray(newData)) {
+      res.status(400).json({ error: "Invalid data format. Expected an array." });
+      return;
+    }
+
+    const previousLeave = await getLeaveData();
+    const previousById = new Map(previousLeave.map((r) => [r.id, r]));
+    const users = await getUsersData();
+    const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
+    const formatPeriod = (start: string, end: string) => start === end ? start : `${start} t/m ${end}`;
+
     await saveLeaveData(newData);
+
+    for (const next of newData) {
+      const prev = previousById.get(next.id);
+      const period = formatPeriod(next.startDate, next.endDate);
+
+      if (!prev) {
+        await logActivity(
+          req,
+          "leave",
+          "Verlof aangevraagd",
+          `${userName(next.userId)} vroeg ${next.type} aan voor ${period}.`,
+        );
+        continue;
+      }
+
+      if (prev.status !== next.status && next.status !== "pending") {
+        const action = next.status === "approved" ? "Verlof goedgekeurd" : "Verlof afgewezen";
+        await logActivity(
+          req,
+          "leave",
+          action,
+          `${userName(next.userId)} — ${next.type} (${period}).`,
+        );
+      }
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save leave", details: err.message });

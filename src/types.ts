@@ -43,6 +43,7 @@ export interface LeaveRequest {
   status: 'pending' | 'approved' | 'rejected';
   comment?: string;
   createdAt: string;
+  decidedAt?: string;
 }
 
 export interface Shift {
@@ -110,7 +111,7 @@ export interface ActivityLogEntry {
   createdAt: string;
   actorName: string;
   actorRole: Role;
-  category: 'users' | 'planning' | 'planning_codes' | 'services' | 'diversions' | 'updates' | 'auth';
+  category: 'users' | 'planning' | 'planning_codes' | 'services' | 'diversions' | 'updates' | 'auth' | 'leave';
   action: string;
   details: string;
 }
