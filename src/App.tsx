@@ -342,7 +342,7 @@ export default function App() {
     try {
       const response = await apiFetch('/api/updates', {}, accessToken);
       const data = await response.json();
-      if (data && Array.isArray(data)) setUpdates(data.length > 0 ? data : MOCK_UPDATES);
+      if (data && Array.isArray(data)) setUpdates(data);
     } catch (error) {
       console.error('Error fetching updates:', error);
     }
@@ -673,7 +673,7 @@ export default function App() {
       const response = await apiFetch('/api/diversions', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setDiversions(data.length > 0 ? data : MOCK_DIVERSIONS);
+        setDiversions(data);
       }
     } catch (error) {
       console.error('Error fetching diversions:', error);
