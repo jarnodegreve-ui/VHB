@@ -49,7 +49,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   };
 
   const handleCalendarDateClick = (dateStr: string) => {
-    if (!showRequestModal || isPlanner) {
+    if (!showRequestModal) {
       setSelectedDate((current) => (current === dateStr ? null : dateStr));
       return;
     }
@@ -126,11 +126,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
       <PageHeader
         title="Verlof & Afwezigheid"
         description="Beheer verlofaanvragen en bekijk de bezetting."
-        actions={!isPlanner ? (
+        actions={(
           <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
             <Plus size={20} /> Verlof Aanvragen
           </button>
-        ) : undefined}
+        )}
       />
 
       <div className="grid lg:grid-cols-12 gap-8">
