@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { Plus, User as UserIcon, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, User } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
@@ -9,7 +9,21 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'vakantie' as LeaveRequest['type'], comment: '' });
-  const [viewMonth] = useState(new Date(2026, 2, 1));
+  const [viewMonth, setViewMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const goToPrevMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
+  const goToNextMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  const goToCurrentMonth = () => {
+    const now = new Date();
+    setViewMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+  };
+  const isCurrentMonth = (() => {
+    const now = new Date();
+    return viewMonth.getFullYear() === now.getFullYear() && viewMonth.getMonth() === now.getMonth();
+  })();
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const today = new Date().toISOString().split('T')[0];
@@ -122,9 +136,36 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
       <div className="grid lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-6">
           <div className="surface-card p-8 rounded-[28px]">
-            <div className="flex items-center justify-between mb-8">
-              <h4 className="text-lg font-black tracking-tight capitalize">{monthName}</h4>
-              <div className="flex gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={goToPrevMonth}
+                  aria-label="Vorige maand"
+                  className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                >
+                  <ChevronLeft size={18} />
+                </button>
+                <h4 className="text-lg font-black tracking-tight capitalize min-w-[160px] text-center">{monthName}</h4>
+                <button
+                  type="button"
+                  onClick={goToNextMonth}
+                  aria-label="Volgende maand"
+                  className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                >
+                  <ChevronRight size={18} />
+                </button>
+                {!isCurrentMonth && (
+                  <button
+                    type="button"
+                    onClick={goToCurrentMonth}
+                    className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+                  >
+                    Vandaag
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voldoende</span></div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Krap</span></div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Onderbezet</span></div>
