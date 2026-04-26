@@ -280,11 +280,61 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                   <p className="font-black text-oker-700 uppercase tracking-[0.18em] text-[10px]">Periode kiezen</p>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
-                      ? 'Klik in de kalender op de startdatum.'
+                      ? 'Klik op de startdatum.'
                       : !formData.endDate
                         ? 'Klik nu op de einddatum (of dezelfde dag voor één dag verlof).'
                         : 'Periode geselecteerd. Pas aan via "Periode wissen" of klik een nieuwe startdatum aan.'}
                   </p>
+                </div>
+
+                <div className="rounded-3xl border border-slate-200 bg-white p-4 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <button
+                      type="button"
+                      onClick={goToPrevMonth}
+                      aria-label="Vorige maand"
+                      className="ios-pressable w-8 h-8 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                    >
+                      <ChevronLeft size={16} />
+                    </button>
+                    <span className="text-sm font-black capitalize">{monthName}</span>
+                    <button
+                      type="button"
+                      onClick={goToNextMonth}
+                      aria-label="Volgende maand"
+                      className="ios-pressable w-8 h-8 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                    >
+                      <ChevronRight size={16} />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-7 gap-1">
+                    {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => (
+                      <div key={d} className="text-center text-[9px] font-black text-slate-300 uppercase tracking-[0.15em] py-1">{d}</div>
+                    ))}
+                    {calendarDays.map((day, i) => {
+                      if (day === null) return <div key={`m-empty-${i}`} />;
+                      const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                      const inRange = isDateWithinDraftRange(dateStr);
+                      const edge = isDraftBoundary(dateStr);
+                      const isToday = dateStr === today;
+                      return (
+                        <button
+                          key={day}
+                          type="button"
+                          onClick={() => handleCalendarDateClick(dateStr)}
+                          className={cn(
+                            'aspect-square rounded-xl text-xs font-black transition-colors flex items-center justify-center',
+                            !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
+                            inRange && !edge && 'bg-oker-100 text-oker-700',
+                            edge && 'bg-oker-500 text-white shadow-sm shadow-oker-500/30',
+                            isToday && !inRange && !edge && 'ring-1 ring-oker-300',
+                          )}
+                        >
+                          {day}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Startdatum</label><input type="text" readOnly value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
