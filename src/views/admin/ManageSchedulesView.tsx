@@ -534,26 +534,26 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               <div className="p-8 space-y-6 overflow-y-auto flex-1">
                 <div className={cn(
                   "rounded-[24px] border p-5",
-                  matrixPreviewHasIssues ? "border-amber-200 bg-amber-50/80" : "border-emerald-200 bg-emerald-50/80"
+                  matrixPreviewHasIssues ? "border-red-200 bg-red-50/80" : "border-emerald-200 bg-emerald-50/80"
                 )}>
                   <div className="flex items-start gap-3">
                     <div className={cn(
                       "mt-0.5 h-3 w-3 rounded-full shrink-0",
-                      matrixPreviewHasIssues ? "bg-amber-500" : "bg-emerald-500"
+                      matrixPreviewHasIssues ? "bg-red-500" : "bg-emerald-500"
                     )} />
                     <div>
                       <p className={cn(
                         "text-xs font-black uppercase tracking-[0.2em]",
-                        matrixPreviewHasIssues ? "text-amber-700" : "text-emerald-700"
+                        matrixPreviewHasIssues ? "text-red-700" : "text-emerald-700"
                       )}>
-                        {matrixPreviewHasIssues ? 'Controle Nodig' : 'Klaar Voor Import'}
+                        {matrixPreviewHasIssues ? 'Import Geblokkeerd' : 'Klaar Voor Import'}
                       </p>
                       <p className={cn(
                         "mt-2 text-sm font-medium",
-                        matrixPreviewHasIssues ? "text-amber-800" : "text-emerald-800"
+                        matrixPreviewHasIssues ? "text-red-800" : "text-emerald-800"
                       )}>
                         {matrixPreviewHasIssues
-                          ? 'Deze matrix bevat nog onbekende codes of niet-gematchte chauffeurs. Je kunt nog steeds importeren, maar controleer dit eerst.'
+                          ? 'Deze matrix bevat onbekende codes of niet-gematchte chauffeurs. Los deze eerst op (planningscodes toevoegen, naam in chauffeurslijst corrigeren of Excel aanpassen) voor je opnieuw importeert.'
                           : 'Geen onbekende codes of niet-gematchte chauffeurs gevonden. Deze import is klaar om de planning te vervangen.'}
                       </p>
                     </div>
@@ -671,15 +671,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </button>
                 <button
                   onClick={confirmMatrixImport}
-                  disabled={isMatrixImporting}
+                  disabled={isMatrixImporting || matrixPreviewHasIssues}
+                  title={matrixPreviewHasIssues ? 'Los eerst de fouten op in de Excel of in de planningscodes/chauffeurslijst.' : undefined}
                   className={cn(
-                    "flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-widest text-xs disabled:opacity-50",
+                    "flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-widest text-xs disabled:opacity-40 disabled:cursor-not-allowed",
                     matrixPreviewHasIssues
-                      ? "bg-amber-500 hover:bg-amber-600 shadow-amber-500/20"
+                      ? "bg-slate-400"
                       : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"
                   )}
                 >
-                  {isMatrixImporting ? 'Importeren...' : matrixPreviewHasIssues ? 'Toch Importeren' : 'Vervang Huidige Planning'}
+                  {isMatrixImporting ? 'Importeren...' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang Huidige Planning'}
                 </button>
               </div>
             </motion.div>

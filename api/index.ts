@@ -241,8 +241,21 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     const importedDates = rows.map((row) => row.source_date).filter(Boolean);
     const startDate = importedDates[0] || null;
     const endDate = importedDates[importedDates.length - 1] || null;
-    await savePlanningMatrixRows(rows);
+
+    // Bouw eerst, schrijf pas weg na strict-mode validatie. Als er onbekende
+    // codes of niet-gematchte chauffeurs zijn, weiger de import zodat de
+    // planner eerst de oorzaak kan rechtzetten.
     const generatedPlanning = await buildPlanningFromMatrix(rows);
+    if (generatedPlanning.summary.unknownCodes.length > 0 || generatedPlanning.summary.unmatchedDrivers.length > 0) {
+      return res.status(400).json({
+        error: "Import geblokkeerd: er zijn onbekende codes of niet-gematchte chauffeurs. Los deze eerst op en probeer opnieuw.",
+        unknownCodes: generatedPlanning.summary.unknownCodes,
+        unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+        blocked: true,
+      });
+    }
+
+    await savePlanningMatrixRows(rows);
     await replacePlanningData(generatedPlanning.shifts);
     await savePlanningMatrixHistoryEntry({
       id: `${Date.now()}`,
