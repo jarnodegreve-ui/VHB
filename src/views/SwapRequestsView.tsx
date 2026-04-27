@@ -53,14 +53,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
     <PageShell>
       <PageHeader
         title="Wissel Aanvragen"
-        actions={!isPlanner ? (
+        actions={(
           <button
             onClick={() => setShowOfferModal(true)}
             className="btn-primary ios-pressable px-6 py-3 text-sm"
           >
             Dienst Aanbieden
           </button>
-        ) : undefined}
+        )}
       />
 
       <div className="grid md:grid-cols-2 gap-8">
@@ -209,13 +209,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                 <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
               </div>
               <form onSubmit={handleOfferShift} className="p-8 space-y-6 overflow-y-auto flex-1">
+                {myShifts.length === 0 && (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                    Je hebt geen diensten op je naam staan om aan te bieden. {isPlanner ? 'Je kan in de Debug-pagina een fictieve test-dienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
+                  </div>
+                )}
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Selecteer Dienst</label>
-                  <select 
-                    value={selectedShift} 
+                  <select
+                    value={selectedShift}
                     onChange={(e) => setSelectedShift(e.target.value)}
-                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none"
+                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
                     required
+                    disabled={myShifts.length === 0}
                   >
                     <option value="">Kies een dienst...</option>
                     {myShifts.map(s => (

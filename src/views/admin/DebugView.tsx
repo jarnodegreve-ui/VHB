@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Activity } from 'lucide-react';
-import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
+import { Activity, FlaskConical } from 'lucide-react';
+import type { Shift, User } from '../../types';
+import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
 
-export function DebugView() {
+const TEST_SHIFT_LINE = 'TEST-DEMO';
+
+export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: User; shifts: Shift[]; onSaveShifts: (s: Shift[]) => void | Promise<void> }) {
   const [healthData, setHealthData] = useState<any>(null);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -65,6 +68,36 @@ export function DebugView() {
     } finally {
       setIsTesting(false);
     }
+  };
+
+  const myTestShifts = shifts.filter((s) => s.driverId === currentUser.id && s.line === TEST_SHIFT_LINE);
+
+  const addTestShift = async () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const dateStr = tomorrow.toISOString().split('T')[0];
+    const newShift: Shift = {
+      id: `test-${Date.now()}`,
+      date: dateStr,
+      startTime: '08:00',
+      endTime: '12:00',
+      line: TEST_SHIFT_LINE,
+      busNumber: 'TEST',
+      loopnr: '1',
+      driverId: currentUser.id,
+    };
+    await onSaveShifts([...shifts, newShift]);
+    notify(`Fictieve dienst toegevoegd op ${dateStr}.`, 'success');
+  };
+
+  const clearTestShifts = async () => {
+    if (myTestShifts.length === 0) {
+      notify('Geen fictieve diensten op je naam gevonden.', 'info');
+      return;
+    }
+    const remaining = shifts.filter((s) => !(s.driverId === currentUser.id && s.line === TEST_SHIFT_LINE));
+    await onSaveShifts(remaining);
+    notify(`${myTestShifts.length} fictieve dienst${myTestShifts.length === 1 ? '' : 'en'} verwijderd.`, 'success');
   };
 
   useEffect(() => {
@@ -156,6 +189,35 @@ export function DebugView() {
           </div>
         </div>
       )}
+
+      <div className="surface-card p-8 rounded-[28px]">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-violet-500 text-white rounded-2xl shadow-lg shadow-violet-500/20">
+            <FlaskConical size={24} />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-slate-900 font-black text-lg mb-2">Test-omgeving</h4>
+            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
+              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, wissel aanvragen, ...) te testen zonder een test-account aan te maken. Diensten gemarkeerd met lijn <code className="bg-slate-100 px-1 rounded font-black">TEST-DEMO</code> kunnen op elk moment worden opgeruimd.
+            </p>
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                onClick={addTestShift}
+                className="btn-primary ios-pressable px-4 py-2 text-sm"
+              >
+                + Maak fictieve dienst voor mezelf
+              </button>
+              <button
+                onClick={clearTestShifts}
+                disabled={myTestShifts.length === 0}
+                className="px-4 py-2 bg-slate-100 rounded-xl text-slate-600 font-bold text-sm hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Verwijder mijn fictieve diensten ({myTestShifts.length})
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <div className="bg-oker-50 p-8 rounded-[28px] border border-oker-100">
         <div className="flex items-start gap-4">
