@@ -188,7 +188,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
               <div className="flex flex-wrap gap-4">
                 <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Voldoende</span></div>
                 <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Krap</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-red-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Onderbezet</span></div>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
@@ -197,7 +196,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
                 const occupancyCount = getRequestsForDate(dateStr).length;
-                const statusColor = occupancyCount >= 3 ? 'bg-red-500' : occupancyCount >= 2 ? 'bg-amber-500' : occupancyCount >= 1 ? 'bg-emerald-500' : 'bg-slate-100';
+                const statusColor = occupancyCount >= 2 ? 'bg-amber-500' : occupancyCount >= 1 ? 'bg-emerald-500' : 'bg-slate-100';
                 const isSelected = selectedDate === dateStr;
                 const isInDraftRange = isDateWithinDraftRange(dateStr);
                 const isDraftEdge = isDraftBoundary(dateStr);
