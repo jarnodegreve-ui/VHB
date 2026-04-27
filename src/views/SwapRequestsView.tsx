@@ -51,7 +51,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   };
 
   const handleCancel = (swapId: string) => {
-    if (!window.confirm('Dit goedgekeurd wisselverzoek annuleren?')) return;
+    if (!window.confirm('Deze goedgekeurde dienstruil annuleren?')) return;
     handleStatusUpdate(swapId, 'cancelled');
   };
 
@@ -73,7 +73,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   return (
     <PageShell>
       <PageHeader
-        title="Wissel Aanvragen"
+        title="Dienstruil"
         actions={(
           <button
             onClick={() => setShowOfferModal(true)}
@@ -112,7 +112,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         </div>
 
         <div className="space-y-4">
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Openstaande Wissels</h4>
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Openstaande Dienstruilen</h4>
           {availableSwaps.length > 0 ? (
             availableSwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
@@ -152,7 +152,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
         return (
           <div className="space-y-4 pt-8">
-            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Beheer Wisselverzoeken</h4>
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Beheer Dienstruilen</h4>
             <div className="surface-table rounded-[32px] overflow-hidden">
               {/* Desktop table */}
               <div className="hidden md:block overflow-x-auto">
@@ -233,7 +233,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   );
                 })}
                 {actionableSwaps.length === 0 && (
-                  <p className="text-center text-slate-400 font-medium italic py-8">Geen openstaande of goedgekeurde wisselverzoeken.</p>
+                  <p className="text-center text-slate-400 font-medium italic py-8">Geen openstaande of goedgekeurde dienstruilen.</p>
                 )}
               </div>
             </div>

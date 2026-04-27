@@ -598,17 +598,17 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     for (const next of newData) {
       const prev = previousById.get(String(next.id));
       if (!prev) {
-        await logActivity(req, "swaps", "Wisselverzoek aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor wissel.`);
+        await logActivity(req, "swaps", "Dienstruil aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor ruil.`);
         continue;
       }
       if (prev.status !== next.status && next.status !== "pending") {
         let action: string | null = null;
-        if (next.status === "approved") action = "Wisselverzoek goedgekeurd";
-        else if (next.status === "rejected") action = "Wisselverzoek afgewezen";
-        else if (next.status === "cancelled") action = "Wisselverzoek geannuleerd";
-        else if (next.status === "completed") action = "Wisselverzoek voltooid";
+        if (next.status === "approved") action = "Dienstruil goedgekeurd";
+        else if (next.status === "rejected") action = "Dienstruil afgewezen";
+        else if (next.status === "cancelled") action = "Dienstruil geannuleerd";
+        else if (next.status === "completed") action = "Dienstruil voltooid";
         if (action) {
-          await logActivity(req, "swaps", action, `${userName(next.requesterId)} — wisselverzoek (${prev.status} → ${next.status}).`);
+          await logActivity(req, "swaps", action, `${userName(next.requesterId)} — dienstruil (${prev.status} → ${next.status}).`);
         }
       }
     }

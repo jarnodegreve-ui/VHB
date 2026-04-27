@@ -410,14 +410,14 @@ export default function App() {
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
-        showToast('Ruilverzoek bijgewerkt.', 'success');
+        showToast('Dienstruil bijgewerkt.', 'success');
       } else {
         const err = await response.json().catch(() => ({} as any));
-        showToast(err.error || 'Opslaan van ruilverzoeken is mislukt.', 'error');
+        showToast(err.error || 'Opslaan van dienstruilen is mislukt.', 'error');
       }
     } catch (error) {
       console.error('Error saving swaps:', error);
-      showToast('Opslaan van ruilverzoeken is mislukt.', 'error');
+      showToast('Opslaan van dienstruilen is mislukt.', 'error');
     }
   };
 
@@ -781,7 +781,7 @@ export default function App() {
     ritblaadjes: { title: 'Ritblaadjes', subtitle: 'Actuele rit-informatie als PDF voor alle chauffeurs.' },
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
-    'ruil-verzoeken': { title: 'Wissel-Verzoeken', subtitle: 'Beheer openstaande ruilverzoeken en aanbiedingen.' },
+    'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
     'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
@@ -904,11 +904,11 @@ export default function App() {
             active={currentView === 'updates'} 
             onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
           />
-          <NavItem 
-            icon={<RotateCcw size={20} />} 
-            label="Wissel Aanvragen" 
-            active={currentView === 'ruil-verzoeken'} 
-            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }} 
+          <NavItem
+            icon={<RotateCcw size={20} />}
+            label="Dienstruil"
+            active={currentView === 'ruil-verzoeken'}
+            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }}
           />
           <NavItem
             icon={<Calendar size={20} />}
