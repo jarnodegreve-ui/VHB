@@ -13,6 +13,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const myShifts = shifts.filter(s => s.driverId === user.id);
+  const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
   const mySwaps = swaps.filter(s => s.requesterId === user.id);
   const availableSwaps = swaps.filter(s => {
     if (s.status !== 'pending' || s.requesterId === user.id) return false;
@@ -90,9 +91,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
             mySwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
               return (
-                <div key={swap.id} className="surface-card p-6 rounded-[32px] flex items-center justify-between">
+                <div key={swap.id} className="surface-card p-6 rounded-[32px] flex items-center justify-between gap-4">
                   <div>
-                    <p className="font-black text-slate-800">{shift?.date}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst {getServiceNumber(shift)}</p>
+                    <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
                   </div>
                   <span className={cn(
@@ -119,7 +121,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                 <div key={swap.id} className="surface-card p-6 rounded-[32px] space-y-4">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-black text-slate-800">{shift?.date}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst {getServiceNumber(shift)}</p>
+                      <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Door: {requester?.name}</p>
                     </div>
@@ -169,7 +172,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                       return (
                         <tr key={swap.id}>
                           <td className="px-6 py-4 font-bold text-sm">{requester?.name}</td>
-                          <td className="px-6 py-4 text-xs font-medium">{shift?.date} ({shift?.startTime} - {shift?.endTime})</td>
+                          <td className="px-6 py-4 text-xs font-medium">
+                            <span className="font-black text-oker-700">Dienst {getServiceNumber(shift)}</span>
+                            <span className="text-slate-500"> — {shift?.date} ({shift?.startTime} - {shift?.endTime})</span>
+                          </td>
                           <td className="px-6 py-4">
                             <span className={cn('px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                           </td>
@@ -201,6 +207,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-black text-slate-800 tracking-tight">{requester?.name}</p>
+                          <p className="text-[10px] font-black text-oker-700 uppercase tracking-widest mt-1">Dienst {getServiceNumber(shift)}</p>
                           <p className="text-xs font-medium text-slate-500 mt-1">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
                         </div>
                         <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
@@ -260,7 +267,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   >
                     <option value="">Kies een dienst...</option>
                     {myShifts.map(s => (
-                      <option key={s.id} value={s.id}>{s.date} ({s.startTime} - {s.endTime})</option>
+                      <option key={s.id} value={s.id}>Dienst {getServiceNumber(s)} — {s.date} ({s.startTime} - {s.endTime})</option>
                     ))}
                   </select>
                 </div>
