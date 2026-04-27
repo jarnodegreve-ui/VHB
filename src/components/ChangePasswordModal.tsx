@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -86,7 +87,8 @@ export function ChangePasswordModal({
     setTimeout(handleClose, 1800);
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
@@ -94,9 +96,9 @@ export function ChangePasswordModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="glass-modal rounded-[28px] w-full max-w-md overflow-hidden"
+            className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
           >
-            <div className="p-8 border-b border-white/70 flex items-start justify-between gap-4">
+            <div className="p-8 border-b border-white/70 flex items-start justify-between gap-4 shrink-0">
               <div>
                 <h4 className="text-xl font-black tracking-tight">Wachtwoord wijzigen</h4>
                 <p className="mt-2 text-sm text-slate-500 font-medium">Kies een nieuw wachtwoord voor {email}.</p>
@@ -106,7 +108,7 @@ export function ChangePasswordModal({
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-8 space-y-5">
+            <form onSubmit={handleSubmit} className="p-8 space-y-5 overflow-y-auto flex-1">
               <div className="space-y-1.5">
                 <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Huidig wachtwoord</label>
                 <input
@@ -179,6 +181,7 @@ export function ChangePasswordModal({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }

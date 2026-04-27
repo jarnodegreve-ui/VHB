@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Plus, X } from 'lucide-react';
 import type { Shift, SwapRequest, User } from '../types';
@@ -198,15 +199,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         );
       })()}
 
+      {createPortal(
       <AnimatePresence>
         {showOfferModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-[28px] w-full max-w-md overflow-hidden">
-              <div className="p-8 border-b border-white/70 flex items-center justify-between">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
                 <h4 className="text-xl font-black">Dienst Aanbieden</h4>
                 <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
               </div>
-              <form onSubmit={handleOfferShift} className="p-8 space-y-6">
+              <form onSubmit={handleOfferShift} className="p-8 space-y-6 overflow-y-auto flex-1">
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Selecteer Dienst</label>
                   <select 
@@ -237,7 +239,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body,
+      )}
     </PageShell>
   );
 }

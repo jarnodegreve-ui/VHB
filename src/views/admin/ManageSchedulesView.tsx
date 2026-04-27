@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Activity, Database, Info, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
@@ -512,6 +513,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         />
       ) : null}
 
+      {createPortal(
       <AnimatePresence>
         {matrixPreviewOpen && matrixPreview && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
@@ -519,9 +521,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[36px] w-full max-w-2xl overflow-hidden"
+              className="glass-modal rounded-[36px] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             >
-              <div className="p-8 border-b border-white/70">
+              <div className="p-8 border-b border-white/70 shrink-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-600">Matrix Import Preview</p>
                 <h4 className="mt-3 text-2xl font-black tracking-tight">Controleer voor je de planning vervangt</h4>
                 <p className="mt-2 text-sm font-medium text-slate-500">
@@ -529,7 +531,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </p>
               </div>
 
-              <div className="p-8 space-y-6">
+              <div className="p-8 space-y-6 overflow-y-auto flex-1">
                 <div className={cn(
                   "rounded-[24px] border p-5",
                   matrixPreviewHasIssues ? "border-amber-200 bg-amber-50/80" : "border-emerald-200 bg-emerald-50/80"
@@ -656,7 +658,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </div>
               </div>
 
-              <div className="p-8 bg-white/40 flex gap-3 backdrop-blur-sm">
+              <div className="p-8 bg-white/40 flex gap-3 backdrop-blur-sm shrink-0">
                 <button
                   onClick={() => {
                     setMatrixPreviewOpen(false);
@@ -683,7 +685,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body,
+      )}
     </PageShell>
   );
 }

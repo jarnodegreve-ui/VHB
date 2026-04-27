@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../lib/ui';
@@ -96,19 +97,20 @@ export function ConfirmationModal({
   cancelText?: string;
   variant?: 'danger' | 'warning';
 }) {
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[28px] w-full max-w-md overflow-hidden">
-            <div className="p-8 border-b border-white/70">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-8 border-b border-white/70 shrink-0">
               <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600')}>
                 <AlertTriangle size={24} />
               </div>
               <h4 className="text-xl font-black">{title}</h4>
               <p className="text-sm text-slate-500 font-medium mt-2">{message}</p>
             </div>
-            <div className="p-8 bg-white/40 flex gap-3 backdrop-blur-sm">
+            <div className="p-8 bg-white/40 flex gap-3 backdrop-blur-sm shrink-0">
               <button onClick={onClose} className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-widest text-xs border border-transparent hover:border-white/80">
                 {cancelText}
               </button>
@@ -125,7 +127,8 @@ export function ConfirmationModal({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
 
@@ -176,12 +179,13 @@ export function CredentialsModal({
     }
   };
 
-  return (
+  if (typeof document === 'undefined') return null;
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[32px] w-full max-w-md overflow-hidden">
-            <div className="p-8 border-b border-white/70 flex items-center justify-between">
+          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[32px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
               <div>
                 <h4 className="text-xl font-black">{title}</h4>
                 <p className="mt-2 text-sm text-slate-500 font-medium">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
@@ -190,7 +194,7 @@ export function CredentialsModal({
                 <X size={20} />
               </button>
             </div>
-            <div className="p-8 space-y-4">
+            <div className="p-8 space-y-4 overflow-y-auto flex-1">
               <div className="surface-muted rounded-2xl p-4">
                 <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">E-mailadres</p>
                 <p className="mt-2 font-bold text-slate-800 break-all">{email}</p>
@@ -211,6 +215,7 @@ export function CredentialsModal({
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body,
   );
 }
