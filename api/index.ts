@@ -34,6 +34,7 @@ import {
   saveSwapsData,
   saveUpdatesData,
   saveUsersData,
+  DIVERSIONS_BUCKET,
   summarizeDiversionChanges,
   summarizePlanningCodeChanges,
   summarizeServiceChanges,
@@ -418,6 +419,48 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving diversions data:", errorMessage);
     res.status(500).json({ error: "Failed to save data", details: errorMessage });
+  }
+});
+
+app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) {
+      return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
+    }
+
+    const id = String(req.body?.id || "").trim();
+    const filename = String(req.body?.filename || "").trim();
+    const dataUrl = String(req.body?.dataUrl || "");
+    if (!id) {
+      return res.status(400).json({ error: "Diversion-id ontbreekt." });
+    }
+    if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
+      return res.status(400).json({ error: "Geef een PDF-bestand met een .pdf extensie." });
+    }
+    const base64Match = dataUrl.match(/^data:application\/pdf;base64,(.+)$/);
+    if (!base64Match) {
+      return res.status(400).json({ error: "Bestand is geen geldige PDF (base64 data URL verwacht)." });
+    }
+    const buffer = Buffer.from(base64Match[1], "base64");
+    if (buffer.length === 0) {
+      return res.status(400).json({ error: "Bestand is leeg." });
+    }
+
+    // Stable path per diversion: re-uploaden = upsert overschrijft het oude bestand.
+    const storagePath = `${id}.pdf`;
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(DIVERSIONS_BUCKET)
+      .upload(storagePath, buffer, {
+        contentType: "application/pdf",
+        upsert: true,
+      });
+    if (uploadError) throw uploadError;
+
+    const { data: publicData } = supabaseAdmin.storage.from(DIVERSIONS_BUCKET).getPublicUrl(storagePath);
+    res.json({ publicUrl: publicData.publicUrl, storagePath, filename, sizeBytes: buffer.length });
+  } catch (err: any) {
+    console.error("Diversion PDF upload error:", err);
+    res.status(500).json({ error: "Kon PDF niet uploaden.", details: err.message });
   }
 });
 

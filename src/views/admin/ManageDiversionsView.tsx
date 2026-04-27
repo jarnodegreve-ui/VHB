@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, FileText, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
-import { cn, notify } from '../../lib/ui';
+import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 
 export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
@@ -19,6 +19,43 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     mapCoordinates: ''
   });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const uploadPdf = async (id: string, file: File): Promise<string | null> => {
+    if (file.size > 20 * 1024 * 1024) {
+      notify('PDF is te groot (max 20 MB).', 'error');
+      return null;
+    }
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      notify('Alleen PDF-bestanden zijn toegestaan.', 'error');
+      return null;
+    }
+    const dataUrl: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(reader.error ?? new Error('Kon bestand niet lezen.'));
+      reader.readAsDataURL(file);
+    });
+    const response = await fetch('/api/diversions/pdf', {
+      method: 'POST',
+      headers: await getSupabaseAuthHeaders(),
+      body: JSON.stringify({ id, filename: file.name, dataUrl }),
+    });
+    const text = await response.text();
+    if (!response.ok) {
+      let detail = text;
+      try { detail = JSON.parse(text).error || detail; } catch {}
+      notify(`Upload mislukt: ${detail}`, 'error');
+      return null;
+    }
+    try {
+      const result = JSON.parse(text);
+      return result.publicUrl as string;
+    } catch {
+      notify('Onverwachte respons van server na upload.', 'error');
+      return null;
+    }
+  };
 
   const handleOpenAdd = () => {
     setEditingId(null);
@@ -51,38 +88,40 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    let pdfUrl = '';
+    if (isUploading) return;
+
+    const targetId = editingId || Date.now().toString();
+    let uploadedPdfUrl: string | null = null;
+
     if (pdfFile) {
-      pdfUrl = await new Promise((resolve) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.readAsDataURL(pdfFile);
-      });
+      setIsUploading(true);
+      uploadedPdfUrl = await uploadPdf(targetId, pdfFile);
+      setIsUploading(false);
+      if (!uploadedPdfUrl) return; // notify reeds getoond
     }
 
     if (editingId) {
-      const updatedDiversions = diversions.map(d => 
-        d.id === editingId 
-          ? { 
-              ...d, 
-              ...formData, 
-              pdfUrl: pdfUrl || d.pdfUrl 
-            } as Diversion 
+      const updatedDiversions = diversions.map(d =>
+        d.id === editingId
+          ? {
+              ...d,
+              ...formData,
+              pdfUrl: uploadedPdfUrl || d.pdfUrl,
+            } as Diversion
           : d
       );
       onSave(updatedDiversions);
     } else {
       const diversionToAdd: Diversion = {
-        id: Date.now().toString(),
+        id: targetId,
         line: formData.line || 'Alle',
         title: formData.title || '',
         description: formData.description || '',
         startDate: formData.startDate || '',
         endDate: formData.endDate,
         severity: formData.severity as any || 'medium',
-        pdfUrl: pdfUrl || undefined,
-        mapCoordinates: formData.mapCoordinates || undefined
+        pdfUrl: uploadedPdfUrl || undefined,
+        mapCoordinates: formData.mapCoordinates || undefined,
       };
       onSave([...diversions, diversionToAdd]);
     }
@@ -307,11 +346,12 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   >
                     Annuleren
                   </button>
-                  <button 
+                  <button
                     type="submit"
-                    className="btn-primary ios-pressable flex-1 px-4 py-4 uppercase tracking-widest text-xs"
+                    disabled={isUploading}
+                    className="btn-primary ios-pressable flex-1 px-4 py-4 uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    {editingId ? 'Opslaan' : 'Toevoegen'}
+                    {isUploading ? 'PDF uploaden...' : editingId ? 'Opslaan' : 'Toevoegen'}
                   </button>
                 </div>
               </form>

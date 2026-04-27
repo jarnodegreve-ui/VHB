@@ -577,6 +577,15 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
 
 // --- Diversions ---
 
+export const DIVERSIONS_BUCKET = "diversions";
+
+export const removeDiversionPdfs = async (diversionIds: string[]) => {
+  if (!supabaseAdmin || diversionIds.length === 0) return;
+  const paths = diversionIds.map((id) => `${id}.pdf`);
+  const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove(paths);
+  if (error) console.warn("Diversion PDF storage cleanup error:", error);
+};
+
 export const getDiversionsData = async () => {
   const client = requireDb();
   const { data, error } = await client.from('diversions').select('*');
@@ -599,6 +608,8 @@ export const saveDiversionsData = async (data: any) => {
   if (idsToDelete.length > 0) {
     const { error: deleteError } = await client.from('diversions').delete().in('id', idsToDelete);
     if (deleteError) throw deleteError;
+    // Best-effort: also remove the PDFs from Storage.
+    await removeDiversionPdfs(idsToDelete);
   }
 
   if (incoming.length > 0) {
