@@ -912,7 +912,7 @@ export default function App() {
           />
           <NavItem
             icon={<Calendar size={20} />}
-            label="Verlof Aanvragen"
+            label="Verlof"
             active={currentView === 'verlof'}
             onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }}
             badge={unseenLeaveDecisionCount}
