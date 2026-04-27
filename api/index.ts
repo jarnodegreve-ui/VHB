@@ -5,6 +5,7 @@ import path from "path";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
+import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
@@ -551,7 +552,7 @@ app.get("/api/leave", authenticate, async (req, res) => {
   }
 });
 
-app.post("/api/leave", authenticate, async (req, res) => {
+app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
     if (!Array.isArray(newData)) {
@@ -589,9 +590,10 @@ app.post("/api/leave", authenticate, async (req, res) => {
 
       if (prev.status !== next.status && next.status !== "pending") {
         let action: string | null = null;
-        if (next.status === "approved") action = "Verlof goedgekeurd";
-        else if (next.status === "rejected") action = "Verlof afgewezen";
-        else if (next.status === "cancelled") action = "Verlof geannuleerd";
+        let emailAction: LeaveDecisionAction | null = null;
+        if (next.status === "approved") { action = "Verlof goedgekeurd"; emailAction = "approved"; }
+        else if (next.status === "rejected") { action = "Verlof afgewezen"; emailAction = "rejected"; }
+        else if (next.status === "cancelled") { action = "Verlof geannuleerd"; emailAction = "cancelled"; }
         if (!action) continue;
         await logActivity(
           req,
@@ -599,6 +601,23 @@ app.post("/api/leave", authenticate, async (req, res) => {
           action,
           `${userName(next.userId)} — ${typeLabel} (${period}).`,
         );
+
+        // E-mail de aanvrager — niet de actor zelf (geen mail naar jezelf
+        // als planner/admin je eigen verlof beslist).
+        if (emailAction && req.appUser && String(req.appUser.id) !== String(next.userId)) {
+          const recipient = users.find((u) => String(u.id) === String(next.userId));
+          if (recipient?.email) {
+            await sendLeaveDecisionEmail({
+              to: recipient.email,
+              recipientName: recipient.name,
+              decidedByName: req.appUser.name || "Planning",
+              typeLabel,
+              startDate: next.startDate,
+              endDate: next.endDate,
+              action: emailAction,
+            });
+          }
+        }
       }
     }
 
