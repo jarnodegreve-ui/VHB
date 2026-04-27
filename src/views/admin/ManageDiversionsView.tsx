@@ -216,13 +216,13 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       <AnimatePresence>
         {showModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[28px] w-full max-w-lg overflow-hidden"
+              className="glass-modal rounded-[28px] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
             >
-              <div className="p-8 border-b border-white/70 flex items-center justify-between">
+              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
                 <div>
                   <h4 className="text-xl font-black">{editingId ? 'Omleiding Bewerken' : 'Nieuwe Omleiding'}</h4>
                   <p className="text-sm text-slate-500 font-medium">Vul de details in en upload eventueel een PDF.</p>
@@ -231,7 +231,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <X size={24} />
                 </button>
               </div>
-              <form onSubmit={handleSubmit} className="p-8 space-y-5">
+              <form onSubmit={handleSubmit} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Lijn(en)</label>
