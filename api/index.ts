@@ -546,9 +546,49 @@ app.get("/api/swaps", authenticate, async (req, res) => {
   }
 });
 
-app.post("/api/swaps", authenticate, async (req, res) => {
+app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
+    if (!Array.isArray(newData)) {
+      return res.status(400).json({ error: "Invalid data format. Expected an array." });
+    }
+
+    if (req.appUser?.role === "chauffeur") {
+      const previousSwaps = await getSwapsData();
+      const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
+      const newById = new Map(newData.map((s: any) => [String(s.id), s]));
+      const selfId = String(req.appUser.id);
+
+      // Verwijderingen: alleen eigen pending-aanvragen mogen weg.
+      for (const [id, prev] of previousById) {
+        if (!newById.has(id)) {
+          if (String(prev.requesterId) !== selfId || prev.status !== "pending") {
+            return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen openstaande wisselverzoeken intrekken." });
+          }
+        }
+      }
+
+      // Toevoegingen + wijzigingen
+      for (const next of newData) {
+        const prev = previousById.get(String(next.id));
+        if (!prev) {
+          if (String(next.requesterId) !== selfId) {
+            return res.status(403).json({ error: "Niet toegestaan: je kan alleen voor jezelf een wisselverzoek indienen." });
+          }
+          if (next.status !== "pending") {
+            return res.status(403).json({ error: "Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'." });
+          }
+        } else {
+          const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason"] as const;
+          for (const f of fields) {
+            if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
+              return res.status(403).json({ error: "Niet toegestaan: bestaande wisselverzoeken kunnen alleen door planner/admin worden aangepast." });
+            }
+          }
+        }
+      }
+    }
+
     await saveSwapsData(newData);
     res.json({ success: true });
   } catch (err: any) {
@@ -583,6 +623,44 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       klein_verlet: "Klein verlet",
     };
     const formatLeaveType = (t: string) => leaveTypeLabels[t] ?? t;
+
+    // Server-side autorisatie: chauffeurs kunnen alleen eigen pending-aanvragen
+    // toevoegen of intrekken. Status-overgangen en bewerken van anderen vereist
+    // planner/admin.
+    if (req.appUser?.role === "chauffeur") {
+      const newById = new Map(newData.map((r: any) => [String(r.id), r]));
+      const selfId = String(req.appUser.id);
+
+      for (const [id, prev] of previousById) {
+        if (!newById.has(String(id))) {
+          if (String(prev.userId) !== selfId || prev.status !== "pending") {
+            return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen openstaande verlofaanvraag intrekken." });
+          }
+        }
+      }
+
+      for (const next of newData) {
+        const prev = previousById.get(String(next.id));
+        if (!prev) {
+          if (String(next.userId) !== selfId) {
+            return res.status(403).json({ error: "Niet toegestaan: je kan alleen voor jezelf verlof aanvragen." });
+          }
+          if (next.status !== "pending") {
+            return res.status(403).json({ error: "Niet toegestaan: nieuwe verlofaanvragen starten als 'pending'." });
+          }
+          if (next.decidedAt) {
+            return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
+          }
+        } else {
+          const fields = ["userId", "startDate", "endDate", "type", "status", "comment", "createdAt", "decidedAt"] as const;
+          for (const f of fields) {
+            if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
+              return res.status(403).json({ error: "Niet toegestaan: bestaande verlofaanvragen kunnen alleen door planner/admin worden aangepast." });
+            }
+          }
+        }
+      }
+    }
 
     await saveLeaveData(newData);
 
