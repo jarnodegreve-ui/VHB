@@ -24,7 +24,7 @@ export interface SwapRecord {
   shiftId: string;
   requesterId: string;
   targetDriverId?: string;
-  status: "pending" | "approved" | "rejected" | "completed";
+  status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
   createdAt: string;
   reason?: string;
 }
@@ -75,7 +75,7 @@ export interface ActivityLogRecord {
   createdAt: string;
   actorName: string;
   actorRole: Role;
-  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth" | "leave";
+  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth" | "leave" | "swaps";
   action: string;
   details: string;
 }
@@ -85,7 +85,7 @@ export type ActivityLogRow = {
   created_at: string;
   actor_name: string;
   actor_role: Role;
-  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth" | "leave";
+  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth" | "leave" | "swaps";
   action: string;
   details: string;
 };

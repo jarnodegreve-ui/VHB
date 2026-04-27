@@ -553,10 +553,11 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       return res.status(400).json({ error: "Invalid data format. Expected an array." });
     }
 
+    const previousSwaps = await getSwapsData();
+    const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
+    const newById = new Map(newData.map((s: any) => [String(s.id), s]));
+
     if (req.appUser?.role === "chauffeur") {
-      const previousSwaps = await getSwapsData();
-      const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
-      const newById = new Map(newData.map((s: any) => [String(s.id), s]));
       const selfId = String(req.appUser.id);
 
       // Verwijderingen: alleen eigen pending-aanvragen mogen weg.
@@ -590,6 +591,28 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     }
 
     await saveSwapsData(newData);
+
+    // Activity log: detecteer state-overgangen en nieuwe aanvragen.
+    const usersForLog = await getUsersData();
+    const userName = (id: string) => usersForLog.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
+    for (const next of newData) {
+      const prev = previousById.get(String(next.id));
+      if (!prev) {
+        await logActivity(req, "swaps", "Wisselverzoek aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor wissel.`);
+        continue;
+      }
+      if (prev.status !== next.status && next.status !== "pending") {
+        let action: string | null = null;
+        if (next.status === "approved") action = "Wisselverzoek goedgekeurd";
+        else if (next.status === "rejected") action = "Wisselverzoek afgewezen";
+        else if (next.status === "cancelled") action = "Wisselverzoek geannuleerd";
+        else if (next.status === "completed") action = "Wisselverzoek voltooid";
+        if (action) {
+          await logActivity(req, "swaps", action, `${userName(next.requesterId)} — wisselverzoek (${prev.status} → ${next.status}).`);
+        }
+      }
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save swaps", details: err.message });

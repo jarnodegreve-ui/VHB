@@ -29,7 +29,7 @@ export interface SwapRequest {
   shiftId: string;
   requesterId: string;
   targetDriverId?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'completed';
+  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
   createdAt: string;
   reason?: string;
 }
@@ -111,7 +111,7 @@ export interface ActivityLogEntry {
   createdAt: string;
   actorName: string;
   actorRole: Role;
-  category: 'users' | 'planning' | 'planning_codes' | 'services' | 'diversions' | 'updates' | 'auth' | 'leave';
+  category: 'users' | 'planning' | 'planning_codes' | 'services' | 'diversions' | 'updates' | 'auth' | 'leave' | 'swaps';
   action: string;
   details: string;
 }

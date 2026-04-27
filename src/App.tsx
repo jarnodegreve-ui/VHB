@@ -407,7 +407,13 @@ export default function App() {
       });
       if (response.ok) {
         setSwaps(newSwaps);
+        if (currentUser?.role === 'admin') {
+          await fetchActivityLog();
+        }
         showToast('Ruilverzoek bijgewerkt.', 'success');
+      } else {
+        const err = await response.json().catch(() => ({} as any));
+        showToast(err.error || 'Opslaan van ruilverzoeken is mislukt.', 'error');
       }
     } catch (error) {
       console.error('Error saving swaps:', error);

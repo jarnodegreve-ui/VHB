@@ -49,6 +49,26 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
     onSave(updatedSwaps);
   };
 
+  const handleCancel = (swapId: string) => {
+    if (!window.confirm('Dit goedgekeurd wisselverzoek annuleren?')) return;
+    handleStatusUpdate(swapId, 'cancelled');
+  };
+
+  const statusLabels: Record<SwapRequest['status'], string> = {
+    pending: 'In behandeling',
+    approved: 'Goedgekeurd',
+    rejected: 'Afgewezen',
+    cancelled: 'Geannuleerd',
+    completed: 'Voltooid',
+  };
+  const statusStyles: Record<SwapRequest['status'], string> = {
+    pending: 'bg-amber-50 text-amber-600',
+    approved: 'bg-emerald-50 text-emerald-600',
+    rejected: 'bg-red-50 text-red-600',
+    cancelled: 'bg-slate-100 text-slate-500',
+    completed: 'bg-blue-50 text-blue-600',
+  };
+
   return (
     <PageShell>
       <PageHeader
@@ -77,10 +97,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   </div>
                   <span className={cn(
                     "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
-                    swap.status === 'pending' ? "bg-amber-50 text-amber-600" :
-                    swap.status === 'approved' ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"
+                    statusStyles[swap.status]
                   )}>
-                    {swap.status}
+                    {statusLabels[swap.status]}
                   </span>
                 </div>
               );
@@ -119,8 +138,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
       </div>
 
       {isPlanner && (() => {
-        const pendingSwaps = swaps.filter(s => {
-          if (s.status !== 'pending') return false;
+        const actionableSwaps = swaps.filter(s => {
+          if (s.status !== 'pending' && s.status !== 'approved') return false;
           const requester = users.find(u => u.id === s.requesterId);
           const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
           const isMe = s.requesterId === user.id;
@@ -130,7 +149,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
         return (
           <div className="space-y-4 pt-8">
-            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Goedkeuring Planner</h4>
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Beheer Wisselverzoeken</h4>
             <div className="surface-table rounded-[32px] overflow-hidden">
               {/* Desktop table */}
               <div className="hidden md:block overflow-x-auto">
@@ -144,7 +163,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {pendingSwaps.map(swap => {
+                    {actionableSwaps.map(swap => {
                       const shift = shifts.find(s => s.id === swap.shiftId);
                       const requester = users.find(u => u.id === swap.requesterId);
                       return (
@@ -152,11 +171,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                           <td className="px-6 py-4 font-bold text-sm">{requester?.name}</td>
                           <td className="px-6 py-4 text-xs font-medium">{shift?.date} ({shift?.startTime} - {shift?.endTime})</td>
                           <td className="px-6 py-4">
-                            <span className="px-2 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-widest">Pending</span>
+                            <span className={cn('px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                           </td>
                           <td className="px-6 py-4 flex gap-2">
-                            <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="p-2 text-green-600 hover:bg-green-50 rounded-lg transition-colors"><Plus size={18} /></button>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
+                            {swap.status === 'pending' && (
+                              <>
+                                <button onClick={() => handleStatusUpdate(swap.id, 'approved')} title="Goedkeuren" className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Plus size={18} /></button>
+                                <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
+                              </>
+                            )}
+                            {swap.status === 'approved' && (
+                              <button onClick={() => handleCancel(swap.id)} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">Annuleren</button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -167,7 +193,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
               {/* Mobile cards */}
               <div className="md:hidden divide-y divide-slate-100">
-                {pendingSwaps.map(swap => {
+                {actionableSwaps.map(swap => {
                   const shift = shifts.find(s => s.id === swap.shiftId);
                   const requester = users.find(u => u.id === swap.requesterId);
                   return (
@@ -177,21 +203,30 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                           <p className="font-black text-slate-800 tracking-tight">{requester?.name}</p>
                           <p className="text-xs font-medium text-slate-500 mt-1">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
                         </div>
-                        <span className="px-3 py-1 bg-amber-50 text-amber-600 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0">Pending</span>
+                        <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                       </div>
                       <div className="flex gap-2 pt-1">
-                        <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-green-50 text-green-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
-                          <Plus size={16} /> Goedkeuren
-                        </button>
-                        <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
-                          <X size={16} /> Afwijzen
-                        </button>
+                        {swap.status === 'pending' && (
+                          <>
+                            <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                              <Plus size={16} /> Goedkeuren
+                            </button>
+                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                              <X size={16} /> Afwijzen
+                            </button>
+                          </>
+                        )}
+                        {swap.status === 'approved' && (
+                          <button onClick={() => handleCancel(swap.id)} className="flex-1 py-3 rounded-2xl border border-red-200 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 transition-colors">
+                            Annuleren
+                          </button>
+                        )}
                       </div>
                     </div>
                   );
                 })}
-                {pendingSwaps.length === 0 && (
-                  <p className="text-center text-slate-400 font-medium italic py-8">Geen openstaande aanvragen.</p>
+                {actionableSwaps.length === 0 && (
+                  <p className="text-center text-slate-400 font-medium italic py-8">Geen openstaande of goedgekeurde wisselverzoeken.</p>
                 )}
               </div>
             </div>
