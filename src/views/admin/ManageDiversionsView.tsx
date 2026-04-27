@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, FileText, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
@@ -213,9 +214,10 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         )}
       </div>
 
+      {createPortal(
       <AnimatePresence>
         {showModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -358,9 +360,11 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
             </motion.div>
           </div>
         )}
-      </AnimatePresence>
+      </AnimatePresence>,
+        document.body,
+      )}
 
-      <ConfirmationModal 
+      <ConfirmationModal
         isOpen={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
         onConfirm={handleDelete}
