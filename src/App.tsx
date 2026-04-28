@@ -834,7 +834,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-40 lg:hidden"
           />
         )}
       </AnimatePresence>
@@ -842,7 +842,7 @@ export default function App() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 w-[19rem] panel-dark ios-soft-panel m-3 mr-0 rounded-[30px] flex flex-col z-50 transition-transform duration-500 transform lg:relative lg:translate-x-0 overflow-hidden",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark ios-soft-panel m-3 mr-0 rounded-[30px] flex flex-col z-50 transition-transform duration-500 transform lg:w-[19rem] lg:max-w-none lg:relative lg:translate-x-0 overflow-hidden",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.28, 0.64, 1)' }}
