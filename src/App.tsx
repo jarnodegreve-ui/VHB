@@ -1148,7 +1148,7 @@ export default function App() {
               )}
               {resolvedCurrentView === 'beheer-debug' && (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyDebugView currentUser={currentUser!} shifts={shifts} onSaveShifts={savePlanning} />
+                  <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
                 </Suspense>
               )}
             </motion.div>

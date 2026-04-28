@@ -1,13 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, FlaskConical } from 'lucide-react';
-import type { Shift, User } from '../../types';
+import type { Service, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
 
 const TEST_SHIFT_ID_PREFIX = 'test-shift-';
-const TEST_SHIFT_NUMBER = '2101';
 
-export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: User; shifts: Shift[]; onSaveShifts: (s: Shift[]) => void | Promise<void> }) {
+export function DebugView({ currentUser, shifts, services, onSaveShifts }: { currentUser: User; shifts: Shift[]; services: Service[]; onSaveShifts: (s: Shift[]) => void | Promise<void> }) {
   const [healthData, setHealthData] = useState<any>(null);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
@@ -74,21 +73,26 @@ export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: 
   const myTestShifts = shifts.filter((s) => s.driverId === currentUser.id && (s.id.startsWith(TEST_SHIFT_ID_PREFIX) || s.line === 'TEST-DEMO'));
 
   const addTestShift = async () => {
+    if (services.length === 0) {
+      notify('Geen diensten beschikbaar — voeg eerst een dienst toe via Beheer Dienstoverzicht.', 'error');
+      return;
+    }
+    const sample = services[0];
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const dateStr = tomorrow.toISOString().split('T')[0];
     const newShift: Shift = {
       id: `${TEST_SHIFT_ID_PREFIX}${Date.now()}`,
       date: dateStr,
-      startTime: '08:00',
-      endTime: '12:00',
-      line: TEST_SHIFT_NUMBER,
+      startTime: sample.startTime,
+      endTime: sample.endTime,
+      line: sample.serviceNumber,
       busNumber: 'TEST',
       loopnr: '1',
       driverId: currentUser.id,
     };
     await onSaveShifts([...shifts, newShift]);
-    notify(`Fictieve dienst ${TEST_SHIFT_NUMBER} toegevoegd op ${dateStr}.`, 'success');
+    notify(`Fictieve dienst ${sample.serviceNumber} (${sample.startTime}-${sample.endTime}) toegevoegd op ${dateStr}.`, 'success');
   };
 
   const clearTestShifts = async () => {
@@ -199,7 +203,7 @@ export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: 
           <div className="flex-1">
             <h4 className="text-slate-900 font-black text-lg mb-2">Test-omgeving</h4>
             <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Test-diensten verschijnen met dienstnummer <code className="bg-slate-100 px-1 rounded font-black">{TEST_SHIFT_NUMBER}</code> en busnummer <code className="bg-slate-100 px-1 rounded font-black">TEST</code>, en kunnen op elk moment worden opgeruimd.
+              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <code className="bg-slate-100 px-1 rounded font-black">TEST</code> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <button
