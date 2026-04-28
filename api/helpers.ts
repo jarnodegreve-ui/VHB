@@ -78,6 +78,7 @@ export const toPublicSwap = (swap: any): SwapRecord => ({
   status: swap.status,
   createdAt: String(swap.createdAt ?? swap.createdat),
   reason: swap.reason ?? undefined,
+  decidedAt: swap.decidedAt ?? swap.decidedat ?? undefined,
 });
 
 export const toDatabaseSwap = (swap: SwapRecord) => ({
@@ -88,6 +89,7 @@ export const toDatabaseSwap = (swap: SwapRecord) => ({
   status: swap.status,
   createdat: String(swap.createdAt),
   reason: swap.reason || null,
+  decidedat: swap.decidedAt || null,
 });
 
 export const toPublicDiversion = (d: any): DiversionRecord => ({

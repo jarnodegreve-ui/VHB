@@ -246,11 +246,41 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     // codes of niet-gematchte chauffeurs zijn, weiger de import zodat de
     // planner eerst de oorzaak kan rechtzetten.
     const generatedPlanning = await buildPlanningFromMatrix(rows);
-    if (generatedPlanning.summary.unknownCodes.length > 0 || generatedPlanning.summary.unmatchedDrivers.length > 0) {
+
+    // Verlof-conflict-detectie: import overschrijft anders een goedgekeurd
+    // verlof met een dienst-toewijzing.
+    const [leaveForCheck, usersForCheck] = await Promise.all([getLeaveData(), getUsersData()]);
+    const userNameForConflict = (id: string) => usersForCheck.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
+    const approvedLeaveForCheck = leaveForCheck.filter((l) => l.status === "approved");
+    const verlofConflictsForImport: Array<{ driverId: string; driverName: string; date: string; serviceNumber: string; leaveStart: string; leaveEnd: string }> = [];
+    for (const shift of generatedPlanning.shifts) {
+      const overlap = approvedLeaveForCheck.find((l) =>
+        String(l.userId) === String(shift.driverId) &&
+        l.startDate <= shift.date &&
+        l.endDate >= shift.date,
+      );
+      if (overlap) {
+        verlofConflictsForImport.push({
+          driverId: shift.driverId,
+          driverName: userNameForConflict(shift.driverId),
+          date: shift.date,
+          serviceNumber: shift.line,
+          leaveStart: overlap.startDate,
+          leaveEnd: overlap.endDate,
+        });
+      }
+    }
+
+    if (
+      generatedPlanning.summary.unknownCodes.length > 0 ||
+      generatedPlanning.summary.unmatchedDrivers.length > 0 ||
+      verlofConflictsForImport.length > 0
+    ) {
       return res.status(400).json({
-        error: "Import geblokkeerd: er zijn onbekende codes of niet-gematchte chauffeurs. Los deze eerst op en probeer opnieuw.",
+        error: "Import geblokkeerd: er zijn onbekende codes, niet-gematchte chauffeurs of verlof-conflicten. Los deze eerst op en probeer opnieuw.",
         unknownCodes: generatedPlanning.summary.unknownCodes,
         unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+        verlofConflicts: verlofConflictsForImport,
         blocked: true,
       });
     }
@@ -303,6 +333,33 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     const endDate = importedDates[importedDates.length - 1] || null;
     const generatedPlanning = await buildPlanningFromMatrix(rows);
 
+    // Verlof-conflicten detecteren: een chauffeur staat met goedgekeurd
+    // verlof én tegelijk met een dienst in de nieuwe import.
+    const [leave, users] = await Promise.all([getLeaveData(), getUsersData()]);
+    const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
+    const approvedLeave = leave.filter((l) => l.status === "approved");
+    const verlofConflicts: Array<{
+      driverId: string; driverName: string; date: string; serviceNumber: string;
+      leaveStart: string; leaveEnd: string;
+    }> = [];
+    for (const shift of generatedPlanning.shifts) {
+      const overlap = approvedLeave.find((l) =>
+        String(l.userId) === String(shift.driverId) &&
+        l.startDate <= shift.date &&
+        l.endDate >= shift.date,
+      );
+      if (overlap) {
+        verlofConflicts.push({
+          driverId: shift.driverId,
+          driverName: userName(shift.driverId),
+          date: shift.date,
+          serviceNumber: shift.line,
+          leaveStart: overlap.startDate,
+          leaveEnd: overlap.endDate,
+        });
+      }
+    }
+
     res.json({
       success: true,
       importedDays: rows.length,
@@ -313,6 +370,7 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       startDate,
       endDate,
       importedDates,
+      verlofConflicts,
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
     });
@@ -334,6 +392,59 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
     res.json({ success: true, ...generatedPlanning.summary });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to sync planning from matrix", details: err.message });
+  }
+});
+
+// Geeft alle in-app beslissingen (verlof, dienstruil) sinds de vorige
+// matrix-import. Helpt de planner om Excel up-to-date te brengen voor de
+// volgende upload, zodat goedgekeurde wijzigingen niet stilzwijgend
+// overschreven worden.
+app.get("/api/planning-matrix/changes-since-import", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const history = await getPlanningMatrixHistory();
+    const lastImport = history.length > 0 ? history[0] : null;
+    const sinceIso = lastImport?.createdAt || new Date(0).toISOString();
+
+    const [leave, swaps, users] = await Promise.all([getLeaveData(), getSwapsData(), getUsersData()]);
+    const userName = (id?: string | null) => {
+      if (!id) return null;
+      return users.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
+    };
+
+    const approvedLeave = leave
+      .filter((l) => l.status === "approved" && l.decidedAt && l.decidedAt > sinceIso)
+      .map((l) => ({
+        id: l.id,
+        userId: l.userId,
+        userName: userName(l.userId),
+        startDate: l.startDate,
+        endDate: l.endDate,
+        type: l.type,
+        decidedAt: l.decidedAt,
+      }));
+
+    const approvedSwaps = swaps
+      .filter((s) => s.status === "approved" && s.decidedAt && s.decidedAt > sinceIso)
+      .map((s) => ({
+        id: s.id,
+        requesterId: s.requesterId,
+        requesterName: userName(s.requesterId),
+        targetDriverId: s.targetDriverId,
+        targetName: userName(s.targetDriverId),
+        shiftId: s.shiftId,
+        decidedAt: s.decidedAt,
+      }));
+
+    res.json({
+      lastImport: lastImport
+        ? { createdAt: lastImport.createdAt, importedDays: lastImport.importedDays }
+        : null,
+      approvedLeave,
+      approvedSwaps,
+    });
+  } catch (err: any) {
+    console.error("Changes-since-import error:", err);
+    res.status(500).json({ error: "Kon wijzigingen niet ophalen.", details: err.message });
   }
 });
 
@@ -585,8 +696,11 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (String(next.targetDriverId) === selfId) {
             return res.status(400).json({ error: "Je kan geen dienstruil aan jezelf aanvragen." });
           }
+          if (next.decidedAt) {
+            return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
+          }
         } else {
-          const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason"] as const;
+          const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason", "decidedAt"] as const;
           for (const f of fields) {
             if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
               return res.status(403).json({ error: "Niet toegestaan: bestaande wisselverzoeken kunnen alleen door planner/admin worden aangepast." });

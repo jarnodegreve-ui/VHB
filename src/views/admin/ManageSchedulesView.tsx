@@ -1,7 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Activity, Database, Info, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { Activity, AlertTriangle, ChevronDown, Database, Info, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
@@ -27,8 +27,35 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     importedDates: string[];
     unknownCodes: string[];
     unmatchedDrivers: string[];
+    verlofConflicts: Array<{ driverId: string; driverName: string; date: string; serviceNumber: string; leaveStart: string; leaveEnd: string }>;
   }>(null);
-  const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0);
+  const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0 || matrixPreview.verlofConflicts.length > 0);
+
+  // Wijzigingen sinds laatste matrix-import (in-app verlof + dienstruil
+  // beslissingen die nog niet in Excel verwerkt zijn).
+  const [changesSinceImport, setChangesSinceImport] = useState<null | {
+    lastImport: { createdAt: string; importedDays: number } | null;
+    approvedLeave: Array<{ id: string; userName: string | null; startDate: string; endDate: string; type: string; decidedAt?: string }>;
+    approvedSwaps: Array<{ id: string; requesterName: string | null; targetName: string | null; decidedAt?: string }>;
+  }>(null);
+  const [changesExpanded, setChangesExpanded] = useState(false);
+
+  const fetchChangesSince = async () => {
+    try {
+      const response = await fetch('/api/planning-matrix/changes-since-import', {
+        headers: await getSupabaseAuthHeaders(),
+      });
+      if (!response.ok) return;
+      const data = await response.json();
+      setChangesSinceImport(data);
+    } catch (err) {
+      console.error('changes-since-import fetch error:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchChangesSince();
+  }, []);
   const matrixOverwriteSummary = useMemo(() => {
     if (!matrixPreview) return null;
 
@@ -101,6 +128,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         importedDates: Array.isArray(data.importedDates) ? data.importedDates : [],
         unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
         unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
+        verlofConflicts: Array.isArray(data.verlofConflicts) ? data.verlofConflicts : [],
       });
       setMatrixPreviewOpen(true);
     } catch (error: any) {
@@ -146,6 +174,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       setPendingMatrixCsv('');
       setMatrixPreview(null);
       await onMatrixImported();
+      await fetchChangesSince();
     } catch (error: any) {
       notify(`CSV-import mislukt: ${error.message}`, 'error');
     } finally {
@@ -265,6 +294,84 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 <li>Controleer eerst de preview op onbekende codes en niet-gematchte chauffeurs.</li>
                 <li>Gebruik JSON alleen voor oudere exports in rij-per-dienst formaat.</li>
               </ol>
+            </div>
+          )}
+
+          {changesSinceImport && (changesSinceImport.approvedLeave.length > 0 || changesSinceImport.approvedSwaps.length > 0) && (
+            <div className="mt-6 rounded-[28px] border border-amber-200 bg-amber-50/70 p-5">
+              <button
+                type="button"
+                onClick={() => setChangesExpanded((v) => !v)}
+                className="flex w-full items-start justify-between gap-4 text-left"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Voor je uploadt</p>
+                    <h4 className="mt-1 text-base font-black tracking-tight text-slate-900">
+                      Wijzigingen sinds vorige import
+                    </h4>
+                    <p className="mt-1 text-sm font-medium text-amber-900">
+                      {changesSinceImport.approvedLeave.length} verlof
+                      {changesSinceImport.approvedLeave.length === 1 ? '' : 'en'}
+                      {' en '}
+                      {changesSinceImport.approvedSwaps.length} dienstruil
+                      {changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'}
+                      {' goedgekeurd. '}
+                      Controleer of deze in jouw Excel verwerkt zijn.
+                    </p>
+                    {changesSinceImport.lastImport && (
+                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
+                        Laatste import: {new Date(changesSinceImport.lastImport.createdAt).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })}
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <ChevronDown size={18} className={cn('text-amber-700 transition-transform shrink-0 mt-1', changesExpanded && 'rotate-180')} />
+              </button>
+              {changesExpanded && (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">Verlof</p>
+                    {changesSinceImport.approvedLeave.length > 0 ? (
+                      <ul className="space-y-1.5 text-xs text-slate-700">
+                        {changesSinceImport.approvedLeave.map((l) => (
+                          <li key={l.id} className="flex items-start gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                            <span>
+                              <span className="font-black">{l.userName}</span>
+                              {' — '}
+                              {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
+                              {l.type ? ` (${l.type})` : ''}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs italic text-slate-400">Geen.</p>
+                    )}
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">Dienstruil</p>
+                    {changesSinceImport.approvedSwaps.length > 0 ? (
+                      <ul className="space-y-1.5 text-xs text-slate-700">
+                        {changesSinceImport.approvedSwaps.map((s) => (
+                          <li key={s.id} className="flex items-start gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                            <span>
+                              <span className="font-black">{s.requesterName}</span>
+                              {' → '}
+                              <span className="font-black">{s.targetName || '?'}</span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-xs italic text-slate-400">Geen.</p>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -553,12 +660,42 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         matrixPreviewHasIssues ? "text-red-800" : "text-emerald-800"
                       )}>
                         {matrixPreviewHasIssues
-                          ? 'Deze matrix bevat onbekende codes of niet-gematchte chauffeurs. Los deze eerst op (planningscodes toevoegen, naam in chauffeurslijst corrigeren of Excel aanpassen) voor je opnieuw importeert.'
-                          : 'Geen onbekende codes of niet-gematchte chauffeurs gevonden. Deze import is klaar om de planning te vervangen.'}
+                          ? 'Deze matrix bevat onbekende codes, niet-gematchte chauffeurs of conflicten met goedgekeurd verlof. Los deze eerst op (planningscodes toevoegen, naam corrigeren, Excel aanpassen of verlof annuleren) voor je opnieuw importeert.'
+                          : 'Geen onbekende codes, niet-gematchte chauffeurs of verlof-conflicten. Deze import is klaar om de planning te vervangen.'}
                       </p>
                     </div>
                   </div>
                 </div>
+
+                {matrixPreview.verlofConflicts.length > 0 && (
+                  <div className="rounded-[24px] border border-red-200 bg-red-50/70 p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl bg-red-100 p-2 text-red-700"><AlertTriangle size={18} /></div>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-700">Conflict met goedgekeurd verlof</p>
+                        <p className="mt-1 text-sm font-medium text-red-900">
+                          De Excel zet {matrixPreview.verlofConflicts.length} dienst{matrixPreview.verlofConflicts.length === 1 ? '' : 'en'} op een chauffeur die voor die dag al goedgekeurd verlof heeft.
+                        </p>
+                        <ul className="mt-3 space-y-1 text-xs text-red-900">
+                          {matrixPreview.verlofConflicts.slice(0, 8).map((c, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
+                              <span>
+                                <span className="font-black">{c.driverName}</span>
+                                {' — '}
+                                {c.date}, dienst {c.serviceNumber}
+                                <span className="text-red-600"> · verlof {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
+                              </span>
+                            </li>
+                          ))}
+                          {matrixPreview.verlofConflicts.length > 8 && (
+                            <li className="italic text-red-700">… en nog {matrixPreview.verlofConflicts.length - 8} meer.</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid gap-4 md:grid-cols-4">
                   <div className="surface-muted rounded-2xl p-4">

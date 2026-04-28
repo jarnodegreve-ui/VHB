@@ -32,6 +32,7 @@ export interface SwapRequest {
   status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
   createdAt: string;
   reason?: string;
+  decidedAt?: string;
 }
 
 export interface LeaveRequest {

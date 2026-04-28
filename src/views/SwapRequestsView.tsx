@@ -53,7 +53,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   };
 
   const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status']) => {
-    const updatedSwaps = swaps.map(s => s.id === swapId ? { ...s, status: newStatus } : s);
+    const decidedAt = newStatus !== 'pending' ? new Date().toISOString() : undefined;
+    const updatedSwaps = swaps.map(s =>
+      s.id === swapId
+        ? { ...s, status: newStatus, ...(decidedAt ? { decidedAt } : {}) }
+        : s
+    );
     onSave(updatedSwaps);
   };
 

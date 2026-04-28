@@ -27,6 +27,7 @@ export interface SwapRecord {
   status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
   createdAt: string;
   reason?: string;
+  decidedAt?: string;
 }
 
 export interface LeaveRecord {
