@@ -1072,7 +1072,7 @@ export default function App() {
 
         {/* Content Area */}
         <div
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 pb-24 pt-4 md:px-7 lg:pb-8"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 pt-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
           onScroll={(e) => {
             const next = (e.currentTarget.scrollTop ?? 0) > 8;
             setIsScrolled((current) => (current === next ? current : next));
@@ -1156,7 +1156,7 @@ export default function App() {
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 py-3 flex justify-between items-center z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-between items-center z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
           <MobileNavItem 
             icon={<LayoutDashboard size={20} />} 
             active={currentView === 'dashboard'} 
