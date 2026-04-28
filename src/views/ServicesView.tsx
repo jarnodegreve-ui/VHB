@@ -18,6 +18,9 @@ export function ServicesView({ services }: { services: Service[] }) {
     });
   };
 
+  const hasValidTime = (start?: string, end?: string) =>
+    !!start && !!end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end);
+
   const filteredServices = services.filter(s => 
     s.serviceNumber.toLowerCase().includes(searchQuery.toLowerCase())
   ).sort((a, b) => {
@@ -145,7 +148,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                     </div>
                   </td>
                   <td className="px-8 py-5">
-                    {s.startTime2 ? (
+                    {hasValidTime(s.startTime2, s.endTime2) ? (
                       <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime2} - {s.endTime2}
@@ -153,7 +156,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                     ) : null}
                   </td>
                   <td className="px-8 py-5">
-                    {s.startTime3 ? (
+                    {hasValidTime(s.startTime3, s.endTime3) ? (
                       <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime3} - {s.endTime3}
@@ -198,7 +201,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                         {s.startTime} - {s.endTime}
                       </div>
                     </div>
-                    {s.startTime2 && (
+                    {hasValidTime(s.startTime2, s.endTime2) && (
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</span>
                         <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
@@ -207,7 +210,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                         </div>
                       </div>
                     )}
-                    {s.startTime3 && (
+                    {hasValidTime(s.startTime3, s.endTime3) && (
                       <div className="flex flex-col gap-1">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</span>
                         <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
