@@ -1156,7 +1156,10 @@ export default function App() {
         </div>
 
         {/* Mobile Bottom Navigation */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-between items-center z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)]">
+        <div className={cn(
+          "lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-between items-center z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] transition-opacity duration-200",
+          isSidebarOpen && "opacity-0 pointer-events-none"
+        )}>
           <MobileNavItem 
             icon={<LayoutDashboard size={20} />} 
             active={currentView === 'dashboard'} 
