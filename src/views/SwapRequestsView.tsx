@@ -130,16 +130,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
               const requester = users.find(u => u.id === swap.requesterId);
               return (
                 <div key={swap.id} className="surface-card p-6 rounded-[32px] space-y-4">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-start justify-between gap-3">
                     <div>
                       <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst {getServiceNumber(shift)}</p>
                       <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Door: {requester?.name}</p>
                     </div>
-                    <button className="px-4 py-2 bg-oker-50 text-oker-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-oker-100 transition-all">
-                      Overnemen
-                    </button>
+                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-600 shrink-0">
+                      Wacht op planner
+                    </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
                 </div>
