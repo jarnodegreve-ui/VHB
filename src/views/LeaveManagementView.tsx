@@ -144,7 +144,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   return (
     <PageShell width="6xl" className="pb-20">
       <PageHeader
-        title="Verlof & Afwezigheid"
+        title="Verlof"
         description="Beheer verlofaanvragen en bekijk de bezetting."
         actions={(
           <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
