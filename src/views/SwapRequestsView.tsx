@@ -79,7 +79,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
             onClick={() => setShowOfferModal(true)}
             className="btn-primary ios-pressable px-6 py-3 text-sm"
           >
-            Dienst Aanbieden
+            Dienstruil aanvragen
           </button>
         )}
       />
@@ -247,7 +247,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
-                <h4 className="text-xl font-black">Dienst Aanbieden</h4>
+                <h4 className="text-xl font-black">Dienstruil aanvragen</h4>
                 <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
               </div>
               <form onSubmit={handleOfferShift} className="p-8 space-y-6 overflow-y-auto flex-1">
