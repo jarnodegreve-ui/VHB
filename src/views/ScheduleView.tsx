@@ -2,19 +2,10 @@ import { Calendar, Clock, Download } from 'lucide-react';
 import type { Shift, User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 
-export function ScheduleView({ user, shifts: allShifts, users }: { user: User, shifts: Shift[], users: User[] }) {
-  const shifts = allShifts.filter(s => {
-    const isMe = s.driverId === user.id;
-    const isPlanner = user.role !== 'chauffeur';
-    
-    if (isMe) return true;
-    if (!isPlanner) return false;
-
-    const driver = users.find(u => u.id === s.driverId);
-    if (driver?.name.toLowerCase() === 'beheerder') return false;
-    
-    return true;
-  });
+export function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: Shift[], users: User[] }) {
+  // 'Mijn Rooster' = strict eigen diensten. Voor het overzicht van alle
+  // chauffeurs gaat planner/admin naar Beheer Roosters.
+  const shifts = allShifts.filter(s => s.driverId === user.id);
   const formatShiftDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
     weekday: 'long',
     day: '2-digit',
