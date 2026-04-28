@@ -1072,7 +1072,7 @@ export default function App() {
 
         {/* Content Area */}
         <div
-          className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-7 lg:pb-8"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 pb-24 pt-4 md:px-7 lg:pb-8"
           onScroll={(e) => {
             const next = (e.currentTarget.scrollTop ?? 0) > 8;
             setIsScrolled((current) => (current === next ? current : next));
@@ -1085,7 +1085,7 @@ export default function App() {
               animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
               exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(6px)' }}
               transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto max-w-[1360px]"
+              className="mx-auto w-full max-w-[1360px]"
             >
               {resolvedCurrentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
