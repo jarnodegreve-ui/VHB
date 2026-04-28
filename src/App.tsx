@@ -825,7 +825,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="flex h-screen bg-transparent text-slate-900 font-sans overflow-hidden">
+      <div className="flex h-screen w-screen bg-transparent text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -1033,7 +1033,7 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 flex flex-col overflow-hidden relative">
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
         {/* Header */}
         <header className={cn(
           "mx-3 mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 shrink-0 z-30 relative transition-shadow duration-500",
