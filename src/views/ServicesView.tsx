@@ -8,6 +8,15 @@ export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'number' | 'time'>('number');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
+
+  const toggleExpanded = (id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
 
   const filteredServices = services.filter(s => 
     s.serviceNumber.toLowerCase().includes(searchQuery.toLowerCase())
@@ -157,48 +166,67 @@ export function ServicesView({ services }: { services: Service[] }) {
           </table>
         </div>
 
-        {/* Mobile Card View */}
+        {/* Mobile Card View — uitklapbaar */}
         <div className="md:hidden divide-y divide-slate-50">
-          {filteredServices.map(s => (
-            <div key={s.id} className="p-6 space-y-4 hover:bg-slate-50/50 transition-colors">
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
-                <div className="glass-chip px-3 py-1 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-widest">
-                  Dienst
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-1 gap-3">
-                <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 1</span>
-                  <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
-                    <Clock size={14} className="text-oker-500" />
-                    {s.startTime} - {s.endTime}
+          {filteredServices.map((s) => {
+            const isExpanded = expandedIds.has(s.id);
+            return (
+              <div key={s.id} className="hover:bg-slate-50/50 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(s.id)}
+                  aria-expanded={isExpanded}
+                  className="w-full p-6 flex items-center justify-between gap-3 text-left"
+                >
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                    <span className="text-xs font-medium text-slate-400 truncate">
+                      {s.startTime} - {s.endTime}
+                      {s.startTime3 ? ` · ${s.endTime3}` : s.startTime2 ? ` · ${s.endTime2}` : ''}
+                    </span>
                   </div>
-                </div>
-
-                {s.startTime2 && (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</span>
-                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
-                      <Clock size={14} className="text-oker-500" />
-                      {s.startTime2} - {s.endTime2}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="glass-chip px-3 py-1 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                      Dienst
                     </div>
+                    <ChevronDown
+                      size={18}
+                      className={cn('text-slate-400 transition-transform duration-200', isExpanded && 'rotate-180')}
+                    />
+                  </div>
+                </button>
+                {isExpanded && (
+                  <div className="px-6 pb-6 grid grid-cols-1 gap-3">
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 1</span>
+                      <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                        <Clock size={14} className="text-oker-500" />
+                        {s.startTime} - {s.endTime}
+                      </div>
+                    </div>
+                    {s.startTime2 && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</span>
+                        <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                          <Clock size={14} className="text-oker-500" />
+                          {s.startTime2} - {s.endTime2}
+                        </div>
+                      </div>
+                    )}
+                    {s.startTime3 && (
+                      <div className="flex flex-col gap-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</span>
+                        <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                          <Clock size={14} className="text-oker-500" />
+                          {s.startTime3} - {s.endTime3}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-
-                {s.startTime3 && (
-                  <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</span>
-                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
-                      <Clock size={14} className="text-oker-500" />
-                      {s.startTime3} - {s.endTime3}
-                    </div>
-                  </div>
-                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         {filteredServices.length === 0 && (
