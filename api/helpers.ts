@@ -1,5 +1,6 @@
 import type {
   AppUser,
+  DiversionRecord,
   IncomingUser,
   LeaveRecord,
   PlanningCodeRecord,
@@ -87,6 +88,30 @@ export const toDatabaseSwap = (swap: SwapRecord) => ({
   status: swap.status,
   createdat: String(swap.createdAt),
   reason: swap.reason || null,
+});
+
+export const toPublicDiversion = (d: any): DiversionRecord => ({
+  id: String(d.id),
+  line: d.line ?? "",
+  title: d.title ?? "",
+  description: d.description ?? "",
+  startDate: d.startDate ?? d.startdate ?? "",
+  endDate: d.endDate ?? d.enddate ?? undefined,
+  severity: d.severity,
+  pdfUrl: d.pdfUrl ?? d.pdfurl ?? undefined,
+  mapCoordinates: d.mapCoordinates ?? d.mapcoordinates ?? undefined,
+});
+
+export const toDatabaseDiversion = (d: DiversionRecord) => ({
+  id: String(d.id),
+  line: d.line,
+  title: d.title,
+  description: d.description,
+  startdate: d.startDate,
+  enddate: d.endDate || null,
+  severity: d.severity,
+  pdfurl: d.pdfUrl || null,
+  mapcoordinates: d.mapCoordinates || null,
 });
 
 export const toPublicLeave = (leave: any): LeaveRecord => ({

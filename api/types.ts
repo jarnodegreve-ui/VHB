@@ -102,6 +102,18 @@ export type PlanningMatrixImportHistoryRow = {
   unmatched_drivers: string[];
 };
 
+export interface DiversionRecord {
+  id: string;
+  line: string;
+  title: string;
+  description: string;
+  startDate: string;
+  endDate?: string;
+  severity: "low" | "medium" | "high";
+  pdfUrl?: string;
+  mapCoordinates?: string;
+}
+
 export interface ServiceRecord {
   id: string;
   serviceNumber: string;

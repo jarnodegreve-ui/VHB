@@ -17,7 +17,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     description: '',
     startDate: new Date().toISOString().split('T')[0],
     severity: 'medium',
-    mapCoordinates: ''
   });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -66,7 +65,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       description: '',
       startDate: new Date().toISOString().split('T')[0],
       severity: 'medium',
-      mapCoordinates: ''
     });
     setPdfFile(null);
     setShowModal(true);
@@ -81,7 +79,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       startDate: div.startDate,
       endDate: div.endDate,
       severity: div.severity,
-      mapCoordinates: div.mapCoordinates || ''
     });
     setPdfFile(null);
     setShowModal(true);
@@ -122,7 +119,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         endDate: formData.endDate,
         severity: formData.severity as any || 'medium',
         pdfUrl: uploadedPdfUrl || undefined,
-        mapCoordinates: formData.mapCoordinates || undefined,
       };
       onSave([...diversions, diversionToAdd]);
     }
@@ -304,18 +300,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                       className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
                     />
                   </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Kaart Coördinaten (JSON Array)</label>
-                  <textarea 
-                    rows={2}
-                    value={formData.mapCoordinates}
-                    onChange={(e) => setFormData({...formData, mapCoordinates: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm resize-none"
-                    placeholder='[[lat, lng], [lat, lng], ...]'
-                  />
-                  <p className="text-[9px] text-slate-400 font-medium px-1">Plak hier een JSON array van coördinaten om de route op de kaart te tonen.</p>
                 </div>
 
                 <div className="space-y-2">

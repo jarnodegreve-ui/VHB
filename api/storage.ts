@@ -20,12 +20,14 @@ import {
   normalizeEmail,
   randomPassword,
   sanitizeIncomingUser,
+  toDatabaseDiversion,
   toDatabaseLeave,
   toDatabasePlanningCode,
   toDatabaseSwap,
   toDatabaseUpdate,
   toDatabaseUser,
   toLookupToken,
+  toPublicDiversion,
   toPublicLeave,
   toPublicPlanningCode,
   toPublicSwap,
@@ -590,13 +592,13 @@ export const getDiversionsData = async () => {
   const client = requireDb();
   const { data, error } = await client.from('diversions').select('*');
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(toPublicDiversion);
 };
 
 export const saveDiversionsData = async (data: any) => {
   const client = requireDb();
-  const incoming = Array.isArray(data) ? data : [];
-  const incomingIds = new Set(incoming.map((d: any) => String(d.id)));
+  const normalized = Array.isArray(data) ? data.map(toPublicDiversion) : [];
+  const incomingIds = new Set(normalized.map((d) => String(d.id)));
 
   const { data: existing, error: fetchError } = await client.from('diversions').select('id');
   if (fetchError) throw fetchError;
@@ -612,8 +614,8 @@ export const saveDiversionsData = async (data: any) => {
     await removeDiversionPdfs(idsToDelete);
   }
 
-  if (incoming.length > 0) {
-    const { error: upsertError } = await client.from('diversions').upsert(incoming);
+  if (normalized.length > 0) {
+    const { error: upsertError } = await client.from('diversions').upsert(normalized.map(toDatabaseDiversion));
     if (upsertError) throw upsertError;
   }
 };
