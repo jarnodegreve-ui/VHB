@@ -274,8 +274,10 @@
     transition-duration: 140ms;
   }
 
+  /* Container for the inner shine pseudo-element. We do NOT force position
+     here — that would override Tailwind's `fixed`/`absolute` utilities at
+     equal specificity. Each consumer sets its own positioning. */
   .ios-soft-panel {
-    position: relative;
     overflow: hidden;
   }
 
