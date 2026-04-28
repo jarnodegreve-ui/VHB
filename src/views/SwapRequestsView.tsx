@@ -9,39 +9,46 @@ import { PageHeader, PageShell } from '../components/ui';
 export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [selectedShift, setSelectedShift] = useState<string>('');
+  const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
   const [reason, setReason] = useState('');
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const myShifts = shifts.filter(s => s.driverId === user.id);
   const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
+  const eligibleTargetDrivers = users
+    .filter((u) => u.id !== user.id && u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
+    .sort((a, b) => a.name.localeCompare(b.name));
   const mySwaps = swaps.filter(s => s.requesterId === user.id);
   const availableSwaps = swaps.filter(s => {
     if (s.status !== 'pending' || s.requesterId === user.id) return false;
-    
+    // Tonen aan de chauffeur waaraan de ruil gericht is. Planner/admin
+    // ziet alle openstaande ruilverzoeken (zoals voorheen).
+    if (!isPlanner && s.targetDriverId && s.targetDriverId !== user.id) return false;
+
     const requester = users.find(u => u.id === s.requesterId);
     const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
-    const isMe = s.requesterId === user.id; // Already covered by s.requesterId !== user.id but for clarity
-
-    if (isBeheerder && !isMe) return false;
+    if (isBeheerder) return false;
     return true;
   });
 
   const handleOfferShift = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedShift) return;
+    if (!selectedShift || !selectedTargetDriver) return;
 
     const newSwap: SwapRequest = {
       id: Date.now().toString(),
       shiftId: selectedShift,
       requesterId: user.id,
+      targetDriverId: selectedTargetDriver,
       status: 'pending',
       createdAt: new Date().toISOString(),
-      reason
+      reason,
     };
 
     onSave([...swaps, newSwap]);
     setShowOfferModal(false);
     setSelectedShift('');
+    setSelectedTargetDriver('');
     setReason('');
   };
 
@@ -90,12 +97,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
           {mySwaps.length > 0 ? (
             mySwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
+              const target = users.find(u => u.id === swap.targetDriverId);
               return (
                 <div key={swap.id} className="surface-card p-6 rounded-[32px] flex items-center justify-between gap-4">
                   <div>
                     <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst {getServiceNumber(shift)}</p>
                     <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
                     <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
+                    {target && (
+                      <p className="text-xs font-bold text-slate-500 mt-2">Aan: <span className="text-slate-800">{target.name}</span></p>
+                    )}
                   </div>
                   <span className={cn(
                     "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
@@ -272,16 +283,35 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   </select>
                 </div>
                 <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Aan welke collega?</label>
+                  <select
+                    value={selectedTargetDriver}
+                    onChange={(e) => setSelectedTargetDriver(e.target.value)}
+                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    required
+                    disabled={eligibleTargetDrivers.length === 0}
+                  >
+                    <option value="">Kies een collega...</option>
+                    {eligibleTargetDrivers.map((u) => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reden (optioneel)</label>
-                  <textarea 
-                    value={reason} 
+                  <textarea
+                    value={reason}
                     onChange={(e) => setReason(e.target.value)}
                     className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none h-24 resize-none"
                     placeholder="Waarom wil je ruilen?"
                   />
                 </div>
-                <button type="submit" className="btn-primary ios-pressable w-full py-4">
-                  Aanbieden
+                <button
+                  type="submit"
+                  disabled={!selectedShift || !selectedTargetDriver}
+                  className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  Dienstruil indienen
                 </button>
               </form>
             </motion.div>
