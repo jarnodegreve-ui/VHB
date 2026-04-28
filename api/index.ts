@@ -579,6 +579,12 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (next.status !== "pending") {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'." });
           }
+          if (!next.targetDriverId || String(next.targetDriverId).trim() === "") {
+            return res.status(400).json({ error: "Selecteer een collega aan wie je de dienstruil aanvraagt." });
+          }
+          if (String(next.targetDriverId) === selfId) {
+            return res.status(400).json({ error: "Je kan geen dienstruil aan jezelf aanvragen." });
+          }
         } else {
           const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason"] as const;
           for (const f of fields) {
