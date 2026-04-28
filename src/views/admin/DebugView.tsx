@@ -4,7 +4,8 @@ import type { Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
 
-const TEST_SHIFT_LINE = 'TEST-DEMO';
+const TEST_SHIFT_ID_PREFIX = 'test-shift-';
+const TEST_SHIFT_NUMBER = '2101';
 
 export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: User; shifts: Shift[]; onSaveShifts: (s: Shift[]) => void | Promise<void> }) {
   const [healthData, setHealthData] = useState<any>(null);
@@ -70,24 +71,24 @@ export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: 
     }
   };
 
-  const myTestShifts = shifts.filter((s) => s.driverId === currentUser.id && s.line === TEST_SHIFT_LINE);
+  const myTestShifts = shifts.filter((s) => s.driverId === currentUser.id && (s.id.startsWith(TEST_SHIFT_ID_PREFIX) || s.line === 'TEST-DEMO'));
 
   const addTestShift = async () => {
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
     const dateStr = tomorrow.toISOString().split('T')[0];
     const newShift: Shift = {
-      id: `test-${Date.now()}`,
+      id: `${TEST_SHIFT_ID_PREFIX}${Date.now()}`,
       date: dateStr,
       startTime: '08:00',
       endTime: '12:00',
-      line: TEST_SHIFT_LINE,
+      line: TEST_SHIFT_NUMBER,
       busNumber: 'TEST',
       loopnr: '1',
       driverId: currentUser.id,
     };
     await onSaveShifts([...shifts, newShift]);
-    notify(`Fictieve dienst toegevoegd op ${dateStr}.`, 'success');
+    notify(`Fictieve dienst ${TEST_SHIFT_NUMBER} toegevoegd op ${dateStr}.`, 'success');
   };
 
   const clearTestShifts = async () => {
@@ -95,7 +96,7 @@ export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: 
       notify('Geen fictieve diensten op je naam gevonden.', 'info');
       return;
     }
-    const remaining = shifts.filter((s) => !(s.driverId === currentUser.id && s.line === TEST_SHIFT_LINE));
+    const remaining = shifts.filter((s) => !(s.driverId === currentUser.id && (s.id.startsWith(TEST_SHIFT_ID_PREFIX) || s.line === 'TEST-DEMO')));
     await onSaveShifts(remaining);
     notify(`${myTestShifts.length} fictieve dienst${myTestShifts.length === 1 ? '' : 'en'} verwijderd.`, 'success');
   };
@@ -198,7 +199,7 @@ export function DebugView({ currentUser, shifts, onSaveShifts }: { currentUser: 
           <div className="flex-1">
             <h4 className="text-slate-900 font-black text-lg mb-2">Test-omgeving</h4>
             <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, wissel aanvragen, ...) te testen zonder een test-account aan te maken. Diensten gemarkeerd met lijn <code className="bg-slate-100 px-1 rounded font-black">TEST-DEMO</code> kunnen op elk moment worden opgeruimd.
+              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Test-diensten verschijnen met dienstnummer <code className="bg-slate-100 px-1 rounded font-black">{TEST_SHIFT_NUMBER}</code> en busnummer <code className="bg-slate-100 px-1 rounded font-black">TEST</code>, en kunnen op elk moment worden opgeruimd.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <button
