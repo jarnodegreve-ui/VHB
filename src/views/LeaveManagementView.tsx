@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, User } from '../types';
-import { cn } from '../lib/ui';
+import { cn, notify } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
@@ -48,6 +48,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   const handleRequestLeave = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.startDate || !formData.endDate) {
+      return;
+    }
+    if (formData.startDate < today) {
+      notify('Je kan geen verlof aanvragen in het verleden.', 'error');
       return;
     }
     onSave([...leaveRequests, { id: Date.now().toString(), userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]);
@@ -360,17 +364,21 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                       const inRange = isDateWithinDraftRange(dateStr);
                       const edge = isDraftBoundary(dateStr);
                       const isToday = dateStr === today;
+                      const isPast = dateStr < today;
                       return (
                         <button
                           key={day}
                           type="button"
+                          disabled={isPast}
+                          title={isPast ? 'Je kan geen verlof aanvragen in het verleden.' : undefined}
                           onClick={() => handleCalendarDateClick(dateStr)}
                           className={cn(
                             'aspect-square rounded-xl text-xs font-black transition-colors flex items-center justify-center',
-                            !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
-                            inRange && !edge && 'bg-oker-100 text-oker-700',
-                            edge && 'bg-oker-500 text-white shadow-sm shadow-oker-500/30',
-                            isToday && !inRange && !edge && 'ring-1 ring-oker-300',
+                            isPast && 'text-slate-300 cursor-not-allowed',
+                            !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
+                            !isPast && inRange && !edge && 'bg-oker-100 text-oker-700',
+                            !isPast && edge && 'bg-oker-500 text-white shadow-sm shadow-oker-500/30',
+                            !isPast && isToday && !inRange && !edge && 'ring-1 ring-oker-300',
                           )}
                         >
                           {day}
