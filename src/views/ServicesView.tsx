@@ -178,13 +178,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                   aria-expanded={isExpanded}
                   className="w-full p-6 flex items-center justify-between gap-3 text-left"
                 >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
-                    <span className="text-xs font-medium text-slate-400 truncate">
-                      {s.startTime} - {s.endTime}
-                      {s.startTime3 ? ` · ${s.endTime3}` : s.startTime2 ? ` · ${s.endTime2}` : ''}
-                    </span>
-                  </div>
+                  <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
                   <div className="flex items-center gap-3 shrink-0">
                     <div className="glass-chip px-3 py-1 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-widest">
                       Dienst
