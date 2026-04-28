@@ -88,7 +88,12 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     e.preventDefault();
     if (isUploading) return;
 
-    const targetId = editingId || Date.now().toString();
+    // UUID i.p.v. Date.now() zodat de Storage-path (${id}.pdf) niet te
+    // raden is voor wie het URL-patroon kent.
+    const generateId = () => (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function')
+      ? crypto.randomUUID()
+      : `d-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const targetId = editingId || generateId();
     let uploadedPdfUrl: string | null = null;
 
     if (pdfFile) {

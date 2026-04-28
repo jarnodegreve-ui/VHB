@@ -871,16 +871,35 @@ app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Auth
       return res.status(400).json({ error: "Bestand is leeg." });
     }
 
-    // Stable storage path so public URLs stay valid across uploads.
-    const storagePath = "current.pdf";
+    // Vorige record ophalen zodat we het oude bestand kunnen verwijderen.
+    const { data: existing } = await supabaseAdmin
+      .from("ritblaadje")
+      .select("storage_path")
+      .eq("id", "current")
+      .maybeSingle();
+
+    // Onvoorspelbaar pad per upload — verhindert dat ex-medewerkers met
+    // een oud URL het laatste ritblaadje kunnen blijven opvragen.
+    const randomSlug = (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function")
+      ? crypto.randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const storagePath = `current-${randomSlug}.pdf`;
 
     const { error: uploadError } = await supabaseAdmin.storage
       .from(RITBLAADJE_BUCKET)
       .upload(storagePath, buffer, {
         contentType: "application/pdf",
-        upsert: true,
+        upsert: false,
       });
     if (uploadError) throw uploadError;
+
+    // Oud bestand opruimen (best-effort).
+    if (existing?.storage_path && existing.storage_path !== storagePath) {
+      const { error: removeError } = await supabaseAdmin.storage
+        .from(RITBLAADJE_BUCKET)
+        .remove([existing.storage_path]);
+      if (removeError) console.warn("Oude ritblaadje-bestand kon niet worden verwijderd:", removeError);
+    }
 
     const row = {
       id: "current",
