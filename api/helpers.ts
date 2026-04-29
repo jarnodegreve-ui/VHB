@@ -254,23 +254,31 @@ export const parsePlanningMatrixCsv = (csvContent: string): PlanningMatrixRow[] 
     .map((name, offset) => ({ index: offset + 2, name: name.trim() }))
     .filter((column) => column.name.length > 0);
 
-  return lines.slice(1).map((line, rowIndex) => {
-    const cells = line.split(";");
-    const sourceDate = normalizePlanningMatrixDate(cells[0] || "");
-    const assignments: Record<string, string> = {};
+  const isValidIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-    for (const driver of driverColumns) {
-      const rawCode = String(cells[driver.index] || "").trim();
-      if (!rawCode) continue;
-      assignments[driver.name] = rawCode;
-    }
+  return lines
+    .slice(1)
+    .map((line, rowIndex) => {
+      const cells = line.split(";");
+      const sourceDate = normalizePlanningMatrixDate(cells[0] || "");
+      const assignments: Record<string, string> = {};
 
-    return {
-      id: `${sourceDate}-${rowIndex + 1}`,
-      source_date: sourceDate,
-      day_type: String(cells[1] || "").trim(),
-      assignments,
-      raw_row: line,
-    };
-  });
+      for (const driver of driverColumns) {
+        const rawCode = String(cells[driver.index] || "").trim();
+        if (!rawCode) continue;
+        assignments[driver.name] = rawCode;
+      }
+
+      return {
+        id: `${sourceDate}-${rowIndex + 1}`,
+        source_date: sourceDate,
+        day_type: String(cells[1] || "").trim(),
+        assignments,
+        raw_row: line,
+      };
+    })
+    // Sla rijen over zonder geldige datum (totaal-/info-rijen onderaan
+    // de Excel veroorzaken anders een 'invalid input syntax for type
+    // date' fout op de DB-insert).
+    .filter((row) => isValidIsoDate(row.source_date));
 };
