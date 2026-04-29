@@ -297,83 +297,97 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             </div>
           )}
 
-          {changesSinceImport && (changesSinceImport.approvedLeave.length > 0 || changesSinceImport.approvedSwaps.length > 0) && (
-            <div className="mt-6 rounded-[28px] border border-amber-200 bg-amber-50/70 p-5">
-              <button
-                type="button"
-                onClick={() => setChangesExpanded((v) => !v)}
-                className="flex w-full items-start justify-between gap-4 text-left"
-              >
-                <div className="flex items-start gap-3">
-                  <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Voor je uploadt</p>
-                    <h4 className="mt-1 text-base font-black tracking-tight text-slate-900">
-                      Wijzigingen sinds vorige import
-                    </h4>
-                    <p className="mt-1 text-sm font-medium text-amber-900">
-                      {changesSinceImport.approvedLeave.length} verlof
-                      {changesSinceImport.approvedLeave.length === 1 ? '' : 'en'}
-                      {' en '}
-                      {changesSinceImport.approvedSwaps.length} dienstruil
-                      {changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'}
-                      {' goedgekeurd. '}
-                      Controleer of deze in jouw Excel verwerkt zijn.
-                    </p>
-                    {changesSinceImport.lastImport && (
-                      <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-amber-600">
-                        Laatste import: {new Date(changesSinceImport.lastImport.createdAt).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })}
+          {(() => {
+            if (!changesSinceImport) {
+              return null;
+            }
+            const totalChanges = changesSinceImport.approvedLeave.length + changesSinceImport.approvedSwaps.length;
+            const hasChanges = totalChanges > 0;
+            const lastImportLabel = changesSinceImport.lastImport
+              ? new Date(changesSinceImport.lastImport.createdAt).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
+              : 'nog nooit';
+
+            const accent = hasChanges
+              ? { border: 'border-amber-200', bg: 'bg-amber-50/70', icon: 'bg-amber-100 text-amber-700', eyebrow: 'text-amber-700', body: 'text-amber-900', stamp: 'text-amber-600' }
+              : { border: 'border-emerald-200', bg: 'bg-emerald-50/70', icon: 'bg-emerald-100 text-emerald-700', eyebrow: 'text-emerald-700', body: 'text-emerald-900', stamp: 'text-emerald-600' };
+
+            return (
+              <div className={cn('mt-6 rounded-[28px] border p-5', accent.border, accent.bg)}>
+                <button
+                  type="button"
+                  onClick={() => hasChanges && setChangesExpanded((v) => !v)}
+                  disabled={!hasChanges}
+                  className="flex w-full items-start justify-between gap-4 text-left disabled:cursor-default"
+                >
+                  <div className="flex items-start gap-3">
+                    <div className={cn('rounded-2xl p-2', accent.icon)}>
+                      {hasChanges ? <AlertTriangle size={18} /> : <Activity size={18} />}
+                    </div>
+                    <div>
+                      <p className={cn('text-[10px] font-black uppercase tracking-[0.18em]', accent.eyebrow)}>Voor je uploadt</p>
+                      <h4 className="mt-1 text-base font-black tracking-tight text-slate-900">
+                        {hasChanges ? 'Wijzigingen sinds vorige import' : 'Geen wijzigingen sinds vorige import'}
+                      </h4>
+                      <p className={cn('mt-1 text-sm font-medium', accent.body)}>
+                        {hasChanges
+                          ? `${changesSinceImport.approvedLeave.length} verlof${changesSinceImport.approvedLeave.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd. Controleer of deze in jouw Excel verwerkt zijn.`
+                          : 'Geen verloven of dienstruilen goedgekeurd in de app sinds je laatste matrix-import. Excel en app zijn in sync.'}
                       </p>
-                    )}
+                      <p className={cn('mt-1 text-[10px] font-bold uppercase tracking-widest', accent.stamp)}>
+                        Laatste import: {lastImportLabel}
+                      </p>
+                    </div>
                   </div>
-                </div>
-                <ChevronDown size={18} className={cn('text-amber-700 transition-transform shrink-0 mt-1', changesExpanded && 'rotate-180')} />
-              </button>
-              {changesExpanded && (
-                <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">Verlof</p>
-                    {changesSinceImport.approvedLeave.length > 0 ? (
-                      <ul className="space-y-1.5 text-xs text-slate-700">
-                        {changesSinceImport.approvedLeave.map((l) => (
-                          <li key={l.id} className="flex items-start gap-2">
-                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                            <span>
-                              <span className="font-black">{l.userName}</span>
-                              {' — '}
-                              {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
-                              {l.type ? ` (${l.type})` : ''}
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs italic text-slate-400">Geen.</p>
-                    )}
+                  {hasChanges && (
+                    <ChevronDown size={18} className={cn('shrink-0 mt-1 transition-transform', accent.eyebrow, changesExpanded && 'rotate-180')} />
+                  )}
+                </button>
+                {hasChanges && changesExpanded && (
+                  <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                    <div>
+                      <p className={cn('text-[10px] font-black uppercase tracking-widest mb-2', accent.eyebrow)}>Verlof</p>
+                      {changesSinceImport.approvedLeave.length > 0 ? (
+                        <ul className="space-y-1.5 text-xs text-slate-700">
+                          {changesSinceImport.approvedLeave.map((l) => (
+                            <li key={l.id} className="flex items-start gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                              <span>
+                                <span className="font-black">{l.userName}</span>
+                                {' — '}
+                                {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
+                                {l.type ? ` (${l.type})` : ''}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs italic text-slate-400">Geen.</p>
+                      )}
+                    </div>
+                    <div>
+                      <p className={cn('text-[10px] font-black uppercase tracking-widest mb-2', accent.eyebrow)}>Dienstruil</p>
+                      {changesSinceImport.approvedSwaps.length > 0 ? (
+                        <ul className="space-y-1.5 text-xs text-slate-700">
+                          {changesSinceImport.approvedSwaps.map((s) => (
+                            <li key={s.id} className="flex items-start gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                              <span>
+                                <span className="font-black">{s.requesterName}</span>
+                                {' → '}
+                                <span className="font-black">{s.targetName || '?'}</span>
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="text-xs italic text-slate-400">Geen.</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-black uppercase tracking-widest text-amber-700 mb-2">Dienstruil</p>
-                    {changesSinceImport.approvedSwaps.length > 0 ? (
-                      <ul className="space-y-1.5 text-xs text-slate-700">
-                        {changesSinceImport.approvedSwaps.map((s) => (
-                          <li key={s.id} className="flex items-start gap-2">
-                            <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                            <span>
-                              <span className="font-black">{s.requesterName}</span>
-                              {' → '}
-                              <span className="font-black">{s.targetName || '?'}</span>
-                            </span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-xs italic text-slate-400">Geen.</p>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+                )}
+              </div>
+            );
+          })()}
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
             <div className="rounded-[28px] border border-emerald-100 bg-emerald-50/70 p-5">
