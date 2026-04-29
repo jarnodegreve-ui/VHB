@@ -395,7 +395,19 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
   ]);
   const rows = inputRows ?? await getPlanningMatrixRows();
 
-  const usersByName = new Map(users.map((user): [string, AppUser] => [toLookupToken(user.name), user]));
+  // Volgorde-onafhankelijke naam-key zodat 'Pascal Duysburgh' en
+  // 'Duysburgh Pascal' beide naar dezelfde gebruiker matchen.
+  const sortedNameToken = (name: string) =>
+    toLookupToken(name)
+      .split(/\s+/)
+      .filter(Boolean)
+      .sort()
+      .join(" ");
+  const usersByName = new Map<string, AppUser>();
+  for (const u of users) {
+    usersByName.set(toLookupToken(u.name), u);
+    usersByName.set(sortedNameToken(u.name), u);
+  }
   const servicesByNumber = new Map(
     (services as ServiceRecord[]).map((service): [string, ServiceRecord] => [toLookupToken(service.serviceNumber), service]),
   );
@@ -409,7 +421,9 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
 
   for (const row of rows) {
     for (const [driverName, rawCode] of Object.entries(row.assignments || {}) as Array<[string, string]>) {
-      const driver = usersByName.get(toLookupToken(driverName));
+      const driver =
+        usersByName.get(toLookupToken(driverName)) ||
+        usersByName.get(sortedNameToken(driverName));
       if (!driver) {
         unmatchedDrivers.add(driverName);
         continue;
