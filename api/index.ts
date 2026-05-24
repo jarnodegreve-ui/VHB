@@ -489,13 +489,11 @@ app.get("/api/users", authenticate, async (req: AuthenticatedRequest, res) => {
 });
 
 app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
-  console.log("POST /api/users called. Body size:", req.body?.length);
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
       const previousUsers = await getUsersData();
       await saveUsersData(newData);
-      console.log("Users saved successfully. Count:", newData.length);
       await logActivity(
         req,
         "users",
@@ -504,7 +502,6 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       );
       res.json({ success: true, count: newData.length });
     } else {
-      console.warn("Invalid data format for POST /api/users:", typeof newData);
       res.status(400).json({ error: "Invalid data format. Expected an array." });
     }
   } catch (err: any) {

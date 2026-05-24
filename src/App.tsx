@@ -581,10 +581,8 @@ export default function App() {
 
   const fetchUsers = async (accessToken = session?.access_token) => {
     try {
-      console.log('Fetching users...');
       const response = await apiFetch('/api/users', {}, accessToken);
       const data = await response.json();
-      console.log('Users fetched:', data?.length);
       if (data && Array.isArray(data)) {
         setUsers(data);
       }
@@ -595,14 +593,12 @@ export default function App() {
 
   const saveUsers = async (newUsers: Array<User & { password?: string }>) => {
     try {
-      console.log('Saving users, count:', newUsers.length);
       setIsLoading(true);
       const response = await apiFetch('/api/users', {
         method: 'POST',
         body: JSON.stringify(newUsers),
       });
       if (response.ok) {
-        console.log('Users saved successfully');
         await fetchUsers();
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
