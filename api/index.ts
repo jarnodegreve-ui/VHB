@@ -43,6 +43,7 @@ interface AppUser {
   isActive?: boolean;
   phone?: string;
   email?: string;
+  leaveBalanceTotal?: number;
 }
 
 interface IncomingUser extends AppUser {
@@ -170,6 +171,7 @@ const toPublicUser = (user: any): AppUser => ({
   isActive: user.isActive ?? user.isactive,
   phone: user.phone,
   email: user.email,
+  leaveBalanceTotal: user.leaveBalanceTotal ?? user.leavebalancetotal ?? undefined,
 });
 
 const toRoleScopedUser = (user: AppUser, role: Role): AppUser => {
@@ -205,6 +207,9 @@ const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   isActive: user.isActive !== false,
   phone: user.phone?.trim() || undefined,
   email: normalizeEmail(user.email),
+  leaveBalanceTotal: typeof user.leaveBalanceTotal === "number" && user.leaveBalanceTotal >= 0
+    ? user.leaveBalanceTotal
+    : undefined,
 });
 
 const toDatabaseUser = (user: AppUser) => ({
@@ -217,6 +222,7 @@ const toDatabaseUser = (user: AppUser) => ({
   isactive: user.isActive !== false,
   phone: user.phone,
   email: normalizeEmail(user.email),
+  leavebalancetotal: typeof user.leaveBalanceTotal === "number" ? user.leaveBalanceTotal : null,
 });
 
 const toPublicSwap = (swap: any): SwapRecord => ({
@@ -1121,7 +1127,13 @@ const saveUsersData = async (incomingUsers: IncomingUser[]) => {
 
     const databaseUsers = sanitizedUsers.map(toDatabaseUser);
 
-    const { error } = await db.from('users').upsert(databaseUsers);
+    let { error } = await db.from('users').upsert(databaseUsers);
+    // Best-effort: tolereer een ontbrekende leavebalancetotal-kolom op oudere schema's.
+    if (error && /leavebalancetotal/i.test(String(error.message || ""))) {
+      console.warn("Kolom leavebalancetotal ontbreekt; verlofrecht wordt niet bewaard tot de migratie is uitgevoerd.", error);
+      const usersWithoutBalance = databaseUsers.map(({ leavebalancetotal, ...rest }) => rest);
+      ({ error } = await db.from('users').upsert(usersWithoutBalance));
+    }
     if (error) {
       console.error("Supabase upsert error:", error);
       throw error;

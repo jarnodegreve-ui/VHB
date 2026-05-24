@@ -10,6 +10,8 @@ export interface User {
   isActive?: boolean;
   phone?: string;
   email?: string;
+  /** Jaarlijks verlofrecht in dagen. Leeg = standaardrecht (zie DEFAULT_LEAVE_BALANCE). */
+  leaveBalanceTotal?: number;
 }
 
 export interface Diversion {

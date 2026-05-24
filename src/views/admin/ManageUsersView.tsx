@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, RotateCcw, Trash2, Upload, Users, X } from 'lucide-react';
 import type { User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { DEFAULT_LEAVE_BALANCE } from '../../lib/leave';
 import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState } from '../../components/ui';
 
 export type UserDraft = User & { password?: string };
@@ -11,7 +12,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
-  const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
+  const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '', leaveBalanceTotal: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
@@ -51,12 +52,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       phone: newUser.phone,
       email: newUser.email,
       isActive: true,
+      leaveBalanceTotal: newUser.leaveBalanceTotal.trim() === '' ? undefined : Number(newUser.leaveBalanceTotal),
     };
 
     const success = await onSave([...users, userToAdd]);
     if (!success) return;
     setShowAddModal(false);
-    setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
+    setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '', leaveBalanceTotal: '' });
     setCredentialsModal({
       title: 'Nieuwe gebruiker aangemaakt',
       email: userToAdd.email || '',
@@ -353,6 +355,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <div className="space-y-1.5 sm:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">E-mailadres</label><input type="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
                   <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Tijdelijk Wachtwoord</label><input type="password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 8 tekens" /></div>
                   <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">GSM Nummer</label><input type="text" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
+                  <div className="space-y-1.5 sm:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Verlofrecht (dagen/jaar)</label><input type="number" min={0} value={newUser.leaveBalanceTotal} onChange={(e) => setNewUser({ ...newUser, leaveBalanceTotal: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder={`Standaard ${DEFAULT_LEAVE_BALANCE}`} /></div>
                 </div>
                 <div className="flex gap-3 pt-2">
                   <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button>
@@ -380,6 +383,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <div className="space-y-1.5 sm:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">E-mailadres</label><input type="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
                   <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Nieuw Wachtwoord</label><input type="password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
                   <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">GSM Nummer</label><input type="text" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
+                  <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Verlofrecht (dagen/jaar)</label><input type="number" min={0} value={editingUser.leaveBalanceTotal ?? ''} onChange={(e) => setEditingUser({ ...editingUser, leaveBalanceTotal: e.target.value.trim() === '' ? undefined : Number(e.target.value) })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder={`Standaard ${DEFAULT_LEAVE_BALANCE}`} /></div>
                 </div>
                 <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
                   <div><p className="text-sm font-bold text-slate-700">Account Actief</p><p className="text-[10px] text-slate-400 font-medium">Inactieve gebruikers kunnen niet inloggen.</p></div>

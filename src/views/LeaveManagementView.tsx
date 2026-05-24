@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, User } from '../types';
 import { cn } from '../lib/ui';
+import { countLeaveDays, DEDUCTED_LEAVE_TYPES, getLeaveBalance } from '../lib/leave';
 
 export function LeaveManagementView({ user, leaveRequests, users, onSave }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
@@ -12,6 +13,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const myRequests = leaveRequests.filter((r) => r.userId === user.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  const myBalance = getLeaveBalance(user, leaveRequests);
+  const myBalancePct = myBalance.total > 0 ? Math.min(100, Math.round((myBalance.used / myBalance.total) * 100)) : 0;
 
   const handleRequestLeave = (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +92,28 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
           </button>
         )}
       </div>
+
+      {!isPlanner && (
+        <div className="surface-card p-8 rounded-[40px]">
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Verlofsaldo {myBalance.year}</p>
+              <p className="mt-2 text-4xl font-black tracking-tight">
+                <span className={cn(myBalance.remaining < 0 ? 'text-red-500' : 'text-slate-800')}>{myBalance.remaining}</span>
+                <span className="text-lg font-bold text-slate-400"> / {myBalance.total} dagen resterend</span>
+              </p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Opgenomen</p>
+              <p className="text-2xl font-black text-slate-700">{myBalance.used} <span className="text-sm font-bold text-slate-400">dagen</span></p>
+            </div>
+          </div>
+          <div className="mt-6 h-3 w-full rounded-full bg-slate-100 overflow-hidden">
+            <div className={cn('h-full rounded-full transition-all', myBalance.remaining < 0 ? 'bg-red-500' : myBalance.remaining <= 3 ? 'bg-amber-500' : 'bg-emerald-500')} style={{ width: `${myBalancePct}%` }} />
+          </div>
+          <p className="mt-3 text-xs font-medium text-slate-400">Alleen goedgekeurde vakantiedagen tellen mee. Zon&shy;dagen worden niet meegerekend.</p>
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-6">
@@ -168,7 +193,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave }: { us
                   return true;
                 }).map((req) => {
                   const requester = users.find((u) => u.id === req.userId);
-                  return <div key={req.id} className="surface-card p-6 rounded-[32px] space-y-4"><div className="flex items-center gap-3"><div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500"><UserIcon size={24} /></div><div><p className="font-black text-slate-800">{requester?.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{req.type} • {req.createdAt.split('T')[0]}</p></div></div><div className="bg-slate-50 p-4 rounded-2xl space-y-2"><div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Periode</span><span className="text-slate-800">{req.startDate} t/m {req.endDate}</span></div>{req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}</div><div className="flex gap-2"><button onClick={() => handleStatusUpdate(req.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">Goedkeuren</button><button onClick={() => handleStatusUpdate(req.id, 'rejected')} className="flex-1 py-3 bg-white border border-slate-200 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-50 transition-all">Afwijzen</button></div></div>;
+                  const isDeducted = DEDUCTED_LEAVE_TYPES.includes(req.type);
+                  const reqYear = new Date(req.startDate).getFullYear();
+                  const reqDays = countLeaveDays(req.startDate, req.endDate, reqYear);
+                  const requesterBalance = requester ? getLeaveBalance(requester, leaveRequests, reqYear) : null;
+                  const remainingAfter = requesterBalance ? requesterBalance.remaining - reqDays : null;
+                  const exceeds = isDeducted && remainingAfter !== null && remainingAfter < 0;
+                  return <div key={req.id} className="surface-card p-6 rounded-[32px] space-y-4"><div className="flex items-center gap-3"><div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500"><UserIcon size={24} /></div><div><p className="font-black text-slate-800">{requester?.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{req.type} • {req.createdAt.split('T')[0]}</p></div></div><div className="bg-slate-50 p-4 rounded-2xl space-y-2"><div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Periode</span><span className="text-slate-800">{req.startDate} t/m {req.endDate}</span></div>{isDeducted && <><div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Verlofdagen</span><span className="text-slate-800">{reqDays}</span></div>{requesterBalance && <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Saldo na goedkeuring</span><span className={cn(exceeds ? 'text-red-500' : 'text-slate-800')}>{remainingAfter} / {requesterBalance.total}</span></div>}</>}{req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}</div>{exceeds && <div className="rounded-2xl bg-red-50 border border-red-100 px-4 py-3 text-xs font-bold text-red-600">Let op: deze aanvraag overschrijdt het verlofsaldo met {Math.abs(remainingAfter!)} dag(en). Goedkeuren mag, maar het saldo wordt negatief.</div>}<div className="flex gap-2"><button onClick={() => handleStatusUpdate(req.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">Goedkeuren</button><button onClick={() => handleStatusUpdate(req.id, 'rejected')} className="flex-1 py-3 bg-white border border-slate-200 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-50 transition-all">Afwijzen</button></div></div>;
                 }) : <div className="surface-card p-8 rounded-[32px] text-center"><p className="text-slate-400 font-bold text-sm">Geen openstaande aanvragen.</p></div>}
               </div>
             </div>
