@@ -1030,9 +1030,12 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
-        {/* Header */}
+        {/* Header — gewikkeld in dezelfde max-w-1360 + px-padding als de
+            content-secties zodat links én rechts uitgelijnd zijn op brede
+            schermen. */}
+        <div className="px-4 md:px-7 shrink-0">
         <header className={cn(
-          "mx-4 mt-3 md:mx-7 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 shrink-0 z-30 relative transition-shadow duration-500",
+          "mx-auto w-full max-w-[1360px] mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 z-30 relative transition-shadow duration-500",
           isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
         )}>
           <div className="flex items-center gap-3">
@@ -1065,6 +1068,7 @@ export default function App() {
             </div>
           </div>
         </header>
+        </div>
 
         {/* Content Area */}
         <div
