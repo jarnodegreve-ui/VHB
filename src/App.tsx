@@ -916,7 +916,7 @@ export default function App() {
 
           {isPlanner && (
             <>
-              <div className="pt-5 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Beheer</div>
+              <div className="mt-5 mb-2 mx-3 border-t border-slate-200/50 pt-4 pb-1 px-1 text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">Beheer</div>
               <NavItem 
                 icon={<Calendar size={20} />} 
                 label="Verlofbeheer" 
@@ -970,7 +970,7 @@ export default function App() {
 
           {isAdmin && (
             <>
-              <div className="pt-5 pb-2 px-4 text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">Admin</div>
+              <div className="mt-5 mb-2 mx-3 border-t border-slate-200/50 pt-4 pb-1 px-1 text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">Admin</div>
               <NavItem 
                 icon={<Users size={20} />} 
                 label="Gebruikers" 
@@ -1081,9 +1081,9 @@ export default function App() {
           <AnimatePresence mode="wait">
             <motion.div
               key={resolvedCurrentView}
-              initial={{ opacity: 0, y: 18, scale: 0.985, filter: 'blur(8px)' }}
-              animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-              exit={{ opacity: 0, y: -12, scale: 0.99, filter: 'blur(6px)' }}
+              initial={{ opacity: 0, y: 18, scale: 0.985 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: -12, scale: 0.99 }}
               transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto w-full max-w-[1360px]"
             >

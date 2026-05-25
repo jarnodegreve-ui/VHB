@@ -91,8 +91,8 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
         <StatCard
           icon={<Clock className="text-oker-600" />}
           label="Vandaag"
-          value={todaysShift?.startTime || '--:--'}
-          subValue={todaysShift ? `${todaysShift.startTime} - ${todaysShift.endTime}` : 'Geen dienst vandaag'}
+          value={todaysShift?.startTime || 'Vrij'}
+          subValue={todaysShift ? `${todaysShift.startTime} - ${todaysShift.endTime}` : 'Geen dienst gepland'}
         />
         <StatCard
           icon={<AlertTriangle className="text-red-500" />}
@@ -134,11 +134,12 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
               </div>
             ))}
             {myShifts.length === 0 && (
-              <div className="flex flex-1 flex-col items-center justify-center text-center py-12">
-                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Calendar className="text-slate-200" size={32} />
-                </div>
-                <p className="text-slate-400 font-medium italic">Geen diensten gepland voor vandaag.</p>
+              <div className="flex flex-1 items-center justify-center">
+                <EmptyState
+                  icon={<Calendar size={28} />}
+                  title="Geen dienst vandaag"
+                  message="Je hebt geen geplande dienst voor vandaag. Geniet ervan."
+                />
               </div>
             )}
           </div>
