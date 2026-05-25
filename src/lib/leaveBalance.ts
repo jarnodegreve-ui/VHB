@@ -31,9 +31,10 @@ export interface LeaveBalance {
   kleinVerletDagen: number;
 }
 
-export function verlofBalans(leaves: LeaveRequest[], userId: string, year: number): LeaveBalance {
+export function verlofBalans(leaves: LeaveRequest[], userId: string, year: number, customBudget?: number): LeaveBalance {
   const yearStart = `${year}-01-01`;
   const yearEnd = `${year}-12-31`;
+  const budget = typeof customBudget === 'number' && customBudget >= 0 ? customBudget : BETAALD_VERLOF_BUDGET;
 
   const relevant = leaves.filter((l) =>
     l.userId === userId &&
@@ -52,8 +53,8 @@ export function verlofBalans(leaves: LeaveRequest[], userId: string, year: numbe
 
   return {
     betaaldGebruikt,
-    betaaldResterend: Math.max(0, BETAALD_VERLOF_BUDGET - betaaldGebruikt),
-    betaaldBudget: BETAALD_VERLOF_BUDGET,
+    betaaldResterend: Math.max(0, budget - betaaldGebruikt),
+    betaaldBudget: budget,
     kleinVerletDagen,
   };
 }

@@ -96,7 +96,7 @@ export function UserHistoryModal({
 
       <div className="p-8 space-y-8 overflow-y-auto flex-1">
         {/* Verlofbalans */}
-        <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, currentYear)} year={currentYear} />
+        <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, currentYear, user.verlofBudget)} year={currentYear} />
 
         {/* Stats overview */}
         <div className="grid grid-cols-3 gap-3">

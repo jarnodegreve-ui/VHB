@@ -97,6 +97,27 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
     onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus, decidedAt } : r)));
   };
 
+  // Bulk-selectie voor planner-goedkeuring van meerdere pending aanvragen.
+  const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set());
+  const togglePendingSelection = (id: string) => {
+    setSelectedPendingIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const handleBulkApprove = () => {
+    if (selectedPendingIds.size === 0) return;
+    const decidedAt = new Date().toISOString();
+    const updated = leaveRequests.map((r) =>
+      selectedPendingIds.has(r.id) && r.status === 'pending'
+        ? { ...r, status: 'approved' as const, decidedAt }
+        : r,
+    );
+    onSave(updated);
+    setSelectedPendingIds(new Set());
+  };
+
   const handleCancel = (requestId: string) => {
     const target = leaveRequests.find((r) => r.id === requestId);
     if (!target) return;
@@ -265,33 +286,83 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
         </div>
 
         <div className="lg:col-span-4 space-y-8">
-          <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear())} year={new Date().getFullYear()} compact />
+          <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)} year={new Date().getFullYear()} compact />
 
-          {isPlanner && (
-            <div className="space-y-4">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Wachtend op Goedkeuring</h4>
+          {isPlanner && (() => {
+            const plannerPending = leaveRequests.filter((r) => {
+              if (r.status !== 'pending') return false;
+              const requester = users.find((u) => u.id === r.userId);
+              const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
+              const isMe = r.userId === user.id;
+              if (isBeheerder && !isMe) return false;
+              return true;
+            });
+            const allSelected = plannerPending.length > 0 && plannerPending.every((r) => selectedPendingIds.has(r.id));
+            return (
               <div className="space-y-4">
-                {leaveRequests.filter((r) => {
-                  if (r.status !== 'pending') return false;
-                  const requester = users.find((u) => u.id === r.userId);
-                  const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
-                  const isMe = r.userId === user.id;
-                  if (isBeheerder && !isMe) return false;
-                  return true;
-                }).length > 0 ? leaveRequests.filter((r) => {
-                  if (r.status !== 'pending') return false;
-                  const requester = users.find((u) => u.id === r.userId);
-                  const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
-                  const isMe = r.userId === user.id;
-                  if (isBeheerder && !isMe) return false;
-                  return true;
-                }).map((req) => {
-                  const requester = users.find((u) => u.id === req.userId);
-                  return <div key={req.id} className="surface-card p-6 rounded-[32px] space-y-4"><div className="flex items-center gap-3"><div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500"><UserIcon size={24} /></div><div><p className="font-black text-slate-800">{requester?.name}</p><p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{req.type} • {req.createdAt.split('T')[0]}</p></div></div><div className="bg-slate-50 p-4 rounded-2xl space-y-2"><div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Periode</span><span className="text-slate-800">{req.startDate} t/m {req.endDate}</span></div>{req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}</div><div className="flex gap-2"><button onClick={() => handleStatusUpdate(req.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">Goedkeuren</button><button onClick={() => handleStatusUpdate(req.id, 'rejected')} className="flex-1 py-3 bg-white border border-slate-200 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-50 transition-all">Afwijzen</button></div></div>;
-                }) : <div className="surface-card p-8 rounded-[32px] text-center"><p className="text-slate-400 font-bold text-sm">Geen openstaande aanvragen.</p></div>}
+                <div className="flex items-center justify-between ml-2">
+                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Wachtend op Goedkeuring</h4>
+                  {plannerPending.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedPendingIds(allSelected ? new Set() : new Set(plannerPending.map((r) => r.id)))}
+                      className="text-[10px] font-black text-slate-500 hover:text-oker-600 uppercase tracking-widest transition-colors"
+                    >
+                      {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
+                    </button>
+                  )}
+                </div>
+                {selectedPendingIds.size > 0 && (
+                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-100">
+                    <span className="text-xs font-bold text-emerald-700">
+                      {selectedPendingIds.size} {selectedPendingIds.size === 1 ? 'aanvraag' : 'aanvragen'} geselecteerd
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleBulkApprove}
+                      className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
+                    >
+                      Goedkeuren ({selectedPendingIds.size})
+                    </button>
+                  </div>
+                )}
+                <div className="space-y-4">
+                  {plannerPending.length > 0 ? plannerPending.map((req) => {
+                    const requester = users.find((u) => u.id === req.userId);
+                    const isSelected = selectedPendingIds.has(req.id);
+                    return (
+                      <div key={req.id} className={cn('surface-card p-6 rounded-[32px] space-y-4 transition-all', isSelected && 'ring-2 ring-emerald-400/50')}>
+                        <div className="flex items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => togglePendingSelection(req.id)}
+                            className="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400 cursor-pointer"
+                            aria-label={`Selecteer ${requester?.name}`}
+                          />
+                          <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500 shrink-0"><UserIcon size={24} /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="font-black text-slate-800 truncate">{requester?.name}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{formatLeaveType(req.type)} • {req.createdAt.split('T')[0]}</p>
+                          </div>
+                        </div>
+                        <div className="bg-slate-50 p-4 rounded-2xl space-y-2">
+                          <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Periode</span><span className="text-slate-800">{req.startDate} t/m {req.endDate}</span></div>
+                          {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
+                        </div>
+                        <div className="flex gap-2">
+                          <button onClick={() => handleStatusUpdate(req.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">Goedkeuren</button>
+                          <button onClick={() => handleStatusUpdate(req.id, 'rejected')} className="flex-1 py-3 bg-white border border-slate-200 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-50 transition-all">Afwijzen</button>
+                        </div>
+                      </div>
+                    );
+                  }) : (
+                    <div className="surface-card p-8 rounded-[32px] text-center"><p className="text-slate-400 font-bold text-sm">Geen openstaande aanvragen.</p></div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           <MyLeaveSection
             title="Mijn Openstaande Aanvragen"

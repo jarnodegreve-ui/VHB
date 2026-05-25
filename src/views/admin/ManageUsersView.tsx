@@ -353,6 +353,21 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <div className="space-y-1.5 sm:col-span-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">E-mailadres</label><input type="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
                 <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Nieuw Wachtwoord</label><input type="password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
                 <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">GSM Nummer</label><input type="text" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Verlofbudget (dagen)</label>
+                  <input
+                    type="number"
+                    min={0}
+                    value={editingUser.verlofBudget ?? ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setEditingUser({ ...editingUser, verlofBudget: v === '' ? undefined : Math.max(0, parseInt(v, 10) || 0) });
+                    }}
+                    className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium"
+                    placeholder="Leeg = standaard (24 dagen)"
+                  />
+                  <p className="text-[10px] text-slate-400 font-medium px-1">Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).</p>
+                </div>
               </div>
               <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
                 <div><p className="text-sm font-bold text-slate-700">Account Actief</p><p className="text-[10px] text-slate-400 font-medium">Inactieve gebruikers kunnen niet inloggen.</p></div>

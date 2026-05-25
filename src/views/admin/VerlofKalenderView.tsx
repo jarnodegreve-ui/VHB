@@ -1,0 +1,222 @@
+import { useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
+import type { LeaveRequest, User } from '../../types';
+import { cn } from '../../lib/ui';
+import { PageHeader, PageShell } from '../../components/ui';
+
+const WEEKDAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
+const MONTH_NAMES = [
+  'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
+  'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
+];
+
+const LEAVE_TYPE_LABELS: Record<string, string> = {
+  betaald_verlof: 'Betaald verlof',
+  klein_verlet: 'Klein verlet',
+};
+
+const cellColor = (status: LeaveRequest['status'] | undefined, type?: string) => {
+  if (!status) return 'bg-transparent';
+  if (status === 'approved') return type === 'klein_verlet' ? 'bg-blue-400' : 'bg-emerald-500';
+  if (status === 'pending') return 'bg-amber-400';
+  if (status === 'rejected') return 'bg-red-300';
+  if (status === 'cancelled') return 'bg-slate-300';
+  return 'bg-transparent';
+};
+
+export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; leaveRequests: LeaveRequest[] }) {
+  const [viewMonth, setViewMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+
+  const year = viewMonth.getFullYear();
+  const monthIndex = viewMonth.getMonth();
+  const monthName = MONTH_NAMES[monthIndex];
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const todayIso = new Date().toISOString().split('T')[0];
+
+  const goToPrev = () => setViewMonth(new Date(year, monthIndex - 1, 1));
+  const goToNext = () => setViewMonth(new Date(year, monthIndex + 1, 1));
+  const goToToday = () => {
+    const now = new Date();
+    setViewMonth(new Date(now.getFullYear(), now.getMonth(), 1));
+  };
+
+  // Toon enkel actieve chauffeurs en planners (niet de admin/beheerder).
+  const visibleUsers = users
+    .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder' && (u.role === 'chauffeur' || u.role === 'planner'))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const dateIso = (day: number) => `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  const weekdayLetter = (day: number) => {
+    const jsDay = new Date(year, monthIndex, day).getDay();
+    const mondayIndex = jsDay === 0 ? 6 : jsDay - 1;
+    return WEEKDAY_LABELS[mondayIndex];
+  };
+  const isWeekend = (day: number) => {
+    const jsDay = new Date(year, monthIndex, day).getDay();
+    return jsDay === 0 || jsDay === 6;
+  };
+  const isToday = (day: number) => dateIso(day) === todayIso;
+
+  // Build a lookup: userId -> day-number -> matching leave record (highest priority status)
+  const leaveByUserDay = new Map<string, Map<number, LeaveRequest>>();
+  const monthStart = dateIso(1);
+  const monthEnd = dateIso(daysInMonth);
+  const statusPriority: Record<LeaveRequest['status'], number> = {
+    approved: 4, pending: 3, cancelled: 2, rejected: 1,
+  };
+  for (const leave of leaveRequests) {
+    if (leave.endDate < monthStart || leave.startDate > monthEnd) continue;
+    const start = leave.startDate < monthStart ? monthStart : leave.startDate;
+    const end = leave.endDate > monthEnd ? monthEnd : leave.endDate;
+    const startDay = parseInt(start.slice(-2), 10);
+    const endDay = parseInt(end.slice(-2), 10);
+    let userMap = leaveByUserDay.get(leave.userId);
+    if (!userMap) {
+      userMap = new Map();
+      leaveByUserDay.set(leave.userId, userMap);
+    }
+    for (let d = startDay; d <= endDay; d++) {
+      const existing = userMap.get(d);
+      if (!existing || statusPriority[leave.status] > statusPriority[existing.status]) {
+        userMap.set(d, leave);
+      }
+    }
+  }
+
+  // Aggregeren voor de top-rij: hoeveel afwezigen (approved) per dag
+  const absenceCountPerDay: Record<number, number> = {};
+  for (const [, userMap] of leaveByUserDay) {
+    for (const [day, leave] of userMap) {
+      if (leave.status === 'approved') {
+        absenceCountPerDay[day] = (absenceCountPerDay[day] || 0) + 1;
+      }
+    }
+  }
+
+  return (
+    <PageShell width="6xl">
+      <PageHeader
+        title="Verlof-kalender"
+        description="Maandoverzicht van wie wanneer afwezig is. Eén oogopslag voor capaciteitsplanning."
+        actions={(
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goToPrev}
+              aria-label="Vorige maand"
+              className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors"
+            >
+              <ChevronLeft size={18} />
+            </button>
+            <span className="px-3 text-base font-black tracking-tight capitalize min-w-[150px] text-center">{monthName} {year}</span>
+            <button
+              type="button"
+              onClick={goToNext}
+              aria-label="Volgende maand"
+              className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors"
+            >
+              <ChevronRight size={18} />
+            </button>
+            <button
+              type="button"
+              onClick={goToToday}
+              className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+            >
+              Vandaag
+            </button>
+          </div>
+        )}
+      />
+
+      <div className="surface-card rounded-[24px] overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="bg-slate-50/60 border-b border-slate-100">
+                <th className="sticky left-0 z-10 bg-slate-50/95 backdrop-blur px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 min-w-[180px]">
+                  Chauffeur
+                </th>
+                {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
+                  <th
+                    key={day}
+                    className={cn(
+                      'px-1 py-2 text-center font-medium border-l border-slate-100',
+                      isWeekend(day) && 'bg-slate-100/50',
+                      isToday(day) && 'bg-oker-50',
+                    )}
+                  >
+                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{weekdayLetter(day)}</div>
+                    <div className={cn('text-xs font-black mt-0.5', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
+                    {absenceCountPerDay[day] > 0 && (
+                      <div className="text-[9px] font-black text-emerald-600 mt-0.5">{absenceCountPerDay[day]}</div>
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {visibleUsers.map((u) => {
+                const userMap = leaveByUserDay.get(u.id);
+                return (
+                  <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
+                    <td className="sticky left-0 z-10 bg-white/95 backdrop-blur px-4 py-2 text-sm font-bold text-slate-800 min-w-[180px] truncate">
+                      {u.name}
+                    </td>
+                    {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+                      const leave = userMap?.get(day);
+                      const title = leave
+                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type} — ${leave.status} (${leave.startDate}${leave.startDate !== leave.endDate ? ` t/m ${leave.endDate}` : ''})`
+                        : undefined;
+                      return (
+                        <td
+                          key={day}
+                          title={title}
+                          className={cn(
+                            'border-l border-slate-100 h-9 px-1',
+                            isWeekend(day) && !leave && 'bg-slate-50/40',
+                            isToday(day) && !leave && 'bg-oker-50/30',
+                          )}
+                        >
+                          {leave && (
+                            <div className={cn('w-full h-6 rounded-md', cellColor(leave.status, leave.type))} />
+                          )}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+              {visibleUsers.length === 0 && (
+                <tr><td colSpan={daysInMonth + 1} className="p-8 text-center text-sm italic text-slate-400">Geen actieve chauffeurs gevonden.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Legende */}
+      <div className="surface-card rounded-[24px] p-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
+        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legende</span>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-3 rounded-sm bg-emerald-500" />
+          <span className="font-medium text-slate-600">Betaald verlof goedgekeurd</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-3 rounded-sm bg-blue-400" />
+          <span className="font-medium text-slate-600">Klein verlet goedgekeurd</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-3 rounded-sm bg-amber-400" />
+          <span className="font-medium text-slate-600">In behandeling</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-3 rounded-sm bg-slate-300" />
+          <span className="font-medium text-slate-600">Geannuleerd</span>
+        </div>
+      </div>
+    </PageShell>
+  );
+}

@@ -63,6 +63,7 @@ import { PlanningMatrixView } from './views/admin/PlanningMatrixView';
 import { PlanningCodesView } from './views/admin/PlanningCodesView';
 import { ManageDiversionsView } from './views/admin/ManageDiversionsView';
 import { ManageServicesView } from './views/admin/ManageServicesView';
+import { VerlofKalenderView } from './views/admin/VerlofKalenderView';
 import { RitblaadjesView } from './views/RitblaadjesView';
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
@@ -84,6 +85,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'verlof',
     'verlof-beheer',
+    'verlof-kalender',
     'beheer-roosters',
     'planning-matrix',
     'planning-codes',
@@ -102,6 +104,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'verlof',
     'verlof-beheer',
+    'verlof-kalender',
     'beheer-roosters',
     'planning-matrix',
     'planning-codes',
@@ -800,6 +803,7 @@ export default function App() {
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
+    'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
     'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
     'planning-matrix': { title: 'Planning Overzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
     'planning-codes': { title: 'Planningscodes', subtitle: 'Beheer de betekenis van matrixcodes zonder SQL of handmatige scripts.' },
@@ -944,6 +948,12 @@ export default function App() {
                 active={currentView === 'verlof-beheer'}
                 onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }}
                 badge={pendingLeaveCount}
+              />
+              <NavItem
+                icon={<Calendar size={20} />}
+                label="Verlof-kalender"
+                active={currentView === 'verlof-kalender'}
+                onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }}
               />
               <NavItem 
                 icon={<Settings size={20} />} 
@@ -1156,6 +1166,7 @@ export default function App() {
                 </Suspense>
               )}
               {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
+              {resolvedCurrentView === 'verlof-kalender' && <VerlofKalenderView users={users} leaveRequests={leaveRequests} />}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView

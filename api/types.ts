@@ -13,6 +13,7 @@ export interface AppUser {
   isActive?: boolean;
   phone?: string;
   email?: string;
+  verlofBudget?: number;
 }
 
 export interface IncomingUser extends AppUser {

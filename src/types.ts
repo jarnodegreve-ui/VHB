@@ -10,6 +10,7 @@ export interface User {
   isActive?: boolean;
   phone?: string;
   email?: string;
+  verlofBudget?: number;
 }
 
 export interface Diversion {
@@ -117,4 +118,4 @@ export interface ActivityLogEntry {
   details: string;
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes';
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes';
