@@ -524,6 +524,11 @@ export default function App() {
       ).length
     : 0;
 
+  // Wachtende beslissingen voor planner/admin (sidebar badges op
+  // Verlofbeheer en Dienstruil-tab).
+  const pendingLeaveCount = leaveRequests.filter((r) => r.status === 'pending').length;
+  const pendingSwapsCount = swaps.filter((s) => s.status === 'pending').length;
+
   const saveLeave = async (newLeave: LeaveRequest[]) => {
     try {
       const response = await apiFetch('/api/leave', {
@@ -920,6 +925,7 @@ export default function App() {
             label="Dienstruil"
             active={currentView === 'ruil-verzoeken'}
             onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }}
+            badge={isPlanner ? pendingSwapsCount : undefined}
           />
           <NavItem
             icon={<Calendar size={20} />}
@@ -932,11 +938,12 @@ export default function App() {
           {isPlanner && (
             <>
               <div className="mt-5 mb-2 mx-3 border-t border-slate-200/50 pt-4 pb-1 px-1 text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">Beheer</div>
-              <NavItem 
-                icon={<Calendar size={20} />} 
-                label="Verlofbeheer" 
-                active={currentView === 'verlof-beheer'} 
-                onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }} 
+              <NavItem
+                icon={<Calendar size={20} />}
+                label="Verlofbeheer"
+                active={currentView === 'verlof-beheer'}
+                onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }}
+                badge={pendingLeaveCount}
               />
               <NavItem 
                 icon={<Settings size={20} />} 
