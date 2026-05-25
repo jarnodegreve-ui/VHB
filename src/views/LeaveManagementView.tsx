@@ -5,6 +5,8 @@ import { ChevronLeft, ChevronRight, Plus, User as UserIcon, X } from 'lucide-rea
 import type { LeaveRequest, User } from '../types';
 import { cn, notify } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { verlofBalans } from '../lib/leaveBalance';
+import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   betaald_verlof: 'Betaald verlof',
@@ -263,6 +265,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
         </div>
 
         <div className="lg:col-span-4 space-y-8">
+          <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear())} year={new Date().getFullYear()} compact />
+
           {isPlanner && (
             <div className="space-y-4">
               <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] ml-2">Wachtend op Goedkeuring</h4>

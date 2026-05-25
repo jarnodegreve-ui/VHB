@@ -3,6 +3,8 @@ import { Calendar, Clock, RotateCcw, X } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { cn } from '../../lib/ui';
+import { verlofBalans } from '../../lib/leaveBalance';
+import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   betaald_verlof: 'Betaald verlof',
@@ -93,6 +95,9 @@ export function UserHistoryModal({
       </div>
 
       <div className="p-8 space-y-8 overflow-y-auto flex-1">
+        {/* Verlofbalans */}
+        <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, currentYear)} year={currentYear} />
+
         {/* Stats overview */}
         <div className="grid grid-cols-3 gap-3">
           <div className="surface-muted rounded-2xl p-4">
