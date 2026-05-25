@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin } from 'lucide-react';
 import type { Diversion, Shift, Update, User } from '../types';
-import { EmptyState } from '../components/ui';
 import { StatCard } from '../components/StatCard';
 
 export function DashboardView({ user, shifts, diversions, users }: { user: User, shifts: Shift[], diversions: Diversion[], users: User[] }) {
@@ -134,12 +133,12 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
               </div>
             ))}
             {myShifts.length === 0 && (
-              <div className="flex flex-1 items-center justify-center">
-                <EmptyState
-                  icon={<Calendar size={28} />}
-                  title="Geen dienst vandaag"
-                  message="Je hebt geen geplande dienst voor vandaag. Geniet ervan."
-                />
+              <div className="flex flex-1 flex-col items-center justify-center text-center py-8">
+                <div className="w-14 h-14 rounded-full bg-white/60 ring-1 ring-white/70 flex items-center justify-center text-slate-300 mb-4">
+                  <Calendar size={24} />
+                </div>
+                <h4 className="text-base font-black text-slate-700 tracking-tight">Geen dienst vandaag</h4>
+                <p className="mt-1.5 text-sm font-medium text-slate-400 max-w-xs">Je hebt geen geplande dienst voor vandaag. Geniet ervan.</p>
               </div>
             )}
           </div>
@@ -168,12 +167,12 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
               </div>
             ))}
             {diversions.length === 0 && (
-              <div className="flex flex-1 items-center justify-center">
-                <EmptyState
-                  icon={<MapPin size={28} />}
-                  title="Geen actieve hinder"
-                  message="Er zijn momenteel geen omleidingen geregistreerd."
-                />
+              <div className="flex flex-1 flex-col items-center justify-center text-center py-8">
+                <div className="w-14 h-14 rounded-full bg-white/60 ring-1 ring-white/70 flex items-center justify-center text-slate-300 mb-4">
+                  <MapPin size={24} />
+                </div>
+                <h4 className="text-base font-black text-slate-700 tracking-tight">Geen actieve hinder</h4>
+                <p className="mt-1.5 text-sm font-medium text-slate-400 max-w-xs">Er zijn momenteel geen omleidingen geregistreerd.</p>
               </div>
             )}
           </div>
