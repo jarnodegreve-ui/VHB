@@ -1,9 +1,10 @@
 import type { LeaveRequest } from '../types';
 
-// Standaard wettelijk verlof in België: 4 weken = 20 dagen.
-// Kan later per gebruiker configureerbaar worden door een veld
-// 'verlofBudget' aan de User-type toe te voegen.
-export const BETAALD_VERLOF_BUDGET = 20;
+// Standaard betaald verlof bij VHB: 24 dagen (boven het wettelijk minimum
+// van 20). Kan later per gebruiker configureerbaar worden door een veld
+// 'verlofBudget' aan de User-type toe te voegen (anciënniteits-toeslag,
+// deeltijdse contracten, etc.).
+export const BETAALD_VERLOF_BUDGET = 24;
 
 const daysBetween = (startIso: string, endIso: string): number => {
   if (!startIso || !endIso) return 0;
