@@ -68,6 +68,7 @@ const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module)
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazy(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
 const LazyLeaveManagementView = lazy(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
+const LazyPrintMonthlyScheduleView = lazy(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 
 
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
@@ -747,6 +748,20 @@ export default function App() {
     return <div className="min-h-screen bg-oker-50 flex items-center justify-center text-slate-600 font-bold">Sessie laden...</div>;
   }
 
+  // Print-modus: kale weergave zonder sidebar/header. Vereist authenticated
+  // planner/admin sessie zodat we de shifts kunnen lezen.
+  const printParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const printDriverId = printParams?.get('print-driver');
+  const printMonth = printParams?.get('print-month');
+  if (printDriverId && printMonth && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
+    const driver = users.find((u) => String(u.id) === String(printDriverId)) || null;
+    return (
+      <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+        <LazyPrintMonthlyScheduleView driver={driver} monthIso={printMonth} shifts={shifts} />
+      </Suspense>
+    );
+  }
+
   if (!isSupabaseConfigured || !supabase) {
     return <div className="min-h-screen bg-oker-50 flex items-center justify-center p-6 text-center text-slate-700 font-bold">Supabase client-configuratie ontbreekt. Voeg `VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY` toe in Vercel en lokaal.</div>;
   }
@@ -1122,7 +1137,7 @@ export default function App() {
               )}
               {resolvedCurrentView === 'gebruikers' && (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} />
+                  <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
               )}
               {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
@@ -1130,7 +1145,7 @@ export default function App() {
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} />}
               {resolvedCurrentView === 'beheer-contactlijst' && (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} />
+                  <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
               )}
               {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}

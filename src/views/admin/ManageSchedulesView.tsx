@@ -39,6 +39,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     approvedSwaps: Array<{ id: string; requesterName: string | null; targetName: string | null; decidedAt?: string }>;
   }>(null);
   const [changesExpanded, setChangesExpanded] = useState(false);
+  const [printDriverId, setPrintDriverId] = useState<string>('');
+  const [printMonth, setPrintMonth] = useState<string>(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
 
   const fetchChangesSince = async () => {
     try {
@@ -597,6 +602,55 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             />
           )}
         </div>
+      </div>
+
+      <div className="surface-card p-8 rounded-[24px]">
+        <AdminSubsectionHeader
+          eyebrow="Export"
+          title="Print Maandrooster"
+          description="Genereer per chauffeur een maand-overzicht in print-/PDF-formaat."
+        />
+        <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto_auto] items-end">
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Chauffeur</label>
+            <select
+              value={printDriverId}
+              onChange={(e) => setPrintDriverId(e.target.value)}
+              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none"
+            >
+              <option value="">Kies een chauffeur…</option>
+              {users
+                .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((u) => (
+                  <option key={u.id} value={u.id}>{u.name}</option>
+                ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Maand</label>
+            <input
+              type="month"
+              value={printMonth}
+              onChange={(e) => setPrintMonth(e.target.value)}
+              className="control-input px-4 py-3 rounded-2xl font-bold text-sm outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            disabled={!printDriverId || !printMonth}
+            onClick={() => {
+              const url = `${window.location.origin}${window.location.pathname}?print-driver=${encodeURIComponent(printDriverId)}&print-month=${encodeURIComponent(printMonth)}`;
+              window.open(url, '_blank', 'noopener,noreferrer');
+            }}
+            className="btn-primary ios-pressable px-6 py-3 text-xs uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            Open print-weergave
+          </button>
+        </div>
+        <p className="mt-4 text-xs text-slate-400 font-medium">
+          Opent in een nieuw tabblad met een printvriendelijke layout. Browser-printdialoog opent automatisch — daar kan je "Opslaan als PDF" kiezen of direct afdrukken.
+        </p>
       </div>
 
       <div className="surface-card p-8 rounded-[24px]">

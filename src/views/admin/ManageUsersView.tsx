@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
-import type { User } from '../../types';
+import { Info, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
+import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
+import { UserHistoryModal } from './UserHistoryModal';
 
 export type UserDraft = User & { password?: string };
 
-export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', currentUser }: { users: User[]; onSave: (u: UserDraft[]) => Promise<boolean>; title?: string; currentUser: User }) {
+export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', currentUser, shifts = [], leaveRequests = [], swaps = [] }: { users: User[]; onSave: (u: UserDraft[]) => Promise<boolean>; title?: string; currentUser: User; shifts?: Shift[]; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[] }) {
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
+  const [viewingHistoryUser, setViewingHistoryUser] = useState<User | null>(null);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -278,6 +280,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <td className="px-8 py-6 text-center"><span className={cn('w-8 h-8 inline-flex items-center justify-center rounded-xl text-xs font-black', (u.activeSessions || 0) > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-400 border border-slate-100')}>{u.activeSessions || 0}</span></td>
                   <td className="px-8 py-6 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => setViewingHistoryUser(u)} className="glass-icon-button p-2 text-slate-400 hover:text-oker-600 rounded-xl transition-all" title="Historiek bekijken"><Info size={18} /></button>
                       <button onClick={() => setConfirmResetUser(u)} className="glass-icon-button p-2 text-slate-400 hover:text-oker-600 rounded-xl transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={18} /></button>
                       <button onClick={() => setEditingUser(u)} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-oker-500 transition-all active:scale-95">Bewerken</button>
                       <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('p-2 rounded-xl transition-all', isProtectedAdmin(u) ? 'bg-white/30 text-slate-300 cursor-not-allowed' : 'glass-icon-button text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={18} /></button>
@@ -301,6 +304,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               </div>
               <div className="flex gap-2 pt-2">
                 <button onClick={() => setEditingUser(u)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest active:scale-95 transition-all">Bewerken</button>
+                <button onClick={() => setViewingHistoryUser(u)} className="glass-icon-button px-4 text-slate-500 rounded-2xl active:scale-95 transition-all" title="Historiek bekijken"><Info size={20} /></button>
                 <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('px-4 rounded-2xl active:scale-95 transition-all', isProtectedAdmin(u) ? 'bg-white/30 text-slate-300 cursor-not-allowed' : 'glass-icon-button text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={20} /></button>
                 <button onClick={() => setConfirmResetUser(u)} className="glass-icon-button px-4 text-slate-500 rounded-2xl active:scale-95 transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={20} /></button>
               </div>
@@ -380,6 +384,15 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         title={credentialsModal?.title || 'Toegangsgegevens'}
         email={credentialsModal?.email || ''}
         password={credentialsModal?.password || ''}
+      />
+
+      <UserHistoryModal
+        user={viewingHistoryUser}
+        shifts={shifts}
+        leaveRequests={leaveRequests}
+        swaps={swaps}
+        users={users}
+        onClose={() => setViewingHistoryUser(null)}
       />
     </PageShell>
   );
