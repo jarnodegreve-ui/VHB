@@ -323,7 +323,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-xl font-black">Verlof Aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
-                <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
+                <div className="rounded-[24px] bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
                   <p className="font-black text-oker-700 uppercase tracking-[0.18em] text-[10px]">Periode kiezen</p>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
@@ -334,7 +334,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                   </p>
                 </div>
 
-                <div className="rounded-3xl border border-slate-200 bg-white p-4 space-y-3">
+                <div className="rounded-[24px] border border-slate-200 bg-white p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <button
                       type="button"

@@ -599,7 +599,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         </div>
       </div>
 
-      <div className="surface-card p-8 rounded-3xl">
+      <div className="surface-card p-8 rounded-[24px]">
         <AdminSubsectionHeader
           eyebrow="Controle"
           title="Huidige Planning"
@@ -642,11 +642,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[36px] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+              className="glass-modal rounded-[32px] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             >
               <div className="p-8 border-b border-white/70 shrink-0">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-600">Matrix Import Preview</p>
-                <h4 className="mt-3 text-2xl font-black tracking-tight">Controleer voor je de planning vervangt</h4>
+                <h4 className="mt-3 text-xl font-black tracking-tight">Controleer voor je de planning vervangt</h4>
                 <p className="mt-2 text-sm font-medium text-slate-500">
                   Deze stap schrijft nog niets weg. Bevestig pas als dagen, diensten en probleempunten correct ogen.
                 </p>

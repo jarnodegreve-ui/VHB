@@ -2,7 +2,7 @@ import React from 'react';
 
 export function StatCard({ icon, label, value, subValue }: { icon: React.ReactNode, label: string, value: string, subValue: string }) {
   return (
-    <div className="panel relative flex items-center gap-4 overflow-hidden rounded-[22px] p-5 transition-all duration-200 group hover:-translate-y-0.5 md:p-6">
+    <div className="panel relative flex items-center gap-4 overflow-hidden rounded-[24px] p-5 transition-all duration-200 group hover:-translate-y-0.5 md:p-6">
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-white/0 via-white/80 to-white/0" />
       <div className="p-3 bg-slate-50/90 rounded-2xl relative z-10 ring-1 ring-slate-100 shadow-sm shrink-0">
         {icon}

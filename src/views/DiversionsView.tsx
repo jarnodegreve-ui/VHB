@@ -161,7 +161,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                       {div.mapCoordinates && (
                         <div className="space-y-2">
                           <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Visuele Omleiding</p>
-                          <div className="h-64 rounded-3xl overflow-hidden border border-slate-100 shadow-inner z-0">
+                          <div className="h-64 rounded-[24px] overflow-hidden border border-slate-100 shadow-inner z-0">
                             <Suspense
                               fallback={
                                 <div className="flex h-full items-center justify-center bg-white/60 text-sm font-bold text-slate-500">

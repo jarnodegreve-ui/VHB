@@ -333,7 +333,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <button 
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-400 hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
+                    className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
                   >
                     Annuleren
                   </button>

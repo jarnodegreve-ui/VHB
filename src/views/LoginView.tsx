@@ -195,7 +195,7 @@ export function LoginView({
               {info && (
                 <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-2xl">
                   <CheckCircle size={14} className="text-emerald-500 shrink-0" />
-                  <p className="text-emerald-700 text-sm font-medium">{info}</p>
+                  <p className="text-emerald-600 text-sm font-medium">{info}</p>
                 </motion.div>
               )}
 
@@ -231,7 +231,7 @@ export function LoginView({
               {info && (
                 <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-2xl">
                   <CheckCircle size={14} className="text-emerald-500 shrink-0" />
-                  <p className="text-emerald-700 text-sm font-medium">{info}</p>
+                  <p className="text-emerald-600 text-sm font-medium">{info}</p>
                 </motion.div>
               )}
 
@@ -296,7 +296,7 @@ export function LoginView({
               {info && (
                 <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 bg-emerald-50 border border-emerald-100 rounded-2xl">
                   <CheckCircle size={14} className="text-emerald-500 shrink-0" />
-                  <p className="text-emerald-700 text-sm font-medium">{info}</p>
+                  <p className="text-emerald-600 text-sm font-medium">{info}</p>
                 </motion.div>
               )}
 

@@ -203,7 +203,7 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
 
         <div className="mt-6 space-y-3">
           {filteredEntries.length > 0 ? filteredEntries.map((entry) => (
-            <div key={entry.id} className="rounded-[26px] border border-white/70 bg-white/50 p-5">
+            <div key={entry.id} className="rounded-[24px] border border-white/70 bg-white/50 p-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">

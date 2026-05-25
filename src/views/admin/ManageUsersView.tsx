@@ -236,7 +236,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           />
           <div className="mt-5 glass-segmented inline-flex rounded-2xl p-1">
             {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-4 py-2 rounded-[18px] text-xs font-black uppercase tracking-[0.16em] transition-all', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-4 py-2 rounded-2xl text-xs font-black uppercase tracking-[0.16em] transition-all', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
                 {role === 'all' ? 'Alles' : role}
               </button>
             ))}

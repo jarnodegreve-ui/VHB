@@ -96,7 +96,7 @@ export function ScheduleView({ user, shifts: allShifts }: { user: User, shifts: 
                     </div>
                   </td>
                   <td className="px-8 py-6">
-                    <div className="inline-flex min-w-[7rem] flex-col rounded-[22px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
+                    <div className="inline-flex min-w-[7rem] flex-col rounded-[24px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
                       <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Dienstnummer</p>
                       <p className="mt-1 font-black text-oker-700">{getServiceNumber(shift)}</p>
                     </div>

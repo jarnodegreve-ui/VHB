@@ -82,7 +82,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         description="Beheer de betekenis van matrixcodes en bepaal welke codes als dienst, verlof of afwezigheid verwerkt mogen worden."
         actions={(
           <>
-            <button onClick={addCode} className="glass-button rounded-[20px] px-5 py-3 text-sm font-black text-slate-800">
+            <button onClick={addCode} className="glass-button rounded-2xl px-5 py-3 text-sm font-black text-slate-800">
               <span className="inline-flex items-center gap-2"><Plus size={16} /> Code Toevoegen</span>
             </button>
             <button onClick={handleSave} disabled={isSaving} className="btn-primary ios-pressable px-5 py-3 text-sm">
@@ -131,7 +131,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                   key={option.key}
                   onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
                   className={cn(
-                    'rounded-[18px] px-4 py-2 text-xs font-black uppercase tracking-[0.16em] transition-all',
+                    'rounded-2xl px-4 py-2 text-xs font-black uppercase tracking-[0.16em] transition-all',
                     filter === option.key ? 'bg-white text-oker-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   )}
                 >
