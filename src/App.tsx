@@ -1032,7 +1032,7 @@ export default function App() {
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
         {/* Header */}
         <header className={cn(
-          "mx-3 mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 shrink-0 z-30 relative transition-shadow duration-500",
+          "mx-4 mt-3 md:mx-7 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 shrink-0 z-30 relative transition-shadow duration-500",
           isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
         )}>
           <div className="flex items-center gap-3">
