@@ -379,11 +379,17 @@ export const summarizeUpdateChanges = (previousUpdates: any[], nextUpdates: any[
 
 // --- Service segment helpers + planning build from matrix ---
 
+const isValidHHMM = (v?: string) => !!v && /^\d{1,2}:\d{2}$/.test(v.trim());
+const validSegment = (start: string | undefined, end: string | undefined, segment: number) =>
+  isValidHHMM(start) && isValidHHMM(end)
+    ? { startTime: start as string, endTime: end as string, segment }
+    : null;
+
 export const getServiceSegments = (service: ServiceRecord) => (
   [
-    service.startTime && service.endTime ? { startTime: service.startTime, endTime: service.endTime, segment: 1 } : null,
-    service.startTime2 && service.endTime2 ? { startTime: service.startTime2, endTime: service.endTime2, segment: 2 } : null,
-    service.startTime3 && service.endTime3 ? { startTime: service.startTime3, endTime: service.endTime3, segment: 3 } : null,
+    validSegment(service.startTime, service.endTime, 1),
+    validSegment(service.startTime2, service.endTime2, 2),
+    validSegment(service.startTime3, service.endTime3, 3),
   ].filter(Boolean) as Array<{ startTime: string; endTime: string; segment: number }>
 );
 
