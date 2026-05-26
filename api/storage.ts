@@ -23,6 +23,7 @@ import {
   toDatabaseDiversion,
   toDatabaseLeave,
   toDatabasePlanningCode,
+  toDatabaseService,
   toDatabaseSwap,
   toDatabaseUpdate,
   toDatabaseUser,
@@ -30,6 +31,7 @@ import {
   toPublicDiversion,
   toPublicLeave,
   toPublicPlanningCode,
+  toPublicService,
   toPublicSwap,
   toPublicUpdate,
   toPublicUser,
@@ -646,21 +648,23 @@ export const getServicesData = async () => {
   const client = requireDb();
   const { data, error } = await client.from('services').select('*');
   if (error) throw error;
-  return data ?? [];
+  return (data ?? []).map(toPublicService);
 };
 
 export const saveServicesData = async (data: any) => {
   const client = requireDb();
+  const normalized = Array.isArray(data) ? data.map(toPublicService) : [];
+  const rows = normalized.map(toDatabaseService);
   // Replace-all semantics: drop then insert. Upsert fallback if delete fails
   // (for example when RLS policies prevent delete on an empty table).
   const { error: deleteError } = await client.from('services').delete().neq('id', '0');
   if (deleteError) {
-    const { error: upsertError } = await client.from('services').upsert(data);
+    const { error: upsertError } = await client.from('services').upsert(rows);
     if (upsertError) throw upsertError;
     return;
   }
-  if (data.length > 0) {
-    const { error: insertError } = await client.from('services').insert(data);
+  if (rows.length > 0) {
+    const { error: insertError } = await client.from('services').insert(rows);
     if (insertError) throw insertError;
   }
 };

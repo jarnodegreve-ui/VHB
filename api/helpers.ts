@@ -121,6 +121,28 @@ export const toDatabaseDiversion = (d: DiversionRecord) => ({
   mapcoordinates: d.mapCoordinates || null,
 });
 
+export const toPublicService = (s: any) => ({
+  id: String(s.id),
+  serviceNumber: String(s.serviceNumber ?? s.servicenumber ?? ''),
+  startTime: String(s.startTime ?? s.starttime ?? ''),
+  endTime: String(s.endTime ?? s.endtime ?? ''),
+  startTime2: s.startTime2 ?? s.starttime2 ?? undefined,
+  endTime2: s.endTime2 ?? s.endtime2 ?? undefined,
+  startTime3: s.startTime3 ?? s.starttime3 ?? undefined,
+  endTime3: s.endTime3 ?? s.endtime3 ?? undefined,
+});
+
+export const toDatabaseService = (s: any) => ({
+  id: String(s.id),
+  servicenumber: String(s.serviceNumber ?? s.servicenumber ?? ''),
+  starttime: String(s.startTime ?? s.starttime ?? ''),
+  endtime: String(s.endTime ?? s.endtime ?? ''),
+  starttime2: s.startTime2 ?? s.starttime2 ?? null,
+  endtime2: s.endTime2 ?? s.endtime2 ?? null,
+  starttime3: s.startTime3 ?? s.starttime3 ?? null,
+  endtime3: s.endTime3 ?? s.endtime3 ?? null,
+});
+
 export const toPublicLeave = (leave: any): LeaveRecord => ({
   id: String(leave.id),
   userId: String(leave.userId ?? leave.userid),
