@@ -47,11 +47,31 @@ const requireDb = () => {
 
 // --- Planning ---
 
+// Supabase/PostgREST cap'pt by default op 1000 rijen per response. Bij een
+// volledige planning over meerdere maanden zit je daar zo over (Apr–Jun
+// 2026 was al 2000+ rijen), waardoor de maandprint stilletjes data
+// kwijtraakte na ~mei. We paginëren expliciet zodat we altijd alles
+// teruggeven.
+const PLANNING_PAGE_SIZE = 1000;
 export const getPlanningData = async () => {
   const client = requireDb();
-  const { data, error } = await client.from('planning').select('*');
-  if (error) throw error;
-  return data ?? [];
+  const all: any[] = [];
+  let from = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const to = from + PLANNING_PAGE_SIZE - 1;
+    const { data, error } = await client
+      .from('planning')
+      .select('*')
+      .order('id', { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    const batch = data ?? [];
+    all.push(...batch);
+    if (batch.length < PLANNING_PAGE_SIZE) break;
+    from += PLANNING_PAGE_SIZE;
+  }
+  return all;
 };
 
 export const savePlanningData = async (data: any) => {

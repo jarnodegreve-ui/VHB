@@ -268,53 +268,6 @@ export const normalizePlanningMatrixDate = (raw: string) => {
   return `${year}-${month}-${day.padStart(2, "0")}`;
 };
 
-export const parsePlanningMatrixCsv = (csvContent: string): PlanningMatrixRow[] => {
-  const raw = csvContent.replace(/^\uFEFF/, "");
-  const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length < 2) {
-    throw new Error("Bestand bevat geen bruikbare rijen.");
-  }
-
-  const header = lines[0].split(";").map((cell) => cell.trim());
-  const firstTotalsIndex = header.findIndex((cell, index) => index > 1 && cell.toLowerCase() === "aantal");
-  if (firstTotalsIndex === -1) {
-    throw new Error('Kolom "aantal" niet gevonden. Dit CSV-formaat wordt niet herkend.');
-  }
-
-  const driverColumns = header
-    .slice(2, firstTotalsIndex)
-    .map((name, offset) => ({ index: offset + 2, name: name.trim() }))
-    .filter((column) => column.name.length > 0);
-
-  const isValidIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
-
-  return lines
-    .slice(1)
-    .map((line, rowIndex) => {
-      const cells = line.split(";");
-      const sourceDate = normalizePlanningMatrixDate(cells[0] || "");
-      const assignments: Record<string, string> = {};
-
-      for (const driver of driverColumns) {
-        const rawCode = String(cells[driver.index] || "").trim();
-        if (!rawCode) continue;
-        assignments[driver.name] = rawCode;
-      }
-
-      return {
-        id: `${sourceDate}-${rowIndex + 1}`,
-        source_date: sourceDate,
-        day_type: String(cells[1] || "").trim(),
-        assignments,
-        raw_row: line,
-      };
-    })
-    // Sla rijen over zonder geldige datum (totaal-/info-rijen onderaan
-    // de Excel veroorzaken anders een 'invalid input syntax for type
-    // date' fout op de DB-insert).
-    .filter((row) => isValidIsoDate(row.source_date));
-};
-
 // Headers in de praktijk-tab die GEEN echte chauffeur zijn en dus
 // genegeerd moeten worden bij assignment-detectie.
 const PLANNING_MATRIX_NON_DRIVER_HEADERS = new Set([
@@ -338,12 +291,11 @@ const excelSerialToIso = (serial: number): string | null => {
   return `${y}-${m}-${d}`;
 };
 
-// Lees de praktijk-tab uit een .xls/.xlsx-buffer en bouw dezelfde
-// PlanningMatrixRow[]-shape als de CSV-parser, zodat de downstream
-// pipeline (buildPlanningFromMatrix → preview → confirm) ongewijzigd
-// blijft. Voordeel ten opzichte van CSV: datums blijven Excel-serial
-// (geen Nederlandse-maand-LUT-gegoochel) en lege cellen vs. lege strings
-// blijven goed gescheiden.
+// Lees de praktijk-tab uit een .xls/.xlsx-buffer en bouw een
+// PlanningMatrixRow[]-shape die de downstream pipeline
+// (buildPlanningFromMatrix → preview → confirm) kan verwerken. Datums
+// blijven Excel-serial zodat we geen locale-LUT nodig hebben, en lege
+// cellen vs. lege strings blijven goed gescheiden.
 export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
   const sheetName = workbook.SheetNames.find((name) => name.trim().toLowerCase() === "praktijk");

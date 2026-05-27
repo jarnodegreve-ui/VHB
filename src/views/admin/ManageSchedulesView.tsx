@@ -17,8 +17,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const [matrixPreviewOpen, setMatrixPreviewOpen] = useState(false);
   // Base64-encoded inhoud van het geüploade .xls/.xlsx-bestand. Blijft in
   // state zodat de gebruiker in de preview kan bevestigen zonder opnieuw
-  // te uploaden. Voorheen heette dit `pendingMatrixCsv`; nu dragen we de
-  // ruwe Excel mee i.p.v. een CSV-string.
+  // te uploaden.
   const [pendingMatrixXlsxBase64, setPendingMatrixXlsxBase64] = useState('');
   const [pendingMatrixFilename, setPendingMatrixFilename] = useState('');
   const [matrixPreview, setMatrixPreview] = useState<null | {

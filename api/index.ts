@@ -9,7 +9,7 @@ import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
-import { normalizeEmail, parsePlanningMatrixCsv, parsePlanningMatrixXlsx, toRoleScopedUser } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser } from "./helpers.js";
 import {
   buildPlanningFromMatrix,
   getActivityLog,
@@ -230,23 +230,18 @@ app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) =
   }
 });
 
-// Helper: lees rijen uit ofwel csvContent (legacy) ofwel xlsxBase64
-// (nieuwe primaire flow). Eén caller heeft één van beide nodig.
+// Helper: decode de geüploade Excel-buffer en parse de praktijk-tab.
 const parseMatrixInput = (body: any) => {
   const xlsxBase64 = typeof body?.xlsxBase64 === "string" ? body.xlsxBase64 : "";
-  if (xlsxBase64) {
-    const cleaned = xlsxBase64.replace(/^data:[^;]+;base64,/, "");
-    const buffer = Buffer.from(cleaned, "base64");
-    if (buffer.length === 0) {
-      throw new Error("XLSX-inhoud ontbreekt of is leeg.");
-    }
-    return { rows: parsePlanningMatrixXlsx(buffer), source: "xlsx" as const };
+  if (!xlsxBase64) {
+    throw new Error("Geen Excel-bestand meegegeven (verwacht xlsxBase64 in body).");
   }
-  const csvContent = typeof body?.csvContent === "string" ? body.csvContent : "";
-  if (csvContent.trim()) {
-    return { rows: parsePlanningMatrixCsv(csvContent), source: "csv" as const };
+  const cleaned = xlsxBase64.replace(/^data:[^;]+;base64,/, "");
+  const buffer = Buffer.from(cleaned, "base64");
+  if (buffer.length === 0) {
+    throw new Error("Excel-bestand is leeg.");
   }
-  throw new Error("Geen CSV- of XLSX-inhoud meegegeven.");
+  return { rows: parsePlanningMatrixXlsx(buffer) };
 };
 
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
