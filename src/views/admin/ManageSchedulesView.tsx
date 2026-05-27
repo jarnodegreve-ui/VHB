@@ -15,7 +15,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [isMatrixImporting, setIsMatrixImporting] = useState(false);
   const [matrixPreviewOpen, setMatrixPreviewOpen] = useState(false);
-  const [pendingMatrixCsv, setPendingMatrixCsv] = useState('');
+  // Base64-encoded inhoud van het geüploade .xls/.xlsx-bestand. Blijft in
+  // state zodat de gebruiker in de preview kan bevestigen zonder opnieuw
+  // te uploaden. Voorheen heette dit `pendingMatrixCsv`; nu dragen we de
+  // ruwe Excel mee i.p.v. een CSV-string.
+  const [pendingMatrixXlsxBase64, setPendingMatrixXlsxBase64] = useState('');
+  const [pendingMatrixFilename, setPendingMatrixFilename] = useState('');
   const [matrixPreview, setMatrixPreview] = useState<null | {
     importedDays: number;
     detectedDrivers: number;
@@ -28,6 +33,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     unknownCodes: string[];
     unmatchedDrivers: string[];
     verlofConflicts: Array<{ driverId: string; driverName: string; date: string; serviceNumber: string; leaveStart: string; leaveEnd: string }>;
+    servicesWithoutSegments: string[];
+    perDriver: Array<{
+      driverName: string;
+      driverId: string;
+      daysWithCode: number;
+      shiftsGenerated: number;
+      servicesMatched: number;
+      absences: number;
+      servicesWithoutSegments: number;
+    }>;
   }>(null);
   const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0 || matrixPreview.verlofConflicts.length > 0);
 
@@ -103,17 +118,31 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearingPlanning, setIsClearingPlanning] = useState(false);
 
+  // Lees binary file → base64 in chunks. btoa(String.fromCharCode(...arr))
+  // klapt over de stack-limit voor bestanden > ~1MB, dus we hakken het in
+  // stukken van 32 KB en concateneren.
+  const fileToBase64 = async (file: File): Promise<string> => {
+    const buffer = await file.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    const chunkSize = 0x8000;
+    let binary = '';
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunkSize)));
+    }
+    return btoa(binary);
+  };
+
   const handleMatrixFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
 
     try {
       setIsMatrixImporting(true);
-      const csvContent = await file.text();
+      const xlsxBase64 = await fileToBase64(file);
       const response = await fetch('/api/planning-matrix/preview', {
         method: 'POST',
         headers: await getSupabaseAuthHeaders(),
-        body: JSON.stringify({ csvContent }),
+        body: JSON.stringify({ xlsxBase64 }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -121,7 +150,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         throw new Error(data.details || data.error || 'Import mislukt.');
       }
 
-      setPendingMatrixCsv(csvContent);
+      setPendingMatrixXlsxBase64(xlsxBase64);
+      setPendingMatrixFilename(file.name);
       setMatrixPreview({
         importedDays: data.importedDays || 0,
         detectedDrivers: data.detectedDrivers || 0,
@@ -134,10 +164,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
         unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
         verlofConflicts: Array.isArray(data.verlofConflicts) ? data.verlofConflicts : [],
+        servicesWithoutSegments: Array.isArray(data.servicesWithoutSegments) ? data.servicesWithoutSegments : [],
+        perDriver: Array.isArray(data.perDriver) ? data.perDriver : [],
       });
       setMatrixPreviewOpen(true);
     } catch (error: any) {
-      notify(`CSV-preview mislukt: ${error.message}`, 'error');
+      notify(`Excel-preview mislukt: ${error.message}`, 'error');
     } finally {
       setIsMatrixImporting(false);
       if (event.target) event.target.value = '';
@@ -145,7 +177,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   };
 
   const confirmMatrixImport = async () => {
-    if (!pendingMatrixCsv.trim()) {
+    if (!pendingMatrixXlsxBase64) {
       notify('Er is geen matrixbestand klaar om te importeren.', 'error');
       return;
     }
@@ -155,7 +187,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       const response = await fetch('/api/planning-matrix/import', {
         method: 'POST',
         headers: await getSupabaseAuthHeaders(),
-        body: JSON.stringify({ csvContent: pendingMatrixCsv }),
+        body: JSON.stringify({ xlsxBase64: pendingMatrixXlsxBase64 }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -176,12 +208,13 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         'success'
       );
       setMatrixPreviewOpen(false);
-      setPendingMatrixCsv('');
+      setPendingMatrixXlsxBase64('');
+      setPendingMatrixFilename('');
       setMatrixPreview(null);
       await onMatrixImported();
       await fetchChangesSince();
     } catch (error: any) {
-      notify(`CSV-import mislukt: ${error.message}`, 'error');
+      notify(`Excel-import mislukt: ${error.message}`, 'error');
     } finally {
       setIsMatrixImporting(false);
     }
@@ -273,7 +306,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           <AdminSubsectionHeader
             eyebrow="Importbronnen"
             title="Matrix en fallback-import"
-            description="Gebruik matrix CSV als primaire bron. JSON-import blijft beschikbaar voor oudere rij-per-dienst exports."
+            description="Upload het originele Excel-bestand. De praktijk-tab wordt server-side gelezen — geen CSV-export of conversie nodig."
             aside={showExcelInfo ? (
               <button
                 onClick={() => setShowExcelInfo(false)}
@@ -295,9 +328,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             <div className="mt-5 rounded-[24px] border border-oker-100 bg-oker-50/80 p-5 text-sm">
               <p className="font-bold text-oker-800">Importvolgorde</p>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-oker-700">
-                <li>Gebruik matrix CSV voor de originele dagplanning per chauffeur.</li>
-                <li>Controleer eerst de preview op onbekende codes en niet-gematchte chauffeurs.</li>
-                <li>Gebruik JSON alleen voor oudere exports in rij-per-dienst formaat.</li>
+                <li>Upload het hele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab automatisch.</li>
+                <li>Controleer in de preview: dagen, diensten, onbekende codes, niet-gematchte chauffeurs en services zonder uren.</li>
+                <li>JSON-import blijft beschikbaar voor oudere rij-per-dienst exports.</li>
               </ol>
             </div>
           )}
@@ -399,10 +432,15 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Primair</p>
-                  <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">Matrix CSV Upload</h4>
+                  <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">Excel Matrix Upload</h4>
                   <p className="mt-2 text-sm font-medium text-slate-600">
-                    Upload je originele dagmatrix. De app toont eerst een preview en vervangt daarna pas de planning.
+                    Upload je originele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
                   </p>
+                  {pendingMatrixFilename && (
+                    <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-emerald-700">
+                      Geladen: {pendingMatrixFilename}
+                    </p>
+                  )}
                 </div>
                 <span className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700">
                   Aangeraden
@@ -415,10 +453,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 )}
               >
                 <Upload size={18} />
-                {isMatrixImporting ? 'Importeren...' : 'CSV Matrix Upload'}
+                {isMatrixImporting ? 'Importeren...' : 'Excel Matrix Upload'}
                 <input
                   type="file"
-                  accept=".csv,text/csv"
+                  accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                   className="hidden"
                   onChange={handleMatrixFileUpload}
                   disabled={isMatrixImporting}
@@ -861,13 +899,89 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </div>
                   </div>
                 </div>
+
+                {matrixPreview.servicesWithoutSegments.length > 0 && (
+                  <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/70 p-5">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
+                      <div className="flex-1">
+                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Services zonder geldige uren</p>
+                        <p className="mt-1 text-sm font-medium text-amber-900">
+                          {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {matrixPreview.servicesWithoutSegments.map((code) => (
+                            <span key={code} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
+                              {code}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {matrixPreview.perDriver.length > 0 && (
+                  <div className="rounded-[24px] border border-white/70 bg-white/55 p-5">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-600">Per-chauffeur breakdown</p>
+                      <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                        {matrixPreview.perDriver.length} chauffeurs
+                      </span>
+                    </div>
+                    <p className="mt-1 text-[11px] font-medium text-slate-500">
+                      Stille gaten worden hier zichtbaar: een chauffeur met dagen-met-code maar nul diensten betekent ofwel allemaal afwezigheden, ofwel een service zonder geldige uren.
+                    </p>
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
+                            <th className="py-2 pr-3">Chauffeur</th>
+                            <th className="py-2 px-2 text-right">Dagen</th>
+                            <th className="py-2 px-2 text-right">Diensten</th>
+                            <th className="py-2 px-2 text-right">Shifts</th>
+                            <th className="py-2 px-2 text-right">Afwez.</th>
+                            <th className="py-2 pl-2 text-right">⚠ Geen uren</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {matrixPreview.perDriver.map((d) => {
+                            const hasWarn = d.servicesWithoutSegments > 0;
+                            const noShifts = d.servicesMatched > 0 && d.shiftsGenerated === 0;
+                            return (
+                              <tr
+                                key={d.driverId}
+                                className={cn(
+                                  'border-t border-white/60',
+                                  hasWarn || noShifts ? 'text-amber-900' : 'text-slate-700'
+                                )}
+                              >
+                                <td className="py-2 pr-3 font-bold">{d.driverName}</td>
+                                <td className="py-2 px-2 text-right tabular-nums">{d.daysWithCode}</td>
+                                <td className="py-2 px-2 text-right tabular-nums">{d.servicesMatched}</td>
+                                <td className={cn('py-2 px-2 text-right tabular-nums font-black', noShifts && 'text-amber-700')}>
+                                  {d.shiftsGenerated}
+                                </td>
+                                <td className="py-2 px-2 text-right tabular-nums text-slate-500">{d.absences}</td>
+                                <td className={cn('py-2 pl-2 text-right tabular-nums', hasWarn ? 'font-black text-amber-700' : 'text-slate-300')}>
+                                  {d.servicesWithoutSegments || '—'}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="p-8 bg-white/40 flex gap-3 backdrop-blur-sm shrink-0">
                 <button
                   onClick={() => {
                     setMatrixPreviewOpen(false);
-                    setPendingMatrixCsv('');
+                    setPendingMatrixXlsxBase64('');
+                    setPendingMatrixFilename('');
                     setMatrixPreview(null);
                   }}
                   className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-widest text-xs border border-transparent hover:border-white/80"

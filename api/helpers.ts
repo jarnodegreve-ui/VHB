@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import type {
   AppUser,
   DiversionRecord,
@@ -132,15 +133,19 @@ export const toPublicService = (s: any) => ({
   endTime3: s.endTime3 ?? s.endtime3 ?? undefined,
 });
 
+// Supabase heeft de services-tabel met *quoted camelCase* kolommen aangemaakt
+// (via de Table Editor). Onquoted SQL-identifiers worden gevouwen naar lowercase,
+// dus we moeten hier camelCase keys schrijven — anders krijg je
+// `column "servicenumber" does not exist`.
 export const toDatabaseService = (s: any) => ({
   id: String(s.id),
-  servicenumber: String(s.serviceNumber ?? s.servicenumber ?? ''),
-  starttime: String(s.startTime ?? s.starttime ?? ''),
-  endtime: String(s.endTime ?? s.endtime ?? ''),
-  starttime2: s.startTime2 ?? s.starttime2 ?? null,
-  endtime2: s.endTime2 ?? s.endtime2 ?? null,
-  starttime3: s.startTime3 ?? s.starttime3 ?? null,
-  endtime3: s.endTime3 ?? s.endtime3 ?? null,
+  serviceNumber: String(s.serviceNumber ?? s.servicenumber ?? ''),
+  startTime: String(s.startTime ?? s.starttime ?? ''),
+  endTime: String(s.endTime ?? s.endtime ?? ''),
+  startTime2: s.startTime2 ?? s.starttime2 ?? null,
+  endTime2: s.endTime2 ?? s.endtime2 ?? null,
+  startTime3: s.startTime3 ?? s.starttime3 ?? null,
+  endTime3: s.endTime3 ?? s.endtime3 ?? null,
 });
 
 export const toPublicLeave = (leave: any): LeaveRecord => ({
@@ -308,4 +313,100 @@ export const parsePlanningMatrixCsv = (csvContent: string): PlanningMatrixRow[] 
     // de Excel veroorzaken anders een 'invalid input syntax for type
     // date' fout op de DB-insert).
     .filter((row) => isValidIsoDate(row.source_date));
+};
+
+// Headers in de praktijk-tab die GEEN echte chauffeur zijn en dus
+// genegeerd moeten worden bij assignment-detectie.
+const PLANNING_MATRIX_NON_DRIVER_HEADERS = new Set([
+  "",
+  "undefined",
+  "flexi/invallers",
+  "flexi",
+  "invallers",
+  "aantal",
+]);
+
+// Excel serial → ISO YYYY-MM-DD. SheetJS rondt naar dichtstbijzijnde dag;
+// we negeren tijd-fractie omdat de praktijk-tab dagniveau is.
+const excelSerialToIso = (serial: number): string | null => {
+  if (!Number.isFinite(serial) || serial <= 0) return null;
+  const parsed = (XLSX as any).SSF?.parse_date_code?.(serial);
+  if (!parsed || !parsed.y || !parsed.m || !parsed.d) return null;
+  const y = String(parsed.y).padStart(4, "0");
+  const m = String(parsed.m).padStart(2, "0");
+  const d = String(parsed.d).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+// Lees de praktijk-tab uit een .xls/.xlsx-buffer en bouw dezelfde
+// PlanningMatrixRow[]-shape als de CSV-parser, zodat de downstream
+// pipeline (buildPlanningFromMatrix → preview → confirm) ongewijzigd
+// blijft. Voordeel ten opzichte van CSV: datums blijven Excel-serial
+// (geen Nederlandse-maand-LUT-gegoochel) en lege cellen vs. lege strings
+// blijven goed gescheiden.
+export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const sheetName = workbook.SheetNames.find((name) => name.trim().toLowerCase() === "praktijk");
+  if (!sheetName) {
+    throw new Error(`Tabblad "praktijk" niet gevonden. Beschikbaar: ${workbook.SheetNames.join(", ")}`);
+  }
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet || !sheet["!ref"]) {
+    throw new Error('Tabblad "praktijk" is leeg.');
+  }
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+
+  // Header-rij = rij 0. Verzamel alle kolomnamen.
+  const header: string[] = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
+    header.push(cell ? String(cell.v).trim() : "");
+  }
+
+  // Driver-block loopt van kolom 2 tot vóór de eerste "aantal"-kolom.
+  const firstTotalsIndex = header.findIndex((cell, index) => index > 1 && cell.toLowerCase() === "aantal");
+  if (firstTotalsIndex === -1) {
+    throw new Error('Kolom "aantal" niet gevonden in praktijk-tab. Excel-structuur klopt niet.');
+  }
+  const driverColumns = header
+    .slice(2, firstTotalsIndex)
+    .map((name, offset) => ({ index: offset + 2, name }))
+    .filter((column) => !PLANNING_MATRIX_NON_DRIVER_HEADERS.has(column.name.toLowerCase()));
+
+  const rows: PlanningMatrixRow[] = [];
+
+  for (let r = 1; r <= range.e.r; r++) {
+    const dateCell = sheet[XLSX.utils.encode_cell({ r, c: 0 })];
+    // Alleen rijen met een Excel-serial in kolom A meenemen; alles wat
+    // tekstueel of leeg is, is een totaal-/info-rij.
+    if (!dateCell || dateCell.t !== "n" || typeof dateCell.v !== "number") continue;
+    const sourceDate = excelSerialToIso(dateCell.v);
+    if (!sourceDate) continue;
+
+    const dayTypeCell = sheet[XLSX.utils.encode_cell({ r, c: 1 })];
+    const dayType = dayTypeCell ? String(dayTypeCell.v).trim() : "";
+
+    const assignments: Record<string, string> = {};
+    for (const driver of driverColumns) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c: driver.index })];
+      if (!cell || cell.v === undefined || cell.v === null) continue;
+      const rawCode = String(cell.v).trim();
+      if (!rawCode) continue;
+      assignments[driver.name] = rawCode;
+    }
+
+    rows.push({
+      id: `${sourceDate}-${r}`,
+      source_date: sourceDate,
+      day_type: dayType,
+      assignments,
+      raw_row: `xlsx:${sheetName}:r${r}`,
+    });
+  }
+
+  if (rows.length === 0) {
+    throw new Error('Geen rijen met datum gevonden in praktijk-tab.');
+  }
+
+  return rows;
 };

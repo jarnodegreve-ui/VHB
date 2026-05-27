@@ -9,7 +9,7 @@ import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
-import { normalizeEmail, parsePlanningMatrixCsv, toRoleScopedUser } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixCsv, parsePlanningMatrixXlsx, toRoleScopedUser } from "./helpers.js";
 import {
   buildPlanningFromMatrix,
   getActivityLog,
@@ -230,14 +230,33 @@ app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) =
   }
 });
 
+// Helper: lees rijen uit ofwel csvContent (legacy) ofwel xlsxBase64
+// (nieuwe primaire flow). Eén caller heeft één van beide nodig.
+const parseMatrixInput = (body: any) => {
+  const xlsxBase64 = typeof body?.xlsxBase64 === "string" ? body.xlsxBase64 : "";
+  if (xlsxBase64) {
+    const cleaned = xlsxBase64.replace(/^data:[^;]+;base64,/, "");
+    const buffer = Buffer.from(cleaned, "base64");
+    if (buffer.length === 0) {
+      throw new Error("XLSX-inhoud ontbreekt of is leeg.");
+    }
+    return { rows: parsePlanningMatrixXlsx(buffer), source: "xlsx" as const };
+  }
+  const csvContent = typeof body?.csvContent === "string" ? body.csvContent : "";
+  if (csvContent.trim()) {
+    return { rows: parsePlanningMatrixCsv(csvContent), source: "csv" as const };
+  }
+  throw new Error("Geen CSV- of XLSX-inhoud meegegeven.");
+};
+
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
-    const csvContent = String(req.body?.csvContent || "");
-    if (!csvContent.trim()) {
-      return res.status(400).json({ error: "CSV-inhoud ontbreekt." });
+    let rows;
+    try {
+      ({ rows } = parseMatrixInput(req.body));
+    } catch (parseErr: any) {
+      return res.status(400).json({ error: parseErr.message });
     }
-
-    const rows = parsePlanningMatrixCsv(csvContent);
     const importedDates = rows.map((row) => row.source_date).filter(Boolean);
     const startDate = importedDates[0] || null;
     const endDate = importedDates[importedDates.length - 1] || null;
@@ -314,6 +333,10 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       skippedAbsences: generatedPlanning.summary.skippedAbsences,
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+      servicesWithoutSegments: generatedPlanning.summary.servicesWithoutSegments,
+      perDriver: generatedPlanning.summary.perDriver,
+      startDate,
+      endDate,
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to import planning matrix", details: err.message });
@@ -322,12 +345,12 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
 
 app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
-    const csvContent = String(req.body?.csvContent || "");
-    if (!csvContent.trim()) {
-      return res.status(400).json({ error: "CSV-inhoud ontbreekt." });
+    let rows;
+    try {
+      ({ rows } = parseMatrixInput(req.body));
+    } catch (parseErr: any) {
+      return res.status(400).json({ error: parseErr.message });
     }
-
-    const rows = parsePlanningMatrixCsv(csvContent);
     const importedDates = rows.map((row) => row.source_date).filter(Boolean);
     const startDate = importedDates[0] || null;
     const endDate = importedDates[importedDates.length - 1] || null;
@@ -373,6 +396,8 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       verlofConflicts,
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+      servicesWithoutSegments: generatedPlanning.summary.servicesWithoutSegments,
+      perDriver: generatedPlanning.summary.perDriver,
     });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to preview planning matrix", details: err.message });
