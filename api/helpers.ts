@@ -373,14 +373,37 @@ export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => 
     .map((name, offset) => ({ index: offset + 2, name }))
     .filter((column) => !PLANNING_MATRIX_NON_DRIVER_HEADERS.has(column.name.toLowerCase()));
 
+  // Voor diagnostiek bij faal: bewaar wat we wél zagen in kolom A.
+  const seenColumnA: Array<{ row: number; type: string; raw: any; display?: string }> = [];
+
+  const isValidIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
+
   const rows: PlanningMatrixRow[] = [];
 
   for (let r = 1; r <= range.e.r; r++) {
     const dateCell = sheet[XLSX.utils.encode_cell({ r, c: 0 })];
-    // Alleen rijen met een Excel-serial in kolom A meenemen; alles wat
-    // tekstueel of leeg is, is een totaal-/info-rij.
-    if (!dateCell || dateCell.t !== "n" || typeof dateCell.v !== "number") continue;
-    const sourceDate = excelSerialToIso(dateCell.v);
+    if (!dateCell || dateCell.v === undefined || dateCell.v === null) continue;
+
+    // Bewaar de eerste paar cellen voor de foutmelding mocht parsing falen.
+    if (seenColumnA.length < 5) {
+      seenColumnA.push({ row: r, type: dateCell.t, raw: dateCell.v, display: dateCell.w });
+    }
+
+    // Strategie: probeer eerst Excel-serial (de schone-bron-format), val
+    // dan terug op de tekstuele display-string of de raw string-waarde
+    // via de bestaande normalizePlanningMatrixDate (handelt "06-Apr-26"
+    // / "06-apr-26" / "06/04/2026"-achtige formats af).
+    let sourceDate: string | null = null;
+    if (dateCell.t === "n" && typeof dateCell.v === "number") {
+      sourceDate = excelSerialToIso(dateCell.v);
+    }
+    if (!sourceDate) {
+      const candidate = String(dateCell.w ?? dateCell.v ?? "").trim();
+      if (candidate) {
+        const normalized = normalizePlanningMatrixDate(candidate);
+        if (isValidIsoDate(normalized)) sourceDate = normalized;
+      }
+    }
     if (!sourceDate) continue;
 
     const dayTypeCell = sheet[XLSX.utils.encode_cell({ r, c: 1 })];
@@ -405,7 +428,13 @@ export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => 
   }
 
   if (rows.length === 0) {
-    throw new Error('Geen rijen met datum gevonden in praktijk-tab.');
+    // Diagnostiek meegeven zodat de gebruiker direct ziet wat er in
+    // kolom A stond — anders is "geen rijen" een blinde vlek.
+    const sample = seenColumnA
+      .map((s) => `R${s.row}: type=${s.type ?? "?"}, v=${JSON.stringify(s.raw)}, w=${JSON.stringify(s.display ?? "")}`)
+      .join(" | ");
+    const detail = sample ? ` Kolom A zag: ${sample}` : ' Kolom A was volledig leeg.';
+    throw new Error(`Geen rijen met datum gevonden in praktijk-tab.${detail}`);
   }
 
   return rows;
