@@ -47,11 +47,31 @@ const requireDb = () => {
 
 // --- Planning ---
 
+// Supabase/PostgREST cap'pt by default op 1000 rijen per response. Bij een
+// volledige planning over meerdere maanden zit je daar zo over (Apr–Jun
+// 2026 was al 2000+ rijen), waardoor de maandprint stilletjes data
+// kwijtraakte na ~mei. We paginëren expliciet zodat we altijd alles
+// teruggeven.
+const PLANNING_PAGE_SIZE = 1000;
 export const getPlanningData = async () => {
   const client = requireDb();
-  const { data, error } = await client.from('planning').select('*');
-  if (error) throw error;
-  return data ?? [];
+  const all: any[] = [];
+  let from = 0;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    const to = from + PLANNING_PAGE_SIZE - 1;
+    const { data, error } = await client
+      .from('planning')
+      .select('*')
+      .order('id', { ascending: true })
+      .range(from, to);
+    if (error) throw error;
+    const batch = data ?? [];
+    all.push(...batch);
+    if (batch.length < PLANNING_PAGE_SIZE) break;
+    from += PLANNING_PAGE_SIZE;
+  }
+  return all;
 };
 
 export const savePlanningData = async (data: any) => {
@@ -424,6 +444,40 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
   const generatedShifts: ShiftRecord[] = [];
   const unknownCodes = new Set<string>();
   const unmatchedDrivers = new Set<string>();
+  // Services die WEL matchen op nummer maar GEEN valid HH:MM-segmenten
+  // bevatten (bijv. omdat alle startTime/endTime velden leeg zijn) —
+  // voorheen telden die als "matched" maar produceerden 0 planning-rijen.
+  // Dit is precies de silent gap waar het Yves-incident door ontstond.
+  const servicesWithoutSegments = new Set<string>();
+  // Per-chauffeur counters voor de preview-breakdown.
+  const perDriver = new Map<
+    string,
+    {
+      driverName: string;
+      driverId: string;
+      daysWithCode: number;
+      shiftsGenerated: number;
+      servicesMatched: number;
+      absences: number;
+      servicesWithoutSegments: number;
+    }
+  >();
+  const bumpDriver = (driver: AppUser, name: string) => {
+    let entry = perDriver.get(driver.id);
+    if (!entry) {
+      entry = {
+        driverName: driver.name || name,
+        driverId: driver.id,
+        daysWithCode: 0,
+        shiftsGenerated: 0,
+        servicesMatched: 0,
+        absences: 0,
+        servicesWithoutSegments: 0,
+      };
+      perDriver.set(driver.id, entry);
+    }
+    return entry;
+  };
   let matchedServices = 0;
   let skippedAbsences = 0;
 
@@ -437,10 +491,19 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
         continue;
       }
 
+      const driverStats = bumpDriver(driver, driverName);
+      driverStats.daysWithCode += 1;
+
       const normalizedCode = toLookupToken(rawCode);
       const matchedService = servicesByNumber.get(normalizedCode);
       if (matchedService) {
         const segments = getServiceSegments(matchedService);
+        if (segments.length === 0) {
+          // Service-nummer matcht maar bevat geen HH:MM-segmenten. Niet
+          // stil voorbij laten gaan: vlag voor de preview-waarschuwing.
+          servicesWithoutSegments.add(matchedService.serviceNumber);
+          driverStats.servicesWithoutSegments += 1;
+        }
         for (const segment of segments) {
           generatedShifts.push({
             id: `${row.source_date}-${driver.id}-${matchedService.serviceNumber}-${segment.segment}`,
@@ -452,8 +515,10 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
             loopnr: "",
             driverId: driver.id,
           });
+          driverStats.shiftsGenerated += 1;
         }
         matchedServices += 1;
+        driverStats.servicesMatched += 1;
         continue;
       }
 
@@ -462,6 +527,7 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
         if (!matchedCode.isDayOff && !matchedCode.countsAsShift) {
           skippedAbsences += 1;
         }
+        driverStats.absences += 1;
         continue;
       }
 
@@ -484,6 +550,8 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
       skippedAbsences,
       unknownCodes: Array.from(unknownCodes).sort(),
       unmatchedDrivers: Array.from(unmatchedDrivers).sort(),
+      servicesWithoutSegments: Array.from(servicesWithoutSegments).sort(),
+      perDriver: Array.from(perDriver.values()).sort((a, b) => a.driverName.localeCompare(b.driverName)),
     },
   };
 };

@@ -165,15 +165,17 @@ create table if not exists public.diversions (
   mapCoordinates text
 );
 
+-- LET OP: quoted camelCase identifiers — anders vouwt Postgres ze naar
+-- lowercase en mismatcht de mapper (toDatabaseService schrijft camelCase).
 create table if not exists public.services (
   id text primary key,
-  serviceNumber text not null,
-  startTime text not null,
-  endTime text not null,
-  startTime2 text,
-  endTime2 text,
-  startTime3 text,
-  endTime3 text
+  "serviceNumber" text not null,
+  "startTime" text not null,
+  "endTime" text not null,
+  "startTime2" text,
+  "endTime2" text,
+  "startTime3" text,
+  "endTime3" text
 );
 
 create table if not exists public.updates (

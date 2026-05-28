@@ -1,3 +1,4 @@
+import * as XLSX from "xlsx";
 import type {
   AppUser,
   DiversionRecord,
@@ -132,15 +133,19 @@ export const toPublicService = (s: any) => ({
   endTime3: s.endTime3 ?? s.endtime3 ?? undefined,
 });
 
+// Supabase heeft de services-tabel met *quoted camelCase* kolommen aangemaakt
+// (via de Table Editor). Onquoted SQL-identifiers worden gevouwen naar lowercase,
+// dus we moeten hier camelCase keys schrijven — anders krijg je
+// `column "servicenumber" does not exist`.
 export const toDatabaseService = (s: any) => ({
   id: String(s.id),
-  servicenumber: String(s.serviceNumber ?? s.servicenumber ?? ''),
-  starttime: String(s.startTime ?? s.starttime ?? ''),
-  endtime: String(s.endTime ?? s.endtime ?? ''),
-  starttime2: s.startTime2 ?? s.starttime2 ?? null,
-  endtime2: s.endTime2 ?? s.endtime2 ?? null,
-  starttime3: s.startTime3 ?? s.starttime3 ?? null,
-  endtime3: s.endTime3 ?? s.endtime3 ?? null,
+  serviceNumber: String(s.serviceNumber ?? s.servicenumber ?? ''),
+  startTime: String(s.startTime ?? s.starttime ?? ''),
+  endTime: String(s.endTime ?? s.endtime ?? ''),
+  startTime2: s.startTime2 ?? s.starttime2 ?? null,
+  endTime2: s.endTime2 ?? s.endtime2 ?? null,
+  startTime3: s.startTime3 ?? s.starttime3 ?? null,
+  endTime3: s.endTime3 ?? s.endtime3 ?? null,
 });
 
 export const toPublicLeave = (leave: any): LeaveRecord => ({
@@ -263,49 +268,126 @@ export const normalizePlanningMatrixDate = (raw: string) => {
   return `${year}-${month}-${day.padStart(2, "0")}`;
 };
 
-export const parsePlanningMatrixCsv = (csvContent: string): PlanningMatrixRow[] => {
-  const raw = csvContent.replace(/^\uFEFF/, "");
-  const lines = raw.split(/\r?\n/).filter((line) => line.trim().length > 0);
-  if (lines.length < 2) {
-    throw new Error("Bestand bevat geen bruikbare rijen.");
+// Headers in de praktijk-tab die GEEN echte chauffeur zijn en dus
+// genegeerd moeten worden bij assignment-detectie.
+const PLANNING_MATRIX_NON_DRIVER_HEADERS = new Set([
+  "",
+  "undefined",
+  "flexi/invallers",
+  "flexi",
+  "invallers",
+  "aantal",
+]);
+
+// Excel serial → ISO YYYY-MM-DD. SheetJS rondt naar dichtstbijzijnde dag;
+// we negeren tijd-fractie omdat de praktijk-tab dagniveau is.
+const excelSerialToIso = (serial: number): string | null => {
+  if (!Number.isFinite(serial) || serial <= 0) return null;
+  const parsed = (XLSX as any).SSF?.parse_date_code?.(serial);
+  if (!parsed || !parsed.y || !parsed.m || !parsed.d) return null;
+  const y = String(parsed.y).padStart(4, "0");
+  const m = String(parsed.m).padStart(2, "0");
+  const d = String(parsed.d).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+};
+
+// Lees de praktijk-tab uit een .xls/.xlsx-buffer en bouw een
+// PlanningMatrixRow[]-shape die de downstream pipeline
+// (buildPlanningFromMatrix → preview → confirm) kan verwerken. Datums
+// blijven Excel-serial zodat we geen locale-LUT nodig hebben, en lege
+// cellen vs. lege strings blijven goed gescheiden.
+export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => {
+  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
+  const sheetName = workbook.SheetNames.find((name) => name.trim().toLowerCase() === "praktijk");
+  if (!sheetName) {
+    throw new Error(`Tabblad "praktijk" niet gevonden. Beschikbaar: ${workbook.SheetNames.join(", ")}`);
+  }
+  const sheet = workbook.Sheets[sheetName];
+  if (!sheet || !sheet["!ref"]) {
+    throw new Error('Tabblad "praktijk" is leeg.');
+  }
+  const range = XLSX.utils.decode_range(sheet["!ref"]);
+
+  // Header-rij = rij 0. Verzamel alle kolomnamen.
+  const header: string[] = [];
+  for (let c = range.s.c; c <= range.e.c; c++) {
+    const cell = sheet[XLSX.utils.encode_cell({ r: 0, c })];
+    header.push(cell ? String(cell.v).trim() : "");
   }
 
-  const header = lines[0].split(";").map((cell) => cell.trim());
+  // Driver-block loopt van kolom 2 tot vóór de eerste "aantal"-kolom.
   const firstTotalsIndex = header.findIndex((cell, index) => index > 1 && cell.toLowerCase() === "aantal");
   if (firstTotalsIndex === -1) {
-    throw new Error('Kolom "aantal" niet gevonden. Dit CSV-formaat wordt niet herkend.');
+    throw new Error('Kolom "aantal" niet gevonden in praktijk-tab. Excel-structuur klopt niet.');
   }
-
   const driverColumns = header
     .slice(2, firstTotalsIndex)
-    .map((name, offset) => ({ index: offset + 2, name: name.trim() }))
-    .filter((column) => column.name.length > 0);
+    .map((name, offset) => ({ index: offset + 2, name }))
+    .filter((column) => !PLANNING_MATRIX_NON_DRIVER_HEADERS.has(column.name.toLowerCase()));
+
+  // Voor diagnostiek bij faal: bewaar wat we wél zagen in kolom A.
+  const seenColumnA: Array<{ row: number; type: string; raw: any; display?: string }> = [];
 
   const isValidIsoDate = (v: string) => /^\d{4}-\d{2}-\d{2}$/.test(v);
 
-  return lines
-    .slice(1)
-    .map((line, rowIndex) => {
-      const cells = line.split(";");
-      const sourceDate = normalizePlanningMatrixDate(cells[0] || "");
-      const assignments: Record<string, string> = {};
+  const rows: PlanningMatrixRow[] = [];
 
-      for (const driver of driverColumns) {
-        const rawCode = String(cells[driver.index] || "").trim();
-        if (!rawCode) continue;
-        assignments[driver.name] = rawCode;
+  for (let r = 1; r <= range.e.r; r++) {
+    const dateCell = sheet[XLSX.utils.encode_cell({ r, c: 0 })];
+    if (!dateCell || dateCell.v === undefined || dateCell.v === null) continue;
+
+    // Bewaar de eerste paar cellen voor de foutmelding mocht parsing falen.
+    if (seenColumnA.length < 5) {
+      seenColumnA.push({ row: r, type: dateCell.t, raw: dateCell.v, display: dateCell.w });
+    }
+
+    // Strategie: probeer eerst Excel-serial (de schone-bron-format), val
+    // dan terug op de tekstuele display-string of de raw string-waarde
+    // via de bestaande normalizePlanningMatrixDate (handelt "06-Apr-26"
+    // / "06-apr-26" / "06/04/2026"-achtige formats af).
+    let sourceDate: string | null = null;
+    if (dateCell.t === "n" && typeof dateCell.v === "number") {
+      sourceDate = excelSerialToIso(dateCell.v);
+    }
+    if (!sourceDate) {
+      const candidate = String(dateCell.w ?? dateCell.v ?? "").trim();
+      if (candidate) {
+        const normalized = normalizePlanningMatrixDate(candidate);
+        if (isValidIsoDate(normalized)) sourceDate = normalized;
       }
+    }
+    if (!sourceDate) continue;
 
-      return {
-        id: `${sourceDate}-${rowIndex + 1}`,
-        source_date: sourceDate,
-        day_type: String(cells[1] || "").trim(),
-        assignments,
-        raw_row: line,
-      };
-    })
-    // Sla rijen over zonder geldige datum (totaal-/info-rijen onderaan
-    // de Excel veroorzaken anders een 'invalid input syntax for type
-    // date' fout op de DB-insert).
-    .filter((row) => isValidIsoDate(row.source_date));
+    const dayTypeCell = sheet[XLSX.utils.encode_cell({ r, c: 1 })];
+    const dayType = dayTypeCell ? String(dayTypeCell.v).trim() : "";
+
+    const assignments: Record<string, string> = {};
+    for (const driver of driverColumns) {
+      const cell = sheet[XLSX.utils.encode_cell({ r, c: driver.index })];
+      if (!cell || cell.v === undefined || cell.v === null) continue;
+      const rawCode = String(cell.v).trim();
+      if (!rawCode) continue;
+      assignments[driver.name] = rawCode;
+    }
+
+    rows.push({
+      id: `${sourceDate}-${r}`,
+      source_date: sourceDate,
+      day_type: dayType,
+      assignments,
+      raw_row: `xlsx:${sheetName}:r${r}`,
+    });
+  }
+
+  if (rows.length === 0) {
+    // Diagnostiek meegeven zodat de gebruiker direct ziet wat er in
+    // kolom A stond — anders is "geen rijen" een blinde vlek.
+    const sample = seenColumnA
+      .map((s) => `R${s.row}: type=${s.type ?? "?"}, v=${JSON.stringify(s.raw)}, w=${JSON.stringify(s.display ?? "")}`)
+      .join(" | ");
+    const detail = sample ? ` Kolom A zag: ${sample}` : ' Kolom A was volledig leeg.';
+    throw new Error(`Geen rijen met datum gevonden in praktijk-tab.${detail}`);
+  }
+
+  return rows;
 };
