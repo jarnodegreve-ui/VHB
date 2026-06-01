@@ -173,7 +173,16 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
 
 app.get("/api/planning", authenticate, async (req, res) => {
   try {
-    const data = await getPlanningData();
+    // Optionele filters: ?driverId=X of ?month=YYYY-MM laten de client
+    // gericht ophalen i.p.v. de hele tabel — drastisch minder data over
+    // het draad voor mobile en maandprint.
+    const driverId = typeof req.query.driverId === "string" && req.query.driverId.trim()
+      ? req.query.driverId.trim()
+      : undefined;
+    const monthIso = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
+      ? req.query.month
+      : undefined;
+    const data = await getPlanningData({ driverId, monthIso });
     res.json(data);
   } catch (err) {
     console.error("Error reading planning data:", err);
