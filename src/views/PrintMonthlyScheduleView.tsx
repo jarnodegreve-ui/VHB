@@ -155,7 +155,7 @@ export function PrintMonthlyScheduleView({
           <div className="flex items-start justify-between gap-6">
             <div>
               <p className="text-[10px] font-black uppercase tracking-[0.22em] text-oker-600">
-                VHB · Maaltegem · Maandrooster
+                VHB · Maldegem · Maandrooster
               </p>
               <h1 className="mt-2 text-3xl font-black tracking-tight">{driver.name}</h1>
               <p className="mt-1 text-xl font-bold text-slate-700">{monthName} {year}</p>
