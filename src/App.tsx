@@ -53,6 +53,7 @@ import { LoginView } from './views/LoginView';
 import { ContactsView } from './views/ContactsView';
 import { ServicesView } from './views/ServicesView';
 import { DashboardView } from './views/DashboardView';
+import { PlannerDashboardWidgets } from './views/PlannerDashboardWidgets';
 import { DiversionsView } from './views/DiversionsView';
 import { ScheduleView } from './views/ScheduleView';
 import { UpdatesView } from './views/UpdatesView';
@@ -1119,7 +1120,21 @@ export default function App() {
               transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto w-full max-w-[1360px]"
             >
-              {resolvedCurrentView === 'dashboard' && <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />}
+              {resolvedCurrentView === 'dashboard' && (
+                <div className="space-y-8">
+                  {(currentUser?.role === 'planner' || currentUser?.role === 'admin') && (
+                    <PlannerDashboardWidgets
+                      leaveRequests={leaveRequests}
+                      swaps={swaps}
+                      matrixHistory={planningMatrixHistory}
+                      diversionsCount={diversions.length}
+                      users={users}
+                      onNavigate={(view) => setCurrentView(view)}
+                    />
+                  )}
+                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />
+                </div>
+              )}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
