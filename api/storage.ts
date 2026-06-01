@@ -45,33 +45,49 @@ const requireDb = () => {
   return db;
 };
 
-// --- Planning ---
-
-// Supabase/PostgREST cap'pt by default op 1000 rijen per response. Bij een
-// volledige planning over meerdere maanden zit je daar zo over (Apr–Jun
-// 2026 was al 2000+ rijen), waardoor de maandprint stilletjes data
-// kwijtraakte na ~mei. We paginëren expliciet zodat we altijd alles
-// teruggeven.
-const PLANNING_PAGE_SIZE = 1000;
-export const getPlanningData = async () => {
-  const client = requireDb();
-  const all: any[] = [];
+// Supabase/PostgREST cap'pt by default op 1000 rijen per response. Voor
+// tabellen die door de tijd groeien (planning, matrix_rows, leave, ...)
+// MOETEN we expliciet paginëren — anders raakt elke caller stilletjes
+// data kwijt zodra de tabel de cap overschrijdt. Dat was de oorzaak van
+// het "eind mei verdwijnt"-incident.
+const PAGE_SIZE = 1000;
+const paginatedFetch = async <T = any>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<T[]> => {
+  const all: T[] = [];
   let from = 0;
   // eslint-disable-next-line no-constant-condition
   while (true) {
-    const to = from + PLANNING_PAGE_SIZE - 1;
-    const { data, error } = await client
-      .from('planning')
-      .select('*')
-      .order('id', { ascending: true })
-      .range(from, to);
+    const { data, error } = await buildQuery(from, from + PAGE_SIZE - 1);
     if (error) throw error;
-    const batch = data ?? [];
+    const batch = (data ?? []) as T[];
     all.push(...batch);
-    if (batch.length < PLANNING_PAGE_SIZE) break;
-    from += PLANNING_PAGE_SIZE;
+    if (batch.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
   }
   return all;
+};
+
+// --- Planning ---
+
+// Optionele filters laten de /api/planning-endpoint één maand of één
+// chauffeur ophalen i.p.v. de hele tabel — scheelt drastisch in
+// data-overdracht voor mobile-clients en de maandprint.
+export type PlanningFilters = { driverId?: string; monthIso?: string };
+
+export const getPlanningData = async (filters?: PlanningFilters) => {
+  const client = requireDb();
+  return paginatedFetch((from, to) => {
+    let q = client.from('planning').select('*').order('id', { ascending: true });
+    if (filters?.driverId) {
+      q = q.eq('driverId', filters.driverId);
+    }
+    if (filters?.monthIso && /^\d{4}-\d{2}$/.test(filters.monthIso)) {
+      // date is text; gebruik string-prefix-match in ISO-formaat
+      q = q.like('date', `${filters.monthIso}-%`);
+    }
+    return q.range(from, to);
+  });
 };
 
 export const savePlanningData = async (data: any) => {
@@ -95,18 +111,27 @@ export const replacePlanningData = async (data: ShiftRecord[]) => {
 
 export const getPlanningMatrixRows = async (): Promise<PlanningMatrixRow[]> => {
   const client = requireDb();
-  const { data, error } = await client
-    .from('planning_matrix_rows')
-    .select('*')
-    .order('source_date', { ascending: true });
-  if (error) throw error;
-  return (data ?? []) as PlanningMatrixRow[];
+  return paginatedFetch<PlanningMatrixRow>((from, to) =>
+    client
+      .from('planning_matrix_rows')
+      .select('*')
+      .order('source_date', { ascending: true })
+      .range(from, to),
+  );
 };
 
+// Replace-semantiek: wis alle bestaande rijen, dan insert. Vroeger werd
+// `upsert` gebruikt op `id`, maar omdat de ID-vorming verschilde tussen
+// CSV- en XLSX-imports (verschillende rij-nummering), stapelden oude
+// imports zich op als "ghost rows". Dat veroorzaakte 549 extra rijen
+// over 549 ghost-datums. Nu maakt elke import schoon werk.
 export const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
   const client = requireDb();
-  const { error } = await client.from('planning_matrix_rows').upsert(rows);
-  if (error) throw error;
+  const { error: deleteError } = await client.from('planning_matrix_rows').delete().neq('id', '__never__');
+  if (deleteError) throw deleteError;
+  if (rows.length === 0) return;
+  const { error: insertError } = await client.from('planning_matrix_rows').insert(rows);
+  if (insertError) throw insertError;
 };
 
 // --- Planning codes ---
@@ -560,9 +585,10 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
 
 export const getUsersData = async (): Promise<AppUser[]> => {
   const client = requireDb();
-  const { data, error } = await client.from('users').select('*');
-  if (error) throw error;
-  return (data ?? []).map(toPublicUser);
+  const rows = await paginatedFetch((from, to) =>
+    client.from('users').select('*').order('id', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicUser);
 };
 
 export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
@@ -680,9 +706,10 @@ export const removeDiversionPdfs = async (diversionIds: string[]) => {
 
 export const getDiversionsData = async () => {
   const client = requireDb();
-  const { data, error } = await client.from('diversions').select('*');
-  if (error) throw error;
-  return (data ?? []).map(toPublicDiversion);
+  const rows = await paginatedFetch((from, to) =>
+    client.from('diversions').select('*').order('id', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicDiversion);
 };
 
 export const saveDiversionsData = async (data: any) => {
@@ -714,9 +741,10 @@ export const saveDiversionsData = async (data: any) => {
 
 export const getServicesData = async () => {
   const client = requireDb();
-  const { data, error } = await client.from('services').select('*');
-  if (error) throw error;
-  return (data ?? []).map(toPublicService);
+  const rows = await paginatedFetch((from, to) =>
+    client.from('services').select('*').order('id', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicService);
 };
 
 export const saveServicesData = async (data: any) => {
@@ -741,9 +769,10 @@ export const saveServicesData = async (data: any) => {
 
 export const getUpdatesData = async () => {
   const client = requireDb();
-  const { data, error } = await client.from('updates').select('*');
-  if (error) throw error;
-  return (data ?? []).map(toPublicUpdate);
+  const rows = await paginatedFetch((from, to) =>
+    client.from('updates').select('*').order('id', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicUpdate);
 };
 
 export const saveUpdatesData = async (data: any) => {
@@ -797,9 +826,10 @@ export const saveUpdatesData = async (data: any) => {
 
 export const getSwapsData = async () => {
   const client = requireDb();
-  const { data, error } = await client.from('swaps').select('*');
-  if (error) throw error;
-  return (data ?? []).map(toPublicSwap);
+  const rows = await paginatedFetch((from, to) =>
+    client.from('swaps').select('*').order('id', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicSwap);
 };
 
 export const saveSwapsData = async (data: any) => {
@@ -813,9 +843,10 @@ export const saveSwapsData = async (data: any) => {
 
 export const getLeaveData = async () => {
   const client = requireDb();
-  const { data, error } = await client.from('leave').select('*');
-  if (error) throw error;
-  return (data ?? []).map(toPublicLeave);
+  const rows = await paginatedFetch((from, to) =>
+    client.from('leave').select('*').order('id', { ascending: true }).range(from, to),
+  );
+  return rows.map(toPublicLeave);
 };
 
 export const saveLeaveData = async (data: any) => {
