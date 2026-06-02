@@ -54,6 +54,7 @@ import { ContactsView } from './views/ContactsView';
 import { ServicesView } from './views/ServicesView';
 import { DashboardView } from './views/DashboardView';
 import { PlannerDashboardWidgets } from './views/PlannerDashboardWidgets';
+import { useParallaxScroll } from './lib/interactive';
 import { DiversionsView } from './views/DiversionsView';
 import { ScheduleView } from './views/ScheduleView';
 import { UpdatesView } from './views/UpdatesView';
@@ -151,6 +152,9 @@ export default function App() {
     isPasswordRecoveryRef.current = v;
     setIsPasswordRecovery(v);
   };
+
+  // Parallax-scroll: schrijft --scroll-y CSS-var voor de fixed bg-blobs
+  useParallaxScroll();
 
   // Initialize theme from localStorage, falling back to system preference.
   useEffect(() => {
@@ -820,6 +824,9 @@ export default function App() {
 
   return (
     <>
+      {/* Parallax-laag: fixed gekleurde blobs die trager scrollen dan content */}
+      <div className="parallax-bg" aria-hidden="true" />
+
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
       <ChangePasswordModal
         isOpen={showChangePassword}
@@ -877,7 +884,9 @@ export default function App() {
             className="w-full rounded-2xl py-1 transition-all active:scale-[0.98] hover:opacity-80"
             title="Naar dashboard"
           >
-            <h1 className="brand-wordmark section-title text-[1.25rem] text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
+            <h1 className="brand-wordmark brand-wordmark-anim section-title text-[1.25rem] text-slate-900 leading-none">
+              VHB <span className="brand-accent text-oker-500">PORTAAL</span>
+            </h1>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
           </button>
           <button

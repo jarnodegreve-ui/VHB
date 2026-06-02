@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight } from 'lucide-react';
 import type { Diversion, Shift, User } from '../types';
+import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -67,9 +68,22 @@ export function DashboardView({
   };
 
   const isChauffeur = user.role === 'chauffeur';
+  const firstName = user.name.split(' ')[0];
+  const greeting = getDaypartGreeting(now);
 
   return (
     <div className="space-y-4">
+      {/* === Gepersonaliseerde begroeting === */}
+      <div className="px-1 pt-1">
+        <h1 className="text-2xl md:text-3xl font-black tracking-[-0.03em] text-slate-900">
+          {greeting}, <span className="text-oker-600">{firstName}</span>
+        </h1>
+        <p className="text-xs font-medium text-slate-500 mt-1">
+          {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
+          {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+        </p>
+      </div>
+
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
@@ -78,7 +92,7 @@ export function DashboardView({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
+            className="tilt-card glow-top glass-stack lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
             style={{
               background:
                 'linear-gradient(135deg, rgba(255, 251, 235, 0.78) 0%, rgba(254, 243, 199, 0.62) 60%, rgba(253, 230, 138, 0.42) 100%)',
@@ -324,20 +338,28 @@ export function StatTile({
     border: c.border,
     boxShadow: c.shadow,
   };
+  const ref = useCursorGlow<HTMLElement>();
   if (onClick) {
     return (
       <button
+        ref={ref as RefObject<HTMLButtonElement>}
         onClick={onClick}
-        className="text-left flex-1 rounded-[24px] p-5 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
+        className="tilt-card glow-top glass-stack cursor-glow text-left flex-1 rounded-[24px] p-5 relative overflow-hidden active:scale-[0.99]"
         style={tileStyle}
       >
-        {Body}
+        <span className="cursor-glow-layer" />
+        <span className="relative z-10 block">{Body}</span>
       </button>
     );
   }
   return (
-    <div className="flex-1 rounded-[24px] p-5 relative overflow-hidden" style={tileStyle}>
-      {Body}
+    <div
+      ref={ref as RefObject<HTMLDivElement>}
+      className="glow-top cursor-glow flex-1 rounded-[24px] p-5 relative overflow-hidden"
+      style={tileStyle}
+    >
+      <span className="cursor-glow-layer" />
+      <span className="relative z-10 block">{Body}</span>
     </div>
   );
 }
@@ -365,7 +387,7 @@ function PremiumPanel({
     : 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)';
   return (
     <div
-      className="rounded-[28px] p-5 relative overflow-hidden"
+      className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
       style={{
         background: bg,
         backdropFilter: 'blur(30px) saturate(155%)',
