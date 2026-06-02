@@ -156,16 +156,16 @@ export function PlannerDashboardWidgets({
 
 const PANEL_PALETTE = {
   oker: {
-    bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 251, 235, 0.72) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 28px rgba(245, 158, 11, 0.10), 0 2px 8px rgba(245, 158, 11, 0.06)',
-    sub: 'text-oker-700/70',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 10px 28px rgba(245, 158, 11, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04)',
+    sub: 'text-slate-500',
   },
   blue: {
-    bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(239, 246, 255, 0.72) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 28px rgba(59, 130, 246, 0.10), 0 2px 8px rgba(59, 130, 246, 0.06)',
-    sub: 'text-blue-700/70',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 10px 28px rgba(59, 130, 246, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04)',
+    sub: 'text-slate-500',
   },
 } as const;
 
@@ -190,7 +190,13 @@ function BentoListPanel({
   return (
     <div
       className="rounded-[28px] p-5 relative overflow-hidden"
-      style={{ background: p.bg, boxShadow: p.shadow }}
+      style={{
+        background: p.bg,
+        backdropFilter: 'blur(22px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(22px) saturate(140%)',
+        border: '1px solid rgba(255, 255, 255, 0.9)',
+        boxShadow: p.shadow,
+      }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
@@ -242,9 +248,12 @@ function QuickActionTile({
       onClick={onClick}
       className="group text-left rounded-[24px] p-4 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
       style={{
-        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.72) 100%)',
+        backdropFilter: 'blur(20px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+        border: '1px solid rgba(255, 255, 255, 0.9)',
         boxShadow:
-          'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)',
+          'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)',
       }}
     >
       <div className="flex items-center gap-3">

@@ -80,39 +80,43 @@ export function DashboardView({
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className="lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
             style={{
-              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 45%, #fcd34d 100%)',
+              background:
+                'linear-gradient(135deg, rgba(255, 251, 235, 0.92) 0%, rgba(254, 243, 199, 0.78) 60%, rgba(253, 230, 138, 0.55) 100%)',
+              backdropFilter: 'blur(24px) saturate(135%)',
+              WebkitBackdropFilter: 'blur(24px) saturate(135%)',
+              border: '1px solid rgba(255, 255, 255, 0.85)',
               boxShadow:
-                'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(180, 83, 9, 0.08), 0 12px 32px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(245, 158, 11, 0.12)',
+                'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 12px 32px rgba(245, 158, 11, 0.10), 0 4px 12px rgba(245, 158, 11, 0.06)',
             }}
           >
             <div
-              className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-60"
+              className="pointer-events-none absolute -top-32 -right-32 w-96 h-96 rounded-full opacity-50"
               style={{
-                background: 'radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, transparent 70%)',
+                background: 'radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, transparent 70%)',
               }}
             />
             <div
-              className="pointer-events-none absolute -bottom-20 -left-20 w-56 h-56 rounded-full opacity-50"
+              className="pointer-events-none absolute -bottom-24 -left-24 w-64 h-64 rounded-full opacity-30"
               style={{
-                background: 'radial-gradient(circle, rgba(180, 83, 9, 0.15) 0%, transparent 70%)',
+                background: 'radial-gradient(circle, rgba(245, 158, 11, 0.18) 0%, transparent 70%)',
               }}
             />
 
             <div className="relative">
-              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/60 backdrop-blur-sm rounded-full mb-4">
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/65 backdrop-blur-md ring-1 ring-white/70 rounded-full mb-4">
                 <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-oker-600 opacity-75 animate-ping" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-oker-600" />
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-oker-500 opacity-70 animate-ping" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-oker-500" />
                 </span>
-                <span className="text-[10px] font-black text-oker-900 uppercase tracking-[0.18em]">
+                <span className="text-[10px] font-black text-oker-800 uppercase tracking-[0.18em]">
                   Volgende dienst
                 </span>
               </div>
 
-              <h2 className="text-5xl md:text-6xl font-black tracking-[-0.04em] text-oker-950 leading-none">
+              <h2 className="text-5xl md:text-6xl font-black tracking-[-0.04em] text-slate-900 leading-none">
                 {getCountdown(nextShift.startDateTime)}
               </h2>
-              <p className="mt-2 text-sm font-semibold text-oker-900/75">
+              <p className="mt-2 text-sm font-semibold text-slate-700/80">
                 {nextShift.startDateTime.toLocaleDateString('nl-BE', {
                   weekday: 'long',
                   day: 'numeric',
@@ -123,13 +127,13 @@ export function DashboardView({
               </p>
 
               <div className="mt-5 flex gap-2.5">
-                <div className="bg-white/75 backdrop-blur-sm rounded-2xl px-4 py-2.5 ring-1 ring-white/60">
-                  <p className="text-[9px] font-bold text-oker-700 uppercase tracking-widest mb-0.5">Start</p>
-                  <p className="text-2xl font-black text-oker-950 tabular-nums leading-none">{nextShift.startTime}</p>
+                <div className="bg-white/70 backdrop-blur-md rounded-2xl px-4 py-2.5 ring-1 ring-white/80 shadow-sm">
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Start</p>
+                  <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">{nextShift.startTime}</p>
                 </div>
-                <div className="bg-white/75 backdrop-blur-sm rounded-2xl px-4 py-2.5 ring-1 ring-white/60">
-                  <p className="text-[9px] font-bold text-oker-700 uppercase tracking-widest mb-0.5">Einde</p>
-                  <p className="text-2xl font-black text-oker-950 tabular-nums leading-none">{nextShift.endTime}</p>
+                <div className="bg-white/70 backdrop-blur-md rounded-2xl px-4 py-2.5 ring-1 ring-white/80 shadow-sm">
+                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Einde</p>
+                  <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">{nextShift.endTime}</p>
                 </div>
               </div>
             </div>
@@ -231,46 +235,53 @@ export function DashboardView({
 
 // === Subcomponents ===
 
+// Rustige glass palette: bijna-witte tegels met heel licht kleur-zweem.
+// backdrop-filter geeft het "Apple Wallet kaart"-glas-effect.
 const TILE_PALETTE = {
   emerald: {
-    bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 60%, #a7f3d0 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(240, 253, 244, 0.72) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(6, 95, 70, 0.06), 0 8px 24px rgba(16, 185, 129, 0.10), 0 2px 8px rgba(16, 185, 129, 0.06)',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(16, 185, 129, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.9)',
     iconBg: 'bg-emerald-500',
-    text: 'text-emerald-950',
-    sub: 'text-emerald-800/70',
+    text: 'text-slate-900',
+    sub: 'text-slate-500',
   },
   rose: {
-    bg: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 60%, #fecdd3 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 241, 242, 0.72) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(159, 18, 57, 0.06), 0 8px 24px rgba(244, 63, 94, 0.10), 0 2px 8px rgba(244, 63, 94, 0.06)',
-    iconBg: 'bg-rose-500',
-    text: 'text-rose-950',
-    sub: 'text-rose-800/70',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(244, 63, 94, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.9)',
+    iconBg: 'bg-rose-400',
+    text: 'text-slate-900',
+    sub: 'text-slate-500',
   },
   oker: {
-    bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 60%, #fde68a 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 251, 235, 0.78) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(146, 64, 14, 0.06), 0 8px 24px rgba(245, 158, 11, 0.12), 0 2px 8px rgba(245, 158, 11, 0.08)',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(245, 158, 11, 0.08)',
+    border: '1px solid rgba(255, 255, 255, 0.9)',
     iconBg: 'bg-oker-500',
-    text: 'text-oker-950',
-    sub: 'text-oker-800/70',
+    text: 'text-slate-900',
+    sub: 'text-slate-500',
   },
   blue: {
-    bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 60%, #bfdbfe 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(239, 246, 255, 0.72) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(30, 64, 175, 0.06), 0 8px 24px rgba(59, 130, 246, 0.10), 0 2px 8px rgba(59, 130, 246, 0.06)',
-    iconBg: 'bg-blue-500',
-    text: 'text-blue-950',
-    sub: 'text-blue-800/70',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(59, 130, 246, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.9)',
+    iconBg: 'bg-blue-400',
+    text: 'text-slate-900',
+    sub: 'text-slate-500',
   },
   slate: {
-    bg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(248, 250, 252, 0.72) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 6px 20px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)',
-    iconBg: 'bg-slate-900',
-    text: 'text-slate-950',
-    sub: 'text-slate-600',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 6px 20px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)',
+    border: '1px solid rgba(255, 255, 255, 0.9)',
+    iconBg: 'bg-slate-700',
+    text: 'text-slate-900',
+    sub: 'text-slate-500',
   },
 } as const;
 
@@ -305,19 +316,26 @@ export function StatTile({
       {subValue && <p className={`mt-1 text-xs font-semibold ${c.sub}`}>{subValue}</p>}
     </>
   );
+  const tileStyle = {
+    background: c.bg,
+    backdropFilter: 'blur(20px) saturate(140%)',
+    WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+    border: c.border,
+    boxShadow: c.shadow,
+  };
   if (onClick) {
     return (
       <button
         onClick={onClick}
         className="text-left flex-1 rounded-[24px] p-5 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
-        style={{ background: c.bg, boxShadow: c.shadow }}
+        style={tileStyle}
       >
         {Body}
       </button>
     );
   }
   return (
-    <div className="flex-1 rounded-[24px] p-5 relative overflow-hidden" style={{ background: c.bg, boxShadow: c.shadow }}>
+    <div className="flex-1 rounded-[24px] p-5 relative overflow-hidden" style={tileStyle}>
       {Body}
     </div>
   );
@@ -339,13 +357,22 @@ function PremiumPanel({
   children: ReactNode;
 }) {
   const bg = accent === 'oker'
-    ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
-    : 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)';
+    ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 251, 235, 0.72) 100%)'
+    : 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.72) 100%)';
   const shadow = accent === 'oker'
-    ? 'inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 28px rgba(245, 158, 11, 0.10), 0 2px 8px rgba(245, 158, 11, 0.06)'
-    : 'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)';
+    ? 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 10px 28px rgba(245, 158, 11, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04)'
+    : 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)';
   return (
-    <div className="rounded-[28px] p-5 relative overflow-hidden" style={{ background: bg, boxShadow: shadow }}>
+    <div
+      className="rounded-[28px] p-5 relative overflow-hidden"
+      style={{
+        background: bg,
+        backdropFilter: 'blur(22px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(22px) saturate(140%)',
+        border: '1px solid rgba(255, 255, 255, 0.9)',
+        boxShadow: shadow,
+      }}
+    >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
           <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${iconBg} text-white shadow-md shadow-black/10`}>
