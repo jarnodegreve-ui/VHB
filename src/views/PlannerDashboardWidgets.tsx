@@ -189,7 +189,7 @@ function BentoListPanel({
   const p = PANEL_PALETTE[accent];
   return (
     <div
-      className="rounded-[28px] p-5 relative overflow-hidden"
+      className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
       style={{
         background: p.bg,
         backdropFilter: 'blur(30px) saturate(155%)',
@@ -246,7 +246,7 @@ function QuickActionTile({
   return (
     <button
       onClick={onClick}
-      className="group text-left rounded-[24px] p-4 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
+      className="tilt-card glow-top glass-stack group text-left rounded-[24px] p-4 relative overflow-hidden active:scale-[0.99]"
       style={{
         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%)',
         backdropFilter: 'blur(28px) saturate(155%)',

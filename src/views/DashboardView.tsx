@@ -78,7 +78,7 @@ export function DashboardView({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
+            className="tilt-card glow-top glass-stack lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
             style={{
               background:
                 'linear-gradient(135deg, rgba(255, 251, 235, 0.78) 0%, rgba(254, 243, 199, 0.62) 60%, rgba(253, 230, 138, 0.42) 100%)',
@@ -328,7 +328,7 @@ export function StatTile({
     return (
       <button
         onClick={onClick}
-        className="text-left flex-1 rounded-[24px] p-5 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
+        className="tilt-card glow-top glass-stack text-left flex-1 rounded-[24px] p-5 relative overflow-hidden active:scale-[0.99]"
         style={tileStyle}
       >
         {Body}
@@ -336,7 +336,7 @@ export function StatTile({
     );
   }
   return (
-    <div className="flex-1 rounded-[24px] p-5 relative overflow-hidden" style={tileStyle}>
+    <div className="glow-top flex-1 rounded-[24px] p-5 relative overflow-hidden" style={tileStyle}>
       {Body}
     </div>
   );
@@ -365,7 +365,7 @@ function PremiumPanel({
     : 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)';
   return (
     <div
-      className="rounded-[28px] p-5 relative overflow-hidden"
+      className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
       style={{
         background: bg,
         backdropFilter: 'blur(30px) saturate(155%)',
