@@ -53,9 +53,6 @@ export function BrandBus({ className, width = 160 }: { className?: string; width
           stroke="#0f172a"
           strokeWidth="2.2"
         />
-        {/* Driver silhouette */}
-        <circle cx="240" cy="78" r="6" fill="#475569" />
-        <rect x="234" y="84" width="12" height="14" rx="3" fill="#475569" />
 
         {/* Side windows */}
         <rect x="36" y="48" width="34" height="22" rx="3" fill="#cbd5e1" stroke="#0f172a" strokeWidth="1.4" />
