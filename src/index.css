@@ -360,6 +360,42 @@
     transition: color 240ms ease;
   }
 
+  /* Brand bus sway — voor empty state mascotte */
+  @keyframes bus-sway {
+    0%, 100% { transform: translateY(0) rotate(0deg); }
+    50%      { transform: translateY(-3px) rotate(-1deg); }
+  }
+  .bus-sway {
+    animation: bus-sway 4s ease-in-out infinite;
+    transform-origin: center bottom;
+  }
+
+  /* Skeleton-loader shimmer */
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+  .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(255, 255, 255, 0.45) 25%,
+      rgba(255, 255, 255, 0.75) 50%,
+      rgba(255, 255, 255, 0.45) 75%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+    border-radius: 8px;
+  }
+  .dark .skeleton {
+    background: linear-gradient(
+      90deg,
+      rgba(71, 85, 105, 0.25) 25%,
+      rgba(71, 85, 105, 0.45) 50%,
+      rgba(71, 85, 105, 0.25) 75%
+    );
+    background-size: 200% 100%;
+  }
+
   /* Subtle grain — premium textuur over alles */
   .grain-overlay::after {
     content: "";
@@ -549,11 +585,16 @@
    ========================================================================== */
 
 html.dark {
-  background:
-    radial-gradient(ellipse at top left, rgba(245, 158, 11, 0.05) 0%, transparent 45%),
-    radial-gradient(ellipse at bottom right, rgba(59, 130, 246, 0.06) 0%, transparent 45%),
-    linear-gradient(180deg, #0b1220 0%, #0f172a 50%, #111827 100%);
+  background: linear-gradient(180deg, #0a0f1c 0%, #0f172a 50%, #0b1220 100%);
   color-scheme: dark;
+}
+
+.dark .parallax-bg {
+  background:
+    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(245, 158, 11, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(99, 102, 241, 0.14) 0%, transparent 55%),
+    radial-gradient(ellipse 500px 350px at 50% 50%, rgba(244, 114, 182, 0.06) 0%, transparent 60%);
+  filter: blur(1px) saturate(120%);
 }
 
 .dark body {
@@ -564,16 +605,19 @@ html.dark {
   background-color: rgba(100, 116, 139, 0.55);
 }
 
-/* --- Custom glass-morphism classes --- */
+/* --- Custom glass-morphism classes (dark) ---
+ * Match de nieuwe premium-bento DNA: hogere blur, dubbele inner-rim,
+ * sterkere edge-lit highlights. */
 
 .dark .panel {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.72) 0%, rgba(15, 23, 42, 0.58) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.28);
+    linear-gradient(180deg, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.4) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.35);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.12),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.05),
-    0 8px 24px rgba(0, 0, 0, 0.32);
+    inset 0 1px 0 rgba(148, 163, 184, 0.18),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.08),
+    0 10px 28px rgba(0, 0, 0, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .dark .panel-dark {
@@ -606,37 +650,69 @@ html.dark {
 
 .dark .surface-card {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.68) 0%, rgba(15, 23, 42, 0.52) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.28);
+    linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.35) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.35);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.04),
-    0 6px 20px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(148, 163, 184, 0.18),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.06),
+    0 8px 24px rgba(0, 0, 0, 0.4),
+    0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
 .dark .surface-card-hover:hover {
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.14),
-    0 10px 26px rgba(0, 0, 0, 0.32);
+    inset 0 1px 0 rgba(148, 163, 184, 0.22),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.08),
+    0 16px 40px rgba(0, 0, 0, 0.5),
+    0 4px 12px rgba(0, 0, 0, 0.25);
 }
 
 .dark .surface-table {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.68) 0%, rgba(15, 23, 42, 0.52) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.28);
+    linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.35) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.35);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 8px 24px rgba(0, 0, 0, 0.28);
+    inset 0 1px 0 rgba(148, 163, 184, 0.18),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.06),
+    0 10px 28px rgba(0, 0, 0, 0.4);
 }
 
 .dark .glass-modal {
   background:
-    radial-gradient(circle at top left, rgba(71, 85, 105, 0.24), transparent 40%),
-    linear-gradient(180deg, rgba(30, 41, 59, 0.88) 0%, rgba(15, 23, 42, 0.78) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.36);
+    radial-gradient(circle at top left, rgba(71, 85, 105, 0.30), transparent 45%),
+    linear-gradient(180deg, rgba(30, 41, 59, 0.78) 0%, rgba(15, 23, 42, 0.62) 100%);
+  border: 1px solid rgba(71, 85, 105, 0.45);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.12),
-    0 24px 64px rgba(0, 0, 0, 0.55);
+    inset 0 1px 0 rgba(148, 163, 184, 0.20),
+    inset 0 -1px 0 rgba(148, 163, 184, 0.08),
+    0 28px 80px rgba(0, 0, 0, 0.7);
+}
+
+/* Dark mode adjustments voor depth-utilities */
+.dark .glow-top::before {
+  background:
+    radial-gradient(
+      ellipse 90% 60% at 50% -10%,
+      rgba(255, 255, 255, 0.18) 0%,
+      rgba(255, 248, 230, 0.08) 30%,
+      transparent 70%
+    );
+  opacity: 0.6;
+}
+.dark .halo-on-hover:hover {
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.45),
+    0 0 18px 2px rgba(245, 158, 11, 0.25),
+    inset 0 1px 0 rgba(148, 163, 184, 0.25);
+}
+.dark .cursor-glow > .cursor-glow-layer {
+  background: radial-gradient(
+    circle 240px at var(--mx) var(--my),
+    rgba(245, 158, 11, 0.18),
+    rgba(99, 102, 241, 0.08) 40%,
+    transparent 70%
+  );
+  mix-blend-mode: screen;
 }
 
 .dark .surface-muted {

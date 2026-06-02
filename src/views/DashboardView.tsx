@@ -3,6 +3,8 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight } from 'lucide-react';
 import type { Diversion, Shift, User } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
+import { Sparkline } from '../components/Sparkline';
+import { BrandEmptyState } from '../components/BrandEmptyState';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -217,7 +219,7 @@ export function DashboardView({
               ))}
             </div>
           ) : (
-            <EmptyTile icon={<Calendar size={20} />} title="Geen dienst vandaag" subtitle="Geniet ervan." />
+            <BrandEmptyState title="Geen dienst vandaag" message="Geniet van je vrije dag." />
           )}
         </PremiumPanel>
 
@@ -309,6 +311,8 @@ export function StatTile({
   value,
   subValue,
   onClick,
+  sparkline,
+  sparklineColor,
 }: {
   icon: ReactNode;
   color: TilePalette;
@@ -316,15 +320,33 @@ export function StatTile({
   value: string | number;
   subValue?: string;
   onClick?: () => void;
+  sparkline?: number[];
+  sparklineColor?: string;
 }) {
   const c = TILE_PALETTE[color];
+  // Default sparkline-kleur volgt de accent-tint
+  const splColor =
+    sparklineColor ||
+    (color === 'oker'
+      ? '#d97706'
+      : color === 'rose'
+      ? '#e11d48'
+      : color === 'emerald'
+      ? '#059669'
+      : color === 'blue'
+      ? '#2563eb'
+      : '#475569');
   const Body = (
     <>
       <div className="flex items-start justify-between mb-3">
         <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl ${c.iconBg} text-white shadow-md shadow-black/10`}>
           {icon}
         </div>
-        {onClick && <ArrowUpRight size={14} className={`${c.sub} opacity-70`} />}
+        {sparkline && sparkline.length > 1 ? (
+          <Sparkline data={sparkline} width={64} height={22} color={splColor} />
+        ) : (
+          onClick && <ArrowUpRight size={14} className={`${c.sub} opacity-70`} />
+        )}
       </div>
       <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${c.sub}`}>{label}</p>
       <p className={`mt-1 text-3xl font-black tabular-nums tracking-[-0.03em] ${c.text}`}>{value}</p>
