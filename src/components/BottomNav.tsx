@@ -1,0 +1,99 @@
+import type { ReactNode } from 'react';
+import { motion } from 'motion/react';
+import { LayoutDashboard, Calendar, MapPin, Bell, Repeat } from 'lucide-react';
+import type { View } from '../types';
+import { cn } from '../lib/ui';
+
+type NavSlot = {
+  view: View;
+  label: string;
+  icon: ReactNode;
+  badge?: number;
+};
+
+/**
+ * Mobile bottom-tab-bar voor chauffeurs. Vervangt de hamburger op
+ * kleine schermen. 5 hoofdacties — sneller dan een menu openen.
+ *
+ * - Floating glass-card stijl, sticky aan de onderkant
+ * - Actief item heeft oker-fill + animated layoutId-pill
+ * - Badges (bv. open dienstruil) tonen rechtsboven
+ * - Alleen rendered op md:hidden (mobile/tablet portrait)
+ */
+export function BottomNav({
+  currentView,
+  onSelect,
+  pendingSwapsCount = 0,
+  unseenLeaveCount = 0,
+}: {
+  currentView: View;
+  onSelect: (view: View) => void;
+  pendingSwapsCount?: number;
+  unseenLeaveCount?: number;
+}) {
+  const slots: NavSlot[] = [
+    { view: 'dashboard', label: 'Home', icon: <LayoutDashboard size={20} /> },
+    { view: 'rooster', label: 'Rooster', icon: <Calendar size={20} /> },
+    { view: 'omleidingen', label: 'Hinder', icon: <MapPin size={20} /> },
+    { view: 'ruil-verzoeken', label: 'Ruilen', icon: <Repeat size={20} />, badge: pendingSwapsCount },
+    { view: 'updates', label: 'Updates', icon: <Bell size={20} />, badge: unseenLeaveCount },
+  ];
+
+  return (
+    <nav
+      className="md:hidden fixed bottom-3 left-3 right-3 z-40 rounded-[24px] px-2 py-2"
+      style={{
+        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.6) 100%)',
+        backdropFilter: 'blur(30px) saturate(160%)',
+        WebkitBackdropFilter: 'blur(30px) saturate(160%)',
+        border: '1px solid rgba(255, 255, 255, 0.85)',
+        boxShadow:
+          'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.42), 0 14px 36px rgba(15, 23, 42, 0.10), 0 4px 12px rgba(15, 23, 42, 0.05)',
+        paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+      }}
+      aria-label="Hoofdnavigatie"
+    >
+      <ul className="flex items-center justify-around gap-1">
+        {slots.map((slot) => {
+          const isActive = currentView === slot.view;
+          return (
+            <li key={slot.view} className="flex-1">
+              <button
+                onClick={() => onSelect(slot.view)}
+                aria-current={isActive ? 'page' : undefined}
+                aria-label={slot.label}
+                className={cn(
+                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-2xl transition-colors',
+                  isActive ? 'text-oker-700' : 'text-slate-400 hover:text-slate-700',
+                )}
+              >
+                {isActive && (
+                  <motion.span
+                    layoutId="bottom-nav-active"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                    className="absolute inset-0 rounded-2xl"
+                    style={{
+                      background:
+                        'linear-gradient(135deg, rgba(254, 243, 199, 0.85) 0%, rgba(253, 230, 138, 0.65) 100%)',
+                      boxShadow:
+                        'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 6px rgba(245, 158, 11, 0.15)',
+                    }}
+                  />
+                )}
+                <span className="relative z-10">{slot.icon}</span>
+                <span className="relative z-10 text-[10px] font-black uppercase tracking-widest">
+                  {slot.label}
+                </span>
+                {slot.badge !== undefined && slot.badge > 0 && (
+                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-black bg-oker-500 text-white rounded-full shadow-sm">
+                    {slot.badge > 9 ? '9+' : slot.badge}
+                  </span>
+                )}
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}

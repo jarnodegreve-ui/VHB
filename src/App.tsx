@@ -46,6 +46,7 @@ import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
 import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
 import { MobileNavItem, NavItem } from './components/Navigation';
+import { BottomNav } from './components/BottomNav';
 import { Input } from './components/Input';
 import { StatCard } from './components/StatCard';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -1258,6 +1259,14 @@ export default function App() {
         </div>
       </main>
       </div>
+
+      {/* Mobile bottom-nav (alleen op klein scherm, alleen voor ingelogde gebruikers) */}
+      <BottomNav
+        currentView={resolvedCurrentView}
+        onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
+        pendingSwapsCount={pendingSwapsCount}
+        unseenLeaveCount={unseenLeaveDecisionCount}
+      />
     </>
   );
 }

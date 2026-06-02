@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Calendar, Clock, Download, ChevronDown } from 'lucide-react';
 import type { Shift, User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { BrandEmptyState } from '../components/BrandEmptyState';
 import { cn } from '../lib/ui';
 
 // Categoriseer per starttijd voor visuele kleurcode — zelfde logica als
@@ -159,10 +160,9 @@ export function ScheduleView({ user, shifts: allShifts }: { user: User; shifts: 
       />
 
       {upcoming.length === 0 && past.length === 0 ? (
-        <EmptyState
-          icon={<Calendar size={28} />}
-          title="Geen diensten gepland"
-          message="Zodra er planning beschikbaar is, verschijnt die hier."
+        <BrandEmptyState
+          title="Nog geen diensten gepland"
+          message="Zodra de planner een nieuwe matrix uploadt, vind je hier al je komende ritten."
         />
       ) : (
         <>
