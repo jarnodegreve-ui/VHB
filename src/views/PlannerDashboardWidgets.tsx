@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, RefObject } from 'react';
 import { CalendarClock, Inbox, Repeat, FileWarning, Activity, ArrowUpRight, Sparkles } from 'lucide-react';
 import type { LeaveRequest, PlanningMatrixImportHistory, SwapRequest, User } from '../types';
 import { StatTile, type TilePalette } from './DashboardView';
+import { useCursorGlow, useMagnetic } from '../lib/interactive';
 
 /**
  * Planner/admin dashboard widgets — Bento premium-stijl.
@@ -243,10 +244,18 @@ function QuickActionTile({
   subLabel: string;
   onClick: () => void;
 }) {
+  const cursorRef = useCursorGlow<HTMLElement>();
+  const magnetRef = useMagnetic<HTMLElement>(0.18, 80);
+  // Combineer beide refs in één callback
+  const setRefs = (el: HTMLButtonElement | null) => {
+    (cursorRef as RefObject<HTMLElement | null>).current = el;
+    (magnetRef as RefObject<HTMLElement | null>).current = el;
+  };
   return (
     <button
+      ref={setRefs}
       onClick={onClick}
-      className="tilt-card glow-top glass-stack group text-left rounded-[24px] p-4 relative overflow-hidden active:scale-[0.99]"
+      className="glow-top glass-stack cursor-glow halo-on-hover group text-left rounded-[24px] p-4 relative overflow-hidden"
       style={{
         background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%)',
         backdropFilter: 'blur(28px) saturate(155%)',
@@ -256,7 +265,8 @@ function QuickActionTile({
           'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04)',
       }}
     >
-      <div className="flex items-center gap-3">
+      <span className="cursor-glow-layer" />
+      <div className="relative z-10 flex items-center gap-3">
         <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-900 text-white shadow-md shadow-black/10">
           {icon}
         </div>

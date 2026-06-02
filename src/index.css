@@ -19,14 +19,11 @@
 
 @layer base {
   html {
-    background:
-      /* Subtiele kleurzones die door het glas heen zichtbaar zijn */
-      radial-gradient(ellipse 800px 600px at 15% 10%, rgba(245, 158, 11, 0.10) 0%, transparent 50%),
-      radial-gradient(ellipse 700px 500px at 85% 75%, rgba(99, 102, 241, 0.06) 0%, transparent 50%),
-      radial-gradient(ellipse 600px 400px at 50% 50%, rgba(244, 114, 182, 0.04) 0%, transparent 60%),
-      linear-gradient(180deg, #f9f7f2 0%, #f3efe6 50%, #efeadf 100%);
+    background: linear-gradient(180deg, #f9f7f2 0%, #f3efe6 50%, #efeadf 100%);
     min-height: 100vh;
     background-attachment: fixed;
+    /* De gekleurde "blobs" zitten in een aparte .parallax-bg div zodat
+     * ze met scroll meelopen (trager dan content). Zie App.tsx. */
   }
 
   body {
@@ -286,6 +283,81 @@
   }
   .glass-stack:hover::before {
     opacity: 1;
+  }
+
+  /* Cursor-glow: radial gradient die de muispositie volgt via CSS-vars.
+   * --mx / --my worden ge-updated door useCursorGlow hook. */
+  .cursor-glow {
+    --mx: 50%;
+    --my: 50%;
+    position: relative;
+  }
+  .cursor-glow > .cursor-glow-layer {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(
+      circle 240px at var(--mx) var(--my),
+      rgba(255, 255, 255, 0.32),
+      rgba(255, 250, 235, 0.12) 40%,
+      transparent 70%
+    );
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 240ms ease;
+    border-radius: inherit;
+    mix-blend-mode: overlay;
+    z-index: 1;
+  }
+  .cursor-glow:hover > .cursor-glow-layer {
+    opacity: 1;
+  }
+
+  /* Halo-on-hover: subtle witte ring rond interactieve elementen */
+  .halo-on-hover {
+    transition: box-shadow 240ms ease, transform 240ms ease;
+  }
+  .halo-on-hover:hover {
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.7),
+      0 0 18px 2px rgba(255, 255, 255, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.95);
+  }
+
+  /* Parallax-background: fixed laag met blobs die trager scrollt */
+  .parallax-bg {
+    position: fixed;
+    inset: -10vh -10vw;
+    z-index: -1;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 700px 500px at 15% 18%, rgba(245, 158, 11, 0.16) 0%, transparent 55%),
+      radial-gradient(ellipse 600px 400px at 85% 70%, rgba(99, 102, 241, 0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 500px 350px at 50% 50%, rgba(244, 114, 182, 0.06) 0%, transparent 60%);
+    transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.18), 0);
+    will-change: transform;
+    filter: blur(1px) saturate(125%);
+  }
+  .parallax-bg-slow {
+    transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.08), 0);
+  }
+
+  /* Brand-wordmark micro-animatie: rustige adem-pulse + warmer op hover */
+  .brand-wordmark-anim {
+    animation: brand-breathe 5s ease-in-out infinite;
+    transition: filter 320ms ease;
+  }
+  @keyframes brand-breathe {
+    0%, 100% { filter: brightness(1) drop-shadow(0 0 0 rgba(245, 158, 11, 0)); }
+    50%      { filter: brightness(1.04) drop-shadow(0 0 8px rgba(245, 158, 11, 0.18)); }
+  }
+  .brand-wordmark-anim:hover {
+    filter: brightness(1.08) drop-shadow(0 0 14px rgba(245, 158, 11, 0.45));
+  }
+  .brand-wordmark-anim:hover .brand-accent {
+    color: #d97706;
+  }
+  .brand-accent {
+    transition: color 240ms ease;
   }
 
   /* Subtle grain — premium textuur over alles */
