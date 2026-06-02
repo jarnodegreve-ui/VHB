@@ -863,7 +863,7 @@ export default function App() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark ios-soft-panel m-3 mr-0 rounded-[28px] flex flex-col z-50 transition-transform duration-500 transform lg:w-[19rem] lg:max-w-none lg:relative lg:translate-x-0 overflow-hidden",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] g-premium-sidebar ios-soft-panel m-3 mr-0 rounded-[28px] flex flex-col z-50 transition-transform duration-500 transform lg:w-[19rem] lg:max-w-none lg:relative lg:translate-x-0 overflow-hidden",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.28, 0.64, 1)' }}
@@ -879,6 +879,7 @@ export default function App() {
           >
             <h1 className="brand-wordmark section-title text-[1.25rem] text-slate-900 leading-none">VHB <span className="text-oker-500">PORTAAL</span></h1>
             <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
+            <p className="text-[8px] font-bold text-oker-400 uppercase tracking-[0.2em] mt-1.5">⌬ Stijl G preview</p>
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
