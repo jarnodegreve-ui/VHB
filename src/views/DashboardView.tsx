@@ -81,12 +81,12 @@ export function DashboardView({
             className="lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
             style={{
               background:
-                'linear-gradient(135deg, rgba(255, 251, 235, 0.92) 0%, rgba(254, 243, 199, 0.78) 60%, rgba(253, 230, 138, 0.55) 100%)',
-              backdropFilter: 'blur(24px) saturate(135%)',
-              WebkitBackdropFilter: 'blur(24px) saturate(135%)',
-              border: '1px solid rgba(255, 255, 255, 0.85)',
+                'linear-gradient(135deg, rgba(255, 251, 235, 0.78) 0%, rgba(254, 243, 199, 0.62) 60%, rgba(253, 230, 138, 0.42) 100%)',
+              backdropFilter: 'blur(32px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(32px) saturate(160%)',
+              border: '1px solid rgba(255, 255, 255, 0.8)',
               boxShadow:
-                'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 12px 32px rgba(245, 158, 11, 0.10), 0 4px 12px rgba(245, 158, 11, 0.06)',
+                'inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.3), 0 12px 32px rgba(245, 158, 11, 0.12), 0 4px 12px rgba(245, 158, 11, 0.08)',
             }}
           >
             <div
@@ -235,50 +235,51 @@ export function DashboardView({
 
 // === Subcomponents ===
 
-// Rustige glass palette: bijna-witte tegels met heel licht kleur-zweem.
-// backdrop-filter geeft het "Apple Wallet kaart"-glas-effect.
+// Rustige glass palette: glas-tegels met heel licht kleur-zweem.
+// backdrop-filter geeft het "Apple Wallet kaart"-glas-effect — witten zijn
+// iets minder dekkend zodat de background door het glas heen schijnt.
 const TILE_PALETTE = {
   emerald: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(240, 253, 244, 0.72) 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(240, 253, 244, 0.55) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(16, 185, 129, 0.05)',
-    border: '1px solid rgba(255, 255, 255, 0.9)',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(16, 185, 129, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.85)',
     iconBg: 'bg-emerald-500',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   rose: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 241, 242, 0.72) 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 241, 242, 0.55) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(244, 63, 94, 0.05)',
-    border: '1px solid rgba(255, 255, 255, 0.9)',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(244, 63, 94, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.85)',
     iconBg: 'bg-rose-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   oker: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(255, 251, 235, 0.78) 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 251, 235, 0.6) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(245, 158, 11, 0.08)',
-    border: '1px solid rgba(255, 255, 255, 0.9)',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(245, 158, 11, 0.10)',
+    border: '1px solid rgba(255, 255, 255, 0.85)',
     iconBg: 'bg-oker-500',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   blue: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(239, 246, 255, 0.72) 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(239, 246, 255, 0.55) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(59, 130, 246, 0.05)',
-    border: '1px solid rgba(255, 255, 255, 0.9)',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(59, 130, 246, 0.06)',
+    border: '1px solid rgba(255, 255, 255, 0.85)',
     iconBg: 'bg-blue-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   slate: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.82) 0%, rgba(248, 250, 252, 0.72) 100%)',
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%)',
     shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 6px 20px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)',
-    border: '1px solid rgba(255, 255, 255, 0.9)',
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 6px 20px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.85)',
     iconBg: 'bg-slate-700',
     text: 'text-slate-900',
     sub: 'text-slate-500',
@@ -318,8 +319,8 @@ export function StatTile({
   );
   const tileStyle = {
     background: c.bg,
-    backdropFilter: 'blur(20px) saturate(140%)',
-    WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+    backdropFilter: 'blur(28px) saturate(155%)',
+    WebkitBackdropFilter: 'blur(28px) saturate(155%)',
     border: c.border,
     boxShadow: c.shadow,
   };
@@ -367,8 +368,8 @@ function PremiumPanel({
       className="rounded-[28px] p-5 relative overflow-hidden"
       style={{
         background: bg,
-        backdropFilter: 'blur(22px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(22px) saturate(140%)',
+        backdropFilter: 'blur(30px) saturate(155%)',
+        WebkitBackdropFilter: 'blur(30px) saturate(155%)',
         border: '1px solid rgba(255, 255, 255, 0.9)',
         boxShadow: shadow,
       }}
