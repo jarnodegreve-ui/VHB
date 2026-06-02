@@ -59,10 +59,10 @@ export function BrandBus({ className, width = 160 }: { className?: string; width
           fontWeight="900"
           fill="#fbbf24"
           stroke="#0f172a"
-          strokeWidth="2.0"
+          strokeWidth="2.4"
           paintOrder="stroke"
           strokeLinejoin="round"
-          letterSpacing="0.14em"
+          letterSpacing="0.18em"
           fontFamily="Manrope, system-ui, sans-serif"
         >
           VANHOOREBEKE
