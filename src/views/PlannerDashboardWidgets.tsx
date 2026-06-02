@@ -1,17 +1,11 @@
 import type { ReactNode } from 'react';
-import { motion } from 'motion/react';
-import { CalendarClock, Inbox, RefreshCw, Repeat, FileWarning, Activity } from 'lucide-react';
+import { CalendarClock, Inbox, Repeat, FileWarning, Activity, ArrowUpRight, Sparkles } from 'lucide-react';
 import type { LeaveRequest, PlanningMatrixImportHistory, SwapRequest, User } from '../types';
+import { StatTile, type TilePalette } from './DashboardView';
 
 /**
- * Planner/admin dashboard widgets. Toont KPI-tegels en pending-lijst
- * boven het standaard chauffeur-dashboard zodat planners in één blik
- * zien wat hun aandacht vereist.
- *
- * - Open verlof: aantal pending leave requests
- * - Open ruilen: aantal pending swap requests
- * - Laatste matrix-import: hoe oud + had het issues
- * - Klikbare quick-links naar verlofbeheer / ruil-verzoeken
+ * Planner/admin dashboard widgets — Bento premium-stijl.
+ * Hergebruikt StatTile uit DashboardView voor consistentie.
  */
 export function PlannerDashboardWidgets({
   leaveRequests,
@@ -44,228 +38,234 @@ export function PlannerDashboardWidgets({
   const previewLeave = pendingLeave.slice(0, 3);
   const previewSwaps = pendingSwaps.slice(0, 3);
 
+  const importColor: TilePalette = lastImportHadIssues ? 'rose' : 'emerald';
+
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-5"
-    >
-      {/* Eyebrow */}
-      <div className="flex items-center justify-between">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-          Planner-overzicht
-        </p>
-        <p className="text-[10px] font-medium text-slate-400">
+    <section className="space-y-4">
+      <div className="flex items-baseline justify-between px-1">
+        <h2 className="text-2xl font-black tracking-[-0.025em] text-slate-900">Overzicht</h2>
+        <p className="text-xs font-semibold text-slate-500">
           {new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
 
-      {/* KPI grid */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <KpiCard
+        <StatTile
           icon={<Inbox size={18} />}
-          label="Open verlof"
+          color="oker"
+          label="Verlofaanvragen"
           value={pendingLeave.length}
-          accent={pendingLeave.length > 0 ? 'amber' : 'emerald'}
+          subValue={pendingLeave.length > 0 ? 'Wachten op besluit' : 'Up to date'}
           onClick={pendingLeave.length > 0 ? () => onNavigate('verlof-beheer') : undefined}
-          actionLabel={pendingLeave.length > 0 ? 'Behandel →' : 'Alles afgehandeld'}
         />
-        <KpiCard
+        <StatTile
           icon={<Repeat size={18} />}
-          label="Open ruilen"
+          color="blue"
+          label="Dienstruilen"
           value={pendingSwaps.length}
-          accent={pendingSwaps.length > 0 ? 'amber' : 'emerald'}
+          subValue={pendingSwaps.length > 0 ? 'Wachten op besluit' : 'Up to date'}
           onClick={pendingSwaps.length > 0 ? () => onNavigate('ruil-verzoeken') : undefined}
-          actionLabel={pendingSwaps.length > 0 ? 'Behandel →' : 'Alles afgehandeld'}
         />
-        <KpiCard
+        <StatTile
           icon={<CalendarClock size={18} />}
+          color={importColor}
           label="Laatste import"
           value={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
-          accent={lastImportHadIssues ? 'rose' : daysSinceImport && daysSinceImport > 14 ? 'amber' : 'slate'}
-          onClick={() => onNavigate('beheer-roosters')}
-          actionLabel={lastImportHadIssues ? 'Issues bekijken →' : 'Importeer →'}
           subValue={lastImport ? `${lastImport.importedDays} dagen verwerkt` : 'Nog geen import'}
+          onClick={() => onNavigate('beheer-roosters')}
         />
-        <KpiCard
+        <StatTile
           icon={<FileWarning size={18} />}
+          color="rose"
           label="Omleidingen"
           value={diversionsCount}
-          accent={diversionsCount > 0 ? 'oker' : 'slate'}
+          subValue="Actief in netwerk"
           onClick={() => onNavigate('beheer-omleidingen')}
-          actionLabel="Beheer →"
         />
       </div>
 
-      {/* Pending-overzicht: alleen tonen als er iets is */}
       {(previewLeave.length > 0 || previewSwaps.length > 0) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {previewLeave.length > 0 && (
-            <PendingPanel
-              title="Wachtende verlofaanvragen"
+            <BentoListPanel
               icon={<Inbox size={16} />}
-              countLabel={`${pendingLeave.length} totaal`}
+              iconBg="bg-oker-500"
+              title="Wachtende verlofaanvragen"
+              count={pendingLeave.length}
+              accent="oker"
               onSeeAll={() => onNavigate('verlof-beheer')}
             >
               {previewLeave.map((req) => (
-                <div key={req.id} className="flex items-start justify-between gap-3 py-2 border-b border-white/60 last:border-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900 truncate">{userNameById(req.userId)}</p>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">
-                      {req.startDate}
-                      {req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · {req.type}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest px-2 py-1">
-                    Pending
-                  </span>
+                <div key={req.id}>
+                  <PendingRow
+                    primary={userNameById(req.userId)}
+                    secondary={`${req.startDate}${
+                      req.startDate !== req.endDate ? ` → ${req.endDate}` : ''
+                    } · ${req.type}`}
+                  />
                 </div>
               ))}
-            </PendingPanel>
+            </BentoListPanel>
           )}
 
           {previewSwaps.length > 0 && (
-            <PendingPanel
-              title="Wachtende dienstruilen"
+            <BentoListPanel
               icon={<Repeat size={16} />}
-              countLabel={`${pendingSwaps.length} totaal`}
+              iconBg="bg-blue-500"
+              title="Wachtende dienstruilen"
+              count={pendingSwaps.length}
+              accent="blue"
               onSeeAll={() => onNavigate('ruil-verzoeken')}
             >
               {previewSwaps.map((swap) => (
-                <div key={swap.id} className="flex items-start justify-between gap-3 py-2 border-b border-white/60 last:border-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900 truncate">
-                      {userNameById(swap.requesterId)}
-                      {swap.targetDriverId && (
-                        <>
-                          <span className="text-slate-400 font-medium"> → </span>
-                          {userNameById(swap.targetDriverId)}
-                        </>
-                      )}
-                    </p>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">
-                      {swap.reason ? swap.reason : 'Geen reden opgegeven'}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest px-2 py-1">
-                    Pending
-                  </span>
+                <div key={swap.id}>
+                  <PendingRow
+                    primary={
+                      swap.targetDriverId
+                        ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
+                        : userNameById(swap.requesterId)
+                    }
+                    secondary={swap.reason || 'Geen reden opgegeven'}
+                  />
                 </div>
               ))}
-            </PendingPanel>
+            </BentoListPanel>
           )}
         </div>
       )}
 
-      {/* Quick-link bar */}
-      <div className="flex flex-wrap gap-2">
-        <QuickLink icon={<RefreshCw size={14} />} label="Matrix-import" onClick={() => onNavigate('beheer-roosters')} />
-        <QuickLink icon={<Activity size={14} />} label="Activiteit" onClick={() => onNavigate('activiteit')} />
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <QuickActionTile
+          icon={<Sparkles size={18} />}
+          label="Matrix-import"
+          subLabel="Nieuwe planning uploaden"
+          onClick={() => onNavigate('beheer-roosters')}
+        />
+        <QuickActionTile
+          icon={<Activity size={18} />}
+          label="Activiteit"
+          subLabel="Recente acties bekijken"
+          onClick={() => onNavigate('activiteit')}
+        />
       </div>
-    </motion.section>
+    </section>
   );
 }
 
-// --- Subcomponents ---
+// === Subcomponents ===
 
-function KpiCard({
+const PANEL_PALETTE = {
+  oker: {
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 251, 235, 0.55) 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 10px 28px rgba(245, 158, 11, 0.08), 0 2px 8px rgba(15, 23, 42, 0.04)',
+    sub: 'text-slate-500',
+  },
+  blue: {
+    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(239, 246, 255, 0.55) 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 10px 28px rgba(59, 130, 246, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04)',
+    sub: 'text-slate-500',
+  },
+} as const;
+
+function BentoListPanel({
   icon,
-  label,
-  value,
-  subValue,
-  accent,
-  onClick,
-  actionLabel,
-}: {
-  icon: ReactNode;
-  label: string;
-  value: string | number;
-  subValue?: string;
-  accent: 'amber' | 'emerald' | 'rose' | 'oker' | 'slate';
-  onClick?: () => void;
-  actionLabel?: string;
-}) {
-  const accentClasses = {
-    amber: 'border-amber-200 bg-amber-50/70 text-amber-700',
-    emerald: 'border-emerald-200 bg-emerald-50/70 text-emerald-700',
-    rose: 'border-rose-200 bg-rose-50/70 text-rose-700',
-    oker: 'border-oker-200 bg-oker-50/70 text-oker-700',
-    slate: 'border-slate-200 bg-slate-50/70 text-slate-600',
-  }[accent];
-
-  const Body = (
-    <>
-      <div className="flex items-center justify-between">
-        <div className={`rounded-xl p-1.5 ${accentClasses}`}>{icon}</div>
-        {actionLabel && (
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-            {actionLabel}
-          </span>
-        )}
-      </div>
-      <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-0.5 text-2xl font-black text-slate-900 tabular-nums">{value}</p>
-      {subValue && <p className="mt-0.5 text-[11px] font-medium text-slate-500">{subValue}</p>}
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        onClick={onClick}
-        className="surface-card text-left rounded-2xl p-4 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer"
-      >
-        {Body}
-      </button>
-    );
-  }
-
-  return <div className="surface-card rounded-2xl p-4">{Body}</div>;
-}
-
-function PendingPanel({
+  iconBg,
   title,
-  icon,
-  countLabel,
+  count,
+  accent,
   onSeeAll,
   children,
 }: {
-  title: string;
   icon: ReactNode;
-  countLabel: string;
+  iconBg: string;
+  title: string;
+  count: number;
+  accent: keyof typeof PANEL_PALETTE;
   onSeeAll: () => void;
   children: ReactNode;
 }) {
+  const p = PANEL_PALETTE[accent];
   return (
-    <div className="surface-card rounded-[24px] p-5">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/60">
-        <div className="flex items-center gap-2">
-          <div className="rounded-lg bg-slate-100 p-1.5 text-slate-600">{icon}</div>
-          <h3 className="text-sm font-black tracking-tight text-slate-900">{title}</h3>
+    <div
+      className="rounded-[28px] p-5 relative overflow-hidden"
+      style={{
+        background: p.bg,
+        backdropFilter: 'blur(30px) saturate(155%)',
+        WebkitBackdropFilter: 'blur(30px) saturate(155%)',
+        border: '1px solid rgba(255, 255, 255, 0.85)',
+        boxShadow: p.shadow,
+      }}
+    >
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2.5">
+          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${iconBg} text-white shadow-md shadow-black/10`}>
+            {icon}
+          </div>
+          <h3 className="text-sm font-black text-slate-900 tracking-tight">{title}</h3>
         </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          {countLabel}
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${p.sub}`}>
+          {count} totaal
         </span>
       </div>
-      <div>{children}</div>
+      <div className="space-y-1.5">{children}</div>
       <button
         onClick={onSeeAll}
-        className="mt-3 w-full text-center text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 py-1.5 transition-colors"
+        className="mt-3 w-full inline-flex items-center justify-center gap-1 rounded-2xl bg-white/60 ring-1 ring-white/80 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-white hover:shadow-sm transition-all"
       >
-        Bekijk alle →
+        Bekijk alle
+        <ArrowUpRight size={12} />
       </button>
     </div>
   );
 }
 
-function QuickLink({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+function PendingRow({ primary, secondary }: { primary: string; secondary: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 rounded-2xl bg-white/65 ring-1 ring-white/80 px-3 py-2 hover:bg-white hover:shadow-sm transition-all">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-black text-slate-900 truncate">{primary}</p>
+        <p className="text-xs font-semibold text-slate-600/80 mt-0.5 truncate">{secondary}</p>
+      </div>
+    </div>
+  );
+}
+
+function QuickActionTile({
+  icon,
+  label,
+  subLabel,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  subLabel: string;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-600 hover:bg-white hover:shadow-sm transition-all active:scale-95"
+      className="group text-left rounded-[24px] p-4 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
+      style={{
+        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%)',
+        backdropFilter: 'blur(28px) saturate(155%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(155%)',
+        border: '1px solid rgba(255, 255, 255, 0.85)',
+        boxShadow:
+          'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04)',
+      }}
     >
-      {icon}
-      {label}
+      <div className="flex items-center gap-3">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-900 text-white shadow-md shadow-black/10">
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-slate-900 tracking-tight">{label}</p>
+          <p className="text-xs font-semibold text-slate-500 mt-0.5">{subLabel}</p>
+        </div>
+        <ArrowUpRight size={16} className="text-slate-400 group-hover:text-slate-900 transition-colors shrink-0" />
+      </div>
     </button>
   );
 }
