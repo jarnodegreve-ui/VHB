@@ -169,7 +169,9 @@ export function LoginView({
           <h1 className="brand-wordmark brand-wordmark-anim text-4xl text-slate-900 leading-none">
             VHB <span className="brand-accent text-oker-500">PORTAAL</span>
           </h1>
-          <p className="mt-2 text-slate-500 font-medium text-sm tracking-wide">Van Hoorebeke en Zoon</p>
+          <p className="mt-3 text-[11px] font-bold text-slate-400 uppercase tracking-[0.22em]">
+            Van Hoorebeke en Zoon
+          </p>
         </motion.div>
 
         {/* Bento mini-tegels voor features */}
@@ -214,10 +216,10 @@ export function LoginView({
           <div className="relative z-10">
             {/* Mobile brand-mark */}
             <div className="lg:hidden text-center mb-8">
-              <h1 className="brand-wordmark brand-wordmark-anim text-3xl text-slate-900">
+              <h1 className="brand-wordmark brand-wordmark-anim text-3xl text-slate-900 leading-none">
                 VHB <span className="brand-accent text-oker-500">PORTAAL</span>
               </h1>
-              <p className="mt-1 text-slate-400 text-xs font-medium tracking-widest uppercase">
+              <p className="mt-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-[0.22em]">
                 Van Hoorebeke en Zoon
               </p>
             </div>
