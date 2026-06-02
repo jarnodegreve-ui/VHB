@@ -50,16 +50,19 @@ export function BrandBus({ className, width = 160 }: { className?: string; width
         {/* Yellow accent stripe under windows */}
         <rect x="36" y="74" width="186" height="3" fill="#fbbf24" />
 
-        {/* VANHOOREBEKE rolling sign — nu binnen de body, boven MAN */}
-        <rect x="60" y="82" width="160" height="14" rx="3" fill="#0f172a" />
+        {/* VANHOOREBEKE wordmark — direct op de bus, oker met zwarte outline */}
         <text
           x="140"
-          y="93"
+          y="95"
           textAnchor="middle"
-          fontSize="8"
-          fontWeight="800"
+          fontSize="13"
+          fontWeight="900"
           fill="#fbbf24"
-          letterSpacing="0.08em"
+          stroke="#0f172a"
+          strokeWidth="0.9"
+          paintOrder="stroke"
+          strokeLinejoin="round"
+          letterSpacing="0.06em"
           fontFamily="Manrope, system-ui, sans-serif"
         >
           VANHOOREBEKE
