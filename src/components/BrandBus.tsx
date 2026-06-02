@@ -31,20 +31,6 @@ export function BrandBus({ className, width = 160 }: { className?: string; width
           stroke="#0f172a"
           strokeWidth="2.2"
         />
-        {/* Rolling sign at top */}
-        <rect x="38" y="20" width="184" height="16" rx="4" fill="#0f172a" />
-        <text
-          x="130"
-          y="32"
-          textAnchor="middle"
-          fontSize="9"
-          fontWeight="800"
-          fill="#fbbf24"
-          letterSpacing="0.08em"
-          fontFamily="Manrope, system-ui, sans-serif"
-        >
-          VANHOOREBEKE
-        </text>
 
         {/* Front windshield (right side) */}
         <path
@@ -64,15 +50,23 @@ export function BrandBus({ className, width = 160 }: { className?: string; width
         {/* Yellow accent stripe under windows */}
         <rect x="36" y="74" width="186" height="3" fill="#fbbf24" />
 
-        {/* Door */}
-        <rect x="36" y="80" width="14" height="28" rx="2" fill="#e2e8f0" stroke="#0f172a" strokeWidth="1.4" />
-        <line x1="43" y1="82" x2="43" y2="106" stroke="#0f172a" strokeWidth="1.2" />
-
-        {/* Yellow accent square (brand) */}
-        <rect x="56" y="86" width="14" height="14" rx="2" fill="#fbbf24" />
+        {/* VANHOOREBEKE rolling sign — nu binnen de body, boven MAN */}
+        <rect x="60" y="82" width="160" height="14" rx="3" fill="#0f172a" />
+        <text
+          x="140"
+          y="93"
+          textAnchor="middle"
+          fontSize="8"
+          fontWeight="800"
+          fill="#fbbf24"
+          letterSpacing="0.08em"
+          fontFamily="Manrope, system-ui, sans-serif"
+        >
+          VANHOOREBEKE
+        </text>
 
         {/* "MAN" badge */}
-        <text x="135" y="106" textAnchor="middle" fontSize="6" fontWeight="800" fill="#0f172a" fontFamily="Manrope, system-ui, sans-serif">
+        <text x="140" y="107" textAnchor="middle" fontSize="6" fontWeight="800" fill="#0f172a" fontFamily="Manrope, system-ui, sans-serif">
           MAN
         </text>
 
