@@ -10,7 +10,6 @@ import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
 import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser } from "./helpers.js";
-import { buildZenobeExport, zenobeRowsToCsv } from "./zenobe.js";
 import {
   buildPlanningFromMatrix,
   getActivityLog,
@@ -646,45 +645,6 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving services data:", errorMessage);
     res.status(500).json({ error: "Failed to save data", details: errorMessage });
-  }
-});
-
-// Zenobe-export: preview-rijen voor een datumbereik (uit de planning-matrix +
-// referentietabellen). De UI toont deze, laat de bus per rij overschrijven en
-// downloadt vervolgens via /api/zenobe-export/csv.
-const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
-app.get("/api/zenobe-export", authenticate, requireRole("planner", "admin"), async (req, res) => {
-  try {
-    const from = String(req.query.from ?? "");
-    const to = String(req.query.to ?? "");
-    if (!ISO_DATE.test(from) || !ISO_DATE.test(to)) {
-      return res.status(400).json({ error: "Geef 'from' en 'to' als YYYY-MM-DD mee." });
-    }
-    if (from > to) {
-      return res.status(400).json({ error: "'from' ligt na 'to'." });
-    }
-    const result = await buildZenobeExport(from, to);
-    res.json(result);
-  } catch (err: any) {
-    console.error("Zenobe export error:", err);
-    res.status(500).json({ error: "Kon Zenobe-export niet bouwen.", details: err.message });
-  }
-});
-
-// Serialiseert de (mogelijk in de UI aangepaste) rijen naar het CSV-bestand
-// dat het portaal verwacht. Body: { rows: [...], filename?: string }.
-app.post("/api/zenobe-export/csv", authenticate, requireRole("planner", "admin"), async (req, res) => {
-  try {
-    const rows = Array.isArray(req.body?.rows) ? req.body.rows : null;
-    if (!rows) return res.status(400).json({ error: "Verwacht 'rows' als array in de body." });
-    const csv = zenobeRowsToCsv(rows);
-    const filename = typeof req.body?.filename === "string" && req.body.filename ? req.body.filename : "zenobe-upload.csv";
-    res.setHeader("Content-Type", "text/csv; charset=utf-8");
-    res.setHeader("Content-Disposition", `attachment; filename="${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}"`);
-    res.send(csv);
-  } catch (err: any) {
-    console.error("Zenobe CSV error:", err);
-    res.status(500).json({ error: "Kon CSV niet genereren.", details: err.message });
   }
 });
 

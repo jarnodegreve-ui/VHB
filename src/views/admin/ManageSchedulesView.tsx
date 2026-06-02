@@ -7,7 +7,6 @@ import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Input } from '../../components/Input';
 import { ScheduleView } from '../ScheduleView';
-import { ZenobeExportSection } from './ZenobeExportSection';
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | Promise<void>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
   const [jsonInput, setJsonInput] = useState('');
@@ -690,8 +689,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           Opent in een nieuw tabblad met een printvriendelijke layout. Browser-printdialoog opent automatisch — daar kan je "Opslaan als PDF" kiezen of direct afdrukken.
         </p>
       </div>
-
-      <ZenobeExportSection />
 
       <div className="surface-card p-8 rounded-[24px]">
         <AdminSubsectionHeader
