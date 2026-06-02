@@ -1,15 +1,11 @@
 import type { ReactNode } from 'react';
-import { CalendarClock, Inbox, RefreshCw, Repeat, FileWarning, Activity, ArrowUpRight, Sparkles } from 'lucide-react';
+import { CalendarClock, Inbox, Repeat, FileWarning, Activity, ArrowUpRight, Sparkles } from 'lucide-react';
 import type { LeaveRequest, PlanningMatrixImportHistory, SwapRequest, User } from '../types';
+import { StatTile, type TilePalette } from './DashboardView';
 
 /**
- * Planner/admin dashboard widgets — Bento-stijl (Apple iOS Settings,
- * Apple Intelligence, Notion homepage tiles).
- *
- * - Grote gekleurde tegels, elk eigen pastel-tint
- * - Substantial radius (rounded-3xl) + zachte schaduw
- * - Icoon-blokje + groot getal + label
- * - Verschillende tile-groottes (sommige span 2 cols)
+ * Planner/admin dashboard widgets — Bento premium-stijl.
+ * Hergebruikt StatTile uit DashboardView voor consistentie.
  */
 export function PlannerDashboardWidgets({
   leaveRequests,
@@ -42,73 +38,66 @@ export function PlannerDashboardWidgets({
   const previewLeave = pendingLeave.slice(0, 3);
   const previewSwaps = pendingSwaps.slice(0, 3);
 
+  const importColor: TilePalette = lastImportHadIssues ? 'rose' : 'emerald';
+
   return (
     <section className="space-y-4">
-      {/* Eyebrow */}
       <div className="flex items-baseline justify-between px-1">
-        <h2 className="text-2xl font-black tracking-tight text-slate-900">Overzicht</h2>
-        <p className="text-xs font-medium text-slate-500">
+        <h2 className="text-2xl font-black tracking-[-0.025em] text-slate-900">Overzicht</h2>
+        <p className="text-xs font-semibold text-slate-500">
           {new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
 
-      {/* Bento KPI grid: 4 tegels op desktop, 2x2 op mobile */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-        <BentoTile
-          color="amber"
-          icon={<Inbox size={20} />}
+        <StatTile
+          icon={<Inbox size={18} />}
+          color="oker"
           label="Verlofaanvragen"
           value={pendingLeave.length}
-          actionLabel={pendingLeave.length > 0 ? 'Behandelen' : 'Up to date'}
+          subValue={pendingLeave.length > 0 ? 'Wachten op besluit' : 'Up to date'}
           onClick={pendingLeave.length > 0 ? () => onNavigate('verlof-beheer') : undefined}
         />
-        <BentoTile
+        <StatTile
+          icon={<Repeat size={18} />}
           color="blue"
-          icon={<Repeat size={20} />}
           label="Dienstruilen"
           value={pendingSwaps.length}
-          actionLabel={pendingSwaps.length > 0 ? 'Behandelen' : 'Up to date'}
+          subValue={pendingSwaps.length > 0 ? 'Wachten op besluit' : 'Up to date'}
           onClick={pendingSwaps.length > 0 ? () => onNavigate('ruil-verzoeken') : undefined}
         />
-        <BentoTile
-          color={lastImportHadIssues ? 'rose' : 'emerald'}
-          icon={<CalendarClock size={20} />}
+        <StatTile
+          icon={<CalendarClock size={18} />}
+          color={importColor}
           label="Laatste import"
-          value={
-            daysSinceImport === null
-              ? '—'
-              : daysSinceImport === 0
-              ? 'Vandaag'
-              : `${daysSinceImport}d`
-          }
+          value={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
           subValue={lastImport ? `${lastImport.importedDays} dagen verwerkt` : 'Nog geen import'}
-          actionLabel={lastImportHadIssues ? 'Issues' : 'Importeer'}
           onClick={() => onNavigate('beheer-roosters')}
         />
-        <BentoTile
-          color="oker"
-          icon={<FileWarning size={20} />}
+        <StatTile
+          icon={<FileWarning size={18} />}
+          color="rose"
           label="Omleidingen"
           value={diversionsCount}
-          actionLabel="Beheer"
+          subValue="Actief in netwerk"
           onClick={() => onNavigate('beheer-omleidingen')}
         />
       </div>
 
-      {/* Pending-tegels: groter, spannend over volledige breedte */}
       {(previewLeave.length > 0 || previewSwaps.length > 0) && (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {previewLeave.length > 0 && (
-            <BentoPanel
-              color="amber"
-              icon={<Inbox size={18} />}
+            <BentoListPanel
+              icon={<Inbox size={16} />}
+              iconBg="bg-oker-500"
               title="Wachtende verlofaanvragen"
-              countLabel={`${pendingLeave.length} totaal`}
+              count={pendingLeave.length}
+              accent="oker"
               onSeeAll={() => onNavigate('verlof-beheer')}
             >
               {previewLeave.map((req) => (
                 <div key={req.id}>
-                  <BentoRow
+                  <PendingRow
                     primary={userNameById(req.userId)}
                     secondary={`${req.startDate}${
                       req.startDate !== req.endDate ? ` → ${req.endDate}` : ''
@@ -116,20 +105,21 @@ export function PlannerDashboardWidgets({
                   />
                 </div>
               ))}
-            </BentoPanel>
+            </BentoListPanel>
           )}
 
           {previewSwaps.length > 0 && (
-            <BentoPanel
-              color="blue"
-              icon={<Repeat size={18} />}
+            <BentoListPanel
+              icon={<Repeat size={16} />}
+              iconBg="bg-blue-500"
               title="Wachtende dienstruilen"
-              countLabel={`${pendingSwaps.length} totaal`}
+              count={pendingSwaps.length}
+              accent="blue"
               onSeeAll={() => onNavigate('ruil-verzoeken')}
             >
               {previewSwaps.map((swap) => (
                 <div key={swap.id}>
-                  <BentoRow
+                  <PendingRow
                     primary={
                       swap.targetDriverId
                         ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
@@ -139,20 +129,19 @@ export function PlannerDashboardWidgets({
                   />
                 </div>
               ))}
-            </BentoPanel>
+            </BentoListPanel>
           )}
         </div>
       )}
 
-      {/* Quick-actions als tegels */}
-      <div className="grid grid-cols-2 gap-3">
-        <BentoActionTile
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <QuickActionTile
           icon={<Sparkles size={18} />}
           label="Matrix-import"
           subLabel="Nieuwe planning uploaden"
           onClick={() => onNavigate('beheer-roosters')}
         />
-        <BentoActionTile
+        <QuickActionTile
           icon={<Activity size={18} />}
           label="Activiteit"
           subLabel="Recente acties bekijken"
@@ -163,137 +152,61 @@ export function PlannerDashboardWidgets({
   );
 }
 
-// --- Bento subcomponents ---
+// === Subcomponents ===
 
-const TILE_COLORS = {
-  amber: {
-    bg: 'bg-gradient-to-br from-amber-50 via-amber-100/50 to-amber-200/30',
-    icon: 'bg-amber-500 text-white',
-    text: 'text-amber-900',
-    sub: 'text-amber-700/70',
-    ring: 'ring-amber-200/50',
+const PANEL_PALETTE = {
+  oker: {
+    bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 28px rgba(245, 158, 11, 0.10), 0 2px 8px rgba(245, 158, 11, 0.06)',
+    sub: 'text-oker-700/70',
   },
   blue: {
-    bg: 'bg-gradient-to-br from-blue-50 via-blue-100/50 to-blue-200/30',
-    icon: 'bg-blue-500 text-white',
-    text: 'text-blue-900',
+    bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 28px rgba(59, 130, 246, 0.10), 0 2px 8px rgba(59, 130, 246, 0.06)',
     sub: 'text-blue-700/70',
-    ring: 'ring-blue-200/50',
-  },
-  emerald: {
-    bg: 'bg-gradient-to-br from-emerald-50 via-emerald-100/50 to-emerald-200/30',
-    icon: 'bg-emerald-500 text-white',
-    text: 'text-emerald-900',
-    sub: 'text-emerald-700/70',
-    ring: 'ring-emerald-200/50',
-  },
-  rose: {
-    bg: 'bg-gradient-to-br from-rose-50 via-rose-100/50 to-rose-200/30',
-    icon: 'bg-rose-500 text-white',
-    text: 'text-rose-900',
-    sub: 'text-rose-700/70',
-    ring: 'ring-rose-200/50',
-  },
-  oker: {
-    bg: 'bg-gradient-to-br from-oker-50 via-oker-100/60 to-oker-200/40',
-    icon: 'bg-oker-500 text-white',
-    text: 'text-oker-900',
-    sub: 'text-oker-700/70',
-    ring: 'ring-oker-200/60',
-  },
-  slate: {
-    bg: 'bg-gradient-to-br from-slate-50 via-slate-100/50 to-slate-200/30',
-    icon: 'bg-slate-500 text-white',
-    text: 'text-slate-900',
-    sub: 'text-slate-600',
-    ring: 'ring-slate-200/50',
   },
 } as const;
 
-type TileColor = keyof typeof TILE_COLORS;
-
-function BentoTile({
-  color,
+function BentoListPanel({
   icon,
-  label,
-  value,
-  subValue,
-  actionLabel,
-  onClick,
-}: {
-  color: TileColor;
-  icon: ReactNode;
-  label: string;
-  value: string | number;
-  subValue?: string;
-  actionLabel?: string;
-  onClick?: () => void;
-}) {
-  const c = TILE_COLORS[color];
-
-  const Body = (
-    <>
-      <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl ${c.icon} shadow-sm`}>
-        {icon}
-      </div>
-      <p className={`mt-3 text-[10px] font-black uppercase tracking-widest ${c.sub}`}>{label}</p>
-      <p className={`mt-0.5 text-3xl font-black tabular-nums tracking-tight ${c.text}`}>{value}</p>
-      {subValue && <p className={`mt-1 text-xs font-medium ${c.sub}`}>{subValue}</p>}
-      {actionLabel && (
-        <div className={`mt-2 flex items-center gap-1 text-xs font-bold ${c.text} opacity-80`}>
-          <span>{actionLabel}</span>
-          {onClick && <ArrowUpRight size={12} />}
-        </div>
-      )}
-    </>
-  );
-
-  if (onClick) {
-    return (
-      <button
-        onClick={onClick}
-        className={`group text-left rounded-3xl p-4 ring-1 ${c.ring} ${c.bg} hover:shadow-md hover:scale-[1.01] transition-all active:scale-[0.99]`}
-      >
-        {Body}
-      </button>
-    );
-  }
-  return <div className={`rounded-3xl p-4 ring-1 ${c.ring} ${c.bg}`}>{Body}</div>;
-}
-
-function BentoPanel({
-  color,
-  icon,
+  iconBg,
   title,
-  countLabel,
+  count,
+  accent,
   onSeeAll,
   children,
 }: {
-  color: TileColor;
   icon: ReactNode;
+  iconBg: string;
   title: string;
-  countLabel: string;
+  count: number;
+  accent: keyof typeof PANEL_PALETTE;
   onSeeAll: () => void;
   children: ReactNode;
 }) {
-  const c = TILE_COLORS[color];
+  const p = PANEL_PALETTE[accent];
   return (
-    <div className={`rounded-3xl ring-1 ${c.ring} ${c.bg} overflow-hidden`}>
-      <div className="flex items-center justify-between gap-3 p-4 pb-2">
+    <div
+      className="rounded-[28px] p-5 relative overflow-hidden"
+      style={{ background: p.bg, boxShadow: p.shadow }}
+    >
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
-          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${c.icon} shadow-sm`}>
+          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${iconBg} text-white shadow-md shadow-black/10`}>
             {icon}
           </div>
-          <h3 className={`text-sm font-black ${c.text}`}>{title}</h3>
+          <h3 className="text-sm font-black text-slate-900 tracking-tight">{title}</h3>
         </div>
-        <span className={`text-[10px] font-bold uppercase tracking-widest ${c.sub}`}>
-          {countLabel}
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${p.sub}`}>
+          {count} totaal
         </span>
       </div>
-      <div className="px-4 pb-2">{children}</div>
+      <div className="space-y-1.5">{children}</div>
       <button
         onClick={onSeeAll}
-        className={`w-full px-4 py-2.5 text-xs font-black uppercase tracking-widest ${c.text} opacity-70 hover:opacity-100 hover:bg-white/40 transition-all flex items-center justify-center gap-1`}
+        className="mt-3 w-full inline-flex items-center justify-center gap-1 rounded-2xl bg-white/60 ring-1 ring-white/80 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-white hover:shadow-sm transition-all"
       >
         Bekijk alle
         <ArrowUpRight size={12} />
@@ -302,18 +215,18 @@ function BentoPanel({
   );
 }
 
-function BentoRow({ primary, secondary }: { primary: string; secondary: string }) {
+function PendingRow({ primary, secondary }: { primary: string; secondary: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 py-2 border-b border-white/40 last:border-0">
-      <div className="min-w-0">
+    <div className="flex items-start justify-between gap-3 rounded-2xl bg-white/65 ring-1 ring-white/80 px-3 py-2 hover:bg-white hover:shadow-sm transition-all">
+      <div className="min-w-0 flex-1">
         <p className="text-sm font-black text-slate-900 truncate">{primary}</p>
-        <p className="text-xs font-medium text-slate-600/70 mt-0.5 truncate">{secondary}</p>
+        <p className="text-xs font-semibold text-slate-600/80 mt-0.5 truncate">{secondary}</p>
       </div>
     </div>
   );
 }
 
-function BentoActionTile({
+function QuickActionTile({
   icon,
   label,
   subLabel,
@@ -327,17 +240,22 @@ function BentoActionTile({
   return (
     <button
       onClick={onClick}
-      className="group text-left rounded-3xl p-4 ring-1 ring-slate-200/60 bg-gradient-to-br from-white to-slate-50/50 hover:shadow-md hover:scale-[1.01] transition-all active:scale-[0.99]"
+      className="group text-left rounded-[24px] p-4 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
+      style={{
+        background: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)',
+        boxShadow:
+          'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)',
+      }}
     >
       <div className="flex items-center gap-3">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-900 text-white shadow-sm">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-900 text-white shadow-md shadow-black/10">
           {icon}
         </div>
-        <div className="min-w-0">
-          <p className="text-sm font-black text-slate-900">{label}</p>
-          <p className="text-xs font-medium text-slate-500 mt-0.5">{subLabel}</p>
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-black text-slate-900 tracking-tight">{label}</p>
+          <p className="text-xs font-semibold text-slate-500 mt-0.5">{subLabel}</p>
         </div>
-        <ArrowUpRight size={16} className="ml-auto text-slate-400 group-hover:text-slate-900 transition-colors" />
+        <ArrowUpRight size={16} className="text-slate-400 group-hover:text-slate-900 transition-colors shrink-0" />
       </div>
     </button>
   );

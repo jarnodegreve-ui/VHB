@@ -1,15 +1,18 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight } from 'lucide-react';
 import type { Diversion, Shift, User } from '../types';
 
 /**
- * Dashboard in Bento-stijl (E-preview).
+ * Dashboard — Bento premium-stijl (E++ preview).
  *
- * - Grote oker hero-tegel voor "volgende dienst" (span 2 cols)
- * - Gekleurde KPI-tegels in een grid (warm + diepte via gradients)
- * - Wide planning-tegel (span 2 cols)
- * - Substantial radius rounded-3xl, soft ring-1 + zachte schaduw
+ * Verfijningen vs. eerste bento-versie:
+ * - Asymmetrische tegel-groottes (hero span 2-col + 2 smaller)
+ * - Diepere lagen schaduw (basis + colored glow on hover)
+ * - 2-tone iconen: chip-achtergrond + crisp foreground
+ * - Sterker typografisch contrast (label-size klein, value-size groot)
+ * - Inner highlight via inset shadows (premium glas-gevoel)
+ * - Smooth hover-transitions (scale + shadow + ring)
  */
 export function DashboardView({
   user,
@@ -63,177 +66,308 @@ export function DashboardView({
     return `${minutes} minuten`;
   };
 
+  const isChauffeur = user.role === 'chauffeur';
+
   return (
     <div className="space-y-4">
-      {/* Bento-banner */}
-      <div className="rounded-2xl bg-gradient-to-r from-oker-100 to-amber-100 ring-1 ring-oker-200/60 px-4 py-2.5 text-xs text-oker-900 font-bold flex items-center justify-between">
-        <span>
-          <span className="uppercase tracking-widest text-[10px] text-oker-700">Stijl E preview</span> · Bento / Apple-stijl tegels
-        </span>
-        <span className="text-oker-700/70">Andere schermen blijven in huidige stijl</span>
-      </div>
+      {/* === HERO ROW === */}
+      {isChauffeur && nextShift ? (
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          {/* Hero: spans 2 cols op desktop */}
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            className="lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
+            style={{
+              background: 'linear-gradient(135deg, #fef3c7 0%, #fde68a 45%, #fcd34d 100%)',
+              boxShadow:
+                'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(180, 83, 9, 0.08), 0 12px 32px rgba(245, 158, 11, 0.18), 0 4px 12px rgba(245, 158, 11, 0.12)',
+            }}
+          >
+            <div
+              className="pointer-events-none absolute -top-24 -right-24 w-72 h-72 rounded-full opacity-60"
+              style={{
+                background: 'radial-gradient(circle, rgba(255, 255, 255, 0.9) 0%, transparent 70%)',
+              }}
+            />
+            <div
+              className="pointer-events-none absolute -bottom-20 -left-20 w-56 h-56 rounded-full opacity-50"
+              style={{
+                background: 'radial-gradient(circle, rgba(180, 83, 9, 0.15) 0%, transparent 70%)',
+              }}
+            />
 
-      {/* Hero — volgende dienst als grote oker-tegel */}
-      {nextShift && user.role === 'chauffeur' && (
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-3xl ring-1 ring-oker-200/60 bg-gradient-to-br from-oker-100 via-oker-200/60 to-amber-200/40 p-6 md:p-8 relative overflow-hidden"
-        >
-          <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-oker-300/30 blur-3xl" />
-          <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
-            <div>
-              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/60 ring-1 ring-oker-300/50 rounded-full mb-3">
-                <div className="w-1.5 h-1.5 bg-oker-600 rounded-full animate-pulse" />
-                <span className="text-[10px] font-black text-oker-800 uppercase tracking-widest">Volgende dienst</span>
+            <div className="relative">
+              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/60 backdrop-blur-sm rounded-full mb-4">
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="absolute inline-flex h-full w-full rounded-full bg-oker-600 opacity-75 animate-ping" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-oker-600" />
+                </span>
+                <span className="text-[10px] font-black text-oker-900 uppercase tracking-[0.18em]">
+                  Volgende dienst
+                </span>
               </div>
-              <h3 className="text-4xl md:text-5xl font-black tracking-tight text-oker-950">
-                Over <span className="text-oker-700">{getCountdown(nextShift.startDateTime)}</span>
-              </h3>
-              <p className="text-oker-900/80 text-sm font-bold mt-2">
-                {nextShift.startDateTime.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} · dienst {getServiceNumber(nextShift)}
+
+              <h2 className="text-5xl md:text-6xl font-black tracking-[-0.04em] text-oker-950 leading-none">
+                {getCountdown(nextShift.startDateTime)}
+              </h2>
+              <p className="mt-2 text-sm font-semibold text-oker-900/75">
+                {nextShift.startDateTime.toLocaleDateString('nl-BE', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
+                {' · dienst '}
+                {getServiceNumber(nextShift)}
               </p>
-            </div>
-            <div className="flex gap-2.5 shrink-0">
-              <div className="bg-white/70 ring-1 ring-oker-300/40 rounded-2xl px-5 py-3 text-center backdrop-blur-sm">
-                <p className="text-[10px] font-bold text-oker-700 uppercase tracking-widest mb-0.5">Start</p>
-                <p className="text-2xl font-black text-oker-900 tabular-nums">{nextShift.startTime}</p>
+
+              <div className="mt-5 flex gap-2.5">
+                <div className="bg-white/75 backdrop-blur-sm rounded-2xl px-4 py-2.5 ring-1 ring-white/60">
+                  <p className="text-[9px] font-bold text-oker-700 uppercase tracking-widest mb-0.5">Start</p>
+                  <p className="text-2xl font-black text-oker-950 tabular-nums leading-none">{nextShift.startTime}</p>
+                </div>
+                <div className="bg-white/75 backdrop-blur-sm rounded-2xl px-4 py-2.5 ring-1 ring-white/60">
+                  <p className="text-[9px] font-bold text-oker-700 uppercase tracking-widest mb-0.5">Einde</p>
+                  <p className="text-2xl font-black text-oker-950 tabular-nums leading-none">{nextShift.endTime}</p>
+                </div>
               </div>
-              <div className="bg-white/70 ring-1 ring-oker-300/40 rounded-2xl px-5 py-3 text-center backdrop-blur-sm">
-                <p className="text-[10px] font-bold text-oker-700 uppercase tracking-widest mb-0.5">Einde</p>
-                <p className="text-2xl font-black text-oker-900 tabular-nums">{nextShift.endTime}</p>
-              </div>
             </div>
+          </motion.div>
+
+          {/* Right column: 2 stacked smaller tiles */}
+          <div className="flex flex-col gap-4">
+            <StatTile
+              icon={<Clock size={18} />}
+              color="emerald"
+              label="Vandaag"
+              value={todaysShift?.startTime || 'Vrij'}
+              subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst'}
+            />
+            <StatTile
+              icon={<AlertTriangle size={18} />}
+              color="rose"
+              label="Omleidingen"
+              value={diversions.length}
+              subValue="Actief in netwerk"
+            />
           </div>
-        </motion.div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          <StatTile
+            icon={<Clock size={18} />}
+            color="emerald"
+            label="Vandaag"
+            value={todaysShift?.startTime || 'Vrij'}
+            subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst gepland'}
+          />
+          <StatTile
+            icon={<AlertTriangle size={18} />}
+            color="rose"
+            label="Omleidingen"
+            value={diversions.length}
+            subValue="Actief in netwerk"
+          />
+        </div>
       )}
 
-      {/* Bento KPI-tegels */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-3xl ring-1 ring-emerald-200/60 bg-gradient-to-br from-emerald-50 via-emerald-100/50 to-emerald-200/30 p-4">
-          <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-sm">
-            <Clock size={20} />
-          </div>
-          <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-emerald-700/70">Vandaag</p>
-          <p className="mt-0.5 text-2xl font-black text-emerald-900 tabular-nums tracking-tight">
-            {todaysShift?.startTime || 'Vrij'}
-          </p>
-          <p className="mt-1 text-xs font-bold text-emerald-700/70">
-            {todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst gepland'}
-          </p>
-        </div>
-
-        <div className="rounded-3xl ring-1 ring-rose-200/60 bg-gradient-to-br from-rose-50 via-rose-100/50 to-rose-200/30 p-4">
-          <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-rose-500 text-white shadow-sm">
-            <AlertTriangle size={20} />
-          </div>
-          <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-rose-700/70">Omleidingen</p>
-          <p className="mt-0.5 text-2xl font-black text-rose-900 tabular-nums tracking-tight">
-            {diversions.length}
-          </p>
-          <p className="mt-1 text-xs font-bold text-rose-700/70">Actief in netwerk</p>
-        </div>
-      </div>
-
-      {/* Twee grote tegels — planning + omleidingen */}
-      <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-        {/* Planning */}
-        <div className="rounded-3xl ring-1 ring-slate-200/60 bg-gradient-to-br from-white via-slate-50/70 to-slate-100/40 overflow-hidden">
-          <div className="flex items-center justify-between gap-3 p-4 pb-2">
-            <div className="flex items-center gap-2.5">
-              <div className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-900 text-white shadow-sm">
-                <Calendar size={16} />
-              </div>
-              <h3 className="text-sm font-black text-slate-900">Planning</h3>
-            </div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-              {now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'short' })}
-            </span>
-          </div>
-          <div className="px-4 pb-4">
-            {visibleShifts.length > 0 ? (
-              <div className="space-y-2 mt-2">
-                {visibleShifts.map((shift) => (
-                  <div
-                    key={shift.id}
-                    className="flex items-center justify-between gap-3 bg-white/60 ring-1 ring-slate-200/40 rounded-2xl px-3 py-2.5"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-bold text-slate-500">{formatShiftDate(shift.date)}</span>
-                        <span className="text-xs text-slate-300">·</span>
-                        <span className="text-xs font-black text-oker-700">{getServiceNumber(shift)}</span>
-                      </div>
-                      <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums">
-                        {shift.startTime} – {shift.endTime}
-                      </p>
+      {/* === Wide tiles row === */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <PremiumPanel icon={<Calendar size={16} />} iconBg="bg-slate-900" title="Planning" subtitle={now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'long' })}>
+          {visibleShifts.length > 0 ? (
+            <div className="space-y-2">
+              {visibleShifts.map((shift) => (
+                <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
+                      <span className="text-slate-300">·</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(shift)}</span>
                     </div>
-                    {user.role !== 'chauffeur' && (
-                      <span className="text-xs text-slate-500 truncate font-medium">
-                        {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
-                      </span>
-                    )}
+                    <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
+                      {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
+                    </p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-center py-8">
-                <div className="w-12 h-12 rounded-2xl bg-white ring-1 ring-slate-200/50 flex items-center justify-center text-slate-300 mb-3 shadow-sm">
-                  <Calendar size={20} />
+                  {!isChauffeur && (
+                    <span className="text-xs text-slate-500 truncate font-semibold max-w-[120px]">
+                      {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
+                    </span>
+                  )}
+                  <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-600 transition-colors shrink-0" />
                 </div>
-                <p className="text-sm font-black text-slate-700">Geen dienst vandaag</p>
-                <p className="mt-0.5 text-xs font-medium text-slate-500">Geniet ervan.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Omleidingen */}
-        <div className="rounded-3xl ring-1 ring-oker-200/60 bg-gradient-to-br from-oker-50 via-oker-100/40 to-amber-100/30 overflow-hidden">
-          <div className="flex items-center justify-between gap-3 p-4 pb-2">
-            <div className="flex items-center gap-2.5">
-              <div className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-oker-500 text-white shadow-sm">
-                <AlertTriangle size={16} />
-              </div>
-              <h3 className="text-sm font-black text-oker-950">Nieuwste omleidingen</h3>
+              ))}
             </div>
-            <span className="text-[10px] font-bold uppercase tracking-widest text-oker-700/70">
-              {newestDiversions.length} getoond
-            </span>
-          </div>
-          <div className="px-4 pb-4">
-            {newestDiversions.length > 0 ? (
-              <div className="space-y-2 mt-2">
-                {newestDiversions.map((div) => (
-                  <div
-                    key={div.id}
-                    className="flex items-start gap-3 bg-white/60 ring-1 ring-oker-200/40 rounded-2xl px-3 py-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2">
-                        <p className="text-sm font-black text-slate-900 truncate">{div.title}</p>
-                        <span className="shrink-0 inline-block rounded-md bg-oker-500/15 px-1.5 py-0.5 text-[10px] font-black text-oker-800">
-                          {div.line}
-                        </span>
-                      </div>
-                      <p className="mt-0.5 text-xs font-medium text-slate-600/80 line-clamp-2">{div.description}</p>
+          ) : (
+            <EmptyTile icon={<Calendar size={20} />} title="Geen dienst vandaag" subtitle="Geniet ervan." />
+          )}
+        </PremiumPanel>
+
+        <PremiumPanel icon={<AlertTriangle size={16} />} iconBg="bg-oker-500" title="Omleidingen" subtitle={`${newestDiversions.length} actief`} accent="oker">
+          {newestDiversions.length > 0 ? (
+            <div className="space-y-2">
+              {newestDiversions.map((div) => (
+                <div key={div.id} className="group flex items-start gap-3 rounded-2xl bg-white/70 ring-1 ring-oker-200/40 px-3.5 py-2.5 hover:bg-white hover:ring-oker-300/60 hover:shadow-sm transition-all cursor-pointer">
+                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-black text-slate-900 truncate">{div.title}</p>
+                      <span className="shrink-0 inline-block rounded-md bg-oker-500/15 px-1.5 py-0.5 text-[10px] font-black text-oker-800">{div.line}</span>
                     </div>
-                    <ChevronRight size={14} className="text-oker-400 mt-1 shrink-0" />
+                    <p className="mt-0.5 text-xs font-medium text-slate-600/80 line-clamp-2">{div.description}</p>
                   </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center justify-center text-center py-8">
-                <div className="w-12 h-12 rounded-2xl bg-white ring-1 ring-oker-200/40 flex items-center justify-center text-oker-300 mb-3 shadow-sm">
-                  <MapPin size={20} />
+                  <ArrowUpRight size={14} className="text-oker-400 group-hover:text-oker-700 transition-colors shrink-0 mt-1" />
                 </div>
-                <p className="text-sm font-black text-oker-900">Geen actieve hinder</p>
-                <p className="mt-0.5 text-xs font-medium text-oker-700/70">Er zijn momenteel geen omleidingen.</p>
-              </div>
-            )}
-          </div>
-        </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyTile icon={<MapPin size={20} />} title="Geen actieve hinder" subtitle="Geen omleidingen geregistreerd." />
+          )}
+        </PremiumPanel>
       </div>
+    </div>
+  );
+}
+
+// === Subcomponents ===
+
+const TILE_PALETTE = {
+  emerald: {
+    bg: 'linear-gradient(135deg, #ecfdf5 0%, #d1fae5 60%, #a7f3d0 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(6, 95, 70, 0.06), 0 8px 24px rgba(16, 185, 129, 0.10), 0 2px 8px rgba(16, 185, 129, 0.06)',
+    iconBg: 'bg-emerald-500',
+    text: 'text-emerald-950',
+    sub: 'text-emerald-800/70',
+  },
+  rose: {
+    bg: 'linear-gradient(135deg, #fff1f2 0%, #ffe4e6 60%, #fecdd3 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(159, 18, 57, 0.06), 0 8px 24px rgba(244, 63, 94, 0.10), 0 2px 8px rgba(244, 63, 94, 0.06)',
+    iconBg: 'bg-rose-500',
+    text: 'text-rose-950',
+    sub: 'text-rose-800/70',
+  },
+  oker: {
+    bg: 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 60%, #fde68a 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(146, 64, 14, 0.06), 0 8px 24px rgba(245, 158, 11, 0.12), 0 2px 8px rgba(245, 158, 11, 0.08)',
+    iconBg: 'bg-oker-500',
+    text: 'text-oker-950',
+    sub: 'text-oker-800/70',
+  },
+  blue: {
+    bg: 'linear-gradient(135deg, #eff6ff 0%, #dbeafe 60%, #bfdbfe 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.7), inset 0 -1px 0 rgba(30, 64, 175, 0.06), 0 8px 24px rgba(59, 130, 246, 0.10), 0 2px 8px rgba(59, 130, 246, 0.06)',
+    iconBg: 'bg-blue-500',
+    text: 'text-blue-950',
+    sub: 'text-blue-800/70',
+  },
+  slate: {
+    bg: 'linear-gradient(135deg, #ffffff 0%, #f8fafc 60%, #f1f5f9 100%)',
+    shadow:
+      'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 6px 20px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)',
+    iconBg: 'bg-slate-900',
+    text: 'text-slate-950',
+    sub: 'text-slate-600',
+  },
+} as const;
+
+export type TilePalette = keyof typeof TILE_PALETTE;
+
+export function StatTile({
+  icon,
+  color,
+  label,
+  value,
+  subValue,
+  onClick,
+}: {
+  icon: ReactNode;
+  color: TilePalette;
+  label: string;
+  value: string | number;
+  subValue?: string;
+  onClick?: () => void;
+}) {
+  const c = TILE_PALETTE[color];
+  const Body = (
+    <>
+      <div className="flex items-start justify-between mb-3">
+        <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl ${c.iconBg} text-white shadow-md shadow-black/10`}>
+          {icon}
+        </div>
+        {onClick && <ArrowUpRight size={14} className={`${c.sub} opacity-70`} />}
+      </div>
+      <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${c.sub}`}>{label}</p>
+      <p className={`mt-1 text-3xl font-black tabular-nums tracking-[-0.03em] ${c.text}`}>{value}</p>
+      {subValue && <p className={`mt-1 text-xs font-semibold ${c.sub}`}>{subValue}</p>}
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        onClick={onClick}
+        className="text-left flex-1 rounded-[24px] p-5 relative overflow-hidden hover:scale-[1.01] active:scale-[0.99] transition-transform"
+        style={{ background: c.bg, boxShadow: c.shadow }}
+      >
+        {Body}
+      </button>
+    );
+  }
+  return (
+    <div className="flex-1 rounded-[24px] p-5 relative overflow-hidden" style={{ background: c.bg, boxShadow: c.shadow }}>
+      {Body}
+    </div>
+  );
+}
+
+function PremiumPanel({
+  icon,
+  iconBg,
+  title,
+  subtitle,
+  accent = 'slate',
+  children,
+}: {
+  icon: ReactNode;
+  iconBg: string;
+  title: string;
+  subtitle?: string;
+  accent?: 'slate' | 'oker';
+  children: ReactNode;
+}) {
+  const bg = accent === 'oker'
+    ? 'linear-gradient(135deg, #fffbeb 0%, #fef3c7 100%)'
+    : 'linear-gradient(135deg, #ffffff 0%, #f8fafc 100%)';
+  const shadow = accent === 'oker'
+    ? 'inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 10px 28px rgba(245, 158, 11, 0.10), 0 2px 8px rgba(245, 158, 11, 0.06)'
+    : 'inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)';
+  return (
+    <div className="rounded-[28px] p-5 relative overflow-hidden" style={{ background: bg, boxShadow: shadow }}>
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2.5">
+          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${iconBg} text-white shadow-md shadow-black/10`}>
+            {icon}
+          </div>
+          <h3 className="text-sm font-black text-slate-900 tracking-tight">{title}</h3>
+        </div>
+        {subtitle && <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{subtitle}</span>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function EmptyTile({ icon, title, subtitle }: { icon: ReactNode; title: string; subtitle: string }) {
+  return (
+    <div className="flex flex-col items-center justify-center text-center py-8">
+      <div className="w-12 h-12 rounded-2xl bg-white ring-1 ring-slate-200/60 flex items-center justify-center text-slate-300 mb-3 shadow-sm">
+        {icon}
+      </div>
+      <p className="text-sm font-black text-slate-700">{title}</p>
+      <p className="mt-0.5 text-xs font-semibold text-slate-500">{subtitle}</p>
     </div>
   );
 }
