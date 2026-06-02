@@ -243,20 +243,24 @@
     transform: perspective(1200px) rotateX(2deg) rotateY(-3deg) translateY(-4px) translateZ(0);
   }
 
-  /* Light-source glow: subtiel licht uit de bovenkant van de kaart.
-   * Combineer met een ::before pseudo-element op de container. */
+  /* Light-source glow: licht uit de bovenkant van de kaart.
+   * Altijd lichtjes zichtbaar (mobile ook), versterkt op hover.
+   * Iets warme tint (oker) gemengd met wit voor brand-consistency. */
   .glow-top::before {
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(
-      ellipse at 50% 0%,
-      rgba(255, 255, 255, 0.4) 0%,
-      transparent 60%
-    );
+    background:
+      radial-gradient(
+        ellipse 90% 60% at 50% -10%,
+        rgba(255, 255, 255, 0.7) 0%,
+        rgba(255, 248, 230, 0.35) 30%,
+        transparent 70%
+      );
     pointer-events: none;
-    opacity: 0;
+    opacity: 0.55;
     transition: opacity 480ms ease;
+    border-radius: inherit;
   }
   .glow-top:hover::before {
     opacity: 1;
