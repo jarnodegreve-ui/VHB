@@ -1,17 +1,16 @@
 import type { ReactNode } from 'react';
-import { motion } from 'motion/react';
-import { CalendarClock, Inbox, RefreshCw, Repeat, FileWarning, Activity } from 'lucide-react';
+import { CalendarClock, Inbox, RefreshCw, Repeat, FileWarning, Activity, ArrowUpRight } from 'lucide-react';
 import type { LeaveRequest, PlanningMatrixImportHistory, SwapRequest, User } from '../types';
 
 /**
- * Planner/admin dashboard widgets. Toont KPI-tegels en pending-lijst
- * boven het standaard chauffeur-dashboard zodat planners in één blik
- * zien wat hun aandacht vereist.
+ * Planner/admin dashboard widgets — Linear/Notion-stijl.
  *
- * - Open verlof: aantal pending leave requests
- * - Open ruilen: aantal pending swap requests
- * - Laatste matrix-import: hoe oud + had het issues
- * - Klikbare quick-links naar verlofbeheer / ruil-verzoeken
+ * Designtokens:
+ * - Geen glass/blur; solid wit met 1px slate-border
+ * - Radius rounded-lg (8px) ipv rounded-[32px]
+ * - Hi-density: kleinere padding, kleinere font-sizes
+ * - Status-kleuren als dot + text, niet als grote pill
+ * - Oker accent enkel op key-indicators
  */
 export function PlannerDashboardWidgets({
   leaveRequests,
@@ -45,17 +44,11 @@ export function PlannerDashboardWidgets({
   const previewSwaps = pendingSwaps.slice(0, 3);
 
   return (
-    <motion.section
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      className="space-y-5"
-    >
-      {/* Eyebrow */}
+    <section className="space-y-4">
+      {/* Eyebrow + datum */}
       <div className="flex items-center justify-between">
-        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">
-          Planner-overzicht
-        </p>
-        <p className="text-[10px] font-medium text-slate-400">
+        <h2 className="text-sm font-semibold text-slate-900">Planner-overzicht</h2>
+        <p className="text-xs text-slate-500">
           {new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
@@ -63,62 +56,59 @@ export function PlannerDashboardWidgets({
       {/* KPI grid */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <KpiCard
-          icon={<Inbox size={18} />}
+          icon={<Inbox size={14} />}
           label="Open verlof"
           value={pendingLeave.length}
-          accent={pendingLeave.length > 0 ? 'amber' : 'emerald'}
+          dotColor={pendingLeave.length > 0 ? 'amber' : 'emerald'}
           onClick={pendingLeave.length > 0 ? () => onNavigate('verlof-beheer') : undefined}
-          actionLabel={pendingLeave.length > 0 ? 'Behandel →' : 'Alles afgehandeld'}
         />
         <KpiCard
-          icon={<Repeat size={18} />}
+          icon={<Repeat size={14} />}
           label="Open ruilen"
           value={pendingSwaps.length}
-          accent={pendingSwaps.length > 0 ? 'amber' : 'emerald'}
+          dotColor={pendingSwaps.length > 0 ? 'amber' : 'emerald'}
           onClick={pendingSwaps.length > 0 ? () => onNavigate('ruil-verzoeken') : undefined}
-          actionLabel={pendingSwaps.length > 0 ? 'Behandel →' : 'Alles afgehandeld'}
         />
         <KpiCard
-          icon={<CalendarClock size={18} />}
+          icon={<CalendarClock size={14} />}
           label="Laatste import"
-          value={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
-          accent={lastImportHadIssues ? 'rose' : daysSinceImport && daysSinceImport > 14 ? 'amber' : 'slate'}
+          value={
+            daysSinceImport === null
+              ? '—'
+              : daysSinceImport === 0
+              ? 'Vandaag'
+              : `${daysSinceImport}d geleden`
+          }
+          dotColor={lastImportHadIssues ? 'rose' : daysSinceImport && daysSinceImport > 14 ? 'amber' : 'slate'}
           onClick={() => onNavigate('beheer-roosters')}
-          actionLabel={lastImportHadIssues ? 'Issues bekijken →' : 'Importeer →'}
           subValue={lastImport ? `${lastImport.importedDays} dagen verwerkt` : 'Nog geen import'}
         />
         <KpiCard
-          icon={<FileWarning size={18} />}
+          icon={<FileWarning size={14} />}
           label="Omleidingen"
           value={diversionsCount}
-          accent={diversionsCount > 0 ? 'oker' : 'slate'}
+          dotColor={diversionsCount > 0 ? 'oker' : 'slate'}
           onClick={() => onNavigate('beheer-omleidingen')}
-          actionLabel="Beheer →"
         />
       </div>
 
-      {/* Pending-overzicht: alleen tonen als er iets is */}
+      {/* Pending-overzicht */}
       {(previewLeave.length > 0 || previewSwaps.length > 0) && (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {previewLeave.length > 0 && (
             <PendingPanel
               title="Wachtende verlofaanvragen"
-              icon={<Inbox size={16} />}
-              countLabel={`${pendingLeave.length} totaal`}
+              count={pendingLeave.length}
               onSeeAll={() => onNavigate('verlof-beheer')}
             >
               {previewLeave.map((req) => (
-                <div key={req.id} className="flex items-start justify-between gap-3 py-2 border-b border-white/60 last:border-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900 truncate">{userNameById(req.userId)}</p>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">
-                      {req.startDate}
-                      {req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · {req.type}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest px-2 py-1">
-                    Pending
-                  </span>
+                <div key={req.id}>
+                  <PendingRow
+                    primary={userNameById(req.userId)}
+                    secondary={`${req.startDate}${
+                      req.startDate !== req.endDate ? ` → ${req.endDate}` : ''
+                    } · ${req.type}`}
+                  />
                 </div>
               ))}
             </PendingPanel>
@@ -127,29 +117,19 @@ export function PlannerDashboardWidgets({
           {previewSwaps.length > 0 && (
             <PendingPanel
               title="Wachtende dienstruilen"
-              icon={<Repeat size={16} />}
-              countLabel={`${pendingSwaps.length} totaal`}
+              count={pendingSwaps.length}
               onSeeAll={() => onNavigate('ruil-verzoeken')}
             >
               {previewSwaps.map((swap) => (
-                <div key={swap.id} className="flex items-start justify-between gap-3 py-2 border-b border-white/60 last:border-0">
-                  <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-900 truncate">
-                      {userNameById(swap.requesterId)}
-                      {swap.targetDriverId && (
-                        <>
-                          <span className="text-slate-400 font-medium"> → </span>
-                          {userNameById(swap.targetDriverId)}
-                        </>
-                      )}
-                    </p>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">
-                      {swap.reason ? swap.reason : 'Geen reden opgegeven'}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-amber-100 text-amber-700 text-[10px] font-black uppercase tracking-widest px-2 py-1">
-                    Pending
-                  </span>
+                <div key={swap.id}>
+                  <PendingRow
+                    primary={
+                      swap.targetDriverId
+                        ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
+                        : userNameById(swap.requesterId)
+                    }
+                    secondary={swap.reason || 'Geen reden opgegeven'}
+                  />
                 </div>
               ))}
             </PendingPanel>
@@ -157,12 +137,12 @@ export function PlannerDashboardWidgets({
         </div>
       )}
 
-      {/* Quick-link bar */}
-      <div className="flex flex-wrap gap-2">
-        <QuickLink icon={<RefreshCw size={14} />} label="Matrix-import" onClick={() => onNavigate('beheer-roosters')} />
-        <QuickLink icon={<Activity size={14} />} label="Activiteit" onClick={() => onNavigate('activiteit')} />
+      {/* Quick links */}
+      <div className="flex flex-wrap gap-2 pt-1">
+        <QuickLink icon={<RefreshCw size={12} />} label="Matrix-import" onClick={() => onNavigate('beheer-roosters')} />
+        <QuickLink icon={<Activity size={12} />} label="Activiteit" onClick={() => onNavigate('activiteit')} />
       </div>
-    </motion.section>
+    </section>
   );
 }
 
@@ -173,39 +153,43 @@ function KpiCard({
   label,
   value,
   subValue,
-  accent,
+  dotColor,
   onClick,
-  actionLabel,
 }: {
   icon: ReactNode;
   label: string;
   value: string | number;
   subValue?: string;
-  accent: 'amber' | 'emerald' | 'rose' | 'oker' | 'slate';
+  dotColor: 'amber' | 'emerald' | 'rose' | 'oker' | 'slate';
   onClick?: () => void;
-  actionLabel?: string;
 }) {
-  const accentClasses = {
-    amber: 'border-amber-200 bg-amber-50/70 text-amber-700',
-    emerald: 'border-emerald-200 bg-emerald-50/70 text-emerald-700',
-    rose: 'border-rose-200 bg-rose-50/70 text-rose-700',
-    oker: 'border-oker-200 bg-oker-50/70 text-oker-700',
-    slate: 'border-slate-200 bg-slate-50/70 text-slate-600',
-  }[accent];
+  const dotBg = {
+    amber: 'bg-amber-500',
+    emerald: 'bg-emerald-500',
+    rose: 'bg-rose-500',
+    oker: 'bg-oker-500',
+    slate: 'bg-slate-300',
+  }[dotColor];
 
   const Body = (
     <>
       <div className="flex items-center justify-between">
-        <div className={`rounded-xl p-1.5 ${accentClasses}`}>{icon}</div>
-        {actionLabel && (
-          <span className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-            {actionLabel}
-          </span>
-        )}
+        <div className="flex items-center gap-2 text-slate-500">
+          <span className="text-slate-400">{icon}</span>
+          <span className="text-xs font-medium">{label}</span>
+        </div>
+        <span className={`h-1.5 w-1.5 rounded-full ${dotBg}`} />
       </div>
-      <p className="mt-3 text-[10px] font-black uppercase tracking-widest text-slate-400">{label}</p>
-      <p className="mt-0.5 text-2xl font-black text-slate-900 tabular-nums">{value}</p>
-      {subValue && <p className="mt-0.5 text-[11px] font-medium text-slate-500">{subValue}</p>}
+      <p className="mt-3 text-2xl font-semibold text-slate-900 tabular-nums tracking-tight">
+        {value}
+      </p>
+      {subValue && <p className="mt-0.5 text-xs text-slate-500">{subValue}</p>}
+      {onClick && (
+        <div className="mt-2 flex items-center gap-1 text-xs font-medium text-slate-600 group-hover:text-slate-900 transition-colors">
+          <span>Behandel</span>
+          <ArrowUpRight size={12} />
+        </div>
+      )}
     </>
   );
 
@@ -213,47 +197,58 @@ function KpiCard({
     return (
       <button
         onClick={onClick}
-        className="surface-card text-left rounded-2xl p-4 hover:shadow-md transition-all active:scale-[0.98] cursor-pointer"
+        className="group text-left rounded-lg border border-slate-200 bg-white p-4 hover:border-slate-300 hover:shadow-sm transition-all"
       >
         {Body}
       </button>
     );
   }
 
-  return <div className="surface-card rounded-2xl p-4">{Body}</div>;
+  return (
+    <div className="rounded-lg border border-slate-200 bg-white p-4">{Body}</div>
+  );
 }
 
 function PendingPanel({
   title,
-  icon,
-  countLabel,
+  count,
   onSeeAll,
   children,
 }: {
   title: string;
-  icon: ReactNode;
-  countLabel: string;
+  count: number;
   onSeeAll: () => void;
   children: ReactNode;
 }) {
   return (
-    <div className="surface-card rounded-[24px] p-5">
-      <div className="flex items-center justify-between mb-3 pb-2 border-b border-white/60">
-        <div className="flex items-center gap-2">
-          <div className="rounded-lg bg-slate-100 p-1.5 text-slate-600">{icon}</div>
-          <h3 className="text-sm font-black tracking-tight text-slate-900">{title}</h3>
-        </div>
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-          {countLabel}
-        </span>
+    <div className="rounded-lg border border-slate-200 bg-white">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+        <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+        <span className="text-xs text-slate-500 tabular-nums">{count} totaal</span>
       </div>
       <div>{children}</div>
       <button
         onClick={onSeeAll}
-        className="mt-3 w-full text-center text-[11px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 py-1.5 transition-colors"
+        className="w-full px-4 py-2 text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors border-t border-slate-100 flex items-center justify-center gap-1"
       >
-        Bekijk alle →
+        Bekijk alle
+        <ArrowUpRight size={12} />
       </button>
+    </div>
+  );
+}
+
+function PendingRow({ primary, secondary }: { primary: string; secondary: string }) {
+  return (
+    <div className="flex items-start justify-between gap-3 px-4 py-2.5 border-b border-slate-100 last:border-0 hover:bg-slate-50 transition-colors">
+      <div className="min-w-0">
+        <p className="text-sm font-medium text-slate-900 truncate">{primary}</p>
+        <p className="text-xs text-slate-500 mt-0.5 truncate">{secondary}</p>
+      </div>
+      <span className="shrink-0 inline-flex items-center gap-1 text-xs text-amber-700">
+        <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+        Pending
+      </span>
     </div>
   );
 }
@@ -262,7 +257,7 @@ function QuickLink({ icon, label, onClick }: { icon: ReactNode; label: string; o
   return (
     <button
       onClick={onClick}
-      className="inline-flex items-center gap-2 rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[11px] font-black uppercase tracking-widest text-slate-600 hover:bg-white hover:shadow-sm transition-all active:scale-95"
+      className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-600 hover:border-slate-300 hover:bg-slate-50 transition-all"
     >
       {icon}
       {label}

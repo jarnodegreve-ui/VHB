@@ -1,37 +1,37 @@
 import { useEffect, useState } from 'react';
-import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin } from 'lucide-react';
 import type { Diversion, Shift, Update, User } from '../types';
-import { StatCard } from '../components/StatCard';
 
-export function DashboardView({ user, shifts, diversions, users }: { user: User, shifts: Shift[], diversions: Diversion[], users: User[] }) {
+export function DashboardView({ user, shifts, diversions, users }: { user: User; shifts: Shift[]; diversions: Diversion[]; users: User[]; updates?: Update[] }) {
   const [now, setNow] = useState(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => setNow(new Date()), 60000); // Update every minute
+    const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
 
-  const myShifts = shifts.filter(s => s.driverId === user.id);
+  const myShifts = shifts.filter((s) => s.driverId === user.id);
   const today = now.toISOString().split('T')[0];
   const todaysShift = myShifts.find((shift) => shift.date === today);
-  
+
   const nextShift = myShifts
-    .map(s => {
+    .map((s) => {
       const [year, month, day] = s.date.split('-').map(Number);
       const [hours, minutes] = s.startTime.split(':').map(Number);
       return { ...s, startDateTime: new Date(year, month - 1, day, hours, minutes) };
     })
-    .filter(s => s.startDateTime > now)
+    .filter((s) => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
-  const newestDiversions = [...diversions].reverse().slice(0, 3);
-  const visibleShifts = myShifts.slice(0, 2);
 
-  const formatShiftDate = (date: string) => new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-  });
+  const newestDiversions = [...diversions].reverse().slice(0, 3);
+  const visibleShifts = myShifts.slice(0, 3);
+
+  const formatShiftDate = (date: string) =>
+    new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    });
 
   const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
@@ -39,146 +39,147 @@ export function DashboardView({ user, shifts, diversions, users }: { user: User,
     const diff = target.getTime() - now.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    
     if (hours > 24) return `${Math.floor(hours / 24)} dagen`;
     if (hours > 0) return `${hours}u ${minutes}m`;
     return `${minutes} minuten`;
   };
 
   return (
-    <div className="space-y-8">
-      {/* Next Shift Hero */}
+    <div className="space-y-6">
+      {/* Next-shift hero — clean, no gradient */}
       {nextShift && user.role === 'chauffeur' && (
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="relative overflow-hidden rounded-[28px] p-7 md:p-9"
-          style={{ background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 60%, #231509 100%)' }}
-        >
-          <div className="absolute top-0 right-0 w-80 h-80 rounded-full -mr-40 -mt-40 blur-3xl" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.18) 0%, transparent 70%)' }} />
-          <div className="absolute bottom-0 left-0 w-48 h-48 rounded-full -ml-24 -mb-24 blur-3xl" style={{ background: 'radial-gradient(circle, rgba(245,158,11,0.08) 0%, transparent 70%)' }} />
-
-          <div className="relative flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+        <div className="rounded-lg border border-slate-200 bg-white p-6">
+          <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-oker-500/15 border border-oker-500/20 rounded-full mb-4">
-                <div className="w-1.5 h-1.5 bg-oker-400 rounded-full animate-pulse" />
-                <span className="text-[11px] font-bold text-oker-400 uppercase tracking-widest">Volgende dienst</span>
+              <div className="inline-flex items-center gap-1.5 text-xs font-medium text-oker-700">
+                <span className="h-1.5 w-1.5 rounded-full bg-oker-500 animate-pulse" />
+                Volgende dienst
               </div>
-              <h3 className="text-3xl md:text-4xl font-black tracking-tight text-white">
-                Over <span className="text-oker-400">{getCountdown(nextShift.startDateTime)}</span>
+              <h3 className="mt-2 text-3xl font-semibold text-slate-900 tracking-tight">
+                Over <span className="text-oker-600">{getCountdown(nextShift.startDateTime)}</span>
               </h3>
-              <p className="text-slate-400 text-sm font-medium mt-2">
-                {nextShift.startDateTime.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} · aanvang {nextShift.startTime}
+              <p className="mt-1 text-sm text-slate-500">
+                {nextShift.startDateTime.toLocaleDateString('nl-BE', {
+                  weekday: 'long',
+                  day: 'numeric',
+                  month: 'long',
+                })}
               </p>
             </div>
-
-            <div className="flex gap-3 shrink-0">
-              <div className="bg-white/6 border border-white/10 rounded-2xl px-6 py-4 text-center">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Start</p>
-                <p className="text-2xl font-black text-oker-400">{nextShift.startTime}</p>
+            <div className="flex gap-2 shrink-0">
+              <div className="rounded-md border border-slate-200 px-4 py-2.5 text-center">
+                <p className="text-xs text-slate-500">Start</p>
+                <p className="text-lg font-semibold text-oker-700 tabular-nums">{nextShift.startTime}</p>
               </div>
-              <div className="bg-white/6 border border-white/10 rounded-2xl px-6 py-4 text-center">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-widest mb-1">Einde</p>
-                <p className="text-2xl font-black text-white">{nextShift.endTime}</p>
+              <div className="rounded-md border border-slate-200 px-4 py-2.5 text-center">
+                <p className="text-xs text-slate-500">Einde</p>
+                <p className="text-lg font-semibold text-slate-900 tabular-nums">{nextShift.endTime}</p>
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-        <StatCard
-          icon={<Clock className="text-oker-600" />}
-          label="Vandaag"
-          value={todaysShift?.startTime || 'Vrij'}
-          subValue={todaysShift ? `${todaysShift.startTime} - ${todaysShift.endTime}` : 'Geen dienst gepland'}
-        />
-        <StatCard
-          icon={<AlertTriangle className="text-red-500" />}
-          label="Actieve Omleidingen"
-          value={diversions.length.toString()}
-          subValue="Totaal aantal"
-        />
+      {/* Twee snelle stats — clean borders */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <Clock size={14} className="text-slate-400" />
+            Vandaag
+          </div>
+          <p className="mt-2 text-xl font-semibold text-slate-900 tabular-nums">
+            {todaysShift?.startTime || 'Vrij'}
+          </p>
+          <p className="mt-0.5 text-xs text-slate-500">
+            {todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst gepland'}
+          </p>
+        </div>
+
+        <div className="rounded-lg border border-slate-200 bg-white p-4">
+          <div className="flex items-center gap-2 text-xs text-slate-500">
+            <AlertTriangle size={14} className="text-slate-400" />
+            Actieve omleidingen
+          </div>
+          <p className="mt-2 text-xl font-semibold text-slate-900 tabular-nums">{diversions.length}</p>
+          <p className="mt-0.5 text-xs text-slate-500">Totaal aantal</p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 lg:items-stretch">
-        <section className="panel flex h-full min-h-[31rem] flex-col rounded-[32px] p-8">
-          <div className="mb-8 flex items-center justify-between">
-            <h3 className="font-black text-xl tracking-tight">Planning voor vandaag</h3>
-            <span className="text-[10px] font-black bg-oker-50 text-oker-700 px-4 py-1.5 rounded-full uppercase tracking-widest">
+      {/* Twee panelen: planning vandaag + nieuwste omleidingen */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {/* Planning */}
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-900">Planning</h3>
+            <span className="text-xs text-slate-500">
               {now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'short' })}
             </span>
           </div>
-          <div className="flex flex-1 flex-col gap-4">
-            {visibleShifts.map(shift => (
-              <div key={shift.id} className="grid min-h-[8.25rem] grid-cols-[5.25rem_minmax(0,1fr)] items-center gap-5 rounded-[28px] border border-slate-100 bg-slate-50/55 p-5 transition-all duration-300 hover:bg-white hover:shadow-md">
-                <div className="flex h-20 flex-col items-center justify-center rounded-[24px] border border-white/80 bg-white shadow-sm">
-                  <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">Dienst</p>
-                  <p className="mt-1 text-xl font-black text-oker-500">{getServiceNumber(shift)}</p>
-                </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">{formatShiftDate(shift.date)}</p>
-                    <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                      {shift.startTime} - {shift.endTime}
-                    </span>
-                  </div>
-                  <p className="mt-3 text-xl font-black tracking-tight text-slate-900">{shift.startTime} - {shift.endTime}</p>
-                  <p className="mt-1 text-sm font-medium text-slate-500">
-                    {user.role === 'chauffeur'
-                      ? 'Jouw eerstvolgende zichtbare inzet.'
-                      : `Chauffeur: ${users.find(u => u.id === shift.driverId)?.name || 'Onbekend'}`}
-                  </p>
-                </div>
-              </div>
-            ))}
-            {myShifts.length === 0 && (
-              <div className="flex flex-1 flex-col items-center justify-center text-center py-8">
-                <div className="w-14 h-14 rounded-full bg-white/60 ring-1 ring-white/70 flex items-center justify-center text-slate-300 mb-4">
-                  <Calendar size={24} />
-                </div>
-                <h4 className="text-base font-black text-slate-700 tracking-tight">Geen dienst vandaag</h4>
-                <p className="mt-1.5 text-sm font-medium text-slate-400 max-w-xs">Je hebt geen geplande dienst voor vandaag. Geniet ervan.</p>
-              </div>
-            )}
-          </div>
-        </section>
 
-        <section className="panel flex h-full min-h-[31rem] flex-col rounded-[32px] p-8">
-          <div className="mb-8 flex items-center justify-between">
-            <h3 className="font-black text-xl tracking-tight">Nieuwe Omleidingen</h3>
-            <span className="text-[10px] font-black bg-slate-100 text-slate-500 px-4 py-1.5 rounded-full uppercase tracking-widest">
-              {Math.min(newestDiversions.length, 3)} getoond
-            </span>
-          </div>
-          <div className="flex flex-1 flex-col gap-4">
-            {newestDiversions.map(div => (
-              <div key={div.id} className="flex min-h-[8.25rem] gap-5 rounded-[28px] border border-oker-100/80 bg-oker-50/25 p-5 transition-all group hover:bg-oker-50/45">
-                <div className="shrink-0 mt-1">
-                  <AlertTriangle size={24} className="text-oker-600" />
+          {visibleShifts.length > 0 ? (
+            <div className="divide-y divide-slate-100">
+              {visibleShifts.map((shift) => (
+                <div key={shift.id} className="flex items-center justify-between gap-3 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-500">{formatShiftDate(shift.date)}</span>
+                      <span className="text-xs text-slate-300">·</span>
+                      <span className="text-xs font-medium text-oker-700">Dienst {getServiceNumber(shift)}</span>
+                    </div>
+                    <p className="mt-0.5 text-sm font-medium text-slate-900 tabular-nums">
+                      {shift.startTime} – {shift.endTime}
+                    </p>
+                  </div>
+                  {user.role !== 'chauffeur' && (
+                    <span className="text-xs text-slate-500 truncate">
+                      {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
+                    </span>
+                  )}
                 </div>
-                <div className="flex min-w-0 flex-1 flex-col justify-between">
-                  <p className="font-black text-lg text-slate-900">{div.title}</p>
-                  <p className="text-sm text-slate-500 mt-1 line-clamp-2 font-medium leading-relaxed">{div.description}</p>
-                  <div className="flex items-center gap-2 mt-3">
-                    <span className="px-2 py-0.5 bg-oker-100 text-oker-700 rounded text-[10px] font-black uppercase">{div.line}</span>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center py-10 px-4">
+              <Calendar size={20} className="text-slate-300 mb-2" />
+              <p className="text-sm font-medium text-slate-700">Geen dienst vandaag</p>
+              <p className="mt-0.5 text-xs text-slate-500">Geniet ervan.</p>
+            </div>
+          )}
+        </div>
+
+        {/* Omleidingen */}
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-slate-100">
+            <h3 className="text-sm font-semibold text-slate-900">Nieuwste omleidingen</h3>
+            <span className="text-xs text-slate-500">{newestDiversions.length} getoond</span>
+          </div>
+
+          {newestDiversions.length > 0 ? (
+            <div className="divide-y divide-slate-100">
+              {newestDiversions.map((div) => (
+                <div key={div.id} className="flex items-start gap-3 px-4 py-3">
+                  <span className="mt-1 h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-slate-900 truncate">{div.title}</p>
+                      <span className="shrink-0 inline-block rounded border border-slate-200 px-1.5 py-0.5 text-[10px] font-medium text-slate-600">
+                        {div.line}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-slate-500 line-clamp-2">{div.description}</p>
                   </div>
                 </div>
-              </div>
-            ))}
-            {diversions.length === 0 && (
-              <div className="flex flex-1 flex-col items-center justify-center text-center py-8">
-                <div className="w-14 h-14 rounded-full bg-white/60 ring-1 ring-white/70 flex items-center justify-center text-slate-300 mb-4">
-                  <MapPin size={24} />
-                </div>
-                <h4 className="text-base font-black text-slate-700 tracking-tight">Geen actieve hinder</h4>
-                <p className="mt-1.5 text-sm font-medium text-slate-400 max-w-xs">Er zijn momenteel geen omleidingen geregistreerd.</p>
-              </div>
-            )}
-          </div>
-        </section>
+              ))}
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center text-center py-10 px-4">
+              <MapPin size={20} className="text-slate-300 mb-2" />
+              <p className="text-sm font-medium text-slate-700">Geen actieve hinder</p>
+              <p className="mt-0.5 text-xs text-slate-500">Er zijn momenteel geen omleidingen.</p>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
