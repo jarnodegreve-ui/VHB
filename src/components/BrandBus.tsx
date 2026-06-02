@@ -65,7 +65,7 @@ export function BrandBus({ className, width = 160 }: { className?: string; width
           letterSpacing="0.18em"
           fontFamily="Manrope, system-ui, sans-serif"
         >
-          VANHOOREBEKE
+          VAN<tspan dx="4">HOOREBEKE</tspan>
         </text>
 
         {/* "MAN" badge */}
