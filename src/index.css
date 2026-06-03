@@ -105,9 +105,21 @@
     transition:
       transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 380ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 380ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 380ms cubic-bezier(0.22, 1, 0.36, 1),
       border-color 380ms cubic-bezier(0.22, 1, 0.36, 1),
-      backdrop-filter 380ms cubic-bezier(0.22, 1, 0.36, 1);
+      backdrop-filter 380ms cubic-bezier(0.22, 1, 0.36, 1),
+      -webkit-backdrop-filter 380ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Variant voor de sticky-header wanneer er onder gescrolld wordt — meer
+     opaak + sterkere blur zodat content er niet doorheen schemert. Voelt
+     premium iOS-frosted. */
+  .panel--scrolled {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+    backdrop-filter: blur(40px) saturate(180%);
+    -webkit-backdrop-filter: blur(40px) saturate(180%);
+    border-color: rgba(255, 255, 255, 0.95);
   }
 
   .panel-dark {

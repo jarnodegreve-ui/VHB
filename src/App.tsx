@@ -1142,7 +1142,7 @@ export default function App() {
           <div className="sticky top-0 z-30 -mx-4 md:-mx-7 px-4 md:px-7 pt-3 pb-3 pointer-events-none">
             <header className={cn(
               "pointer-events-auto mx-auto w-full max-w-[1360px] rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 transition-shadow duration-500",
-              isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
+              isScrolled && "panel--scrolled shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
             )}>
               <div className="flex items-center gap-3">
                 <button
