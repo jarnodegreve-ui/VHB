@@ -5,6 +5,7 @@ import type { Diversion, Shift, User } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
 import { Sparkline } from '../components/Sparkline';
 import { BrandEmptyState } from '../components/BrandEmptyState';
+import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -22,11 +23,13 @@ export function DashboardView({
   shifts,
   diversions,
   users,
+  isInitialLoad = false,
 }: {
   user: User;
   shifts: Shift[];
   diversions: Diversion[];
   users: User[];
+  isInitialLoad?: boolean;
 }) {
   const [now, setNow] = useState(new Date());
 
@@ -72,6 +75,39 @@ export function DashboardView({
   const isChauffeur = user.role === 'chauffeur';
   const firstName = user.name.split(' ')[0];
   const greeting = getDaypartGreeting(now);
+
+  // Skeleton-mode: eerste fetch nog niet rond
+  if (isInitialLoad) {
+    return (
+      <div className="space-y-4">
+        <div className="px-1 pt-1 space-y-2">
+          <Skeleton className="h-8 w-72" />
+          <Skeleton className="h-3 w-48" />
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="lg:col-span-2 rounded-[28px] h-44">
+            <SkeletonTile className="h-full" />
+          </div>
+          <div className="flex flex-col gap-4">
+            <SkeletonTile />
+            <SkeletonTile />
+          </div>
+        </div>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <div className="rounded-[28px] p-5 surface-card">
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+          <div className="rounded-[28px] p-5 surface-card">
+            <SkeletonRow />
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
