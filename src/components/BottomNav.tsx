@@ -24,10 +24,14 @@ export function BottomNav({
   currentView,
   onSelect,
   unseenLeaveCount = 0,
+  hidden = false,
 }: {
   currentView: View;
   onSelect: (view: View) => void;
   unseenLeaveCount?: number;
+  /** Verberg de balk wanneer er bv. een sidebar/sheet open is, zodat
+   *  hij niet onder de overlay door piept. */
+  hidden?: boolean;
 }) {
   const slots: NavSlot[] = [
     { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
@@ -39,7 +43,11 @@ export function BottomNav({
 
   return (
     <nav
-      className="md:hidden fixed bottom-3 left-3 right-3 z-40 rounded-[24px] px-2 py-2"
+      className={cn(
+        'md:hidden fixed bottom-3 left-3 right-3 z-40 rounded-[24px] px-2 py-2 transition-all duration-300',
+        hidden && 'pointer-events-none opacity-0 translate-y-4',
+      )}
+      aria-hidden={hidden || undefined}
       style={{
         background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.6) 100%)',
         backdropFilter: 'blur(30px) saturate(160%)',

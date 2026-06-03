@@ -929,9 +929,10 @@ export default function App() {
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
-            className="absolute right-6 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors lg:hidden"
+            aria-label="Menu sluiten"
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-slate-600 hover:text-slate-900 bg-white/60 hover:bg-white/90 rounded-2xl shadow-sm transition-colors lg:hidden"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
@@ -1086,23 +1087,29 @@ export default function App() {
           </div>
           <button
             onClick={toggleTheme}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
           >
-            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            </span>
             <span>{theme === 'light' ? 'Donkere modus' : 'Lichte modus'}</span>
           </button>
           <button
             onClick={() => setShowChangePassword(true)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
           >
-            <KeyRound size={16} />
+            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+              <KeyRound size={16} />
+            </span>
             <span>Wachtwoord wijzigen</span>
           </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
           >
-            <LogOut size={16} />
+            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+              <LogOut size={16} />
+            </span>
             <span>Uitloggen</span>
           </button>
         </div>
@@ -1259,6 +1266,7 @@ export default function App() {
         currentView={resolvedCurrentView}
         onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
         unseenLeaveCount={unseenLeaveDecisionCount}
+        hidden={isSidebarOpen}
       />
 
       {/* ⌘K Command Palette */}
