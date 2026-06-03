@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { AlertTriangle, Bell, CalendarDays, Pencil, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bell, CalendarDays, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
+import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 function Input({
   label,
@@ -59,6 +60,7 @@ export function ManageUpdatesView({
   const [isPublishing, setIsPublishing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [historyUpdate, setHistoryUpdate] = useState<Update | null>(null);
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -240,6 +242,14 @@ export function ManageUpdatesView({
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
+                    onClick={() => setHistoryUpdate(update)}
+                    title="Wijzigingsgeschiedenis"
+                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:text-slate-800"
+                  >
+                    <History size={14} />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => handleEdit(update)}
                     className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:text-oker-600"
                   >
@@ -270,6 +280,14 @@ export function ManageUpdatesView({
           )}
         </div>
       </div>
+
+      <EntityHistoryModal
+        open={!!historyUpdate}
+        onClose={() => setHistoryUpdate(null)}
+        entityType="update"
+        entityId={historyUpdate?.id ?? ''}
+        title={historyUpdate?.title}
+      />
     </PageShell>
   );
 }

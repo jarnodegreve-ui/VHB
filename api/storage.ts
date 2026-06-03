@@ -436,6 +436,107 @@ export const summarizeServiceChanges = (previousServices: ServiceRecord[], nextS
   ].join(" · ");
 };
 
+/** Structurele diff per omleiding voor per-entity audit-logging. */
+export const diffDiversionChanges = (previousDiversions: any[], nextDiversions: any[]) => {
+  const previousById = new Map(previousDiversions.map((item): [string, any] => [String(item.id), item]));
+  const nextById = new Map(nextDiversions.map((item): [string, any] => [String(item.id), item]));
+  const added = nextDiversions.filter((item) => !previousById.has(String(item.id)));
+  const removed = previousDiversions.filter((item) => !nextById.has(String(item.id)));
+  const changed = nextDiversions.filter((item) => {
+    const previous = previousById.get(String(item.id));
+    return previous && (
+      previous.title !== item.title ||
+      previous.description !== item.description ||
+      previous.startDate !== item.startDate ||
+      previous.endDate !== item.endDate ||
+      previous.severity !== item.severity ||
+      previous.line !== item.line ||
+      previous.pdfUrl !== item.pdfUrl
+    );
+  });
+  return { added, removed, changed };
+};
+
+/** Structurele diff per update voor per-entity audit-logging. */
+export const diffUpdateChanges = (previousUpdates: any[], nextUpdates: any[]) => {
+  const previousById = new Map(previousUpdates.map((item): [string, any] => [String(item.id), item]));
+  const nextById = new Map(nextUpdates.map((item): [string, any] => [String(item.id), item]));
+  const added = nextUpdates.filter((item) => !previousById.has(String(item.id)));
+  const removed = previousUpdates.filter((item) => !nextById.has(String(item.id)));
+  const changed = nextUpdates.filter((item) => {
+    const previous = previousById.get(String(item.id));
+    return previous && (
+      previous.title !== item.title ||
+      previous.content !== item.content ||
+      previous.category !== item.category ||
+      Boolean(previous.isUrgent) !== Boolean(item.isUrgent)
+    );
+  });
+  return { added, removed, changed };
+};
+
+/** Structurele diff per gebruiker voor per-entity audit-logging. */
+export const diffUserChanges = (previousUsers: AppUser[], nextUsers: IncomingUser[]) => {
+  const normalizedNextUsers = nextUsers.map(sanitizeIncomingUser);
+  const previousById = new Map(previousUsers.map((user): [string, AppUser] => [String(user.id), user]));
+  const nextById = new Map(normalizedNextUsers.map((user): [string, AppUser] => [String(user.id), user]));
+
+  const added = normalizedNextUsers.filter((user) => !previousById.has(String(user.id)));
+  const removed = previousUsers.filter((user) => !nextById.has(String(user.id)));
+  const changed = normalizedNextUsers
+    .filter((user) => {
+      const previous = previousById.get(String(user.id));
+      if (!previous) return false;
+      return (
+        previous.name !== user.name ||
+        previous.role !== user.role ||
+        previous.employeeId !== user.employeeId ||
+        previous.phone !== user.phone ||
+        previous.email !== user.email ||
+        previous.verlofBudget !== user.verlofBudget ||
+        Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true)
+      );
+    })
+    .map((user) => {
+      const previous = previousById.get(String(user.id))!;
+      const fields: string[] = [];
+      if (previous.name !== user.name) fields.push(`naam: ${previous.name}→${user.name}`);
+      if (previous.role !== user.role) fields.push(`rol: ${previous.role}→${user.role}`);
+      if (previous.employeeId !== user.employeeId) fields.push(`employeeId: ${previous.employeeId}→${user.employeeId}`);
+      if (previous.phone !== user.phone) fields.push(`telefoon`);
+      if (previous.email !== user.email) fields.push(`email`);
+      if (previous.verlofBudget !== user.verlofBudget) fields.push(`verlofBudget: ${previous.verlofBudget ?? 'standaard'}→${user.verlofBudget ?? 'standaard'}`);
+      if (Boolean(previous.isActive ?? true) !== Boolean(user.isActive ?? true)) {
+        fields.push(`status: ${previous.isActive === false ? 'inactief' : 'actief'}→${user.isActive === false ? 'inactief' : 'actief'}`);
+      }
+      return { user, fields };
+    });
+
+  return { added, removed, changed };
+};
+
+/** Structurele diff per planning-code voor per-entity audit-logging. */
+export const diffPlanningCodeChanges = (
+  previousCodes: PlanningCodeRecord[],
+  nextCodes: PlanningCodeRecord[],
+) => {
+  const previousByCode = new Map(previousCodes.map((c): [string, PlanningCodeRecord] => [toLookupToken(c.code), c]));
+  const nextByCode = new Map(nextCodes.map((c): [string, PlanningCodeRecord] => [toLookupToken(c.code), c]));
+  const added = nextCodes.filter((c) => !previousByCode.has(toLookupToken(c.code)));
+  const removed = previousCodes.filter((c) => !nextByCode.has(toLookupToken(c.code)));
+  const changed = nextCodes.filter((c) => {
+    const previous = previousByCode.get(toLookupToken(c.code));
+    return previous && (
+      previous.category !== c.category ||
+      previous.description !== c.description ||
+      previous.countsAsShift !== c.countsAsShift ||
+      previous.isPaidAbsence !== c.isPaidAbsence ||
+      previous.isDayOff !== c.isDayOff
+    );
+  });
+  return { added, removed, changed };
+};
+
 export const summarizeDiversionChanges = (previousDiversions: any[], nextDiversions: any[]) => {
   const previousById = new Map(previousDiversions.map((item): [string, any] => [String(item.id), item]));
   const nextById = new Map(nextDiversions.map((item): [string, any] => [String(item.id), item]));

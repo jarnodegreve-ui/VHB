@@ -1,15 +1,17 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, FileText, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [historyDiversion, setHistoryDiversion] = useState<Diversion | null>(null);
 
   const [formData, setFormData] = useState<Partial<Diversion>>({
     line: '',
@@ -188,7 +190,14 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     <FileText size={20} />
                   </div>
                 )}
-                <button 
+                <button
+                  onClick={() => setHistoryDiversion(div)}
+                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-slate-100 rounded-xl transition-all active:scale-90"
+                  title="Wijzigingsgeschiedenis"
+                >
+                  <History size={20} />
+                </button>
+                <button
                   onClick={() => handleOpenEdit(div)}
                   className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-oker-600 hover:bg-oker-50 border border-slate-100 rounded-xl transition-all active:scale-90"
                   title="Bewerken"
@@ -196,7 +205,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <Pencil size={20} />
                 </button>
               </div>
-              <button 
+              <button
                 onClick={() => setConfirmDeleteId(div.id)}
                 className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 border border-slate-100 rounded-xl transition-all active:scale-90"
                 title="Verwijderen"
@@ -359,6 +368,14 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         onConfirm={handleDelete}
         title="Omleiding Verwijderen"
         message="Weet je zeker dat je deze omleiding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+      />
+
+      <EntityHistoryModal
+        open={!!historyDiversion}
+        onClose={() => setHistoryDiversion(null)}
+        entityType="diversion"
+        entityId={historyDiversion?.id ?? ''}
+        title={historyDiversion ? `${historyDiversion.title} — lijn ${historyDiversion.line}` : undefined}
       />
 
     </PageShell>
