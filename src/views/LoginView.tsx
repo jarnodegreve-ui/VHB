@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, MapPin, Bell, AlertTriangle, CheckCircle, ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
+import { BrandLogo } from '../components/BrandLogo';
 
 type Mode = 'login' | 'forgot';
 
@@ -179,11 +180,9 @@ export function LoginView({
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="relative z-10"
         >
-          <h1 className="brand-wordmark brand-wordmark-anim text-4xl text-slate-900 leading-none">
-            VHB <span className="brand-accent text-oker-500">PORTAAL</span>
-          </h1>
-          <p className="mt-3 text-[11px] font-bold text-slate-400 uppercase tracking-[0.22em]">
-            Van Hoorebeke en Zoon
+          <BrandLogo size="lg" />
+          <p className="mt-4 text-[11px] font-bold text-slate-400 uppercase tracking-[0.22em]">
+            Intern portaal · sinds 1922
           </p>
         </motion.div>
 
@@ -228,12 +227,10 @@ export function LoginView({
 
           <div className="relative z-10">
             {/* Mobile brand-mark */}
-            <div className="lg:hidden text-center mb-8">
-              <h1 className="brand-wordmark brand-wordmark-anim text-3xl text-slate-900 leading-none">
-                VHB <span className="brand-accent text-oker-500">PORTAAL</span>
-              </h1>
-              <p className="mt-2.5 text-[10px] font-bold text-slate-400 uppercase tracking-[0.22em]">
-                Van Hoorebeke en Zoon
+            <div className="lg:hidden flex flex-col items-center text-center mb-8">
+              <BrandLogo size="md" />
+              <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-[0.22em]">
+                Intern portaal · sinds 1922
               </p>
             </div>
 
