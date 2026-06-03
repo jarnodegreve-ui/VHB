@@ -15,15 +15,15 @@ export function BrandWordmark({
   className?: string;
 }) {
   const titleSize = {
-    sm: 'text-2xl',
-    md: 'text-3xl',
-    lg: 'text-4xl md:text-5xl',
+    sm: 'text-xl',
+    md: 'text-2xl',
+    lg: 'text-3xl',
   }[size];
 
   const subSize = {
     sm: 'text-[9px] tracking-[0.18em] mt-1.5',
     md: 'text-[10px] tracking-[0.22em] mt-2',
-    lg: 'text-[11px] md:text-xs tracking-[0.24em] mt-2.5',
+    lg: 'text-[11px] tracking-[0.24em] mt-2',
   }[size];
 
   return (
