@@ -47,6 +47,7 @@ import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, 
 import { Toast, ToastStack } from './components/ToastStack';
 import { MobileNavItem, NavItem } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
+import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { Input } from './components/Input';
 import { StatCard } from './components/StatCard';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -56,6 +57,7 @@ import { ServicesView } from './views/ServicesView';
 import { DashboardView } from './views/DashboardView';
 import { PlannerDashboardWidgets } from './views/PlannerDashboardWidgets';
 import { useParallaxScroll } from './lib/interactive';
+import { useRealtimeSync } from './lib/realtime';
 import { DiversionsView } from './views/DiversionsView';
 import { ScheduleView } from './views/ScheduleView';
 import { UpdatesView } from './views/UpdatesView';
@@ -146,6 +148,7 @@ export default function App() {
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -159,6 +162,26 @@ export default function App() {
 
   // Parallax-scroll: schrijft --scroll-y CSS-var voor de fixed bg-blobs
   useParallaxScroll();
+
+  // ⌘K / Ctrl+K opent het command palette
+  useCommandPaletteShortcut(() => setIsCommandPaletteOpen(true));
+
+  // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
+  // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
+  // gebeurt er niets.
+  useRealtimeSync(!!session && !!currentUser, {
+    refetchLeave: () => fetchLeave(),
+    refetchSwaps: () => fetchSwaps(),
+    refetchDiversions: () => fetchDiversions(),
+    refetchUpdates: () => fetchUpdates(),
+    refetchPlanning: () => {
+      // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
+      const planningFilter = currentUser?.role === 'chauffeur'
+        ? { driverId: String(currentUser.id) }
+        : undefined;
+      fetchPlanning(undefined, planningFilter);
+    },
+  });
 
   // Initialize theme from localStorage, falling back to system preference.
   useEffect(() => {
@@ -331,8 +354,11 @@ export default function App() {
     try {
       setIsLoading(true);
       const appUser = await fetchCurrentUser(accessToken);
+      // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
+      // Planner/admin: alle shifts (nodig voor beheer-views).
+      const planningFilter = appUser.role === 'chauffeur' ? { driverId: String(appUser.id) } : undefined;
       await Promise.all([
-        fetchPlanning(accessToken),
+        fetchPlanning(accessToken, planningFilter),
         fetchUsers(accessToken),
         fetchDiversions(accessToken),
         fetchServices(accessToken),
@@ -651,10 +677,17 @@ export default function App() {
     }
   };
 
-  const fetchPlanning = async (accessToken = session?.access_token) => {
+  const fetchPlanning = async (accessToken = session?.access_token, filters?: { driverId?: string; month?: string }) => {
     try {
       setIsLoading(true);
-      const response = await apiFetch('/api/planning', {}, accessToken);
+      // Chauffeurs krijgen alleen hun eigen shifts — 50x minder data
+      // dan het volledige rooster. Planner/admin krijgt alles.
+      const params = new URLSearchParams();
+      if (filters?.driverId) params.set('driverId', filters.driverId);
+      if (filters?.month) params.set('month', filters.month);
+      const qs = params.toString();
+      const url = qs ? `/api/planning?${qs}` : '/api/planning';
+      const response = await apiFetch(url, {}, accessToken);
       const data = await response.json();
       if (data && data.length > 0) {
         setShifts(data);
@@ -1271,6 +1304,14 @@ export default function App() {
         onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
         pendingSwapsCount={pendingSwapsCount}
         unseenLeaveCount={unseenLeaveDecisionCount}
+      />
+
+      {/* ⌘K Command Palette */}
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
+        role={currentUser.role}
       />
     </>
   );
