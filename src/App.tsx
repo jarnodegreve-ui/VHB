@@ -163,6 +163,17 @@ export default function App() {
   // Parallax-scroll: schrijft --scroll-y CSS-var voor de fixed bg-blobs
   useParallaxScroll();
 
+  // Body-scroll lock wanneer de mobiele sidebar open is — anders kan iOS
+  // Safari de aside-inhoud "rubber-banden" of de hoofdpagina laten meebewegen.
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isSidebarOpen]);
+
   // ⌘K / Ctrl+K opent het command palette
   useCommandPaletteShortcut(() => setIsCommandPaletteOpen(true));
 
@@ -915,7 +926,7 @@ export default function App() {
       >
         <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
-        <div className="p-6 flex items-center justify-center border-b fine-divider relative text-center">
+        <div className="shrink-0 p-6 flex items-center justify-center border-b fine-divider relative text-center">
           <button
             type="button"
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
@@ -936,7 +947,7 @@ export default function App() {
           </button>
         </div>
 
-        <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-4 py-5 space-y-1.5 overflow-y-auto overscroll-contain">
           <NavItem 
             icon={<LayoutDashboard size={20} />} 
             label="Dashboard" 
@@ -1074,7 +1085,7 @@ export default function App() {
           )}
         </nav>
 
-        <div className="p-4 border-t fine-divider space-y-2">
+        <div className="shrink-0 p-4 border-t fine-divider space-y-2">
           {/* User profile card */}
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-white/40">
             <div className="w-8 h-8 rounded-xl bg-oker-100 flex items-center justify-center text-oker-700 shrink-0">
