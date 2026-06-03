@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertTriangle, ChevronLeft, ChevronRight, Plus, User as UserIcon, X } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, History, Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { verlofBalans } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { leaveIdsWithConflict, shiftsConflictingWithLeave } from '../lib/conflicts';
+import { EntityHistoryModal } from '../components/EntityHistoryModal';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   betaald_verlof: 'Betaald verlof',
@@ -139,6 +140,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
 
   // Bulk-selectie voor planner-goedkeuring van meerdere pending aanvragen.
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set());
+  const [historyLeave, setHistoryLeave] = useState<LeaveRequest | null>(null);
   const togglePendingSelection = (id: string) => {
     setSelectedPendingIds((prev) => {
       const next = new Set(prev);
@@ -432,6 +434,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                           )}
                         </div>
                         <div className="flex gap-2">
+                          <button onClick={() => setHistoryLeave(req)} title="Wijzigingsgeschiedenis" className="px-3 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-slate-800 hover:bg-slate-50 transition-all">
+                            <History size={14} />
+                          </button>
                           <button onClick={() => handleStatusUpdate(req.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">Goedkeuren</button>
                           <button onClick={() => handleStatusUpdate(req.id, 'rejected')} className="flex-1 py-3 bg-white border border-slate-200 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-50 transition-all">Afwijzen</button>
                         </div>
@@ -606,6 +611,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
       </AnimatePresence>,
         document.body,
       )}
+
+      <EntityHistoryModal
+        open={!!historyLeave}
+        onClose={() => setHistoryLeave(null)}
+        entityType="leave"
+        entityId={historyLeave?.id ?? ''}
+        title={historyLeave ? `${users.find((u) => u.id === historyLeave.userId)?.name || 'Onbekend'} — ${historyLeave.startDate} t/m ${historyLeave.endDate}` : undefined}
+      />
     </PageShell>
   );
 }

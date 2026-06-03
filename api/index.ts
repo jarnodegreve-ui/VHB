@@ -39,6 +39,10 @@ import {
   DIVERSIONS_BUCKET,
   summarizeDiversionChanges,
   summarizePlanningCodeChanges,
+  diffDiversionChanges,
+  diffUpdateChanges,
+  diffUserChanges,
+  diffPlanningCodeChanges,
   summarizeServiceChanges,
   diffServiceChanges,
   summarizeTokens,
@@ -523,6 +527,20 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
       "Planningscodes opgeslagen",
       `${codes.length} planningscodes opgeslagen. ${summarizePlanningCodeChanges(previousCodes, codes)}.`,
     );
+
+    // Per-code audit entries — code zelf is de unieke key (geen apart id)
+    const codeDiff = diffPlanningCodeChanges(previousCodes, codes);
+    const fmtCode = (c: typeof codes[number]) => `${c.code} — ${c.description || '(geen omschrijving)'} [${c.category}].`;
+    for (const c of codeDiff.added) {
+      await logActivity(req, "planning_codes", "Code toegevoegd", fmtCode(c), { type: "planning_code", id: c.code });
+    }
+    for (const c of codeDiff.changed) {
+      await logActivity(req, "planning_codes", "Code gewijzigd", fmtCode(c), { type: "planning_code", id: c.code });
+    }
+    for (const c of codeDiff.removed) {
+      await logActivity(req, "planning_codes", "Code verwijderd", fmtCode(c), { type: "planning_code", id: c.code });
+    }
+
     res.json({ success: true, count: codes.length });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save planning codes", details: err.message });
@@ -551,6 +569,19 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
         "Gebruikers opgeslagen",
         `${newData.length} gebruikers verwerkt in gebruikersbeheer. ${summarizeUserChanges(previousUsers, newData)}.`,
       );
+
+      // Per-user audit entries
+      const userDiff = diffUserChanges(previousUsers, newData);
+      for (const u of userDiff.added) {
+        await logActivity(req, "users", "Gebruiker toegevoegd", `${u.name} (${u.role}, ${u.employeeId || '—'}).`, { type: "user", id: u.id });
+      }
+      for (const { user: u, fields } of userDiff.changed) {
+        await logActivity(req, "users", "Gebruiker gewijzigd", `${u.name} — ${fields.join(', ')}.`, { type: "user", id: u.id });
+      }
+      for (const u of userDiff.removed) {
+        await logActivity(req, "users", "Gebruiker verwijderd", `${u.name} (${u.role}).`, { type: "user", id: u.id });
+      }
+
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -584,6 +615,20 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
         "Omleidingen opgeslagen",
         `${newData.length} omleidingen opgeslagen. ${summarizeDiversionChanges(previousDiversions, newData)}.`,
       );
+
+      // Per-omleiding audit entries
+      const divDiff = diffDiversionChanges(previousDiversions, newData);
+      const fmtDiv = (d: any) => `${d.title} (lijn ${d.line}, ${d.severity}) — ${d.startDate}${d.endDate ? ` t/m ${d.endDate}` : ''}.`;
+      for (const d of divDiff.added) {
+        await logActivity(req, "diversions", "Omleiding toegevoegd", fmtDiv(d), { type: "diversion", id: d.id });
+      }
+      for (const d of divDiff.changed) {
+        await logActivity(req, "diversions", "Omleiding gewijzigd", fmtDiv(d), { type: "diversion", id: d.id });
+      }
+      for (const d of divDiff.removed) {
+        await logActivity(req, "diversions", "Omleiding verwijderd", fmtDiv(d), { type: "diversion", id: d.id });
+      }
+
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -700,13 +745,28 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
   try {
     const newData = req.body;
     const previousUpdates = await getUpdatesData();
+    const arr = Array.isArray(newData) ? newData : [];
     await saveUpdatesData(newData);
     await logActivity(
       req,
       "updates",
       "Updates opgeslagen",
-      `${Array.isArray(newData) ? newData.length : 0} updates opgeslagen. ${summarizeUpdateChanges(previousUpdates, Array.isArray(newData) ? newData : [])}.`,
+      `${arr.length} updates opgeslagen. ${summarizeUpdateChanges(previousUpdates, arr)}.`,
     );
+
+    // Per-update audit entries
+    const updDiff = diffUpdateChanges(previousUpdates, arr);
+    const fmtUpd = (u: any) => `${u.title} [${u.category}${u.isUrgent ? ', URGENT' : ''}].`;
+    for (const u of updDiff.added) {
+      await logActivity(req, "updates", "Update toegevoegd", fmtUpd(u), { type: "update", id: u.id });
+    }
+    for (const u of updDiff.changed) {
+      await logActivity(req, "updates", "Update gewijzigd", fmtUpd(u), { type: "update", id: u.id });
+    }
+    for (const u of updDiff.removed) {
+      await logActivity(req, "updates", "Update verwijderd", fmtUpd(u), { type: "update", id: u.id });
+    }
+
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save updates", details: err.message });

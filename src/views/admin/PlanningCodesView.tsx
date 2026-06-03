@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Bus, Calendar, FileText, Filter, Info, Plus, Settings, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bus, Calendar, FileText, Filter, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
 import type { PlanningCode, User } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
+import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: PlanningCode[]; onSave: (codes: PlanningCode[]) => Promise<boolean>; canAdminDelete: boolean }) {
   const [draftCodes, setDraftCodes] = useState<PlanningCode[]>(codes);
   const [isSaving, setIsSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | PlanningCode['category']>('all');
+  const [historyCode, setHistoryCode] = useState<PlanningCode | null>(null);
 
   useEffect(() => {
     setDraftCodes(codes);
@@ -214,15 +216,27 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                             </label>
                           </td>
                           <td className="px-5 py-4">
-                            {canAdminDelete ? (
-                              <button onClick={() => removeCode(index)} className="glass-button rounded-2xl p-3 text-red-500 hover:text-red-600" aria-label="Verwijder code">
-                                <Trash2 size={16} />
-                              </button>
-                            ) : (
-                              <span className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-300">
-                                Admin
-                              </span>
-                            )}
+                            <div className="flex items-center justify-end gap-2">
+                              {code.code && (
+                                <button
+                                  onClick={() => setHistoryCode(code)}
+                                  className="glass-button rounded-2xl p-3 text-slate-400 hover:text-slate-700"
+                                  title="Wijzigingsgeschiedenis"
+                                  aria-label="Wijzigingsgeschiedenis"
+                                >
+                                  <History size={16} />
+                                </button>
+                              )}
+                              {canAdminDelete ? (
+                                <button onClick={() => removeCode(index)} className="glass-button rounded-2xl p-3 text-red-500 hover:text-red-600" aria-label="Verwijder code">
+                                  <Trash2 size={16} />
+                                </button>
+                              ) : (
+                                <span className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-300">
+                                  Admin
+                                </span>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -300,6 +314,14 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           )}
         </div>
       </section>
+
+      <EntityHistoryModal
+        open={!!historyCode}
+        onClose={() => setHistoryCode(null)}
+        entityType="planning_code"
+        entityId={historyCode?.code ?? ''}
+        title={historyCode ? `Code ${historyCode.code}` : undefined}
+      />
     </PageShell>
   );
 }

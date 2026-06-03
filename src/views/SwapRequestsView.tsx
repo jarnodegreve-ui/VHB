@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { Plus, X } from 'lucide-react';
+import { History, Plus, X } from 'lucide-react';
 import type { Shift, SwapRequest, User } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { EntityHistoryModal } from '../components/EntityHistoryModal';
 
 export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [selectedShift, setSelectedShift] = useState<string>('');
   const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
   const [reason, setReason] = useState('');
+  const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const myShifts = shifts.filter(s => s.driverId === user.id);
@@ -196,6 +198,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                             <span className={cn('px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                           </td>
                           <td className="px-6 py-4 flex gap-2">
+                            <button onClick={() => setHistorySwap(swap)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"><History size={18} /></button>
                             {swap.status === 'pending' && (
                               <>
                                 <button onClick={() => handleStatusUpdate(swap.id, 'approved')} title="Goedkeuren" className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Plus size={18} /></button>
@@ -325,6 +328,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
       </AnimatePresence>,
         document.body,
       )}
+
+      <EntityHistoryModal
+        open={!!historySwap}
+        onClose={() => setHistorySwap(null)}
+        entityType="swap"
+        entityId={historySwap?.id ?? ''}
+        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'} — ${shifts.find((s) => s.id === historySwap.shiftId)?.date ?? ''}` : undefined}
+      />
     </PageShell>
   );
 }
