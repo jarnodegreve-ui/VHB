@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, MapPin, Bell, AlertTriangle, CheckCircle, ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -46,6 +46,19 @@ export function LoginView({
   onRecoveryComplete?: () => Promise<void>;
 }) {
   const [mode, setMode] = useState<Mode>('login');
+
+  // Login is altijd licht — dark mode oogt vreemd op de cream/oker
+  // achtergrond. Verwijder de dark-class zolang LoginView gemount is en
+  // herstel hem bij unmount (na succesvol inloggen).
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const html = document.documentElement;
+    const wasDark = html.classList.contains('dark');
+    html.classList.remove('dark');
+    return () => {
+      if (wasDark) html.classList.add('dark');
+    };
+  }, []);
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [newPassword, setNewPassword] = useState<string>('');
