@@ -47,6 +47,7 @@ import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, 
 import { Toast, ToastStack } from './components/ToastStack';
 import { MobileNavItem, NavItem } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
+import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { Input } from './components/Input';
 import { StatCard } from './components/StatCard';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -56,6 +57,7 @@ import { ServicesView } from './views/ServicesView';
 import { DashboardView } from './views/DashboardView';
 import { PlannerDashboardWidgets } from './views/PlannerDashboardWidgets';
 import { useParallaxScroll } from './lib/interactive';
+import { useRealtimeSync } from './lib/realtime';
 import { DiversionsView } from './views/DiversionsView';
 import { ScheduleView } from './views/ScheduleView';
 import { UpdatesView } from './views/UpdatesView';
@@ -146,6 +148,7 @@ export default function App() {
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -159,6 +162,37 @@ export default function App() {
 
   // Parallax-scroll: schrijft --scroll-y CSS-var voor de fixed bg-blobs
   useParallaxScroll();
+
+  // Body-scroll lock wanneer de mobiele sidebar open is — anders kan iOS
+  // Safari de aside-inhoud "rubber-banden" of de hoofdpagina laten meebewegen.
+  useEffect(() => {
+    if (!isSidebarOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [isSidebarOpen]);
+
+  // ⌘K / Ctrl+K opent het command palette
+  useCommandPaletteShortcut(() => setIsCommandPaletteOpen(true));
+
+  // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
+  // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
+  // gebeurt er niets.
+  useRealtimeSync(!!session && !!currentUser, {
+    refetchLeave: () => fetchLeave(),
+    refetchSwaps: () => fetchSwaps(),
+    refetchDiversions: () => fetchDiversions(),
+    refetchUpdates: () => fetchUpdates(),
+    refetchPlanning: () => {
+      // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
+      const planningFilter = currentUser?.role === 'chauffeur'
+        ? { driverId: String(currentUser.id) }
+        : undefined;
+      fetchPlanning(undefined, planningFilter);
+    },
+  });
 
   // Initialize theme from localStorage, falling back to system preference.
   useEffect(() => {
@@ -331,8 +365,11 @@ export default function App() {
     try {
       setIsLoading(true);
       const appUser = await fetchCurrentUser(accessToken);
+      // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
+      // Planner/admin: alle shifts (nodig voor beheer-views).
+      const planningFilter = appUser.role === 'chauffeur' ? { driverId: String(appUser.id) } : undefined;
       await Promise.all([
-        fetchPlanning(accessToken),
+        fetchPlanning(accessToken, planningFilter),
         fetchUsers(accessToken),
         fetchDiversions(accessToken),
         fetchServices(accessToken),
@@ -651,10 +688,17 @@ export default function App() {
     }
   };
 
-  const fetchPlanning = async (accessToken = session?.access_token) => {
+  const fetchPlanning = async (accessToken = session?.access_token, filters?: { driverId?: string; month?: string }) => {
     try {
       setIsLoading(true);
-      const response = await apiFetch('/api/planning', {}, accessToken);
+      // Chauffeurs krijgen alleen hun eigen shifts — 50x minder data
+      // dan het volledige rooster. Planner/admin krijgt alles.
+      const params = new URLSearchParams();
+      if (filters?.driverId) params.set('driverId', filters.driverId);
+      if (filters?.month) params.set('month', filters.month);
+      const qs = params.toString();
+      const url = qs ? `/api/planning?${qs}` : '/api/planning';
+      const response = await apiFetch(url, {}, accessToken);
       const data = await response.json();
       if (data && data.length > 0) {
         setShifts(data);
@@ -875,14 +919,14 @@ export default function App() {
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark ios-soft-panel m-3 mr-0 rounded-[28px] flex flex-col z-50 transition-transform duration-500 transform lg:w-[19rem] lg:max-w-none lg:relative lg:translate-x-0 overflow-hidden",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark ios-soft-panel lg:m-3 lg:mr-0 rounded-none lg:rounded-[28px] flex flex-col z-50 transition-transform duration-500 transform lg:w-[19rem] lg:max-w-none lg:relative lg:translate-x-0 overflow-hidden",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.28, 0.64, 1)' }}
       >
         <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
-        <div className="p-6 flex items-center justify-center border-b fine-divider relative text-center">
+        <div className="shrink-0 p-6 flex items-center justify-center border-b fine-divider relative text-center">
           <button
             type="button"
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
@@ -896,13 +940,14 @@ export default function App() {
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
-            className="absolute right-6 p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors lg:hidden"
+            aria-label="Menu sluiten"
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-slate-600 hover:text-slate-900 bg-white/60 hover:bg-white/90 rounded-2xl shadow-sm transition-colors lg:hidden"
           >
-            <X size={18} />
+            <X size={20} />
           </button>
         </div>
 
-        <nav className="flex-1 px-4 py-5 space-y-1.5 overflow-y-auto">
+        <nav className="flex-1 min-h-0 px-4 py-5 space-y-1.5 overflow-y-auto overscroll-contain">
           <NavItem 
             icon={<LayoutDashboard size={20} />} 
             label="Dashboard" 
@@ -1040,7 +1085,7 @@ export default function App() {
           )}
         </nav>
 
-        <div className="p-4 border-t fine-divider space-y-2">
+        <div className="shrink-0 p-4 border-t fine-divider space-y-2">
           {/* User profile card */}
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-white/40">
             <div className="w-8 h-8 rounded-xl bg-oker-100 flex items-center justify-center text-oker-700 shrink-0">
@@ -1053,23 +1098,29 @@ export default function App() {
           </div>
           <button
             onClick={toggleTheme}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
           >
-            {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
+            </span>
             <span>{theme === 'light' ? 'Donkere modus' : 'Lichte modus'}</span>
           </button>
           <button
             onClick={() => setShowChangePassword(true)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
           >
-            <KeyRound size={16} />
+            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+              <KeyRound size={16} />
+            </span>
             <span>Wachtwoord wijzigen</span>
           </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-400 hover:text-red-500 hover:bg-red-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
           >
-            <LogOut size={16} />
+            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+              <LogOut size={16} />
+            </span>
             <span>Uitloggen</span>
           </button>
         </div>
@@ -1077,54 +1128,55 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
-        {/* Header — gewikkeld in dezelfde max-w-1360 + px-padding als de
-            content-secties zodat links én rechts uitgelijnd zijn op brede
-            schermen. */}
-        <div className="px-4 md:px-7 shrink-0">
-        <header className={cn(
-          "mx-auto w-full max-w-[1360px] mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 z-30 relative transition-shadow duration-500",
-          isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
-        )}>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-400 hover:bg-slate-100/70 rounded-xl lg:hidden transition-colors"
-            >
-              <Menu size={22} />
-            </button>
-            <div>
-              <h2 className="section-title text-xl md:text-2xl font-black tracking-tight text-slate-900 leading-tight">
-                {currentMeta.title}
-              </h2>
-              <p className="hidden md:block text-xs font-medium text-slate-400 mt-0.5 max-w-xl">{currentMeta.subtitle}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100">
-              <div className="h-2 w-2 rounded-full bg-emerald-500" />
-              <p className="text-xs font-semibold text-emerald-700">Online</p>
-            </div>
-            <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-100">
-              <div className="w-9 h-9 bg-oker-50 rounded-xl flex items-center justify-center text-oker-600 border border-oker-100/60">
-                <UserIcon size={17} />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold text-slate-800 leading-tight">{currentUser.name}</p>
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide">{currentUser.role}</p>
-              </div>
-            </div>
-          </div>
-        </header>
-        </div>
-
-        {/* Content Area */}
+        {/* Scroll container met sticky-header — header zit BINNEN de scroll
+            zodat content er onderdoor schuift en de panel-blur natuurlijk
+            werkt (echte iOS-vibe i.p.v. harde rand). */}
         <div
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 pt-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
           onScroll={(e) => {
             const next = (e.currentTarget.scrollTop ?? 0) > 8;
             setIsScrolled((current) => (current === next ? current : next));
           }}
         >
+          {/* Sticky header — kleeft aan top van scroll-area */}
+          <div className="sticky top-0 z-30 -mx-4 md:-mx-7 px-4 md:px-7 pt-3 pb-3 pointer-events-none">
+            <header className={cn(
+              "pointer-events-auto mx-auto w-full max-w-[1360px] rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 transition-shadow duration-500",
+              isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
+            )}>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2 text-slate-400 hover:bg-slate-100/70 rounded-xl lg:hidden transition-colors"
+                >
+                  <Menu size={22} />
+                </button>
+                <div>
+                  <h2 className="section-title text-xl md:text-2xl font-black tracking-tight text-slate-900 leading-tight">
+                    {currentMeta.title}
+                  </h2>
+                  <p className="hidden md:block text-xs font-medium text-slate-400 mt-0.5 max-w-xl">{currentMeta.subtitle}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <p className="text-xs font-semibold text-emerald-700">Online</p>
+                </div>
+                <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-100">
+                  <div className="w-9 h-9 bg-oker-50 rounded-xl flex items-center justify-center text-oker-600 border border-oker-100/60">
+                    <UserIcon size={17} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800 leading-tight">{currentUser.name}</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide">{currentUser.role}</p>
+                  </div>
+                </div>
+              </div>
+            </header>
+            {/* Soft fade-out onder de header zodat content er rustig onder verdwijnt */}
+            <div className="h-2 -mt-px bg-gradient-to-b from-transparent to-transparent" />
+          </div>
           <AnimatePresence mode="wait">
             <motion.div
               key={resolvedCurrentView}
@@ -1217,51 +1269,6 @@ export default function App() {
             </motion.div>
           </AnimatePresence>
         </div>
-
-        {/* Mobile Bottom Navigation */}
-        <div className={cn(
-          "lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-between items-center z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] transition-opacity duration-200",
-          isSidebarOpen && "opacity-0 pointer-events-none"
-        )}>
-          <MobileNavItem 
-            icon={<LayoutDashboard size={20} />} 
-            active={currentView === 'dashboard'} 
-            onClick={() => setCurrentView('dashboard')} 
-          />
-          <MobileNavItem 
-            icon={<MapPin size={20} />} 
-            active={currentView === 'omleidingen'} 
-            onClick={() => setCurrentView('omleidingen')} 
-          />
-          <MobileNavItem 
-            icon={<Calendar size={20} />} 
-            active={currentView === 'rooster'} 
-            onClick={() => setCurrentView('rooster')} 
-          />
-          {isPlanner && (
-            <MobileNavItem
-              icon={<Bus size={20} />}
-              active={currentView === 'dienstoverzicht'}
-              onClick={() => setCurrentView('dienstoverzicht')}
-            />
-          )}
-          <MobileNavItem 
-            icon={<Phone size={20} />} 
-            active={currentView === 'contacten'} 
-            onClick={() => setCurrentView('contacten')} 
-          />
-          <MobileNavItem 
-            icon={<Calendar size={20} />} 
-            active={currentView === 'verlof'} 
-            onClick={() => setCurrentView('verlof')} 
-          />
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="ios-pressable p-3 text-slate-400 hover:text-oker-500 transition-colors"
-          >
-            <Menu size={20} />
-          </button>
-        </div>
       </main>
       </div>
 
@@ -1269,8 +1276,16 @@ export default function App() {
       <BottomNav
         currentView={resolvedCurrentView}
         onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
-        pendingSwapsCount={pendingSwapsCount}
         unseenLeaveCount={unseenLeaveDecisionCount}
+        hidden={isSidebarOpen}
+      />
+
+      {/* ⌘K Command Palette */}
+      <CommandPalette
+        open={isCommandPaletteOpen}
+        onClose={() => setIsCommandPaletteOpen(false)}
+        onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
+        role={currentUser.role}
       />
     </>
   );

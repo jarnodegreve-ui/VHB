@@ -31,12 +31,12 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
         "ios-pressable flex items-center gap-3 w-full px-3 py-2.5 rounded-2xl transition-all duration-300 group text-left",
         active
           ? "bg-white/90 text-slate-900 shadow-sm font-semibold"
-          : "text-slate-500 hover:text-slate-800 hover:bg-white/50 font-medium"
+          : "text-slate-700 hover:text-slate-900 hover:bg-white/60 font-medium"
       )}
     >
       <span className={cn(
         "w-8 h-8 rounded-xl flex items-center justify-center shrink-0 transition-colors duration-200",
-        active ? "bg-oker-500 text-white shadow-sm shadow-oker-500/30" : "text-slate-400 group-hover:text-oker-500"
+        active ? "bg-oker-500 text-white shadow-sm shadow-oker-500/30" : "bg-white/40 text-slate-500 group-hover:text-oker-600"
       )}>
         {icon}
       </span>

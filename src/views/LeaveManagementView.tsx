@@ -118,6 +118,19 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
     setSelectedPendingIds(new Set());
   };
 
+  const handleBulkReject = () => {
+    if (selectedPendingIds.size === 0) return;
+    if (!window.confirm(`${selectedPendingIds.size} aanvragen weigeren? Dit kan niet ongedaan gemaakt worden.`)) return;
+    const decidedAt = new Date().toISOString();
+    const updated = leaveRequests.map((r) =>
+      selectedPendingIds.has(r.id) && r.status === 'pending'
+        ? { ...r, status: 'rejected' as const, decidedAt }
+        : r,
+    );
+    onSave(updated);
+    setSelectedPendingIds(new Set());
+  };
+
   const handleCancel = (requestId: string) => {
     const target = leaveRequests.find((r) => r.id === requestId);
     if (!target) return;
@@ -313,17 +326,26 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                   )}
                 </div>
                 {selectedPendingIds.size > 0 && (
-                  <div className="flex items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-emerald-50 border border-emerald-100">
-                    <span className="text-xs font-bold text-emerald-700">
+                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50/80 border border-slate-200">
+                    <span className="text-xs font-bold text-slate-700">
                       {selectedPendingIds.size} {selectedPendingIds.size === 1 ? 'aanvraag' : 'aanvragen'} geselecteerd
                     </span>
-                    <button
-                      type="button"
-                      onClick={handleBulkApprove}
-                      className="px-4 py-2 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
-                    >
-                      Goedkeuren ({selectedPendingIds.size})
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleBulkReject}
+                        className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-red-50 transition-all"
+                      >
+                        Weigeren ({selectedPendingIds.size})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleBulkApprove}
+                        className="px-3 py-2 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
+                      >
+                        Goedkeuren ({selectedPendingIds.size})
+                      </button>
+                    </div>
                   </div>
                 )}
                 <div className="space-y-4">
