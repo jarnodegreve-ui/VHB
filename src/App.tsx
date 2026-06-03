@@ -1110,54 +1110,55 @@ export default function App() {
 
       {/* Main Content */}
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
-        {/* Header — gewikkeld in dezelfde max-w-1360 + px-padding als de
-            content-secties zodat links én rechts uitgelijnd zijn op brede
-            schermen. */}
-        <div className="px-4 md:px-7 shrink-0">
-        <header className={cn(
-          "mx-auto w-full max-w-[1360px] mt-3 rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 z-30 relative transition-shadow duration-500",
-          isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
-        )}>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsSidebarOpen(true)}
-              className="p-2 text-slate-400 hover:bg-slate-100/70 rounded-xl lg:hidden transition-colors"
-            >
-              <Menu size={22} />
-            </button>
-            <div>
-              <h2 className="section-title text-xl md:text-2xl font-black tracking-tight text-slate-900 leading-tight">
-                {currentMeta.title}
-              </h2>
-              <p className="hidden md:block text-xs font-medium text-slate-400 mt-0.5 max-w-xl">{currentMeta.subtitle}</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2.5">
-            <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100">
-              <div className="h-2 w-2 rounded-full bg-emerald-500" />
-              <p className="text-xs font-semibold text-emerald-700">Online</p>
-            </div>
-            <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-100">
-              <div className="w-9 h-9 bg-oker-50 rounded-xl flex items-center justify-center text-oker-600 border border-oker-100/60">
-                <UserIcon size={17} />
-              </div>
-              <div className="text-left">
-                <p className="text-sm font-bold text-slate-800 leading-tight">{currentUser.name}</p>
-                <p className="text-[10px] text-slate-400 uppercase tracking-wide">{currentUser.role}</p>
-              </div>
-            </div>
-          </div>
-        </header>
-        </div>
-
-        {/* Content Area */}
+        {/* Scroll container met sticky-header — header zit BINNEN de scroll
+            zodat content er onderdoor schuift en de panel-blur natuurlijk
+            werkt (echte iOS-vibe i.p.v. harde rand). */}
         <div
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 pt-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
           onScroll={(e) => {
             const next = (e.currentTarget.scrollTop ?? 0) > 8;
             setIsScrolled((current) => (current === next ? current : next));
           }}
         >
+          {/* Sticky header — kleeft aan top van scroll-area */}
+          <div className="sticky top-0 z-30 -mx-4 md:-mx-7 px-4 md:px-7 pt-3 pb-3 pointer-events-none">
+            <header className={cn(
+              "pointer-events-auto mx-auto w-full max-w-[1360px] rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 transition-shadow duration-500",
+              isScrolled && "shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
+            )}>
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setIsSidebarOpen(true)}
+                  className="p-2 text-slate-400 hover:bg-slate-100/70 rounded-xl lg:hidden transition-colors"
+                >
+                  <Menu size={22} />
+                </button>
+                <div>
+                  <h2 className="section-title text-xl md:text-2xl font-black tracking-tight text-slate-900 leading-tight">
+                    {currentMeta.title}
+                  </h2>
+                  <p className="hidden md:block text-xs font-medium text-slate-400 mt-0.5 max-w-xl">{currentMeta.subtitle}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2.5">
+                <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100">
+                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
+                  <p className="text-xs font-semibold text-emerald-700">Online</p>
+                </div>
+                <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-100">
+                  <div className="w-9 h-9 bg-oker-50 rounded-xl flex items-center justify-center text-oker-600 border border-oker-100/60">
+                    <UserIcon size={17} />
+                  </div>
+                  <div className="text-left">
+                    <p className="text-sm font-bold text-slate-800 leading-tight">{currentUser.name}</p>
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide">{currentUser.role}</p>
+                  </div>
+                </div>
+              </div>
+            </header>
+            {/* Soft fade-out onder de header zodat content er rustig onder verdwijnt */}
+            <div className="h-2 -mt-px bg-gradient-to-b from-transparent to-transparent" />
+          </div>
           <AnimatePresence mode="wait">
             <motion.div
               key={resolvedCurrentView}
@@ -1249,51 +1250,6 @@ export default function App() {
               )}
             </motion.div>
           </AnimatePresence>
-        </div>
-
-        {/* Mobile Bottom Navigation */}
-        <div className={cn(
-          "lg:hidden fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 px-6 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex justify-between items-center z-40 shadow-[0_-8px_30px_rgba(0,0,0,0.04)] transition-opacity duration-200",
-          isSidebarOpen && "opacity-0 pointer-events-none"
-        )}>
-          <MobileNavItem 
-            icon={<LayoutDashboard size={20} />} 
-            active={currentView === 'dashboard'} 
-            onClick={() => setCurrentView('dashboard')} 
-          />
-          <MobileNavItem 
-            icon={<MapPin size={20} />} 
-            active={currentView === 'omleidingen'} 
-            onClick={() => setCurrentView('omleidingen')} 
-          />
-          <MobileNavItem 
-            icon={<Calendar size={20} />} 
-            active={currentView === 'rooster'} 
-            onClick={() => setCurrentView('rooster')} 
-          />
-          {isPlanner && (
-            <MobileNavItem
-              icon={<Bus size={20} />}
-              active={currentView === 'dienstoverzicht'}
-              onClick={() => setCurrentView('dienstoverzicht')}
-            />
-          )}
-          <MobileNavItem 
-            icon={<Phone size={20} />} 
-            active={currentView === 'contacten'} 
-            onClick={() => setCurrentView('contacten')} 
-          />
-          <MobileNavItem 
-            icon={<Calendar size={20} />} 
-            active={currentView === 'verlof'} 
-            onClick={() => setCurrentView('verlof')} 
-          />
-          <button 
-            onClick={() => setIsSidebarOpen(true)}
-            className="ios-pressable p-3 text-slate-400 hover:text-oker-500 transition-colors"
-          >
-            <Menu size={20} />
-          </button>
         </div>
       </main>
       </div>
