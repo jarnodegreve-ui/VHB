@@ -224,6 +224,10 @@ export const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): Ac
   category: row.category,
   action: row.action,
   details: row.details,
+  entityType:
+    "entityType" in row ? row.entityType ?? null : (row as ActivityLogRow).entity_type ?? null,
+  entityId:
+    "entityId" in row ? row.entityId ?? null : (row as ActivityLogRow).entity_id ?? null,
 });
 
 export const getActivityLog = async (): Promise<ActivityLogRecord[]> => {
@@ -233,6 +237,27 @@ export const getActivityLog = async (): Promise<ActivityLogRecord[]> => {
     .select("*")
     .order("created_at", { ascending: false })
     .limit(100);
+  if (error) throw error;
+  return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
+};
+
+/**
+ * Per-entity geschiedenis: alle activity-log entries voor één specifieke
+ * entity (bv. één service, één swap). Wordt gebruikt door de "Geschiedenis"-
+ * modal vanuit admin-views.
+ */
+export const getEntityHistory = async (
+  entityType: NonNullable<ActivityLogRecord["entityType"]>,
+  entityId: string,
+): Promise<ActivityLogRecord[]> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from("activity_log")
+    .select("*")
+    .eq("entity_type", entityType)
+    .eq("entity_id", entityId)
+    .order("created_at", { ascending: false })
+    .limit(200);
   if (error) throw error;
   return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
 };
@@ -247,6 +272,8 @@ export const saveActivityLogEntry = async (entry: ActivityLogRecord) => {
     category: entry.category,
     action: entry.action,
     details: entry.details,
+    entity_type: entry.entityType ?? null,
+    entity_id: entry.entityId ?? null,
   };
   const { error } = await client.from("activity_log").insert(row);
   if (error) console.error("Supabase error saving activity log:", error);
@@ -257,6 +284,7 @@ export const logActivity = async (
   category: ActivityLogRecord["category"],
   action: string,
   details: string,
+  entity?: { type: NonNullable<ActivityLogRecord["entityType"]>; id: string },
 ) => {
   if (!req.appUser) return;
 
@@ -268,6 +296,8 @@ export const logActivity = async (
     category,
     action,
     details,
+    entityType: entity?.type ?? null,
+    entityId: entity?.id ?? null,
   });
 };
 
@@ -345,6 +375,37 @@ export const summarizePlanningCodeChanges = (previousCodes: PlanningCodeRecord[]
     `verwijderd: ${summarizeTokens(removed)}`,
     `gewijzigd: ${summarizeTokens(changed)}`,
   ].join(" · ");
+};
+
+/**
+ * Structureel diff van service-changes — geeft per categorie de records terug
+ * (i.p.v. alleen een summary-string). Gebruikt door de API om per-service
+ * activity-log entries te schrijven met entity_id, zodat we per-service
+ * wijzigingsgeschiedenis kunnen tonen.
+ */
+export const diffServiceChanges = (
+  previousServices: ServiceRecord[],
+  nextServices: ServiceRecord[],
+): { added: ServiceRecord[]; removed: ServiceRecord[]; changed: ServiceRecord[] } => {
+  const previousById = new Map(previousServices.map((service): [string, ServiceRecord] => [String(service.id), service]));
+  const nextById = new Map(nextServices.map((service): [string, ServiceRecord] => [String(service.id), service]));
+
+  const added = nextServices.filter((service) => !previousById.has(String(service.id)));
+  const removed = previousServices.filter((service) => !nextById.has(String(service.id)));
+  const changed = nextServices.filter((service) => {
+    const previous = previousById.get(String(service.id));
+    return previous && (
+      previous.serviceNumber !== service.serviceNumber ||
+      previous.startTime !== service.startTime ||
+      previous.endTime !== service.endTime ||
+      previous.startTime2 !== service.startTime2 ||
+      previous.endTime2 !== service.endTime2 ||
+      previous.startTime3 !== service.startTime3 ||
+      previous.endTime3 !== service.endTime3
+    );
+  });
+
+  return { added, removed, changed };
 };
 
 export const summarizeServiceChanges = (previousServices: ServiceRecord[], nextServices: ServiceRecord[]) => {

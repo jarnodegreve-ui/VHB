@@ -108,14 +108,39 @@ export interface PlanningMatrixImportHistory {
   unmatchedDrivers: string[];
 }
 
+export type ActivityCategory =
+  | 'users'
+  | 'planning'
+  | 'planning_codes'
+  | 'services'
+  | 'diversions'
+  | 'updates'
+  | 'auth'
+  | 'leave'
+  | 'swaps';
+
+export type ActivityEntityType =
+  | 'user'
+  | 'service'
+  | 'diversion'
+  | 'update'
+  | 'swap'
+  | 'leave'
+  | 'planning_code'
+  | 'shift';
+
 export interface ActivityLogEntry {
   id: string;
   createdAt: string;
   actorName: string;
   actorRole: Role;
-  category: 'users' | 'planning' | 'planning_codes' | 'services' | 'diversions' | 'updates' | 'auth' | 'leave' | 'swaps';
+  category: ActivityCategory;
   action: string;
   details: string;
+  /** Type van de entity die gewijzigd is (voor per-entity geschiedenis). Optional voor legacy. */
+  entityType?: ActivityEntityType | null;
+  /** ID van de entity (bv. shift-id, service-id). Optional voor legacy. */
+  entityId?: string | null;
 }
 
 export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes';

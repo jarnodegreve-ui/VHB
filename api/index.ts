@@ -13,6 +13,7 @@ import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser } from "./hel
 import {
   buildPlanningFromMatrix,
   getActivityLog,
+  getEntityHistory,
   getDiversionsData,
   getLeaveData,
   getPlanningCodesData,
@@ -39,6 +40,7 @@ import {
   summarizeDiversionChanges,
   summarizePlanningCodeChanges,
   summarizeServiceChanges,
+  diffServiceChanges,
   summarizeTokens,
   summarizeUpdateChanges,
   summarizeUserChanges,
@@ -164,7 +166,7 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
     const { error } = await supabaseAdmin.auth.admin.updateUserById(authUser.id, { password });
     if (error) throw error;
 
-    await logActivity(req, "auth", "Wachtwoord gereset", `Wachtwoord opnieuw ingesteld voor ${targetUser.name}.`);
+    await logActivity(req, "auth", "Wachtwoord gereset", `Wachtwoord opnieuw ingesteld voor ${targetUser.name}.`, { type: "user", id: targetUser.id });
     res.json({ success: true });
   } catch (error: any) {
     res.status(500).json({ error: "Wachtwoord reset mislukt.", details: error.message });
@@ -237,6 +239,26 @@ app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) =
   } catch (err: any) {
     res.status(500).json({ error: "Failed to read activity log", details: err.message });
   }
+});
+
+// Per-entity geschiedenis — toegankelijk voor planner/admin om wijzigingen
+// te traceren per dienst, swap, verlof, etc.
+app.get(
+  "/api/activity/:entityType/:entityId",
+  authenticate,
+  requireRole("planner", "admin"),
+  async (req, res) => {
+    try {
+      const { entityType, entityId } = req.params;
+      const allowed = ["user", "service", "diversion", "update", "swap", "leave", "planning_code", "shift"];
+      if (!allowed.includes(entityType)) {
+        return res.status(400).json({ error: "Onbekend entity-type." });
+      }
+      const history = await getEntityHistory(entityType as any, entityId);
+      res.json(history);
+    } catch (err: any) {
+      res.status(500).json({ error: "Failed to read entity history", details: err.message });
+    }
 });
 
 // Helper: decode de geüploade Excel-buffer en parse de praktijk-tab.
@@ -631,12 +653,29 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
     if (Array.isArray(newData)) {
       const previousServices = await getServicesData();
       await saveServicesData(newData);
+
+      // Global summary entry (zoals voorheen)
       await logActivity(
         req,
         "services",
         "Diensten opgeslagen",
         `${newData.length} diensten opgeslagen. ${summarizeServiceChanges(previousServices, newData)}.`,
       );
+
+      // Per-service entries voor per-entity wijzigingsgeschiedenis
+      const diff = diffServiceChanges(previousServices, newData);
+      const formatService = (s: typeof newData[number]) =>
+        `Dienst ${s.serviceNumber} (${s.startTime}–${s.endTime}${s.startTime2 ? `, ${s.startTime2}–${s.endTime2}` : ''}${s.startTime3 ? `, ${s.startTime3}–${s.endTime3}` : ''}).`;
+      for (const s of diff.added) {
+        await logActivity(req, "services", "Dienst toegevoegd", formatService(s), { type: "service", id: s.id });
+      }
+      for (const s of diff.changed) {
+        await logActivity(req, "services", "Dienst gewijzigd", formatService(s), { type: "service", id: s.id });
+      }
+      for (const s of diff.removed) {
+        await logActivity(req, "services", "Dienst verwijderd", formatService(s), { type: "service", id: s.id });
+      }
+
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -744,7 +783,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     for (const next of newData) {
       const prev = previousById.get(String(next.id));
       if (!prev) {
-        await logActivity(req, "swaps", "Dienstruil aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor ruil.`);
+        await logActivity(req, "swaps", "Dienstruil aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor ruil.`, { type: "swap", id: next.id });
         continue;
       }
       if (prev.status !== next.status && next.status !== "pending") {
@@ -754,7 +793,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         else if (next.status === "cancelled") action = "Dienstruil geannuleerd";
         else if (next.status === "completed") action = "Dienstruil voltooid";
         if (action) {
-          await logActivity(req, "swaps", action, `${userName(next.requesterId)} — dienstruil (${prev.status} → ${next.status}).`);
+          await logActivity(req, "swaps", action, `${userName(next.requesterId)} — dienstruil (${prev.status} → ${next.status}).`, { type: "swap", id: next.id });
         }
       }
     }
@@ -844,6 +883,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           "leave",
           "Verlof aangevraagd",
           `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
+          { type: "leave", id: next.id },
         );
         continue;
       }
@@ -860,6 +900,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           "leave",
           action,
           `${userName(next.userId)} — ${typeLabel} (${period}).`,
+          { type: "leave", id: next.id },
         );
 
         // E-mail de aanvrager — niet de actor zelf (geen mail naar jezelf

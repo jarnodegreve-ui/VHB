@@ -1199,11 +1199,11 @@ export default function App() {
                       isInitialLoad={isInitialLoad}
                     />
                   )}
-                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} isInitialLoad={isInitialLoad} />
+                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />
                 </div>
               )}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
-              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} isInitialLoad={isInitialLoad} />}
+              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'updates' && <UpdatesView updates={updates} />}
@@ -1258,6 +1258,7 @@ export default function App() {
                     onSave={saveLeave}
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
+                    shifts={shifts}
                   />
                 </Suspense>
               )}
