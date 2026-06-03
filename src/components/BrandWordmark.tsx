@@ -17,12 +17,12 @@ export function BrandWordmark({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
-  // Zelfde stijl als sidebar (text-[1.25rem]); voor login mag het iets
-  // groter, maar exact dezelfde font-stack en spacing.
+  // Zelfde stijl als sidebar (text-[1.25rem]); voor login een tikje groter
+  // maar dichtbij identiek qua proportie.
   const titleSize = {
-    sm: 'text-[1.25rem]', // = 20px (zelfde als sidebar)
-    md: 'text-[1.5rem]',  // = 24px
-    lg: 'text-[2rem]',    // = 32px
+    sm: 'text-[1.25rem]',   // = 20px (zelfde als sidebar)
+    md: 'text-[1.375rem]',  // = 22px
+    lg: 'text-[1.625rem]',  // = 26px
   }[size];
 
   const subSize = {
