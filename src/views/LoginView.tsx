@@ -168,22 +168,30 @@ export function LoginView({
         </motion.div>
       </aside>
 
-      {/* === Rechter form-paneel === */}
-      <main className="flex-1 flex items-center justify-center p-6 lg:p-12">
+      {/* === Rechter form-paneel ===
+          Op mobile: brand-mark BOVEN de card, copyright eronder — strakke
+          single-column flow. Op desktop: alleen de card (links staat de
+          aside). */}
+      <main className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12 gap-6">
+        {/* Mobile-only brand-mark boven de form-card */}
+        <motion.div
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          className="lg:hidden flex flex-col items-center text-center gap-4 w-full max-w-md"
+        >
+          <BrandWordmark size="md" className="items-center" />
+          <div className="w-full max-w-[220px]">
+            <LoginBus />
+          </div>
+        </motion.div>
+
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          className="panel ios-soft-panel w-full max-w-md rounded-[28px] p-8 md:p-10"
+          className="panel ios-soft-panel w-full max-w-md rounded-[28px] p-6 sm:p-8 md:p-10"
         >
-          {/* Mobile brand-mark — wordmark + kleinere bus, gecentreerd */}
-          <div className="lg:hidden flex flex-col items-center text-center mb-8 space-y-4">
-            <BrandWordmark size="md" />
-            <div className="w-full max-w-[260px]">
-              <LoginBus />
-            </div>
-          </div>
-
           <AnimatePresence mode="wait">
             <motion.div
               key={`${mode}-${recoveryMode}`}
@@ -295,6 +303,16 @@ export function LoginView({
             <ShieldCheck size={11} className="text-emerald-500" />
             Beveiligd via Supabase Auth
           </div>
+        </motion.div>
+
+        {/* Mobile-only footer onder de card */}
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
+          className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-[0.18em] text-center pt-2"
+        >
+          © {new Date().getFullYear()} Van Hoorebeke en Zoon · Intern gebruik
         </motion.div>
       </main>
     </div>
