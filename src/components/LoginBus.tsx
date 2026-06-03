@@ -12,11 +12,11 @@ import { cn } from '../lib/ui';
 
 // Positie + grootte van de plaat als % van de bus-container.
 // Tuned voor /vhb-logo.png (1536×1024) waar de werkelijke nummerplaat
-// onder het MAN-embleem aan de voorzijde zit.
+// onder het MAN-embleem aan de voorzijde zit (rechts-onder de windscreen).
 const PLATE = {
-  left: '63.5%',
-  top: '74.5%',
-  width: '9.5%',
+  left: '71%',
+  top: '62%',
+  width: '7%',
   // Belgische plaat-verhouding ≈ 4.7 : 1
   aspectRatio: '4.7 / 1',
 } as const;

@@ -5,7 +5,10 @@ import { cn } from '../lib/ui';
  *   VHB PORTAAL
  *   VAN HOOREBEKE EN ZOON
  *
- * Pure CSS/typografie — geen afbeelding nodig. Past zich aan via `size`.
+ * Pure CSS/typografie — gebruikt EXACT dezelfde classes als de sidebar
+ * op het dashboard (brand-wordmark + brand-wordmark-anim + section-title)
+ * zodat font + tracking + line-height identiek zijn. Alleen de grootte
+ * varieert per `size`-prop.
  */
 export function BrandWordmark({
   size = 'lg',
@@ -14,23 +17,25 @@ export function BrandWordmark({
   size?: 'sm' | 'md' | 'lg';
   className?: string;
 }) {
+  // Zelfde stijl als sidebar (text-[1.25rem]); voor login mag het iets
+  // groter, maar exact dezelfde font-stack en spacing.
   const titleSize = {
-    sm: 'text-xl',
-    md: 'text-2xl',
-    lg: 'text-3xl',
+    sm: 'text-[1.25rem]', // = 20px (zelfde als sidebar)
+    md: 'text-[1.5rem]',  // = 24px
+    lg: 'text-[2rem]',    // = 32px
   }[size];
 
   const subSize = {
-    sm: 'text-[9px] tracking-[0.18em] mt-1.5',
-    md: 'text-[10px] tracking-[0.22em] mt-2',
-    lg: 'text-[11px] tracking-[0.24em] mt-2',
+    sm: 'text-[9px] tracking-[0.2em] mt-0.5',
+    md: 'text-[10px] tracking-[0.2em] mt-1',
+    lg: 'text-[11px] tracking-[0.22em] mt-1.5',
   }[size];
 
   return (
     <div className={cn('inline-flex flex-col', className)}>
       <h1
         className={cn(
-          'brand-wordmark brand-wordmark-anim leading-none text-slate-900',
+          'brand-wordmark brand-wordmark-anim section-title text-slate-900 leading-none',
           titleSize,
         )}
       >
