@@ -19,11 +19,11 @@
 
 @layer base {
   html {
-    background: linear-gradient(180deg, #f9f7f2 0%, #f3efe6 50%, #efeadf 100%);
+    background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
     min-height: 100vh;
     background-attachment: fixed;
-    /* De gekleurde "blobs" zitten in een aparte .parallax-bg div zodat
-     * ze met scroll meelopen (trager dan content). Zie App.tsx. */
+    /* Subtiele neutrale schaduw via .parallax-bg blijft mogelijk — geen
+     * gekleurde tint meer in de basis. */
   }
 
   body {
@@ -93,14 +93,13 @@
 
   .panel {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(255, 255, 255, 0.5) 100%);
-    backdrop-filter: blur(30px) saturate(155%);
-    -webkit-backdrop-filter: blur(30px) saturate(155%);
-    border: 1px solid rgba(255, 255, 255, 0.85);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.78) 100%);
+    backdrop-filter: blur(36px) saturate(140%);
+    -webkit-backdrop-filter: blur(36px) saturate(140%);
+    border: 1px solid rgba(226, 232, 240, 0.7);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.42),
-      0 10px 28px rgba(15, 23, 42, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85),
+      0 8px 24px rgba(15, 23, 42, 0.04),
       0 2px 6px rgba(15, 23, 42, 0.03);
     transition:
       transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -111,15 +110,14 @@
       -webkit-backdrop-filter 380ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  /* Variant voor de sticky-header wanneer er onder gescrolld wordt — meer
-     opaak + sterkere blur zodat content er niet doorheen schemert. Voelt
-     premium iOS-frosted. */
+  /* Variant voor de sticky-header wanneer er onder gescrolld wordt — bijna
+     volledig opaak zodat absoluut niets doorheen schemert. */
   .panel--scrolled {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
-    backdrop-filter: blur(40px) saturate(180%);
-    -webkit-backdrop-filter: blur(40px) saturate(180%);
-    border-color: rgba(255, 255, 255, 0.95);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.94) 100%);
+    backdrop-filter: blur(44px) saturate(160%);
+    -webkit-backdrop-filter: blur(44px) saturate(160%);
+    border-color: rgba(226, 232, 240, 0.85);
   }
 
   .panel-dark {
@@ -174,19 +172,18 @@
    */
   .surface-card {
     background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 255, 255, 0.48) 100%);
-    backdrop-filter: blur(28px) saturate(155%);
-    -webkit-backdrop-filter: blur(28px) saturate(155%);
-    border: 1px solid rgba(255, 255, 255, 0.85);
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+    backdrop-filter: blur(28px) saturate(140%);
+    -webkit-backdrop-filter: blur(28px) saturate(140%);
+    border: 1px solid rgba(226, 232, 240, 0.7);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.38),
-      0 8px 24px rgba(15, 23, 42, 0.05),
+      inset 0 1px 0 rgba(255, 255, 255, 0.85),
+      0 8px 24px rgba(15, 23, 42, 0.04),
       0 2px 6px rgba(15, 23, 42, 0.03);
     transition:
       transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 340ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 340ms cubic-bezier(0.22, 1, 0.36, 1),
       border-color 340ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
@@ -335,19 +332,20 @@
       inset 0 1px 0 rgba(255, 255, 255, 0.95);
   }
 
-  /* Parallax-background: fixed laag met blobs die trager scrollt */
+  /* Parallax-background: fixed laag met subtiele neutrale dieptelagen.
+     Geen gekleurde blobs meer — alleen een vleugje warmth/cool in slate
+     voor wat textuur. */
   .parallax-bg {
     position: fixed;
     inset: -10vh -10vw;
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 700px 500px at 15% 18%, rgba(245, 158, 11, 0.16) 0%, transparent 55%),
-      radial-gradient(ellipse 600px 400px at 85% 70%, rgba(99, 102, 241, 0.10) 0%, transparent 55%),
-      radial-gradient(ellipse 500px 350px at 50% 50%, rgba(244, 114, 182, 0.06) 0%, transparent 60%);
+      radial-gradient(ellipse 700px 500px at 15% 18%, rgba(148, 163, 184, 0.10) 0%, transparent 55%),
+      radial-gradient(ellipse 600px 400px at 85% 70%, rgba(148, 163, 184, 0.06) 0%, transparent 55%);
     transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.18), 0);
     will-change: transform;
-    filter: blur(1px) saturate(125%);
+    filter: blur(1px);
   }
   .parallax-bg-slow {
     transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.08), 0);
