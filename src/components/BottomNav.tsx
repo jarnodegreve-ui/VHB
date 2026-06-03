@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, Calendar, MapPin, Bell, Repeat } from 'lucide-react';
+import { LayoutDashboard, Calendar, MapPin, Bell, FileText } from 'lucide-react';
 import type { View } from '../types';
 import { cn } from '../lib/ui';
 
@@ -17,25 +17,23 @@ type NavSlot = {
  *
  * - Floating glass-card stijl, sticky aan de onderkant
  * - Actief item heeft oker-fill + animated layoutId-pill
- * - Badges (bv. open dienstruil) tonen rechtsboven
+ * - Badges (bv. ongelezen updates) tonen rechtsboven
  * - Alleen rendered op md:hidden (mobile/tablet portrait)
  */
 export function BottomNav({
   currentView,
   onSelect,
-  pendingSwapsCount = 0,
   unseenLeaveCount = 0,
 }: {
   currentView: View;
   onSelect: (view: View) => void;
-  pendingSwapsCount?: number;
   unseenLeaveCount?: number;
 }) {
   const slots: NavSlot[] = [
-    { view: 'dashboard', label: 'Home', icon: <LayoutDashboard size={20} /> },
+    { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { view: 'rooster', label: 'Rooster', icon: <Calendar size={20} /> },
-    { view: 'omleidingen', label: 'Hinder', icon: <MapPin size={20} /> },
-    { view: 'ruil-verzoeken', label: 'Ruilen', icon: <Repeat size={20} />, badge: pendingSwapsCount },
+    { view: 'omleidingen', label: 'Omleidingen', icon: <MapPin size={20} /> },
+    { view: 'ritblaadjes', label: 'Ritblaadjes', icon: <FileText size={20} /> },
     { view: 'updates', label: 'Updates', icon: <Bell size={20} />, badge: unseenLeaveCount },
   ];
 
@@ -81,7 +79,7 @@ export function BottomNav({
                   />
                 )}
                 <span className="relative z-10">{slot.icon}</span>
-                <span className="relative z-10 text-[10px] font-black uppercase tracking-widest">
+                <span className="relative z-10 text-[9px] font-bold tracking-tight leading-tight truncate max-w-full px-1">
                   {slot.label}
                 </span>
                 {slot.badge !== undefined && slot.badge > 0 && (
