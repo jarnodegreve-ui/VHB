@@ -3,6 +3,7 @@ import { Calendar, Clock, Download, ChevronDown } from 'lucide-react';
 import type { Shift, User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { BrandEmptyState } from '../components/BrandEmptyState';
+import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
 
 // Categoriseer per starttijd voor visuele kleurcode — zelfde logica als
@@ -45,7 +46,7 @@ const formatShortDate = (date: string) =>
 
 const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
-export function ScheduleView({ user, shifts: allShifts }: { user: User; shifts: Shift[]; users: User[] }) {
+export function ScheduleView({ user, shifts: allShifts, isInitialLoad = false }: { user: User; shifts: Shift[]; users: User[]; isInitialLoad?: boolean }) {
   const [showPast, setShowPast] = useState(false);
 
   // Strict eigen diensten; voor het overzicht van alle chauffeurs gaat
@@ -159,7 +160,15 @@ export function ScheduleView({ user, shifts: allShifts }: { user: User; shifts: 
         }
       />
 
-      {upcoming.length === 0 && past.length === 0 ? (
+      {isInitialLoad ? (
+        <div className="surface-card rounded-[32px] overflow-hidden">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i}>
+              <SkeletonRow className="border-b border-white/40 last:border-0" />
+            </div>
+          ))}
+        </div>
+      ) : upcoming.length === 0 && past.length === 0 ? (
         <BrandEmptyState
           title="Nog geen diensten gepland"
           message="Zodra de planner een nieuwe matrix uploadt, vind je hier al je komende ritten."

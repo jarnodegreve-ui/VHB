@@ -3,21 +3,7 @@ import { CalendarClock, Inbox, Repeat, FileWarning, Activity, ArrowUpRight, Spar
 import type { LeaveRequest, PlanningMatrixImportHistory, SwapRequest, User } from '../types';
 import { StatTile, type TilePalette } from './DashboardView';
 import { useCursorGlow, useMagnetic } from '../lib/interactive';
-import { Sparkline } from '../components/Sparkline';
-
-// Lichte deterministische pseudo-trend op basis van een seed (zodat we
-// niet steeds andere lijntjes zien bij re-render). Stub tot we echte
-// historiek hebben — geeft visueel een idee van "trend over tijd".
-const trendFromSeed = (seed: number, length = 14, base = 4, amp = 3): number[] => {
-  const out: number[] = [];
-  let s = seed;
-  for (let i = 0; i < length; i++) {
-    s = (s * 9301 + 49297) % 233280;
-    const noise = (s / 233280) * 2 - 1;
-    out.push(Math.max(0, base + Math.sin(i / 2) * amp * 0.6 + noise * amp * 0.4));
-  }
-  return out;
-};
+import { SkeletonTile, SkeletonRow, Skeleton } from '../components/Skeleton';
 
 /**
  * Planner/admin dashboard widgets — Bento premium-stijl.
@@ -30,6 +16,7 @@ export function PlannerDashboardWidgets({
   diversionsCount,
   users,
   onNavigate,
+  isInitialLoad = false,
 }: {
   leaveRequests: LeaveRequest[];
   swaps: SwapRequest[];
@@ -37,7 +24,34 @@ export function PlannerDashboardWidgets({
   diversionsCount: number;
   users: User[];
   onNavigate: (view: 'verlof-beheer' | 'ruil-verzoeken' | 'beheer-roosters' | 'beheer-omleidingen' | 'activiteit') => void;
+  isInitialLoad?: boolean;
 }) {
+  if (isInitialLoad) {
+    return (
+      <section className="space-y-4">
+        <div className="flex items-baseline justify-between px-1">
+          <Skeleton className="h-7 w-32" />
+          <Skeleton className="h-3 w-24" />
+        </div>
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+          <SkeletonTile />
+          <SkeletonTile />
+          <SkeletonTile />
+          <SkeletonTile />
+        </div>
+        <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+          <div className="rounded-[28px] p-5 surface-card">
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+          <div className="rounded-[28px] p-5 surface-card">
+            <SkeletonRow />
+            <SkeletonRow />
+          </div>
+        </div>
+      </section>
+    );
+  }
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending');
   const lastImport = matrixHistory[0] || null;
@@ -73,7 +87,6 @@ export function PlannerDashboardWidgets({
           value={pendingLeave.length}
           subValue={pendingLeave.length > 0 ? 'Wachten op besluit' : 'Up to date'}
           onClick={pendingLeave.length > 0 ? () => onNavigate('verlof-beheer') : undefined}
-          sparkline={trendFromSeed(101, 14, Math.max(pendingLeave.length, 2), 3)}
         />
         <StatTile
           icon={<Repeat size={18} />}
@@ -82,7 +95,6 @@ export function PlannerDashboardWidgets({
           value={pendingSwaps.length}
           subValue={pendingSwaps.length > 0 ? 'Wachten op besluit' : 'Up to date'}
           onClick={pendingSwaps.length > 0 ? () => onNavigate('ruil-verzoeken') : undefined}
-          sparkline={trendFromSeed(212, 14, Math.max(pendingSwaps.length, 2), 2.5)}
         />
         <StatTile
           icon={<CalendarClock size={18} />}
@@ -91,7 +103,6 @@ export function PlannerDashboardWidgets({
           value={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
           subValue={lastImport ? `${lastImport.importedDays} dagen verwerkt` : 'Nog geen import'}
           onClick={() => onNavigate('beheer-roosters')}
-          sparkline={trendFromSeed(307, 14, 5, 2)}
         />
         <StatTile
           icon={<FileWarning size={18} />}
@@ -100,7 +111,6 @@ export function PlannerDashboardWidgets({
           value={diversionsCount}
           subValue="Actief in netwerk"
           onClick={() => onNavigate('beheer-omleidingen')}
-          sparkline={trendFromSeed(404, 14, Math.max(diversionsCount, 2), 2.5)}
         />
       </div>
 

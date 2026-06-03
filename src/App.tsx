@@ -142,6 +142,9 @@ export default function App() {
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  // Eerste data-fetch nog niet rond? Views kunnen dit gebruiken om
+  // skeleton-loaders te tonen i.p.v. lege/mock-data.
+  const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
@@ -345,6 +348,7 @@ export default function App() {
       console.error('Error initializing app:', error);
     } finally {
       setIsLoading(false);
+      setIsInitialLoad(false);
     }
   };
 
@@ -1140,13 +1144,14 @@ export default function App() {
                       diversionsCount={diversions.length}
                       users={users}
                       onNavigate={(view) => setCurrentView(view)}
+                      isInitialLoad={isInitialLoad}
                     />
                   )}
-                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} />
+                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} isInitialLoad={isInitialLoad} />
                 </div>
               )}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
-              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} />}
+              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} isInitialLoad={isInitialLoad} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'updates' && <UpdatesView updates={updates} />}

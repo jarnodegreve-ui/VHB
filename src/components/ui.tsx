@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { BrandBus } from './BrandBus';
 
 export function PageShell({
   children,
@@ -132,12 +133,35 @@ export function ConfirmationModal({
   );
 }
 
-export function EmptyState({ icon, title, message }: { icon: React.ReactNode; title: string; message: string }) {
+/**
+ * Brand-empty-state met de VHB-busje-mascotte by default. Bestaande
+ * EmptyState-aanroepen krijgen het busje automatisch — `icon` wordt
+ * genegeerd tenzij je `mascotte={false}` zet (dan valt-back op icon).
+ */
+export function EmptyState({
+  icon,
+  title,
+  message,
+  mascotte = true,
+}: {
+  icon?: React.ReactNode;
+  title: string;
+  message: string;
+  mascotte?: boolean;
+}) {
   return (
     <div className="text-center py-12 surface-card rounded-[32px] border border-dashed border-white/80">
-      <div className="w-16 h-16 bg-white/75 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300 shadow-sm ring-1 ring-white/80">{icon}</div>
+      {mascotte ? (
+        <div className="bus-sway mx-auto mb-3 inline-block">
+          <BrandBus width={170} />
+        </div>
+      ) : (
+        <div className="w-16 h-16 bg-white/75 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300 shadow-sm ring-1 ring-white/80">
+          {icon}
+        </div>
+      )}
       <h4 className="text-lg font-black text-slate-800 tracking-tight">{title}</h4>
-      <p className="mt-2 text-sm font-medium text-slate-400">{message}</p>
+      <p className="mt-2 text-sm font-medium text-slate-400 max-w-md mx-auto">{message}</p>
     </div>
   );
 }
