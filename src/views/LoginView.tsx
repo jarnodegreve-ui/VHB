@@ -3,7 +3,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, MapPin, Bell, AlertTriangle, CheckCircle, ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
-import { BrandLogo } from '../components/BrandLogo';
+import { BrandWordmark } from '../components/BrandWordmark';
+import { LoginBus } from '../components/LoginBus';
 
 type Mode = 'login' | 'forgot';
 
@@ -174,17 +175,25 @@ export function LoginView({
 
       {/* === Linker brand-paneel — alleen desktop === */}
       <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col justify-between p-14 overflow-hidden">
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
-          className="relative z-10"
-        >
-          <BrandLogo size="lg" />
-          <p className="mt-4 text-[11px] font-bold text-slate-400 uppercase tracking-[0.22em]">
-            Intern portaal · sinds 1922
-          </p>
-        </motion.div>
+        {/* Top-block: wordmark + prominente bus */}
+        <div className="relative z-10 space-y-10">
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          >
+            <BrandWordmark size="lg" />
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 18, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+            className="max-w-[440px]"
+          >
+            <LoginBus />
+          </motion.div>
+        </div>
 
         {/* Bento mini-tegels voor features */}
         <div className="relative z-10 space-y-3">
@@ -226,12 +235,12 @@ export function LoginView({
           <span className="cursor-glow-layer" />
 
           <div className="relative z-10">
-            {/* Mobile brand-mark */}
-            <div className="lg:hidden flex flex-col items-center text-center mb-8">
-              <BrandLogo size="md" />
-              <p className="mt-3 text-[10px] font-bold text-slate-400 uppercase tracking-[0.22em]">
-                Intern portaal · sinds 1922
-              </p>
+            {/* Mobile brand-mark — wordmark bovenaan, bus klein eronder */}
+            <div className="lg:hidden flex flex-col items-center text-center mb-8 space-y-4">
+              <BrandWordmark size="md" />
+              <div className="w-full max-w-[240px]">
+                <LoginBus />
+              </div>
             </div>
 
             <AnimatePresence mode="wait">
