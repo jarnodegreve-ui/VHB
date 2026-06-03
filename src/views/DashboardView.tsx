@@ -137,12 +137,12 @@ export function DashboardView({
             className="tilt-card glow-top glass-stack lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
             style={{
               background:
-                'linear-gradient(135deg, rgba(255, 251, 235, 0.78) 0%, rgba(254, 243, 199, 0.62) 60%, rgba(253, 230, 138, 0.42) 100%)',
-              backdropFilter: 'blur(32px) saturate(160%)',
-              WebkitBackdropFilter: 'blur(32px) saturate(160%)',
-              border: '1px solid rgba(255, 255, 255, 0.8)',
+                'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%)',
+              backdropFilter: 'blur(32px) saturate(140%)',
+              WebkitBackdropFilter: 'blur(32px) saturate(140%)',
+              border: '1px solid rgba(226, 232, 240, 0.7)',
               boxShadow:
-                'inset 0 1px 0 rgba(255, 255, 255, 0.9), inset 0 -1px 0 rgba(255, 255, 255, 0.3), 0 12px 32px rgba(245, 158, 11, 0.12), 0 4px 12px rgba(245, 158, 11, 0.08)',
+                'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 12px 32px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.03)',
             }}
           >
             <div
@@ -152,9 +152,9 @@ export function DashboardView({
               }}
             />
             <div
-              className="pointer-events-none absolute -bottom-24 -left-24 w-64 h-64 rounded-full opacity-30"
+              className="pointer-events-none absolute -bottom-24 -left-24 w-64 h-64 rounded-full opacity-20"
               style={{
-                background: 'radial-gradient(circle, rgba(245, 158, 11, 0.18) 0%, transparent 70%)',
+                background: 'radial-gradient(circle, rgba(148, 163, 184, 0.18) 0%, transparent 70%)',
               }}
             />
 
@@ -308,48 +308,50 @@ export function DashboardView({
 // Rustige glass palette: glas-tegels met heel licht kleur-zweem.
 // backdrop-filter geeft het "Apple Wallet kaart"-glas-effect — witten zijn
 // iets minder dekkend zodat de background door het glas heen schijnt.
+// Strakke neutrale tegels: gekleurd icoon = enige tint, achtergrond blijft
+// gewoon wit. Geen warme creme- of pastel-tinten meer.
+const NEUTRAL_BG = 'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%)';
+const NEUTRAL_BORDER = '1px solid rgba(226, 232, 240, 0.7)';
+const NEUTRAL_SHADOW =
+  'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)';
+
 const TILE_PALETTE = {
   emerald: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(240, 253, 244, 0.55) 100%)',
-    shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(16, 185, 129, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.85)',
+    bg: NEUTRAL_BG,
+    shadow: NEUTRAL_SHADOW,
+    border: NEUTRAL_BORDER,
     iconBg: 'bg-emerald-500',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   rose: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 241, 242, 0.55) 100%)',
-    shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(244, 63, 94, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.85)',
+    bg: NEUTRAL_BG,
+    shadow: NEUTRAL_SHADOW,
+    border: NEUTRAL_BORDER,
     iconBg: 'bg-rose-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   oker: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 251, 235, 0.6) 100%)',
-    shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(245, 158, 11, 0.10)',
-    border: '1px solid rgba(255, 255, 255, 0.85)',
+    bg: NEUTRAL_BG,
+    shadow: NEUTRAL_SHADOW,
+    border: NEUTRAL_BORDER,
     iconBg: 'bg-oker-500',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   blue: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(239, 246, 255, 0.55) 100%)',
-    shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(59, 130, 246, 0.06)',
-    border: '1px solid rgba(255, 255, 255, 0.85)',
+    bg: NEUTRAL_BG,
+    shadow: NEUTRAL_SHADOW,
+    border: NEUTRAL_BORDER,
     iconBg: 'bg-blue-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
   slate: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%)',
-    shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 6px 20px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04)',
-    border: '1px solid rgba(255, 255, 255, 0.85)',
+    bg: NEUTRAL_BG,
+    shadow: NEUTRAL_SHADOW,
+    border: NEUTRAL_BORDER,
     iconBg: 'bg-slate-700',
     text: 'text-slate-900',
     sub: 'text-slate-500',
