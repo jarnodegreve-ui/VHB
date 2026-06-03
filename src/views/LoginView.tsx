@@ -124,19 +124,19 @@ export function LoginView({
   return (
     <div className="min-h-screen flex relative">
       {/* === Linker brand-paneel — alleen desktop ===
-          Strakke 3-zone layout: brand top, bus center, footer bottom. */}
+          Wordmark + bus + tagline gecentreerd verticaal, copyright onderaan. */}
       <aside className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col px-14 py-12">
-        {/* Top: wordmark */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-        >
-          <BrandWordmark size="lg" />
-        </motion.div>
-
-        {/* Center: bus + tagline (gecentreerd in de overgebleven ruimte) */}
+        {/* Center: alles gecentreerd boven elkaar */}
         <div className="flex-1 flex flex-col items-center justify-center gap-8">
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+            className="text-center"
+          >
+            <BrandWordmark size="lg" className="items-center" />
+          </motion.div>
+
           <motion.div
             initial={{ opacity: 0, y: 18, scale: 0.97 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -146,19 +146,14 @@ export function LoginView({
             <LoginBus />
           </motion.div>
 
-          <motion.div
+          <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-center max-w-md"
+            className="text-base font-bold text-slate-700 tracking-tight text-center"
           >
-            <p className="text-base font-bold text-slate-700 tracking-tight">
-              Centrale planning voor onze chauffeurs.
-            </p>
-            <p className="mt-1.5 text-sm font-medium text-slate-400">
-              Roosters, omleidingen, verlof en updates — alles op één plek.
-            </p>
-          </motion.div>
+            Alles op één plek.
+          </motion.p>
         </div>
 
         {/* Bottom: footer */}
