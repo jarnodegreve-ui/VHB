@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
-import { Clock, Download, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Clock, Download, History, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Service, View } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
+import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[]) => void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [historyService, setHistoryService] = useState<Service | null>(null);
   const [pendingImportedServices, setPendingImportedServices] = useState<Service[] | null>(null);
   const [pendingImportCount, setPendingImportCount] = useState(0);
   const [formData, setFormData] = useState({
@@ -301,6 +303,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   </td>
                   <td className="px-6 py-5 text-right">
                     <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><History size={18} /></button>
                       <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
                       {canAdminOverride ? <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button> : null}
                     </div>
@@ -318,6 +321,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               <div className="flex justify-between items-center">
                 <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
                 <div className="flex items-center gap-2">
+                  <button onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><History size={18} /></button>
                   <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
                   {canAdminOverride ? <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button> : null}
                 </div>
@@ -462,6 +466,14 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         onConfirm={handleConfirmDelete}
         title="Dienst verwijderen"
         message="Weet je zeker dat je deze dienst wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+      />
+
+      <EntityHistoryModal
+        open={!!historyService}
+        onClose={() => setHistoryService(null)}
+        entityType="service"
+        entityId={historyService?.id ?? ''}
+        title={historyService ? `Dienst ${historyService.serviceNumber}` : undefined}
       />
     </PageShell>
   );

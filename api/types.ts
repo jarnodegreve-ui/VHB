@@ -72,14 +72,37 @@ export interface PlanningMatrixImportHistoryRecord {
   unmatchedDrivers: string[];
 }
 
+export type ActivityCategory =
+  | "users"
+  | "planning"
+  | "planning_codes"
+  | "services"
+  | "diversions"
+  | "updates"
+  | "auth"
+  | "leave"
+  | "swaps";
+
+export type ActivityEntityType =
+  | "user"
+  | "service"
+  | "diversion"
+  | "update"
+  | "swap"
+  | "leave"
+  | "planning_code"
+  | "shift";
+
 export interface ActivityLogRecord {
   id: string;
   createdAt: string;
   actorName: string;
   actorRole: Role;
-  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth" | "leave" | "swaps";
+  category: ActivityCategory;
   action: string;
   details: string;
+  entityType?: ActivityEntityType | null;
+  entityId?: string | null;
 }
 
 export type ActivityLogRow = {
@@ -87,9 +110,11 @@ export type ActivityLogRow = {
   created_at: string;
   actor_name: string;
   actor_role: Role;
-  category: "users" | "planning" | "planning_codes" | "services" | "diversions" | "updates" | "auth" | "leave" | "swaps";
+  category: ActivityCategory;
   action: string;
   details: string;
+  entity_type?: ActivityEntityType | null;
+  entity_id?: string | null;
 };
 
 export type PlanningMatrixImportHistoryRow = {

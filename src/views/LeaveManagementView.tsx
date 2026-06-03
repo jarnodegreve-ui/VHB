@@ -1,12 +1,13 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Plus, User as UserIcon, X } from 'lucide-react';
-import type { LeaveRequest, User } from '../types';
+import { AlertTriangle, ChevronLeft, ChevronRight, Plus, User as UserIcon, X } from 'lucide-react';
+import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { verlofBalans } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
+import { leaveIdsWithConflict, shiftsConflictingWithLeave } from '../lib/conflicts';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   betaald_verlof: 'Betaald verlof',
@@ -14,7 +15,7 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
 };
 const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSeenDecisionAt, onMarkDecisionsSeen }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
@@ -60,6 +61,45 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
     setShowRequestModal(false);
     setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
   };
+
+  // === Live preview van impact van de nieuwe aanvraag ===
+  // - Hoeveel dagen vraagt-ie aan?
+  // - Gaat hij over budget?
+  // - Heeft hij al diensten ingepland in die periode? (conflict)
+  const requestPreview = useMemo(() => {
+    if (!formData.startDate || !formData.endDate) return null;
+    const requestedYear = parseInt(formData.startDate.slice(0, 4), 10);
+    const startD = new Date(`${formData.startDate}T00:00:00`);
+    const endD = new Date(`${formData.endDate}T00:00:00`);
+    const ms = endD.getTime() - startD.getTime();
+    if (Number.isNaN(ms) || ms < 0) return null;
+    const requestedDays = Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+
+    const currentBalance = verlofBalans(leaveRequests, user.id, requestedYear, user.verlofBudget);
+    const wouldExceed =
+      formData.type === 'betaald_verlof' &&
+      currentBalance.betaaldGebruikt + requestedDays > currentBalance.betaaldBudget;
+    const remainingAfter = currentBalance.betaaldBudget - currentBalance.betaaldGebruikt - requestedDays;
+
+    const conflictingShifts = shiftsConflictingWithLeave(shifts, {
+      id: '__draft__',
+      userId: user.id,
+      startDate: formData.startDate,
+      endDate: formData.endDate,
+      type: formData.type,
+      status: 'pending',
+      createdAt: new Date().toISOString(),
+    });
+
+    return {
+      requestedDays,
+      wouldExceed,
+      remainingAfter,
+      budget: currentBalance.betaaldBudget,
+      gebruikt: currentBalance.betaaldGebruikt,
+      conflictingShifts,
+    };
+  }, [formData.startDate, formData.endDate, formData.type, leaveRequests, shifts, user.id, user.verlofBudget]);
 
   const handleCalendarDateClick = (dateStr: string) => {
     if (!showRequestModal) {
@@ -352,6 +392,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                   {plannerPending.length > 0 ? plannerPending.map((req) => {
                     const requester = users.find((u) => u.id === req.userId);
                     const isSelected = selectedPendingIds.has(req.id);
+                    const conflictShifts = shiftsConflictingWithLeave(shifts, req);
                     return (
                       <div key={req.id} className={cn('surface-card p-6 rounded-[32px] space-y-4 transition-all', isSelected && 'ring-2 ring-emerald-400/50')}>
                         <div className="flex items-start gap-3">
@@ -364,13 +405,31 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                           />
                           <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500 shrink-0"><UserIcon size={24} /></div>
                           <div className="min-w-0 flex-1">
-                            <p className="font-black text-slate-800 truncate">{requester?.name}</p>
+                            <div className="flex items-center gap-2">
+                              <p className="font-black text-slate-800 truncate">{requester?.name}</p>
+                              {conflictShifts.length > 0 && (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-widest border border-red-200">
+                                  <AlertTriangle size={10} />
+                                  {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'}
+                                </span>
+                              )}
+                            </div>
                             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{formatLeaveType(req.type)} • {req.createdAt.split('T')[0]}</p>
                           </div>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-2xl space-y-2">
                           <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-widest"><span>Periode</span><span className="text-slate-800">{req.startDate} t/m {req.endDate}</span></div>
                           {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
+                          {conflictShifts.length > 0 && (
+                            <div className="mt-2 pt-2 border-t border-slate-200/80 space-y-1">
+                              <p className="text-[10px] font-black text-red-600 uppercase tracking-widest">⚠ Conflict met planning</p>
+                              <p className="text-[11px] font-medium text-slate-600">
+                                {conflictShifts.length === 1
+                                  ? `Op ${conflictShifts[0].date} staat dienst ${conflictShifts[0].line} ingepland (${conflictShifts[0].startTime}–${conflictShifts[0].endTime}).`
+                                  : `${conflictShifts.length} diensten staan ingepland in deze periode. Herverdelen bij goedkeuring.`}
+                              </p>
+                            </div>
+                          )}
                         </div>
                         <div className="flex gap-2">
                           <button onClick={() => handleStatusUpdate(req.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">Goedkeuren</button>
@@ -493,6 +552,52 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                 </button>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
                 <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
+
+                {/* Live impact-preview: budget + shift-conflicten */}
+                {requestPreview && (
+                  <div className="space-y-2">
+                    {/* Budget-saldo */}
+                    {formData.type === 'betaald_verlof' && (
+                      <div className={cn(
+                        'rounded-[20px] px-4 py-3 text-xs font-medium border',
+                        requestPreview.wouldExceed
+                          ? 'bg-red-50/80 border-red-200 text-red-700'
+                          : 'bg-emerald-50/60 border-emerald-200/80 text-emerald-700'
+                      )}>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-black">
+                            {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} aangevraagd
+                          </span>
+                          <span className="font-bold tabular-nums">
+                            {requestPreview.gebruikt + requestPreview.requestedDays} / {requestPreview.budget}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] font-medium opacity-90">
+                          {requestPreview.wouldExceed
+                            ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven je jaarbudget. Planner moet beoordelen.`
+                            : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze aanvraag.`}
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Shift-conflict */}
+                    {requestPreview.conflictingShifts.length > 0 && (
+                      <div className="rounded-[20px] px-4 py-3 text-xs font-medium border bg-amber-50/80 border-amber-200 text-amber-800">
+                        <div className="flex items-center gap-2">
+                          <AlertTriangle size={14} className="shrink-0" />
+                          <span className="font-black">
+                            {requestPreview.conflictingShifts.length}{' '}
+                            {requestPreview.conflictingShifts.length === 1 ? 'dienst staat' : 'diensten staan'} al ingepland in deze periode
+                          </span>
+                        </div>
+                        <p className="mt-1 text-[11px] font-medium opacity-90">
+                          De planner herverdeelt deze bij goedkeuring.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <button type="submit" disabled={!formData.startDate || !formData.endDate} className="btn-primary ios-pressable w-full py-4">Aanvraag Indienen</button>
               </form>
             </motion.div>

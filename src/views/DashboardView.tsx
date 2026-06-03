@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight } from 'lucide-react';
-import type { Diversion, Shift, User } from '../types';
+import type { Diversion, LeaveRequest, Shift, User } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
 import { Sparkline } from '../components/Sparkline';
 import { BrandEmptyState } from '../components/BrandEmptyState';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
+import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
+import { verlofBalans } from '../lib/leaveBalance';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -23,12 +25,14 @@ export function DashboardView({
   shifts,
   diversions,
   users,
+  leaveRequests = [],
   isInitialLoad = false,
 }: {
   user: User;
   shifts: Shift[];
   diversions: Diversion[];
   users: User[];
+  leaveRequests?: LeaveRequest[];
   isInitialLoad?: boolean;
 }) {
   const [now, setNow] = useState(new Date());
@@ -191,7 +195,7 @@ export function DashboardView({
             </div>
           </motion.div>
 
-          {/* Right column: 2 stacked smaller tiles */}
+          {/* Right column: 2 stacked smaller tiles + verlofbalans voor chauffeurs */}
           <div className="flex flex-col gap-4">
             <StatTile
               icon={<Clock size={18} />}
@@ -207,10 +211,17 @@ export function DashboardView({
               value={diversions.length}
               subValue="Actief in netwerk"
             />
+            {isChauffeur && (
+              <LeaveBalanceCard
+                balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
+                year={new Date().getFullYear()}
+                compact
+              />
+            )}
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        <div className={isChauffeur ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
           <StatTile
             icon={<Clock size={18} />}
             color="emerald"
@@ -225,6 +236,13 @@ export function DashboardView({
             value={diversions.length}
             subValue="Actief in netwerk"
           />
+          {isChauffeur && (
+            <LeaveBalanceCard
+              balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
+              year={new Date().getFullYear()}
+              compact
+            />
+          )}
         </div>
       )}
 

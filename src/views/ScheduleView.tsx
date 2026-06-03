@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
-import { Calendar, Clock, Download, ChevronDown } from 'lucide-react';
-import type { Shift, User } from '../types';
+import { AlertTriangle, Calendar, Clock, Download, ChevronDown } from 'lucide-react';
+import type { LeaveRequest, Shift, User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { BrandEmptyState } from '../components/BrandEmptyState';
 import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
+import { shiftIdsWithConflict } from '../lib/conflicts';
 
 // Categoriseer per starttijd voor visuele kleurcode — zelfde logica als
 // de maandprint.
@@ -27,6 +28,7 @@ type GroupedShift = {
   line: string;
   segments: Shift[];
   earliestStart: string;
+  hasConflict: boolean;
 };
 
 const formatShiftDate = (date: string) =>
@@ -46,7 +48,7 @@ const formatShortDate = (date: string) =>
 
 const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
-export function ScheduleView({ user, shifts: allShifts, isInitialLoad = false }: { user: User; shifts: Shift[]; users: User[]; isInitialLoad?: boolean }) {
+export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isInitialLoad = false }: { user: User; shifts: Shift[]; users: User[]; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean }) {
   const [showPast, setShowPast] = useState(false);
 
   // Strict eigen diensten; voor het overzicht van alle chauffeurs gaat
@@ -56,6 +58,13 @@ export function ScheduleView({ user, shifts: allShifts, isInitialLoad = false }:
     [allShifts, user.id],
   );
 
+  // Set van shift-IDs met een verlofconflict (chauffeur staat ingepland
+  // op een dag waarop hij goedgekeurd verlof heeft). Rendert als rode flag.
+  const conflictIds = useMemo(
+    () => shiftIdsWithConflict(myShifts, leaveRequests),
+    [myShifts, leaveRequests],
+  );
+
   // Groepeer per (datum + dienstnummer) zodat multi-segment diensten
   // (bv. dienst 2304 met 3 blokken) als één kaart met meerdere
   // tijdsvensters tonen i.p.v. drie aparte cards.
@@ -63,12 +72,14 @@ export function ScheduleView({ user, shifts: allShifts, isInitialLoad = false }:
     const byKey = new Map<string, GroupedShift>();
     for (const s of myShifts) {
       const key = `${s.date}__${getServiceNumber(s)}`;
+      const hasConflict = conflictIds.has(s.id);
       const existing = byKey.get(key);
       if (existing) {
         existing.segments.push(s);
         if (s.startTime.localeCompare(existing.earliestStart) < 0) {
           existing.earliestStart = s.startTime;
         }
+        if (hasConflict) existing.hasConflict = true;
       } else {
         byKey.set(key, {
           key,
@@ -76,6 +87,7 @@ export function ScheduleView({ user, shifts: allShifts, isInitialLoad = false }:
           line: getServiceNumber(s),
           segments: [s],
           earliestStart: s.startTime,
+          hasConflict,
         });
       }
     }
@@ -233,6 +245,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                   className={cn(
                     'hover:bg-slate-50/50 transition-colors group border-t border-slate-100',
                     isToday && 'bg-oker-50/30',
+                    g.hasConflict && 'bg-red-50/40 hover:bg-red-50/60',
                   )}
                 >
                   <td className="px-6 py-5">
@@ -240,11 +253,21 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                       <p className={cn('font-black', isToday ? 'text-oker-700' : 'text-slate-800')}>
                         {formatShiftDate(g.date)}
                       </p>
-                      {isToday && (
-                        <span className="inline-block rounded-full bg-oker-500/15 text-oker-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5">
-                          Vandaag
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {isToday && (
+                          <span className="inline-block rounded-full bg-oker-500/15 text-oker-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5">
+                            Vandaag
+                          </span>
+                        )}
+                        {g.hasConflict && (
+                          <span
+                            title="Je staat ingepland terwijl je verlof goedgekeurd is. Neem contact op met de planner."
+                            className="inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border border-red-300/60"
+                          >
+                            <AlertTriangle size={10} /> Verlof-conflict
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td className="px-6 py-5">
@@ -292,6 +315,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
               className={cn(
                 'surface-card rounded-2xl p-4',
                 isToday && 'ring-2 ring-oker-300',
+                g.hasConflict && 'ring-2 ring-red-300 bg-red-50/30',
               )}
             >
               {/* Datum + dienst-pill */}
@@ -303,6 +327,11 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                   <p className="text-sm font-black text-slate-900 mt-0.5">
                     {formatShortDate(g.date).split(' ').slice(1).join(' ')}
                   </p>
+                  {g.hasConflict && (
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border border-red-300/60">
+                      <AlertTriangle size={10} /> Verlof-conflict
+                    </span>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <span className={cn('inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', pill.className)}>
