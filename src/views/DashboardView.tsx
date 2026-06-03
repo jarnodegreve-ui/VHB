@@ -281,16 +281,16 @@ export function DashboardView({
           {newestDiversions.length > 0 ? (
             <div className="space-y-2">
               {newestDiversions.map((div) => (
-                <div key={div.id} className="group flex items-start gap-3 rounded-2xl bg-white/70 ring-1 ring-oker-200/40 px-3.5 py-2.5 hover:bg-white hover:ring-oker-300/60 hover:shadow-sm transition-all cursor-pointer">
+                <div key={div.id} className="group flex items-start gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all cursor-pointer">
                   <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-black text-slate-900 truncate">{div.title}</p>
-                      <span className="shrink-0 inline-block rounded-md bg-oker-500/15 px-1.5 py-0.5 text-[10px] font-black text-oker-800">{div.line}</span>
+                      <span className="shrink-0 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-700">{div.line}</span>
                     </div>
                     <p className="mt-0.5 text-xs font-medium text-slate-600/80 line-clamp-2">{div.description}</p>
                   </div>
-                  <ArrowUpRight size={14} className="text-oker-400 group-hover:text-oker-700 transition-colors shrink-0 mt-1" />
+                  <ArrowUpRight size={14} className="text-slate-300 group-hover:text-slate-700 transition-colors shrink-0 mt-1" />
                 </div>
               ))}
             </div>
@@ -457,20 +457,20 @@ function PremiumPanel({
   accent?: 'slate' | 'oker';
   children: ReactNode;
 }) {
-  const bg = accent === 'oker'
-    ? 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 251, 235, 0.72) 100%)'
-    : 'linear-gradient(135deg, rgba(255, 255, 255, 0.85) 0%, rgba(248, 250, 252, 0.72) 100%)';
-  const shadow = accent === 'oker'
-    ? 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 10px 28px rgba(245, 158, 11, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04)'
-    : 'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.03)';
+  // Strakke neutrale panelen — accent-prop blijft voor API-compat maar
+  // beïnvloedt niet langer de achtergrond (alleen icoon krijgt de tint
+  // via iconBg).
+  void accent;
+  const bg = 'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%)';
+  const shadow = 'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)';
   return (
     <div
       className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
       style={{
         background: bg,
-        backdropFilter: 'blur(30px) saturate(155%)',
-        WebkitBackdropFilter: 'blur(30px) saturate(155%)',
-        border: '1px solid rgba(255, 255, 255, 0.9)',
+        backdropFilter: 'blur(30px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(30px) saturate(140%)',
+        border: '1px solid rgba(226, 232, 240, 0.7)',
         boxShadow: shadow,
       }}
     >
