@@ -911,7 +911,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-40 lg:hidden"
+            className="fixed inset-0 bg-slate-900/35 backdrop-blur-sm z-40 lg:hidden"
           />
         )}
       </AnimatePresence>

@@ -164,8 +164,11 @@ export function LoginView({
       <MeshGradient className="absolute inset-0 -z-10 w-full h-full pointer-events-none" />
 
       {/* Editorial divider lines — drie horizontale lijnen die zich op
-          page-load uittekenen. Subtiel decoratief moment. */}
-      <div aria-hidden className="absolute inset-0 pointer-events-none">
+          page-load uittekenen. Subtiel decoratief moment.
+          Alleen op lg+ (waar de 3-koloms asymmetrische layout actief is);
+          op mobile/tablet zou de bovenste lijn op ~18% precies door het
+          wordmark-blokje lopen. */}
+      <div aria-hidden className="absolute inset-0 pointer-events-none hidden lg:block">
         <div className="editorial-divider editorial-divider-1 absolute top-[18%]" />
         <div className="editorial-divider editorial-divider-2 absolute top-[50%]" />
         <div className="editorial-divider editorial-divider-3 absolute top-[82%]" />
