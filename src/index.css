@@ -398,17 +398,30 @@
     .aurora-blob-1, .aurora-blob-2, .aurora-blob-3 { animation: none; }
   }
 
-  /* Brand-wordmark micro-animatie: rustige adem-pulse + warmer op hover */
+  /* Brand-wordmark micro-animatie: rustige adem-pulse + warmer op hover.
+     6s cycle = ongeveer menselijke ademhaling. Combineert subtiele scale
+     met oker drop-shadow voor een tactiel 'levend'-gevoel. */
   .brand-wordmark-anim {
-    animation: brand-breathe 5s ease-in-out infinite;
-    transition: filter 320ms ease;
+    animation: brand-breathe 6s ease-in-out infinite;
+    transition: filter 320ms ease, transform 320ms ease;
+    transform-origin: center center;
+    will-change: transform, filter;
   }
   @keyframes brand-breathe {
-    0%, 100% { filter: brightness(1) drop-shadow(0 0 0 rgba(245, 158, 11, 0)); }
-    50%      { filter: brightness(1.04) drop-shadow(0 0 8px rgba(245, 158, 11, 0.18)); }
+    0%, 100% {
+      transform: scale(1);
+      filter: brightness(1) drop-shadow(0 0 0 rgba(245, 158, 11, 0));
+    }
+    50% {
+      transform: scale(1.012);
+      filter: brightness(1.06) drop-shadow(0 0 14px rgba(245, 158, 11, 0.30));
+    }
   }
   .brand-wordmark-anim:hover {
-    filter: brightness(1.08) drop-shadow(0 0 14px rgba(245, 158, 11, 0.45));
+    filter: brightness(1.1) drop-shadow(0 0 18px rgba(245, 158, 11, 0.5));
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .brand-wordmark-anim { animation: none; }
   }
   .brand-wordmark-anim:hover .brand-accent {
     color: #d97706;
@@ -504,6 +517,107 @@
   }
   @media (prefers-reduced-motion: reduce) {
     .field-glow { animation: none; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.10); }
+  }
+
+  /* === Iridescent border voor het login form-card ===
+     Een dunne conische gradient die traag draait — geeft een holografische
+     shimmer over de hele rand van de card. ::before tekent de gradient,
+     ::after maakt 'm dun door een witte ring eroverheen (inner border-radius).
+     Gebruik op een wrapper rond .panel. */
+  .iridescent-frame {
+    position: relative;
+    border-radius: inherit;
+  }
+  .iridescent-frame::before {
+    content: '';
+    position: absolute;
+    inset: -1.5px;
+    border-radius: inherit;
+    padding: 1.5px;
+    background: conic-gradient(
+      from 0deg,
+      rgba(245, 158, 11, 0.55) 0%,
+      rgba(214, 196, 158, 0.45) 25%,
+      rgba(99, 102, 241, 0.40) 50%,
+      rgba(245, 158, 11, 0.55) 75%,
+      rgba(214, 196, 158, 0.45) 100%
+    );
+    /* Mask zodat alleen de border-rand zichtbaar is, niet de fill */
+    -webkit-mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+            mask:
+      linear-gradient(#000 0 0) content-box,
+      linear-gradient(#000 0 0);
+            mask-composite: exclude;
+    animation: iridescent-rotate 14s linear infinite;
+    pointer-events: none;
+  }
+  @keyframes iridescent-rotate {
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .iridescent-frame::before { animation: none; }
+  }
+
+  /* === Stacked glass depth ===
+     Twee panelen achter het form-card met lichte offset + lagere opacity.
+     Geeft echte z-as diepte zonder 3D-engine. Position absolute relatief
+     aan de stack-wrapper. */
+  .glass-stack-wrap {
+    position: relative;
+    width: 100%;
+  }
+  .glass-stack-back {
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.40) 100%);
+    border: 1px solid rgba(226, 232, 240, 0.55);
+    backdrop-filter: blur(20px) saturate(130%);
+    -webkit-backdrop-filter: blur(20px) saturate(130%);
+    box-shadow:
+      0 12px 32px rgba(15, 23, 42, 0.05),
+      0 4px 10px rgba(15, 23, 42, 0.03);
+    pointer-events: none;
+  }
+  .glass-stack-back-1 {
+    transform: translate(8px, 10px) scale(0.98);
+    z-index: -1;
+    opacity: 0.85;
+  }
+  .glass-stack-back-2 {
+    transform: translate(16px, 20px) scale(0.96);
+    z-index: -2;
+    opacity: 0.55;
+  }
+
+  /* === Editorial divider lines ===
+     Drie dunne lijnen die zich op page-load uittekenen (~700ms each, staggered).
+     Bedoeld als decoratief moment, alleen bij eerste mount. */
+  .editorial-divider {
+    height: 1px;
+    width: 100%;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(148, 163, 184, 0.32) 50%,
+      transparent 100%
+    );
+    transform-origin: center;
+    animation: divider-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .editorial-divider-1 { animation-delay: 0.05s; }
+  .editorial-divider-2 { animation-delay: 0.20s; }
+  .editorial-divider-3 { animation-delay: 0.35s; }
+  @keyframes divider-draw {
+    from { transform: scaleX(0); opacity: 0; }
+    to   { transform: scaleX(1); opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .editorial-divider { animation: none; }
   }
 
   .control-button-soft {
