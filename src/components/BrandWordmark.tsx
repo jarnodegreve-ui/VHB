@@ -20,12 +20,15 @@ export function BrandWordmark({
   className,
   animateLetters = false,
   storageKey = 'vhb-wordmark-typed',
+  dark = false,
 }: {
   size?: 'sm' | 'md' | 'lg';
   className?: string;
   animateLetters?: boolean;
   /** localStorage-key om te onthouden dat de animatie al gespeeld is. */
   storageKey?: string;
+  /** Dark variant: wit op zwart i.p.v. slate-900 op licht. */
+  dark?: boolean;
 }) {
   // Zelfde stijl als sidebar (text-[1.25rem]); voor login een tikje groter
   // maar dichtbij identiek qua proportie.
@@ -64,7 +67,8 @@ export function BrandWordmark({
     <div className={cn('inline-flex flex-col', className)}>
       <h1
         className={cn(
-          'brand-wordmark brand-wordmark-anim section-title text-slate-900 leading-none',
+          'brand-wordmark brand-wordmark-anim section-title leading-none',
+          dark ? 'text-white' : 'text-slate-900',
           titleSize,
         )}
         aria-label="VHB PORTAAL"
@@ -85,7 +89,11 @@ export function BrandWordmark({
           duration: 0.5,
           ease: [0.22, 1, 0.36, 1],
         }}
-        className={cn('font-bold text-slate-400 uppercase', subSize)}
+        className={cn(
+          'font-bold uppercase',
+          dark ? 'text-slate-500' : 'text-slate-400',
+          subSize,
+        )}
       >
         Van Hoorebeke en Zoon
       </motion.p>
