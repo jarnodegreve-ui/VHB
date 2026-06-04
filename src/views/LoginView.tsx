@@ -148,20 +148,6 @@ export function LoginView({
         />
       </div>
 
-      {/* Bus-silhouet als waterprent — pure zwarte silhouet via
-          filter: brightness(0). Geen kleurdetails meer = geen pixel-
-          kwaliteits-issues. Voelt als een echte heritage-watermerk. */}
-      <img
-        aria-hidden
-        src="/vhb-logo.png"
-        alt=""
-        className="pointer-events-none select-none absolute -z-10 -bottom-12 -right-16 md:-bottom-20 md:-right-24 w-[700px] md:w-[900px] max-w-none object-contain"
-        style={{
-          opacity: 0.04,
-          filter: 'brightness(0)',
-        }}
-        draggable={false}
-      />
 
       <main className="w-full max-w-[440px] flex flex-col items-center gap-6">
         {/* Brand-header: wordmark — boven de kaart */}
