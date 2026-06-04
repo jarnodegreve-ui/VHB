@@ -122,32 +122,28 @@ export function LoginView({
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden">
-      {/* Subtiele radial-gradient voor diepte — zonder warme tint */}
+      {/* Subtiele multi-tone gradient: warme oker-toets bovenin, koele
+          slate-toets onderaan. Houdt de pagina levendig zonder cream/kitsch. */}
       <div
         aria-hidden
         className="absolute inset-0 -z-10 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 900px 600px at 50% 0%, rgba(148, 163, 184, 0.10) 0%, transparent 60%)',
+            'radial-gradient(ellipse 1100px 700px at 20% -5%, rgba(245, 158, 11, 0.10) 0%, transparent 55%),' +
+            'radial-gradient(ellipse 900px 600px at 80% 105%, rgba(99, 102, 241, 0.07) 0%, transparent 55%),' +
+            'radial-gradient(ellipse 600px 400px at 50% 50%, rgba(255, 255, 255, 0.5) 0%, transparent 70%)',
         }}
       />
 
       <main className="w-full max-w-[440px] flex flex-col items-center gap-6">
-        {/* Brand-header: wordmark + heritage-stripe — boven de kaart */}
+        {/* Brand-header: wordmark — boven de kaart */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="flex flex-col items-center text-center gap-2"
+          className="flex flex-col items-center text-center"
         >
           <BrandWordmark size="lg" className="items-center" />
-          <div className="flex items-center gap-3 mt-2">
-            <span className="h-px w-8 bg-slate-300" />
-            <span className="text-[10px] font-bold uppercase tracking-[0.32em] text-slate-400">
-              Sinds 1922
-            </span>
-            <span className="h-px w-8 bg-slate-300" />
-          </div>
         </motion.div>
 
         {/* Form-card */}
