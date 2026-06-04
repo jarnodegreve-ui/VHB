@@ -122,19 +122,44 @@ export function LoginView({
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden">
-      {/* Multi-tone gradient — warme oker-blob linksboven, koele indigo
-          rechtsonder, lichte oker/grijze accent rechtsboven.
-          Roze is vervangen door een warme stone-tint die in de brand-palette
-          blijft. */}
-      <div
+      {/* Aurora — drie zachte gradient-blobs die traag bewegen
+          (warm oker + koel indigo + warme stone). Voelt levend, premium. */}
+      <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
+        <div
+          className="absolute aurora-blob aurora-blob-1"
+          style={{
+            background:
+              'radial-gradient(ellipse at center, rgba(245, 158, 11, 0.42) 0%, transparent 65%)',
+          }}
+        />
+        <div
+          className="absolute aurora-blob aurora-blob-2"
+          style={{
+            background:
+              'radial-gradient(ellipse at center, rgba(99, 102, 241, 0.30) 0%, transparent 65%)',
+          }}
+        />
+        <div
+          className="absolute aurora-blob aurora-blob-3"
+          style={{
+            background:
+              'radial-gradient(ellipse at center, rgba(214, 196, 158, 0.32) 0%, transparent 65%)',
+          }}
+        />
+      </div>
+
+      {/* Bus-silhouet als waterprent — heritage zonder dominantie.
+          Heel zacht zodat het meer textuur dan illustratie voelt. */}
+      <img
         aria-hidden
-        className="absolute inset-0 -z-10 pointer-events-none"
+        src="/vhb-logo.png"
+        alt=""
+        className="pointer-events-none select-none absolute -z-10 -bottom-12 -right-16 md:-bottom-20 md:-right-24 w-[700px] md:w-[900px] max-w-none object-contain"
         style={{
-          background:
-            'radial-gradient(ellipse 1200px 800px at 15% -10%, rgba(245, 158, 11, 0.28) 0%, transparent 55%),' +
-            'radial-gradient(ellipse 1000px 700px at 85% 110%, rgba(99, 102, 241, 0.18) 0%, transparent 55%),' +
-            'radial-gradient(ellipse 700px 500px at 95% 10%, rgba(214, 196, 158, 0.18) 0%, transparent 60%)',
+          opacity: 0.07,
+          filter: 'grayscale(80%) blur(0.5px)',
         }}
+        draggable={false}
       />
 
       <main className="w-full max-w-[440px] flex flex-col items-center gap-6">

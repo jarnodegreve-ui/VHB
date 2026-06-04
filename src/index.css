@@ -351,6 +351,53 @@
     transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.08), 0);
   }
 
+  /* === Aurora-blobs — voor het login-scherm ===
+     Drie grote zachte gradient-cirkels die traag bewegen + ademen.
+     Verschillende timings en posities zodat ze "drijven" als noorderlicht.
+     filter: blur(40px) maakt de overgangen organisch.
+     prefers-reduced-motion → animaties uit, posities blijven statisch. */
+  .aurora-blob {
+    width: 65vw;
+    height: 65vw;
+    max-width: 900px;
+    max-height: 900px;
+    border-radius: 50%;
+    filter: blur(60px);
+    will-change: transform;
+  }
+  .aurora-blob-1 {
+    top: -20%;
+    left: -10%;
+    animation: aurora-drift-1 24s ease-in-out infinite;
+  }
+  .aurora-blob-2 {
+    bottom: -25%;
+    right: -15%;
+    animation: aurora-drift-2 30s ease-in-out infinite;
+  }
+  .aurora-blob-3 {
+    top: 5%;
+    right: -10%;
+    animation: aurora-drift-3 26s ease-in-out infinite;
+  }
+  @keyframes aurora-drift-1 {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    33%      { transform: translate3d(60px, 40px, 0) scale(1.08); }
+    66%      { transform: translate3d(-30px, 70px, 0) scale(0.95); }
+  }
+  @keyframes aurora-drift-2 {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    50%      { transform: translate3d(-80px, -50px, 0) scale(1.12); }
+  }
+  @keyframes aurora-drift-3 {
+    0%, 100% { transform: translate3d(0, 0, 0) scale(1); }
+    25%      { transform: translate3d(-50px, 30px, 0) scale(1.05); }
+    75%      { transform: translate3d(40px, -40px, 0) scale(0.92); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .aurora-blob-1, .aurora-blob-2, .aurora-blob-3 { animation: none; }
+  }
+
   /* Brand-wordmark micro-animatie: rustige adem-pulse + warmer op hover */
   .brand-wordmark-anim {
     animation: brand-breathe 5s ease-in-out infinite;
