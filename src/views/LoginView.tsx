@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React, { useEffect, useRef, useState } from 'react';
+import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { AlertTriangle, CheckCircle, ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getDaypartGreeting } from '../lib/interactive';
@@ -120,6 +120,38 @@ export function LoginView({
       ? { title: 'Wachtwoord vergeten', description: 'Vul je e-mail in — we sturen een reset-link.' }
       : { title: greeting, description: 'Meld je aan om verder te gaan.' };
 
+  // === Tilt-parallax voor het form-card ===
+  // Cursor-positie tov het card-center bepaalt subtiele 3D-rotation.
+  // Max ~3° op elke as, met spring voor zachte respons. Touch-devices
+  // krijgen geen tilt (pointer-event fires only on hover).
+  const cardRef = useRef<HTMLDivElement>(null);
+  const mouseX = useMotionValue(0);
+  const mouseY = useMotionValue(0);
+  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [3, -3]), {
+    stiffness: 120,
+    damping: 18,
+    mass: 0.5,
+  });
+  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-3, 3]), {
+    stiffness: 120,
+    damping: 18,
+    mass: 0.5,
+  });
+
+  const handleCardMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const node = cardRef.current;
+    if (!node) return;
+    const r = node.getBoundingClientRect();
+    const px = (e.clientX - r.left) / r.width - 0.5;
+    const py = (e.clientY - r.top) / r.height - 0.5;
+    mouseX.set(px);
+    mouseY.set(py);
+  };
+  const handleCardLeave = () => {
+    mouseX.set(0);
+    mouseY.set(0);
+  };
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden">
       {/* Aurora — drie zachte gradient-blobs die traag bewegen
@@ -149,23 +181,34 @@ export function LoginView({
       </div>
 
 
-      <main className="w-full max-w-[440px] flex flex-col items-center gap-6">
-        {/* Brand-header: wordmark — boven de kaart */}
+      <main
+        className="w-full max-w-[440px] flex flex-col items-center gap-6"
+        style={{ perspective: '1200px' }}
+      >
+        {/* Brand-header: wordmark — letters typen zich op eerste bezoek */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center"
         >
-          <BrandWordmark size="lg" className="items-center" />
+          <BrandWordmark size="lg" className="items-center" animateLetters />
         </motion.div>
 
-        {/* Form-card */}
+        {/* Form-card met tilt-parallax (cursor-tracking 3D rotatie) */}
         <motion.div
+          ref={cardRef}
+          onPointerMove={handleCardMove}
+          onPointerLeave={handleCardLeave}
           initial={{ opacity: 0, y: 14, scale: 0.98 }}
           animate={{ opacity: 1, y: 0, scale: 1 }}
           transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
-          className="panel ios-soft-panel w-full rounded-[28px] p-7 sm:p-9"
+          style={{
+            rotateX,
+            rotateY,
+            transformStyle: 'preserve-3d',
+          }}
+          className="panel ios-soft-panel w-full rounded-[28px] p-7 sm:p-9 will-change-transform"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -319,25 +362,33 @@ function FieldInput({
   autoComplete?: string;
   rightSlot?: React.ReactNode;
 }) {
+  // Focus-state voor de ademende oker-glow rond het actieve veld
+  const [focused, setFocused] = useState(false);
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1">
         <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.18em]">{label}</label>
         {rightSlot}
       </div>
-      <div className="relative">
-        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
+      <div className={`relative rounded-2xl transition-shadow ${focused ? 'field-glow' : ''}`}>
+        <div
+          className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${
+            focused ? 'text-oker-500' : 'text-slate-400'
+          }`}
+        >
           {icon}
         </div>
         <input
           type={type}
           value={value}
           onChange={(e) => onChange(e.target.value)}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
           placeholder={placeholder}
           required={required}
           minLength={minLength}
           autoComplete={autoComplete}
-          className="control-input w-full pl-11 pr-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
+          className="control-input w-full pl-11 pr-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all no-focus-ring"
         />
       </div>
     </div>
