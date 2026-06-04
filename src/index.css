@@ -1148,11 +1148,29 @@ html.dark {
    brand landing on the login screen. If you want it dark, wire a different
    style override for .min-h-screen inside LoginView. */
 
-/* === Dark login redesign ===
-   Volledig donkere achtergrond met subtiele oker-vignet rond het center.
-   Card zelf is donker glas; inputs zijn semi-transparant donker; alle
-   tekst is wit/slate-300. De roterende iridescent-frame is al oker (zie
-   boven). Layout is centered single-column (geen 3-col grid meer). */
+/* === Login redesign — light variant ===
+   Witte achtergrond met subtiele oker-vignet rond het center en
+   onderaan voor warmte. Card is licht glas (.panel), inputs zijn
+   .control-input. Layout is centered single-column. */
+
+.login-bg-light {
+  background:
+    radial-gradient(
+      ellipse 1000px 800px at 50% 30%,
+      rgba(245, 158, 11, 0.08) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 700px 500px at 50% 95%,
+      rgba(217, 119, 6, 0.05) 0%,
+      transparent 60%
+    ),
+    linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
+}
+
+/* === Dark login redesign — bewaard maar niet langer gebruikt ===
+   Mocht je later een dark login willen, swap .login-bg-light voor
+   .login-bg-dark in LoginView en update tekst-classes terug naar wit. */
 
 .login-bg-dark {
   background:

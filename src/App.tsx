@@ -194,14 +194,12 @@ export default function App() {
     },
   });
 
-  // Initialize theme from localStorage, falling back to system preference.
+  // Initialize theme from localStorage. Eerste-bezoek default = LIGHT
+  // (geen system-preference fallback meer — gebruikers die dark willen
+  // klikken zelf de toggle).
   useEffect(() => {
     const stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-theme') : null;
-    const initial: 'light' | 'dark' = stored === 'dark' || stored === 'light'
-      ? stored
-      : typeof window !== 'undefined' && window.matchMedia('(prefers-color-scheme: dark)').matches
-        ? 'dark'
-        : 'light';
+    const initial: 'light' | 'dark' = stored === 'dark' || stored === 'light' ? stored : 'light';
     setTheme(initial);
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', initial === 'dark');

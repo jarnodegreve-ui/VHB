@@ -7,13 +7,13 @@ import { BrandWordmark } from '../components/BrandWordmark';
 type Mode = 'login' | 'forgot';
 
 /**
- * Login-scherm — dark redesign.
+ * Login-scherm — light variant.
  *
- * Pure donkere achtergrond met subtiele oker vignet, gecentreerde
- * single-column layout. VHB PORTAAL wordmark zit boven het form-card.
- * Het card heeft een roterende oker-iridescent border (zie .iridescent-frame
- * in index.css) en donker glas als panel.
+ * Lichte achtergrond met subtiele oker vignet, gecentreerde single-column
+ * layout. VHB PORTAAL wordmark boven de form-card. Card gebruikt .panel
+ * (licht glas) + .iridescent-frame voor de roterende oker rand.
  *
+ * Login is altijd licht, los van de globale theme-toggle in de portal.
  * Tilt-parallax blijft op muis, uit op touch.
  * prefers-reduced-motion zet animaties uit (border + breathing wordmark).
  */
@@ -28,9 +28,9 @@ export function LoginView({
 }) {
   const [mode, setMode] = useState<Mode>('login');
 
-  // Login screen is altijd donker, los van de globale theme-toggle.
-  // De html.dark class wordt tijdelijk verwijderd zodat dark-aware
-  // componenten elders (bv. Modal die later opent) stabiel blijven.
+  // Login is altijd licht, los van de globale theme-toggle. We removen
+  // de html.dark class tijdelijk (wordt herstelt op unmount na succesvol
+  // inloggen) zodat de hele login-context gegarandeerd licht is.
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const html = document.documentElement;
@@ -161,7 +161,7 @@ export function LoginView({
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden login-bg-dark">
+    <div className="min-h-screen relative overflow-hidden login-bg-light">
       {/* Centrale wordmark + form-card, vertikaal gecentreerd. */}
       <main
         className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
@@ -174,7 +174,7 @@ export function LoginView({
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center mb-10"
         >
-          <BrandWordmark size="lg" className="items-center" animateLetters dark />
+          <BrandWordmark size="lg" className="items-center" animateLetters />
         </motion.div>
 
         {/* Form-card met tilt-parallax + roterende oker-iridescent border */}
@@ -191,7 +191,7 @@ export function LoginView({
             onPointerLeave={handleCardLeave}
             className="iridescent-frame rounded-[28px]"
           >
-            <div className="panel-login-dark relative w-full rounded-[28px] p-7 sm:p-9">
+            <div className="panel ios-soft-panel relative w-full rounded-[28px] p-7 sm:p-9">
               <AnimatePresence mode="wait">
                 <motion.div
                   key={`${mode}-${recoveryMode}`}
@@ -201,10 +201,10 @@ export function LoginView({
                   transition={{ duration: 0.22 }}
                   className="mb-7 text-center"
                 >
-                  <h2 className="text-[1.75rem] font-black text-white tracking-[-0.02em] leading-tight">
+                  <h2 className="text-[1.75rem] font-black text-slate-900 tracking-[-0.02em] leading-tight">
                     {headerCopy.title}
                   </h2>
-                  <p className="mt-2 text-sm text-slate-400 font-medium">{headerCopy.description}</p>
+                  <p className="mt-2 text-sm text-slate-500 font-medium">{headerCopy.description}</p>
                 </motion.div>
               </AnimatePresence>
 
@@ -248,7 +248,7 @@ export function LoginView({
                       setMode('login');
                       resetFeedback();
                     }}
-                    className="w-full text-center text-xs font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors pt-2"
+                    className="w-full text-center text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-700 transition-colors pt-2"
                   >
                     ← Terug naar inloggen
                   </button>
@@ -287,7 +287,7 @@ export function LoginView({
                           setMode('forgot');
                           resetFeedback();
                         }}
-                        className="text-[10px] font-bold uppercase tracking-widest text-oker-400 hover:text-oker-300 transition-colors"
+                        className="text-[10px] font-bold uppercase tracking-widest text-oker-600 hover:text-oker-700 transition-colors"
                       >
                         Vergeten?
                       </button>
@@ -299,11 +299,11 @@ export function LoginView({
               )}
 
               {/* Trust badge */}
-              <div className="mt-7 pt-5 border-t border-white/10 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-500">
-                <ShieldCheck size={11} className="text-emerald-400" />
+              <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                <ShieldCheck size={11} className="text-emerald-500" />
                 Beveiligd via Supabase Auth
               </div>
-            </div>{/* /panel-login-dark */}
+            </div>{/* /panel */}
           </div>{/* /iridescent-frame */}
         </motion.div>
       </main>
@@ -315,7 +315,7 @@ export function LoginView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-[10px] font-bold text-slate-600 uppercase tracking-[0.2em] text-center px-6 space-y-1"
+        className="absolute inset-x-0 bottom-0 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center px-6 space-y-1"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <div>Intern gebruik</div>
@@ -374,7 +374,7 @@ function FieldInput({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 6 }}
                 transition={{ duration: 0.18 }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-amber-400"
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-amber-600"
                 title="Caps Lock staat aan"
               >
                 <ArrowUp size={10} strokeWidth={3} />
@@ -385,10 +385,10 @@ function FieldInput({
           {rightSlot}
         </div>
       </div>
-      <div className="relative rounded-2xl">
+      <div className={`relative rounded-2xl transition-shadow ${focused ? 'field-glow' : ''}`}>
         <div
           className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${
-            focused ? 'text-oker-400' : 'text-slate-500'
+            focused ? 'text-oker-500' : 'text-slate-400'
           }`}
         >
           {icon}
@@ -405,7 +405,7 @@ function FieldInput({
           required={required}
           minLength={minLength}
           autoComplete={autoComplete}
-          className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium outline-none no-focus-ring ${
+          className={`control-input w-full pl-11 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all no-focus-ring ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}
         />
@@ -415,7 +415,7 @@ function FieldInput({
             onClick={() => setRevealed((r) => !r)}
             aria-label={revealed ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
             tabIndex={-1}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-500 hover:text-slate-300 rounded-lg transition-colors z-10"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors z-10"
           >
             {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>
@@ -433,10 +433,10 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-500/10 border border-red-500/30"
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-50/80 border border-red-200/70"
         >
-          <AlertTriangle size={14} className="text-red-400 shrink-0" />
-          <p className="text-red-300 text-sm font-semibold">{error}</p>
+          <AlertTriangle size={14} className="text-red-500 shrink-0" />
+          <p className="text-red-700 text-sm font-semibold">{error}</p>
         </motion.div>
       )}
       {info && (
@@ -444,10 +444,10 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/30"
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50/80 border border-emerald-200/70"
         >
-          <CheckCircle size={14} className="text-emerald-400 shrink-0" />
-          <p className="text-emerald-300 text-sm font-semibold">{info}</p>
+          <CheckCircle size={14} className="text-emerald-600 shrink-0" />
+          <p className="text-emerald-700 text-sm font-semibold">{info}</p>
         </motion.div>
       )}
     </AnimatePresence>
