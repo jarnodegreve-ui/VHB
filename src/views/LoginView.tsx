@@ -2,9 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, CheckCircle, ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
+import { getDaypartGreeting } from '../lib/interactive';
 import { BrandWordmark } from '../components/BrandWordmark';
-import { LoginBus } from '../components/LoginBus';
 
 type Mode = 'login' | 'forgot';
 
@@ -122,75 +121,41 @@ export function LoginView({
       : { title: greeting, description: 'Meld je aan om verder te gaan.' };
 
   return (
-    <div className="min-h-screen flex relative">
-      {/* === Linker brand-paneel — alleen desktop ===
-          Wordmark + bus + tagline gecentreerd verticaal, copyright onderaan. */}
-      <aside className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative flex-col px-14 py-12">
-        {/* Center: alles gecentreerd boven elkaar */}
-        <div className="flex-1 flex flex-col items-center justify-center gap-8">
-          <motion.div
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-            className="text-center"
-          >
-            <BrandWordmark size="lg" className="items-center" />
-          </motion.div>
+    <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden">
+      {/* Subtiele radial-gradient voor diepte — zonder warme tint */}
+      <div
+        aria-hidden
+        className="absolute inset-0 -z-10 pointer-events-none"
+        style={{
+          background:
+            'radial-gradient(ellipse 900px 600px at 50% 0%, rgba(148, 163, 184, 0.10) 0%, transparent 60%)',
+        }}
+      />
 
-          <motion.div
-            initial={{ opacity: 0, y: 18, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            transition={{ duration: 0.7, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-            className="w-full max-w-[520px]"
-          >
-            <LoginBus />
-          </motion.div>
-
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6, delay: 0.4 }}
-            className="text-base font-bold text-slate-700 tracking-tight text-center"
-          >
-            Alles op één plek.
-          </motion.p>
-        </div>
-
-        {/* Bottom: footer */}
+      <main className="w-full max-w-[440px] flex flex-col items-center gap-6">
+        {/* Brand-header: wordmark + heritage-stripe — boven de kaart */}
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.55 }}
-          className="flex items-center justify-between text-[11px] font-bold text-slate-400 uppercase tracking-[0.18em]"
-        >
-          <span>© {new Date().getFullYear()} Van Hoorebeke en Zoon</span>
-          <span>Intern gebruik</span>
-        </motion.div>
-      </aside>
-
-      {/* === Rechter form-paneel ===
-          Op mobile: brand-mark BOVEN de card, copyright eronder — strakke
-          single-column flow. Op desktop: alleen de card (links staat de
-          aside). */}
-      <main className="flex-1 flex flex-col items-center justify-center p-6 lg:p-12 gap-6">
-        {/* Mobile-only brand-mark boven de form-card */}
-        <motion.div
-          initial={{ opacity: 0, y: 8 }}
+          initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          className="lg:hidden flex flex-col items-center text-center gap-4 w-full max-w-md"
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="flex flex-col items-center text-center gap-2"
         >
-          <BrandWordmark size="md" className="items-center" />
-          <div className="w-full max-w-[220px]">
-            <LoginBus />
+          <BrandWordmark size="lg" className="items-center" />
+          <div className="flex items-center gap-3 mt-2">
+            <span className="h-px w-8 bg-slate-300" />
+            <span className="text-[10px] font-bold uppercase tracking-[0.32em] text-slate-400">
+              Sinds 1922
+            </span>
+            <span className="h-px w-8 bg-slate-300" />
           </div>
         </motion.div>
 
+        {/* Form-card */}
         <motion.div
-          initial={{ opacity: 0, y: 14 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
-          className="panel ios-soft-panel w-full max-w-md rounded-[28px] p-6 sm:p-8 md:p-10"
+          initial={{ opacity: 0, y: 14, scale: 0.98 }}
+          animate={{ opacity: 1, y: 0, scale: 1 }}
+          transition={{ duration: 0.55, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+          className="panel ios-soft-panel w-full rounded-[28px] p-7 sm:p-9"
         >
           <AnimatePresence mode="wait">
             <motion.div
@@ -201,7 +166,7 @@ export function LoginView({
               transition={{ duration: 0.22 }}
               className="mb-6"
             >
-              <h2 className="text-2xl md:text-[1.75rem] font-black text-slate-900 tracking-[-0.02em] leading-tight">
+              <h2 className="text-[1.625rem] font-black text-slate-900 tracking-[-0.02em] leading-tight">
                 {headerCopy.title}
               </h2>
               <p className="mt-1.5 text-sm text-slate-500 font-medium">{headerCopy.description}</p>
@@ -305,12 +270,12 @@ export function LoginView({
           </div>
         </motion.div>
 
-        {/* Mobile-only footer onder de card */}
+        {/* Footer onder de kaart */}
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="lg:hidden text-[10px] font-bold text-slate-400 uppercase tracking-[0.18em] text-center pt-2"
+          transition={{ delay: 0.4 }}
+          className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center"
         >
           © {new Date().getFullYear()} Van Hoorebeke en Zoon · Intern gebruik
         </motion.div>
