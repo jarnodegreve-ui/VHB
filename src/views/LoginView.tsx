@@ -122,16 +122,17 @@ export function LoginView({
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden">
-      {/* Subtiele multi-tone gradient: warme oker-toets bovenin, koele
-          slate-toets onderaan. Houdt de pagina levendig zonder cream/kitsch. */}
+      {/* Multi-tone gradient: warme oker-blob linksboven, koele indigo
+          rechtsonder. Sterk genoeg om de pagina warmte/diepte te geven,
+          subtiel genoeg om niet als cream-/kitsch te ogen. */}
       <div
         aria-hidden
         className="absolute inset-0 -z-10 pointer-events-none"
         style={{
           background:
-            'radial-gradient(ellipse 1100px 700px at 20% -5%, rgba(245, 158, 11, 0.10) 0%, transparent 55%),' +
-            'radial-gradient(ellipse 900px 600px at 80% 105%, rgba(99, 102, 241, 0.07) 0%, transparent 55%),' +
-            'radial-gradient(ellipse 600px 400px at 50% 50%, rgba(255, 255, 255, 0.5) 0%, transparent 70%)',
+            'radial-gradient(ellipse 1200px 800px at 15% -10%, rgba(245, 158, 11, 0.28) 0%, transparent 55%),' +
+            'radial-gradient(ellipse 1000px 700px at 85% 110%, rgba(99, 102, 241, 0.18) 0%, transparent 55%),' +
+            'radial-gradient(ellipse 600px 500px at 95% 10%, rgba(244, 114, 182, 0.10) 0%, transparent 60%)',
         }}
       />
 
