@@ -564,7 +564,7 @@
   /* === Stacked glass depth ===
      Twee panelen achter het form-card met lichte offset + lagere opacity.
      Geeft echte z-as diepte zonder 3D-engine. Position absolute relatief
-     aan de stack-wrapper. */
+     aan de stack-wrapper. Border-radius matcht expliciet de hoofd-card. */
   .glass-stack-wrap {
     position: relative;
     width: 100%;
@@ -572,7 +572,7 @@
   .glass-stack-back {
     position: absolute;
     inset: 0;
-    border-radius: inherit;
+    border-radius: 28px;
     background:
       linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.40) 100%);
     border: 1px solid rgba(226, 232, 240, 0.55);
