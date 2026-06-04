@@ -458,19 +458,17 @@ function PremiumPanel({
 }) {
   // Strakke neutrale panelen — accent-prop blijft voor API-compat maar
   // beïnvloedt niet langer de achtergrond (alleen icoon krijgt de tint
-  // via iconBg).
+  // via iconBg). Achtergrond via CSS-vars zodat dark mode mee-flipt.
   void accent;
-  const bg = 'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%)';
-  const shadow = 'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)';
   return (
     <div
       className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
       style={{
-        background: bg,
+        background: 'var(--tile-bg)',
         backdropFilter: 'blur(30px) saturate(140%)',
         WebkitBackdropFilter: 'blur(30px) saturate(140%)',
-        border: '1px solid rgba(226, 232, 240, 0.7)',
-        boxShadow: shadow,
+        border: 'var(--tile-border)',
+        boxShadow: 'var(--tile-shadow)',
       }}
     >
       <div className="flex items-center justify-between mb-4">
