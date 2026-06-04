@@ -76,7 +76,7 @@ export function EntityHistoryModal({
               <button
                 onClick={onClose}
                 aria-label="Sluiten"
-                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors"
+                className="w-11 h-11 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors"
               >
                 <X size={20} />
               </button>

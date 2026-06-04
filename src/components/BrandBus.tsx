@@ -85,21 +85,3 @@ export function BrandBus({ className, width = 160 }: { className?: string; width
     </svg>
   );
 }
-
-/**
- * Subtle "wuif"-animatie (kleine sway). Plak op de SVG-container.
- * Wordt automatisch uitgezet bij prefers-reduced-motion.
- */
-export const BUS_SWAY_CSS = `
-  @keyframes bus-sway {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    50%      { transform: translateY(-3px) rotate(-1deg); }
-  }
-  .bus-sway {
-    animation: bus-sway 4s ease-in-out infinite;
-    transform-origin: center bottom;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .bus-sway { animation: none; }
-  }
-`;

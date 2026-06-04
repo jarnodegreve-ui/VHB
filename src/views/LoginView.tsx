@@ -140,6 +140,10 @@ export function LoginView({
   });
 
   const handleCardMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    // Tilt-parallax alleen op muis. Op touch krijg je tijdens scroll
+    // pointermove-events met steeds wisselende coords waardoor de kaart
+    // zou rondtollen — disorienterend op telefoon. Hetzelfde voor pen.
+    if (e.pointerType !== 'mouse') return;
     const node = cardRef.current;
     if (!node) return;
     const r = node.getBoundingClientRect();

@@ -941,7 +941,7 @@ export default function App() {
           <button
             onClick={() => setIsSidebarOpen(false)}
             aria-label="Menu sluiten"
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center text-slate-600 hover:text-slate-900 bg-white/60 hover:bg-white/90 rounded-2xl shadow-sm transition-colors lg:hidden"
+            className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center text-slate-600 hover:text-slate-900 bg-white/60 hover:bg-white/90 rounded-2xl shadow-sm transition-colors lg:hidden"
           >
             <X size={20} />
           </button>
@@ -1093,7 +1093,7 @@ export default function App() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-bold text-slate-800 truncate leading-tight">{currentUser.name}</p>
-              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wide">{currentUser.role}</p>
+              <p className="text-[11px] text-slate-600 font-semibold uppercase tracking-wide">{currentUser.role}</p>
             </div>
           </div>
           <button
