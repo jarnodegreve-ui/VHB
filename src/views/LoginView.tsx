@@ -123,41 +123,42 @@ export function LoginView({
   return (
     <div className="min-h-screen flex flex-col items-center justify-center p-6 md:p-10 relative overflow-hidden">
       {/* Aurora — drie zachte gradient-blobs die traag bewegen
-          (warm oker + koel indigo + warme stone). Voelt levend, premium. */}
+          (warm oker + koel indigo + warme stone). Subtiel, ambient. */}
       <div aria-hidden className="absolute inset-0 -z-10 pointer-events-none overflow-hidden">
         <div
           className="absolute aurora-blob aurora-blob-1"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(245, 158, 11, 0.42) 0%, transparent 65%)',
+              'radial-gradient(ellipse at center, rgba(245, 158, 11, 0.22) 0%, transparent 65%)',
           }}
         />
         <div
           className="absolute aurora-blob aurora-blob-2"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(99, 102, 241, 0.30) 0%, transparent 65%)',
+              'radial-gradient(ellipse at center, rgba(99, 102, 241, 0.14) 0%, transparent 65%)',
           }}
         />
         <div
           className="absolute aurora-blob aurora-blob-3"
           style={{
             background:
-              'radial-gradient(ellipse at center, rgba(214, 196, 158, 0.32) 0%, transparent 65%)',
+              'radial-gradient(ellipse at center, rgba(214, 196, 158, 0.16) 0%, transparent 65%)',
           }}
         />
       </div>
 
-      {/* Bus-silhouet als waterprent — heritage zonder dominantie.
-          Heel zacht zodat het meer textuur dan illustratie voelt. */}
+      {/* Bus-silhouet als waterprent — pure zwarte silhouet via
+          filter: brightness(0). Geen kleurdetails meer = geen pixel-
+          kwaliteits-issues. Voelt als een echte heritage-watermerk. */}
       <img
         aria-hidden
         src="/vhb-logo.png"
         alt=""
         className="pointer-events-none select-none absolute -z-10 -bottom-12 -right-16 md:-bottom-20 md:-right-24 w-[700px] md:w-[900px] max-w-none object-contain"
         style={{
-          opacity: 0.07,
-          filter: 'grayscale(80%) blur(0.5px)',
+          opacity: 0.04,
+          filter: 'brightness(0)',
         }}
         draggable={false}
       />
