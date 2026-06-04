@@ -17,6 +17,43 @@
   --color-oker-900: #78350f;
 }
 
+/* === Tile-surface variabelen ===
+   Voor inline-styled tegels in DashboardView / PlannerDashboardWidgets /
+   Skeleton die niet via Tailwind-classes kunnen flippen. Standaard wit-
+   glass; in dark mode worden ze automatisch near-black warm zodat de
+   tiles netjes meebewegen met de rest van het thema. */
+:root {
+  --tile-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+  --tile-border: 1px solid rgba(226, 232, 240, 0.7);
+  --tile-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 8px 24px rgba(15, 23, 42, 0.04),
+    0 2px 6px rgba(15, 23, 42, 0.03);
+  --tile-bg-soft: linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%);
+  --tile-border-soft: 1px solid rgba(255, 255, 255, 0.85);
+  --tile-bg-hero: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+  --tile-shadow-hero:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 12px 32px rgba(15, 23, 42, 0.05),
+    0 4px 12px rgba(15, 23, 42, 0.03);
+}
+
+html.dark {
+  --tile-bg: linear-gradient(135deg, rgba(22, 22, 26, 0.88) 0%, rgba(16, 16, 20, 0.82) 100%);
+  --tile-border: 1px solid rgba(255, 255, 255, 0.06);
+  --tile-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.42),
+    0 2px 6px rgba(0, 0, 0, 0.22);
+  --tile-bg-soft: linear-gradient(135deg, rgba(22, 22, 26, 0.72) 0%, rgba(16, 16, 20, 0.62) 100%);
+  --tile-border-soft: 1px solid rgba(255, 255, 255, 0.06);
+  --tile-bg-hero: linear-gradient(135deg, rgba(22, 22, 26, 0.92) 0%, rgba(14, 14, 18, 0.86) 100%);
+  --tile-shadow-hero:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 32px rgba(0, 0, 0, 0.50),
+    0 4px 12px rgba(0, 0, 0, 0.26);
+}
+
 @layer base {
   html {
     background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
@@ -491,16 +528,19 @@
   .iridescent-frame::before {
     content: '';
     position: absolute;
-    inset: -1.5px;
+    inset: -1px;
     border-radius: inherit;
-    padding: 1.5px;
+    padding: 1px;
+    /* Pure oker-palette conic — subtieler, meer een hint dan een
+       opvallende oker rand. Lagere opaciteit + dunnere padding zodat
+       't ademt zonder af te leiden. */
     background: conic-gradient(
       from 0deg,
-      rgba(245, 158, 11, 0.55) 0%,
-      rgba(214, 196, 158, 0.45) 25%,
-      rgba(99, 102, 241, 0.40) 50%,
-      rgba(245, 158, 11, 0.55) 75%,
-      rgba(214, 196, 158, 0.45) 100%
+      rgba(245, 158, 11, 0.28) 0%,
+      rgba(251, 191, 36, 0.16) 25%,
+      rgba(217, 119, 6, 0.22) 50%,
+      rgba(251, 191, 36, 0.16) 75%,
+      rgba(245, 158, 11, 0.28) 100%
     );
     /* Mask zodat alleen de border-rand zichtbaar is, niet de fill */
     -webkit-mask:
@@ -511,7 +551,7 @@
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
             mask-composite: exclude;
-    animation: iridescent-rotate 14s linear infinite;
+    animation: iridescent-rotate 20s linear infinite;
     pointer-events: none;
   }
   @keyframes iridescent-rotate {
@@ -733,16 +773,29 @@
    glass-morphism classes above.
    ========================================================================== */
 
+/* Dark mode = login kleurschema: pure donker (#0a0a0c) met subtiele
+   oker vignet, geen indigo / koel-blauwe tinten meer. */
 html.dark {
-  background: linear-gradient(180deg, #0a0f1c 0%, #0f172a 50%, #0b1220 100%);
+  background:
+    radial-gradient(
+      ellipse 1000px 800px at 50% 30%,
+      rgba(245, 158, 11, 0.05) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse 700px 500px at 50% 95%,
+      rgba(217, 119, 6, 0.03) 0%,
+      transparent 60%
+    ),
+    #0a0a0c;
   color-scheme: dark;
 }
 
 .dark .parallax-bg {
+  /* Pure oker-vignet, geen indigo of pink meer. */
   background:
-    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(245, 158, 11, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(99, 102, 241, 0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 500px 350px at 50% 50%, rgba(244, 114, 182, 0.06) 0%, transparent 60%);
+    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(245, 158, 11, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(217, 119, 6, 0.07) 0%, transparent 55%);
   filter: blur(1px) saturate(120%);
 }
 
@@ -760,19 +813,45 @@ html.dark {
 
 .dark .panel {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.55) 0%, rgba(15, 23, 42, 0.4) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.35);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.62) 0%, rgba(14, 14, 18, 0.50) 100%);
+  /* Heel subtiele warme rand ipv koel-blauwe slate-600. Zo blijft de
+     edge zichtbaar genoeg voor depth maar geen harde "sharpie"-lijn
+     meer tegen de near-black bg. */
+  border: 1px solid rgba(255, 255, 255, 0.05);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.18),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.02),
     0 10px 28px rgba(0, 0, 0, 0.4),
     0 2px 6px rgba(0, 0, 0, 0.2);
+}
+
+/* iOS soft-panel ::after legt een wit hoogtepunt (0.24 → 0.08) over
+   ELK panel, bedoeld voor het glass-effect op licht. Op near-black
+   dark geeft dat een opvallende zilveren lijn boven/onder de header.
+   In dark mode bijna helemaal uit. */
+.dark .ios-soft-panel::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    transparent 30%,
+    transparent 70%,
+    rgba(255, 255, 255, 0.015)
+  );
+  opacity: 0.5;
+}
+
+/* Dark variant van .panel--scrolled: zelfde lichte rand, iets meer
+   opaak zodat de header nog stevig staat als je scrolt. */
+.dark .panel--scrolled {
+  background:
+    linear-gradient(180deg, rgba(22, 22, 26, 0.85) 0%, rgba(14, 14, 18, 0.78) 100%);
+  border-color: rgba(255, 255, 255, 0.06);
 }
 
 .dark .panel-dark {
   background:
     radial-gradient(circle at top right, rgba(245, 158, 11, 0.10), transparent 38%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.88) 0%, rgba(11, 18, 32, 0.92) 100%);
+    linear-gradient(180deg, rgba(14, 14, 18, 0.88) 0%, rgba(8, 8, 12, 0.92) 100%);
   border: 1px solid rgba(71, 85, 105, 0.28);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.10),
@@ -781,7 +860,7 @@ html.dark {
 
 .dark .glass {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
   border: 1px solid rgba(71, 85, 105, 0.28);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.10),
@@ -799,7 +878,7 @@ html.dark {
 
 .dark .surface-card {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.35) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.5) 0%, rgba(14, 14, 18, 0.35) 100%);
   border: 1px solid rgba(71, 85, 105, 0.35);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.18),
@@ -818,7 +897,7 @@ html.dark {
 
 .dark .surface-table {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.5) 0%, rgba(15, 23, 42, 0.35) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.5) 0%, rgba(14, 14, 18, 0.35) 100%);
   border: 1px solid rgba(71, 85, 105, 0.35);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.18),
@@ -829,7 +908,7 @@ html.dark {
 .dark .glass-modal {
   background:
     radial-gradient(circle at top left, rgba(71, 85, 105, 0.30), transparent 45%),
-    linear-gradient(180deg, rgba(30, 41, 59, 0.78) 0%, rgba(15, 23, 42, 0.62) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.78) 0%, rgba(14, 14, 18, 0.62) 100%);
   border: 1px solid rgba(71, 85, 105, 0.45);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.20),
@@ -855,23 +934,24 @@ html.dark {
     inset 0 1px 0 rgba(148, 163, 184, 0.25);
 }
 .dark .cursor-glow > .cursor-glow-layer {
+  /* Pure oker-glow, geen indigo bijmenging meer. */
   background: radial-gradient(
     circle 240px at var(--mx) var(--my),
-    rgba(245, 158, 11, 0.18),
-    rgba(99, 102, 241, 0.08) 40%,
+    rgba(245, 158, 11, 0.20),
+    rgba(217, 119, 6, 0.08) 40%,
     transparent 70%
   );
   mix-blend-mode: screen;
 }
 
 .dark .surface-muted {
-  background: rgba(30, 41, 59, 0.5);
+  background: rgba(22, 22, 26, 0.5);
   border: 1px solid rgba(71, 85, 105, 0.28);
 }
 
 .dark .control-input {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.68) 0%, rgba(15, 23, 42, 0.52) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.68) 0%, rgba(14, 14, 18, 0.52) 100%);
   border: 1px solid rgba(71, 85, 105, 0.34);
   color: #e2e8f0;
   box-shadow:
@@ -893,7 +973,7 @@ html.dark {
 
 .dark .control-button-soft {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
   border: 1px solid rgba(71, 85, 105, 0.32);
   color: #e2e8f0;
   box-shadow:
@@ -903,12 +983,12 @@ html.dark {
 
 .dark .control-button-soft:hover {
   background:
-    linear-gradient(180deg, rgba(51, 65, 85, 0.72) 0%, rgba(30, 41, 59, 0.56) 100%);
+    linear-gradient(180deg, rgba(36, 36, 42, 0.72) 0%, rgba(22, 22, 26, 0.56) 100%);
 }
 
 .dark .glass-chip {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
   border: 1px solid rgba(71, 85, 105, 0.32);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.10),
@@ -917,7 +997,7 @@ html.dark {
 
 .dark .glass-segmented {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.52) 0%, rgba(15, 23, 42, 0.38) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.52) 0%, rgba(14, 14, 18, 0.38) 100%);
   border: 1px solid rgba(71, 85, 105, 0.30);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.10),
@@ -926,7 +1006,7 @@ html.dark {
 
 .dark .glass-icon-button {
   background:
-    linear-gradient(180deg, rgba(30, 41, 59, 0.64) 0%, rgba(15, 23, 42, 0.48) 100%);
+    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
   border: 1px solid rgba(71, 85, 105, 0.32);
   box-shadow:
     inset 0 1px 0 rgba(148, 163, 184, 0.10),
@@ -939,42 +1019,42 @@ html.dark {
 /* --- Tailwind utility overrides (most-used) --- */
 
 /* White backgrounds */
-.dark .bg-white { background-color: rgba(30, 41, 59, 0.85); }
-.dark .bg-white\/30 { background-color: rgba(30, 41, 59, 0.40); }
-.dark .bg-white\/35 { background-color: rgba(30, 41, 59, 0.45); }
-.dark .bg-white\/40 { background-color: rgba(30, 41, 59, 0.50); }
-.dark .bg-white\/42 { background-color: rgba(30, 41, 59, 0.52); }
-.dark .bg-white\/45 { background-color: rgba(30, 41, 59, 0.55); }
-.dark .bg-white\/50 { background-color: rgba(30, 41, 59, 0.60); }
-.dark .bg-white\/55 { background-color: rgba(30, 41, 59, 0.65); }
-.dark .bg-white\/58 { background-color: rgba(30, 41, 59, 0.68); }
-.dark .bg-white\/60 { background-color: rgba(30, 41, 59, 0.68); }
-.dark .bg-white\/62 { background-color: rgba(30, 41, 59, 0.70); }
-.dark .bg-white\/65 { background-color: rgba(30, 41, 59, 0.72); }
-.dark .bg-white\/70 { background-color: rgba(30, 41, 59, 0.74); }
-.dark .bg-white\/74 { background-color: rgba(30, 41, 59, 0.76); }
-.dark .bg-white\/75 { background-color: rgba(30, 41, 59, 0.78); }
-.dark .bg-white\/80 { background-color: rgba(30, 41, 59, 0.82); }
-.dark .bg-white\/84 { background-color: rgba(30, 41, 59, 0.85); }
-.dark .bg-white\/88 { background-color: rgba(30, 41, 59, 0.88); }
-.dark .bg-white\/90 { background-color: rgba(30, 41, 59, 0.90); }
-.dark .bg-white\/95 { background-color: rgba(30, 41, 59, 0.92); }
-.dark .hover\:bg-white\/50:hover { background-color: rgba(51, 65, 85, 0.60); }
-.dark .hover\:bg-white\/70:hover { background-color: rgba(51, 65, 85, 0.72); }
+.dark .bg-white { background-color: rgba(22, 22, 26, 0.85); }
+.dark .bg-white\/30 { background-color: rgba(22, 22, 26, 0.40); }
+.dark .bg-white\/35 { background-color: rgba(22, 22, 26, 0.45); }
+.dark .bg-white\/40 { background-color: rgba(22, 22, 26, 0.50); }
+.dark .bg-white\/42 { background-color: rgba(22, 22, 26, 0.52); }
+.dark .bg-white\/45 { background-color: rgba(22, 22, 26, 0.55); }
+.dark .bg-white\/50 { background-color: rgba(22, 22, 26, 0.60); }
+.dark .bg-white\/55 { background-color: rgba(22, 22, 26, 0.65); }
+.dark .bg-white\/58 { background-color: rgba(22, 22, 26, 0.68); }
+.dark .bg-white\/60 { background-color: rgba(22, 22, 26, 0.68); }
+.dark .bg-white\/62 { background-color: rgba(22, 22, 26, 0.70); }
+.dark .bg-white\/65 { background-color: rgba(22, 22, 26, 0.72); }
+.dark .bg-white\/70 { background-color: rgba(22, 22, 26, 0.74); }
+.dark .bg-white\/74 { background-color: rgba(22, 22, 26, 0.76); }
+.dark .bg-white\/75 { background-color: rgba(22, 22, 26, 0.78); }
+.dark .bg-white\/80 { background-color: rgba(22, 22, 26, 0.82); }
+.dark .bg-white\/84 { background-color: rgba(22, 22, 26, 0.85); }
+.dark .bg-white\/88 { background-color: rgba(22, 22, 26, 0.88); }
+.dark .bg-white\/90 { background-color: rgba(22, 22, 26, 0.90); }
+.dark .bg-white\/95 { background-color: rgba(22, 22, 26, 0.92); }
+.dark .hover\:bg-white\/50:hover { background-color: rgba(36, 36, 42, 0.60); }
+.dark .hover\:bg-white\/70:hover { background-color: rgba(36, 36, 42, 0.72); }
 
 /* Slate surfaces */
-.dark .bg-slate-50 { background-color: rgba(30, 41, 59, 0.60); }
-.dark .bg-slate-50\/50 { background-color: rgba(30, 41, 59, 0.30); }
-.dark .bg-slate-50\/55 { background-color: rgba(30, 41, 59, 0.32); }
-.dark .bg-slate-50\/60 { background-color: rgba(30, 41, 59, 0.36); }
-.dark .bg-slate-50\/80 { background-color: rgba(30, 41, 59, 0.50); }
-.dark .bg-slate-50\/90 { background-color: rgba(30, 41, 59, 0.55); }
-.dark .bg-slate-100 { background-color: rgba(51, 65, 85, 0.60); }
-.dark .bg-slate-100\/60 { background-color: rgba(51, 65, 85, 0.38); }
-.dark .bg-slate-100\/70 { background-color: rgba(51, 65, 85, 0.45); }
-.dark .hover\:bg-slate-50:hover { background-color: rgba(51, 65, 85, 0.40); }
-.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(51, 65, 85, 0.26); }
-.dark .hover\:bg-slate-100:hover { background-color: rgba(51, 65, 85, 0.55); }
+.dark .bg-slate-50 { background-color: rgba(22, 22, 26, 0.60); }
+.dark .bg-slate-50\/50 { background-color: rgba(22, 22, 26, 0.30); }
+.dark .bg-slate-50\/55 { background-color: rgba(22, 22, 26, 0.32); }
+.dark .bg-slate-50\/60 { background-color: rgba(22, 22, 26, 0.36); }
+.dark .bg-slate-50\/80 { background-color: rgba(22, 22, 26, 0.50); }
+.dark .bg-slate-50\/90 { background-color: rgba(22, 22, 26, 0.55); }
+.dark .bg-slate-100 { background-color: rgba(36, 36, 42, 0.60); }
+.dark .bg-slate-100\/60 { background-color: rgba(36, 36, 42, 0.38); }
+.dark .bg-slate-100\/70 { background-color: rgba(36, 36, 42, 0.45); }
+.dark .hover\:bg-slate-50:hover { background-color: rgba(36, 36, 42, 0.40); }
+.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(36, 36, 42, 0.26); }
+.dark .hover\:bg-slate-100:hover { background-color: rgba(36, 36, 42, 0.55); }
 .dark .hover\:bg-slate-100\/60:hover { background-color: rgba(71, 85, 105, 0.48); }
 .dark .hover\:bg-slate-100\/70:hover { background-color: rgba(71, 85, 105, 0.52); }
 .dark .hover\:bg-slate-200:hover { background-color: rgba(71, 85, 105, 0.55); }
@@ -1022,7 +1102,7 @@ html.dark {
 
 /* Rings */
 .dark .ring-slate-100 { --tw-ring-color: rgba(71, 85, 105, 0.32); }
-.dark .ring-white\/60 { --tw-ring-color: rgba(148, 163, 184, 0.18); }
+.dark .ring-white\/60 { --tw-ring-color: rgba(255, 255, 255, 0.05); }
 .dark .ring-white\/80 { --tw-ring-color: rgba(148, 163, 184, 0.22); }
 .dark .ring-oker-100 { --tw-ring-color: rgba(245, 158, 11, 0.30); }
 
@@ -1067,6 +1147,72 @@ html.dark {
 /* Login panel soft cream gradient stays light — users expect a familiar
    brand landing on the login screen. If you want it dark, wire a different
    style override for .min-h-screen inside LoginView. */
+
+/* === Dark login redesign ===
+   Volledig donkere achtergrond met subtiele oker-vignet rond het center.
+   Card zelf is donker glas; inputs zijn semi-transparant donker; alle
+   tekst is wit/slate-300. De roterende iridescent-frame is al oker (zie
+   boven). Layout is centered single-column (geen 3-col grid meer). */
+
+.login-bg-dark {
+  background:
+    radial-gradient(
+      ellipse 900px 700px at 50% 38%,
+      rgba(245, 158, 11, 0.07) 0%,
+      transparent 55%
+    ),
+    radial-gradient(
+      ellipse 600px 500px at 50% 95%,
+      rgba(217, 119, 6, 0.04) 0%,
+      transparent 55%
+    ),
+    #0a0a0c;
+}
+
+.panel-login-dark {
+  background:
+    linear-gradient(
+      180deg,
+      rgba(24, 24, 28, 0.92) 0%,
+      rgba(16, 16, 19, 0.96) 100%
+    );
+  backdrop-filter: blur(24px) saturate(140%);
+  -webkit-backdrop-filter: blur(24px) saturate(140%);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 20px 60px rgba(0, 0, 0, 0.55),
+    0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+.control-input-dark {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.95);
+  transition:
+    background 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 240ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 240ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.control-input-dark::placeholder {
+  color: rgba(255, 255, 255, 0.30);
+}
+.control-input-dark:focus {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(245, 158, 11, 0.55);
+  box-shadow:
+    0 0 0 4px rgba(245, 158, 11, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+
+/* Mobile: zelfde forced 16px font-size truc voor iOS-zoom-fix.
+   We mikken zowel op de standaard input als op deze dark variant. */
+@media (max-width: 767px) {
+  .control-input-dark,
+  input.control-input-dark {
+    font-size: 16px;
+  }
+}
 
 /* === Mobile perf: lichtere backdrop-filter ===
    Op desktop willen we de volle iOS-glass-look met blur 30–44px.

@@ -184,15 +184,18 @@ export function PlannerDashboardWidgets({
 
 // === Subcomponents ===
 
+// Beide palette-varianten gebruiken nu de gedeelde --tile-bg-soft uit
+// index.css, met een lichte accent-shadow voor de oker- vs blauw-versie.
+// Dark mode flipt automatisch via de var.
 const PANEL_PALETTE = {
   oker: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(255, 251, 235, 0.55) 100%)',
+    bg: 'var(--tile-bg-soft)',
     shadow:
       'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 10px 28px rgba(245, 158, 11, 0.08), 0 2px 8px rgba(15, 23, 42, 0.04)',
     sub: 'text-slate-500',
   },
   blue: {
-    bg: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(239, 246, 255, 0.55) 100%)',
+    bg: 'var(--tile-bg-soft)',
     shadow:
       'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 10px 28px rgba(59, 130, 246, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04)',
     sub: 'text-slate-500',
@@ -224,7 +227,7 @@ function BentoListPanel({
         background: p.bg,
         backdropFilter: 'blur(30px) saturate(155%)',
         WebkitBackdropFilter: 'blur(30px) saturate(155%)',
-        border: '1px solid rgba(255, 255, 255, 0.85)',
+        border: 'var(--tile-border-soft)',
         boxShadow: p.shadow,
       }}
     >
@@ -286,10 +289,10 @@ function QuickActionTile({
       onClick={onClick}
       className="glow-top glass-stack cursor-glow halo-on-hover group text-left rounded-[24px] p-4 relative overflow-hidden"
       style={{
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%)',
+        background: 'var(--tile-bg-soft)',
         backdropFilter: 'blur(28px) saturate(155%)',
         WebkitBackdropFilter: 'blur(28px) saturate(155%)',
-        border: '1px solid rgba(255, 255, 255, 0.85)',
+        border: 'var(--tile-border-soft)',
         boxShadow:
           'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04)',
       }}

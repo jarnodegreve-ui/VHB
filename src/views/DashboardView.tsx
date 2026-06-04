@@ -136,13 +136,11 @@ export function DashboardView({
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
             className="tilt-card glow-top glass-stack lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
             style={{
-              background:
-                'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%)',
+              background: 'var(--tile-bg-hero)',
               backdropFilter: 'blur(32px) saturate(140%)',
               WebkitBackdropFilter: 'blur(32px) saturate(140%)',
-              border: '1px solid rgba(226, 232, 240, 0.7)',
-              boxShadow:
-                'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 12px 32px rgba(15, 23, 42, 0.05), 0 4px 12px rgba(15, 23, 42, 0.03)',
+              border: 'var(--tile-border)',
+              boxShadow: 'var(--tile-shadow-hero)',
             }}
           >
             <div
@@ -310,10 +308,11 @@ export function DashboardView({
 // iets minder dekkend zodat de background door het glas heen schijnt.
 // Strakke neutrale tegels: gekleurd icoon = enige tint, achtergrond blijft
 // gewoon wit. Geen warme creme- of pastel-tinten meer.
-const NEUTRAL_BG = 'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%)';
-const NEUTRAL_BORDER = '1px solid rgba(226, 232, 240, 0.7)';
-const NEUTRAL_SHADOW =
-  'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)';
+// CSS-variables zodat tegels mee-flippen in dark mode (zie :root en
+// html.dark in index.css voor de waardes).
+const NEUTRAL_BG = 'var(--tile-bg)';
+const NEUTRAL_BORDER = 'var(--tile-border)';
+const NEUTRAL_SHADOW = 'var(--tile-shadow)';
 
 const TILE_PALETTE = {
   emerald: {
@@ -459,19 +458,17 @@ function PremiumPanel({
 }) {
   // Strakke neutrale panelen — accent-prop blijft voor API-compat maar
   // beïnvloedt niet langer de achtergrond (alleen icoon krijgt de tint
-  // via iconBg).
+  // via iconBg). Achtergrond via CSS-vars zodat dark mode mee-flipt.
   void accent;
-  const bg = 'linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%)';
-  const shadow = 'inset 0 1px 0 rgba(255, 255, 255, 0.85), 0 8px 24px rgba(15, 23, 42, 0.04), 0 2px 6px rgba(15, 23, 42, 0.03)';
   return (
     <div
       className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
       style={{
-        background: bg,
+        background: 'var(--tile-bg)',
         backdropFilter: 'blur(30px) saturate(140%)',
         WebkitBackdropFilter: 'blur(30px) saturate(140%)',
-        border: '1px solid rgba(226, 232, 240, 0.7)',
-        boxShadow: shadow,
+        border: 'var(--tile-border)',
+        boxShadow: 'var(--tile-shadow)',
       }}
     >
       <div className="flex items-center justify-between mb-4">
