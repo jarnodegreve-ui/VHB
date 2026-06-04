@@ -17,6 +17,43 @@
   --color-oker-900: #78350f;
 }
 
+/* === Tile-surface variabelen ===
+   Voor inline-styled tegels in DashboardView / PlannerDashboardWidgets /
+   Skeleton die niet via Tailwind-classes kunnen flippen. Standaard wit-
+   glass; in dark mode worden ze automatisch near-black warm zodat de
+   tiles netjes meebewegen met de rest van het thema. */
+:root {
+  --tile-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+  --tile-border: 1px solid rgba(226, 232, 240, 0.7);
+  --tile-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 8px 24px rgba(15, 23, 42, 0.04),
+    0 2px 6px rgba(15, 23, 42, 0.03);
+  --tile-bg-soft: linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%);
+  --tile-border-soft: 1px solid rgba(255, 255, 255, 0.85);
+  --tile-bg-hero: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+  --tile-shadow-hero:
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    0 12px 32px rgba(15, 23, 42, 0.05),
+    0 4px 12px rgba(15, 23, 42, 0.03);
+}
+
+html.dark {
+  --tile-bg: linear-gradient(135deg, rgba(22, 22, 26, 0.88) 0%, rgba(16, 16, 20, 0.82) 100%);
+  --tile-border: 1px solid rgba(255, 255, 255, 0.06);
+  --tile-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 8px 24px rgba(0, 0, 0, 0.42),
+    0 2px 6px rgba(0, 0, 0, 0.22);
+  --tile-bg-soft: linear-gradient(135deg, rgba(22, 22, 26, 0.72) 0%, rgba(16, 16, 20, 0.62) 100%);
+  --tile-border-soft: 1px solid rgba(255, 255, 255, 0.06);
+  --tile-bg-hero: linear-gradient(135deg, rgba(22, 22, 26, 0.92) 0%, rgba(14, 14, 18, 0.86) 100%);
+  --tile-shadow-hero:
+    inset 0 1px 0 rgba(255, 255, 255, 0.05),
+    0 12px 32px rgba(0, 0, 0, 0.50),
+    0 4px 12px rgba(0, 0, 0, 0.26);
+}
+
 @layer base {
   html {
     background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);

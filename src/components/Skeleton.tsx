@@ -46,10 +46,10 @@ export function SkeletonTile({ className }: { className?: string }) {
     <div
       className={cn('rounded-[24px] p-5 relative overflow-hidden', className)}
       style={{
-        background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(248, 250, 252, 0.4) 100%)',
+        background: 'var(--tile-bg-soft)',
         backdropFilter: 'blur(20px) saturate(140%)',
         WebkitBackdropFilter: 'blur(20px) saturate(140%)',
-        border: '1px solid rgba(255, 255, 255, 0.7)',
+        border: 'var(--tile-border-soft)',
       }}
     >
       <Skeleton rounded="xl" className="w-9 h-9" />
