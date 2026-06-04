@@ -491,18 +491,19 @@
   .iridescent-frame::before {
     content: '';
     position: absolute;
-    inset: -1.5px;
+    inset: -1px;
     border-radius: inherit;
-    padding: 1.5px;
-    /* Pure oker-palette conic — geen vreemde indigo-stop meer.
-       Op donkere achtergrond geeft dit een warm gloeiende rand. */
+    padding: 1px;
+    /* Pure oker-palette conic — subtieler, meer een hint dan een
+       opvallende oker rand. Lagere opaciteit + dunnere padding zodat
+       't ademt zonder af te leiden. */
     background: conic-gradient(
       from 0deg,
-      rgba(245, 158, 11, 0.65) 0%,
-      rgba(251, 191, 36, 0.45) 25%,
-      rgba(217, 119, 6, 0.55) 50%,
-      rgba(251, 191, 36, 0.45) 75%,
-      rgba(245, 158, 11, 0.65) 100%
+      rgba(245, 158, 11, 0.28) 0%,
+      rgba(251, 191, 36, 0.16) 25%,
+      rgba(217, 119, 6, 0.22) 50%,
+      rgba(251, 191, 36, 0.16) 75%,
+      rgba(245, 158, 11, 0.28) 100%
     );
     /* Mask zodat alleen de border-rand zichtbaar is, niet de fill */
     -webkit-mask:
@@ -513,7 +514,7 @@
       linear-gradient(#000 0 0) content-box,
       linear-gradient(#000 0 0);
             mask-composite: exclude;
-    animation: iridescent-rotate 14s linear infinite;
+    animation: iridescent-rotate 20s linear infinite;
     pointer-events: none;
   }
   @keyframes iridescent-rotate {
