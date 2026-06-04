@@ -98,21 +98,27 @@ export function ChangePasswordModal({
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
             className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
           >
-            <div className="p-8 border-b border-white/70 flex items-start justify-between gap-4 shrink-0">
+            <div className="p-6 md:p-8 border-b border-white/70 flex items-start justify-between gap-4 shrink-0">
               <div>
                 <h4 className="text-xl font-black tracking-tight">Wachtwoord wijzigen</h4>
                 <p className="mt-2 text-sm text-slate-500 font-medium">Kies een nieuw wachtwoord voor {email}.</p>
               </div>
-              <button onClick={handleClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl shrink-0">
+              <button
+                onClick={handleClose}
+                aria-label="Sluiten"
+                className="w-11 h-11 inline-flex items-center justify-center text-slate-400 hover:bg-slate-50 rounded-xl shrink-0 transition-colors"
+              >
                 <X size={20} />
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-8 space-y-5 overflow-y-auto flex-1">
+            <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-5 overflow-y-auto flex-1">
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Huidig wachtwoord</label>
+                <label htmlFor="cpm-current-password" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Huidig wachtwoord</label>
                 <input
+                  id="cpm-current-password"
                   type="password"
+                  autoComplete="current-password"
                   value={currentPassword}
                   onChange={(e) => { setCurrentPassword(e.target.value); setError(''); }}
                   className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
@@ -122,9 +128,11 @@ export function ChangePasswordModal({
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Nieuw wachtwoord</label>
+                <label htmlFor="cpm-new-password" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Nieuw wachtwoord</label>
                 <input
+                  id="cpm-new-password"
                   type="password"
+                  autoComplete="new-password"
                   value={newPassword}
                   onChange={(e) => { setNewPassword(e.target.value); setError(''); }}
                   className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
@@ -135,9 +143,11 @@ export function ChangePasswordModal({
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Bevestig nieuw wachtwoord</label>
+                <label htmlFor="cpm-confirm-password" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Bevestig nieuw wachtwoord</label>
                 <input
+                  id="cpm-confirm-password"
                   type="password"
+                  autoComplete="new-password"
                   value={confirmPassword}
                   onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
                   className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"

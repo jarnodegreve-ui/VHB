@@ -131,7 +131,10 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
         )}
       />
 
-      <div className="surface-card rounded-[24px] overflow-hidden">
+      {/* Desktop: volle 31-koloms kalender. Op mobile is dit onbruikbaar
+          (~6px per dag-cel), dus tonen we hieronder een per-chauffeur
+          stacked list. */}
+      <div className="hidden md:block surface-card rounded-[24px] overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -195,6 +198,64 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile: per-chauffeur lijst met afwezigheden in deze maand.
+          Veel compacter dan een mini-grid; meest relevante info eerst. */}
+      <div className="md:hidden surface-card rounded-[24px] overflow-hidden divide-y divide-slate-100">
+        {visibleUsers.map((u) => {
+          const userMap = leaveByUserDay.get(u.id);
+          // userMap heeft één entry per dag van een leave — dedup naar
+          // unieke leave-aanvragen om die als items te tonen.
+          const uniqueLeaves = userMap
+            ? Array.from(new Map(Array.from(userMap.values()).map((l) => [l.id, l])).values())
+                .sort((a, b) => a.startDate.localeCompare(b.startDate))
+            : [];
+          return (
+            <div key={u.id} className="p-4">
+              <div className="flex items-baseline justify-between gap-2">
+                <div className="text-sm font-bold text-slate-800 truncate">{u.name}</div>
+                {uniqueLeaves.length > 0 && (
+                  <div className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                    {uniqueLeaves.length} {uniqueLeaves.length === 1 ? 'aanvraag' : 'aanvragen'}
+                  </div>
+                )}
+              </div>
+              {uniqueLeaves.length === 0 ? (
+                <div className="mt-2 text-xs text-slate-300 italic">Geen afwezigheden deze maand.</div>
+              ) : (
+                <ul className="mt-2 space-y-1.5">
+                  {uniqueLeaves.map((leave) => {
+                    const startDay = parseInt(leave.startDate.slice(-2), 10);
+                    const endDay = parseInt(leave.endDate.slice(-2), 10);
+                    const sameMonthAsStart = leave.startDate.startsWith(`${year}-${String(monthIndex + 1).padStart(2, '0')}`);
+                    const sameMonthAsEnd = leave.endDate.startsWith(`${year}-${String(monthIndex + 1).padStart(2, '0')}`);
+                    return (
+                      <li key={leave.id} className="flex items-center gap-2.5 text-xs">
+                        <span className={cn('shrink-0 w-2.5 h-2.5 rounded-full', cellColor(leave.status, leave.type))} />
+                        <span className="font-bold text-slate-700">
+                          {sameMonthAsStart ? startDay : '←'}
+                          {leave.startDate !== leave.endDate && ` — ${sameMonthAsEnd ? endDay : '→'}`}
+                        </span>
+                        <span className="text-slate-500 truncate">
+                          {LEAVE_TYPE_LABELS[leave.type] || leave.type}
+                          {leave.status === 'pending' && ' · in behandeling'}
+                          {leave.status === 'cancelled' && ' · geannuleerd'}
+                          {leave.status === 'rejected' && ' · afgewezen'}
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+        {visibleUsers.length === 0 && (
+          <div className="p-6 text-center text-sm italic text-slate-400">
+            Geen actieve chauffeurs gevonden.
+          </div>
+        )}
       </div>
 
       {/* Legende */}

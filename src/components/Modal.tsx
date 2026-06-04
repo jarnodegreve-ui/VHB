@@ -53,14 +53,28 @@ export function Modal({
       animate={{ opacity: 1 }}
       transition={{ duration: 0.16 }}
       onClick={dismissOnBackdrop ? onClose : undefined}
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
+      // Op mobile: minimale padding zodat de modal bijna full-screen kan,
+      // en respecteer safe-area (notch + home-indicator).
+      // Op md+: 1rem padding rondom de modal.
+      className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-4 bg-slate-900/40 backdrop-blur-sm"
+      style={{
+        paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
+        paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+      }}
     >
       <motion.div
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
         transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
-        className={cn('glass-modal rounded-[32px] w-full overflow-y-auto max-h-[90vh]', widthClass, className)}
+        // Op mobile: max-h volle viewport minus safe-area-padding, met
+        // iets minder agressieve rounded-hoeken (32px voelt overkill op
+        // bijna-full-screen). Op md+: zoals voorheen.
+        className={cn(
+          'glass-modal rounded-[24px] md:rounded-[32px] w-full overflow-y-auto max-h-[calc(100vh-1rem)] md:max-h-[90vh]',
+          widthClass,
+          className,
+        )}
       >
         {children}
       </motion.div>

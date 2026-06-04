@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, Clock, Download, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Clock, Download, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { BrandEmptyState } from '../components/BrandEmptyState';

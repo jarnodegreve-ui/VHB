@@ -347,10 +347,6 @@
     will-change: transform;
     filter: blur(1px);
   }
-  .parallax-bg-slow {
-    transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.08), 0);
-  }
-
   /* Brand-wordmark micro-animatie: rustige adem-pulse + warmer op hover.
      6s cycle = ongeveer menselijke ademhaling. Combineert subtiele scale
      met oker drop-shadow voor een tactiel 'levend'-gevoel. */
@@ -440,6 +436,17 @@
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.88),
       0 6px 16px rgba(15, 23, 42, 0.035);
+  }
+
+  /* iOS Safari zoomt naar input-velden in als de font-size < 16px.
+     We forceren 16px op mobile zodat focus-zoom niet meer optreedt. */
+  @media (max-width: 767px) {
+    .control-input,
+    input.control-input,
+    textarea.control-input,
+    select.control-input {
+      font-size: 16px;
+    }
   }
 
   .control-input:focus {
@@ -626,10 +633,6 @@
     pointer-events: none;
     background: linear-gradient(180deg, rgba(255,255,255,0.24), transparent 28%, transparent 72%, rgba(255,255,255,0.08));
     opacity: 0.9;
-  }
-
-  .control-button-primary {
-    box-shadow: 0 8px 22px rgba(245, 158, 11, 0.18);
   }
 
   .btn-primary {
@@ -1064,3 +1067,33 @@ html.dark {
 /* Login panel soft cream gradient stays light — users expect a familiar
    brand landing on the login screen. If you want it dark, wire a different
    style override for .min-h-screen inside LoginView. */
+
+/* === Mobile perf: lichtere backdrop-filter ===
+   Op desktop willen we de volle iOS-glass-look met blur 30–44px.
+   Op mid-range Android (Snapdragon 600-serie) is dat GPU-belastend:
+   met 6+ kaarten in beeld zakt FPS naar 30. We halveren de blur op
+   mobile, behoud van de glass-look maar veel minder filter-werk.
+   Saturate verlagen we ook iets — anders ziet de lichtere blur er
+   te flets uit. */
+@media (max-width: 767px) {
+  .panel {
+    backdrop-filter: blur(20px) saturate(135%);
+    -webkit-backdrop-filter: blur(20px) saturate(135%);
+  }
+  .panel--scrolled {
+    backdrop-filter: blur(24px) saturate(150%);
+    -webkit-backdrop-filter: blur(24px) saturate(150%);
+  }
+  .surface-card {
+    backdrop-filter: blur(16px) saturate(140%);
+    -webkit-backdrop-filter: blur(16px) saturate(140%);
+  }
+  .surface-table {
+    backdrop-filter: blur(18px) saturate(145%);
+    -webkit-backdrop-filter: blur(18px) saturate(145%);
+  }
+  .glass-modal {
+    backdrop-filter: blur(22px) saturate(155%);
+    -webkit-backdrop-filter: blur(22px) saturate(155%);
+  }
+}

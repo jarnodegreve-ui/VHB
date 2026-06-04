@@ -13,7 +13,9 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="VHB" />
     <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <link rel="apple-touch-icon" href="/icon.svg" />
+    <!-- iOS Safari accepteert geen SVG voor het home-screen icon op iOS < 15.
+         De PNG-fallback wordt overal als 180x180 op het home-screen geplakt. -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
 
     <!-- Service worker registratie: cache app shell voor offline gebruik. -->
     <script>
