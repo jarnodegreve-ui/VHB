@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { AlertTriangle, CheckCircle, ArrowRight, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { getDaypartGreeting } from '../lib/interactive';
 import { BrandWordmark } from '../components/BrandWordmark';
@@ -319,26 +319,82 @@ function FieldInput({
   autoComplete?: string;
   rightSlot?: React.ReactNode;
 }) {
+  const isPassword = type === 'password';
+  // Reveal-state voor de eye-toggle in wachtwoordvelden
+  const [revealed, setRevealed] = useState(false);
+  // Caps-lock detectie tijdens typen in wachtwoordvelden — voorkomt
+  // 'waarom werkt mijn wachtwoord niet'-frustratie. Status alleen relevant
+  // wanneer het veld focus heeft.
+  const [capsLockOn, setCapsLockOn] = useState(false);
+  const [hasFocus, setHasFocus] = useState(false);
+
+  const checkCaps = (e: React.KeyboardEvent<HTMLInputElement> | React.FocusEvent<HTMLInputElement>) => {
+    // getModifierState bestaat op KeyboardEvent — bij focus kunnen we 'm
+    // niet betrouwbaar uitlezen, dus stellen we 'm op false zonder bewijs.
+    if ('getModifierState' in e && typeof e.getModifierState === 'function') {
+      setCapsLockOn(e.getModifierState('CapsLock'));
+    }
+  };
+
+  const effectiveType = isPassword && revealed ? 'text' : type;
+  const showCapsWarning = isPassword && hasFocus && capsLockOn;
+
   return (
     <div className="space-y-1.5">
-      <div className="flex items-center justify-between px-1">
-        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.18em]">{label}</label>
-        {rightSlot}
+      <div className="flex items-center justify-between px-1 min-h-[14px]">
+        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.18em]">
+          {label}
+        </label>
+        <div className="flex items-center gap-3">
+          <AnimatePresence>
+            {showCapsWarning && (
+              <motion.span
+                initial={{ opacity: 0, x: 6 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: 6 }}
+                transition={{ duration: 0.18 }}
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-amber-600"
+                title="Caps Lock staat aan"
+              >
+                <ArrowUp size={10} strokeWidth={3} />
+                Caps Lock
+              </motion.span>
+            )}
+          </AnimatePresence>
+          {rightSlot}
+        </div>
       </div>
       <div className="relative">
         <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none">
           {icon}
         </div>
         <input
-          type={type}
+          type={effectiveType}
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
           required={required}
           minLength={minLength}
           autoComplete={autoComplete}
-          className="control-input w-full pl-11 pr-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
+          onFocus={(e) => { setHasFocus(true); checkCaps(e); }}
+          onBlur={() => { setHasFocus(false); setCapsLockOn(false); }}
+          onKeyDown={isPassword ? checkCaps : undefined}
+          onKeyUp={isPassword ? checkCaps : undefined}
+          className={`control-input w-full pl-11 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all ${
+            isPassword ? 'pr-12' : 'pr-4'
+          }`}
         />
+        {isPassword && (
+          <button
+            type="button"
+            onClick={() => setRevealed((r) => !r)}
+            aria-label={revealed ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
+            tabIndex={-1}
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors"
+          >
+            {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
+          </button>
+        )}
       </div>
     </div>
   );
