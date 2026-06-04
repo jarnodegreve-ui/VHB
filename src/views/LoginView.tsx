@@ -362,20 +362,26 @@ export function LoginView({
             </div>{/* /iridescent-frame */}
           </motion.div>
 
-          {/* Mobile-only footer onder de card */}
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.5 }}
-            className="lg:hidden mt-6 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center"
-          >
-            © {new Date().getFullYear()} Van Hoorebeke en Zoon · Intern gebruik
-          </motion.div>
         </main>
 
         {/* Lege rechter-zone om asymmetrie te vormen (alleen xl+ als smalle gutter) */}
         <div aria-hidden className="hidden xl:block" />
       </div>
+
+      {/* Mobile-only footer — gepind aan de onderkant van de viewport.
+          Twee regels: "Intern gebruik" gecentreerd boven, en het copyright
+          met bedrijfsnaam onderaan. Respecteert safe-area-inset zodat 't
+          niet onder de home-indicator valt op iPhones. */}
+      <motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        transition={{ delay: 0.5 }}
+        className="lg:hidden absolute inset-x-0 bottom-0 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center px-6 space-y-1"
+        style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+      >
+        <div>Intern gebruik</div>
+        <div>© {new Date().getFullYear()} Van Hoorebeke en Zoon</div>
+      </motion.div>
     </div>
   );
 }
