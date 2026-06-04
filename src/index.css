@@ -825,6 +825,21 @@ html.dark {
     0 2px 6px rgba(0, 0, 0, 0.2);
 }
 
+/* iOS soft-panel ::after legt een wit hoogtepunt (0.24 → 0.08) over
+   ELK panel, bedoeld voor het glass-effect op licht. Op near-black
+   dark geeft dat een opvallende zilveren lijn boven/onder de header.
+   In dark mode bijna helemaal uit. */
+.dark .ios-soft-panel::after {
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.04),
+    transparent 30%,
+    transparent 70%,
+    rgba(255, 255, 255, 0.015)
+  );
+  opacity: 0.5;
+}
+
 /* Dark variant van .panel--scrolled: zelfde lichte rand, iets meer
    opaak zodat de header nog stevig staat als je scrolt. */
 .dark .panel--scrolled {
