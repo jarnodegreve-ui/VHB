@@ -39,14 +39,15 @@ export function MeshGradient({
         </filter>
       </defs>
 
-      {/* Vier ge-blurde cirkels met VHB-brand-palette:
-          - Oker (hoofdkleur)          → bright warm
-          - Diep amber (oker-700)      → diepte zonder koudte
-          - Cream (oker-50/100)        → zachte warmth, lighter touch
-          - Donker antraciet/zwart     → subtle anchor (zoals zwart op de bus) */}
+      {/* Vier ge-blurde cirkels in lichte VHB-palette:
+          - Oker (hoofdkleur)          → zacht warm
+          - Licht amber (oker-400)     → diepte zonder koudte
+          - Cream (oker-50/100)        → zachte warmth
+          - Slate (lichte koel anker)  → subtle tegenwicht
+          Alle opacities heel laag voor een whispered effect. */}
       <g filter={`url(#${filterId})`}>
-        {/* Bright oker — warm linksboven, drift naar midden */}
-        <circle r="32" fill="rgba(245, 158, 11, 0.55)">
+        {/* Soft oker — warm linksboven, drift naar midden */}
+        <circle r="32" fill="rgba(245, 158, 11, 0.22)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="20;38;28;20" dur="22s" repeatCount="indefinite" />
@@ -57,8 +58,8 @@ export function MeshGradient({
           {reducedMotion && <><animate attributeName="cx" values="20" dur="0s" fill="freeze" /><animate attributeName="cy" values="22" dur="0s" fill="freeze" /></>}
         </circle>
 
-        {/* Deep amber (oker-700 #b45309) — diepte rechtsonder, vervangt indigo */}
-        <circle r="32" fill="rgba(180, 83, 9, 0.42)">
+        {/* Licht amber (oker-400 #fbbf24) — zachte diepte rechtsonder */}
+        <circle r="32" fill="rgba(251, 191, 36, 0.18)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="82;72;78;82" dur="26s" repeatCount="indefinite" />
@@ -70,7 +71,7 @@ export function MeshGradient({
         </circle>
 
         {/* Soft cream (oker-100 #fef3c7) — lichte warmth rechtsboven */}
-        <circle r="28" fill="rgba(254, 243, 199, 0.55)">
+        <circle r="28" fill="rgba(254, 243, 199, 0.30)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="80;72;86;80" dur="28s" repeatCount="indefinite" />
@@ -81,9 +82,9 @@ export function MeshGradient({
           {reducedMotion && <><animate attributeName="cx" values="80" dur="0s" fill="freeze" /><animate attributeName="cy" values="18" dur="0s" fill="freeze" /></>}
         </circle>
 
-        {/* Antraciet anker — knipoog naar het zwart op de bus, grounds the
-            warme palette met een koel tegenwicht zonder felle indigo */}
-        <circle r="20" fill="rgba(30, 41, 59, 0.18)">
+        {/* Lichte slate-anker — zacht koel tegenwicht, voelt nu meer als
+            een schaduw dan een blob */}
+        <circle r="20" fill="rgba(100, 116, 139, 0.08)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="30;60;40;30" dur="32s" repeatCount="indefinite" />
