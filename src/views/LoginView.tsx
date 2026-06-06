@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { BrandWordmark } from '../components/BrandWordmark';
 
 type Mode = 'login' | 'forgot';
 
@@ -167,14 +166,20 @@ export function LoginView({
         className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
         style={{ perspective: '1200px' }}
       >
-        {/* Wordmark boven het card */}
+        {/* Officieel VHB-logo boven het card. Login is altijd licht, dus
+            altijd de volkleur-variant (donkere tekst + oker bus). */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center mb-10"
         >
-          <BrandWordmark size="lg" className="items-center" animateLetters />
+          <img
+            src="/vhb-logo.svg"
+            alt="VHB — Van Hoorebeke & Zoon"
+            className="h-20 sm:h-24 w-auto select-none"
+            draggable={false}
+          />
         </motion.div>
 
         {/* Form-card met tilt-parallax + roterende oker-iridescent border */}

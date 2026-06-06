@@ -8,14 +8,16 @@
 
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#f59e0b" />
+    <meta name="theme-color" content="#e8a33d" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="VHB" />
-    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-    <!-- iOS Safari accepteert geen SVG voor het home-screen icon op iOS < 15.
-         De PNG-fallback wordt overal als 180x180 op het home-screen geplakt. -->
-    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- VHB favicon: zwart afgerond vierkant met oker bus erin. SVG voor
+         crisp rendering, PNG-fallbacks voor browsers/iOS die geen SVG-icon
+         accepteren (iOS < 15). -->
+    <link rel="icon" type="image/svg+xml" href="/vhb-favicon.svg" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/vhb-favicon-32.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/vhb-favicon-180.png" />
 
     <!-- Service worker registratie: cache app shell voor offline gebruik. -->
     <script>

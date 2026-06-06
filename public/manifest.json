@@ -5,27 +5,27 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#f9f7f2",
-  "theme_color": "#f59e0b",
+  "background_color": "#111111",
+  "theme_color": "#e8a33d",
   "orientation": "portrait-primary",
   "categories": ["business", "productivity"],
   "lang": "nl-BE",
   "dir": "ltr",
   "icons": [
     {
-      "src": "/icon.svg",
+      "src": "/vhb-favicon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-192.png",
-      "sizes": "192x192",
+      "src": "/vhb-favicon-180.png",
+      "sizes": "180x180",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-512.png",
+      "src": "/vhb-favicon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
