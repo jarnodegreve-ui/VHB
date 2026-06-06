@@ -177,7 +177,7 @@ export function LoginView({
           <img
             src="/vhb-logo.svg"
             alt="VHB — Van Hoorebeke & Zoon"
-            className="h-20 sm:h-24 w-auto select-none"
+            className="h-28 sm:h-36 w-auto select-none"
             draggable={false}
           />
         </motion.div>
@@ -194,10 +194,9 @@ export function LoginView({
             ref={cardRef}
             onPointerMove={handleCardMove}
             onPointerLeave={handleCardLeave}
-            className="iridescent-frame rounded-[28px]"
+            className="panel ios-soft-panel relative w-full rounded-[28px] p-7 sm:p-9"
           >
-            <div className="panel ios-soft-panel relative w-full rounded-[28px] p-7 sm:p-9">
-              <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait">
                 <motion.div
                   key={`${mode}-${recoveryMode}`}
                   initial={{ opacity: 0, x: 6 }}
@@ -303,13 +302,12 @@ export function LoginView({
                 </form>
               )}
 
-              {/* Trust badge */}
-              <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                <ShieldCheck size={11} className="text-emerald-500" />
-                Beveiligd via Supabase Auth
-              </div>
-            </div>{/* /panel */}
-          </div>{/* /iridescent-frame */}
+            {/* Trust badge */}
+            <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <ShieldCheck size={11} className="text-emerald-500" />
+              Beveiligd via Supabase Auth
+            </div>
+          </div>{/* /panel */}
         </motion.div>
       </main>
 
