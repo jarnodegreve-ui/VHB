@@ -183,10 +183,10 @@ export function DashboardView({
               {/* Busje rijdt van links naar rechts over de onderrand, in
                   een loop. Wrapper spant de volle tile-breedte; de bus
                   animeert via `left` (zie .bus-drive in index.css). */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-1 h-10">
+              <div className="pointer-events-none absolute inset-x-0 bottom-1 h-8">
                 <div className="bus-drive">
                   <div className="bus-bump">
-                    <BrandBus width={64} />
+                    <BrandBus width={48} />
                   </div>
                 </div>
               </div>
