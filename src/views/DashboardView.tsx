@@ -156,6 +156,7 @@ export function DashboardView({
 
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
+        <div className="relative">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {todaysShift ? (
             <StatTile
@@ -180,17 +181,6 @@ export function DashboardView({
                 boxShadow: 'var(--tile-shadow)',
               }}
             >
-              {/* Busje rijdt van links naar rechts over de onderrand, in
-                  een loop. Wrapper spant de volle tile-breedte; de bus
-                  animeert via `left` (zie .bus-drive in index.css). */}
-              <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7">
-                <div className="bus-drive">
-                  <div className="bus-bump">
-                    <BrandBus width={40} />
-                  </div>
-                </div>
-              </div>
-
               <div className="relative">
                 <div className="flex items-start justify-between mb-2">
                   <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
@@ -201,7 +191,6 @@ export function DashboardView({
                 <p className="mt-1 text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
               </div>
-              <RoadLine />
             </motion.div>
           )}
 
@@ -241,7 +230,6 @@ export function DashboardView({
                 </>
               );
             })()}
-            <RoadLine />
           </motion.div>
 
           <StatTile
@@ -250,8 +238,23 @@ export function DashboardView({
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
-            road
           />
+        </div>
+
+        {/* Rij-brede laag: doorlopende oker weg + busje dat over alle drie
+            de tiles heen rijdt (alleen als vandaag vrij). De laag ligt
+            boven de tiles (z-20) en wordt niet geklipt, dus de bus rijdt
+            ononderbroken van links naar rechts over de hele rij. */}
+        {!todaysShift && (
+          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 z-20">
+            <div className="absolute inset-x-2 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/30 to-transparent" />
+            <div className="bus-drive">
+              <div className="bus-bump">
+                <BrandBus width={44} />
+              </div>
+            </div>
+          </div>
+        )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
