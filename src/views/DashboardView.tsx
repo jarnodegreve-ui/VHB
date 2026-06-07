@@ -156,7 +156,6 @@ export function DashboardView({
 
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
-        <div className="relative">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {todaysShift ? (
             <StatTile
@@ -167,7 +166,7 @@ export function DashboardView({
               subValue={`tot ${todaysShift.endTime}`}
             />
           ) : (
-            /* Vrij vandaag — busje + vriendelijke tekst i.p.v. platte 'Vrij' */
+            /* Vrij vandaag — busje rijdt over de onderrand (delay 0s) */
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -191,6 +190,7 @@ export function DashboardView({
                 <p className="mt-1 text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
               </div>
+              <DrivingBus delay="0s" />
             </motion.div>
           )}
 
@@ -230,6 +230,8 @@ export function DashboardView({
                 </>
               );
             })()}
+            {/* Busje verschijnt hier (delay 4s) als vandaag vrij. */}
+            {!todaysShift && <DrivingBus delay="4s" />}
           </motion.div>
 
           <StatTile
@@ -238,23 +240,8 @@ export function DashboardView({
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
+            overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
           />
-        </div>
-
-        {/* Rij-brede laag: doorlopende oker weg + busje dat over alle drie
-            de tiles heen rijdt (alleen als vandaag vrij). De laag ligt
-            boven de tiles (z-20) en wordt niet geklipt, dus de bus rijdt
-            ononderbroken van links naar rechts over de hele rij. */}
-        {!todaysShift && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7 z-20">
-            <div className="absolute inset-x-2 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/30 to-transparent" />
-            <div className="bus-drive">
-              <div className="bus-bump">
-                <BrandBus width={44} />
-              </div>
-            </div>
-          </div>
-        )}
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -404,13 +391,23 @@ const TILE_PALETTE = {
 export type TilePalette = keyof typeof TILE_PALETTE;
 
 /**
- * Subtiele oker "weg-lijn" langs de onderrand van een tile. Fade aan
- * beide kanten zodat de naden tussen de tiles niet storen — geeft de
- * hero-rij visuele continuïteit waarop het busje lijkt te rijden.
+ * Per-tile rijdend busje + weg-segment. De bus rijdt over de onderrand
+ * van de tile (geclipt door de tile's overflow-hidden) en verdwijnt
+ * achter de rand. Met een verschillende `delay` per tile lijkt dezelfde
+ * bus van tile naar tile over te springen — tussendoor (in de gap) is
+ * 'ie niet zichtbaar. Alleen tonen wanneer de chauffeur vandaag vrij is.
  */
-function RoadLine() {
+function DrivingBus({ delay }: { delay: string }) {
   return (
-    <div className="pointer-events-none absolute inset-x-4 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/35 to-transparent" />
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7">
+      {/* Weg-segment langs de onderrand (fade aan de randen). */}
+      <div className="absolute inset-x-3 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/30 to-transparent" />
+      <div className="bus-cross" style={{ animationDelay: delay }}>
+        <div className="bus-bump">
+          <BrandBus width={44} />
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -423,7 +420,7 @@ export function StatTile({
   onClick,
   sparkline,
   sparklineColor,
-  road = false,
+  overlay,
 }: {
   icon: ReactNode;
   color: TilePalette;
@@ -433,7 +430,7 @@ export function StatTile({
   onClick?: () => void;
   sparkline?: number[];
   sparklineColor?: string;
-  road?: boolean;
+  overlay?: ReactNode;
 }) {
   const c = TILE_PALETTE[color];
   // Default sparkline-kleur volgt de accent-tint
@@ -483,7 +480,7 @@ export function StatTile({
       >
         <span className="cursor-glow-layer" />
         <span className="relative z-10 block">{Body}</span>
-        {road && <RoadLine />}
+        {overlay}
       </button>
     );
   }
@@ -495,7 +492,7 @@ export function StatTile({
     >
       <span className="cursor-glow-layer" />
       <span className="relative z-10 block">{Body}</span>
-      {road && <RoadLine />}
+      {overlay}
     </div>
   );
 }

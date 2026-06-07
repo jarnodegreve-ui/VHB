@@ -430,27 +430,22 @@ html.dark {
     transform-origin: center bottom;
   }
 
-  /* Bus rijdt van links naar rechts over de onderrand — loop.
-     `left` is relatief aan de wrapper (die de volle tile-breedte
-     spant), dus -30% start volledig links buiten beeld en 110% rijdt
-     volledig rechts uit beeld. De tile heeft overflow-hidden, dus de
-     bus verschijnt/verdwijnt netjes aan de randen. Lichte verticale
-     wiebel erbij zodat 't levendig 'rijdt'. */
-  /* Bus blijft BINNEN de rij (van linkerrand tile 1 tot rechterrand
-     tile 3) en rijdt over de tussenruimtes heen zodat 't lijkt of de
-     tiles in elkaar overlopen. Fade-in links / fade-out rechts verbergt
-     de loop-reset, zodat de bus nooit zichtbaar buiten de tiles rijdt.
+  /* Bus rijdt PER TILE over de onderrand. `left` is relatief aan de
+     wrapper (volle tile-breedte): -48px start volledig links buiten de
+     tile, 100% rijdt volledig rechts de tile uit. Tile heeft
+     overflow-hidden, dus de bus verdwijnt achter de rand en komt in de
+     volgende tile (via animation-delay) weer tevoorschijn.
+     De bus is maar ~30% van de cyclus zichtbaar (rijdt over de tile),
+     daarna geparkeerd buiten beeld tot de volgende ronde — zo rijdt er
+     telkens één bus die van tile naar tile lijkt over te springen.
      `48px` ≈ bus-breedte; pas mee aan als BrandBus-width wijzigt. */
-  @keyframes bus-drive {
-    0%   { left: 0; opacity: 0; }
-    8%   { opacity: 1; }
-    90%  { opacity: 1; }
-    100% { left: calc(100% - 48px); opacity: 0; }
+  @keyframes bus-cross {
+    0%   { left: -48px; }
+    30%  { left: 100%; }
+    100% { left: 100%; }
   }
   /* Hobbel-effect: zachte, vloeiende deining + minieme kanteling alsof
-     de bus over een licht oneffen weg rolt. Lagere amplitude, langere
-     cyclus en een vloeiende sinus-achtige curve zodat 't smooth oogt
-     i.p.v. schokkerig. Aparte cyclus van het rijden. */
+     de bus over een licht oneffen weg rolt. Aparte cyclus van het rijden. */
   @keyframes bus-bump {
     0%   { transform: translateY(0)      rotate(0deg); }
     35%  { transform: translateY(-1.5px) rotate(0.5deg); }
@@ -458,21 +453,21 @@ html.dark {
     80%  { transform: translateY(-1px)   rotate(0.3deg); }
     100% { transform: translateY(0)      rotate(0deg); }
   }
-  .bus-drive {
+  .bus-cross {
     position: absolute;
     bottom: 0;
-    animation: bus-drive 9s linear infinite;
+    animation: bus-cross 12s linear infinite;
     will-change: left;
   }
   /* Inner wrapper draagt de hobbel zodat 't onafhankelijk van het
      horizontale rijden loopt (los transform-kanaal). */
-  .bus-drive > .bus-bump {
+  .bus-cross > .bus-bump {
     animation: bus-bump 1.5s ease-in-out infinite;
     transform-origin: center bottom;
   }
   @media (prefers-reduced-motion: reduce) {
-    .bus-drive { animation: none; left: auto; right: 0.75rem; }
-    .bus-drive > .bus-bump { animation: none; }
+    .bus-cross { animation: none; left: auto; right: 0.75rem; }
+    .bus-cross > .bus-bump { animation: none; }
   }
 
   /* Skeleton-loader shimmer */
