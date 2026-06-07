@@ -4,7 +4,7 @@ import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight } fr
 import type { Diversion, LeaveRequest, Shift, User } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
 import { Sparkline } from '../components/Sparkline';
-import { BrandEmptyState } from '../components/BrandEmptyState';
+import { BrandBus } from '../components/BrandBus';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { verlofBalans } from '../lib/leaveBalance';
@@ -57,6 +57,18 @@ export function DashboardView({
 
   const newestDiversions = [...diversions].reverse().slice(0, 3);
   const visibleShifts = myShifts.slice(0, 3);
+
+  // Volgende geplande diensten (toekomst, oplopend gesorteerd) — voor de
+  // Planning-panel bij chauffeurs.
+  const upcomingShifts = myShifts
+    .map((s) => {
+      const [year, month, day] = s.date.split('-').map(Number);
+      const [hours, minutes] = s.startTime.split(':').map(Number);
+      return { ...s, startDateTime: new Date(year, month - 1, day, hours, minutes) };
+    })
+    .filter((s) => s.startDateTime > now)
+    .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())
+    .slice(0, 3);
 
   const formatShiftDate = (date: string) =>
     new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
@@ -147,13 +159,46 @@ export function DashboardView({
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatTile
-            icon={<Clock size={18} />}
-            color="emerald"
-            label="Vandaag"
-            value={todaysShift?.startTime || 'Vrij'}
-            subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst'}
-          />
+          {todaysShift ? (
+            <StatTile
+              icon={<Clock size={18} />}
+              color="emerald"
+              label="Vandaag"
+              value={todaysShift.startTime}
+              subValue={`tot ${todaysShift.endTime}`}
+            />
+          ) : (
+            /* Vrij vandaag — busje + vriendelijke tekst i.p.v. platte 'Vrij' */
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="tilt-card glow-top glass-stack relative overflow-hidden rounded-[24px] p-5"
+              style={{
+                background: 'var(--tile-bg)',
+                backdropFilter: 'blur(28px) saturate(155%)',
+                WebkitBackdropFilter: 'blur(28px) saturate(155%)',
+                border: 'var(--tile-border)',
+                boxShadow: 'var(--tile-shadow)',
+              }}
+            >
+              <div className="flex items-start justify-between mb-3">
+                <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
+                  <Clock size={18} />
+                </div>
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
+              <div className="mt-1 flex items-center gap-3">
+                <div className="bus-sway shrink-0">
+                  <BrandBus width={56} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-2xl font-black tracking-[-0.03em] text-slate-900 leading-tight">Vrij</p>
+                  <p className="text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
+                </div>
+              </div>
+            </motion.div>
+          )}
 
           {/* Volgende-dienst tile — zelfde format als StatTile zodat 't
               naadloos in de rij met andere hero's past. */}
@@ -237,52 +282,45 @@ export function DashboardView({
       {/* === Wide tiles row === */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PremiumPanel icon={<Calendar size={16} />} iconBg="bg-slate-900" title="Planning" subtitle={now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'long' })}>
-          {/* Chauffeur: panel focust op VANDAAG — dienst van vandaag of de
-              vrije-dag empty state (volgende dienst staat al in de hero-tile
-              bovenaan). Planner/admin: lijst met komende diensten. */}
-          {isChauffeur ? (
-            todaysShift ? (
+          {/* Chauffeur: volgende geplande diensten (toekomst). De vrije-dag
+              empty state + busje staat nu in de 'Vandaag'-tile bovenaan.
+              Planner/admin: bredere lijst met komende diensten + namen. */}
+          {(() => {
+            const planningShifts = isChauffeur ? upcomingShifts : visibleShifts;
+            if (planningShifts.length === 0) {
+              return (
+                <EmptyTile
+                  icon={<Calendar size={20} />}
+                  title="Geen geplande diensten"
+                  subtitle="Er staan geen komende diensten in de planning."
+                />
+              );
+            }
+            return (
               <div className="space-y-2">
-                <div className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(todaysShift.date)}</span>
-                      <span className="text-slate-300">·</span>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(todaysShift)}</span>
+                {planningShifts.map((shift) => (
+                  <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(shift)}</span>
+                      </div>
+                      <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
+                        {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
+                      </p>
                     </div>
-                    <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
-                      {todaysShift.startTime} <span className="text-slate-400 font-bold">–</span> {todaysShift.endTime}
-                    </p>
+                    {!isChauffeur && (
+                      <span className="text-xs text-slate-500 truncate font-semibold max-w-[120px]">
+                        {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
+                      </span>
+                    )}
+                    <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-600 transition-colors shrink-0" />
                   </div>
-                </div>
+                ))}
               </div>
-            ) : (
-              <BrandEmptyState title="Geen dienst vandaag" message="Geniet van je vrije dag." />
-            )
-          ) : visibleShifts.length > 0 ? (
-            <div className="space-y-2">
-              {visibleShifts.map((shift) => (
-                <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
-                      <span className="text-slate-300">·</span>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(shift)}</span>
-                    </div>
-                    <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
-                      {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
-                    </p>
-                  </div>
-                  <span className="text-xs text-slate-500 truncate font-semibold max-w-[120px]">
-                    {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
-                  </span>
-                  <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-600 transition-colors shrink-0" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <BrandEmptyState title="Geen diensten gepland" message="Er staan nog geen diensten in de planning." />
-          )}
+            );
+          })()}
         </PremiumPanel>
 
         <PremiumPanel icon={<AlertTriangle size={16} />} iconBg="bg-oker-500" title="Omleidingen" subtitle={`${newestDiversions.length} actief`} accent="oker">
