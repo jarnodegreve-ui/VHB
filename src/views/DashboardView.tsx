@@ -186,12 +186,14 @@ export function DashboardView({
                 <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
                   <Clock size={18} />
                 </div>
-                <div className="bus-sway shrink-0 -mt-0.5">
+              </div>
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
+              <div className="mt-1 flex items-center justify-between gap-3">
+                <p className="text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
+                <div className="bus-sway shrink-0">
                   <BrandBus width={68} />
                 </div>
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
-              <p className="mt-1 text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
               <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
             </motion.div>
           )}
