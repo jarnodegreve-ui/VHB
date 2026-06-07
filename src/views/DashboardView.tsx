@@ -67,13 +67,31 @@ export function DashboardView({
 
   const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
-  const getCountdown = (target: Date) => {
+  // Adaptief: voor < 24u is de countdown zelf de hero (dringend, hoe
+  // lang nog tot je dienst). Voor > 24u is de DATUM bruikbaarder dan
+  // "27 dagen" — dat zegt een chauffeur weinig. Subtitle krijgt dan
+  // de dagen-info als context.
+  const getNextShiftDisplay = (target: Date) => {
     const diff = target.getTime() - now.getTime();
     const hours = Math.floor(diff / (1000 * 60 * 60));
     const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    if (hours > 24) return `${Math.floor(hours / 24)} dagen`;
-    if (hours > 0) return `${hours}u ${minutes}m`;
-    return `${minutes} minuten`;
+    const dateStr = target.toLocaleDateString('nl-BE', {
+      weekday: 'long',
+      day: 'numeric',
+      month: 'long',
+    });
+    const capitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    if (hours > 24) {
+      const days = Math.floor(hours / 24);
+      return {
+        hero: capitalized,
+        sub: `over ${days} ${days === 1 ? 'dag' : 'dagen'}`,
+      };
+    }
+    if (hours > 0) {
+      return { hero: `${hours}u ${minutes}m`, sub: capitalized };
+    }
+    return { hero: `${minutes} minuten`, sub: capitalized };
   };
 
   const isChauffeur = user.role === 'chauffeur';
@@ -167,18 +185,21 @@ export function DashboardView({
                 </span>
               </div>
 
-              <h2 className="text-5xl md:text-6xl font-black tracking-[-0.04em] text-slate-900 leading-none">
-                {getCountdown(nextShift.startDateTime)}
-              </h2>
-              <p className="mt-2 text-sm font-semibold text-slate-700/80">
-                {nextShift.startDateTime.toLocaleDateString('nl-BE', {
-                  weekday: 'long',
-                  day: 'numeric',
-                  month: 'long',
-                })}
-                {' · dienst '}
-                {getServiceNumber(nextShift)}
-              </p>
+              {(() => {
+                const display = getNextShiftDisplay(nextShift.startDateTime);
+                return (
+                  <>
+                    <h2 className="text-3xl md:text-4xl font-black tracking-[-0.03em] text-slate-900 leading-tight">
+                      {display.hero}
+                    </h2>
+                    <p className="mt-1.5 text-sm font-semibold text-slate-700/80">
+                      {display.sub}
+                      {' · dienst '}
+                      {getServiceNumber(nextShift)}
+                    </p>
+                  </>
+                );
+              })()}
 
               <div className="mt-5 flex gap-2.5">
                 <div className="bg-white/70 backdrop-blur-md rounded-2xl px-4 py-2.5 ring-1 ring-white/80 shadow-sm">
