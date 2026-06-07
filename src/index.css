@@ -436,9 +436,16 @@ html.dark {
      volledig rechts uit beeld. De tile heeft overflow-hidden, dus de
      bus verschijnt/verdwijnt netjes aan de randen. Lichte verticale
      wiebel erbij zodat 't levendig 'rijdt'. */
+  /* Bus blijft BINNEN de rij (van linkerrand tile 1 tot rechterrand
+     tile 3) en rijdt over de tussenruimtes heen zodat 't lijkt of de
+     tiles in elkaar overlopen. Fade-in links / fade-out rechts verbergt
+     de loop-reset, zodat de bus nooit zichtbaar buiten de tiles rijdt.
+     `48px` ≈ bus-breedte; pas mee aan als BrandBus-width wijzigt. */
   @keyframes bus-drive {
-    0%   { left: -30%; }
-    100% { left: 110%; }
+    0%   { left: 0; opacity: 0; }
+    8%   { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { left: calc(100% - 48px); opacity: 0; }
   }
   /* Hobbel-effect: zachte, vloeiende deining + minieme kanteling alsof
      de bus over een licht oneffen weg rolt. Lagere amplitude, langere
