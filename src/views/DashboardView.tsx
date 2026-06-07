@@ -192,7 +192,7 @@ export function DashboardView({
               </div>
 
               <div className="relative">
-                <div className="flex items-start justify-between mb-3">
+                <div className="flex items-start justify-between mb-2">
                   <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
                     <Clock size={18} />
                   </div>
@@ -219,7 +219,7 @@ export function DashboardView({
               boxShadow: 'var(--tile-shadow)',
             }}
           >
-            <div className="flex items-start justify-between mb-3">
+            <div className="flex items-start justify-between mb-2">
               <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-oker-500 text-white shadow-md shadow-black/10">
                 <Calendar size={18} />
               </div>
@@ -431,7 +431,7 @@ export function StatTile({
       : '#475569');
   const Body = (
     <>
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-2">
         <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl ${c.iconBg} text-white shadow-md shadow-black/10`}>
           {icon}
         </div>
