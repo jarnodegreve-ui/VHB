@@ -1,6 +1,12 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Nunito:wght@600;700;800&family=Sora:wght@600;700;800&display=swap");
 @import "tailwindcss";
 
+/* Class-based dark mode: laat Tailwind `dark:`-utilities de app-toggle
+   (.dark op <html>) volgen i.p.v. de OS-voorkeur (prefers-color-scheme).
+   Zonder dit reageerde bv. het wit/zwart-busje op de systeeminstelling
+   en niet op de Donkere-modus-knop in de app. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Manrope", system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Sora", system-ui, sans-serif;
@@ -428,6 +434,50 @@ html.dark {
   .bus-sway {
     animation: bus-sway 2.4s ease-in-out infinite;
     transform-origin: center bottom;
+  }
+
+  /* Bus rijdt PER TILE over de onderrand. `left` is relatief aan de
+     wrapper (volle tile-breedte): -48px start volledig links buiten de
+     tile, 100% rijdt volledig rechts de tile uit. Tile heeft
+     overflow-hidden, dus de bus verdwijnt achter de rand en komt in de
+     volgende tile (via animation-delay) weer tevoorschijn.
+     De bus is maar ~30% van de cyclus zichtbaar (rijdt over de tile),
+     daarna geparkeerd buiten beeld tot de volgende ronde — zo rijdt er
+     telkens één bus die van tile naar tile lijkt over te springen.
+     `48px` ≈ bus-breedte; pas mee aan als BrandBus-width wijzigt. */
+  @keyframes bus-cross {
+    0%   { left: -48px; }
+    33%  { left: 100%; }
+    100% { left: 100%; }
+  }
+  /* Hobbel-effect: zachte, vloeiende deining + minieme kanteling alsof
+     de bus over een licht oneffen weg rolt. Aparte cyclus van het rijden. */
+  @keyframes bus-bump {
+    0%   { transform: translateY(0)      rotate(0deg); }
+    35%  { transform: translateY(-1.5px) rotate(0.5deg); }
+    60%  { transform: translateY(-0.3px) rotate(-0.2deg); }
+    80%  { transform: translateY(-1px)   rotate(0.3deg); }
+    100% { transform: translateY(0)      rotate(0deg); }
+  }
+  .bus-cross {
+    position: absolute;
+    bottom: 0;
+    animation: bus-cross 12s linear infinite;
+    /* backwards: tijdens de positieve animation-delay alvast de 0%-staat
+       (left:-48px, buiten beeld) tonen i.p.v. de statische positie —
+       anders staan de nog-niet-gestarte busjes zichtbaar te wachten. */
+    animation-fill-mode: backwards;
+    will-change: left;
+  }
+  /* Inner wrapper draagt de hobbel zodat 't onafhankelijk van het
+     horizontale rijden loopt (los transform-kanaal). */
+  .bus-cross > .bus-bump {
+    animation: bus-bump 1.5s ease-in-out infinite;
+    transform-origin: center bottom;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bus-cross { animation: none; left: auto; right: 0.75rem; }
+    .bus-cross > .bus-bump { animation: none; }
   }
 
   /* Skeleton-loader shimmer */

@@ -4,10 +4,8 @@ import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight } fr
 import type { Diversion, LeaveRequest, Shift, User } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
 import { Sparkline } from '../components/Sparkline';
-import { BrandEmptyState } from '../components/BrandEmptyState';
+import { BrandBus } from '../components/BrandBus';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
-import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
-import { verlofBalans } from '../lib/leaveBalance';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -57,6 +55,18 @@ export function DashboardView({
 
   const newestDiversions = [...diversions].reverse().slice(0, 3);
   const visibleShifts = myShifts.slice(0, 3);
+
+  // Volgende geplande diensten (toekomst, oplopend gesorteerd) — voor de
+  // Planning-panel bij chauffeurs.
+  const upcomingShifts = myShifts
+    .map((s) => {
+      const [year, month, day] = s.date.split('-').map(Number);
+      const [hours, minutes] = s.startTime.split(':').map(Number);
+      return { ...s, startDateTime: new Date(year, month - 1, day, hours, minutes) };
+    })
+    .filter((s) => s.startDateTime > now)
+    .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())
+    .slice(0, 3);
 
   const formatShiftDate = (date: string) =>
     new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
@@ -146,7 +156,44 @@ export function DashboardView({
 
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {todaysShift ? (
+            <StatTile
+              icon={<Clock size={18} />}
+              color="emerald"
+              label="Vandaag"
+              value={todaysShift.startTime}
+              subValue={`tot ${todaysShift.endTime}`}
+            />
+          ) : (
+            /* Vrij vandaag — busje rijdt over de onderrand (delay 0s) */
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+              className="tilt-card glow-top glass-stack relative overflow-hidden rounded-[24px] p-5"
+              style={{
+                background: 'var(--tile-bg)',
+                backdropFilter: 'blur(28px) saturate(155%)',
+                WebkitBackdropFilter: 'blur(28px) saturate(155%)',
+                border: 'var(--tile-border)',
+                boxShadow: 'var(--tile-shadow)',
+              }}
+            >
+              <div className="relative">
+                <div className="flex items-start justify-between mb-2">
+                  <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
+                    <Clock size={18} />
+                  </div>
+                </div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
+                <p className="mt-1 text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
+              </div>
+              <DrivingBus delay="0s" />
+            </motion.div>
+          )}
+
           {/* Volgende-dienst tile — zelfde format als StatTile zodat 't
               naadloos in de rij met andere hero's past. */}
           <motion.div
@@ -162,7 +209,7 @@ export function DashboardView({
               boxShadow: 'var(--tile-shadow)',
             }}
           >
-            <div className="flex items-start justify-between mb-3">
+            <div className="flex items-start justify-between mb-2">
               <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-oker-500 text-white shadow-md shadow-black/10">
                 <Calendar size={18} />
               </div>
@@ -183,32 +230,21 @@ export function DashboardView({
                 </>
               );
             })()}
+            {/* Busje verschijnt hier (delay 4s) als vandaag vrij. */}
+            {!todaysShift && <DrivingBus delay="4s" />}
           </motion.div>
 
-          <StatTile
-            icon={<Clock size={18} />}
-            color="emerald"
-            label="Vandaag"
-            value={todaysShift?.startTime || 'Vrij'}
-            subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst'}
-          />
           <StatTile
             icon={<AlertTriangle size={18} />}
             color="rose"
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
+            overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
           />
-          {isChauffeur && (
-            <LeaveBalanceCard
-              balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
-              year={new Date().getFullYear()}
-              compact
-            />
-          )}
         </div>
       ) : (
-        <div className={isChauffeur ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <StatTile
             icon={<Clock size={18} />}
             color="emerald"
@@ -223,45 +259,51 @@ export function DashboardView({
             value={diversions.length}
             subValue="Actief in netwerk"
           />
-          {isChauffeur && (
-            <LeaveBalanceCard
-              balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
-              year={new Date().getFullYear()}
-              compact
-            />
-          )}
         </div>
       )}
 
       {/* === Wide tiles row === */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PremiumPanel icon={<Calendar size={16} />} iconBg="bg-slate-900" title="Planning" subtitle={now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'long' })}>
-          {visibleShifts.length > 0 ? (
-            <div className="space-y-2">
-              {visibleShifts.map((shift) => (
-                <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
-                      <span className="text-slate-300">·</span>
-                      <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(shift)}</span>
+          {/* Chauffeur: volgende geplande diensten (toekomst). De vrije-dag
+              empty state + busje staat nu in de 'Vandaag'-tile bovenaan.
+              Planner/admin: bredere lijst met komende diensten + namen. */}
+          {(() => {
+            const planningShifts = isChauffeur ? upcomingShifts : visibleShifts;
+            if (planningShifts.length === 0) {
+              return (
+                <EmptyTile
+                  icon={<Calendar size={20} />}
+                  title="Geen geplande diensten"
+                  subtitle="Er staan geen komende diensten in de planning."
+                />
+              );
+            }
+            return (
+              <div className="space-y-2">
+                {planningShifts.map((shift) => (
+                  <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
+                        <span className="text-slate-300">·</span>
+                        <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(shift)}</span>
+                      </div>
+                      <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
+                        {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
+                      </p>
                     </div>
-                    <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
-                      {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
-                    </p>
+                    {!isChauffeur && (
+                      <span className="text-xs text-slate-500 truncate font-semibold max-w-[120px]">
+                        {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
+                      </span>
+                    )}
+                    <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-600 transition-colors shrink-0" />
                   </div>
-                  {!isChauffeur && (
-                    <span className="text-xs text-slate-500 truncate font-semibold max-w-[120px]">
-                      {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
-                    </span>
-                  )}
-                  <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-600 transition-colors shrink-0" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <BrandEmptyState title="Geen dienst vandaag" message="Geniet van je vrije dag." />
-          )}
+                ))}
+              </div>
+            );
+          })()}
         </PremiumPanel>
 
         <PremiumPanel icon={<AlertTriangle size={16} />} iconBg="bg-oker-500" title="Omleidingen" subtitle={`${newestDiversions.length} actief`} accent="oker">
@@ -348,6 +390,34 @@ const TILE_PALETTE = {
 
 export type TilePalette = keyof typeof TILE_PALETTE;
 
+/**
+ * Per-tile rijdend busje + weg-segment. De bus rijdt over de onderrand
+ * van de tile (geclipt door de tile's overflow-hidden) en verdwijnt
+ * achter de rand. Met een verschillende `delay` per tile lijkt dezelfde
+ * bus van tile naar tile over te springen — tussendoor (in de gap) is
+ * 'ie niet zichtbaar. Alleen tonen wanneer de chauffeur vandaag vrij is.
+ */
+function DrivingBus({ delay }: { delay: string }) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7">
+      {/* Weg-segment langs de onderrand (fade aan de randen). Iets
+          zichtbaarder in light mode, subtieler in dark. */}
+      <div className="absolute inset-x-3 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/50 to-transparent dark:via-oker-400/30" />
+      <div className="bus-cross" style={{ animationDelay: delay }}>
+        <div className="bus-bump">
+          {/* Donker busje in light mode, wit busje in dark mode. */}
+          <span className="block dark:hidden">
+            <BrandBus width={44} />
+          </span>
+          <span className="hidden dark:block">
+            <BrandBus width={44} dark />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StatTile({
   icon,
   color,
@@ -357,6 +427,7 @@ export function StatTile({
   onClick,
   sparkline,
   sparklineColor,
+  overlay,
 }: {
   icon: ReactNode;
   color: TilePalette;
@@ -366,6 +437,7 @@ export function StatTile({
   onClick?: () => void;
   sparkline?: number[];
   sparklineColor?: string;
+  overlay?: ReactNode;
 }) {
   const c = TILE_PALETTE[color];
   // Default sparkline-kleur volgt de accent-tint
@@ -382,7 +454,7 @@ export function StatTile({
       : '#475569');
   const Body = (
     <>
-      <div className="flex items-start justify-between mb-3">
+      <div className="flex items-start justify-between mb-2">
         <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl ${c.iconBg} text-white shadow-md shadow-black/10`}>
           {icon}
         </div>
@@ -415,6 +487,7 @@ export function StatTile({
       >
         <span className="cursor-glow-layer" />
         <span className="relative z-10 block">{Body}</span>
+        {overlay}
       </button>
     );
   }
@@ -426,6 +499,7 @@ export function StatTile({
     >
       <span className="cursor-glow-layer" />
       <span className="relative z-10 block">{Body}</span>
+      {overlay}
     </div>
   );
 }
