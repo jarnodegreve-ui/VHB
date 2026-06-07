@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { BrandWordmark } from '../components/BrandWordmark';
 
 type Mode = 'login' | 'forgot';
 
@@ -167,14 +166,20 @@ export function LoginView({
         className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
         style={{ perspective: '1200px' }}
       >
-        {/* Wordmark boven het card */}
+        {/* Officieel VHB-logo boven het card. Login is altijd licht, dus
+            altijd de volkleur-variant (donkere tekst + oker bus). */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center mb-10"
         >
-          <BrandWordmark size="lg" className="items-center" animateLetters />
+          <img
+            src="/vhb-logo.svg"
+            alt="VHB — Van Hoorebeke & Zoon"
+            className="h-24 sm:h-32 w-auto select-none"
+            draggable={false}
+          />
         </motion.div>
 
         {/* Form-card met tilt-parallax + roterende oker-iridescent border */}
@@ -189,10 +194,9 @@ export function LoginView({
             ref={cardRef}
             onPointerMove={handleCardMove}
             onPointerLeave={handleCardLeave}
-            className="iridescent-frame rounded-[28px]"
+            className="panel ios-soft-panel relative w-full rounded-[28px] p-7 sm:p-9"
           >
-            <div className="panel ios-soft-panel relative w-full rounded-[28px] p-7 sm:p-9">
-              <AnimatePresence mode="wait">
+            <AnimatePresence mode="wait">
                 <motion.div
                   key={`${mode}-${recoveryMode}`}
                   initial={{ opacity: 0, x: 6 }}
@@ -298,13 +302,12 @@ export function LoginView({
                 </form>
               )}
 
-              {/* Trust badge */}
-              <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
-                <ShieldCheck size={11} className="text-emerald-500" />
-                Beveiligd via Supabase Auth
-              </div>
-            </div>{/* /panel */}
-          </div>{/* /iridescent-frame */}
+            {/* Trust badge */}
+            <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+              <ShieldCheck size={11} className="text-emerald-500" />
+              Beveiligd via Supabase Auth
+            </div>
+          </div>{/* /panel */}
         </motion.div>
       </main>
 

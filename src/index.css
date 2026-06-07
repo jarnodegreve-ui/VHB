@@ -416,13 +416,17 @@ html.dark {
     transition: color 240ms ease;
   }
 
-  /* Brand bus sway — voor empty state mascotte */
+  /* Brand bus sway — voor empty state mascotte. Levendiger nu: dubbele
+     bounce per cyclus + heen-en-weer kanteling, alsof de bus over een
+     hobbelig weggetje rijdt. */
   @keyframes bus-sway {
     0%, 100% { transform: translateY(0) rotate(0deg); }
-    50%      { transform: translateY(-3px) rotate(-1deg); }
+    25%      { transform: translateY(-7px) rotate(-2.5deg); }
+    50%      { transform: translateY(-2px) rotate(0deg); }
+    75%      { transform: translateY(-7px) rotate(2.5deg); }
   }
   .bus-sway {
-    animation: bus-sway 4s ease-in-out infinite;
+    animation: bus-sway 2.4s ease-in-out infinite;
     transform-origin: center bottom;
   }
 

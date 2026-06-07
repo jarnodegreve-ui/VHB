@@ -1,0 +1,29 @@
+VAN HOOREBEKE & ZOON — LOGOPAKKET (Optie A)
+============================================
+Huisstijl: amber #E8A33D / zwart #111111. Tekst is omgezet naar
+vector-outlines, dus het logo blijft scherp zonder lettertype-installatie.
+
+WELK BESTAND WANNEER?
+---------------------
+WEBSITE
+  vhb-logo.svg ............ beste keuze: schaalt oneindig, klein bestand
+  vhb-logo-500.png ........ klein/header (gewone schermen)
+  vhb-logo-1000.png ....... header op retina-/hoge-resolutieschermen
+  vhb-logo-wit-1000.png ... voor een donkere balk/footer
+  vhb-favicon.svg / -32 / -180 / -512 ... browsertab + app-icoon
+
+FACTUREN (Word, Excel, PDF)
+  vhb-logo.svg ............ als je software SVG aankan (scherpst)
+  vhb-logo-800.png ........ veilige keuze, plak bovenaan de factuur
+
+BRIEVEN / BRIEFHOOFD (print, 300 dpi)
+  vhb-logo-1600.png ....... briefhoofd op A4
+  vhb-logo-3000.png ....... grote afdrukken / spandoek / busbelettering
+
+DONKERE ACHTERGROND
+  vhb-logo-wit.svg, vhb-logo-wit-1000.png, vhb-logo-wit-3000.png
+
+TIP
+---
+Gebruik bij voorkeur de .svg-bestanden waar het kan. PNG's zijn transparant,
+dus ze werken op elke achtergrondkleur.

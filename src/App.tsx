@@ -924,17 +924,21 @@ export default function App() {
       >
         <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
-        <div className="shrink-0 p-6 flex items-center justify-center border-b fine-divider relative text-center">
+        <div className="shrink-0 p-6 flex items-center justify-center border-b fine-divider relative z-10 text-center">
           <button
             type="button"
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
             className="w-full rounded-2xl py-1 transition-all active:scale-[0.98] hover:opacity-80"
             title="Naar dashboard"
           >
-            <h1 className="brand-wordmark brand-wordmark-anim section-title text-[1.25rem] text-slate-900 leading-none">
-              VHB <span className="brand-accent text-oker-500">PORTAAL</span>
-            </h1>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-0.5">Van Hoorebeke en Zoon</p>
+            {/* VHB-logo — vol-kleur variant in beide modes, zelfde als op
+                het login-scherm. Aspect-ratio van de SVG = ~1.66 (539x324). */}
+            <img
+              src="/vhb-logo.svg"
+              alt="VHB — Van Hoorebeke & Zoon"
+              className="h-20 w-auto mx-auto select-none"
+              draggable={false}
+            />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
