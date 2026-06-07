@@ -201,6 +201,7 @@ export function DashboardView({
                 <p className="mt-1 text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
                 <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
               </div>
+              <RoadLine />
             </motion.div>
           )}
 
@@ -240,6 +241,7 @@ export function DashboardView({
                 </>
               );
             })()}
+            <RoadLine />
           </motion.div>
 
           <StatTile
@@ -248,6 +250,7 @@ export function DashboardView({
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
+            road
           />
         </div>
       ) : (
@@ -397,6 +400,17 @@ const TILE_PALETTE = {
 
 export type TilePalette = keyof typeof TILE_PALETTE;
 
+/**
+ * Subtiele oker "weg-lijn" langs de onderrand van een tile. Fade aan
+ * beide kanten zodat de naden tussen de tiles niet storen — geeft de
+ * hero-rij visuele continuïteit waarop het busje lijkt te rijden.
+ */
+function RoadLine() {
+  return (
+    <div className="pointer-events-none absolute inset-x-4 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/35 to-transparent" />
+  );
+}
+
 export function StatTile({
   icon,
   color,
@@ -406,6 +420,7 @@ export function StatTile({
   onClick,
   sparkline,
   sparklineColor,
+  road = false,
 }: {
   icon: ReactNode;
   color: TilePalette;
@@ -415,6 +430,7 @@ export function StatTile({
   onClick?: () => void;
   sparkline?: number[];
   sparklineColor?: string;
+  road?: boolean;
 }) {
   const c = TILE_PALETTE[color];
   // Default sparkline-kleur volgt de accent-tint
@@ -464,6 +480,7 @@ export function StatTile({
       >
         <span className="cursor-glow-layer" />
         <span className="relative z-10 block">{Body}</span>
+        {road && <RoadLine />}
       </button>
     );
   }
@@ -475,6 +492,7 @@ export function StatTile({
     >
       <span className="cursor-glow-layer" />
       <span className="relative z-10 block">{Body}</span>
+      {road && <RoadLine />}
     </div>
   );
 }
