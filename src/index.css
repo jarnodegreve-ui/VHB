@@ -1,6 +1,12 @@
 @import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Nunito:wght@600;700;800&family=Sora:wght@600;700;800&display=swap");
 @import "tailwindcss";
 
+/* Class-based dark mode: laat Tailwind `dark:`-utilities de app-toggle
+   (.dark op <html>) volgen i.p.v. de OS-voorkeur (prefers-color-scheme).
+   Zonder dit reageerde bv. het wit/zwart-busje op de systeeminstelling
+   en niet op de Donkere-modus-knop in de app. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Manrope", system-ui, sans-serif;
   --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Sora", system-ui, sans-serif;
