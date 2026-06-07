@@ -38,9 +38,9 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
         )}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-x-3 gap-y-5">
         {filteredUsers.map(u => (
-          <div key={u.id} className="surface-card surface-card-hover p-4 rounded-[22px] flex items-center justify-between gap-3 group">
+          <div key={u.id} className="surface-card surface-card-hover px-4 py-3 rounded-[20px] flex items-center justify-between gap-3 group">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-black text-base shrink-0">
                 {u.name.charAt(0)}
