@@ -924,7 +924,7 @@ export default function App() {
       >
         <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
         <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
-        <div className="shrink-0 p-6 flex items-center justify-center border-b fine-divider relative text-center">
+        <div className="shrink-0 p-6 flex items-center justify-center border-b fine-divider relative z-10 text-center">
           <button
             type="button"
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
