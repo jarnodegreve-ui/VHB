@@ -245,12 +245,16 @@ export function DashboardView({
         </div>
       ) : (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+          {/* Busje rijdt ook hier (admin/planner + chauffeur-zonder-
+              dienst) van tile naar tile zodra 't 'Vrij' is. Delays 0s/4s
+              voor de twee tiles. */}
           <StatTile
             icon={<Clock size={18} />}
             color="emerald"
             label="Vandaag"
             value={todaysShift?.startTime || 'Vrij'}
             subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst gepland'}
+            overlay={!todaysShift ? <DrivingBus delay="0s" /> : undefined}
           />
           <StatTile
             icon={<AlertTriangle size={18} />}
@@ -258,6 +262,7 @@ export function DashboardView({
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
+            overlay={!todaysShift ? <DrivingBus delay="4s" /> : undefined}
           />
         </div>
       )}
