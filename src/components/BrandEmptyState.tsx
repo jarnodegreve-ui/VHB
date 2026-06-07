@@ -27,7 +27,7 @@ export function BrandEmptyState({
     <div className={`flex flex-col items-center justify-center text-center py-10 px-4 ${className ?? ''}`}>
       {bus && (
         <div className="bus-sway mb-4">
-          <BrandBus width={180} />
+          <BrandBus width={120} />
         </div>
       )}
       <h4 className="text-base font-black tracking-tight text-slate-800">{title}</h4>
