@@ -457,6 +457,10 @@ html.dark {
     position: absolute;
     bottom: 0;
     animation: bus-cross 12s linear infinite;
+    /* backwards: tijdens de positieve animation-delay alvast de 0%-staat
+       (left:-48px, buiten beeld) tonen i.p.v. de statische positie —
+       anders staan de nog-niet-gestarte busjes zichtbaar te wachten. */
+    animation-fill-mode: backwards;
     will-change: left;
   }
   /* Inner wrapper draagt de hobbel zodat 't onafhankelijk van het
