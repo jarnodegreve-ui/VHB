@@ -430,6 +430,27 @@ html.dark {
     transform-origin: center bottom;
   }
 
+  /* Bus rijdt van links naar rechts over de onderrand — loop.
+     `left` is relatief aan de wrapper (die de volle tile-breedte
+     spant), dus -30% start volledig links buiten beeld en 110% rijdt
+     volledig rechts uit beeld. De tile heeft overflow-hidden, dus de
+     bus verschijnt/verdwijnt netjes aan de randen. Lichte verticale
+     wiebel erbij zodat 't levendig 'rijdt'. */
+  @keyframes bus-drive {
+    0%        { left: -30%; transform: translateY(0); }
+    50%       { transform: translateY(-2px); }
+    100%      { left: 110%; transform: translateY(0); }
+  }
+  .bus-drive {
+    position: absolute;
+    bottom: 0;
+    animation: bus-drive 9s linear infinite;
+    will-change: left, transform;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .bus-drive { animation: none; left: auto; right: 0.75rem; }
+  }
+
   /* Skeleton-loader shimmer */
   @keyframes shimmer {
     0%   { background-position: -200% 0; }

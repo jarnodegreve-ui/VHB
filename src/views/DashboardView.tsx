@@ -182,10 +182,13 @@ export function DashboardView({
                 boxShadow: 'var(--tile-shadow)',
               }}
             >
-              {/* Busje rijdt over de onderrand — full color, wielen op de
-                  rand zodat 't lijkt of de bus wegrijdt. Sway = beweging. */}
-              <div className="bus-sway pointer-events-none absolute bottom-0 right-3">
-                <BrandBus width={88} />
+              {/* Busje rijdt van links naar rechts over de onderrand, in
+                  een loop. Wrapper spant de volle tile-breedte; de bus
+                  animeert via `left` (zie .bus-drive in index.css). */}
+              <div className="pointer-events-none absolute inset-x-0 bottom-1 h-11">
+                <div className="bus-drive">
+                  <BrandBus width={84} />
+                </div>
               </div>
 
               <div className="relative">
