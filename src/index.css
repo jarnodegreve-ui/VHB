@@ -437,18 +437,36 @@ html.dark {
      bus verschijnt/verdwijnt netjes aan de randen. Lichte verticale
      wiebel erbij zodat 't levendig 'rijdt'. */
   @keyframes bus-drive {
-    0%        { left: -30%; transform: translateY(0); }
-    50%       { transform: translateY(-2px); }
-    100%      { left: 110%; transform: translateY(0); }
+    0%   { left: -30%; }
+    100% { left: 110%; }
+  }
+  /* Hobbel-effect: snelle, kleine, onregelmatige op-en-neer + minieme
+     kanteling alsof de wielen over kasseien rollen. Aparte (snellere)
+     cyclus dan het rijden zelf zodat 't niet mechanisch oogt. */
+  @keyframes bus-bump {
+    0%   { transform: translateY(0)     rotate(0deg); }
+    15%  { transform: translateY(-1.5px) rotate(-0.6deg); }
+    30%  { transform: translateY(0.5px)  rotate(0.4deg); }
+    45%  { transform: translateY(-2px)   rotate(-0.8deg); }
+    60%  { transform: translateY(0)      rotate(0.5deg); }
+    75%  { transform: translateY(-1px)   rotate(-0.3deg); }
+    100% { transform: translateY(0)      rotate(0deg); }
   }
   .bus-drive {
     position: absolute;
     bottom: 0;
     animation: bus-drive 9s linear infinite;
-    will-change: left, transform;
+    will-change: left;
+  }
+  /* Inner wrapper draagt de hobbel zodat 't onafhankelijk van het
+     horizontale rijden loopt (los transform-kanaal). */
+  .bus-drive > .bus-bump {
+    animation: bus-bump 0.9s ease-in-out infinite;
+    transform-origin: center bottom;
   }
   @media (prefers-reduced-motion: reduce) {
     .bus-drive { animation: none; left: auto; right: 0.75rem; }
+    .bus-drive > .bus-bump { animation: none; }
   }
 
   /* Skeleton-loader shimmer */
