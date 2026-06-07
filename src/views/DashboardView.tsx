@@ -146,98 +146,66 @@ export function DashboardView({
 
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
-        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          {/* Hero: spans 2 cols op desktop */}
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {/* Volgende-dienst tile — zelfde format als StatTile zodat 't
+              naadloos in de rij met andere hero's past. */}
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="tilt-card glow-top glass-stack lg:col-span-2 relative overflow-hidden rounded-[28px] p-6 md:p-8"
+            className="tilt-card glow-top glass-stack relative overflow-hidden rounded-[24px] p-5"
             style={{
-              background: 'var(--tile-bg-hero)',
-              backdropFilter: 'blur(32px) saturate(140%)',
-              WebkitBackdropFilter: 'blur(32px) saturate(140%)',
+              background: 'var(--tile-bg)',
+              backdropFilter: 'blur(28px) saturate(155%)',
+              WebkitBackdropFilter: 'blur(28px) saturate(155%)',
               border: 'var(--tile-border)',
-              boxShadow: 'var(--tile-shadow-hero)',
+              boxShadow: 'var(--tile-shadow)',
             }}
           >
-            <div
-              className="pointer-events-none absolute -top-32 -right-32 w-96 h-96 rounded-full opacity-50"
-              style={{
-                background: 'radial-gradient(circle, rgba(255, 255, 255, 0.8) 0%, transparent 70%)',
-              }}
-            />
-            <div
-              className="pointer-events-none absolute -bottom-24 -left-24 w-64 h-64 rounded-full opacity-20"
-              style={{
-                background: 'radial-gradient(circle, rgba(148, 163, 184, 0.18) 0%, transparent 70%)',
-              }}
-            />
-
-            <div className="relative">
-              <div className="inline-flex items-center gap-2 px-2.5 py-1 bg-white/65 backdrop-blur-md ring-1 ring-white/70 rounded-full mb-4">
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full rounded-full bg-oker-500 opacity-70 animate-ping" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-oker-500" />
-                </span>
-                <span className="text-[10px] font-black text-oker-800 uppercase tracking-[0.18em]">
-                  Volgende dienst
-                </span>
-              </div>
-
-              {(() => {
-                const display = getNextShiftDisplay(nextShift.startDateTime);
-                return (
-                  <>
-                    <h2 className="text-3xl md:text-4xl font-black tracking-[-0.03em] text-slate-900 leading-tight">
-                      {display.hero}
-                    </h2>
-                    <p className="mt-1.5 text-sm font-semibold text-slate-700/80">
-                      {display.sub}
-                      {' · dienst '}
-                      {getServiceNumber(nextShift)}
-                    </p>
-                  </>
-                );
-              })()}
-
-              <div className="mt-5 flex gap-2.5">
-                <div className="bg-white/70 backdrop-blur-md rounded-2xl px-4 py-2.5 ring-1 ring-white/80 shadow-sm">
-                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Start</p>
-                  <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">{nextShift.startTime}</p>
-                </div>
-                <div className="bg-white/70 backdrop-blur-md rounded-2xl px-4 py-2.5 ring-1 ring-white/80 shadow-sm">
-                  <p className="text-[9px] font-bold text-slate-500 uppercase tracking-widest mb-0.5">Einde</p>
-                  <p className="text-2xl font-black text-slate-900 tabular-nums leading-none">{nextShift.endTime}</p>
-                </div>
+            <div className="flex items-start justify-between mb-3">
+              <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-oker-500 text-white shadow-md shadow-black/10">
+                <Calendar size={18} />
               </div>
             </div>
+            {(() => {
+              const display = getNextShiftDisplay(nextShift.startDateTime);
+              return (
+                <>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                    Volgende dienst
+                  </p>
+                  <p className="mt-1 text-2xl font-black tracking-[-0.03em] text-slate-900 leading-tight">
+                    {display.hero}
+                  </p>
+                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                    {display.sub} · {nextShift.startTime}–{nextShift.endTime}
+                  </p>
+                </>
+              );
+            })()}
           </motion.div>
 
-          {/* Right column: 2 stacked smaller tiles + verlofbalans voor chauffeurs */}
-          <div className="flex flex-col gap-4">
-            <StatTile
-              icon={<Clock size={18} />}
-              color="emerald"
-              label="Vandaag"
-              value={todaysShift?.startTime || 'Vrij'}
-              subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst'}
+          <StatTile
+            icon={<Clock size={18} />}
+            color="emerald"
+            label="Vandaag"
+            value={todaysShift?.startTime || 'Vrij'}
+            subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst'}
+          />
+          <StatTile
+            icon={<AlertTriangle size={18} />}
+            color="rose"
+            label="Omleidingen"
+            value={diversions.length}
+            subValue="Actief in netwerk"
+          />
+          {isChauffeur && (
+            <LeaveBalanceCard
+              balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
+              year={new Date().getFullYear()}
+              compact
             />
-            <StatTile
-              icon={<AlertTriangle size={18} />}
-              color="rose"
-              label="Omleidingen"
-              value={diversions.length}
-              subValue="Actief in netwerk"
-            />
-            {isChauffeur && (
-              <LeaveBalanceCard
-                balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
-                year={new Date().getFullYear()}
-                compact
-              />
-            )}
-          </div>
+          )}
         </div>
       ) : (
         <div className={isChauffeur ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
