@@ -182,19 +182,22 @@ export function DashboardView({
                 boxShadow: 'var(--tile-shadow)',
               }}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
-                  <Clock size={18} />
-                </div>
+              {/* Busje als subtiel watermerk rechtsonder — sfeervolle
+                  decoratie i.p.v. een element dat met de tekst vecht. */}
+              <div className="bus-sway pointer-events-none absolute -bottom-2 -right-3 opacity-[0.12]">
+                <BrandBus width={150} />
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
-              <div className="mt-1 flex items-center justify-between gap-3">
-                <p className="text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
-                <div className="bus-sway shrink-0">
-                  <BrandBus width={68} />
+
+              <div className="relative">
+                <div className="flex items-start justify-between mb-3">
+                  <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
+                    <Clock size={18} />
+                  </div>
                 </div>
+                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
+                <p className="mt-1 text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
+                <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
               </div>
-              <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
             </motion.div>
           )}
 
