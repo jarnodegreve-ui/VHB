@@ -6,8 +6,6 @@ import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
 import { Sparkline } from '../components/Sparkline';
 import { BrandBus } from '../components/BrandBus';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
-import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
-import { verlofBalans } from '../lib/leaveBalance';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -158,7 +156,7 @@ export function DashboardView({
 
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
           {todaysShift ? (
             <StatTile
               icon={<Clock size={18} />}
@@ -251,16 +249,9 @@ export function DashboardView({
             value={diversions.length}
             subValue="Actief in netwerk"
           />
-          {isChauffeur && (
-            <LeaveBalanceCard
-              balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
-              year={new Date().getFullYear()}
-              compact
-            />
-          )}
         </div>
       ) : (
-        <div className={isChauffeur ? 'grid grid-cols-1 gap-4 md:grid-cols-3' : 'grid grid-cols-1 gap-4 md:grid-cols-2'}>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <StatTile
             icon={<Clock size={18} />}
             color="emerald"
@@ -275,13 +266,6 @@ export function DashboardView({
             value={diversions.length}
             subValue="Actief in netwerk"
           />
-          {isChauffeur && (
-            <LeaveBalanceCard
-              balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)}
-              year={new Date().getFullYear()}
-              compact
-            />
-          )}
         </div>
       )}
 
