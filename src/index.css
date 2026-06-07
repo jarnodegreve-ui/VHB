@@ -446,7 +446,9 @@ html.dark {
      i.p.v. schokkerig. Aparte cyclus van het rijden. */
   @keyframes bus-bump {
     0%   { transform: translateY(0)      rotate(0deg); }
-    50%  { transform: translateY(-1.5px) rotate(0.5deg); }
+    35%  { transform: translateY(-1.5px) rotate(0.5deg); }
+    60%  { transform: translateY(-0.3px) rotate(-0.2deg); }
+    80%  { transform: translateY(-1px)   rotate(0.3deg); }
     100% { transform: translateY(0)      rotate(0deg); }
   }
   .bus-drive {
@@ -458,7 +460,7 @@ html.dark {
   /* Inner wrapper draagt de hobbel zodat 't onafhankelijk van het
      horizontale rijden loopt (los transform-kanaal). */
   .bus-drive > .bus-bump {
-    animation: bus-bump 1.8s ease-in-out infinite;
+    animation: bus-bump 1.5s ease-in-out infinite;
     transform-origin: center bottom;
   }
   @media (prefers-reduced-motion: reduce) {
