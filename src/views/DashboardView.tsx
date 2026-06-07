@@ -187,15 +187,13 @@ export function DashboardView({
                   <Clock size={18} />
                 </div>
               </div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
-              <div className="mt-1 flex items-center gap-3">
-                <div className="bus-sway shrink-0">
-                  <BrandBus width={56} />
+              <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500 text-center">Vandaag</p>
+              <div className="mt-1 flex flex-col items-center text-center">
+                <div className="bus-sway">
+                  <BrandBus width={84} />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-2xl font-black tracking-[-0.03em] text-slate-900 leading-tight">Vrij</p>
-                  <p className="text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
-                </div>
+                <p className="mt-2 text-2xl font-black tracking-[-0.03em] text-slate-900 leading-tight">Vrij</p>
+                <p className="text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
               </div>
             </motion.div>
           )}
