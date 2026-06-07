@@ -147,6 +147,14 @@ export function DashboardView({
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatTile
+            icon={<Clock size={18} />}
+            color="emerald"
+            label="Vandaag"
+            value={todaysShift?.startTime || 'Vrij'}
+            subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst'}
+          />
+
           {/* Volgende-dienst tile — zelfde format als StatTile zodat 't
               naadloos in de rij met andere hero's past. */}
           <motion.div
@@ -185,13 +193,6 @@ export function DashboardView({
             })()}
           </motion.div>
 
-          <StatTile
-            icon={<Clock size={18} />}
-            color="emerald"
-            label="Vandaag"
-            value={todaysShift?.startTime || 'Vrij'}
-            subValue={todaysShift ? `tot ${todaysShift.endTime}` : 'Geen dienst'}
-          />
           <StatTile
             icon={<AlertTriangle size={18} />}
             color="rose"
