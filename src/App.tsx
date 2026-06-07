@@ -937,13 +937,13 @@ export default function App() {
             <img
               src="/vhb-logo.svg"
               alt="VHB — Van Hoorebeke & Zoon"
-              className="block dark:hidden h-12 w-auto mx-auto select-none"
+              className="block dark:hidden h-20 w-auto mx-auto select-none"
               draggable={false}
             />
             <img
               src="/vhb-logo-wit.svg"
               alt="VHB — Van Hoorebeke & Zoon"
-              className="hidden dark:block h-12 w-auto mx-auto select-none"
+              className="hidden dark:block h-20 w-auto mx-auto select-none"
               draggable={false}
             />
           </button>
