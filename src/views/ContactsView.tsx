@@ -18,7 +18,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <PageShell>
+    <PageShell width="6xl">
       <PageHeader
         title="Contactlijst"
         description="Contactgegevens van alle medewerkers."
@@ -38,28 +38,28 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
         )}
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
         {filteredUsers.map(u => (
-          <div key={u.id} className="surface-card surface-card-hover p-6 rounded-[32px] flex items-center justify-between group">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-black text-lg">
+          <div key={u.id} className="surface-card surface-card-hover p-4 rounded-[22px] flex items-center justify-between gap-3 group">
+            <div className="flex items-center gap-3 min-w-0">
+              <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-black text-base shrink-0">
                 {u.name.charAt(0)}
               </div>
-              <div>
-                <h4 className="font-black text-slate-800 tracking-tight">{u.name}</h4>
+              <div className="min-w-0">
+                <h4 className="font-black text-slate-800 tracking-tight truncate">{u.name}</h4>
                 <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{u.role}</p>
               </div>
             </div>
             {u.phone ? (
-              <a 
+              <a
                 href={`tel:${u.phone.replace(/\s/g, '')}`}
-                className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all active:scale-90"
+                className="w-10 h-10 shrink-0 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all active:scale-90"
                 title={`Bel ${u.name}`}
               >
                 <Phone size={18} />
               </a>
             ) : (
-              <div className="text-[10px] text-slate-300 font-bold italic">Geen nummer</div>
+              <div className="text-[10px] text-slate-300 font-bold italic shrink-0">Geen nummer</div>
             )}
           </div>
         ))}
