@@ -237,7 +237,29 @@ export function DashboardView({
       {/* === Wide tiles row === */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <PremiumPanel icon={<Calendar size={16} />} iconBg="bg-slate-900" title="Planning" subtitle={now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'long' })}>
-          {visibleShifts.length > 0 ? (
+          {/* Chauffeur: panel focust op VANDAAG — dienst van vandaag of de
+              vrije-dag empty state (volgende dienst staat al in de hero-tile
+              bovenaan). Planner/admin: lijst met komende diensten. */}
+          {isChauffeur ? (
+            todaysShift ? (
+              <div className="space-y-2">
+                <div className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(todaysShift.date)}</span>
+                      <span className="text-slate-300">·</span>
+                      <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(todaysShift)}</span>
+                    </div>
+                    <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
+                      {todaysShift.startTime} <span className="text-slate-400 font-bold">–</span> {todaysShift.endTime}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <BrandEmptyState title="Geen dienst vandaag" message="Geniet van je vrije dag." />
+            )
+          ) : visibleShifts.length > 0 ? (
             <div className="space-y-2">
               {visibleShifts.map((shift) => (
                 <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
@@ -251,17 +273,15 @@ export function DashboardView({
                       {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
                     </p>
                   </div>
-                  {!isChauffeur && (
-                    <span className="text-xs text-slate-500 truncate font-semibold max-w-[120px]">
-                      {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
-                    </span>
-                  )}
+                  <span className="text-xs text-slate-500 truncate font-semibold max-w-[120px]">
+                    {users.find((u) => u.id === shift.driverId)?.name || 'Onbekend'}
+                  </span>
                   <ChevronRight size={14} className="text-slate-300 group-hover:text-slate-600 transition-colors shrink-0" />
                 </div>
               ))}
             </div>
           ) : (
-            <BrandEmptyState title="Geen dienst vandaag" message="Geniet van je vrije dag." />
+            <BrandEmptyState title="Geen diensten gepland" message="Er staan nog geen diensten in de planning." />
           )}
         </PremiumPanel>
 
