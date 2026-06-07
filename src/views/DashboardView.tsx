@@ -400,11 +400,18 @@ export type TilePalette = keyof typeof TILE_PALETTE;
 function DrivingBus({ delay }: { delay: string }) {
   return (
     <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7">
-      {/* Weg-segment langs de onderrand (fade aan de randen). */}
-      <div className="absolute inset-x-3 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/30 to-transparent" />
+      {/* Weg-segment langs de onderrand (fade aan de randen). Iets
+          zichtbaarder in light mode, subtieler in dark. */}
+      <div className="absolute inset-x-3 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/50 to-transparent dark:via-oker-400/30" />
       <div className="bus-cross" style={{ animationDelay: delay }}>
         <div className="bus-bump">
-          <BrandBus width={44} />
+          {/* Donker busje in light mode, wit busje in dark mode. */}
+          <span className="block dark:hidden">
+            <BrandBus width={44} />
+          </span>
+          <span className="hidden dark:block">
+            <BrandBus width={44} dark />
+          </span>
         </div>
       </div>
     </div>

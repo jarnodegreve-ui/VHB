@@ -441,7 +441,7 @@ html.dark {
      `48px` ≈ bus-breedte; pas mee aan als BrandBus-width wijzigt. */
   @keyframes bus-cross {
     0%   { left: -48px; }
-    30%  { left: 100%; }
+    33%  { left: 100%; }
     100% { left: 100%; }
   }
   /* Hobbel-effect: zachte, vloeiende deining + minieme kanteling alsof
