@@ -931,19 +931,12 @@ export default function App() {
             className="w-full rounded-2xl py-1 transition-all active:scale-[0.98] hover:opacity-80"
             title="Naar dashboard"
           >
-            {/* Officieel VHB-logo. Theme-aware: licht panel-dark → volkleur,
-                dark mode → wit-tekst variant zodat "VAN HOOREBEKE" leesbaar
-                blijft. Aspect-ratio van de SVG = ~1.66 (539x324). */}
-            <img
-              src="/vhb-logo.svg"
-              alt="VHB — Van Hoorebeke & Zoon"
-              className="block dark:hidden h-20 w-auto mx-auto select-none"
-              draggable={false}
-            />
+            {/* VHB-logo — wit-variant in beide modes (oker bus + witte tekst).
+                Aspect-ratio van de SVG = ~1.66 (539x324). */}
             <img
               src="/vhb-logo-wit.svg"
               alt="VHB — Van Hoorebeke & Zoon"
-              className="hidden dark:block h-20 w-auto mx-auto select-none"
+              className="h-20 w-auto mx-auto select-none"
               draggable={false}
             />
           </button>
