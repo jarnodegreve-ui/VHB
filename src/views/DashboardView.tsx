@@ -182,10 +182,10 @@ export function DashboardView({
                 boxShadow: 'var(--tile-shadow)',
               }}
             >
-              {/* Busje als subtiel watermerk rechtsonder — sfeervolle
-                  decoratie i.p.v. een element dat met de tekst vecht. */}
-              <div className="bus-sway pointer-events-none absolute -bottom-2 -right-3 opacity-[0.12]">
-                <BrandBus width={150} />
+              {/* Busje rijdt over de onderrand — full color, wielen op de
+                  rand zodat 't lijkt of de bus wegrijdt. Sway = beweging. */}
+              <div className="bus-sway pointer-events-none absolute bottom-0 right-3">
+                <BrandBus width={88} />
               </div>
 
               <div className="relative">
