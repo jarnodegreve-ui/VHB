@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
@@ -44,6 +44,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<{ driverName: string; iso: string; cell: MonthCell } | null>(null);
+  // Venster van 2 weken binnen de maand; bij de randen springen we naar de
+  // vorige/volgende maand. 'pendingEdge' bepaalt waar we landen na het laden.
+  const [pageIndex, setPageIndex] = useState(0);
+  const [pendingEdge, setPendingEdge] = useState<null | 'first' | 'last' | 'today'>('today');
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -61,13 +65,76 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     return () => { cancelled = true; };
   }, [monthParam]);
 
-  const goPrev = () => setViewMonth(new Date(year, monthIndex - 1, 1));
-  const goNext = () => setViewMonth(new Date(year, monthIndex + 1, 1));
-  const goToday = () => { const n = new Date(); setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1)); };
-
   const dates = data?.dates ?? [];
   const drivers = data?.drivers ?? [];
   const cells = data?.cells ?? {};
+
+  // Maandag van de week (lokaal) → sleutel om dagen per week te bucketen.
+  const weekKeyOf = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    const day = d.getDay();
+    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+    return isoDate(d);
+  };
+
+  // Pagina's van telkens 2 kalenderweken (enkel de geplande dagen erin).
+  const WEEKS_PER_PAGE = 2;
+  const pages = useMemo(() => {
+    if (dates.length === 0) return [] as string[][];
+    const byWeek = new Map<string, string[]>();
+    for (const iso of dates) {
+      const k = weekKeyOf(iso);
+      const bucket = byWeek.get(k);
+      if (bucket) bucket.push(iso); else byWeek.set(k, [iso]);
+    }
+    const weekKeys = Array.from(byWeek.keys()).sort();
+    const result: string[][] = [];
+    for (let i = 0; i < weekKeys.length; i += WEEKS_PER_PAGE) {
+      result.push(weekKeys.slice(i, i + WEEKS_PER_PAGE).flatMap((k) => byWeek.get(k)!));
+    }
+    return result;
+  }, [dates]);
+
+  // Na het (her)laden van een maand op de juiste pagina landen.
+  useEffect(() => {
+    if (pages.length === 0) { setPageIndex(0); return; }
+    if (pendingEdge === 'last') { setPageIndex(pages.length - 1); setPendingEdge(null); }
+    else if (pendingEdge === 'first') { setPageIndex(0); setPendingEdge(null); }
+    else if (pendingEdge === 'today') {
+      const idx = pages.findIndex((pg) => pg.includes(todayIso));
+      setPageIndex(idx >= 0 ? idx : 0);
+      setPendingEdge(null);
+    } else {
+      setPageIndex((p) => Math.min(p, pages.length - 1));
+    }
+  }, [pages, pendingEdge, todayIso]);
+
+  const goPrevWindow = () => {
+    if (pageIndex > 0) { setPageIndex(pageIndex - 1); return; }
+    setPendingEdge('last');
+    setViewMonth(new Date(year, monthIndex - 1, 1));
+  };
+  const goNextWindow = () => {
+    if (pageIndex < pages.length - 1) { setPageIndex(pageIndex + 1); return; }
+    setPendingEdge('first');
+    setViewMonth(new Date(year, monthIndex + 1, 1));
+  };
+  const goToday = () => {
+    const n = new Date();
+    setPendingEdge('today');
+    setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1));
+  };
+
+  const visibleDates = pages[pageIndex] ?? [];
+
+  const formatDayMonth = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    try { return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' }); }
+    catch { return iso; }
+  };
+  const windowLabel = visibleDates.length > 0
+    ? `${formatDayMonth(visibleDates[0])} – ${formatDayMonth(visibleDates[visibleDates.length - 1])} ${year}`
+    : `${MONTH_NAMES[monthIndex]} ${year}`;
 
   const dayHeader = (iso: string) => {
     const d = new Date(`${iso}T00:00:00`);
@@ -98,15 +165,15 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         description="Wie rijdt welke dienst, wie heeft verlof — zoals het overzicht in het chauffeurslokaal."
         actions={(
           <div className="flex items-center gap-2">
-            <button type="button" onClick={goPrev} aria-label="Vorige maand" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronLeft size={18} />
             </button>
-            <span className="px-3 text-base font-black tracking-tight capitalize min-w-[150px] text-center">{MONTH_NAMES[monthIndex]} {year}</span>
-            <button type="button" onClick={goNext} aria-label="Volgende maand" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <span className="px-3 text-sm font-black tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
+            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronRight size={18} />
             </button>
             <button type="button" onClick={goToday} className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors">
-              Deze maand
+              Vandaag
             </button>
           </div>
         )}
@@ -135,7 +202,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <thead>
                   <tr>
                     <th className="sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
-                    {dates.map((iso) => {
+                    {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
                       return (
@@ -175,7 +242,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             {isOwn && <span className="text-[9px] font-black uppercase tracking-widest text-oker-600">jij</span>}
                           </span>
                         </td>
-                        {dates.map((iso) => {
+                        {visibleDates.map((iso) => {
                           const cell = row[iso];
                           const h = dayHeader(iso);
                           const today = iso === todayIso;
@@ -214,7 +281,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           <div className="md:hidden surface-card rounded-[24px] overflow-hidden divide-y divide-slate-100">
             {drivers.map((drv) => {
               const row = cells[drv.id] || {};
-              const entries = dates.filter((iso) => row[iso]).map((iso) => ({ iso, cell: row[iso] }));
+              const entries = visibleDates.filter((iso) => row[iso]).map((iso) => ({ iso, cell: row[iso] }));
               const isOwn = ownId && drv.id === ownId;
               return (
                 <div key={drv.id} className={cn('p-4', isOwn && 'bg-oker-50')}>
@@ -227,7 +294,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     <div className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{entries.length}</div>
                   </div>
                   {entries.length === 0 ? (
-                    <div className="mt-2 text-xs text-slate-300 italic">Niets gepland deze maand.</div>
+                    <div className="mt-2 text-xs text-slate-300 italic">Niets gepland in deze periode.</div>
                   ) : (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {entries.map(({ iso, cell }) => (
