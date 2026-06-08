@@ -16,6 +16,7 @@
     "convert:planning-matrix": "tsx scripts/convert-planning-matrix.ts"
   },
   "dependencies": {
+    "@sentry/react": "^10.56.0",
     "@supabase/supabase-js": "^2.98.0",
     "@tailwindcss/vite": "^4.1.14",
     "@types/leaflet": "^1.9.21",
