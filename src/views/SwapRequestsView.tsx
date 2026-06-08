@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { History, Plus, X } from 'lucide-react';
@@ -6,6 +6,7 @@ import type { Shift, SwapRequest, User } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
+import { fetchAvailability } from '../lib/availability';
 
 export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -13,13 +14,49 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
   const [reason, setReason] = useState('');
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
+  // Dienstruil-matching: wie is vrij op de dag van de gekozen dienst?
+  const [freeForDate, setFreeForDate] = useState<Set<string> | null>(null);
+  const [matchLoading, setMatchLoading] = useState(false);
+
+  const selectedShiftDate = shifts.find((s) => s.id === selectedShift)?.date;
+
+  useEffect(() => {
+    if (!selectedShiftDate) {
+      setFreeForDate(null);
+      return;
+    }
+    let cancelled = false;
+    setMatchLoading(true);
+    fetchAvailability(selectedShiftDate, selectedShiftDate)
+      .then((res) => {
+        if (cancelled) return;
+        const day = res.days.find((d) => d.date === selectedShiftDate);
+        setFreeForDate(new Set(day?.free ?? []));
+      })
+      .catch(() => { if (!cancelled) setFreeForDate(null); })
+      .finally(() => { if (!cancelled) setMatchLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedShiftDate]);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const myShifts = shifts.filter(s => s.driverId === user.id);
   const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
-  const eligibleTargetDrivers = users
-    .filter((u) => u.id !== user.id && u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const eligibleTargetDrivers = useMemo(() => {
+    const base = users
+      .filter((u) => u.id !== user.id && u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
+      .sort((a, b) => a.name.localeCompare(b.name));
+    if (!freeForDate) return base;
+    // Vrije collega's eerst (matching), daarna de rest. Beide blijven kiesbaar
+    // — de planner kan altijd overschrijven.
+    return [...base].sort((a, b) => {
+      const af = freeForDate.has(a.id) ? 0 : 1;
+      const bf = freeForDate.has(b.id) ? 0 : 1;
+      return af - bf || a.name.localeCompare(b.name);
+    });
+  }, [users, user.id, freeForDate]);
+  const freeCount = freeForDate
+    ? eligibleTargetDrivers.filter((u) => freeForDate.has(u.id)).length
+    : null;
   const mySwaps = swaps.filter(s => s.requesterId === user.id);
   const availableSwaps = swaps.filter(s => {
     if (s.status !== 'pending' || s.requesterId === user.id) return false;
@@ -291,7 +328,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Aan welke collega?</label>
+                  <div className="flex items-center justify-between ml-1">
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aan welke collega?</label>
+                    {selectedShiftDate && (
+                      <span className="text-[10px] font-bold text-slate-400">
+                        {matchLoading
+                          ? 'Beschikbaarheid laden…'
+                          : freeCount !== null
+                            ? `${freeCount} vrij op ${selectedShiftDate}`
+                            : ''}
+                      </span>
+                    )}
+                  </div>
                   <select
                     value={selectedTargetDriver}
                     onChange={(e) => setSelectedTargetDriver(e.target.value)}
@@ -300,10 +348,20 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     disabled={eligibleTargetDrivers.length === 0}
                   >
                     <option value="">Kies een collega...</option>
-                    {eligibleTargetDrivers.map((u) => (
-                      <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
+                    {eligibleTargetDrivers.map((u) => {
+                      const free = freeForDate?.has(u.id);
+                      return (
+                        <option key={u.id} value={u.id}>
+                          {u.name}{free ? ' · vrij' : freeForDate ? ' · bezet' : ''}
+                        </option>
+                      );
+                    })}
                   </select>
+                  {freeForDate && (
+                    <p className="text-[10px] font-medium text-slate-400 ml-1">
+                      "Vrij" = geen dienst en geen verlof op die dag. Bezette collega's blijven kiesbaar.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Info (optioneel)</label>
