@@ -306,11 +306,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Reden (optioneel)</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Info (optioneel)</label>
                   <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
-                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none h-24 resize-none"
+                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none h-14 resize-none"
                     placeholder="Waarom wil je ruilen?"
                   />
                 </div>
