@@ -287,6 +287,69 @@ app.get("/api/availability", authenticate, async (req, res) => {
   }
 });
 
+// Read-only maandplanning voor iedereen — de geïmporteerde planning-matrix
+// (chauffeur × datum met codes) zoals die in het chauffeurslokaal hangt.
+// Server resolved per cel het type (dienst/verlof/afwezig/opleiding) via
+// services + planningcodes, en geeft een compacte, render-klare payload.
+app.get("/api/month-planning", authenticate, async (req, res) => {
+  try {
+    const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
+    if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
+
+    const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
+    const [rows, users, services, codes] = await Promise.all([
+      getPlanningMatrixRows(),
+      getUsersData(),
+      getServicesData(),
+      getPlanningCodesData(),
+    ]);
+
+    const monthRows = rows
+      .filter((r: any) => String(r.source_date ?? "").startsWith(`${month}-`))
+      .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
+    const dates = monthRows.map((r: any) => String(r.source_date));
+
+    const chauffeurs = users
+      .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && norm(u.name) !== "beheerder")
+      .map((u: any) => ({ id: String(u.id), name: u.name as string, key: norm(u.name) }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const idByNameKey = new Map(chauffeurs.map((c) => [c.key, c.id]));
+
+    // Code-resolutie — zelfde logica als lib/planning.ts, server-side.
+    const serviceSet = new Set(services.map((s: any) => norm(s.serviceNumber)));
+    const codeByNorm = new Map(codes.map((c: any) => [norm(c.code), c]));
+    const resolveKind = (code: string): string | null => {
+      const n = norm(code);
+      if (!n) return null;
+      if (serviceSet.has(n)) return "service";
+      const pc = codeByNorm.get(n);
+      if (pc) return String(pc.category);
+      return "unknown";
+    };
+
+    const cells: Record<string, Record<string, { code: string; kind: string }>> = {};
+    for (const row of monthRows) {
+      const date = String(row.source_date);
+      const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? row.assignments : {};
+      for (const [driverName, rawCode] of Object.entries(assignments)) {
+        const id = idByNameKey.get(norm(driverName));
+        if (!id) continue;
+        const code = String(rawCode ?? "").trim();
+        if (!code) continue;
+        const kind = resolveKind(code);
+        if (!kind) continue;
+        if (!cells[id]) cells[id] = {};
+        cells[id][date] = { code, kind };
+      }
+    }
+
+    res.json({ month, dates, drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells });
+  } catch (err: any) {
+    console.error("Error computing month planning:", err);
+    res.status(500).json({ error: "Kon maandplanning niet berekenen." });
+  }
+});
+
 app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const rows = await getPlanningMatrixRows();
