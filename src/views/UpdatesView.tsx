@@ -16,7 +16,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
   };
 
   return (
-    <PageShell width="3xl">
+    <PageShell width="6xl">
       <PageHeader
         title="Updates & Nieuws"
         actions={(
@@ -37,7 +37,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
         )}
       />
 
-      <div className="space-y-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
         {filteredUpdates.length > 0 ? (
           filteredUpdates.map(update => {
             const isExpanded = expandedUpdateIds.includes(update.id);
@@ -47,7 +47,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
               : update.content;
 
             return (
-            <div key={update.id} className="surface-card surface-card-hover p-6 md:p-8 rounded-[32px] relative overflow-hidden group duration-300">
+            <div key={update.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-[26px] relative overflow-hidden group duration-300">
               <div className={cn(
                 "absolute top-0 left-0 w-1.5 h-full",
                 update.isUrgent ? "bg-red-600" :
@@ -55,7 +55,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 update.category === 'technisch' ? "bg-blue-500" : "bg-emerald-500"
               )} />
               
-              <div className="flex justify-between items-center mb-6">
+              <div className="flex justify-between items-center mb-4">
                 <div className="flex gap-2">
                   <span className={cn(
                     "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em]",
@@ -76,11 +76,11 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 </div>
               </div>
               
-              <h4 className="text-xl font-black text-slate-800 mb-4 group-hover:text-oker-500 transition-colors leading-tight">{update.title}</h4>
-              <p className="text-slate-600 leading-relaxed font-medium text-sm md:text-base whitespace-pre-wrap">{visibleContent}</p>
-              
+              <h4 className="text-lg font-black text-slate-800 mb-3 group-hover:text-oker-500 transition-colors leading-tight">{update.title}</h4>
+              <p className="text-slate-600 leading-relaxed font-medium text-sm whitespace-pre-wrap">{visibleContent}</p>
+
               {shouldTruncate ? (
-                <div className="mt-6 pt-6 border-t border-slate-50 flex justify-end">
+                <div className="mt-5 pt-5 border-t border-slate-50 flex justify-end">
                   <button
                     type="button"
                     onClick={() => toggleExpanded(update.id)}
@@ -95,7 +95,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
           );
           })
         ) : (
-          <div className="surface-card p-12 rounded-[32px] text-center">
+          <div className="lg:col-span-2 surface-card p-12 rounded-[26px] text-center">
             <Info size={48} className="mx-auto text-slate-200 mb-4" />
             <p className="text-slate-400 font-bold">Geen updates gevonden in deze categorie.</p>
           </div>
