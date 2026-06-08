@@ -15,6 +15,25 @@ type RitblaadjeMeta = {
 
 const MAX_PDF_MB = 20;
 
+// localStorage-keys voor offline-fallback van de ritblaadje-metadata.
+// Het ritblaadje is één gedeelde resource, dus cachen is veilig.
+const META_CACHE_KEY = 'vhb-ritblaadje-meta';
+const SYNCED_AT_KEY = 'vhb-ritblaadje-synced';
+
+const formatSyncedAt = (iso: string | null) => {
+  if (!iso) return null;
+  try {
+    return new Date(iso).toLocaleString('nl-BE', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return null;
+  }
+};
+
 const formatSize = (bytes: number | null) => {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes} B`;
@@ -41,6 +60,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [syncedAt, setSyncedAt] = useState<string | null>(null);
+  const [fromCache, setFromCache] = useState(false);
 
   const canEdit = currentUser.role === 'admin';
   const canDelete = currentUser.role === 'admin';
@@ -52,9 +73,35 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       if (!response.ok) throw new Error(`Server antwoordde ${response.status}`);
       const data = await response.json();
       setCurrent(data);
+      setFromCache(false);
+      // Cache de metadata + sync-tijd voor offline-fallback.
+      try {
+        const now = new Date().toISOString();
+        setSyncedAt(now);
+        localStorage.setItem(SYNCED_AT_KEY, now);
+        if (data) localStorage.setItem(META_CACHE_KEY, JSON.stringify(data));
+        else localStorage.removeItem(META_CACHE_KEY);
+      } catch {
+        // localStorage geblokkeerd — geen fallback, geen ramp
+      }
     } catch (error: any) {
-      notify('Kon ritblaadje niet laden: ' + error.message, 'error');
-      setCurrent(null);
+      // Offline / server onbereikbaar → val terug op de gecachte metadata.
+      let recovered = false;
+      try {
+        const cached = localStorage.getItem(META_CACHE_KEY);
+        if (cached) {
+          setCurrent(JSON.parse(cached));
+          setSyncedAt(localStorage.getItem(SYNCED_AT_KEY));
+          setFromCache(true);
+          recovered = true;
+        }
+      } catch {
+        // ongeldige cache — negeer
+      }
+      if (!recovered) {
+        notify('Kon ritblaadje niet laden: ' + error.message, 'error');
+        setCurrent(null);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -99,7 +146,15 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         try { detail = JSON.parse(text).error || detail; } catch {}
         throw new Error(detail);
       }
-      setCurrent(JSON.parse(text));
+      const updated = JSON.parse(text);
+      setCurrent(updated);
+      setFromCache(false);
+      try {
+        const now = new Date().toISOString();
+        setSyncedAt(now);
+        localStorage.setItem(SYNCED_AT_KEY, now);
+        localStorage.setItem(META_CACHE_KEY, JSON.stringify(updated));
+      } catch { /* localStorage geblokkeerd */ }
       notify('Ritblaadje succesvol bijgewerkt.', 'success');
     } catch (error: any) {
       notify('Upload mislukt: ' + error.message, 'error');
@@ -119,6 +174,10 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         throw new Error(text);
       }
       setCurrent(null);
+      try {
+        localStorage.removeItem(META_CACHE_KEY);
+        localStorage.removeItem(SYNCED_AT_KEY);
+      } catch { /* localStorage geblokkeerd */ }
       notify('Ritblaadje verwijderd.', 'success');
     } catch (error: any) {
       notify('Verwijderen mislukt: ' + error.message, 'error');
@@ -170,12 +229,24 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                   <FileText size={22} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Huidige ritblaadjes</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Huidige ritblaadjes</p>
+                    {fromCache && (
+                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-600 ring-1 ring-amber-100">
+                        Offline
+                      </span>
+                    )}
+                  </div>
                   <h4 className="mt-1 text-lg font-black text-slate-900 tracking-tight break-all">{current.filename}</h4>
                   <p className="mt-1 text-xs font-medium text-slate-500">
                     Geüpload {current.uploadedBy ? `door ${current.uploadedBy} ` : ''}op {formatUploadedAt(current.uploadedAt)}
                     {current.sizeBytes ? ` · ${formatSize(current.sizeBytes)}` : ''}
                   </p>
+                  {formatSyncedAt(syncedAt) && (
+                    <p className="mt-0.5 text-[11px] font-medium text-slate-400">
+                      Laatst bijgewerkt {formatSyncedAt(syncedAt)}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2">
