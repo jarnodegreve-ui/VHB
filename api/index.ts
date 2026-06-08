@@ -218,6 +218,67 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
   }
 });
 
+// Beschikbaarheid per dag — voor het bezettingsoverzicht + dienstruil-
+// matching. Geeft minimale data terug (per dag: wie rijdt / op verlof /
+// vrij) zodat ook chauffeurs (die normaal enkel hun eigen shifts zien)
+// kunnen zien wie er vrij is om mee te ruilen. Geen shift-details, enkel
+// driver-ids + namen. Toegankelijk voor alle ingelogde gebruikers.
+app.get("/api/availability", authenticate, async (req, res) => {
+  try {
+    const from = typeof req.query.from === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.from) ? req.query.from : undefined;
+    const to = typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to) ? req.query.to : undefined;
+    if (!from || !to || from > to) {
+      return res.status(400).json({ error: "Geef geldige from/to-datums (YYYY-MM-DD), met from <= to." });
+    }
+
+    // Datums in [from, to] enumereren (guard van 120 dagen tegen runaway).
+    const dates: string[] = [];
+    {
+      const cursor = new Date(`${from}T00:00:00Z`);
+      const end = new Date(`${to}T00:00:00Z`);
+      let guard = 0;
+      while (cursor <= end && guard < 120) {
+        dates.push(cursor.toISOString().slice(0, 10));
+        cursor.setUTCDate(cursor.getUTCDate() + 1);
+        guard++;
+      }
+    }
+    if (dates.length === 0) return res.json({ from, to, drivers: [], days: [] });
+
+    const months = Array.from(new Set(dates.map((d) => d.slice(0, 7))));
+    const [users, leave] = await Promise.all([getUsersData(), getLeaveData()]);
+    const shiftChunks = await Promise.all(months.map((m) => getPlanningData({ monthIso: m })));
+    const shifts = shiftChunks.flat().filter((s: any) => s.date >= from && s.date <= to);
+
+    const chauffeurs = users
+      .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && String(u.name).toLowerCase() !== "beheerder")
+      .map((u: any) => ({ id: String(u.id), name: u.name as string }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
+    const approvedLeave = leave.filter((l: any) => l.status === "approved");
+
+    const days = dates.map((date) => {
+      const working = new Set<string>();
+      for (const s of shifts) {
+        if (s.date === date && chauffeurIds.has(String(s.driverId))) working.add(String(s.driverId));
+      }
+      const onLeave = new Set<string>();
+      for (const l of approvedLeave) {
+        if (String(l.startDate) <= date && date <= String(l.endDate) && chauffeurIds.has(String(l.userId))) {
+          onLeave.add(String(l.userId));
+        }
+      }
+      const free = chauffeurs.filter((c) => !working.has(c.id) && !onLeave.has(c.id)).map((c) => c.id);
+      return { date, working: Array.from(working), leave: Array.from(onLeave), free };
+    });
+
+    res.json({ from, to, drivers: chauffeurs, days });
+  } catch (err: any) {
+    console.error("Error computing availability:", err);
+    res.status(500).json({ error: "Kon beschikbaarheid niet berekenen." });
+  }
+});
+
 app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const rows = await getPlanningMatrixRows();
