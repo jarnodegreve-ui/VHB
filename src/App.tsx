@@ -71,6 +71,7 @@ import { ManageDiversionsView } from './views/admin/ManageDiversionsView';
 import { ManageServicesView } from './views/admin/ManageServicesView';
 import { VerlofKalenderView } from './views/admin/VerlofKalenderView';
 import { RitblaadjesView } from './views/RitblaadjesView';
+import { CapacityView } from './views/CapacityView';
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazy(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -79,7 +80,7 @@ const LazyPrintMonthlyScheduleView = lazy(() => import('./views/PrintMonthlySche
 
 
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
-  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'contacten', 'updates', 'ruil-verzoeken', 'verlof'],
+  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'],
   planner: [
     'dashboard',
     'rooster',
@@ -89,6 +90,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'contacten',
     'updates',
     'ruil-verzoeken',
+    'bezetting',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -108,6 +110,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'contacten',
     'updates',
     'ruil-verzoeken',
+    'bezetting',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -854,6 +857,7 @@ export default function App() {
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
+    bezetting: { title: 'Maandrooster', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
     'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
@@ -995,6 +999,12 @@ export default function App() {
             active={currentView === 'ruil-verzoeken'}
             onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }}
             badge={isPlanner ? pendingSwapsCount : undefined}
+          />
+          <NavItem
+            icon={<Users size={20} />}
+            label="Maandrooster"
+            active={currentView === 'bezetting'}
+            onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
           />
           <NavItem
             icon={<Calendar size={20} />}
@@ -1253,6 +1263,7 @@ export default function App() {
                 </Suspense>
               )}
               {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
+              {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'verlof-kalender' && <VerlofKalenderView users={users} leaveRequests={leaveRequests} />}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
                 <Suspense fallback={<ViewLoader />}>
