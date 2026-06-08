@@ -1263,7 +1263,7 @@ export default function App() {
                 </Suspense>
               )}
               {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
-              {resolvedCurrentView === 'bezetting' && <CapacityView />}
+              {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'verlof-kalender' && <VerlofKalenderView users={users} leaveRequests={leaveRequests} />}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
                 <Suspense fallback={<ViewLoader />}>

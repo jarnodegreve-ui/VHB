@@ -4,6 +4,7 @@ import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type CellKind } from '../lib/monthPlanning';
+import type { User } from '../types';
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -32,7 +33,8 @@ const KIND_LABEL: Record<CellKind, string> = {
  * datum met codes), zoals het overzicht dat in het chauffeurslokaal hangt.
  * Zichtbaar voor iedereen zodat collega's wissels kunnen vinden.
  */
-export function CapacityView() {
+export function CapacityView({ currentUser }: { currentUser: User }) {
+  const ownId = String(currentUser?.id ?? '');
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -68,7 +70,12 @@ export function CapacityView() {
   const dayHeader = (iso: string) => {
     const d = new Date(`${iso}T00:00:00`);
     const jsDay = d.getDay();
-    return { letter: WEEKDAY_LETTERS[jsDay === 0 ? 6 : jsDay - 1], day: d.getDate(), weekend: jsDay === 0 || jsDay === 6 };
+    return {
+      letter: WEEKDAY_LETTERS[jsDay === 0 ? 6 : jsDay - 1],
+      day: d.getDate(),
+      weekend: jsDay === 0 || jsDay === 6,
+      isMonday: jsDay === 1,
+    };
   };
 
   const hasData = dates.length > 0 && drivers.length > 0;
@@ -115,13 +122,20 @@ export function CapacityView() {
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="bg-slate-50/60 border-b border-slate-100">
-                    <th className="sticky left-0 z-10 bg-slate-50/95 backdrop-blur px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 min-w-[170px]">Chauffeur</th>
+                  <tr>
+                    <th className="sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
                     {dates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
                       return (
-                        <th key={iso} className={cn('px-1 py-2 text-center font-medium border-l border-slate-100', h.weekend && 'bg-slate-100/50', today && 'bg-oker-50')}>
+                        <th
+                          key={iso}
+                          className={cn(
+                            'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-slate-300',
+                            h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
+                            today ? 'bg-oker-100' : h.weekend ? 'bg-slate-100' : 'bg-slate-50',
+                          )}
+                        >
                           <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{h.letter}</div>
                           <div className={cn('text-xs font-black mt-0.5', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
                         </th>
@@ -130,19 +144,42 @@ export function CapacityView() {
                   </tr>
                 </thead>
                 <tbody>
-                  {drivers.map((drv) => {
+                  {drivers.map((drv, i) => {
                     const row = cells[drv.id] || {};
+                    const isOwn = ownId && drv.id === ownId;
+                    const rowBg = isOwn ? 'bg-oker-50' : i % 2 === 1 ? 'bg-slate-50/70' : 'bg-white';
                     return (
-                      <tr key={drv.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
-                        <td className="sticky left-0 z-10 bg-white/95 backdrop-blur px-4 py-2 text-sm font-bold text-slate-800 min-w-[170px] truncate">{drv.name}</td>
+                      <tr key={drv.id} className={cn('group border-b border-slate-200', rowBg)}>
+                        <td
+                          className={cn(
+                            'sticky left-0 z-10 px-4 py-2 text-sm font-bold min-w-[180px] truncate border-r-2 border-slate-300 transition-colors',
+                            rowBg,
+                            'group-hover:bg-oker-50',
+                            isOwn ? 'text-oker-800' : 'text-slate-800',
+                          )}
+                        >
+                          <span className="inline-flex items-center gap-1.5">
+                            {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500" aria-hidden />}
+                            {drv.name}
+                            {isOwn && <span className="text-[9px] font-black uppercase tracking-widest text-oker-600">jij</span>}
+                          </span>
+                        </td>
                         {dates.map((iso) => {
                           const cell = row[iso];
+                          const h = dayHeader(iso);
                           const today = iso === todayIso;
-                          const weekend = dayHeader(iso).weekend;
                           return (
-                            <td key={iso} className={cn('border-l border-slate-100 h-9 px-0.5 text-center', !cell && weekend && 'bg-slate-50/40', !cell && today && 'bg-oker-50/30')}>
+                            <td
+                              key={iso}
+                              className={cn(
+                                'h-9 px-0.5 text-center transition-colors group-hover:bg-oker-50/60',
+                                h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
+                                !cell && today && 'bg-oker-50/40',
+                                !cell && !today && h.weekend && 'bg-slate-100/50',
+                              )}
+                            >
                               {cell && (
-                                <span className={cn('inline-block min-w-[28px] rounded-md px-1 py-0.5 text-[10px] font-black tabular-nums', KIND_CLS[cell.kind])} title={`${KIND_LABEL[cell.kind]} · ${cell.code}`}>
+                                <span className={cn('inline-block min-w-[30px] rounded-md px-1 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])} title={`${KIND_LABEL[cell.kind]} · ${cell.code}`}>
                                   {cell.code}
                                 </span>
                               )}
@@ -162,10 +199,15 @@ export function CapacityView() {
             {drivers.map((drv) => {
               const row = cells[drv.id] || {};
               const entries = dates.filter((iso) => row[iso]).map((iso) => ({ iso, cell: row[iso] }));
+              const isOwn = ownId && drv.id === ownId;
               return (
-                <div key={drv.id} className="p-4">
+                <div key={drv.id} className={cn('p-4', isOwn && 'bg-oker-50')}>
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className="text-sm font-bold text-slate-800 truncate">{drv.name}</div>
+                    <div className={cn('text-sm font-bold truncate inline-flex items-center gap-1.5', isOwn ? 'text-oker-800' : 'text-slate-800')}>
+                      {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" aria-hidden />}
+                      {drv.name}
+                      {isOwn && <span className="text-[9px] font-black uppercase tracking-widest text-oker-600">jij</span>}
+                    </div>
                     <div className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">{entries.length}</div>
                   </div>
                   {entries.length === 0 ? (
