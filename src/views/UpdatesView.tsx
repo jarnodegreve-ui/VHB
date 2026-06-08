@@ -37,7 +37,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
         )}
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         {filteredUpdates.length > 0 ? (
           filteredUpdates.map(update => {
             const isExpanded = expandedUpdateIds.includes(update.id);
