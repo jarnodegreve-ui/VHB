@@ -12,6 +12,7 @@ const MONTH_NAMES = [
   'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
 ];
 const WEEKDAY_LETTERS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
+const WEEKDAY_SHORT = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 
 const KIND_CLS: Record<CellKind, string> = {
   service: 'bg-oker-50 text-oker-700',
@@ -296,17 +297,27 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   {entries.length === 0 ? (
                     <div className="mt-2 text-xs text-slate-300 italic">Niets gepland in deze periode.</div>
                   ) : (
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {entries.map(({ iso, cell }) => (
-                        <button
-                          key={iso}
-                          type="button"
-                          onClick={() => setSelected({ driverName: drv.name, iso, cell })}
-                          className={cn('inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ring-1 ring-black/5 active:scale-95 transition', KIND_CLS[cell.kind])}
-                        >
-                          <span className="opacity-60">{new Date(`${iso}T00:00:00`).getDate()}</span> {cell.code}
-                        </button>
-                      ))}
+                    <div className="mt-2">
+                      {entries.map(({ iso, cell }) => {
+                        const d = new Date(`${iso}T00:00:00`);
+                        const wd = WEEKDAY_SHORT[(d.getDay() + 6) % 7];
+                        const today = iso === todayIso;
+                        const summary = cell.kind === 'service'
+                          ? (cell.segments.length ? cell.segments.join(' · ') : 'Dienst')
+                          : cell.label;
+                        return (
+                          <button
+                            key={iso}
+                            type="button"
+                            onClick={() => setSelected({ driverName: drv.name, iso, cell })}
+                            className="w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left active:bg-black/[0.04] transition-colors"
+                          >
+                            <span className={cn('w-11 shrink-0 text-xs font-bold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
+                            <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
+                            <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">{summary}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>
