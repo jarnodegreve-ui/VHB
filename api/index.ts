@@ -316,18 +316,26 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
     const idByNameKey = new Map(chauffeurs.map((c) => [c.key, c.id]));
 
     // Code-resolutie — zelfde logica als lib/planning.ts, server-side.
-    const serviceSet = new Set(services.map((s: any) => norm(s.serviceNumber)));
+    // We geven ook label + uren-segmenten mee zodat de UI per cel een
+    // detail kan tonen zonder de services/codes naar elke client te sturen.
+    const serviceByNorm = new Map(services.map((s: any) => [norm(s.serviceNumber), s]));
     const codeByNorm = new Map(codes.map((c: any) => [norm(c.code), c]));
-    const resolveKind = (code: string): string | null => {
+    const segmentsOf = (s: any): string[] => [
+      s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : "",
+      s.startTime2 && s.endTime2 ? `${s.startTime2} - ${s.endTime2}` : "",
+      s.startTime3 && s.endTime3 ? `${s.startTime3} - ${s.endTime3}` : "",
+    ].filter(Boolean);
+    const resolve = (code: string): { kind: string; label: string; segments: string[] } | null => {
       const n = norm(code);
       if (!n) return null;
-      if (serviceSet.has(n)) return "service";
+      const svc = serviceByNorm.get(n);
+      if (svc) return { kind: "service", label: `Dienst ${svc.serviceNumber}`, segments: segmentsOf(svc) };
       const pc = codeByNorm.get(n);
-      if (pc) return String(pc.category);
-      return "unknown";
+      if (pc) return { kind: String(pc.category), label: pc.description || String(pc.code).toUpperCase(), segments: [] };
+      return { kind: "unknown", label: "Onbekende code", segments: [] };
     };
 
-    const cells: Record<string, Record<string, { code: string; kind: string }>> = {};
+    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[] }>> = {};
     for (const row of monthRows) {
       const date = String(row.source_date);
       const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? row.assignments : {};
@@ -336,10 +344,10 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
         if (!id) continue;
         const code = String(rawCode ?? "").trim();
         if (!code) continue;
-        const kind = resolveKind(code);
-        if (!kind) continue;
+        const r = resolve(code);
+        if (!r) continue;
         if (!cells[id]) cells[id] = {};
-        cells[id][date] = { code, kind };
+        cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
       }
     }
 

@@ -7,7 +7,14 @@ import { apiFetch } from './api';
  */
 export type CellKind = 'service' | 'absence' | 'leave' | 'training' | 'unknown';
 
-export type MonthCell = { code: string; kind: CellKind };
+export type MonthCell = {
+  code: string;
+  kind: CellKind;
+  /** mensleesbaar label, bv. "Dienst 4101" of de omschrijving van een code */
+  label: string;
+  /** uren-segmenten "HH:MM - HH:MM" (enkel bij diensten, anders leeg) */
+  segments: string[];
+};
 
 export type MonthPlanning = {
   month: string;

@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { Modal } from '../components/Modal';
 import { isoDate } from '../lib/availability';
-import { fetchMonthPlanning, type MonthPlanning, type CellKind } from '../lib/monthPlanning';
+import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
 import type { User } from '../types';
 
 const MONTH_NAMES = [
@@ -42,6 +43,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const [data, setData] = useState<MonthPlanning | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [selected, setSelected] = useState<{ driverName: string; iso: string; cell: MonthCell } | null>(null);
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -76,6 +78,15 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       weekend: jsDay === 0 || jsDay === 6,
       isMonday: jsDay === 1,
     };
+  };
+
+  const formatDateLong = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    try {
+      return d.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+    } catch {
+      return iso;
+    }
   };
 
   const hasData = dates.length > 0 && drivers.length > 0;
@@ -179,9 +190,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               )}
                             >
                               {cell && (
-                                <span className={cn('inline-block min-w-[30px] rounded-md px-1 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])} title={`${KIND_LABEL[cell.kind]} · ${cell.code}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelected({ driverName: drv.name, iso, cell })}
+                                  className={cn('inline-block min-w-[30px] rounded-md px-1 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-black/5 cursor-pointer transition hover:ring-2 hover:ring-oker-400', KIND_CLS[cell.kind])}
+                                  title={`${KIND_LABEL[cell.kind]} · ${cell.code} — klik voor details`}
+                                >
                                   {cell.code}
-                                </span>
+                                </button>
                               )}
                             </td>
                           );
@@ -215,9 +231,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   ) : (
                     <div className="mt-2 flex flex-wrap gap-1.5">
                       {entries.map(({ iso, cell }) => (
-                        <span key={iso} className={cn('inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold', KIND_CLS[cell.kind])}>
+                        <button
+                          key={iso}
+                          type="button"
+                          onClick={() => setSelected({ driverName: drv.name, iso, cell })}
+                          className={cn('inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-bold ring-1 ring-black/5 active:scale-95 transition', KIND_CLS[cell.kind])}
+                        >
                           <span className="opacity-60">{new Date(`${iso}T00:00:00`).getDate()}</span> {cell.code}
-                        </span>
+                        </button>
                       ))}
                     </div>
                   )}
@@ -239,6 +260,47 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           </div>
         </>
       )}
+
+      <Modal open={!!selected} onClose={() => setSelected(null)} maxWidth="sm">
+        {selected && (
+          <div className="p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 capitalize">{formatDateLong(selected.iso)}</div>
+                <h3 className="mt-0.5 text-lg font-black tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
+              </div>
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            <div className="mt-4 flex items-center gap-2.5">
+              <span className={cn('inline-block rounded-lg px-2.5 py-1 text-sm font-black tabular-nums ring-1 ring-black/5', KIND_CLS[selected.cell.kind])}>{selected.cell.code}</span>
+              <span className="text-sm font-bold text-slate-700">{selected.cell.label}</span>
+            </div>
+
+            {selected.cell.kind === 'service' ? (
+              selected.cell.segments.length > 0 ? (
+                <div className="mt-5 space-y-2">
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Uren</div>
+                  {selected.cell.segments.map((seg, idx) => (
+                    <div key={idx} className="flex items-center gap-2 text-base font-black text-slate-800 tabular-nums">
+                      <Clock size={16} className="text-oker-500 shrink-0" /> {seg}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-5 text-sm font-medium text-slate-400">Geen uren bekend voor deze dienst in het dienstoverzicht.</p>
+              )
+            ) : (
+              <p className="mt-5 text-sm font-medium text-slate-500">
+                {KIND_LABEL[selected.cell.kind]}
+                {selected.cell.kind === 'unknown' && ' — staat (nog) niet in het dienstoverzicht of de planningscodes.'}
+              </p>
+            )}
+          </div>
+        )}
+      </Modal>
     </PageShell>
   );
 }
