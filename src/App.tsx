@@ -45,6 +45,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
 import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
+import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { MobileNavItem, NavItem } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
@@ -875,6 +876,8 @@ export default function App() {
       <div className="parallax-bg" aria-hidden="true" />
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      <OfflineBanner />
+      <InstallPrompt />
       <ChangePasswordModal
         isOpen={showChangePassword}
         onClose={() => setShowChangePassword(false)}
