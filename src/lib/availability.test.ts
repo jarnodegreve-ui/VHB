@@ -8,12 +8,13 @@ describe('availability — helpers', () => {
       working: ['a', 'b', 'c'],
       leave: ['b', 'd'],
       free: ['e'],
+      lines: {},
     };
     expect(conflictIds(day)).toEqual(['b']);
   });
 
   it('conflictIds: geen overlap → leeg', () => {
-    const day: AvailabilityDay = { date: '2026-07-06', working: ['a'], leave: ['b'], free: [] };
+    const day: AvailabilityDay = { date: '2026-07-06', working: ['a'], leave: ['b'], free: [], lines: {} };
     expect(conflictIds(day)).toEqual([]);
   });
 

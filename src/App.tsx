@@ -857,7 +857,7 @@ export default function App() {
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
-    bezetting: { title: 'Bezetting', subtitle: 'Wie rijdt, wie is met verlof en wie is vrij per dag.' },
+    bezetting: { title: 'Maandrooster', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
     'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
@@ -1002,7 +1002,7 @@ export default function App() {
           />
           <NavItem
             icon={<Users size={20} />}
-            label="Bezetting"
+            label="Maandrooster"
             active={currentView === 'bezetting'}
             onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
           />

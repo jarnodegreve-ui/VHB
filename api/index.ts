@@ -259,8 +259,16 @@ app.get("/api/availability", authenticate, async (req, res) => {
 
     const days = dates.map((date) => {
       const working = new Set<string>();
+      // Per werkende chauffeur het dienst-/lijnnummer (voor het maandrooster).
+      // Meerdere diensten op één dag → samengevoegd met '/'.
+      const lines: Record<string, string> = {};
       for (const s of shifts) {
-        if (s.date === date && chauffeurIds.has(String(s.driverId))) working.add(String(s.driverId));
+        if (s.date === date && chauffeurIds.has(String(s.driverId))) {
+          const id = String(s.driverId);
+          working.add(id);
+          const line = String(s.line ?? "").trim() || "•";
+          lines[id] = lines[id] ? `${lines[id]}/${line}` : line;
+        }
       }
       const onLeave = new Set<string>();
       for (const l of approvedLeave) {
@@ -269,7 +277,7 @@ app.get("/api/availability", authenticate, async (req, res) => {
         }
       }
       const free = chauffeurs.filter((c) => !working.has(c.id) && !onLeave.has(c.id)).map((c) => c.id);
-      return { date, working: Array.from(working), leave: Array.from(onLeave), free };
+      return { date, working: Array.from(working), leave: Array.from(onLeave), free, lines };
     });
 
     res.json({ from, to, drivers: chauffeurs, days });

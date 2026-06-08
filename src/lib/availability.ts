@@ -16,6 +16,8 @@ export type AvailabilityDay = {
   leave: string[];
   /** driver-ids zonder dienst én zonder verlof */
   free: string[];
+  /** per werkende driver-id: het dienst-/lijnnummer (bv. "4101", of "4101/4103") */
+  lines: Record<string, string>;
 };
 
 export type AvailabilityResponse = {
