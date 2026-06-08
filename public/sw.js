@@ -10,9 +10,13 @@
 // - Ritblaadje-PDF (publieke storage-URL met /ritblaadjes/ in pad): cache-
 //   first met achtergrond-revalidate, zodat de PDF offline blijft werken in
 //   de iframe + download (opaque response — prima voor weergave/download).
+// - Rooster (/api/planning): stale-while-revalidate — chauffeur ziet z'n
+//   diensten ook zonder signaal. Gecachet per volledige URL (incl.
+//   ?driverId=&month=), dus per gebruiker/maand geïsoleerd.
 // - Overige /api/*: network-only (geen stale-data risico).
-const CACHE_NAME = 'vhb-portaal-v2';
+const CACHE_NAME = 'vhb-portaal-v3';
 const RITBLAADJE_API = '/api/ritblaadje';
+const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
 
 self.addEventListener('install', (event) => {
@@ -59,8 +63,10 @@ self.addEventListener('fetch', (event) => {
   // Vanaf hier alleen same-origin.
   if (url.origin !== self.location.origin) return;
 
-  // === Ritblaadje-metadata — stale-while-revalidate ===
-  if (url.pathname === RITBLAADJE_API) {
+  // === Ritblaadje-metadata + rooster — stale-while-revalidate ===
+  // Keyed op de volledige URL (incl. query), dus /api/planning?driverId=…&
+  // month=… cachet per gebruiker/maand apart.
+  if (url.pathname === RITBLAADJE_API || url.pathname === PLANNING_API) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(req).then((cached) => {
