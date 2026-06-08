@@ -33,6 +33,22 @@ export const canCancelLeave = (
   _leave: Pick<LeaveRequest, 'userId' | 'status'>,
 ) => isPlannerOrAdmin(user);
 
+/**
+ * Mag de gebruiker zijn EIGEN nog-niet-besliste (pending) verlofaanvraag
+ * intrekken? Dit mag wél — een 'pending' aanvraag is nog nooit goedgekeurd,
+ * dus er is geen planning- of rij-/rusttijden-impact. Een vergissing snel
+ * zelf rechtzetten kan dus. Goedgekeurd verlof annuleren blijft via
+ * `canCancelLeave` (planner/admin), zodat dáár de validatie behouden blijft.
+ */
+export const canWithdrawOwnLeave = (
+  user: Pick<User, 'id' | 'role'> | null | undefined,
+  leave: Pick<LeaveRequest, 'userId' | 'status'>,
+) => {
+  if (!user) return false;
+  if (leave.status !== 'pending') return false;
+  return String(leave.userId) === String(user.id) || isPlannerOrAdmin(user);
+};
+
 /** Mag de gebruiker zelf een verlofaanvraag indienen voor een chauffeur? */
 export const canSubmitLeaveFor = (
   actor: Pick<User, 'id' | 'role'> | null | undefined,

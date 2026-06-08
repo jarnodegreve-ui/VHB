@@ -186,6 +186,18 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
     onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, ...update } : r)));
   };
 
+  // Eigen nog-niet-besliste aanvraag intrekken (vergissing rechtzetten).
+  // Mag alleen voor 'pending' — de aanvraag wordt volledig verwijderd, niet
+  // op 'cancelled' gezet. Goedgekeurd verlof blijft via handleCancel
+  // (planner/admin) zodat de rij-/rusttijden-check intact blijft.
+  const handleWithdraw = (requestId: string) => {
+    const target = leaveRequests.find((r) => r.id === requestId);
+    if (!target || target.status !== 'pending') return;
+    if (!window.confirm('Deze openstaande aanvraag intrekken? Ze wordt volledig verwijderd.')) return;
+    onSave(leaveRequests.filter((r) => r.id !== requestId));
+    notify('Aanvraag ingetrokken.', 'success');
+  };
+
   const initialLastSeen = useRef(lastSeenDecisionAt ?? null).current;
   const isNewlyDecided = (req: LeaveRequest) =>
     req.userId === user.id &&
@@ -456,6 +468,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
             emptyText="Geen openstaande aanvragen."
             requests={myPending}
             isNew={isNewlyDecided}
+            onWithdraw={handleWithdraw}
           />
 
           <MyLeaveSection
@@ -623,7 +636,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   );
 }
 
-function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void }) {
+function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void }) {
   const statusLabels: Record<LeaveRequest['status'], string> = {
     pending: 'In behandeling',
     approved: 'Goedgekeurd',
@@ -667,6 +680,15 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel }: 
                   className="ios-pressable mt-4 w-full rounded-2xl border border-red-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-red-500 hover:bg-red-50 transition-colors"
                 >
                   Verlof annuleren
+                </button>
+              )}
+              {onWithdraw && req.status === 'pending' && (
+                <button
+                  type="button"
+                  onClick={() => onWithdraw(req.id)}
+                  className="ios-pressable mt-4 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+                >
+                  Aanvraag intrekken
                 </button>
               )}
             </div>

@@ -3,6 +3,7 @@ import type { LeaveRequest, User } from '../types';
 import {
   canApproveLeave,
   canCancelLeave,
+  canWithdrawOwnLeave,
   canDecideSwap,
   canManagePlanning,
   canManageUsers,
@@ -74,6 +75,25 @@ describe('authorization — verlof', () => {
     expect(canCancelLeave(chauffeur, pendingLeave)).toBe(false);
     expect(canCancelLeave(planner, pendingLeave)).toBe(true);
     expect(canCancelLeave(admin, pendingLeave)).toBe(true);
+  });
+
+  it('chauffeur mag z\'n EIGEN pending aanvraag intrekken, niet die van een ander', () => {
+    expect(canWithdrawOwnLeave(chauffeur, pendingLeave)).toBe(true); // pendingLeave.userId === driver-1
+    const andersPending: LeaveRequest = { ...pendingLeave, userId: 'driver-2' };
+    expect(canWithdrawOwnLeave(chauffeur, andersPending)).toBe(false);
+  });
+
+  it('intrekken mag NIET voor goedgekeurd/afgewezen verlof (alleen pending)', () => {
+    const approved: LeaveRequest = { ...pendingLeave, status: 'approved' };
+    const rejected: LeaveRequest = { ...pendingLeave, status: 'rejected' };
+    expect(canWithdrawOwnLeave(chauffeur, approved)).toBe(false);
+    expect(canWithdrawOwnLeave(chauffeur, rejected)).toBe(false);
+  });
+
+  it('planner/admin mag elke pending aanvraag intrekken', () => {
+    const andersPending: LeaveRequest = { ...pendingLeave, userId: 'driver-2' };
+    expect(canWithdrawOwnLeave(planner, andersPending)).toBe(true);
+    expect(canWithdrawOwnLeave(admin, andersPending)).toBe(true);
   });
 
   it('chauffeur dient alleen voor zichzelf in', () => {
