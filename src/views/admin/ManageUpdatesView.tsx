@@ -132,17 +132,6 @@ export function ManageUpdatesView({
         </h3>
         <form onSubmit={handlePublish} className="space-y-6">
           <Input label="Titel" type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
-          <Input
-            label="Categorie"
-            type="select"
-            options={[
-              { label: 'Algemeen', value: 'algemeen' },
-              { label: 'Veiligheid', value: 'veiligheid' },
-              { label: 'Technisch', value: 'technisch' },
-            ]}
-            value={updateForm.category}
-            onChange={(e) => setUpdateForm({ ...updateForm, category: e.target.value })}
-          />
 
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
             {canSendUrgentEmail ? (
