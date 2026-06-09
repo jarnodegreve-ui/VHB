@@ -29,6 +29,8 @@ export interface SwapRecord {
   createdAt: string;
   reason?: string;
   decidedAt?: string;
+  returnDate?: string;
+  returnCode?: string;
 }
 
 export interface LeaveRecord {

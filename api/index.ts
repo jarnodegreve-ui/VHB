@@ -1117,6 +1117,9 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (String(next.targetDriverId) === selfId) {
             return res.status(400).json({ error: "Je kan geen dienstruil aan jezelf aanvragen." });
           }
+          if (!next.returnCode || String(next.returnCode).trim() === "" || !next.returnDate || String(next.returnDate).trim() === "") {
+            return res.status(400).json({ error: "Kies wat je in ruil neemt (een dienst of een vrije dag van de collega)." });
+          }
           if (next.decidedAt) {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
           }
@@ -1133,14 +1136,14 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
 
           if (isColleagueResponse) {
             // Enkel status (+ decidedAt bij weigeren) mag wijzigen; de rest niet.
-            const immutable = ["shiftId", "requesterId", "targetDriverId", "createdAt", "reason"] as const;
+            const immutable = ["shiftId", "requesterId", "targetDriverId", "createdAt", "reason", "returnDate", "returnCode"] as const;
             for (const f of immutable) {
               if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
                 return res.status(403).json({ error: "Niet toegestaan: je mag een aanvraag alleen accepteren of weigeren." });
               }
             }
           } else {
-            const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason", "decidedAt"] as const;
+            const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason", "decidedAt", "returnDate", "returnCode"] as const;
             for (const f of fields) {
               if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
                 return res.status(403).json({ error: "Niet toegestaan: bestaande wisselverzoeken kunnen alleen door planner/admin worden aangepast." });
