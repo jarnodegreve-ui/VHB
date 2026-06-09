@@ -1,8 +1,9 @@
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight } from 'lucide-react';
-import type { Diversion, LeaveRequest, Shift, User } from '../types';
+import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid } from 'lucide-react';
+import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
+import { verlofBalans } from '../lib/leaveBalance';
 import { Sparkline } from '../components/Sparkline';
 import { BrandBus } from '../components/BrandBus';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
@@ -25,6 +26,7 @@ export function DashboardView({
   users,
   leaveRequests = [],
   isInitialLoad = false,
+  onNavigate,
 }: {
   user: User;
   shifts: Shift[];
@@ -32,6 +34,7 @@ export function DashboardView({
   users: User[];
   leaveRequests?: LeaveRequest[];
   isInitialLoad?: boolean;
+  onNavigate?: (view: View) => void;
 }) {
   const [now, setNow] = useState(new Date());
 
@@ -55,6 +58,11 @@ export function DashboardView({
 
   const newestDiversions = [...diversions].reverse().slice(0, 3);
   const visibleShifts = myShifts.slice(0, 3);
+
+  // Verlofsaldo + 'deze maand' voor de extra dashboard-kaarten.
+  const balans = verlofBalans(leaveRequests, user.id, now.getFullYear(), user.verlofBudget);
+  const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const thisMonthShiftCount = myShifts.filter((s) => s.date.startsWith(monthPrefix)).length;
 
   // Volgende geplande diensten (toekomst, oplopend gesorteerd) — voor de
   // Planning-panel bij chauffeurs.
@@ -156,7 +164,7 @@ export function DashboardView({
 
       {/* === HERO ROW === */}
       {isChauffeur && nextShift ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {todaysShift ? (
             <StatTile
               icon={<Clock size={18} />}
@@ -235,11 +243,21 @@ export function DashboardView({
           </motion.div>
 
           <StatTile
+            icon={<Plane size={18} />}
+            color="blue"
+            label="Verlofsaldo"
+            value={balans.betaaldResterend}
+            subValue={`van ${balans.betaaldBudget} dagen over`}
+            onClick={onNavigate ? () => onNavigate('verlof') : undefined}
+          />
+
+          <StatTile
             icon={<AlertTriangle size={18} />}
             color="rose"
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
+            onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
             overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
           />
         </div>
@@ -268,8 +286,8 @@ export function DashboardView({
       )}
 
       {/* === Wide tiles row === */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        <PremiumPanel icon={<Calendar size={16} />} iconBg="bg-slate-900" title="Planning" subtitle={now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'long' })}>
+      <div className={`grid grid-cols-1 gap-4 lg:grid-cols-2 ${isChauffeur && onNavigate ? '2xl:grid-cols-3' : ''}`}>
+        <PremiumPanel icon={<Calendar size={16} />} iconBg="bg-slate-900" title="Planning" subtitle={isChauffeur ? `${thisMonthShiftCount} deze maand` : now.toLocaleDateString('nl-BE', { day: '2-digit', month: 'long' })}>
           {/* Chauffeur: volgende geplande diensten (toekomst). De vrije-dag
               empty state + busje staat nu in de 'Vandaag'-tile bovenaan.
               Planner/admin: bredere lijst met komende diensten + namen. */}
@@ -332,8 +350,36 @@ export function DashboardView({
             <EmptyTile icon={<MapPin size={20} />} title="Geen actieve hinder" subtitle="Geen omleidingen geregistreerd." />
           )}
         </PremiumPanel>
+
+        {/* Snelkoppelingen — vult de breedte op breedbeeld + handige sprongen. */}
+        {isChauffeur && onNavigate && (
+          <div className="lg:col-span-2 2xl:col-span-1">
+            <PremiumPanel icon={<LayoutGrid size={16} />} iconBg="bg-slate-900" title="Snelkoppelingen">
+              <div className="grid grid-cols-2 gap-2.5">
+                <QuickLink icon={<Calendar size={16} />} label="Mijn Rooster" onClick={() => onNavigate('rooster')} />
+                <QuickLink icon={<Users size={16} />} label="Maandplanning" onClick={() => onNavigate('bezetting')} />
+                <QuickLink icon={<FileText size={16} />} label="Ritblaadjes" onClick={() => onNavigate('ritblaadjes')} />
+                <QuickLink icon={<RefreshCw size={16} />} label="Dienstruil" onClick={() => onNavigate('ruil-verzoeken')} />
+              </div>
+            </PremiumPanel>
+          </div>
+        )}
       </div>
     </div>
+  );
+}
+
+/** Knop in het Snelkoppelingen-paneel. */
+function QuickLink({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex items-center gap-2.5 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3 py-3 text-left hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all"
+    >
+      <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-100 text-slate-700 group-hover:bg-oker-100 group-hover:text-oker-700 transition-colors shrink-0">{icon}</span>
+      <span className="text-sm font-bold text-slate-800 truncate">{label}</span>
+    </button>
   );
 }
 

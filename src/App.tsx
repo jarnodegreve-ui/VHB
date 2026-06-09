@@ -907,7 +907,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="mx-auto flex h-screen w-full max-w-[1600px] bg-transparent text-slate-900 font-sans overflow-hidden">
+      <div className="flex h-screen w-full bg-transparent text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -1214,7 +1214,7 @@ export default function App() {
                       isInitialLoad={isInitialLoad}
                     />
                   )}
-                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />
+                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />
                 </div>
               )}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
