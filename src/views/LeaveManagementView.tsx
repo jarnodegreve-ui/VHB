@@ -8,6 +8,7 @@ import { PageHeader, PageShell } from '../components/ui';
 import { verlofBalans } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { leaveIdsWithConflict, shiftsConflictingWithLeave } from '../lib/conflicts';
+import { isoDate } from '../lib/availability';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
@@ -37,7 +38,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   })();
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
-  const today = new Date().toISOString().split('T')[0];
+  // Lokale dag i.p.v. UTC (toISOString gaf 's nachts in BE de vorige dag).
+  const today = isoDate(new Date());
   const myRequests = leaveRequests.filter((r) => r.userId === user.id);
   const myPending = myRequests
     .filter((r) => r.status === 'pending')

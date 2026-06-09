@@ -8,11 +8,16 @@ export const BETAALD_VERLOF_BUDGET = 24;
 
 const daysBetween = (startIso: string, endIso: string): number => {
   if (!startIso || !endIso) return 0;
-  const start = new Date(`${startIso}T00:00:00`);
-  const end = new Date(`${endIso}T00:00:00`);
-  const ms = end.getTime() - start.getTime();
+  // UTC-rekenen i.p.v. lokale tijd: een lokale dag is bij de overgang naar
+  // zomertijd (laatste zondag maart) maar 23u, waardoor floor() een hele
+  // verlofdag te weinig telde voor periodes die die dag bevatten. UTC-dagen
+  // zijn altijd 24u, dus geen DST-drift.
+  const [sy, sm, sd] = startIso.split('-').map(Number);
+  const [ey, em, ed] = endIso.split('-').map(Number);
+  if (!sy || !sm || !sd || !ey || !em || !ed) return 0;
+  const ms = Date.UTC(ey, em - 1, ed) - Date.UTC(sy, sm - 1, sd);
   if (Number.isNaN(ms) || ms < 0) return 0;
-  return Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+  return Math.round(ms / (1000 * 60 * 60 * 24)) + 1;
 };
 
 const clipToYear = (iso: string, year: number, fallback: 'start' | 'end') => {

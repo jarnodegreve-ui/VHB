@@ -20,12 +20,23 @@ export function computeDayGap(
   assignmentValues: string[],
 ): DayGap {
   const assigned = new Set(assignmentValues.map(normalizeCode));
-  const missing = expectedServiceNumbers.filter((s) => !assigned.has(normalizeCode(s)));
+  // Dedupe op genormaliseerde sleutel (en negeer lege entries) zodat een
+  // dubbel ingestelde verwachting niet dubbel telt; bewaar wel de originele
+  // schrijfwijze voor weergave. Houd in sync met src/lib/coverageGaps.ts.
+  const seen = new Set<string>();
+  const expectedUnique: string[] = [];
+  for (const s of expectedServiceNumbers) {
+    const key = normalizeCode(s);
+    if (key.length === 0 || seen.has(key)) continue;
+    seen.add(key);
+    expectedUnique.push(s);
+  }
+  const missing = expectedUnique.filter((s) => !assigned.has(normalizeCode(s)));
   return {
     date,
     dayType,
-    expected: expectedServiceNumbers.length,
-    covered: expectedServiceNumbers.length - missing.length,
+    expected: expectedUnique.length,
+    covered: expectedUnique.length - missing.length,
     missing,
   };
 }

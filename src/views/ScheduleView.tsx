@@ -7,6 +7,7 @@ import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
+import { isoDate } from '../lib/availability';
 
 // Categoriseer per starttijd voor visuele kleurcode — zelfde logica als
 // de maandprint.
@@ -101,10 +102,14 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
       (a, b) =>
         a.date.localeCompare(b.date) || a.earliestStart.localeCompare(b.earliestStart),
     );
-  }, [myShifts]);
+    // conflictIds zit in de body: zonder deze dep blijven de verlof-conflict-
+    // vlaggen stale wanneer alleen leaveRequests (en dus conflictIds) wijzigt.
+  }, [myShifts, conflictIds]);
 
-  // Splits toekomst / vandaag / verleden — chauffeur wil toekomst zien
-  const today = new Date().toISOString().split('T')[0];
+  // Splits toekomst / vandaag / verleden — chauffeur wil toekomst zien.
+  // isoDate = lokale tijd; toISOString() gaf in BE 's nachts de UTC-dag
+  // (off-by-one), waardoor 'vandaag' soms in 'verleden' belandde.
+  const today = isoDate(new Date());
   const upcoming = grouped.filter((g) => g.date >= today);
   const past = grouped.filter((g) => g.date < today).reverse();
 
@@ -289,8 +294,8 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                   </td>
                   <td className="px-6 py-5">
                     <div className="space-y-1">
-                      {g.segments.map((s, i) => (
-                        <div key={i} className="flex items-center gap-3 text-slate-700 font-bold">
+                      {g.segments.map((s) => (
+                        <div key={s.id} className="flex items-center gap-3 text-slate-700 font-bold">
                           <Clock size={14} className="text-oker-400 shrink-0" />
                           <span className="tabular-nums">
                             {s.startTime} – {s.endTime}
@@ -347,8 +352,8 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
 
               {/* Segmenten */}
               <div className="space-y-1.5 pl-1">
-                {g.segments.map((s, i) => (
-                  <div key={i} className="flex items-center gap-2 text-sm">
+                {g.segments.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2 text-sm">
                     <Clock size={12} className="text-slate-400 shrink-0" />
                     <span className="font-mono font-bold text-slate-700 tabular-nums">
                       {s.startTime} – {s.endTime}
