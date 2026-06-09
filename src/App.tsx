@@ -907,7 +907,7 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="flex h-screen w-screen bg-transparent text-slate-900 font-sans overflow-hidden">
+      <div className="mx-auto flex h-screen w-full max-w-[1600px] bg-transparent text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
