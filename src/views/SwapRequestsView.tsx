@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { History, Plus, X } from 'lucide-react';
+import { History, X, Check } from 'lucide-react';
 import type { Shift, SwapRequest, User } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability } from '../lib/availability';
+import { canRespondToSwap } from '../lib/authorization';
 
 export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -58,8 +59,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
     ? eligibleTargetDrivers.filter((u) => freeForDate.has(u.id)).length
     : null;
   const mySwaps = swaps.filter(s => s.requesterId === user.id);
+  // Aan mij gerichte ruilverzoeken: pending (te beantwoorden) + accepted
+  // (door mij geaccepteerd, wacht op planner) zodat de collega de status volgt.
   const availableSwaps = swaps.filter(s => {
-    if (s.status !== 'pending' || s.requesterId === user.id) return false;
+    if (s.requesterId === user.id) return false;
+    if (s.status !== 'pending' && s.status !== 'accepted') return false;
     // Tonen aan de chauffeur waaraan de ruil gericht is. Planner/admin
     // ziet alle openstaande ruilverzoeken (zoals voorheen).
     if (!isPlanner && s.targetDriverId && s.targetDriverId !== user.id) return false;
@@ -92,13 +96,23 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   };
 
   const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status']) => {
-    const decidedAt = newStatus !== 'pending' ? new Date().toISOString() : undefined;
+    // 'accepted' is een tussenstap (collega akkoord) — nog géén beslismoment;
+    // decidedAt zetten we pas bij een definitieve beslissing.
+    const isFinal = newStatus !== 'pending' && newStatus !== 'accepted';
+    const decidedAt = isFinal ? new Date().toISOString() : undefined;
     const updatedSwaps = swaps.map(s =>
       s.id === swapId
         ? { ...s, status: newStatus, ...(decidedAt ? { decidedAt } : {}) }
         : s
     );
     onSave(updatedSwaps);
+  };
+
+  // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
+  const handleAccept = (swapId: string) => handleStatusUpdate(swapId, 'accepted');
+  const handleDecline = (swapId: string) => {
+    if (!window.confirm('Deze dienstruil weigeren?')) return;
+    handleStatusUpdate(swapId, 'rejected');
   };
 
   const handleCancel = (swapId: string) => {
@@ -108,6 +122,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
   const statusLabels: Record<SwapRequest['status'], string> = {
     pending: 'In behandeling',
+    accepted: 'Wacht op planner',
     approved: 'Goedgekeurd',
     rejected: 'Afgewezen',
     cancelled: 'Geannuleerd',
@@ -115,6 +130,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   };
   const statusStyles: Record<SwapRequest['status'], string> = {
     pending: 'bg-amber-50 text-amber-600',
+    accepted: 'bg-indigo-50 text-indigo-600',
     approved: 'bg-emerald-50 text-emerald-600',
     rejected: 'bg-red-50 text-red-600',
     cancelled: 'bg-slate-100 text-slate-500',
@@ -172,6 +188,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
             availableSwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
               const requester = users.find(u => u.id === swap.requesterId);
+              const canRespond = canRespondToSwap(user, swap);
               return (
                 <div key={swap.id} className="surface-card p-6 rounded-[32px] space-y-4">
                   <div className="flex items-start justify-between gap-3">
@@ -181,11 +198,32 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Door: {requester?.name}</p>
                     </div>
-                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest bg-amber-50 text-amber-600 shrink-0">
-                      Wacht op planner
+                    <span className={cn(
+                      'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0',
+                      swap.status === 'accepted' ? statusStyles.accepted : 'bg-amber-50 text-amber-600',
+                    )}>
+                      {swap.status === 'accepted' ? 'Wacht op planner' : canRespond ? 'Jouw antwoord' : 'Wacht op planner'}
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
+                  {canRespond ? (
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        onClick={() => handleAccept(swap.id)}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                      >
+                        <Check size={16} /> Accepteren
+                      </button>
+                      <button
+                        onClick={() => handleDecline(swap.id)}
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                      >
+                        <X size={16} /> Weigeren
+                      </button>
+                    </div>
+                  ) : swap.status === 'accepted' && swap.targetDriverId === user.id ? (
+                    <p className="text-[11px] font-bold text-indigo-500">Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).</p>
+                  ) : null}
                 </div>
               );
             })
@@ -197,7 +235,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
       {isPlanner && (() => {
         const actionableSwaps = swaps.filter(s => {
-          if (s.status !== 'pending' && s.status !== 'approved') return false;
+          if (s.status !== 'pending' && s.status !== 'accepted' && s.status !== 'approved') return false;
           const requester = users.find(u => u.id === s.requesterId);
           const isBeheerder = requester?.name.toLowerCase() === 'beheerder';
           const isMe = s.requesterId === user.id;
@@ -226,7 +264,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                       const requester = users.find(u => u.id === swap.requesterId);
                       return (
                         <tr key={swap.id}>
-                          <td className="px-6 py-4 font-bold text-sm">{requester?.name}</td>
+                          <td className="px-6 py-4 font-bold text-sm">
+                            {requester?.name}
+                            {swap.targetDriverId && (
+                              <span className="block text-[11px] font-medium text-slate-400">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
+                            )}
+                          </td>
                           <td className="px-6 py-4 text-xs font-medium">
                             <span className="font-black text-oker-700">Dienst {getServiceNumber(shift)}</span>
                             <span className="text-slate-500"> — {shift?.date} ({shift?.startTime} - {shift?.endTime})</span>
@@ -236,11 +279,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                           </td>
                           <td className="px-6 py-4 flex gap-2">
                             <button onClick={() => setHistorySwap(swap)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"><History size={18} /></button>
-                            {swap.status === 'pending' && (
+                            {swap.status === 'accepted' && (
                               <>
-                                <button onClick={() => handleStatusUpdate(swap.id, 'approved')} title="Goedkeuren" className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Plus size={18} /></button>
+                                <button onClick={() => handleStatusUpdate(swap.id, 'approved')} title="Goedkeuren (rij-/rusttijden ok)" className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Check size={18} /></button>
                                 <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
                               </>
+                            )}
+                            {swap.status === 'pending' && (
+                              <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen (wacht op collega)" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
                             )}
                             {swap.status === 'approved' && (
                               <button onClick={() => handleCancel(swap.id)} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">Annuleren</button>
@@ -262,22 +308,33 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     <div key={swap.id} className="p-5 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="font-black text-slate-800 tracking-tight">{requester?.name}</p>
+                          <p className="font-black text-slate-800 tracking-tight">
+                            {requester?.name}
+                            {swap.targetDriverId && <span className="font-medium text-slate-400"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
+                          </p>
                           <p className="text-[10px] font-black text-oker-700 uppercase tracking-widest mt-1">Dienst {getServiceNumber(shift)}</p>
                           <p className="text-xs font-medium text-slate-500 mt-1">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
                         </div>
                         <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                       </div>
                       <div className="flex gap-2 pt-1">
-                        {swap.status === 'pending' && (
+                        {swap.status === 'accepted' && (
                           <>
                             <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
-                              <Plus size={16} /> Goedkeuren
+                              <Check size={16} /> Goedkeuren
                             </button>
                             <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
                               <X size={16} /> Afwijzen
                             </button>
                           </>
+                        )}
+                        {swap.status === 'pending' && (
+                          <div className="flex-1 flex items-center justify-between gap-2">
+                            <span className="text-[11px] font-bold text-amber-600">Wacht op antwoord collega</span>
+                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="py-2 px-3 rounded-xl bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">
+                              Afwijzen
+                            </button>
+                          </div>
                         )}
                         {swap.status === 'approved' && (
                           <button onClick={() => handleCancel(swap.id)} className="flex-1 py-3 rounded-2xl border border-red-200 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 transition-colors">

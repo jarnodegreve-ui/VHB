@@ -1042,10 +1042,30 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
           }
         } else {
-          const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason", "decidedAt"] as const;
-          for (const f of fields) {
-            if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
-              return res.status(403).json({ error: "Niet toegestaan: bestaande wisselverzoeken kunnen alleen door planner/admin worden aangepast." });
+          // De aangeduide collega mag een aan hem/haar gerichte, openstaande
+          // ruil accepteren (pending → accepted) of weigeren (pending → rejected).
+          // Definitieve goedkeuring blijft bij planner/admin (rij-/rusttijden).
+          const selfIsTarget = String(prev.targetDriverId ?? "") === selfId;
+          const selfIsRequester = String(prev.requesterId) === selfId;
+          const isColleagueResponse =
+            selfIsTarget && !selfIsRequester &&
+            prev.status === "pending" &&
+            (next.status === "accepted" || next.status === "rejected");
+
+          if (isColleagueResponse) {
+            // Enkel status (+ decidedAt bij weigeren) mag wijzigen; de rest niet.
+            const immutable = ["shiftId", "requesterId", "targetDriverId", "createdAt", "reason"] as const;
+            for (const f of immutable) {
+              if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
+                return res.status(403).json({ error: "Niet toegestaan: je mag een aanvraag alleen accepteren of weigeren." });
+              }
+            }
+          } else {
+            const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason", "decidedAt"] as const;
+            for (const f of fields) {
+              if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
+                return res.status(403).json({ error: "Niet toegestaan: bestaande wisselverzoeken kunnen alleen door planner/admin worden aangepast." });
+              }
             }
           }
         }
@@ -1065,7 +1085,8 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
       if (prev.status !== next.status && next.status !== "pending") {
         let action: string | null = null;
-        if (next.status === "approved") action = "Dienstruil goedgekeurd";
+        if (next.status === "accepted") action = "Dienstruil geaccepteerd";
+        else if (next.status === "approved") action = "Dienstruil goedgekeurd";
         else if (next.status === "rejected") action = "Dienstruil afgewezen";
         else if (next.status === "cancelled") action = "Dienstruil geannuleerd";
         else if (next.status === "completed") action = "Dienstruil voltooid";

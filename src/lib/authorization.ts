@@ -1,4 +1,4 @@
-import type { Role, User, LeaveRequest } from '../types';
+import type { Role, User, LeaveRequest, SwapRequest } from '../types';
 
 /**
  * Role-based authorization helpers — centrale plek voor wie wat mag doen.
@@ -78,6 +78,21 @@ export const canPostUpdates = (user: Pick<User, 'role'> | null | undefined) =>
 /** Mag de gebruiker de activiteit-log inzien? */
 export const canViewActivityLog = (user: Pick<User, 'role'> | null | undefined) => isAdmin(user);
 
-/** Mag de gebruiker een dienstruil beslissen (goedkeuren/weigeren)? */
+/** Mag de gebruiker een dienstruil valideren (definitief goedkeuren/weigeren)? */
 export const canDecideSwap = (user: Pick<User, 'role'> | null | undefined) =>
   isPlannerOrAdmin(user);
+
+/**
+ * Mag deze gebruiker een aan hem/haar gerichte dienstruil accepteren of
+ * weigeren? Enkel de aangeduide collega, op een nog openstaande (pending)
+ * ruil die niet van henzelf is. Na accepteren gaat 'ie naar 'accepted' en
+ * wacht op validatie door planner/admin (rij-/rusttijden).
+ */
+export const canRespondToSwap = (
+  user: Pick<User, 'id' | 'role'> | null | undefined,
+  swap: Pick<SwapRequest, 'status' | 'requesterId' | 'targetDriverId'>,
+): boolean =>
+  !!user &&
+  swap.status === 'pending' &&
+  swap.requesterId !== user.id &&
+  swap.targetDriverId === user.id;

@@ -30,7 +30,9 @@ export interface SwapRequest {
   shiftId: string;
   requesterId: string;
   targetDriverId?: string;
-  status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled';
+  // 'accepted' = de collega ging akkoord; wacht nog op validatie (rij-/
+  // rusttijden) door planner/admin → daarna 'approved'.
+  status: 'pending' | 'accepted' | 'approved' | 'rejected' | 'completed' | 'cancelled';
   createdAt: string;
   reason?: string;
   decidedAt?: string;

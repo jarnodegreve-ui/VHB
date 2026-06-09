@@ -25,7 +25,7 @@ export interface SwapRecord {
   shiftId: string;
   requesterId: string;
   targetDriverId?: string;
-  status: "pending" | "approved" | "rejected" | "completed" | "cancelled";
+  status: "pending" | "accepted" | "approved" | "rejected" | "completed" | "cancelled";
   createdAt: string;
   reason?: string;
   decidedAt?: string;
