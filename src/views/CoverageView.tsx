@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { Modal } from '../components/Modal';
+import { fetchAvailability } from '../lib/availability';
 import {
   fetchCoverageConfig,
   fetchCoverageGaps,
@@ -33,6 +35,10 @@ export function CoverageView() {
   const [error, setError] = useState('');
   const [showConfig, setShowConfig] = useState(false);
   const [onlyGaps, setOnlyGaps] = useState(true);
+  // Klik op een ontbrekende dienst → wie is er vrij die dag?
+  const [pick, setPick] = useState<{ date: string; code: string } | null>(null);
+  const [freeNames, setFreeNames] = useState<string[] | null>(null);
+  const [pickLoading, setPickLoading] = useState(false);
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -59,6 +65,24 @@ export function CoverageView() {
   }, [from, to]);
 
   const refetchGaps = () => fetchCoverageGaps(from, to).then((res) => setGaps(res.days)).catch(() => {});
+
+  // Vrije chauffeurs ophalen voor de gekozen dag (kandidaten om het gat te vullen).
+  useEffect(() => {
+    if (!pick) { setFreeNames(null); return; }
+    let cancelled = false;
+    setPickLoading(true);
+    setFreeNames(null);
+    fetchAvailability(pick.date, pick.date)
+      .then((res) => {
+        if (cancelled) return;
+        const day = res.days.find((d) => d.date === pick.date);
+        const freeSet = new Set(day?.free ?? []);
+        setFreeNames(res.drivers.filter((d) => freeSet.has(d.id)).map((d) => d.name).sort((a, b) => a.localeCompare(b)));
+      })
+      .catch(() => { if (!cancelled) setFreeNames([]); })
+      .finally(() => { if (!cancelled) setPickLoading(false); });
+    return () => { cancelled = true; };
+  }, [pick]);
 
   const toggleService = (dayType: string, svc: string) => {
     setDraft((prev) => {
@@ -213,7 +237,15 @@ export function CoverageView() {
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
                       {d.missing.map((svc) => (
-                        <span key={svc} className="rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-red-200">{svc}</span>
+                        <button
+                          key={svc}
+                          type="button"
+                          onClick={() => setPick({ date: d.date, code: svc })}
+                          title="Klik om te zien wie vrij is"
+                          className="rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
+                        >
+                          {svc}
+                        </button>
                       ))}
                     </div>
                   )}
@@ -223,6 +255,45 @@ export function CoverageView() {
           })}
         </div>
       )}
+
+      {/* Wie is vrij op de gekozen dag? — kandidaten om het gat te vullen */}
+      <Modal open={!!pick} onClose={() => setPick(null)} maxWidth="sm">
+        {pick && (
+          <div className="p-6">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Kandidaten voor dienst {pick.code}</div>
+                <h3 className="mt-0.5 text-lg font-black tracking-tight text-slate-900 capitalize">{dayLabel(pick.date)}</h3>
+              </div>
+              <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+                <X size={16} />
+              </button>
+            </div>
+
+            {pickLoading ? (
+              <div className="mt-5 flex items-center gap-3 text-slate-500">
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+                <span className="text-sm font-bold">Beschikbaarheid laden…</span>
+              </div>
+            ) : !freeNames || freeNames.length === 0 ? (
+              <p className="mt-5 text-sm font-medium text-slate-400">Niemand is vrij op deze dag (geen dienst én geen verlof).</p>
+            ) : (
+              <div className="mt-4">
+                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600">{freeNames.length} vrij</div>
+                <div className="mt-2 flex flex-col gap-1.5">
+                  {freeNames.map((name) => (
+                    <div key={name} className="flex items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">
+                      <UserCheck size={15} className="text-emerald-600 shrink-0" />
+                      <span className="text-sm font-bold text-slate-800 truncate">{name}</span>
+                    </div>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof die dag. De planner wijst de dienst toe in de planning.</p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </PageShell>
   );
 }
