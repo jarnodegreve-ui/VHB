@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Clock, Download, ChevronDown } from 'lucide-react';
+import { AlertTriangle, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { BrandEmptyState } from '../components/BrandEmptyState';
+import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
@@ -50,6 +51,7 @@ const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || 
 
 export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isInitialLoad = false }: { user: User; shifts: Shift[]; users: User[]; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean }) {
   const [showPast, setShowPast] = useState(false);
+  const [calendarOpen, setCalendarOpen] = useState(false);
 
   // Strict eigen diensten; voor het overzicht van alle chauffeurs gaat
   // planner/admin naar Beheer Roosters.
@@ -163,14 +165,16 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
         }
         actions={
           <button
-            onClick={exportToICS}
+            onClick={() => setCalendarOpen(true)}
             className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 transition-all active:scale-95"
           >
-            <Download size={16} className="text-oker-500" />
-            Export naar Agenda
+            <CalendarPlus size={16} className="text-oker-500" />
+            Aan agenda toevoegen
           </button>
         }
       />
+
+      <CalendarSubscribeModal open={calendarOpen} onClose={() => setCalendarOpen(false)} onDownload={exportToICS} />
 
       {isInitialLoad ? (
         <div className="surface-card rounded-[32px] overflow-hidden">

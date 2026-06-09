@@ -2,8 +2,11 @@ import express from "express";
 import cors from "cors";
 import fs from "fs";
 import path from "path";
+import crypto from "node:crypto";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
+
+import { buildCalendar, type IcsEvent } from "../src/lib/ics";
 
 import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
@@ -193,6 +196,80 @@ app.get("/api/planning", authenticate, async (req, res) => {
   } catch (err) {
     console.error("Error reading planning data:", err);
     res.status(500).json({ error: "Failed to read data" });
+  }
+});
+
+// === Agenda-abonnement (.ics-feed) =========================================
+// Chauffeurs abonneren hun diensten in Google/Apple Agenda via een
+// persoonlijke, token-beveiligde URL die de agenda-app periodiek ophaalt
+// (auto-update). De token is een HMAC over het user-id met een server-
+// secret — stateless, geen DB-kolom nodig. De feed bevat enkel de eigen
+// diensten (geen gevoelige data), maar behandel de URL als privé.
+const CAL_SECRET =
+  process.env.CALENDAR_FEED_SECRET ||
+  process.env.SUPABASE_SERVICE_ROLE_KEY ||
+  process.env.SUPABASE_ANON_KEY ||
+  "vhb-portaal-calendar-fallback-secret";
+
+const calendarToken = (userId: string) =>
+  crypto.createHmac("sha256", CAL_SECRET).update(`calendar:${userId}`).digest("hex");
+
+const verifyCalendarToken = (userId: string, token: string) => {
+  const expected = calendarToken(userId);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(String(token || ""));
+  return a.length === b.length && crypto.timingSafeEqual(a, b);
+};
+
+// Persoonlijke abonnee-links voor de ingelogde gebruiker.
+app.get("/api/calendar-url", authenticate, async (req: AuthenticatedRequest, res) => {
+  const u = req.appUser;
+  if (!u) return res.status(401).json({ error: "Niet aangemeld." });
+  const userId = String(u.id);
+  const token = calendarToken(userId);
+  const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "https").split(",")[0].trim();
+  const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
+  const feedPath = `/api/calendar/${encodeURIComponent(userId)}/${token}.ics`;
+  const url = `${proto}://${host}${feedPath}`;
+  const webcal = `webcal://${host}${feedPath}`;
+  const googleUrl = `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(webcal)}`;
+  res.json({ url, webcal, googleUrl });
+});
+
+// De feed zelf — GEEN bearer-auth (agenda-apps sturen geen headers); de
+// token in de URL authenticeert. Geeft text/calendar terug.
+app.get("/api/calendar/:userId/:token", async (req, res) => {
+  try {
+    const userId = String(req.params.userId || "");
+    const token = String(req.params.token || "").replace(/\.ics$/i, "");
+    if (!userId || !verifyCalendarToken(userId, token)) {
+      return res.status(404).send("Not found");
+    }
+    const [shifts, users] = await Promise.all([
+      getPlanningData({ driverId: userId }),
+      getUsersData(),
+    ]);
+    const user = users.find((u: any) => String(u.id) === userId);
+    const events: IcsEvent[] = (shifts as any[]).map((s) => ({
+      uid: `vhb-shift-${s.id}@vhb-portaal`,
+      date: String(s.date),
+      startTime: String(s.startTime || "00:00"),
+      endTime: String(s.endTime || "00:00"),
+      summary: `Dienst ${String(s.line || s.serviceNumber || "").trim()}`.trim(),
+      description: [s.busNumber && `Bus ${s.busNumber}`, s.loopnr && `Loop ${s.loopnr}`]
+        .filter(Boolean)
+        .join(" · ") || undefined,
+    }));
+    const dtstamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
+    const calName = user?.name ? `VHB Diensten — ${user.name}` : "VHB Diensten";
+    const ics = buildCalendar(events, { calName, dtstamp });
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Content-Disposition", 'inline; filename="vhb-diensten.ics"');
+    res.setHeader("Cache-Control", "no-cache, max-age=0");
+    res.send(ics);
+  } catch (err) {
+    console.error("Error building calendar feed:", err);
+    res.status(500).send("error");
   }
 });
 
