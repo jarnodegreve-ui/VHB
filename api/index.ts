@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
 import { buildCalendar, type IcsEvent } from "../src/lib/ics";
+import { computeDayGap, type DayGap } from "../src/lib/coverageGaps";
 
 import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
@@ -16,6 +17,8 @@ import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser } from "./hel
 import {
   buildPlanningFromMatrix,
   getActivityLog,
+  getCoverageExpectations,
+  saveCoverageExpectations,
   getEntityHistory,
   getDiversionsData,
   getLeaveData,
@@ -432,6 +435,82 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
   } catch (err: any) {
     console.error("Error computing month planning:", err);
     res.status(500).json({ error: "Kon maandplanning niet berekenen." });
+  }
+});
+
+// === Dekking: verwachte diensten per dag-type + niet-ingevulde diensten ===
+// Config + gaten-overzicht voor planner/admin. Een "gat" = een verwachte
+// dienst (ingesteld per dag-type) die op een dag door niemand is ingevuld.
+app.get("/api/coverage-expectations", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const [expectations, rows, services] = await Promise.all([
+      getCoverageExpectations(),
+      getPlanningMatrixRows(),
+      getServicesData(),
+    ]);
+    const dayTypes = Array.from(
+      new Set(rows.map((r: any) => String(r.day_type ?? "").trim()).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b));
+    const serviceNumbers = Array.from(
+      new Set((services as any[]).map((s) => String(s.serviceNumber ?? "").trim()).filter(Boolean)),
+    ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+    res.json({ expectations, dayTypes, services: serviceNumbers });
+  } catch (err) {
+    console.error("Error reading coverage expectations:", err);
+    res.status(500).json({ error: "Kon dekkingsinstellingen niet laden." });
+  }
+});
+
+app.put("/api/coverage-expectations", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const body = req.body?.expectations;
+    if (!body || typeof body !== "object" || Array.isArray(body)) {
+      return res.status(400).json({ error: "Verwacht { expectations: { dagtype: [dienstnummers] } }." });
+    }
+    const clean: Record<string, string[]> = {};
+    for (const [dayType, list] of Object.entries(body)) {
+      const dt = String(dayType).trim();
+      if (!dt) continue;
+      clean[dt] = Array.isArray(list) ? list.map((s) => String(s).trim()).filter(Boolean) : [];
+    }
+    await saveCoverageExpectations(clean);
+    await logActivity(req, "planning", "Dekkingsinstellingen bijgewerkt", "Verwachte diensten per dag-type aangepast.", undefined);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Error saving coverage expectations:", err);
+    res.status(500).json({ error: err?.message || "Opslaan mislukt. Bestaat de tabel coverage_expectations al?" });
+  }
+});
+
+app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const from = typeof req.query.from === "string" ? req.query.from : "";
+    const to = typeof req.query.to === "string" ? req.query.to : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+      return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
+    }
+    const [expectations, rows] = await Promise.all([
+      getCoverageExpectations(),
+      getPlanningMatrixRows(),
+    ]);
+    const inRange = rows
+      .filter((r: any) => {
+        const d = String(r.source_date ?? "");
+        return d >= from && d <= to;
+      })
+      .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
+    const days: DayGap[] = inRange.map((r: any) => {
+      const dayType = String(r.day_type ?? "").trim();
+      const expected = expectations[dayType] || [];
+      const assignmentValues = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
+        ? Object.values(r.assignments).map((v) => String(v))
+        : [];
+      return computeDayGap(String(r.source_date), dayType, expected, assignmentValues);
+    });
+    res.json({ from, to, days });
+  } catch (err) {
+    console.error("Error computing coverage gaps:", err);
+    res.status(500).json({ error: "Kon dekking niet berekenen." });
   }
 });
 

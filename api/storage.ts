@@ -1017,3 +1017,35 @@ export const saveLeaveData = async (data: any) => {
   const { error } = await client.from('leave').upsert(normalizedData.map(toDatabaseLeave));
   if (error) throw error;
 };
+
+// --- Coverage expectations (verwachte diensten per dag-type) ---
+// Vereist een tabel `coverage_expectations (day_type text primary key,
+// service_numbers text[])`. Als die (nog) niet bestaat geven we leeg terug
+// zodat de app niet crasht vóór de migratie gedraaid is.
+export const getCoverageExpectations = async (): Promise<Record<string, string[]>> => {
+  const client = requireDb();
+  const { data, error } = await client.from('coverage_expectations').select('*');
+  if (error) {
+    console.warn('coverage_expectations niet beschikbaar (migratie gedraaid?):', error.message);
+    return {};
+  }
+  const map: Record<string, string[]> = {};
+  for (const row of data || []) {
+    const dayType = String((row as any).day_type ?? '').trim();
+    if (!dayType) continue;
+    const raw = (row as any).service_numbers;
+    map[dayType] = Array.isArray(raw) ? raw.map((s: any) => String(s)) : [];
+  }
+  return map;
+};
+
+export const saveCoverageExpectations = async (map: Record<string, string[]>) => {
+  const client = requireDb();
+  const rows = Object.entries(map || {}).map(([day_type, service_numbers]) => ({
+    day_type: String(day_type),
+    service_numbers: Array.isArray(service_numbers) ? service_numbers.map((s) => String(s)) : [],
+  }));
+  if (rows.length === 0) return;
+  const { error } = await client.from('coverage_expectations').upsert(rows, { onConflict: 'day_type' });
+  if (error) throw error;
+};
