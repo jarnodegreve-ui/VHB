@@ -6,8 +6,8 @@ import crypto from "node:crypto";
 import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
-import { buildCalendar, type IcsEvent } from "../src/lib/ics";
-import { computeDayGap, type DayGap } from "../src/lib/coverageGaps";
+import { buildCalendar, type IcsEvent } from "./ics.js";
+import { computeDayGap, type DayGap } from "./coverageGaps.js";
 
 import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
