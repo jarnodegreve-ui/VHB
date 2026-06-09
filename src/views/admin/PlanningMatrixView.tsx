@@ -55,7 +55,10 @@ export function PlanningMatrixView({
     setVisibleDayCount(60);
   }, [showOnlyIssues]);
 
-  try {
+    // NB: de useMemo-hooks staan bewust BUITEN de try/catch verderop —
+    // React-hooks mogen niet binnen een try/catch draaien (Rules of Hooks):
+    // als de eerste hook gooit wordt de tweede overgeslagen → "rendered
+    // fewer hooks than expected" en een crash op de volgende render.
     const derived = useMemo(() => {
       const serviceCodeLookup = new Set(services.map((service) => normalizePlanningToken(service.serviceNumber)));
       const planningCodeLookup = new Set(planningCodes.map((code) => normalizePlanningToken(code.code)));
@@ -143,6 +146,10 @@ export function PlanningMatrixView({
         : [],
       [selectedRow, services, planningCodes]
     );
+
+    // Vanaf hier: geen hooks meer → veilig om in try/catch te wikkelen als
+    // render-vangnet (de catch toont een nette schermfout i.p.v. een crash).
+    try {
     const visibleRows = showOnlyIssues ? derived.rowsWithIssues : deferredRows;
     const serviceAssignments = assignments.filter((assignment) => assignment.kind === 'service').length;
     const unknownAssignments = assignments.filter((assignment) => assignment.kind === 'unknown').length;

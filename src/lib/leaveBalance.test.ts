@@ -119,6 +119,20 @@ describe('verlofBalans — over budget', () => {
   });
 });
 
+describe('verlofBalans — zomertijd (DST)', () => {
+  it('verlofperiode over de overgang naar zomertijd telt elke dag inclusief', () => {
+    // 2026: zomertijd begint zondag 29 maart (die lokale dag is maar 23u).
+    // 28, 29, 30 maart = 3 dagen — vroeger telde floor() er maar 2.
+    const leaves = [leave('l1', 'driver-1', '2026-03-28', '2026-03-30')];
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(3);
+  });
+
+  it('volledige week rond de zomertijd-overgang telt correct', () => {
+    const leaves = [leave('l1', 'driver-1', '2026-03-23', '2026-03-31')]; // 9 dagen
+    expect(verlofBalans(leaves, 'driver-1', 2026).betaaldGebruikt).toBe(9);
+  });
+});
+
 describe('verlofBalans — custom budget per gebruiker', () => {
   it('respecteert verlofBudget veld op user (bv. anciënniteit/deeltijds)', () => {
     const leaves = [leave('l1', 'driver-1', '2026-07-01', '2026-07-05')]; // 5 dagen

@@ -36,4 +36,17 @@ describe('coverageGaps', () => {
     const gap = computeDayGap('2026-07-06', 'weekdag', ['ABC1'], ['abc1']);
     expect(gap.missing).toEqual([]);
   });
+
+  it('computeDayGap: dubbele verwachte code telt maar één keer', () => {
+    const gap = computeDayGap('2026-07-07', 'weekdag', ['4101', '4101', '4102'], ['4102']);
+    expect(gap.expected).toBe(2);
+    expect(gap.covered).toBe(1);
+    expect(gap.missing).toEqual(['4101']);
+  });
+
+  it('computeDayGap: lege/whitespace verwachte entries worden genegeerd', () => {
+    const gap = computeDayGap('2026-07-08', 'weekdag', ['', '  ', '4101'], []);
+    expect(gap.expected).toBe(1);
+    expect(gap.missing).toEqual(['4101']);
+  });
 });

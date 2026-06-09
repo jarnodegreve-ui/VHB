@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid } from 'lucide-react';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
+import { isoDate } from '../lib/availability';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Sparkline } from '../components/Sparkline';
 import { BrandBus } from '../components/BrandBus';
@@ -44,7 +45,9 @@ export function DashboardView({
   }, []);
 
   const myShifts = shifts.filter((s) => s.driverId === user.id);
-  const today = now.toISOString().split('T')[0];
+  // Lokale dag (isoDate) i.p.v. toISOString(): die laatste gaf 's nachts in
+  // BE de UTC-dag terug, waardoor 'Vandaag' de verkeerde/geen dienst toonde.
+  const today = isoDate(now);
   const todaysShift = myShifts.find((shift) => shift.date === today);
 
   const nextShift = myShifts
@@ -249,6 +252,7 @@ export function DashboardView({
             value={balans.betaaldResterend}
             subValue={`van ${balans.betaaldBudget} dagen over`}
             onClick={onNavigate ? () => onNavigate('verlof') : undefined}
+            overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
           />
 
           <StatTile
@@ -258,7 +262,7 @@ export function DashboardView({
             value={diversions.length}
             subValue="Actief in netwerk"
             onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
-            overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
+            overlay={!todaysShift ? <DrivingBus delay="12s" /> : undefined}
           />
         </div>
       ) : (
@@ -280,7 +284,7 @@ export function DashboardView({
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
-            overlay={!todaysShift ? <DrivingBus delay="4s" /> : undefined}
+            overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
           />
         </div>
       )}

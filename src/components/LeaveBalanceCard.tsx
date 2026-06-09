@@ -9,7 +9,11 @@ import { cn } from '../lib/ui';
  * in de historiek).
  */
 export function LeaveBalanceCard({ balance, year, compact = false }: { balance: LeaveBalance; year: number; compact?: boolean }) {
-  const percentage = Math.min(100, Math.round((balance.betaaldGebruikt / balance.betaaldBudget) * 100));
+  const percentage = balance.betaaldBudget > 0
+    ? Math.min(100, Math.round((balance.betaaldGebruikt / balance.betaaldBudget) * 100))
+    : balance.betaaldGebruikt > 0
+      ? 100
+      : 0;
   const overBudget = balance.betaaldGebruikt > balance.betaaldBudget;
 
   return (

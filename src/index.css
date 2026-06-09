@@ -447,7 +447,7 @@ html.dark {
      `48px` ≈ bus-breedte; pas mee aan als BrandBus-width wijzigt. */
   @keyframes bus-cross {
     0%   { transform: translateX(-48px); }
-    33%  { transform: translateX(100%); }
+    25%  { transform: translateX(100%); }
     100% { transform: translateX(100%); }
   }
   /* Hobbel-effect: zachte, vloeiende deining + minieme kanteling alsof
@@ -468,7 +468,7 @@ html.dark {
        geen layout/paint per frame (scheelt veel op Windows). */
     left: 0;
     right: 0;
-    animation: bus-cross 12s linear infinite;
+    animation: bus-cross 16s linear infinite;
     /* backwards: tijdens de positieve animation-delay alvast de 0%-staat
        (translateX(-48px), buiten beeld) tonen i.p.v. de statische positie. */
     animation-fill-mode: backwards;
