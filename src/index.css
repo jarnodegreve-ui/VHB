@@ -446,9 +446,9 @@ html.dark {
      telkens één bus die van tile naar tile lijkt over te springen.
      `48px` ≈ bus-breedte; pas mee aan als BrandBus-width wijzigt. */
   @keyframes bus-cross {
-    0%   { left: -48px; }
-    33%  { left: 100%; }
-    100% { left: 100%; }
+    0%   { transform: translateX(-48px); }
+    33%  { transform: translateX(100%); }
+    100% { transform: translateX(100%); }
   }
   /* Hobbel-effect: zachte, vloeiende deining + minieme kanteling alsof
      de bus over een licht oneffen weg rolt. Aparte cyclus van het rijden. */
@@ -462,25 +462,31 @@ html.dark {
   .bus-cross {
     position: absolute;
     bottom: 0;
+    /* Volle tile-breedte: zo is translateX(100%) == tile-breedte en rijdt
+       het busje (aan de linkerrand) netjes over de hele onderrand. We
+       animeren `transform` i.p.v. `left` zodat het GPU-composited is —
+       geen layout/paint per frame (scheelt veel op Windows). */
+    left: 0;
+    right: 0;
     animation: bus-cross 12s linear infinite;
     /* backwards: tijdens de positieve animation-delay alvast de 0%-staat
-       (left:-48px, buiten beeld) tonen i.p.v. de statische positie —
-       anders staan de nog-niet-gestarte busjes zichtbaar te wachten. */
+       (translateX(-48px), buiten beeld) tonen i.p.v. de statische positie. */
     animation-fill-mode: backwards;
-    will-change: left;
+    will-change: transform;
   }
   /* Inner wrapper draagt de hobbel zodat 't onafhankelijk van het
-     horizontale rijden loopt (los transform-kanaal). */
+     horizontale rijden loopt (los transform-kanaal). inline-block houdt
+     het busje aan de linkerrand van de volle-breedte .bus-cross. */
   .bus-cross > .bus-bump {
+    display: inline-block;
     animation: bus-bump 1.5s ease-in-out infinite;
     transform-origin: center bottom;
   }
-  @media (prefers-reduced-motion: reduce) {
-    /* Geen animatie → toon helemaal géén busjes. Anders parkeren er
-       meerdere stil onderaan in élke tile (5 render-plekken), wat
-       rommelig oogt — o.a. op Windows met "animaties uit". */
-    .driving-bus { display: none; }
-  }
+  /* Bewuste keuze: het rijdende busje blijft óók draaien bij
+     prefers-reduced-motion (bv. Windows met "animaties uit"). Het is een
+     gewild merk-element en sinds de transform-omzetting GPU-licht, dus
+     geen perf-reden meer om 't te verbergen. De vroegere reduced-motion-
+     fallback parkeerde 5 busjes stil — die rommel is nu weg. */
 
   /* Skeleton-loader shimmer */
   @keyframes shimmer {
