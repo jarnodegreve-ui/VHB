@@ -85,6 +85,8 @@ export const toPublicSwap = (swap: any): SwapRecord => ({
   createdAt: String(swap.createdAt ?? swap.createdat),
   reason: swap.reason ?? undefined,
   decidedAt: swap.decidedAt ?? swap.decidedat ?? undefined,
+  returnDate: swap.returnDate ?? swap.return_date ?? undefined,
+  returnCode: swap.returnCode ?? swap.return_code ?? undefined,
 });
 
 export const toDatabaseSwap = (swap: SwapRecord) => ({
@@ -96,6 +98,8 @@ export const toDatabaseSwap = (swap: SwapRecord) => ({
   createdat: String(swap.createdAt),
   reason: swap.reason || null,
   decidedat: swap.decidedAt || null,
+  return_date: swap.returnDate || null,
+  return_code: swap.returnCode || null,
 });
 
 export const toPublicDiversion = (d: any): DiversionRecord => ({

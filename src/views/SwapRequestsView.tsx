@@ -6,8 +6,10 @@ import type { Shift, SwapRequest, User } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
-import { fetchAvailability } from '../lib/availability';
+import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { canRespondToSwap } from '../lib/authorization';
+
+type ReturnOption = { date: string; code: string; isFree: boolean };
 
 export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -18,6 +20,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   // Dienstruil-matching: wie is vrij op de dag van de gekozen dienst?
   const [freeForDate, setFreeForDate] = useState<Set<string> | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
+  // 1-op-1 ruil: wat neemt de aanvrager in ruil van de collega?
+  const [returnPick, setReturnPick] = useState<string>(''); // "date|code"
+  const [returnOptions, setReturnOptions] = useState<ReturnOption[] | null>(null);
+  const [returnLoading, setReturnLoading] = useState(false);
 
   const selectedShiftDate = shifts.find((s) => s.id === selectedShift)?.date;
 
@@ -39,9 +45,48 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
     return () => { cancelled = true; };
   }, [selectedShiftDate]);
 
+  // Komende diensten + vrije dagen van de gekozen collega (8 weken vooruit),
+  // zodat de aanvrager kiest wat hij in ruil neemt (1-op-1 ruil).
+  useEffect(() => {
+    if (!selectedTargetDriver) {
+      setReturnOptions(null);
+      setReturnPick('');
+      return;
+    }
+    let cancelled = false;
+    setReturnLoading(true);
+    setReturnPick('');
+    const today = new Date();
+    fetchAvailability(isoDate(today), isoDate(addDays(today, 56)))
+      .then((res) => {
+        if (cancelled) return;
+        const opts: ReturnOption[] = [];
+        for (const day of res.days) {
+          const dienst = day.lines?.[selectedTargetDriver];
+          if (dienst) opts.push({ date: day.date, code: dienst, isFree: false });
+          else if (day.free?.includes(selectedTargetDriver)) opts.push({ date: day.date, code: 'vrij', isFree: true });
+        }
+        opts.sort((a, b) => a.date.localeCompare(b.date));
+        setReturnOptions(opts);
+      })
+      .catch(() => { if (!cancelled) setReturnOptions([]); })
+      .finally(() => { if (!cancelled) setReturnLoading(false); });
+    return () => { cancelled = true; };
+  }, [selectedTargetDriver]);
+
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const myShifts = shifts.filter(s => s.driverId === user.id);
   const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
+  const fmtShort = (iso: string) => {
+    try { return new Date(`${iso}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: '2-digit' }); }
+    catch { return iso; }
+  };
+  // "krijgt: dienst 4101 (vr 10/07)" of "krijgt: vrij (vr 10/07)"
+  const returnLabel = (swap: SwapRequest) => {
+    if (!swap.returnCode || !swap.returnDate) return null;
+    const what = swap.returnCode.toLowerCase() === 'vrij' ? 'vrij' : `dienst ${swap.returnCode}`;
+    return `${what} (${fmtShort(swap.returnDate)})`;
+  };
   const eligibleTargetDrivers = useMemo(() => {
     const base = users
       .filter((u) => u.id !== user.id && u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
@@ -76,7 +121,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
   const handleOfferShift = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedShift || !selectedTargetDriver) return;
+    if (!selectedShift || !selectedTargetDriver || !returnPick) return;
+
+    const sep = returnPick.indexOf('|');
+    const returnDate = returnPick.slice(0, sep);
+    const returnCode = returnPick.slice(sep + 1);
 
     const newSwap: SwapRequest = {
       id: Date.now().toString(),
@@ -86,6 +135,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
       status: 'pending',
       createdAt: new Date().toISOString(),
       reason,
+      returnDate,
+      returnCode,
     };
 
     onSave([...swaps, newSwap]);
@@ -93,6 +144,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
     setSelectedShift('');
     setSelectedTargetDriver('');
     setReason('');
+    setReturnPick('');
   };
 
   const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status']) => {
@@ -167,6 +219,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     {target && (
                       <p className="text-xs font-bold text-slate-500 mt-2">Aan: <span className="text-slate-800">{target.name}</span></p>
                     )}
+                    {returnLabel(swap) && (
+                      <p className="text-xs font-bold text-indigo-600 mt-1">In ruil: {returnLabel(swap)}</p>
+                    )}
                   </div>
                   <span className={cn(
                     "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
@@ -197,6 +252,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                       <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Door: {requester?.name}</p>
+                      {returnLabel(swap) && (
+                        <p className="text-xs font-bold text-indigo-600 mt-1 normal-case tracking-normal">Jij geeft: {returnLabel(swap)}</p>
+                      )}
                     </div>
                     <span className={cn(
                       'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0',
@@ -273,6 +331,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                           <td className="px-6 py-4 text-xs font-medium">
                             <span className="font-black text-oker-700">Dienst {getServiceNumber(shift)}</span>
                             <span className="text-slate-500"> — {shift?.date} ({shift?.startTime} - {shift?.endTime})</span>
+                            {returnLabel(swap) && (
+                              <span className="block text-[11px] font-bold text-indigo-600 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
+                            )}
                           </td>
                           <td className="px-6 py-4">
                             <span className={cn('px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
@@ -314,6 +375,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                           </p>
                           <p className="text-[10px] font-black text-oker-700 uppercase tracking-widest mt-1">Dienst {getServiceNumber(shift)}</p>
                           <p className="text-xs font-medium text-slate-500 mt-1">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
+                          {returnLabel(swap) && (
+                            <p className="text-[11px] font-bold text-indigo-600 mt-1">↔ in ruil: {returnLabel(swap)}</p>
+                          )}
                         </div>
                         <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                       </div>
@@ -421,6 +485,36 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   )}
                 </div>
                 <div className="space-y-2">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Wat neem jij in ruil?</label>
+                  <select
+                    value={returnPick}
+                    onChange={(e) => setReturnPick(e.target.value)}
+                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+                    required
+                    disabled={!selectedTargetDriver || returnLoading || !returnOptions || returnOptions.length === 0}
+                  >
+                    <option value="">
+                      {!selectedTargetDriver
+                        ? 'Kies eerst een collega…'
+                        : returnLoading
+                          ? 'Diensten laden…'
+                          : returnOptions && returnOptions.length === 0
+                            ? 'Geen diensten/vrije dagen gevonden'
+                            : 'Kies een dienst of vrije dag…'}
+                    </option>
+                    {(returnOptions ?? []).map((o) => (
+                      <option key={`${o.date}|${o.code}`} value={`${o.date}|${o.code}`}>
+                        {fmtShort(o.date)} · {o.isFree ? 'vrij' : `dienst ${o.code}`}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedTargetDriver && (
+                    <p className="text-[10px] font-medium text-slate-400 ml-1">
+                      Jij neemt deze dienst/vrije dag over; de collega neemt jouw aangeboden dienst. (komende 8 weken)
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-2">
                   <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Info (optioneel)</label>
                   <textarea
                     value={reason}
@@ -431,7 +525,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                 </div>
                 <button
                   type="submit"
-                  disabled={!selectedShift || !selectedTargetDriver}
+                  disabled={!selectedShift || !selectedTargetDriver || !returnPick}
                   className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   Dienstruil indienen

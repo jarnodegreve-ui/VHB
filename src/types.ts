@@ -36,6 +36,10 @@ export interface SwapRequest {
   createdAt: string;
   reason?: string;
   decidedAt?: string;
+  // 1-op-1 ruil: wat de aanvrager in ruil neemt van de collega.
+  // returnCode = dienstnummer of 'vrij'; returnDate = de dag ervan.
+  returnDate?: string;
+  returnCode?: string;
 }
 
 export interface LeaveRequest {
