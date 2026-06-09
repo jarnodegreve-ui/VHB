@@ -27,6 +27,7 @@ const LEAVE_STATUS_STYLES: Record<LeaveRequest['status'], string> = {
 
 const SWAP_STATUS_LABELS: Record<SwapRequest['status'], string> = {
   pending: 'In behandeling',
+  accepted: 'Wacht op planner',
   approved: 'Goedgekeurd',
   rejected: 'Afgewezen',
   cancelled: 'Geannuleerd',
@@ -34,6 +35,7 @@ const SWAP_STATUS_LABELS: Record<SwapRequest['status'], string> = {
 };
 const SWAP_STATUS_STYLES: Record<SwapRequest['status'], string> = {
   pending: 'bg-amber-50 text-amber-600',
+  accepted: 'bg-indigo-50 text-indigo-600',
   approved: 'bg-emerald-50 text-emerald-600',
   rejected: 'bg-red-50 text-red-600',
   cancelled: 'bg-slate-100 text-slate-500',
