@@ -476,8 +476,10 @@ html.dark {
     transform-origin: center bottom;
   }
   @media (prefers-reduced-motion: reduce) {
-    .bus-cross { animation: none; left: auto; right: 0.75rem; }
-    .bus-cross > .bus-bump { animation: none; }
+    /* Geen animatie → toon helemaal géén busjes. Anders parkeren er
+       meerdere stil onderaan in élke tile (5 render-plekken), wat
+       rommelig oogt — o.a. op Windows met "animaties uit". */
+    .driving-bus { display: none; }
   }
 
   /* Skeleton-loader shimmer */

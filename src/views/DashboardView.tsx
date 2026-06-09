@@ -111,7 +111,7 @@ export function DashboardView({
   // Skeleton-mode: eerste fetch nog niet rond
   if (isInitialLoad) {
     return (
-      <div className="space-y-4">
+      <div className="space-y-4 max-w-6xl mx-auto">
         <div className="px-1 pt-1 space-y-2">
           <Skeleton className="h-8 w-72" />
           <Skeleton className="h-3 w-48" />
@@ -142,7 +142,7 @@ export function DashboardView({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 max-w-6xl mx-auto">
       {/* === Gepersonaliseerde begroeting === */}
       <div className="px-1 pt-1">
         <h1 className="text-2xl md:text-3xl font-black tracking-[-0.03em] text-slate-900">
@@ -404,7 +404,7 @@ export type TilePalette = keyof typeof TILE_PALETTE;
  */
 function DrivingBus({ delay }: { delay: string }) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-7">
+    <div className="driving-bus pointer-events-none absolute inset-x-0 bottom-0 h-7">
       {/* Weg-segment langs de onderrand (fade aan de randen). Iets
           zichtbaarder in light mode, subtieler in dark. */}
       <div className="absolute inset-x-3 bottom-0 h-[2px] bg-gradient-to-r from-transparent via-oker-400/50 to-transparent dark:via-oker-400/30" />
