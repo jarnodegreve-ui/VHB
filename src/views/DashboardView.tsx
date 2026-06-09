@@ -182,8 +182,8 @@ export function DashboardView({
               className="tilt-card glow-top glass-stack relative overflow-hidden rounded-[24px] p-5"
               style={{
                 background: 'var(--tile-bg)',
-                backdropFilter: 'blur(28px) saturate(155%)',
-                WebkitBackdropFilter: 'blur(28px) saturate(155%)',
+                backdropFilter: 'blur(18px) saturate(150%)',
+                WebkitBackdropFilter: 'blur(18px) saturate(150%)',
                 border: 'var(--tile-border)',
                 boxShadow: 'var(--tile-shadow)',
               }}
@@ -211,8 +211,8 @@ export function DashboardView({
             className="tilt-card glow-top glass-stack relative overflow-hidden rounded-[24px] p-5"
             style={{
               background: 'var(--tile-bg)',
-              backdropFilter: 'blur(28px) saturate(155%)',
-              WebkitBackdropFilter: 'blur(28px) saturate(155%)',
+              backdropFilter: 'blur(18px) saturate(150%)',
+              WebkitBackdropFilter: 'blur(18px) saturate(150%)',
               border: 'var(--tile-border)',
               boxShadow: 'var(--tile-shadow)',
             }}
@@ -522,8 +522,8 @@ export function StatTile({
   );
   const tileStyle = {
     background: c.bg,
-    backdropFilter: 'blur(28px) saturate(155%)',
-    WebkitBackdropFilter: 'blur(28px) saturate(155%)',
+    backdropFilter: 'blur(18px) saturate(150%)',
+    WebkitBackdropFilter: 'blur(18px) saturate(150%)',
     border: c.border,
     boxShadow: c.shadow,
   };
@@ -579,8 +579,8 @@ function PremiumPanel({
       className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
       style={{
         background: 'var(--tile-bg)',
-        backdropFilter: 'blur(30px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(30px) saturate(140%)',
+        backdropFilter: 'blur(18px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         border: 'var(--tile-border)',
         boxShadow: 'var(--tile-shadow)',
       }}
