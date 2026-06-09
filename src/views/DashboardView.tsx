@@ -111,7 +111,7 @@ export function DashboardView({
   // Skeleton-mode: eerste fetch nog niet rond
   if (isInitialLoad) {
     return (
-      <div className="space-y-4 max-w-6xl mx-auto">
+      <div className="space-y-4">
         <div className="px-1 pt-1 space-y-2">
           <Skeleton className="h-8 w-72" />
           <Skeleton className="h-3 w-48" />
@@ -142,7 +142,7 @@ export function DashboardView({
   }
 
   return (
-    <div className="space-y-4 max-w-6xl mx-auto">
+    <div className="space-y-4">
       {/* === Gepersonaliseerde begroeting === */}
       <div className="px-1 pt-1">
         <h1 className="text-2xl md:text-3xl font-black tracking-[-0.03em] text-slate-900">
