@@ -482,12 +482,11 @@ html.dark {
     animation: bus-bump 1.5s ease-in-out infinite;
     transform-origin: center bottom;
   }
-  @media (prefers-reduced-motion: reduce) {
-    /* Geen animatie → toon helemaal géén busjes. Anders parkeren er
-       meerdere stil onderaan in élke tile (5 render-plekken), wat
-       rommelig oogt — o.a. op Windows met "animaties uit". */
-    .driving-bus { display: none; }
-  }
+  /* Bewuste keuze: het rijdende busje blijft óók draaien bij
+     prefers-reduced-motion (bv. Windows met "animaties uit"). Het is een
+     gewild merk-element en sinds de transform-omzetting GPU-licht, dus
+     geen perf-reden meer om 't te verbergen. De vroegere reduced-motion-
+     fallback parkeerde 5 busjes stil — die rommel is nu weg. */
 
   /* Skeleton-loader shimmer */
   @keyframes shimmer {
