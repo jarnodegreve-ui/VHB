@@ -861,7 +861,7 @@ export default function App() {
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
     bezetting: { title: 'Maandrooster', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
-    dekking: { title: 'Dekking', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
+    dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
     'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
@@ -1023,7 +1023,7 @@ export default function App() {
               <div className="mt-5 mb-2 mx-3 border-t border-slate-200/50 pt-4 pb-1 px-1 text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">Beheer</div>
               <NavItem
                 icon={<AlertTriangle size={20} />}
-                label="Dekking"
+                label="Openstaande diensten"
                 active={currentView === 'dekking'}
                 onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }}
               />

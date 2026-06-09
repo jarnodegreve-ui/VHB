@@ -118,8 +118,8 @@ export function CoverageView() {
   return (
     <PageShell width="6xl">
       <PageHeader
-        title="Dekking"
-        description="Niet-ingevulde diensten per dag — t.o.v. de verwachte diensten per dag-type."
+        title="Openstaande diensten"
+        description="Diensten die nog niet ingevuld zijn — per dag, t.o.v. de verwachte diensten per dag-type."
         actions={(
           <div className="flex items-center gap-2">
             <button type="button" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} aria-label="Vorige maand" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"><ChevronLeft size={18} /></button>
