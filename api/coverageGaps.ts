@@ -5,6 +5,24 @@
 
 export const normalizeCode = (v: unknown) => String(v ?? "").trim().toLowerCase();
 
+/**
+ * Bepaal het dag-type van een planning-rij. Gebruik het expliciete dag-type
+ * uit de import (kolom B) als dat is ingevuld; val anders terug op een
+ * afleiding uit de datum: weekdag / zaterdag / zondag. Zo werkt de
+ * dekkings-instelling ook wanneer de planning "zonder kopjes" is ingelezen
+ * (dan is day_type leeg voor elke rij). Houd in sync met src/lib/coverageGaps.ts.
+ */
+export function resolveDayType(rawDayType: unknown, sourceDate: string): string {
+  const explicit = String(rawDayType ?? "").trim();
+  if (explicit) return explicit;
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(sourceDate ?? "").trim());
+  if (!m) return "";
+  const dow = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
+  if (dow === 0) return "zondag";
+  if (dow === 6) return "zaterdag";
+  return "weekdag";
+}
+
 export type DayGap = {
   date: string;
   dayType: string;
