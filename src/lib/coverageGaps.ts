@@ -8,52 +8,63 @@
 
 export const normalizeCode = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
-/** De vier afgeleide dag-types wanneer de import geen eigen kopjes meegaf. */
-export const DERIVED_DAY_TYPES = ['schooldag', 'vakantie', 'zaterdag', 'zondag'] as const;
-
-export type VacationRange = { from: string; to: string };
-
 /**
- * Parse vakantieperiodes uit opgeslagen strings "YYYY-MM-DD..YYYY-MM-DD".
- * Ongeldige entries worden genegeerd; een omgekeerde range wordt rechtgezet.
+ * Standaard dag-types + standaard weekdag-toewijzing, gebruikt als de planner
+ * nog niets zelf ingesteld heeft. dow-index: 0=zondag .. 6=zaterdag.
  */
-export function parseVacationRanges(raw: unknown): VacationRange[] {
+export const DEFAULT_DAY_TYPES = ['schooldag', 'vakantie', 'zaterdag', 'zondag'] as const;
+export const DEFAULT_WEEKDAYS: string[] = ['zondag', 'schooldag', 'schooldag', 'schooldag', 'schooldag', 'schooldag', 'zaterdag'];
+
+/** Een uitzondering: binnen [from,to] (yyyy-mm-dd, inclusief) geldt `dayType`. */
+export type DayTypeOverride = { from: string; to: string; dayType: string };
+
+/** Encodeer een uitzondering als opslag-string "from..to|dagtype". */
+export function encodeOverride(o: DayTypeOverride): string {
+  const from = o.from <= o.to ? o.from : o.to;
+  const to = o.from <= o.to ? o.to : o.from;
+  return `${from}..${to}|${o.dayType}`;
+}
+
+/** Parse uitzonderingen uit opgeslagen strings "from..to|dagtype". */
+export function parseOverrides(raw: unknown): DayTypeOverride[] {
   if (!Array.isArray(raw)) return [];
-  const out: VacationRange[] = [];
+  const out: DayTypeOverride[] = [];
   for (const item of raw) {
-    const m = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(String(item ?? '').trim());
-    if (!m) continue;
+    const s = String(item ?? '').trim();
+    const bar = s.lastIndexOf('|');
+    if (bar < 0) continue;
+    const dayType = s.slice(bar + 1).trim();
+    const m = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(s.slice(0, bar));
+    if (!m || !dayType) continue;
     const [, a, b] = m;
-    out.push(a <= b ? { from: a, to: b } : { from: b, to: a });
+    out.push({ from: a <= b ? a : b, to: a <= b ? b : a, dayType });
   }
   return out;
 }
 
-/** Valt de (yyyy-mm-dd) datum binnen één van de vakantieperiodes? */
-export function isVacation(dateIso: string, ranges: VacationRange[]): boolean {
-  const d = String(dateIso ?? '').trim();
-  return ranges.some((r) => d >= r.from && d <= r.to);
-}
-
 /**
- * Bepaal het dag-type van een planning-rij. Gebruik het expliciete dag-type
- * uit de import (kolom B) als dat is ingevuld; val anders terug op een
- * afleiding uit de datum:
- *   - zondag / zaterdag in het weekend;
- *   - op weekdagen: 'vakantie' wanneer de datum in een ingestelde
- *     schoolvakantie valt, anders 'schooldag'.
+ * Bepaal het dag-type van een planning-rij:
+ *   1. Expliciet dag-type uit de import (kolom B) wint altijd.
+ *   2. Anders: een uitzondering waarvan [from,to] de datum bevat.
+ *   3. Anders: het standaard dag-type voor die weekdag (weekdays[dow]).
  * Datum als yyyy-mm-dd; UTC zodat er geen tijdzone-drift op de weekdag zit.
  */
-export function resolveDayType(rawDayType: unknown, sourceDate: string, vacationRanges: VacationRange[] = []): string {
+export function resolveDayType(
+  rawDayType: unknown,
+  sourceDate: string,
+  weekdays: string[] = [],
+  overrides: DayTypeOverride[] = [],
+): string {
   const explicit = String(rawDayType ?? '').trim();
   if (explicit) return explicit;
   const iso = String(sourceDate ?? '').trim();
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return '';
+  for (const o of overrides) {
+    if (iso >= o.from && iso <= o.to) return o.dayType;
+  }
   const dow = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
-  if (dow === 0) return 'zondag';
-  if (dow === 6) return 'zaterdag';
-  return isVacation(iso, vacationRanges) ? 'vakantie' : 'schooldag';
+  return String(weekdays[dow] ?? '').trim();
 }
 
 export type DayGap = {
