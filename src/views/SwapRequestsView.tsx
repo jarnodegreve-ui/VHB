@@ -75,6 +75,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   }, [selectedTargetDriver]);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
+  const isAdmin = user.role === 'admin';
   const myShifts = shifts.filter(s => s.driverId === user.id);
   const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
   const fmtShort = (iso: string) => {
@@ -158,6 +159,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         : s
     );
     onSave(updatedSwaps);
+  };
+
+  // Admin-override: een ruil die nog op de collega wacht ('pending') tóch
+  // rechtstreeks goedkeuren, zónder bevestiging van de collega. Alleen admin
+  // (de server dwingt dit ook af). Bewust met waarschuwing.
+  const handleAdminForceApprove = (swapId: string) => {
+    if (!window.confirm('De collega heeft deze ruil nog niet bevestigd. Wil je hem als admin tóch rechtstreeks goedkeuren?')) return;
+    handleStatusUpdate(swapId, 'approved');
   };
 
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
@@ -346,9 +355,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                                 <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
                               </>
                             )}
-                            {swap.status === 'pending' && (
-                              <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen (wacht op collega)" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
-                            )}
+                            {swap.status === 'pending' && (isAdmin ? (
+                              <>
+                                <button onClick={() => handleAdminForceApprove(swap.id)} title="Direct goedkeuren — collega heeft nog niet bevestigd" className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Check size={18} /></button>
+                                <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
+                              </>
+                            ) : (
+                              <>
+                                <span className="self-center text-[11px] font-bold text-amber-600 whitespace-nowrap">wacht op collega</span>
+                                <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
+                              </>
+                            ))}
                             {swap.status === 'approved' && (
                               <button onClick={() => handleCancel(swap.id)} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">Annuleren</button>
                             )}
@@ -392,14 +409,23 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                             </button>
                           </>
                         )}
-                        {swap.status === 'pending' && (
+                        {swap.status === 'pending' && (isAdmin ? (
+                          <>
+                            <button onClick={() => handleAdminForceApprove(swap.id)} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                              <Check size={16} /> Goedkeuren
+                            </button>
+                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                              <X size={16} /> Afwijzen
+                            </button>
+                          </>
+                        ) : (
                           <div className="flex-1 flex items-center justify-between gap-2">
                             <span className="text-[11px] font-bold text-amber-600">Wacht op antwoord collega</span>
                             <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="py-2 px-3 rounded-xl bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">
                               Afwijzen
                             </button>
                           </div>
-                        )}
+                        ))}
                         {swap.status === 'approved' && (
                           <button onClick={() => handleCancel(swap.id)} className="flex-1 py-3 rounded-2xl border border-red-200 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 transition-colors">
                             Annuleren
