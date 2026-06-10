@@ -40,7 +40,6 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
-import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
 import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
@@ -138,11 +137,14 @@ export default function App() {
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [currentView, setCurrentView] = useState<View>('dashboard');
-  const [shifts, setShifts] = useState<Shift[]>(MOCK_SHIFTS);
-  const [users, setUsers] = useState<User[]>(MOCK_USERS);
-  const [diversions, setDiversions] = useState<Diversion[]>(MOCK_DIVERSIONS);
-  const [services, setServices] = useState<Service[]>(MOCK_SERVICES);
-  const [updates, setUpdates] = useState<Update[]>(MOCK_UPDATES);
+  // Start leeg (geen mock-data): tot de eerste fetch klaar is gate't
+  // isInitialLoad de skeleton-staat. Geen risico meer dat mock-diensten/
+  // gebruikers stilletjes als echte data getoond worden.
+  const [shifts, setShifts] = useState<Shift[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
+  const [diversions, setDiversions] = useState<Diversion[]>([]);
+  const [services, setServices] = useState<Service[]>([]);
+  const [updates, setUpdates] = useState<Update[]>([]);
   const [swaps, setSwaps] = useState<SwapRequest[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
@@ -281,11 +283,11 @@ export default function App() {
       } else {
         setRecoveryMode(false);
         setCurrentUser(null);
-        setUsers(MOCK_USERS);
-        setShifts(MOCK_SHIFTS);
-        setDiversions(MOCK_DIVERSIONS);
-        setServices(MOCK_SERVICES);
-        setUpdates(MOCK_UPDATES);
+        setUsers([]);
+        setShifts([]);
+        setDiversions([]);
+        setServices([]);
+        setUpdates([]);
         setSwaps([]);
         setLeaveRequests([]);
         setPlanningMatrixRows([]);
@@ -388,6 +390,7 @@ export default function App() {
       ]);
     } catch (error) {
       console.error('Error initializing app:', error);
+      showToast('Kon de gegevens niet laden. Controleer je verbinding en vernieuw.', 'error');
     } finally {
       setIsLoading(false);
       setIsInitialLoad(false);
@@ -401,6 +404,7 @@ export default function App() {
       if (data && Array.isArray(data)) setUpdates(data);
     } catch (error) {
       console.error('Error fetching updates:', error);
+      showToast('Kon de updates niet laden.', 'error');
     }
   };
 
@@ -452,6 +456,7 @@ export default function App() {
       if (data && Array.isArray(data)) setSwaps(data);
     } catch (error) {
       console.error('Error fetching swaps:', error);
+      showToast('Kon de dienstruilen niet laden.', 'error');
     }
   };
 
@@ -484,6 +489,7 @@ export default function App() {
       if (data && Array.isArray(data)) setLeaveRequests(data);
     } catch (error) {
       console.error('Error fetching leave:', error);
+      showToast('Kon de verlofaanvragen niet laden.', 'error');
     }
   };
 
@@ -613,6 +619,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching services:', error);
+      showToast('Kon het dienstoverzicht niet laden.', 'error');
     } finally {
       setIsLoading(false);
     }
@@ -649,6 +656,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching users:', error);
+      showToast('Kon de gebruikerslijst niet laden.', 'error');
     }
   };
 
@@ -705,11 +713,15 @@ export default function App() {
       const url = qs ? `/api/planning?${qs}` : '/api/planning';
       const response = await apiFetch(url, {}, accessToken);
       const data = await response.json();
-      if (data && data.length > 0) {
+      // Een lege lijst is een geldig resultaat (chauffeur zonder diensten, of
+      // planning gewist) → die moet ook écht leeg tonen. Vroeger hield
+      // `length > 0` de oude/mock-data staan; nu enkel guarden op array-vorm.
+      if (Array.isArray(data)) {
         setShifts(data);
       }
     } catch (error) {
       console.error('Error fetching planning:', error);
+      showToast('Kon de planning niet laden. Probeer te vernieuwen.', 'error');
     } finally {
       setIsLoading(false);
     }

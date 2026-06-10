@@ -1074,9 +1074,19 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
   }
 });
 
-app.get("/api/swaps", authenticate, async (req, res) => {
+app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const data = await getSwapsData();
+    // Privacy: een chauffeur ziet enkel ruilen waar hij zélf bij betrokken is
+    // (aanvrager of aangezochte collega) — niet de ruilhistoriek van iedereen.
+    // Planner/admin zien alles (nodig voor validatie + beheer).
+    if (req.appUser?.role === "chauffeur") {
+      const selfId = String(req.appUser.id);
+      const scoped = data.filter(
+        (s) => String(s.requesterId) === selfId || String(s.targetDriverId ?? "") === selfId,
+      );
+      return res.json(scoped);
+    }
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to read swaps" });
@@ -1189,9 +1199,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   }
 });
 
-app.get("/api/leave", authenticate, async (req, res) => {
+app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const data = await getLeaveData();
+    // Privacy: een chauffeur ziet enkel zijn eigen verlof (incl. de vrije-tekst
+    // reden). Planner/admin zien alles (voor verlof-beheer en bezetting).
+    if (req.appUser?.role === "chauffeur") {
+      const selfId = String(req.appUser.id);
+      return res.json(data.filter((l) => String(l.userId) === selfId));
+    }
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to read leave" });
