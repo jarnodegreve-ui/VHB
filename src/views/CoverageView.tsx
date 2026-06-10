@@ -39,6 +39,8 @@ export function CoverageView() {
   const [pick, setPick] = useState<{ date: string; code: string } | null>(null);
   const [freeNames, setFreeNames] = useState<string[] | null>(null);
   const [pickLoading, setPickLoading] = useState(false);
+  // Schoolvakantie-periodes (ma–vr binnen een periode = 'vakantie', anders 'schooldag').
+  const [vacations, setVacations] = useState<{ from: string; to: string }[]>([]);
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -49,7 +51,16 @@ export function CoverageView() {
   useEffect(() => {
     let cancelled = false;
     fetchCoverageConfig()
-      .then((c) => { if (!cancelled) { setConfig(c); setDraft(c.expectations || {}); } })
+      .then((c) => {
+        if (cancelled) return;
+        setConfig(c);
+        setDraft(c.expectations || {});
+        // "from..to"-strings → bewerkbare {from,to}-rijen.
+        setVacations((c.vacations || []).map((s) => {
+          const [from, to] = s.split('..');
+          return { from: from || '', to: to || from || '' };
+        }));
+      })
       .catch((e) => { if (!cancelled) setError(e?.message || 'Kon instellingen niet laden.'); });
     return () => { cancelled = true; };
   }, []);
@@ -92,11 +103,20 @@ export function CoverageView() {
     });
   };
 
+  const addVacation = () => setVacations((prev) => [...prev, { from: '', to: '' }]);
+  const updateVacation = (i: number, field: 'from' | 'to', value: string) =>
+    setVacations((prev) => prev.map((v, idx) => (idx === i ? { ...v, [field]: value } : v)));
+  const removeVacation = (i: number) => setVacations((prev) => prev.filter((_, idx) => idx !== i));
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      await saveCoverageExpectations(draft);
+      // Alleen volledig ingevulde periodes; van/tot rechtzetten en serialiseren.
+      const serialized = vacations
+        .filter((v) => v.from && v.to)
+        .map((v) => (v.from <= v.to ? `${v.from}..${v.to}` : `${v.to}..${v.from}`));
+      await saveCoverageExpectations(draft, serialized);
       await refetchGaps();
     } catch (e: any) {
       setError(e?.message || 'Opslaan mislukt.');
@@ -184,6 +204,38 @@ export function CoverageView() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* Schoolvakanties — bepalen welke weekdagen 'vakantie' i.p.v. 'schooldag' zijn */}
+          {config && (
+            <div className="border-t border-slate-100 pt-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-black tracking-tight text-slate-900">Schoolvakanties</h3>
+                  <p className="text-xs font-medium text-slate-500 mt-0.5">Weekdagen binnen een periode tellen als <span className="font-bold">vakantie</span>, daarbuiten als <span className="font-bold">schooldag</span>. Weekends blijven zaterdag/zondag.</p>
+                </div>
+                <button type="button" onClick={addVacation} className="ios-pressable shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-600 hover:bg-slate-50 transition-colors">
+                  + Periode
+                </button>
+              </div>
+              <div className="mt-3 space-y-2">
+                {vacations.length === 0 ? (
+                  <p className="text-xs font-medium text-slate-400">Nog geen vakantieperiodes ingesteld — elke weekdag telt dan als schooldag.</p>
+                ) : (
+                  vacations.map((v, i) => (
+                    <div key={i} className="flex flex-wrap items-center gap-2">
+                      <input type="date" value={v.from} onChange={(e) => updateVacation(i, 'from', e.target.value)} aria-label="Van" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                      <span className="text-[11px] font-bold text-slate-400">t/m</span>
+                      <input type="date" value={v.to} onChange={(e) => updateVacation(i, 'to', e.target.value)} aria-label="Tot en met" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                      <button type="button" onClick={() => removeVacation(i)} aria-label="Periode verwijderen" className="ios-pressable w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors">
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))
+                )}
+                <p className="text-[11px] font-medium text-slate-400 pt-1">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
+              </div>
             </div>
           )}
         </div>

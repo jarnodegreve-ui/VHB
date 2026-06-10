@@ -10,6 +10,8 @@ export type CoverageConfig = {
   dayTypes: string[];
   /** alle dienstnummers uit het dienstoverzicht (om uit te kiezen) */
   services: string[];
+  /** ingestelde schoolvakantie-periodes als "YYYY-MM-DD..YYYY-MM-DD" */
+  vacations: string[];
 };
 
 export type CoverageGaps = {
@@ -22,10 +24,13 @@ export function fetchCoverageConfig(): Promise<CoverageConfig> {
   return apiFetch<CoverageConfig>('/api/coverage-expectations');
 }
 
-export function saveCoverageExpectations(expectations: Record<string, string[]>): Promise<{ success: boolean }> {
+export function saveCoverageExpectations(
+  expectations: Record<string, string[]>,
+  vacations: string[] = [],
+): Promise<{ success: boolean }> {
   return apiFetch<{ success: boolean }>('/api/coverage-expectations', {
     method: 'PUT',
-    body: JSON.stringify({ expectations }),
+    body: JSON.stringify({ expectations, vacations }),
   });
 }
 

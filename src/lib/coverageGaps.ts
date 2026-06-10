@@ -8,23 +8,52 @@
 
 export const normalizeCode = (v: unknown) => String(v ?? '').trim().toLowerCase();
 
+/** De vier afgeleide dag-types wanneer de import geen eigen kopjes meegaf. */
+export const DERIVED_DAY_TYPES = ['schooldag', 'vakantie', 'zaterdag', 'zondag'] as const;
+
+export type VacationRange = { from: string; to: string };
+
+/**
+ * Parse vakantieperiodes uit opgeslagen strings "YYYY-MM-DD..YYYY-MM-DD".
+ * Ongeldige entries worden genegeerd; een omgekeerde range wordt rechtgezet.
+ */
+export function parseVacationRanges(raw: unknown): VacationRange[] {
+  if (!Array.isArray(raw)) return [];
+  const out: VacationRange[] = [];
+  for (const item of raw) {
+    const m = /^(\d{4}-\d{2}-\d{2})\.\.(\d{4}-\d{2}-\d{2})$/.exec(String(item ?? '').trim());
+    if (!m) continue;
+    const [, a, b] = m;
+    out.push(a <= b ? { from: a, to: b } : { from: b, to: a });
+  }
+  return out;
+}
+
+/** Valt de (yyyy-mm-dd) datum binnen één van de vakantieperiodes? */
+export function isVacation(dateIso: string, ranges: VacationRange[]): boolean {
+  const d = String(dateIso ?? '').trim();
+  return ranges.some((r) => d >= r.from && d <= r.to);
+}
+
 /**
  * Bepaal het dag-type van een planning-rij. Gebruik het expliciete dag-type
  * uit de import (kolom B) als dat is ingevuld; val anders terug op een
- * afleiding uit de datum: weekdag / zaterdag / zondag. Zo werkt de
- * dekkings-instelling ook wanneer de planning "zonder kopjes" is ingelezen
- * (dan is day_type leeg voor elke rij). Datum als yyyy-mm-dd; UTC zodat er
- * geen tijdzone-drift op de weekdag zit.
+ * afleiding uit de datum:
+ *   - zondag / zaterdag in het weekend;
+ *   - op weekdagen: 'vakantie' wanneer de datum in een ingestelde
+ *     schoolvakantie valt, anders 'schooldag'.
+ * Datum als yyyy-mm-dd; UTC zodat er geen tijdzone-drift op de weekdag zit.
  */
-export function resolveDayType(rawDayType: unknown, sourceDate: string): string {
+export function resolveDayType(rawDayType: unknown, sourceDate: string, vacationRanges: VacationRange[] = []): string {
   const explicit = String(rawDayType ?? '').trim();
   if (explicit) return explicit;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(sourceDate ?? '').trim());
+  const iso = String(sourceDate ?? '').trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
   if (!m) return '';
   const dow = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
   if (dow === 0) return 'zondag';
   if (dow === 6) return 'zaterdag';
-  return 'weekdag';
+  return isVacation(iso, vacationRanges) ? 'vakantie' : 'schooldag';
 }
 
 export type DayGap = {

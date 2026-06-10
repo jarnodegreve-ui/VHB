@@ -7,7 +7,12 @@ import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
-import { computeDayGap, resolveDayType, type DayGap } from "./coverageGaps.js";
+import { computeDayGap, resolveDayType, parseVacationRanges, DERIVED_DAY_TYPES, type DayGap } from "./coverageGaps.js";
+
+// Gereserveerde sleutel in coverage_expectations om de schoolvakantie-periodes
+// in op te slaan (als "YYYY-MM-DD..YYYY-MM-DD"-strings), zodat er geen aparte
+// tabel/migratie nodig is. Wordt nooit als echt dag-type getoond.
+const COVERAGE_VACATION_KEY = "__vakantieperiodes__";
 
 import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
@@ -443,21 +448,31 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
 // dienst (ingesteld per dag-type) die op een dag door niemand is ingevuld.
 app.get("/api/coverage-expectations", authenticate, requireRole("planner", "admin"), async (_req, res) => {
   try {
-    const [expectations, rows, services] = await Promise.all([
+    const [stored, rows, services] = await Promise.all([
       getCoverageExpectations(),
       getPlanningMatrixRows(),
       getServicesData(),
     ]);
-    // resolveDayType valt terug op weekdag/zaterdag/zondag wanneer de
-    // import geen expliciet dag-type meegaf (planning "zonder kopjes"),
-    // zodat er altijd dag-types zijn om verwachtingen tegen in te stellen.
-    const dayTypes = Array.from(
-      new Set(rows.map((r: any) => resolveDayType(r.day_type, String(r.source_date ?? ""))).filter(Boolean)),
-    ).sort((a, b) => a.localeCompare(b));
+    // Vakantieperiodes zitten onder een gereserveerde sleutel — die halen we
+    // eruit zodat hij niet als dag-type tussen de verwachtingen verschijnt.
+    const vacations = Array.isArray(stored[COVERAGE_VACATION_KEY]) ? stored[COVERAGE_VACATION_KEY] : [];
+    const expectations: Record<string, string[]> = {};
+    for (const [k, v] of Object.entries(stored)) {
+      if (k === COVERAGE_VACATION_KEY) continue;
+      expectations[k] = v;
+    }
+    // Altijd de vier afgeleide dag-types aanbieden (schooldag/vakantie/za/zo)
+    // zodat je 'vakantie' ook kan instellen vóór er periodes gekozen zijn,
+    // plus eventuele expliciete dag-types uit een import met kopjes.
+    const explicitTypes = (rows as any[])
+      .map((r) => String(r.day_type ?? "").trim())
+      .filter(Boolean);
+    const dayTypes = Array.from(new Set([...DERIVED_DAY_TYPES, ...explicitTypes]))
+      .sort((a, b) => a.localeCompare(b));
     const serviceNumbers = Array.from(
       new Set((services as any[]).map((s) => String(s.serviceNumber ?? "").trim()).filter(Boolean)),
     ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    res.json({ expectations, dayTypes, services: serviceNumbers });
+    res.json({ expectations, dayTypes, services: serviceNumbers, vacations });
   } catch (err) {
     console.error("Error reading coverage expectations:", err);
     res.status(500).json({ error: "Kon dekkingsinstellingen niet laden." });
@@ -473,9 +488,16 @@ app.put("/api/coverage-expectations", authenticate, requireRole("planner", "admi
     const clean: Record<string, string[]> = {};
     for (const [dayType, list] of Object.entries(body)) {
       const dt = String(dayType).trim();
-      if (!dt) continue;
+      if (!dt || dt === COVERAGE_VACATION_KEY) continue;
       clean[dt] = Array.isArray(list) ? list.map((s) => String(s).trim()).filter(Boolean) : [];
     }
+    // Schoolvakantie-periodes: alleen geldige "YYYY-MM-DD..YYYY-MM-DD"-ranges
+    // bewaren, onder de gereserveerde sleutel (zelfde tabel, geen migratie).
+    const rawVacations = Array.isArray(req.body?.vacations) ? req.body.vacations : [];
+    const cleanVacations = rawVacations
+      .map((s: unknown) => String(s ?? "").trim())
+      .filter((s: string) => /^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/.test(s));
+    clean[COVERAGE_VACATION_KEY] = cleanVacations;
     await saveCoverageExpectations(clean);
     await logActivity(req, "planning", "Dekkingsinstellingen bijgewerkt", "Verwachte diensten per dag-type aangepast.", undefined);
     res.json({ success: true });
@@ -496,6 +518,9 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       getCoverageExpectations(),
       getPlanningMatrixRows(),
     ]);
+    // Dezelfde vakantieperiodes als bij het instellen, zodat schooldag/vakantie
+    // consistent wordt bepaald.
+    const vacationRanges = parseVacationRanges(expectations[COVERAGE_VACATION_KEY]);
     const inRange = rows
       .filter((r: any) => {
         const d = String(r.source_date ?? "");
@@ -505,7 +530,7 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
     const days: DayGap[] = inRange.map((r: any) => {
       // Zelfde afleiding als de config-endpoint, zodat ingestelde
       // verwachtingen per dag-type ook echt matchen met de dagen.
-      const dayType = resolveDayType(r.day_type, String(r.source_date ?? ""));
+      const dayType = resolveDayType(r.day_type, String(r.source_date ?? ""), vacationRanges);
       const expected = expectations[dayType] || [];
       const assignmentValues = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
         ? Object.values(r.assignments).map((v) => String(v))
