@@ -38,7 +38,7 @@ export function PageHeader({
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{eyebrow}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">{eyebrow}</p>
         ) : null}
         <h3 className={cn('section-title font-black tracking-tight text-slate-900 leading-[1.05]', eyebrow ? 'mt-2 text-[32px] md:text-[40px]' : 'text-[32px] md:text-[40px]')}>
           {title}
@@ -70,7 +70,7 @@ export function AdminSubsectionHeader({
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
-        {eyebrow ? <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{eyebrow}</p> : null}
+        {eyebrow ? <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">{eyebrow}</p> : null}
         <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900 md:text-xl">{title}</h3>
         {description ? <p className="mt-1 text-sm font-medium text-slate-500">{description}</p> : null}
       </div>
@@ -161,7 +161,7 @@ export function EmptyState({
         </div>
       )}
       <h4 className="text-lg font-black text-slate-800 tracking-tight">{title}</h4>
-      <p className="mt-2 text-sm font-medium text-slate-400 max-w-md mx-auto">{message}</p>
+      <p className="mt-2 text-sm font-medium text-slate-500 max-w-md mx-auto">{message}</p>
     </div>
   );
 }
