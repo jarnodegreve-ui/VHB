@@ -14,7 +14,9 @@ import { computeDayGap, resolveDayType, parseOverrides, encodeOverride, DEFAULT_
 // Ze worden nooit als echt dag-type getoond.
 const COVERAGE_WEEKDAYS_KEY = "__weekdagen__";
 const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
-const COVERAGE_RESERVED = new Set<string>([COVERAGE_WEEKDAYS_KEY, COVERAGE_OVERRIDES_KEY]);
+// Behandel élke __...__ sleutel als gereserveerd: zo vervuilen ook oudere
+// interne sleutels (bv. een vroegere __vakantieperiodes__) de dag-type-lijst niet.
+const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
 import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
@@ -459,7 +461,7 @@ app.get("/api/coverage-expectations", authenticate, requireRole("planner", "admi
     const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
     const overrides = parseOverrides(stored[COVERAGE_OVERRIDES_KEY]);
     // De overige sleutels zijn de zelf-gedefinieerde dag-types + hun diensten.
-    const dayTypeEntries = Object.entries(stored).filter(([k]) => !COVERAGE_RESERVED.has(k));
+    const dayTypeEntries = Object.entries(stored).filter(([k]) => !isReservedCoverageKey(k));
     const dayTypes = dayTypeEntries.length > 0
       ? dayTypeEntries
           .map(([name, svcs]) => ({ name, services: Array.isArray(svcs) ? svcs : [] }))
@@ -485,8 +487,8 @@ app.put("/api/coverage-expectations", authenticate, requireRole("planner", "admi
     const validNames = new Set<string>();
     for (const dt of rawDayTypes) {
       const name = String(dt?.name ?? "").trim();
-      // Lege namen en de gereserveerde sleutels overslaan; eerste win bij dubbel.
-      if (!name || COVERAGE_RESERVED.has(name) || validNames.has(name)) continue;
+      // Lege namen en gereserveerde (__...__) sleutels overslaan; eerste wint bij dubbel.
+      if (!name || isReservedCoverageKey(name) || validNames.has(name)) continue;
       validNames.add(name);
       clean[name] = Array.isArray(dt?.services) ? dt.services.map((s: unknown) => String(s).trim()).filter(Boolean) : [];
     }
