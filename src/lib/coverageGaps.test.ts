@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeCode, computeDayGap } from './coverageGaps';
+import { normalizeCode, computeDayGap, resolveDayType } from './coverageGaps';
 
 describe('coverageGaps', () => {
   it('normalizeCode trimt + lowercase', () => {
@@ -48,5 +48,23 @@ describe('coverageGaps', () => {
     const gap = computeDayGap('2026-07-08', 'weekdag', ['', '  ', '4101'], []);
     expect(gap.expected).toBe(1);
     expect(gap.missing).toEqual(['4101']);
+  });
+
+  it('resolveDayType: expliciet dag-type wint van de datum-afleiding', () => {
+    // 2026-06-13 is een zaterdag, maar expliciet 'feestdag' moet blijven staan.
+    expect(resolveDayType('feestdag', '2026-06-13')).toBe('feestdag');
+    expect(resolveDayType('  Weekdag ', '2026-06-14')).toBe('Weekdag');
+  });
+
+  it('resolveDayType: leeg dag-type → afgeleid uit de datum (weekdag/zaterdag/zondag)', () => {
+    expect(resolveDayType('', '2026-06-08')).toBe('weekdag'); // maandag
+    expect(resolveDayType('   ', '2026-06-12')).toBe('weekdag'); // vrijdag
+    expect(resolveDayType('', '2026-06-13')).toBe('zaterdag');
+    expect(resolveDayType(null, '2026-06-14')).toBe('zondag');
+  });
+
+  it('resolveDayType: ongeldige datum zonder dag-type → leeg', () => {
+    expect(resolveDayType('', 'geen-datum')).toBe('');
+    expect(resolveDayType(undefined, '')).toBe('');
   });
 });

@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 import nodemailer from "nodemailer";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
-import { computeDayGap, type DayGap } from "./coverageGaps.js";
+import { computeDayGap, resolveDayType, type DayGap } from "./coverageGaps.js";
 
 import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
@@ -448,8 +448,11 @@ app.get("/api/coverage-expectations", authenticate, requireRole("planner", "admi
       getPlanningMatrixRows(),
       getServicesData(),
     ]);
+    // resolveDayType valt terug op weekdag/zaterdag/zondag wanneer de
+    // import geen expliciet dag-type meegaf (planning "zonder kopjes"),
+    // zodat er altijd dag-types zijn om verwachtingen tegen in te stellen.
     const dayTypes = Array.from(
-      new Set(rows.map((r: any) => String(r.day_type ?? "").trim()).filter(Boolean)),
+      new Set(rows.map((r: any) => resolveDayType(r.day_type, String(r.source_date ?? ""))).filter(Boolean)),
     ).sort((a, b) => a.localeCompare(b));
     const serviceNumbers = Array.from(
       new Set((services as any[]).map((s) => String(s.serviceNumber ?? "").trim()).filter(Boolean)),
@@ -500,7 +503,9 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       })
       .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
     const days: DayGap[] = inRange.map((r: any) => {
-      const dayType = String(r.day_type ?? "").trim();
+      // Zelfde afleiding als de config-endpoint, zodat ingestelde
+      // verwachtingen per dag-type ook echt matchen met de dagen.
+      const dayType = resolveDayType(r.day_type, String(r.source_date ?? ""));
       const expected = expectations[dayType] || [];
       const assignmentValues = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
         ? Object.values(r.assignments).map((v) => String(v))
