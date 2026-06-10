@@ -92,19 +92,28 @@ export const getPlanningData = async (filters?: PlanningFilters) => {
 
 export const savePlanningData = async (data: any) => {
   const client = requireDb();
+  if (!Array.isArray(data)) {
+    throw new Error("Ongeldige planning-data: een array van diensten verwacht.");
+  }
+  if (data.length === 0) return;
   const { error } = await client.from('planning').upsert(data);
   if (error) throw error;
 };
 
 export const replacePlanningData = async (data: ShiftRecord[]) => {
   const client = requireDb();
+  // Veiligheid: weiger de planning te wissen met een lege/ongeldige set.
+  // replacePlanningData wist ALLE planning en zet er de nieuwe set voor in de
+  // plaats; dit wordt enkel door import/sync aangeroepen, die altijd rijen
+  // horen te produceren. De empty-check stond vroeger impliciet ná de delete
+  // (insert enkel bij length>0) → een lege set wiste stil de hele planning.
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("Lege planning-set geweigerd: dit zou alle planning wissen. Een import/sync hoort diensten te bevatten.");
+  }
   const { error: deleteError } = await client.from('planning').delete().neq('id', '__never__');
   if (deleteError) throw deleteError;
-
-  if (data.length > 0) {
-    const { error: insertError } = await client.from('planning').insert(data);
-    if (insertError) throw insertError;
-  }
+  const { error: insertError } = await client.from('planning').insert(data);
+  if (insertError) throw insertError;
 };
 
 // --- Planning matrix rows ---
@@ -127,9 +136,14 @@ export const getPlanningMatrixRows = async (): Promise<PlanningMatrixRow[]> => {
 // over 549 ghost-datums. Nu maakt elke import schoon werk.
 export const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
   const client = requireDb();
+  // Veiligheid: nooit wissen op een lege set — dat zou de volledige
+  // matrixplanning wegvegen. De empty-check stond vroeger ná de delete, dus
+  // een lege import wiste eerst alles en stopte dan (data-verlies).
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error("Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.");
+  }
   const { error: deleteError } = await client.from('planning_matrix_rows').delete().neq('id', '__never__');
   if (deleteError) throw deleteError;
-  if (rows.length === 0) return;
   const { error: insertError } = await client.from('planning_matrix_rows').insert(rows);
   if (insertError) throw insertError;
 };
