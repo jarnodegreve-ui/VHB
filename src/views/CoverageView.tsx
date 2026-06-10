@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, Plus } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
@@ -114,7 +114,19 @@ export function CoverageView() {
     [dayTypes],
   );
 
-  const addDayType = () => setDayTypes((prev) => [...prev, { name: '', services: [] }]);
+  // Nieuw dag-type bovenaan toevoegen (anders verdwijnt het onder de lange
+  // chips-lijsten en lijkt "toevoegen" niets te doen) + naamveld focussen.
+  const firstNameRef = useRef<HTMLInputElement | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
+  const addDayType = () => {
+    setDayTypes((prev) => [{ name: '', services: [] }, ...prev]);
+    setFocusTick((t) => t + 1);
+  };
+  useEffect(() => {
+    if (focusTick === 0) return;
+    firstNameRef.current?.focus();
+    firstNameRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [focusTick]);
 
   // Hernoemen: werk meteen de verwijzingen in weekdagen + uitzonderingen mee
   // bij (per toetsaanslag), zodat een toewijzing niet stilletjes verloren gaat.
@@ -248,6 +260,7 @@ export function CoverageView() {
                         <div key={i} className="rounded-2xl border border-slate-100 bg-white/60 p-4">
                           <div className="flex items-center gap-2">
                             <input
+                              ref={i === 0 ? firstNameRef : undefined}
                               value={dt.name}
                               onChange={(e) => updateDayTypeName(i, e.target.value)}
                               placeholder="Naam dag-type"
