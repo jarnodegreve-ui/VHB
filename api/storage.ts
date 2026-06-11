@@ -45,6 +45,14 @@ const requireDb = () => {
   return db;
 };
 
+// Herkent een rpc-fout die betekent "deze Postgres-functie bestaat niet"
+// (de transactionele replace-SQL is nog niet gedraaid). ENKEL dan vallen we
+// terug op het JS-pad. Bij een échte fout NIET terugvallen: de transactie is
+// dan al teruggerold (tabel intact) en delete+insert zou alsnog kunnen wissen.
+const isMissingDbFunction = (error: any): boolean =>
+  error?.code === "PGRST202" ||
+  /could not find the function|function .*does not exist|schema cache/i.test(String(error?.message ?? ""));
+
 // Supabase/PostgREST cap'pt by default op 1000 rijen per response. Voor
 // tabellen die door de tijd groeien (planning, matrix_rows, leave, ...)
 // MOETEN we expliciet paginëren — anders raakt elke caller stilletjes
@@ -92,19 +100,34 @@ export const getPlanningData = async (filters?: PlanningFilters) => {
 
 export const savePlanningData = async (data: any) => {
   const client = requireDb();
+  if (!Array.isArray(data)) {
+    throw new Error("Ongeldige planning-data: een array van diensten verwacht.");
+  }
+  if (data.length === 0) return;
   const { error } = await client.from('planning').upsert(data);
   if (error) throw error;
 };
 
 export const replacePlanningData = async (data: ShiftRecord[]) => {
   const client = requireDb();
+  // Veiligheid: weiger de planning te wissen met een lege/ongeldige set.
+  // replacePlanningData wist ALLE planning en zet er de nieuwe set voor in de
+  // plaats; dit wordt enkel door import/sync aangeroepen, die altijd rijen
+  // horen te produceren. De empty-check stond vroeger impliciet ná de delete
+  // (insert enkel bij length>0) → een lege set wiste stil de hele planning.
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new Error("Lege planning-set geweigerd: dit zou alle planning wissen. Een import/sync hoort diensten te bevatten.");
+  }
+  // Voorkeur: atomair via de Postgres-functie (delete+insert in één
+  // transactie) — geen leeg-tabel-venster als de insert zou falen.
+  const { error: rpcError } = await client.rpc('replace_planning', { rows: data });
+  if (!rpcError) return;
+  if (!isMissingDbFunction(rpcError)) throw rpcError;
+  // Functie bestaat (nog) niet → veilig JS-pad met de empty-guard hierboven.
   const { error: deleteError } = await client.from('planning').delete().neq('id', '__never__');
   if (deleteError) throw deleteError;
-
-  if (data.length > 0) {
-    const { error: insertError } = await client.from('planning').insert(data);
-    if (insertError) throw insertError;
-  }
+  const { error: insertError } = await client.from('planning').insert(data);
+  if (insertError) throw insertError;
 };
 
 // --- Planning matrix rows ---
@@ -127,9 +150,19 @@ export const getPlanningMatrixRows = async (): Promise<PlanningMatrixRow[]> => {
 // over 549 ghost-datums. Nu maakt elke import schoon werk.
 export const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
   const client = requireDb();
+  // Veiligheid: nooit wissen op een lege set — dat zou de volledige
+  // matrixplanning wegvegen. De empty-check stond vroeger ná de delete, dus
+  // een lege import wiste eerst alles en stopte dan (data-verlies).
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error("Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.");
+  }
+  // Voorkeur: atomair via de Postgres-functie; val enkel terug op het JS-pad
+  // als die functie nog niet bestaat (SQL niet gedraaid).
+  const { error: rpcError } = await client.rpc('replace_planning_matrix_rows', { rows });
+  if (!rpcError) return;
+  if (!isMissingDbFunction(rpcError)) throw rpcError;
   const { error: deleteError } = await client.from('planning_matrix_rows').delete().neq('id', '__never__');
   if (deleteError) throw deleteError;
-  if (rows.length === 0) return;
   const { error: insertError } = await client.from('planning_matrix_rows').insert(rows);
   if (insertError) throw insertError;
 };
