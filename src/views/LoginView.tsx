@@ -177,7 +177,7 @@ export function LoginView({
           <img
             src="/vhb-logo.svg"
             alt="VHB — Van Hoorebeke & Zoon"
-            className="h-24 sm:h-32 w-auto select-none"
+            className="h-16 sm:h-20 w-auto select-none"
             draggable={false}
           />
         </motion.div>
@@ -464,9 +464,9 @@ function SubmitButton({ loading, children }: { loading: boolean; children: React
       disabled={loading}
       className="group w-full inline-flex items-center justify-center gap-2 py-3.5 mt-2 rounded-xl text-[15px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
       style={{
-        background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)',
+        background: 'linear-gradient(180deg, #E8A33D 0%, #C9851F 100%)',
         boxShadow:
-          'inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(180, 83, 9, 0.25), 0 6px 16px rgba(245, 158, 11, 0.24)',
+          'inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(162, 105, 26, 0.25), 0 6px 16px rgba(232, 163, 61, 0.24)',
       }}
     >
       <span>{loading ? 'Even geduld…' : children}</span>

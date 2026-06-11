@@ -47,8 +47,6 @@ export function SkeletonTile({ className }: { className?: string }) {
       className={cn('rounded-3xl p-5 relative overflow-hidden', className)}
       style={{
         background: 'var(--tile-bg-soft)',
-        backdropFilter: 'blur(20px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(140%)',
         border: 'var(--tile-border-soft)',
       }}
     >

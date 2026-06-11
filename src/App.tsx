@@ -42,6 +42,8 @@ import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveReques
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
+import { fetchCoverageGaps, type DayGap } from './lib/coverage';
+import { isoDate } from './lib/availability';
 import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
@@ -149,6 +151,10 @@ export default function App() {
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  // Dekkingsgaten (vandaag + 6 dagen = 7-daags venster) voor het Operations
+  // Center van planner/admin. null = (nog) niet geladen — de cockpit toont
+  // dan 'onbekend' i.p.v. een vals-groen 'volledig gedekt'.
+  const [coverageDays, setCoverageDays] = useState<DayGap[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // Eerste data-fetch nog niet rond? Views kunnen dit gebruiken om
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
@@ -197,6 +203,10 @@ export default function App() {
         ? { driverId: String(currentUser.id) }
         : undefined;
       fetchPlanning(undefined, planningFilter);
+      // Dekking beweegt mee met de planning (Operations Center).
+      if (currentUser && currentUser.role !== 'chauffeur') {
+        refreshCoverageGaps();
+      }
     },
   });
 
@@ -383,6 +393,7 @@ export default function App() {
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrix(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningCodes(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrixHistory(accessToken)] : []),
+        ...(appUser.role === 'planner' || appUser.role === 'admin' ? [refreshCoverageGaps()] : []),
         ...(appUser.role === 'admin' ? [fetchActivityLog(accessToken)] : []),
       ]);
     } catch (error) {
@@ -520,6 +531,19 @@ export default function App() {
     }
   };
 
+  const refreshCoverageGaps = async () => {
+    try {
+      const from = isoDate(new Date());
+      const to = isoDate(new Date(Date.now() + 6 * 86400000));
+      const res = await fetchCoverageGaps(from, to);
+      setCoverageDays(res.days);
+    } catch (error) {
+      // State blijft null (of houdt de vorige succesvolle fetch) — de
+      // cockpit toont dan 'onbekend' i.p.v. vals-groen.
+      console.error('Error fetching coverage gaps:', error);
+    }
+  };
+
   const fetchActivityLog = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/activity', {}, accessToken);
@@ -581,7 +605,9 @@ export default function App() {
   // Wachtende beslissingen voor planner/admin (sidebar badges op
   // Verlofbeheer en Dienstruil-tab).
   const pendingLeaveCount = leaveRequests.filter((r) => r.status === 'pending').length;
-  const pendingSwapsCount = swaps.filter((s) => s.status === 'pending').length;
+  // Zelfde definitie als de cockpit: 'accepted' wacht óók op de planner
+  // (validatie), dus telt mee als open werkvoorraad.
+  const pendingSwapsCount = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted').length;
 
   const saveLeave = async (newLeave: LeaveRequest[]) => {
     try {
@@ -946,12 +972,18 @@ export default function App() {
             className="rounded-xl py-1 px-2 transition-all active:scale-[0.98] hover:opacity-80"
             title="Naar dashboard"
           >
-            {/* VHB-logo — vol-kleur variant in beide modes, zelfde als op
-                het login-scherm. Aspect-ratio van de SVG = ~1.66 (539x324). */}
+            {/* Officieel VHB-logo (huisstijl): zwartetekst op licht,
+                wittekst in dark mode. Strak bijgesneden SVG, ratio ~2.15. */}
             <img
               src="/vhb-logo.svg"
               alt="VHB — Van Hoorebeke & Zoon"
-              className="h-16 w-auto mx-auto select-none"
+              className="h-14 w-auto mx-auto select-none block dark:hidden"
+              draggable={false}
+            />
+            <img
+              src="/vhb-logo-wit.svg"
+              alt="VHB — Van Hoorebeke & Zoon"
+              className="h-14 w-auto mx-auto select-none hidden dark:block"
               draggable={false}
             />
           </button>
@@ -1222,20 +1254,26 @@ export default function App() {
               className="mx-auto w-full max-w-[1360px]"
             >
               {resolvedCurrentView === 'dashboard' && (
-                <div className="space-y-8">
-                  {(currentUser?.role === 'planner' || currentUser?.role === 'admin') && (
-                    <PlannerDashboardWidgets
-                      leaveRequests={leaveRequests}
-                      swaps={swaps}
-                      matrixHistory={planningMatrixHistory}
-                      diversionsCount={diversions.length}
-                      users={users}
-                      onNavigate={(view) => setCurrentView(view)}
-                      isInitialLoad={isInitialLoad}
-                    />
-                  )}
+                isPlanner ? (
+                  /* Planner/admin: Operations Center — één operationele cockpit
+                     i.p.v. een dubbel dashboard. */
+                  <PlannerDashboardWidgets
+                    currentUser={currentUser!}
+                    users={users}
+                    shifts={shifts}
+                    diversions={diversions}
+                    updates={updates}
+                    leaveRequests={leaveRequests}
+                    swaps={swaps}
+                    matrixHistory={planningMatrixHistory}
+                    activityLog={activityLog}
+                    coverageDays={coverageDays}
+                    onNavigate={(view) => setCurrentView(view)}
+                    isInitialLoad={isInitialLoad}
+                  />
+                ) : (
                   <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />
-                </div>
+                )
               )}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />}
@@ -1248,6 +1286,7 @@ export default function App() {
                   fetchPlanningMatrix(),
                   fetchPlanning(),
                   fetchPlanningMatrixHistory(),
+                  refreshCoverageGaps(),
                   ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
                 ]);
               }} />}

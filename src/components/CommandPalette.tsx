@@ -280,57 +280,41 @@ export function CommandPalette({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[120] flex items-start justify-center pt-[10vh] px-4"
+          className="fixed inset-0 z-[120] flex items-start justify-center px-4"
           onClick={onClose}
         >
           {/* Backdrop */}
-          <div
-            className="absolute inset-0"
-            style={{
-              background: 'rgba(15, 23, 42, 0.35)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-            }}
-          />
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
 
           {/* Panel */}
           <motion.div
-            initial={{ opacity: 0, y: -16, scale: 0.97 }}
+            initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="relative w-full max-w-xl rounded-3xl overflow-hidden"
-            style={{
-              background:
-                'linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.7) 100%)',
-              backdropFilter: 'blur(36px) saturate(165%)',
-              WebkitBackdropFilter: 'blur(36px) saturate(165%)',
-              border: '1px solid rgba(255, 255, 255, 0.92)',
-              boxShadow:
-                'inset 0 1px 0 rgba(255, 255, 255, 0.98), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 28px 80px rgba(15, 23, 42, 0.18)',
-            }}
+            className="glass-modal relative mt-[12vh] w-full max-w-xl rounded-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Search input */}
-            <div className="flex items-center gap-3 px-5 py-4 border-b border-slate-200/60">
-              <Search size={18} className="text-slate-400 shrink-0" />
+            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200/70">
+              <Search size={16} className="text-slate-400 shrink-0" />
               <input
                 ref={inputRef}
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Zoek scherm of actie…"
-                className="flex-1 bg-transparent outline-none text-base font-medium text-slate-900 placeholder:text-slate-400"
+                className="no-focus-ring flex-1 bg-transparent outline-none text-[15px] text-slate-900 placeholder:text-slate-400"
               />
-              <kbd className="hidden sm:inline-flex items-center gap-0.5 px-2 py-1 rounded-md border border-slate-200 bg-white/60 text-[10px] font-bold text-slate-500">
-                ESC
+              <kbd className="hidden sm:inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                esc
               </kbd>
             </div>
 
             {/* Results */}
-            <div className="max-h-[55vh] overflow-y-auto py-2">
+            <div className="max-h-[50vh] overflow-y-auto p-2">
               {filtered.length === 0 ? (
-                <div className="px-5 py-8 text-center">
-                  <p className="text-sm font-medium text-slate-500">Geen resultaten voor "{query}"</p>
+                <div className="py-8 text-center text-[13px] text-slate-500">
+                  Geen resultaten voor "{query}"
                 </div>
               ) : (
                 filtered.map((cmd, i) => {
@@ -344,30 +328,25 @@ export function CommandPalette({
                       }}
                       onMouseEnter={() => setSelectedIdx(i)}
                       className={cn(
-                        'w-full flex items-center gap-3 px-5 py-2.5 text-left transition-colors',
-                        isActive ? 'bg-oker-50/80' : 'hover:bg-slate-50/60',
+                        'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-[13.5px] font-medium transition-colors',
+                        isActive
+                          ? 'bg-slate-100 text-slate-900'
+                          : 'text-slate-700 hover:bg-slate-50',
                       )}
                     >
-                      <div
+                      <span
                         className={cn(
-                          'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
-                          isActive ? 'bg-oker-500 text-white shadow-sm' : 'bg-slate-100 text-slate-500',
+                          'shrink-0 flex items-center justify-center',
+                          isActive ? 'text-oker-600' : 'text-slate-400',
                         )}
                       >
                         {cmd.icon}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className={cn('text-sm font-semibold', isActive ? 'text-oker-900' : 'text-slate-800')}>
-                          {cmd.label}
-                        </p>
-                        {cmd.hint && (
-                          <p className="text-xs text-slate-500 mt-0.5 truncate">{cmd.hint}</p>
-                        )}
-                      </div>
-                      {isActive && (
-                        <kbd className="hidden sm:inline-flex items-center px-2 py-1 rounded-md border border-oker-300/50 bg-white/80 text-[10px] font-bold text-oker-700">
-                          ↵
-                        </kbd>
+                      </span>
+                      <span className="flex-1 min-w-0 truncate">{cmd.label}</span>
+                      {cmd.hint && (
+                        <span className="hidden sm:block shrink-0 max-w-[45%] truncate text-[12px] font-normal text-slate-400">
+                          {cmd.hint}
+                        </span>
                       )}
                     </button>
                   );
@@ -376,19 +355,31 @@ export function CommandPalette({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-t border-slate-200/60 bg-white/40 text-[10px] font-medium text-slate-500">
-              <div className="flex items-center gap-3">
-                <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 rounded border border-slate-200 bg-white">↑</kbd>
-                  <kbd className="px-1.5 py-0.5 rounded border border-slate-200 bg-white">↓</kbd>
-                  Navigeer
-                </span>
-                <span className="flex items-center gap-1">
-                  <kbd className="px-1.5 py-0.5 rounded border border-slate-200 bg-white">↵</kbd>
-                  Kies
-                </span>
-              </div>
-              <span className="font-bold tracking-[0.08em] uppercase">{filtered.length} resultaten</span>
+            <div className="flex items-center gap-3 border-t border-slate-200/70 px-4 py-2 text-[11px] text-slate-400">
+              <span className="flex items-center gap-1">
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                  ↑
+                </kbd>
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                  ↓
+                </kbd>
+                navigeren
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="flex items-center gap-1">
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                  ↵
+                </kbd>
+                openen
+              </span>
+              <span aria-hidden="true">·</span>
+              <span className="flex items-center gap-1">
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                  esc
+                </kbd>
+                sluiten
+              </span>
+              <span className="ml-auto">{filtered.length} resultaten</span>
             </div>
           </motion.div>
         </motion.div>

@@ -17,8 +17,8 @@ export function BrandBus({
    *  donkere achtergrond zichtbaar is. Oker accenten blijven gelijk. */
   dark?: boolean;
 }) {
-  const body = dark ? '#F1F5F9' : '#111111';      // bus-lichaam + wielrand
-  const wheelHub = dark ? '#0A0A0C' : '#FFFFFF';   // wiel-hart (contrast met rand)
+  const body = dark ? '#F2F3F4' : '#0D0D0F';      // bus-lichaam + wielrand (VHB Black / Light Grey)
+  const wheelHub = dark ? '#0D0D0F' : '#FFFFFF';   // wiel-hart (contrast met rand)
   return (
     <svg
       viewBox="100 55 350 170"

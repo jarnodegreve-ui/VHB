@@ -8,6 +8,7 @@ import { verlofBalans } from '../lib/leaveBalance';
 import { Sparkline } from '../components/Sparkline';
 import { BrandBus } from '../components/BrandBus';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
+import { SlideOver } from '../components/SlideOver';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -38,6 +39,8 @@ export function DashboardView({
   onNavigate?: (view: View) => void;
 }) {
   const [now, setNow] = useState(new Date());
+  // Detailvenster voor een omleiding — opent als side panel, geen paginawissel.
+  const [openDiversion, setOpenDiversion] = useState<Diversion | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -87,6 +90,10 @@ export function DashboardView({
     });
 
   const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
+
+  // "Lijn 5 & 8" vs "5": prefix alleen wanneer 't nog niet in de data zit.
+  const lineLabel = (line: string) =>
+    line.trim().toLowerCase().startsWith('lijn') ? line.trim() : `Lijn ${line.trim()}`;
 
   // Adaptief: voor < 24u is de countdown zelf de hero (dringend, hoe
   // lang nog tot je dienst). Voor > 24u is de DATUM bruikbaarder dan
@@ -333,17 +340,22 @@ export function DashboardView({
           {newestDiversions.length > 0 ? (
             <div className="space-y-2">
               {newestDiversions.map((div) => (
-                <div key={div.id} className="group flex items-start gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all cursor-pointer">
-                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" />
+                <button
+                  type="button"
+                  key={div.id}
+                  onClick={() => setOpenDiversion(div)}
+                  className="group flex w-full items-start gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 text-left hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all"
+                >
+                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${div.severity === 'high' ? 'bg-red-500' : 'bg-oker-500'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-black text-slate-900 truncate">{div.title}</p>
-                      <span className="shrink-0 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-700">{div.line}</span>
+                      <p className="text-sm font-bold text-slate-900 truncate">{div.title}</p>
+                      <span className="shrink-0 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{div.line}</span>
                     </div>
-                    <p className="mt-0.5 text-xs font-medium text-slate-600/80 line-clamp-2">{div.description}</p>
+                    <p className="mt-0.5 text-xs font-normal text-slate-500 line-clamp-2">{div.description}</p>
                   </div>
                   <ArrowUpRight size={14} className="text-slate-300 group-hover:text-slate-700 transition-colors shrink-0 mt-1" />
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -365,6 +377,73 @@ export function DashboardView({
           </div>
         )}
       </div>
+
+      {/* Omleiding-detail als premium side panel */}
+      <SlideOver
+        open={!!openDiversion}
+        onClose={() => setOpenDiversion(null)}
+        title={openDiversion?.title ?? 'Omleiding'}
+        subtitle={openDiversion ? lineLabel(openDiversion.line) : undefined}
+        icon={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
+            <MapPin size={17} />
+          </span>
+        }
+      >
+        {openDiversion && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                  openDiversion.severity === 'high'
+                    ? 'border-red-100 bg-red-50 text-red-700'
+                    : openDiversion.severity === 'medium'
+                    ? 'border-amber-100 bg-amber-50 text-amber-700'
+                    : 'border-slate-200 bg-slate-50 text-slate-600'
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    openDiversion.severity === 'high'
+                      ? 'bg-red-500'
+                      : openDiversion.severity === 'medium'
+                      ? 'bg-amber-500'
+                      : 'bg-slate-400'
+                  }`}
+                />
+                {openDiversion.severity === 'high' ? 'Hoge impact' : openDiversion.severity === 'medium' ? 'Matige impact' : 'Lage impact'}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                {lineLabel(openDiversion.line)}
+              </span>
+            </div>
+            <div className="surface-muted rounded-xl p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
+              <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
+                {openDiversion.startDate}
+                {openDiversion.endDate ? ` → ${openDiversion.endDate}` : ' → einde onbekend'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm font-normal leading-relaxed text-slate-700">
+                {openDiversion.description}
+              </p>
+            </div>
+            {openDiversion.pdfUrl && (
+              <a
+                href={openDiversion.pdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="control-button-soft inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all"
+              >
+                <FileText size={15} />
+                Bijlage openen (PDF)
+              </a>
+            )}
+          </div>
+        )}
+      </SlideOver>
     </div>
   );
 }
@@ -497,14 +576,14 @@ export function StatTile({
   const splColor =
     sparklineColor ||
     (color === 'oker'
-      ? '#d97706'
+      ? '#C9851F'
       : color === 'rose'
       ? '#e11d48'
       : color === 'emerald'
       ? '#059669'
       : color === 'blue'
       ? '#2563eb'
-      : '#475569');
+      : '#4F575F');
   const Body = (
     <>
       <div className="flex items-start justify-between mb-2.5">

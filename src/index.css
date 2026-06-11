@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&family=Manrope:wght@500..800&display=swap");
 @import "tailwindcss";
 
 /* Class-based dark mode: laat Tailwind `dark:`-utilities de app-toggle
@@ -8,10 +8,11 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  /* Eén professioneel variabel font (Inter, met optical sizing) zodat het
-     portaal er op macOS, Windows en Android identiek uitziet. */
+  /* Officiële VHB-huisstijl typografie: Inter voor UI/body, Manrope
+     (ExtraBold) voor koppen en de wordmark. Beide variabel via Google
+     Fonts zodat alle gewichten beschikbaar zijn op elk platform. */
   --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-display: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* Gewichten getemperd: `font-black` rendert als 800 i.p.v. 900. Dat
      kalmeert alle koppen/labels in één keer zonder honderden class-edits. */
@@ -24,16 +25,50 @@
   --radius-2xl: 0.875rem;
   --radius-3xl: 1.125rem;
 
-  --color-oker-50: #fffbeb;
-  --color-oker-100: #fef3c7;
-  --color-oker-200: #fde68a;
-  --color-oker-300: #fcd34d;
-  --color-oker-400: #fbbf24;
-  --color-oker-500: #f59e0b;
-  --color-oker-600: #d97706;
-  --color-oker-700: #b45309;
-  --color-oker-800: #92400e;
-  --color-oker-900: #78350f;
+  /* === VHB Amber (huisstijl #E8A33D als anker op 500) ===
+     De `oker`-naam blijft (honderden usages); de waardes zijn de
+     officiële brand-schaal. 600/700 zijn verdiept voor tekst-contrast. */
+  --color-oker-50: #FCF7ED;
+  --color-oker-100: #F8ECD4;
+  --color-oker-200: #F2DCAE;
+  --color-oker-300: #F0CB82;
+  --color-oker-400: #ECB75F;
+  --color-oker-500: #E8A33D;
+  --color-oker-600: #C9851F;
+  --color-oker-700: #A2691A;
+  --color-oker-800: #7C4F14;
+  --color-oker-900: #5C3A0F;
+
+  /* amber-* aliast naar dezelfde brand-schaal: waarschuwings-states
+     (bg-amber-50, text-amber-700, …) spreken zo exact hetzelfde VHB
+     Amber als oker-* — geen oud-Tailwind-amber naast brand-amber. */
+  --color-amber-50: #FCF7ED;
+  --color-amber-100: #F8ECD4;
+  --color-amber-200: #F2DCAE;
+  --color-amber-300: #F0CB82;
+  --color-amber-400: #ECB75F;
+  --color-amber-500: #E8A33D;
+  --color-amber-600: #C9851F;
+  --color-amber-700: #A2691A;
+  --color-amber-800: #7C4F14;
+  --color-amber-900: #5C3A0F;
+
+  /* === VHB-neutralen (huisstijl) ===
+     De volledige slate-schaal wordt geretuned naar de brand-neutralen:
+     Light Grey #F2F3F4 (100), Graphite #2C3137 (700), VHB Black #0D0D0F
+     (900/950). Daarmee verliest de hele app z'n blauwige zweem en spreekt
+     elke view automatisch de huisstijl. */
+  --color-slate-50: #F7F8F8;
+  --color-slate-100: #F2F3F4;
+  --color-slate-200: #E4E6E8;
+  --color-slate-300: #CDD1D5;
+  --color-slate-400: #9AA1A9;
+  --color-slate-500: #6E767F;
+  --color-slate-600: #4F575F;
+  --color-slate-700: #2C3137;
+  --color-slate-800: #1C2025;
+  --color-slate-900: #0D0D0F;
+  --color-slate-950: #08090A;
 }
 
 /* === Tile-surface variabelen ===
@@ -43,27 +78,27 @@
    tiles netjes meebewegen met de rest van het thema. */
 :root {
   --tile-bg: rgba(255, 255, 255, 0.96);
-  --tile-border: 1px solid rgba(226, 232, 240, 0.9);
+  --tile-border: 1px solid rgba(228, 230, 232, 0.9);
   --tile-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 6px 20px rgba(15, 23, 42, 0.04);
+    0 1px 2px rgba(13, 13, 15, 0.04),
+    0 6px 20px rgba(13, 13, 15, 0.04);
   --tile-bg-soft: rgba(255, 255, 255, 0.85);
-  --tile-border-soft: 1px solid rgba(226, 232, 240, 0.75);
+  --tile-border-soft: 1px solid rgba(228, 230, 232, 0.75);
   --tile-bg-hero: rgba(255, 255, 255, 0.97);
   --tile-shadow-hero:
-    0 1px 2px rgba(15, 23, 42, 0.05),
-    0 12px 32px rgba(15, 23, 42, 0.06);
+    0 1px 2px rgba(13, 13, 15, 0.05),
+    0 12px 32px rgba(13, 13, 15, 0.06);
 }
 
 html.dark {
-  --tile-bg: rgba(22, 22, 26, 0.92);
+  --tile-bg: rgba(23, 24, 26, 0.92);
   --tile-border: 1px solid rgba(255, 255, 255, 0.07);
   --tile-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
     0 8px 24px rgba(0, 0, 0, 0.4);
-  --tile-bg-soft: rgba(22, 22, 26, 0.75);
+  --tile-bg-soft: rgba(23, 24, 26, 0.75);
   --tile-border-soft: 1px solid rgba(255, 255, 255, 0.06);
-  --tile-bg-hero: rgba(20, 20, 24, 0.94);
+  --tile-bg-hero: rgba(21, 22, 25, 0.94);
   --tile-shadow-hero:
     0 1px 2px rgba(0, 0, 0, 0.35),
     0 12px 32px rgba(0, 0, 0, 0.5);
@@ -71,7 +106,7 @@ html.dark {
 
 @layer base {
   html {
-    background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
+    background: linear-gradient(180deg, #fafbfc 0%, #F2F3F4 100%);
     min-height: 100vh;
     background-attachment: fixed;
     /* Subtiele neutrale schaduw via .parallax-bg blijft mogelijk — geen
@@ -80,7 +115,7 @@ html.dark {
 
   body {
     font-family: var(--font-sans);
-    color: #0f172a;
+    color: #0D0D0F;
     background: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -93,7 +128,7 @@ html.dark {
   /* Apple-style focus rings: subtle colored halo instead of harsh outline. */
   :focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.28);
+    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.28);
     border-radius: inherit;
   }
   /* Elements with their own focus treatment can opt out via class. */
@@ -120,7 +155,7 @@ html.dark {
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(203, 213, 225, 0.6) transparent;
+    scrollbar-color: rgba(205, 209, 213, 0.6) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -132,7 +167,7 @@ html.dark {
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: rgba(203, 213, 225, 0.6);
+    background-color: rgba(205, 209, 213, 0.6);
     border-radius: 999px;
   }
 }
@@ -146,10 +181,10 @@ html.dark {
     background: rgba(255, 255, 255, 0.94);
     backdrop-filter: blur(12px) saturate(140%);
     -webkit-backdrop-filter: blur(12px) saturate(140%);
-    border: 1px solid rgba(226, 232, 240, 0.85);
+    border: 1px solid rgba(228, 230, 232, 0.85);
     box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.04),
-      0 8px 24px rgba(15, 23, 42, 0.05);
+      0 1px 2px rgba(13, 13, 15, 0.04),
+      0 8px 24px rgba(13, 13, 15, 0.05);
     transition:
       box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
       background 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -159,7 +194,7 @@ html.dark {
   /* Variant voor sticky elementen wanneer er onder gescrolld wordt. */
   .panel--scrolled {
     background: rgba(255, 255, 255, 0.97);
-    border-color: rgba(226, 232, 240, 0.95);
+    border-color: rgba(228, 230, 232, 0.95);
   }
 
   /* Sidebar-rail: vaste, rustige flank van de app. Bewust géén
@@ -167,7 +202,7 @@ html.dark {
      element geeft compositing-glitches; near-opaque heeft 't niet nodig. */
   .panel-dark {
     background: rgba(252, 253, 254, 0.97);
-    border-right: 1px solid rgba(226, 232, 240, 0.8);
+    border-right: 1px solid rgba(228, 230, 232, 0.8);
     transition:
       transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
       background-color 420ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -178,7 +213,7 @@ html.dark {
     background: rgba(250, 251, 252, 0.82);
     backdrop-filter: blur(16px) saturate(150%);
     -webkit-backdrop-filter: blur(16px) saturate(150%);
-    border-bottom: 1px solid rgba(226, 232, 240, 0.7);
+    border-bottom: 1px solid rgba(228, 230, 232, 0.7);
     transition:
       background 280ms cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -186,18 +221,18 @@ html.dark {
   }
   .topbar--scrolled {
     background: rgba(255, 255, 255, 0.92);
-    border-bottom-color: rgba(226, 232, 240, 0.95);
-    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+    border-bottom-color: rgba(228, 230, 232, 0.95);
+    box-shadow: 0 4px 16px rgba(13, 13, 15, 0.04);
   }
 
   .glass {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(10px) saturate(140%);
     -webkit-backdrop-filter: blur(10px) saturate(140%);
-    border: 1px solid rgba(226, 232, 240, 0.8);
+    border: 1px solid rgba(228, 230, 232, 0.8);
     box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.03),
-      0 8px 20px rgba(15, 23, 42, 0.04);
+      0 1px 2px rgba(13, 13, 15, 0.03),
+      0 8px 20px rgba(13, 13, 15, 0.04);
     transition:
       box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
       background-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -206,10 +241,10 @@ html.dark {
 
   .surface-card {
     background: rgba(255, 255, 255, 0.96);
-    border: 1px solid rgba(226, 232, 240, 0.9);
+    border: 1px solid rgba(228, 230, 232, 0.9);
     box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.04),
-      0 6px 20px rgba(15, 23, 42, 0.04);
+      0 1px 2px rgba(13, 13, 15, 0.04),
+      0 6px 20px rgba(13, 13, 15, 0.04);
     transition:
       transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -227,33 +262,33 @@ html.dark {
 
   .surface-card-hover:hover {
     transform: translateY(-2px);
-    border-color: rgba(203, 213, 225, 0.9);
+    border-color: rgba(205, 209, 213, 0.9);
     box-shadow:
-      0 2px 4px rgba(15, 23, 42, 0.04),
-      0 14px 32px rgba(15, 23, 42, 0.08);
+      0 2px 4px rgba(13, 13, 15, 0.04),
+      0 14px 32px rgba(13, 13, 15, 0.08);
   }
 
   .surface-table {
     background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(226, 232, 240, 0.85);
+    border: 1px solid rgba(228, 230, 232, 0.85);
     box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.03),
-      0 8px 24px rgba(15, 23, 42, 0.04);
+      0 1px 2px rgba(13, 13, 15, 0.03),
+      0 8px 24px rgba(13, 13, 15, 0.04);
   }
 
   .glass-modal {
     background: rgba(255, 255, 255, 0.95);
     backdrop-filter: blur(24px) saturate(160%);
     -webkit-backdrop-filter: blur(24px) saturate(160%);
-    border: 1px solid rgba(226, 232, 240, 0.9);
+    border: 1px solid rgba(228, 230, 232, 0.9);
     box-shadow:
-      0 1px 2px rgba(15, 23, 42, 0.05),
-      0 28px 80px rgba(15, 23, 42, 0.18);
+      0 1px 2px rgba(13, 13, 15, 0.05),
+      0 28px 80px rgba(13, 13, 15, 0.18);
   }
 
   .surface-muted {
-    background: rgba(248, 250, 252, 0.8);
-    border: 1px solid rgba(226, 232, 240, 0.7);
+    background: rgba(247, 248, 248, 0.8);
+    border: 1px solid rgba(228, 230, 232, 0.7);
   }
 
   /* --- Depth utilities --- */
@@ -299,7 +334,7 @@ html.dark {
     position: absolute;
     inset: -10px;
     background:
-      radial-gradient(ellipse at 30% 20%, rgba(245, 158, 11, 0.08), transparent 50%),
+      radial-gradient(ellipse at 30% 20%, rgba(232, 163, 61, 0.08), transparent 50%),
       radial-gradient(ellipse at 80% 80%, rgba(99, 102, 241, 0.05), transparent 50%);
     filter: blur(40px);
     z-index: -1;
@@ -356,8 +391,8 @@ html.dark {
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 700px 500px at 15% 18%, rgba(148, 163, 184, 0.07) 0%, transparent 55%),
-      radial-gradient(ellipse 600px 400px at 85% 70%, rgba(148, 163, 184, 0.04) 0%, transparent 55%);
+      radial-gradient(ellipse 700px 500px at 15% 18%, rgba(154, 161, 169, 0.07) 0%, transparent 55%),
+      radial-gradient(ellipse 600px 400px at 85% 70%, rgba(154, 161, 169, 0.04) 0%, transparent 55%);
     transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.18), 0);
     will-change: transform;
     filter: blur(1px);
@@ -437,9 +472,9 @@ html.dark {
   .skeleton {
     background: linear-gradient(
       90deg,
-      rgba(226, 232, 240, 0.55) 25%,
-      rgba(241, 245, 249, 0.95) 50%,
-      rgba(226, 232, 240, 0.55) 75%
+      rgba(228, 230, 232, 0.55) 25%,
+      rgba(242, 243, 244, 0.95) 50%,
+      rgba(228, 230, 232, 0.55) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.4s linear infinite;
@@ -448,17 +483,17 @@ html.dark {
   .dark .skeleton {
     background: linear-gradient(
       90deg,
-      rgba(71, 85, 105, 0.25) 25%,
-      rgba(71, 85, 105, 0.45) 50%,
-      rgba(71, 85, 105, 0.25) 75%
+      rgba(79, 87, 95, 0.25) 25%,
+      rgba(79, 87, 95, 0.45) 50%,
+      rgba(79, 87, 95, 0.25) 75%
     );
     background-size: 200% 100%;
   }
 
   .control-input {
     background: rgba(255, 255, 255, 0.92);
-    border: 1px solid rgba(203, 213, 225, 0.7);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+    border: 1px solid rgba(205, 209, 213, 0.7);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.03);
     transition:
       border-color 200ms ease,
       box-shadow 200ms ease,
@@ -478,8 +513,8 @@ html.dark {
 
   .control-input:focus {
     background: #ffffff;
-    border-color: rgba(245, 158, 11, 0.55);
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.12);
+    border-color: rgba(232, 163, 61, 0.55);
+    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.12);
   }
 
   /* Ademende oker-glow ROND een gefocust input-veld (voor LoginView).
@@ -491,29 +526,29 @@ html.dark {
   @keyframes field-glow-breathe {
     0%, 100% {
       box-shadow:
-        0 0 0 0 rgba(245, 158, 11, 0),
-        0 0 0 0 rgba(245, 158, 11, 0);
+        0 0 0 0 rgba(232, 163, 61, 0),
+        0 0 0 0 rgba(232, 163, 61, 0);
     }
     50% {
       box-shadow:
-        0 0 0 6px rgba(245, 158, 11, 0.12),
-        0 0 24px rgba(245, 158, 11, 0.18);
+        0 0 0 6px rgba(232, 163, 61, 0.12),
+        0 0 24px rgba(232, 163, 61, 0.18);
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .field-glow { animation: none; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.10); }
+    .field-glow { animation: none; box-shadow: 0 0 0 4px rgba(232, 163, 61, 0.10); }
   }
 
   .control-button-soft {
     background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(228, 230, 232, 0.9);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
   }
 
   .control-button-soft:hover {
     background: #ffffff;
-    border-color: rgba(203, 213, 225, 0.95);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+    border-color: rgba(205, 209, 213, 0.95);
+    box-shadow: 0 2px 8px rgba(13, 13, 15, 0.06);
   }
 
   .ios-pressable {
@@ -559,8 +594,8 @@ html.dark {
     border-radius: 0.75rem;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.2),
-      0 1px 2px rgba(180, 83, 9, 0.25),
-      0 4px 12px rgba(245, 158, 11, 0.2);
+      0 1px 2px rgba(162, 105, 26, 0.25),
+      0 4px 12px rgba(232, 163, 61, 0.2);
     transition:
       transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
       box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -572,8 +607,8 @@ html.dark {
     background: linear-gradient(180deg, var(--color-oker-600) 0%, var(--color-oker-700) 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.16),
-      0 1px 2px rgba(180, 83, 9, 0.3),
-      0 6px 16px rgba(245, 158, 11, 0.24);
+      0 1px 2px rgba(162, 105, 26, 0.3),
+      0 6px 16px rgba(232, 163, 61, 0.24);
   }
 
   .btn-primary:active {
@@ -581,8 +616,8 @@ html.dark {
   }
 
   .btn-primary:disabled {
-    background: #e2e8f0;
-    color: #94a3b8;
+    background: #E4E6E8;
+    color: #9AA1A9;
     box-shadow: none;
     cursor: not-allowed;
     transform: none;
@@ -590,26 +625,26 @@ html.dark {
 
   .glass-chip {
     background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(228, 230, 232, 0.9);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
   }
 
   .glass-segmented {
-    background: rgba(241, 245, 249, 0.75);
-    border: 1px solid rgba(226, 232, 240, 0.8);
-    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.03);
+    background: rgba(242, 243, 244, 0.75);
+    border: 1px solid rgba(228, 230, 232, 0.8);
+    box-shadow: inset 0 1px 2px rgba(13, 13, 15, 0.03);
   }
 
   .glass-icon-button {
     background: rgba(255, 255, 255, 0.9);
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    border: 1px solid rgba(228, 230, 232, 0.9);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
   }
 
   .glass-icon-button:hover {
     background: #ffffff;
-    border-color: rgba(203, 213, 225, 0.95);
-    box-shadow: 0 2px 8px rgba(15, 23, 42, 0.07);
+    border-color: rgba(205, 209, 213, 0.95);
+    box-shadow: 0 2px 8px rgba(13, 13, 15, 0.07);
   }
 
   .section-title {
@@ -618,13 +653,13 @@ html.dark {
   }
 
   .fine-divider {
-    border-color: rgba(148, 163, 184, 0.18);
+    border-color: rgba(154, 161, 169, 0.18);
   }
 
   /* Hairline divider: ~0.5px on retina, 1px elsewhere. Use on borders you
      want near-invisible but present, like iOS Settings list separators. */
   .hairline {
-    border-color: rgba(148, 163, 184, 0.22);
+    border-color: rgba(154, 161, 169, 0.22);
   }
   @media (min-resolution: 2dppx) {
     .hairline {
@@ -641,38 +676,38 @@ html.dark {
    glass-morphism classes above.
    ========================================================================== */
 
-/* Dark mode = login kleurschema: pure donker (#0a0a0c) met subtiele
+/* Dark mode = login kleurschema: pure donker (#0D0D0F) met subtiele
    oker vignet, geen indigo / koel-blauwe tinten meer. */
 html.dark {
   background:
     radial-gradient(
       ellipse 1000px 800px at 50% 30%,
-      rgba(245, 158, 11, 0.05) 0%,
+      rgba(232, 163, 61, 0.05) 0%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 700px 500px at 50% 95%,
-      rgba(217, 119, 6, 0.03) 0%,
+      rgba(201, 133, 31, 0.03) 0%,
       transparent 60%
     ),
-    #0a0a0c;
+    #0D0D0F;
   color-scheme: dark;
 }
 
 .dark .parallax-bg {
   /* Pure oker-vignet, geen indigo of pink meer. */
   background:
-    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(245, 158, 11, 0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(217, 119, 6, 0.07) 0%, transparent 55%);
+    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(232, 163, 61, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(201, 133, 31, 0.07) 0%, transparent 55%);
   filter: blur(1px) saturate(120%);
 }
 
 .dark body {
-  color: #e2e8f0;
+  color: #E4E6E8;
 }
 
 .dark *::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 116, 139, 0.55);
+  background-color: rgba(110, 118, 127, 0.55);
 }
 
 /* --- Custom glass-morphism classes (dark) ---
@@ -680,7 +715,7 @@ html.dark {
  * sterkere edge-lit highlights. */
 
 .dark .panel {
-  background: rgba(20, 20, 24, 0.92);
+  background: rgba(21, 22, 25, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
@@ -705,27 +740,27 @@ html.dark {
 /* Dark variant van .panel--scrolled: zelfde lichte rand, iets meer
    opaak zodat de header nog stevig staat als je scrolt. */
 .dark .panel--scrolled {
-  background: rgba(20, 20, 24, 0.96);
+  background: rgba(21, 22, 25, 0.96);
   border-color: rgba(255, 255, 255, 0.08);
 }
 
 .dark .panel-dark {
-  background: rgba(14, 14, 18, 0.97);
+  background: rgba(16, 17, 19, 0.97);
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
 .dark .topbar {
-  background: rgba(10, 10, 12, 0.82);
+  background: rgba(13, 13, 15, 0.82);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .dark .topbar--scrolled {
-  background: rgba(14, 14, 18, 0.92);
+  background: rgba(16, 17, 19, 0.92);
   border-bottom-color: rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .dark .glass {
-  background: rgba(22, 22, 26, 0.85);
+  background: rgba(23, 24, 26, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.25),
@@ -733,7 +768,7 @@ html.dark {
 }
 
 .dark .surface-card {
-  background: rgba(22, 22, 26, 0.88);
+  background: rgba(23, 24, 26, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
@@ -748,7 +783,7 @@ html.dark {
 }
 
 .dark .surface-table {
-  background: rgba(22, 22, 26, 0.88);
+  background: rgba(23, 24, 26, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
@@ -756,7 +791,7 @@ html.dark {
 }
 
 .dark .glass-modal {
-  background: rgba(22, 22, 26, 0.96);
+  background: rgba(23, 24, 26, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.4),
@@ -776,199 +811,220 @@ html.dark {
 }
 .dark .halo-on-hover:hover {
   box-shadow:
-    0 0 0 1px rgba(245, 158, 11, 0.45),
-    0 0 18px 2px rgba(245, 158, 11, 0.25),
-    inset 0 1px 0 rgba(148, 163, 184, 0.25);
+    0 0 0 1px rgba(232, 163, 61, 0.45),
+    0 0 18px 2px rgba(232, 163, 61, 0.25),
+    inset 0 1px 0 rgba(154, 161, 169, 0.25);
 }
 .dark .cursor-glow > .cursor-glow-layer {
   /* Pure oker-glow, geen indigo bijmenging meer. */
   background: radial-gradient(
     circle 240px at var(--mx) var(--my),
-    rgba(245, 158, 11, 0.20),
-    rgba(217, 119, 6, 0.08) 40%,
+    rgba(232, 163, 61, 0.20),
+    rgba(201, 133, 31, 0.08) 40%,
     transparent 70%
   );
   mix-blend-mode: screen;
 }
 
 .dark .surface-muted {
-  background: rgba(22, 22, 26, 0.6);
+  background: rgba(23, 24, 26, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .dark .control-input {
-  background: rgba(22, 22, 26, 0.8);
+  background: rgba(23, 24, 26, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  color: #E4E6E8;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .dark .control-input::placeholder {
-  color: rgba(148, 163, 184, 0.55);
+  color: rgba(154, 161, 169, 0.55);
 }
 
 .dark .control-input:focus {
-  background: rgba(28, 28, 32, 0.95);
-  border-color: rgba(245, 158, 11, 0.5);
-  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.16);
+  background: rgba(29, 31, 34, 0.95);
+  border-color: rgba(232, 163, 61, 0.5);
+  box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.16);
 }
 
 .dark .control-button-soft {
-  background: rgba(22, 22, 26, 0.85);
+  background: rgba(23, 24, 26, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.09);
-  color: #e2e8f0;
+  color: #E4E6E8;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .dark .control-button-soft:hover {
-  background: rgba(36, 36, 42, 0.9);
+  background: rgba(38, 40, 43, 0.9);
   border-color: rgba(255, 255, 255, 0.14);
 }
 
 .dark .glass-chip {
-  background: rgba(22, 22, 26, 0.85);
+  background: rgba(23, 24, 26, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.09);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .dark .glass-segmented {
-  background: rgba(16, 16, 20, 0.7);
+  background: rgba(17, 18, 20, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .dark .glass-icon-button {
-  background: rgba(22, 22, 26, 0.85);
+  background: rgba(23, 24, 26, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.09);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.dark .fine-divider { border-color: rgba(148, 163, 184, 0.12); }
-.dark .hairline { border-color: rgba(148, 163, 184, 0.18); }
+.dark .fine-divider { border-color: rgba(154, 161, 169, 0.12); }
+.dark .hairline { border-color: rgba(154, 161, 169, 0.18); }
+
+/* Opacity-varianten van border-slate-200 (klassen mét /NN zijn aparte
+   classnamen, dus de kale override hierboven matcht ze niet). */
+.dark .border-slate-200\/60,
+.dark .border-slate-200\/70,
+.dark .border-slate-200\/80,
+.dark .border-slate-200\/90 { border-color: rgba(79, 87, 95, 0.38); }
+
+/* Ring-varianten op rijen/kaarten (OpsRow, PendingRow, QuickLink, …). */
+.dark .ring-slate-200\/60,
+.dark .ring-slate-200\/70 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
+.dark .hover\:ring-slate-300\/80:hover { --tw-ring-color: rgba(110, 118, 127, 0.45); }
+
+/* Status-teksten op geflipte tint-chips (pill 'Operationeel', severity-
+   badges): -700 is op near-black onleesbaar, flip naar lichte variant. */
+.dark .text-emerald-700 { color: rgb(110, 231, 183); }
+.dark .text-amber-700 { color: rgb(236, 183, 95); }
+.dark .text-red-700 { color: rgb(252, 165, 165); }
+
+/* Group-hover die in dark anders dood zou zijn (pijltjes in OpsRow e.d.). */
+.dark .group:hover .group-hover\:text-slate-700 { color: #E4E6E8; }
 
 /* --- Tailwind utility overrides (most-used) --- */
 
 /* White backgrounds */
-.dark .bg-white { background-color: rgba(22, 22, 26, 0.85); }
-.dark .bg-white\/30 { background-color: rgba(22, 22, 26, 0.40); }
-.dark .bg-white\/35 { background-color: rgba(22, 22, 26, 0.45); }
-.dark .bg-white\/40 { background-color: rgba(22, 22, 26, 0.50); }
-.dark .bg-white\/42 { background-color: rgba(22, 22, 26, 0.52); }
-.dark .bg-white\/45 { background-color: rgba(22, 22, 26, 0.55); }
-.dark .bg-white\/50 { background-color: rgba(22, 22, 26, 0.60); }
-.dark .bg-white\/55 { background-color: rgba(22, 22, 26, 0.65); }
-.dark .bg-white\/58 { background-color: rgba(22, 22, 26, 0.68); }
-.dark .bg-white\/60 { background-color: rgba(22, 22, 26, 0.68); }
-.dark .bg-white\/62 { background-color: rgba(22, 22, 26, 0.70); }
-.dark .bg-white\/65 { background-color: rgba(22, 22, 26, 0.72); }
-.dark .bg-white\/70 { background-color: rgba(22, 22, 26, 0.74); }
-.dark .bg-white\/74 { background-color: rgba(22, 22, 26, 0.76); }
-.dark .bg-white\/75 { background-color: rgba(22, 22, 26, 0.78); }
-.dark .bg-white\/80 { background-color: rgba(22, 22, 26, 0.82); }
-.dark .bg-white\/84 { background-color: rgba(22, 22, 26, 0.85); }
-.dark .bg-white\/88 { background-color: rgba(22, 22, 26, 0.88); }
-.dark .bg-white\/90 { background-color: rgba(22, 22, 26, 0.90); }
-.dark .bg-white\/95 { background-color: rgba(22, 22, 26, 0.92); }
-.dark .hover\:bg-white\/50:hover { background-color: rgba(36, 36, 42, 0.60); }
-.dark .hover\:bg-white\/70:hover { background-color: rgba(36, 36, 42, 0.72); }
+.dark .bg-white { background-color: rgba(23, 24, 26, 0.85); }
+.dark .bg-white\/30 { background-color: rgba(23, 24, 26, 0.40); }
+.dark .bg-white\/35 { background-color: rgba(23, 24, 26, 0.45); }
+.dark .bg-white\/40 { background-color: rgba(23, 24, 26, 0.50); }
+.dark .bg-white\/42 { background-color: rgba(23, 24, 26, 0.52); }
+.dark .bg-white\/45 { background-color: rgba(23, 24, 26, 0.55); }
+.dark .bg-white\/50 { background-color: rgba(23, 24, 26, 0.60); }
+.dark .bg-white\/55 { background-color: rgba(23, 24, 26, 0.65); }
+.dark .bg-white\/58 { background-color: rgba(23, 24, 26, 0.68); }
+.dark .bg-white\/60 { background-color: rgba(23, 24, 26, 0.68); }
+.dark .bg-white\/62 { background-color: rgba(23, 24, 26, 0.70); }
+.dark .bg-white\/65 { background-color: rgba(23, 24, 26, 0.72); }
+.dark .bg-white\/70 { background-color: rgba(23, 24, 26, 0.74); }
+.dark .bg-white\/74 { background-color: rgba(23, 24, 26, 0.76); }
+.dark .bg-white\/75 { background-color: rgba(23, 24, 26, 0.78); }
+.dark .bg-white\/80 { background-color: rgba(23, 24, 26, 0.82); }
+.dark .bg-white\/84 { background-color: rgba(23, 24, 26, 0.85); }
+.dark .bg-white\/88 { background-color: rgba(23, 24, 26, 0.88); }
+.dark .bg-white\/90 { background-color: rgba(23, 24, 26, 0.90); }
+.dark .bg-white\/95 { background-color: rgba(23, 24, 26, 0.92); }
+.dark .hover\:bg-white\/50:hover { background-color: rgba(38, 40, 43, 0.60); }
+.dark .hover\:bg-white\/70:hover { background-color: rgba(38, 40, 43, 0.72); }
 
 /* Slate surfaces */
-.dark .bg-slate-50 { background-color: rgba(22, 22, 26, 0.60); }
-.dark .bg-slate-50\/50 { background-color: rgba(22, 22, 26, 0.30); }
-.dark .bg-slate-50\/55 { background-color: rgba(22, 22, 26, 0.32); }
-.dark .bg-slate-50\/60 { background-color: rgba(22, 22, 26, 0.36); }
-.dark .bg-slate-50\/80 { background-color: rgba(22, 22, 26, 0.50); }
-.dark .bg-slate-50\/90 { background-color: rgba(22, 22, 26, 0.55); }
-.dark .bg-slate-100 { background-color: rgba(36, 36, 42, 0.60); }
-.dark .bg-slate-100\/60 { background-color: rgba(36, 36, 42, 0.38); }
-.dark .bg-slate-100\/70 { background-color: rgba(36, 36, 42, 0.45); }
-.dark .hover\:bg-slate-50:hover { background-color: rgba(36, 36, 42, 0.40); }
-.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(36, 36, 42, 0.26); }
-.dark .hover\:bg-slate-100:hover { background-color: rgba(36, 36, 42, 0.55); }
-.dark .hover\:bg-slate-100\/60:hover { background-color: rgba(71, 85, 105, 0.48); }
-.dark .hover\:bg-slate-100\/70:hover { background-color: rgba(71, 85, 105, 0.52); }
-.dark .hover\:bg-slate-200:hover { background-color: rgba(71, 85, 105, 0.55); }
-.dark .bg-slate-200 { background-color: rgba(71, 85, 105, 0.45); }
+.dark .bg-slate-50 { background-color: rgba(23, 24, 26, 0.60); }
+.dark .bg-slate-50\/50 { background-color: rgba(23, 24, 26, 0.30); }
+.dark .bg-slate-50\/55 { background-color: rgba(23, 24, 26, 0.32); }
+.dark .bg-slate-50\/60 { background-color: rgba(23, 24, 26, 0.36); }
+.dark .bg-slate-50\/80 { background-color: rgba(23, 24, 26, 0.50); }
+.dark .bg-slate-50\/90 { background-color: rgba(23, 24, 26, 0.55); }
+.dark .bg-slate-100 { background-color: rgba(38, 40, 43, 0.60); }
+.dark .bg-slate-100\/60 { background-color: rgba(38, 40, 43, 0.38); }
+.dark .bg-slate-100\/70 { background-color: rgba(38, 40, 43, 0.45); }
+.dark .hover\:bg-slate-50:hover { background-color: rgba(38, 40, 43, 0.40); }
+.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(38, 40, 43, 0.26); }
+.dark .hover\:bg-slate-100:hover { background-color: rgba(38, 40, 43, 0.55); }
+.dark .hover\:bg-slate-100\/60:hover { background-color: rgba(79, 87, 95, 0.48); }
+.dark .hover\:bg-slate-100\/70:hover { background-color: rgba(79, 87, 95, 0.52); }
+.dark .hover\:bg-slate-200:hover { background-color: rgba(79, 87, 95, 0.55); }
+.dark .bg-slate-200 { background-color: rgba(79, 87, 95, 0.45); }
 
 /* Deep-dark backgrounds (sign-in buttons, countdown hero) */
-.dark .bg-slate-900 { background-color: rgb(2, 6, 23); }
+.dark .bg-slate-900 { background-color: rgb(13, 13, 15); }
 .dark .bg-slate-900\/20 { background-color: rgba(0, 0, 0, 0.40); }
 .dark .bg-slate-900\/40 { background-color: rgba(0, 0, 0, 0.55); }
 .dark .bg-slate-900\/60 { background-color: rgba(0, 0, 0, 0.70); }
-.dark .hover\:bg-slate-800:hover { background-color: rgb(15, 23, 42); }
+.dark .hover\:bg-slate-800:hover { background-color: rgb(28, 32, 37); }
 
 /* Text colors */
-.dark .text-slate-900 { color: #f1f5f9; }
-.dark .text-slate-800 { color: #e2e8f0; }
-.dark .text-slate-700 { color: #cbd5e1; }
-.dark .text-slate-600 { color: #94a3b8; }
-.dark .text-slate-500 { color: #94a3b8; }
-.dark .text-slate-400 { color: #64748b; }
-.dark .text-slate-300 { color: #475569; }
-.dark .text-slate-200 { color: #334155; }
-.dark .hover\:text-slate-500:hover { color: #cbd5e1; }
-.dark .hover\:text-slate-600:hover { color: #cbd5e1; }
-.dark .hover\:text-slate-700:hover { color: #e2e8f0; }
-.dark .hover\:text-slate-800:hover { color: #f1f5f9; }
-.dark .group-focus-within\:text-oker-500 { color: rgb(252, 176, 64); }
-.dark .group-hover\:text-slate-600 { color: #cbd5e1; }
+.dark .text-slate-900 { color: #F2F3F4; }
+.dark .text-slate-800 { color: #E4E6E8; }
+.dark .text-slate-700 { color: #CDD1D5; }
+.dark .text-slate-600 { color: #9AA1A9; }
+.dark .text-slate-500 { color: #9AA1A9; }
+.dark .text-slate-400 { color: #6E767F; }
+.dark .text-slate-300 { color: #4F575F; }
+.dark .text-slate-200 { color: #2C3137; }
+.dark .hover\:text-slate-500:hover { color: #CDD1D5; }
+.dark .hover\:text-slate-600:hover { color: #CDD1D5; }
+.dark .hover\:text-slate-700:hover { color: #E4E6E8; }
+.dark .hover\:text-slate-800:hover { color: #F2F3F4; }
+.dark .group-focus-within\:text-oker-500 { color: rgb(236, 183, 95); }
+.dark .group-hover\:text-slate-600 { color: #CDD1D5; }
 
 /* Borders */
-.dark .border-slate-50 { border-color: rgba(71, 85, 105, 0.20); }
-.dark .border-slate-100 { border-color: rgba(71, 85, 105, 0.28); }
-.dark .border-slate-200 { border-color: rgba(71, 85, 105, 0.38); }
-.dark .border-slate-300 { border-color: rgba(100, 116, 139, 0.45); }
-.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.20); }
-.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.28); }
-.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.38); }
-.dark .border-white\/60 { border-color: rgba(148, 163, 184, 0.18); }
-.dark .border-white\/70 { border-color: rgba(148, 163, 184, 0.20); }
-.dark .border-white\/75 { border-color: rgba(148, 163, 184, 0.22); }
-.dark .border-white\/80 { border-color: rgba(148, 163, 184, 0.22); }
-.dark .border-white\/88 { border-color: rgba(148, 163, 184, 0.25); }
-.dark .border-white\/92 { border-color: rgba(148, 163, 184, 0.26); }
-.dark .hover\:border-slate-200:hover { border-color: rgba(71, 85, 105, 0.42); }
-.dark .hover\:border-white\/80:hover { border-color: rgba(148, 163, 184, 0.26); }
+.dark .border-slate-50 { border-color: rgba(79, 87, 95, 0.20); }
+.dark .border-slate-100 { border-color: rgba(79, 87, 95, 0.28); }
+.dark .border-slate-200 { border-color: rgba(79, 87, 95, 0.38); }
+.dark .border-slate-300 { border-color: rgba(110, 118, 127, 0.45); }
+.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.20); }
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.28); }
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.38); }
+.dark .border-white\/60 { border-color: rgba(154, 161, 169, 0.18); }
+.dark .border-white\/70 { border-color: rgba(154, 161, 169, 0.20); }
+.dark .border-white\/75 { border-color: rgba(154, 161, 169, 0.22); }
+.dark .border-white\/80 { border-color: rgba(154, 161, 169, 0.22); }
+.dark .border-white\/88 { border-color: rgba(154, 161, 169, 0.25); }
+.dark .border-white\/92 { border-color: rgba(154, 161, 169, 0.26); }
+.dark .hover\:border-slate-200:hover { border-color: rgba(79, 87, 95, 0.42); }
+.dark .hover\:border-white\/80:hover { border-color: rgba(154, 161, 169, 0.26); }
 
 /* Rings */
-.dark .ring-slate-100 { --tw-ring-color: rgba(71, 85, 105, 0.32); }
+.dark .ring-slate-100 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
 .dark .ring-white\/60 { --tw-ring-color: rgba(255, 255, 255, 0.05); }
-.dark .ring-white\/80 { --tw-ring-color: rgba(148, 163, 184, 0.22); }
-.dark .ring-oker-100 { --tw-ring-color: rgba(245, 158, 11, 0.30); }
+.dark .ring-white\/80 { --tw-ring-color: rgba(154, 161, 169, 0.22); }
+.dark .ring-oker-100 { --tw-ring-color: rgba(232, 163, 61, 0.30); }
 
 /* Oker accents */
-.dark .bg-oker-50 { background-color: rgba(245, 158, 11, 0.10); }
-.dark .bg-oker-50\/80 { background-color: rgba(245, 158, 11, 0.08); }
-.dark .bg-oker-100 { background-color: rgba(245, 158, 11, 0.18); }
-.dark .bg-oker-500\/15 { background-color: rgba(245, 158, 11, 0.14); }
-.dark .bg-oker-500\/10 { background-color: rgba(245, 158, 11, 0.10); }
-.dark .border-oker-100 { border-color: rgba(245, 158, 11, 0.28); }
-.dark .border-oker-100\/60 { border-color: rgba(245, 158, 11, 0.20); }
-.dark .border-oker-200 { border-color: rgba(245, 158, 11, 0.32); }
-.dark .border-oker-200\/70 { border-color: rgba(245, 158, 11, 0.26); }
-.dark .border-oker-500\/20 { border-color: rgba(245, 158, 11, 0.28); }
-.dark .text-oker-600 { color: rgb(252, 176, 64); }
-.dark .text-oker-700 { color: rgb(252, 176, 64); }
-.dark .text-oker-800 { color: rgb(254, 215, 170); }
-.dark .text-oker-900 { color: rgb(255, 237, 213); }
-.dark .hover\:bg-oker-50\/70:hover { background-color: rgba(245, 158, 11, 0.10); }
-.dark .hover\:bg-oker-100:hover { background-color: rgba(245, 158, 11, 0.24); }
+.dark .bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
+.dark .bg-oker-50\/80 { background-color: rgba(232, 163, 61, 0.08); }
+.dark .bg-oker-100 { background-color: rgba(232, 163, 61, 0.18); }
+.dark .bg-oker-500\/15 { background-color: rgba(232, 163, 61, 0.14); }
+.dark .bg-oker-500\/10 { background-color: rgba(232, 163, 61, 0.10); }
+.dark .border-oker-100 { border-color: rgba(232, 163, 61, 0.28); }
+.dark .border-oker-100\/60 { border-color: rgba(232, 163, 61, 0.20); }
+.dark .border-oker-200 { border-color: rgba(232, 163, 61, 0.32); }
+.dark .border-oker-200\/70 { border-color: rgba(232, 163, 61, 0.26); }
+.dark .border-oker-500\/20 { border-color: rgba(232, 163, 61, 0.28); }
+.dark .text-oker-600 { color: rgb(236, 183, 95); }
+.dark .text-oker-700 { color: rgb(236, 183, 95); }
+.dark .text-oker-800 { color: rgb(242, 220, 174); }
+.dark .text-oker-900 { color: rgb(248, 236, 212); }
+.dark .hover\:bg-oker-50\/70:hover { background-color: rgba(232, 163, 61, 0.10); }
+.dark .hover\:bg-oker-100:hover { background-color: rgba(232, 163, 61, 0.24); }
 
 /* Emerald / red / amber / blue / green status tints */
 .dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
 .dark .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.12); }
 .dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.14); }
 .dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.22); }
-.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.14); }
-.dark .bg-amber-50\/80 { background-color: rgba(245, 158, 11, 0.14); }
-.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.22); }
+.dark .bg-amber-50 { background-color: rgba(232, 163, 61, 0.14); }
+.dark .bg-amber-50\/80 { background-color: rgba(232, 163, 61, 0.14); }
+.dark .bg-amber-100 { background-color: rgba(232, 163, 61, 0.22); }
 .dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
 .dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.14); }
 .dark .border-emerald-100 { border-color: rgba(16, 185, 129, 0.30); }
 .dark .border-red-100 { border-color: rgba(239, 68, 68, 0.30); }
-.dark .border-amber-100 { border-color: rgba(245, 158, 11, 0.30); }
-.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.38); }
-.dark .border-amber-200\/70 { border-color: rgba(245, 158, 11, 0.30); }
+.dark .border-amber-100 { border-color: rgba(232, 163, 61, 0.30); }
+.dark .border-amber-200 { border-color: rgba(232, 163, 61, 0.38); }
+.dark .border-amber-200\/70 { border-color: rgba(232, 163, 61, 0.30); }
 .dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.30); }
 .dark .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.18); }
 .dark .hover\:bg-red-50\/70:hover { background-color: rgba(239, 68, 68, 0.16); }
@@ -987,15 +1043,15 @@ html.dark {
   background:
     radial-gradient(
       ellipse 1000px 800px at 50% 30%,
-      rgba(245, 158, 11, 0.08) 0%,
+      rgba(232, 163, 61, 0.08) 0%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 700px 500px at 50% 95%,
-      rgba(217, 119, 6, 0.05) 0%,
+      rgba(201, 133, 31, 0.05) 0%,
       transparent 60%
     ),
-    linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
+    linear-gradient(180deg, #fafbfc 0%, #F2F3F4 100%);
 }
 
 /* === Dark login redesign — bewaard maar niet langer gebruikt ===
@@ -1006,15 +1062,15 @@ html.dark {
   background:
     radial-gradient(
       ellipse 900px 700px at 50% 38%,
-      rgba(245, 158, 11, 0.07) 0%,
+      rgba(232, 163, 61, 0.07) 0%,
       transparent 55%
     ),
     radial-gradient(
       ellipse 600px 500px at 50% 95%,
-      rgba(217, 119, 6, 0.04) 0%,
+      rgba(201, 133, 31, 0.04) 0%,
       transparent 55%
     ),
-    #0a0a0c;
+    #0D0D0F;
 }
 
 .panel-login-dark {
@@ -1047,9 +1103,9 @@ html.dark {
 }
 .control-input-dark:focus {
   background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(245, 158, 11, 0.55);
+  border-color: rgba(232, 163, 61, 0.55);
   box-shadow:
-    0 0 0 4px rgba(245, 158, 11, 0.10),
+    0 0 0 4px rgba(232, 163, 61, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
