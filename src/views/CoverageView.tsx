@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, Plus } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
@@ -7,8 +7,10 @@ import { fetchAvailability } from '../lib/availability';
 import {
   fetchCoverageConfig,
   fetchCoverageGaps,
-  saveCoverageExpectations,
+  saveCoverageConfig,
   type CoverageConfig,
+  type CoverageDayType,
+  type CoverageOverride,
   type DayGap,
 } from '../lib/coverage';
 
@@ -17,10 +19,22 @@ const MONTH_NAMES = [
   'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
 ];
 
+// Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
+const WEEKDAY_ORDER: { dow: number; label: string }[] = [
+  { dow: 1, label: 'Maandag' },
+  { dow: 2, label: 'Dinsdag' },
+  { dow: 3, label: 'Woensdag' },
+  { dow: 4, label: 'Donderdag' },
+  { dow: 5, label: 'Vrijdag' },
+  { dow: 6, label: 'Zaterdag' },
+  { dow: 0, label: 'Zondag' },
+];
+
 /**
- * Dekking — planner/admin: welke verwachte diensten zijn op een dag niet
- * ingevuld? Verwachte diensten worden per dag-type ingesteld; gaten worden
- * per dag berekend t.o.v. de planning-matrix.
+ * Openstaande diensten — planner/admin: welke verwachte diensten zijn op een
+ * dag niet ingevuld? De planner beheert zelf de dag-types + hun verwachte
+ * diensten, welk dag-type elke weekdag standaard is, en uitzonderingen
+ * (datumreeksen die afwijken, bv. schoolvakantie of feestdag).
  */
 export function CoverageView() {
   const [viewMonth, setViewMonth] = useState(() => {
@@ -28,7 +42,10 @@ export function CoverageView() {
     return new Date(n.getFullYear(), n.getMonth(), 1);
   });
   const [config, setConfig] = useState<CoverageConfig | null>(null);
-  const [draft, setDraft] = useState<Record<string, string[]>>({});
+  // Bewerkbare config-state.
+  const [dayTypes, setDayTypes] = useState<CoverageDayType[]>([]);
+  const [weekdays, setWeekdays] = useState<string[]>(['', '', '', '', '', '', '']);
+  const [overrides, setOverrides] = useState<CoverageOverride[]>([]);
   const [gaps, setGaps] = useState<DayGap[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -49,7 +66,14 @@ export function CoverageView() {
   useEffect(() => {
     let cancelled = false;
     fetchCoverageConfig()
-      .then((c) => { if (!cancelled) { setConfig(c); setDraft(c.expectations || {}); } })
+      .then((c) => {
+        if (cancelled) return;
+        setConfig(c);
+        setDayTypes((c.dayTypes || []).map((dt) => ({ name: dt.name, services: [...(dt.services || [])] })));
+        const w = Array.isArray(c.weekdays) && c.weekdays.length === 7 ? c.weekdays : ['', '', '', '', '', '', ''];
+        setWeekdays([...w]);
+        setOverrides((c.overrides || []).map((o) => ({ ...o })));
+      })
       .catch((e) => { if (!cancelled) setError(e?.message || 'Kon instellingen niet laden.'); });
     return () => { cancelled = true; };
   }, []);
@@ -84,19 +108,84 @@ export function CoverageView() {
     return () => { cancelled = true; };
   }, [pick]);
 
-  const toggleService = (dayType: string, svc: string) => {
-    setDraft((prev) => {
-      const cur = new Set(prev[dayType] || []);
-      if (cur.has(svc)) cur.delete(svc); else cur.add(svc);
-      return { ...prev, [dayType]: Array.from(cur) };
-    });
+  // --- Dag-types beheren ---
+  const dayTypeNames = useMemo(
+    () => Array.from(new Set(dayTypes.map((d) => d.name.trim()).filter(Boolean))),
+    [dayTypes],
+  );
+
+  // Nieuw dag-type bovenaan toevoegen (anders verdwijnt het onder de lange
+  // chips-lijsten en lijkt "toevoegen" niets te doen) + naamveld focussen.
+  const firstNameRef = useRef<HTMLInputElement | null>(null);
+  const [focusTick, setFocusTick] = useState(0);
+  const addDayType = () => {
+    setDayTypes((prev) => [{ name: '', services: [] }, ...prev]);
+    setFocusTick((t) => t + 1);
   };
+  useEffect(() => {
+    if (focusTick === 0) return;
+    firstNameRef.current?.focus();
+    firstNameRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [focusTick]);
+
+  // Hernoemen: werk meteen de verwijzingen in weekdagen + uitzonderingen mee
+  // bij (per toetsaanslag), zodat een toewijzing niet stilletjes verloren gaat.
+  const updateDayTypeName = (i: number, name: string) => {
+    const old = (dayTypes[i]?.name ?? '').trim();
+    const neu = name.trim();
+    setDayTypes((prev) => prev.map((dt, idx) => (idx === i ? { ...dt, name } : dt)));
+    if (old && old !== neu) {
+      setWeekdays((prev) => prev.map((x) => (x === old ? neu : x)));
+      setOverrides((prev) => prev.map((x) => (x.dayType === old ? { ...x, dayType: neu } : x)));
+    }
+  };
+
+  const toggleService = (i: number, svc: string) => {
+    setDayTypes((prev) => prev.map((dt, idx) => {
+      if (idx !== i) return dt;
+      const set = new Set(dt.services);
+      if (set.has(svc)) set.delete(svc); else set.add(svc);
+      return { ...dt, services: Array.from(set) };
+    }));
+  };
+
+  const removeDayType = (i: number) => {
+    const removed = (dayTypes[i]?.name ?? '').trim();
+    setDayTypes((prev) => prev.filter((_, idx) => idx !== i));
+    if (removed) {
+      setWeekdays((prev) => prev.map((x) => (x === removed ? '' : x)));
+      setOverrides((prev) => prev.filter((o) => o.dayType !== removed));
+    }
+  };
+
+  const setWeekday = (dow: number, name: string) =>
+    setWeekdays((prev) => prev.map((x, idx) => (idx === dow ? name : x)));
+
+  // --- Uitzonderingen ---
+  const addOverride = () => setOverrides((prev) => [...prev, { from: '', to: '', dayType: '' }]);
+  const updateOverride = (i: number, field: keyof CoverageOverride, value: string) =>
+    setOverrides((prev) => prev.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)));
+  const removeOverride = (i: number) => setOverrides((prev) => prev.filter((_, idx) => idx !== i));
 
   const handleSave = async () => {
     setSaving(true);
     setError('');
     try {
-      await saveCoverageExpectations(draft);
+      // Dag-types: lege namen weg, dedupe (eerste wint).
+      const seen = new Set<string>();
+      const cleanDayTypes: CoverageDayType[] = [];
+      for (const dt of dayTypes) {
+        const name = dt.name.trim();
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
+        cleanDayTypes.push({ name, services: dt.services });
+      }
+      const validNames = new Set(cleanDayTypes.map((d) => d.name));
+      const cleanWeekdays = weekdays.map((w) => (validNames.has(w) ? w : ''));
+      const cleanOverrides = overrides
+        .filter((o) => o.from && o.to && validNames.has(o.dayType))
+        .map((o) => ({ from: o.from, to: o.to, dayType: o.dayType }));
+      await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, overrides: cleanOverrides });
       await refetchGaps();
     } catch (e: any) {
       setError(e?.message || 'Opslaan mislukt.');
@@ -112,7 +201,7 @@ export function CoverageView() {
   };
 
   const totalMissing = useMemo(() => gaps.reduce((sum, d) => sum + d.missing.length, 0), [gaps]);
-  const anyExpectations = useMemo(() => Object.values(draft).some((l) => Array.isArray(l) && l.length > 0), [draft]);
+  const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);
   const visibleDays = onlyGaps ? gaps.filter((d) => d.missing.length > 0) : gaps;
 
   return (
@@ -134,62 +223,145 @@ export function CoverageView() {
 
       {error && <div className="surface-card p-4 rounded-2xl text-sm font-bold text-red-500">{error}</div>}
 
-      {/* Config: verwachte diensten per dag-type */}
+      {/* === Instellingen === */}
       {showConfig && (
-        <div className="surface-card rounded-3xl p-6 space-y-5">
+        <div className="surface-card rounded-3xl p-6 space-y-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-black tracking-tight text-slate-900">Verwachte diensten per dag-type</h3>
-              <p className="text-xs font-medium text-slate-500 mt-0.5">Vink de diensten aan die op dat dag-type horen te draaien. Ontbreekt zo'n dienst op een dag → gat.</p>
+              <h3 className="text-sm font-black tracking-tight text-slate-900">Dekkingsinstellingen</h3>
+              <p className="text-xs font-medium text-slate-500 mt-0.5">Beheer je dag-types, de verwachte diensten per type, welk type elke weekdag is, en uitzonderingen.</p>
             </div>
-            <button type="button" onClick={handleSave} disabled={saving} className="btn-primary ios-pressable px-5 py-2.5 text-xs disabled:opacity-50">
+            <button type="button" onClick={handleSave} disabled={saving} className="btn-primary ios-pressable shrink-0 px-5 py-2.5 text-xs disabled:opacity-50">
               {saving ? 'Opslaan…' : 'Opslaan'}
             </button>
           </div>
 
           {!config ? (
             <p className="text-sm font-medium text-slate-400">Laden…</p>
-          ) : config.dayTypes.length === 0 ? (
-            <p className="text-sm font-medium text-slate-400">Nog geen dag-types gevonden — importeer eerst een planning-matrix.</p>
           ) : config.services.length === 0 ? (
             <p className="text-sm font-medium text-slate-400">Geen diensten in het dienstoverzicht om uit te kiezen.</p>
           ) : (
-            <div className="space-y-5">
-              {config.dayTypes.map((dt) => {
-                const selected = new Set(draft[dt] || []);
-                return (
-                  <div key={dt}>
-                    <div className="flex items-baseline justify-between">
-                      <div className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-600 capitalize">{dt || '—'}</div>
-                      <div className="text-[10px] font-bold text-slate-400">{selected.size} geselecteerd</div>
-                    </div>
-                    <div className="mt-2 flex flex-wrap gap-1.5">
-                      {config.services.map((svc) => {
-                        const on = selected.has(svc);
-                        return (
-                          <button
-                            key={svc}
-                            type="button"
-                            onClick={() => toggleService(dt, svc)}
-                            className={cn(
-                              'rounded-lg px-2 py-1 text-[11px] font-black tabular-nums ring-1 transition-colors',
-                              on ? 'bg-oker-100 text-oker-700 ring-oker-300' : 'bg-white text-slate-400 ring-slate-200 hover:text-slate-600 hover:ring-slate-300',
-                            )}
-                          >
-                            {svc}
-                          </button>
-                        );
-                      })}
-                    </div>
+            <>
+              {/* 1. Dag-types + verwachte diensten */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Dag-types &amp; verwachte diensten</h4>
+                  <button type="button" onClick={addDayType} className="ios-pressable inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-600 hover:bg-slate-50 transition-colors">
+                    <Plus size={13} /> Dag-type
+                  </button>
+                </div>
+                {dayTypes.length === 0 ? (
+                  <p className="text-sm font-medium text-slate-400">Nog geen dag-types. Klik op "Dag-type" om er een toe te voegen (bv. schooldag, vakantie, zaterdag, zondag).</p>
+                ) : (
+                  <div className="space-y-3">
+                    {dayTypes.map((dt, i) => {
+                      const selected = new Set(dt.services);
+                      return (
+                        <div key={i} className="rounded-2xl border border-slate-100 bg-white/60 p-4">
+                          <div className="flex items-center gap-2">
+                            <input
+                              ref={i === 0 ? firstNameRef : undefined}
+                              value={dt.name}
+                              onChange={(e) => updateDayTypeName(i, e.target.value)}
+                              placeholder="Naam dag-type"
+                              aria-label="Naam dag-type"
+                              className="control-input flex-1 rounded-xl px-3 py-2 text-sm font-black outline-none"
+                            />
+                            <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</span>
+                            <button type="button" onClick={() => removeDayType(i)} aria-label="Dag-type verwijderen" className="ios-pressable shrink-0 w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors">
+                              <X size={15} />
+                            </button>
+                          </div>
+                          <div className="mt-3 flex flex-wrap gap-1.5">
+                            {config.services.map((svc) => {
+                              const on = selected.has(svc);
+                              return (
+                                <button
+                                  key={svc}
+                                  type="button"
+                                  onClick={() => toggleService(i, svc)}
+                                  className={cn(
+                                    'rounded-lg px-2 py-1 text-[11px] font-black tabular-nums ring-1 transition-colors',
+                                    on ? 'bg-oker-100 text-oker-700 ring-oker-300' : 'bg-white text-slate-400 ring-slate-200 hover:text-slate-600 hover:ring-slate-300',
+                                  )}
+                                >
+                                  {svc}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                );
-              })}
-            </div>
+                )}
+              </div>
+
+              {/* 2. Standaard dag-type per weekdag */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <div>
+                  <h4 className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Standaard per weekdag</h4>
+                  <p className="text-xs font-medium text-slate-500 mt-0.5">Welk dag-type geldt standaard op elke weekdag (tenzij een uitzondering hieronder).</p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {WEEKDAY_ORDER.map(({ dow, label }) => (
+                    <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-white ring-1 ring-slate-200/60 px-3 py-2">
+                      <span className="text-sm font-bold text-slate-700">{label}</span>
+                      <select
+                        value={weekdays[dow] || ''}
+                        onChange={(e) => setWeekday(dow, e.target.value)}
+                        aria-label={`Dag-type voor ${label}`}
+                        className="control-input rounded-lg px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                      >
+                        <option value="">— geen —</option>
+                        {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* 3. Uitzonderingen */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h4 className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Uitzonderingen</h4>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Een periode die afwijkt van de weekdag-standaard — bv. een schoolvakantie of een feestdag (van = tot voor één dag).</p>
+                  </div>
+                  <button type="button" onClick={addOverride} className="ios-pressable shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-600 hover:bg-slate-50 transition-colors">
+                    <Plus size={13} /> Uitzondering
+                  </button>
+                </div>
+                {overrides.length === 0 ? (
+                  <p className="text-xs font-medium text-slate-400">Geen uitzonderingen — elke dag volgt de weekdag-standaard.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {overrides.map((o, i) => (
+                      <div key={i} className="flex flex-wrap items-center gap-2">
+                        <input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                        <span className="text-[11px] font-bold text-slate-400">t/m</span>
+                        <input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                        <span className="text-slate-400 font-black">→</span>
+                        <select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" className="control-input rounded-xl px-2 py-2 text-sm font-bold outline-none">
+                          <option value="">— kies type —</option>
+                          {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                        </select>
+                        <button type="button" onClick={() => removeOverride(i)} aria-label="Uitzondering verwijderen" className="ios-pressable w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors">
+                          <X size={15} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <p className="text-[11px] font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
+            </>
           )}
         </div>
       )}
 
-      {/* Gaten-overzicht */}
+      {/* === Gaten-overzicht === */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
