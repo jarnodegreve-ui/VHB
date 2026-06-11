@@ -411,10 +411,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                         )}
                         {swap.status === 'pending' && (isAdmin ? (
                           <>
-                            <button onClick={() => handleAdminForceApprove(swap.id)} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                            <button onClick={() => handleAdminForceApprove(swap.id)} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-50 text-emerald-700 font-semibold text-sm active:scale-95 transition-all">
                               <Check size={16} /> Goedkeuren
                             </button>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 text-red-700 font-semibold text-sm active:scale-95 transition-all">
                               <X size={16} /> Afwijzen
                             </button>
                           </>
