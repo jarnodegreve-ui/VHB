@@ -254,17 +254,32 @@ export default function App() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      if (!isMounted) return;
+      // try/finally: wat er ook misgaat (netwerk, Supabase-lock-hang in een
+      // ander tabblad, API-fout), de app mag NOOIT eeuwig op 'Sessie
+      // laden...' blijven staan — dan liever terugvallen op het loginscherm.
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
 
-      setSession(data.session);
-      if (data.session) {
-        await initializeAuthenticatedApp(data.session.access_token);
+        setSession(data.session);
+        if (data.session) {
+          await initializeAuthenticatedApp(data.session.access_token);
+        }
+      } catch (error) {
+        console.error('Auth bootstrap error:', error);
+      } finally {
+        if (isMounted) setAuthReady(true);
       }
-      setAuthReady(true);
     };
 
     bootstrap();
+
+    // Watchdog: mocht getSession() tóch blijven hangen (bekend Supabase-
+    // fenomeen met meerdere open tabbladen), forceer dan na 8s een render
+    // zodat de gebruiker kan inloggen i.p.v. naar een spinner te staren.
+    const watchdog = window.setTimeout(() => {
+      if (isMounted) setAuthReady(true);
+    }, 8000);
 
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, nextSession) => {
       if (!isMounted) return;
@@ -308,6 +323,7 @@ export default function App() {
 
     return () => {
       isMounted = false;
+      window.clearTimeout(watchdog);
       authListener?.subscription.unsubscribe();
     };
   }, []);
@@ -375,10 +391,10 @@ export default function App() {
     return data as User;
   };
 
-  const initializeAuthenticatedApp = async (accessToken: string) => {
+  /** Achtergrond-dataload ná het profiel: blokkeert de eerste render niet —
+   *  de views tonen intussen skeletons (isInitialLoad). */
+  const loadAppData = async (appUser: User, accessToken: string) => {
     try {
-      setIsLoading(true);
-      const appUser = await fetchCurrentUser(accessToken);
       // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
       // Planner/admin: alle shifts (nodig voor beheer-views).
       const planningFilter = appUser.role === 'chauffeur' ? { driverId: String(appUser.id) } : undefined;
@@ -397,9 +413,20 @@ export default function App() {
         ...(appUser.role === 'admin' ? [fetchActivityLog(accessToken)] : []),
       ]);
     } catch (error) {
-      console.error('Error initializing app:', error);
+      console.error('Error loading app data:', error);
     } finally {
-      setIsLoading(false);
+      setIsInitialLoad(false);
+    }
+  };
+
+  const initializeAuthenticatedApp = async (accessToken: string) => {
+    // Progressieve boot: alleen het profiel (één snelle call) blokkeert de
+    // eerste render; alle overige data streamt op de achtergrond binnen.
+    try {
+      const appUser = await fetchCurrentUser(accessToken);
+      void loadAppData(appUser, accessToken);
+    } catch (error) {
+      console.error('Error initializing app:', error);
       setIsInitialLoad(false);
     }
   };
@@ -837,7 +864,15 @@ export default function App() {
   };
 
   if (!authReady) {
-    return <div className="min-h-screen bg-oker-50 flex items-center justify-center text-slate-600 font-bold">Sessie laden...</div>;
+    return (
+      <div className="login-bg-light min-h-screen flex flex-col items-center justify-center gap-5">
+        <img src="/vhb-logo.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-14 w-auto select-none" draggable={false} />
+        <div className="flex items-center gap-2.5 text-slate-500">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+          <span className="text-[13px] font-medium">Sessie laden…</span>
+        </div>
+      </div>
+    );
   }
 
   // Print-modus: kale weergave zonder sidebar/header. Vereist authenticated
@@ -924,7 +959,7 @@ export default function App() {
         email={currentUser?.email || session?.user?.email || ''}
       />
       <AnimatePresence>
-        {isLoading && (
+        {isLoading && !isInitialLoad && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
