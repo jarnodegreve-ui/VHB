@@ -1072,13 +1072,18 @@ export const getCoverageExpectations = async (): Promise<Record<string, string[]
   return map;
 };
 
+// Replace-semantiek: de hele dekkings-config wordt telkens volledig
+// meegestuurd, dus wis eerst alles en zet dan de nieuwe set. Zo verdwijnen
+// verwijderde dag-types ook echt (een upsert liet "ghost"-rijen staan).
 export const saveCoverageExpectations = async (map: Record<string, string[]>) => {
   const client = requireDb();
   const rows = Object.entries(map || {}).map(([day_type, service_numbers]) => ({
     day_type: String(day_type),
     service_numbers: Array.isArray(service_numbers) ? service_numbers.map((s) => String(s)) : [],
   }));
+  const { error: deleteError } = await client.from('coverage_expectations').delete().neq('day_type', '__never_match__');
+  if (deleteError) throw deleteError;
   if (rows.length === 0) return;
-  const { error } = await client.from('coverage_expectations').upsert(rows, { onConflict: 'day_type' });
-  if (error) throw error;
+  const { error: insertError } = await client.from('coverage_expectations').insert(rows);
+  if (insertError) throw insertError;
 };

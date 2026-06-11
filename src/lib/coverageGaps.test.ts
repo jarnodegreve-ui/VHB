@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeCode, computeDayGap, resolveDayType } from './coverageGaps';
+import { normalizeCode, computeDayGap, resolveDayType, parseOverrides, encodeOverride, DEFAULT_WEEKDAYS } from './coverageGaps';
 
 describe('coverageGaps', () => {
   it('normalizeCode trimt + lowercase', () => {
@@ -50,21 +50,45 @@ describe('coverageGaps', () => {
     expect(gap.missing).toEqual(['4101']);
   });
 
-  it('resolveDayType: expliciet dag-type wint van de datum-afleiding', () => {
-    // 2026-06-13 is een zaterdag, maar expliciet 'feestdag' moet blijven staan.
-    expect(resolveDayType('feestdag', '2026-06-13')).toBe('feestdag');
-    expect(resolveDayType('  Weekdag ', '2026-06-14')).toBe('Weekdag');
+  it('resolveDayType: expliciet dag-type (import-kopje) wint altijd', () => {
+    expect(resolveDayType('feestdag', '2026-06-13', DEFAULT_WEEKDAYS)).toBe('feestdag');
+    expect(resolveDayType('  Marktdag ', '2026-06-14', DEFAULT_WEEKDAYS)).toBe('Marktdag');
   });
 
-  it('resolveDayType: leeg dag-type → afgeleid uit de datum (weekdag/zaterdag/zondag)', () => {
-    expect(resolveDayType('', '2026-06-08')).toBe('weekdag'); // maandag
-    expect(resolveDayType('   ', '2026-06-12')).toBe('weekdag'); // vrijdag
-    expect(resolveDayType('', '2026-06-13')).toBe('zaterdag');
-    expect(resolveDayType(null, '2026-06-14')).toBe('zondag');
+  it('resolveDayType: leeg dag-type → standaard dag-type voor die weekdag', () => {
+    // DEFAULT_WEEKDAYS: zo=zondag, ma–vr=schooldag, za=zaterdag.
+    expect(resolveDayType('', '2026-06-08', DEFAULT_WEEKDAYS)).toBe('schooldag'); // maandag
+    expect(resolveDayType('   ', '2026-06-12', DEFAULT_WEEKDAYS)).toBe('schooldag'); // vrijdag
+    expect(resolveDayType('', '2026-06-13', DEFAULT_WEEKDAYS)).toBe('zaterdag');
+    expect(resolveDayType(null, '2026-06-14', DEFAULT_WEEKDAYS)).toBe('zondag');
+  });
+
+  it('resolveDayType: een uitzondering wint van de weekdag-standaard', () => {
+    const overrides = parseOverrides(['2026-07-01..2026-08-31|vakantie']);
+    expect(resolveDayType('', '2026-07-06', DEFAULT_WEEKDAYS, overrides)).toBe('vakantie'); // maandag in vakantie
+    expect(resolveDayType('', '2026-06-08', DEFAULT_WEEKDAYS, overrides)).toBe('schooldag'); // buiten de periode
+    // Een uitzondering geldt voor álle dagen in de range, ook het weekend.
+    expect(resolveDayType('', '2026-07-11', DEFAULT_WEEKDAYS, overrides)).toBe('vakantie'); // zaterdag in vakantie
+  });
+
+  it('resolveDayType: aangepaste weekdag-toewijzing wordt gerespecteerd', () => {
+    const weekdays = ['zon', 'werkdag', 'werkdag', 'werkdag', 'werkdag', 'werkdag', 'zat'];
+    expect(resolveDayType('', '2026-06-08', weekdays)).toBe('werkdag'); // maandag
+    expect(resolveDayType('', '2026-06-14', weekdays)).toBe('zon'); // zondag
+    // Geen toewijzing voor die weekdag → leeg.
+    expect(resolveDayType('', '2026-06-08', ['', '', '', '', '', '', ''])).toBe('');
   });
 
   it('resolveDayType: ongeldige datum zonder dag-type → leeg', () => {
-    expect(resolveDayType('', 'geen-datum')).toBe('');
-    expect(resolveDayType(undefined, '')).toBe('');
+    expect(resolveDayType('', 'geen-datum', DEFAULT_WEEKDAYS)).toBe('');
+    expect(resolveDayType(undefined, '', DEFAULT_WEEKDAYS)).toBe('');
+  });
+
+  it('parseOverrides/encodeOverride: round-trip + rommel negeren + omgekeerde range rechtzetten', () => {
+    expect(parseOverrides(['2026-07-01..2026-08-31|vakantie'])).toEqual([{ from: '2026-07-01', to: '2026-08-31', dayType: 'vakantie' }]);
+    expect(parseOverrides(['2026-08-31..2026-07-01|vakantie'])).toEqual([{ from: '2026-07-01', to: '2026-08-31', dayType: 'vakantie' }]);
+    expect(parseOverrides(['geen-pipe', '2026-07-01..x|y', '2026-07-01..2026-07-01|', null])).toEqual([]);
+    expect(parseOverrides('geen-array' as unknown)).toEqual([]);
+    expect(encodeOverride({ from: '2026-08-31', to: '2026-07-01', dayType: 'feestdag' })).toBe('2026-07-01..2026-08-31|feestdag');
   });
 });
