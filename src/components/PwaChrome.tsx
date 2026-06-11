@@ -118,7 +118,7 @@ export function InstallPrompt() {
           className="fixed inset-x-0 z-[125] flex justify-center px-4 pointer-events-none"
           style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
         >
-          <div className="pointer-events-auto flex items-center gap-3 rounded-[20px] border border-white/70 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-sm max-w-sm">
+          <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/70 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-sm max-w-sm">
             <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500 text-white">
               <Download size={16} />
             </div>
@@ -132,7 +132,7 @@ export function InstallPrompt() {
             </div>
             <button
               onClick={install}
-              className="btn-primary ios-pressable shrink-0 px-3.5 py-2 text-[11px] uppercase tracking-widest"
+              className="btn-primary ios-pressable shrink-0 px-3.5 py-2 text-[11px] uppercase tracking-[0.08em]"
             >
               Toevoegen
             </button>

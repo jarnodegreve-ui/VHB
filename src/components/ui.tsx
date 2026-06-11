@@ -38,13 +38,13 @@ export function PageHeader({
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400">{eyebrow}</p>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p>
         ) : null}
-        <h3 className={cn('section-title font-black tracking-tight text-slate-900 leading-[1.05]', eyebrow ? 'mt-2 text-[32px] md:text-[40px]' : 'text-[32px] md:text-[40px]')}>
+        <h3 className={cn('section-title font-black tracking-[-0.02em] text-slate-900 leading-[1.1] text-[26px] md:text-[30px]', eyebrow && 'mt-1.5')}>
           {title}
         </h3>
         {description ? (
-          <p className="mt-3 text-[15px] font-medium leading-relaxed text-slate-500 md:text-base">{description}</p>
+          <p className="mt-2 text-sm md:text-[15px] font-normal leading-relaxed text-slate-500">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
@@ -70,9 +70,9 @@ export function AdminSubsectionHeader({
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
-        {eyebrow ? <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400">{eyebrow}</p> : null}
-        <h3 className="mt-2 text-lg font-black tracking-tight text-slate-900 md:text-xl">{title}</h3>
-        {description ? <p className="mt-1 text-sm font-medium text-slate-500">{description}</p> : null}
+        {eyebrow ? <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p> : null}
+        <h3 className="mt-1.5 text-lg font-bold tracking-tight text-slate-900 md:text-xl">{title}</h3>
+        {description ? <p className="mt-1 text-sm font-normal text-slate-500">{description}</p> : null}
       </div>
       {aside ? <div className="flex flex-wrap items-center gap-3">{aside}</div> : null}
     </div>
@@ -103,16 +103,16 @@ export function ConfirmationModal({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-8 border-b border-white/70 shrink-0">
-              <div className={cn('w-12 h-12 rounded-2xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-100 text-red-600' : 'bg-amber-100 text-amber-600')}>
-                <AlertTriangle size={24} />
+          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0">
+              <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-600' : 'bg-amber-500/15 text-amber-600')}>
+                <AlertTriangle size={22} />
               </div>
-              <h4 className="text-xl font-black">{title}</h4>
-              <p className="text-sm text-slate-500 font-medium mt-2">{message}</p>
+              <h4 className="text-lg font-bold tracking-tight">{title}</h4>
+              <p className="text-sm text-slate-500 font-normal mt-1.5 leading-relaxed">{message}</p>
             </div>
-            <div className="p-8 bg-white/40 flex gap-3 backdrop-blur-sm shrink-0">
-              <button onClick={onClose} className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-widest text-xs border border-transparent hover:border-white/80">
+            <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
+              <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-slate-200 transition-all">
                 {cancelText}
               </button>
               <button
@@ -120,7 +120,7 @@ export function ConfirmationModal({
                   onConfirm();
                   onClose();
                 }}
-                className={cn('flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-widest text-xs', variant === 'danger' ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20')}
+                className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-white transition-all shadow-lg', variant === 'danger' ? 'bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20')}
               >
                 {confirmText}
               </button>
@@ -150,18 +150,18 @@ export function EmptyState({
   mascotte?: boolean;
 }) {
   return (
-    <div className="text-center py-12 surface-card rounded-[32px] border border-dashed border-white/80">
+    <div className="text-center py-12 surface-card rounded-3xl !border-dashed">
       {mascotte ? (
         <div className="bus-sway mx-auto mb-3 inline-block">
           <BrandBus width={170} />
         </div>
       ) : (
-        <div className="w-16 h-16 bg-white/75 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-300 shadow-sm ring-1 ring-white/80">
+        <div className="w-14 h-14 bg-slate-100/80 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
           {icon}
         </div>
       )}
-      <h4 className="text-lg font-black text-slate-800 tracking-tight">{title}</h4>
-      <p className="mt-2 text-sm font-medium text-slate-400 max-w-md mx-auto">{message}</p>
+      <h4 className="text-base font-bold text-slate-800 tracking-tight">{title}</h4>
+      <p className="mt-1.5 text-sm font-normal text-slate-500 max-w-md mx-auto">{message}</p>
     </div>
   );
 }
@@ -169,12 +169,12 @@ export function EmptyState({
 export function ViewLoader() {
   return (
     <div className="flex min-h-[280px] items-center justify-center">
-      <div className="rounded-[28px] border border-white/60 bg-white/85 px-6 py-5 shadow-xl backdrop-blur-xl">
+      <div className="rounded-2xl border border-slate-200/80 bg-white/95 px-5 py-4 shadow-lg">
         <div className="flex items-center gap-4">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-oker-500" />
+          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
           <div>
-            <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Laden</p>
-            <p className="text-sm font-bold text-slate-800">Scherm wordt voorbereid...</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Laden</p>
+            <p className="text-sm font-semibold text-slate-800">Scherm wordt voorbereid...</p>
           </div>
         </div>
       </div>
@@ -208,30 +208,30 @@ export function CredentialsModal({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-[32px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-            <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
+          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <div className="p-6 md:p-7 border-b border-slate-200/70 flex items-center justify-between shrink-0">
               <div>
-                <h4 className="text-xl font-black">{title}</h4>
-                <p className="mt-2 text-sm text-slate-500 font-medium">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
+                <h4 className="text-lg font-bold tracking-tight">{title}</h4>
+                <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
               </div>
-              <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl">
-                <X size={20} />
+              <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors">
+                <X size={18} />
               </button>
             </div>
-            <div className="p-8 space-y-4 overflow-y-auto flex-1">
-              <div className="surface-muted rounded-2xl p-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">E-mailadres</p>
-                <p className="mt-2 font-bold text-slate-800 break-all">{email}</p>
+            <div className="p-6 md:p-7 space-y-3 overflow-y-auto flex-1">
+              <div className="surface-muted rounded-xl p-4">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.08em]">E-mailadres</p>
+                <p className="mt-1.5 font-semibold text-slate-800 break-all">{email}</p>
               </div>
-              <div className="surface-muted rounded-2xl p-4">
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Tijdelijk wachtwoord</p>
-                <p className="mt-2 font-mono font-bold text-slate-800">{password}</p>
+              <div className="surface-muted rounded-xl p-4">
+                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.08em]">Tijdelijk wachtwoord</p>
+                <p className="mt-1.5 font-mono font-semibold text-slate-800">{password}</p>
               </div>
-              <div className="flex gap-3 pt-2">
-                <button onClick={handleCopy} className="flex-1 px-4 py-3 rounded-xl font-bold text-slate-700 control-button-soft transition-all">
+              <div className="flex gap-2.5 pt-2">
+                <button onClick={handleCopy} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-700 control-button-soft transition-all">
                   Kopieer gegevens
                 </button>
-                <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3">
+                <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3 text-sm">
                   Sluiten
                 </button>
               </div>

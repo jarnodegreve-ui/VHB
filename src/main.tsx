@@ -18,7 +18,7 @@ function CrashFallback() {
         </p>
         <button
           onClick={() => window.location.reload()}
-          className="btn-primary ios-pressable mt-5 px-5 py-3 text-xs uppercase tracking-widest"
+          className="btn-primary ios-pressable mt-5 px-5 py-3 text-xs uppercase tracking-[0.08em]"
         >
           Pagina herladen
         </button>

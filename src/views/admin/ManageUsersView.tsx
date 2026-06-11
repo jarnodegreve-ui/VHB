@@ -218,12 +218,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         description="Beheer medewerkers, rollen en accountacties vanuit een consistente beheershell. Gebruik Excel-import alleen wanneer de brongegevens al gevalideerd zijn."
         actions={(
           <>
-            <label className="btn-primary ios-pressable px-4 py-3 text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer">
+            <label className="btn-primary ios-pressable px-4 py-3 text-xs uppercase tracking-[0.08em] flex items-center gap-2 cursor-pointer">
               <Upload size={18} />
               {isImporting ? 'Bezig...' : 'Excel Upload'}
               <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
             </label>
-            <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-2 hover:bg-slate-800 transition-colors">
+            <button onClick={() => setShowAddModal(true)} className="bg-slate-900 text-white px-4 py-3 rounded-2xl text-xs font-black uppercase tracking-[0.08em] flex items-center gap-2 hover:bg-slate-800 transition-colors">
               <Plus size={18} /> Gebruiker Toevoegen
             </button>
           </>
@@ -231,12 +231,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.9fr]">
-        <div className="surface-card rounded-[32px] p-6">
+        <div className="surface-card rounded-3xl p-6">
           <AdminSubsectionHeader
             eyebrow="Werkset"
             title="Zichtbare gebruikers"
             description="Filter de huidige lijst per rol voordat je wijzigingen doorvoert."
-            aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredUsers.length} zichtbaar</div>}
+            aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{filteredUsers.length} zichtbaar</div>}
           />
           <div className="mt-5 glass-segmented inline-flex rounded-2xl p-1">
             {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
@@ -247,14 +247,14 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           </div>
         </div>
 
-        <div className="rounded-[32px] border border-oker-100 bg-oker-50/80 p-6 text-sm">
-          <p className="text-[10px] font-black uppercase tracking-[0.18em] text-oker-700">Bronimport</p>
+        <div className="rounded-3xl border border-oker-100 bg-oker-50/80 p-6 text-sm">
+          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">Bronimport</p>
           <p className="mt-3 font-bold text-oker-800">Excel Instructies</p>
           <p className="mt-2 text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-bold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-bold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
         </div>
       </div>
 
-      <div className="surface-table rounded-[32px] overflow-hidden">
+      <div className="surface-table rounded-3xl overflow-hidden">
         <div className="border-b border-white/70 px-6 py-5 md:px-8">
           <AdminSubsectionHeader
             eyebrow="Overzicht"
@@ -266,18 +266,18 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Medewerker</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Laatst Actief</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-center">Sessies</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] text-right">Acties</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Medewerker</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Status</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Laatst Actief</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] text-center">Sessies</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] text-right">Acties</th>
               </tr>
             </thead>
             <tbody>
               {filteredUsers.map((u) => (
                 <tr key={u.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-8 py-6"><div className="font-black text-slate-800 tracking-tight text-lg">{u.name}</div><div className="text-[10px] text-oker-500 font-black uppercase tracking-widest mt-0.5">{u.role}</div></td>
-                  <td className="px-8 py-6"><span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', u.isActive !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span></td>
+                  <td className="px-8 py-6"><div className="font-black text-slate-800 tracking-tight text-lg">{u.name}</div><div className="text-[10px] text-oker-500 font-black uppercase tracking-[0.08em] mt-0.5">{u.role}</div></td>
+                  <td className="px-8 py-6"><span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', u.isActive !== false ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-red-50 text-red-600 border border-red-100')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span></td>
                   <td className="px-8 py-6 text-sm font-bold text-slate-500">{u.lastLogin ? u.lastLogin : <span className="text-slate-300 italic font-medium">Nooit</span>}</td>
                   <td className="px-8 py-6 text-center"><span className={cn('w-8 h-8 inline-flex items-center justify-center rounded-xl text-xs font-black', (u.activeSessions || 0) > 0 ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-slate-50 text-slate-400 border border-slate-100')}>{u.activeSessions || 0}</span></td>
                   <td className="px-8 py-6 text-right">
@@ -285,7 +285,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                       <button onClick={() => setViewingHistoryUser(u)} className="glass-icon-button p-2 text-slate-400 hover:text-oker-600 rounded-xl transition-all" title="Verlof- en dienstruil-historiek"><Info size={18} /></button>
                       <button onClick={() => setViewingChangeLogUser(u)} className="glass-icon-button p-2 text-slate-400 hover:text-slate-700 rounded-xl transition-all" title="Wijzigingsgeschiedenis (rol, naam, etc.)"><History size={18} /></button>
                       <button onClick={() => setConfirmResetUser(u)} className="glass-icon-button p-2 text-slate-400 hover:text-oker-600 rounded-xl transition-all" title="Stel nieuw tijdelijk wachtwoord in"><RotateCcw size={18} /></button>
-                      <button onClick={() => setEditingUser(u)} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-oker-500 transition-all active:scale-95">Bewerken</button>
+                      <button onClick={() => setEditingUser(u)} className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.08em] hover:bg-oker-500 transition-all active:scale-95">Bewerken</button>
                       <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('p-2 rounded-xl transition-all', isProtectedAdmin(u) ? 'bg-white/30 text-slate-300 cursor-not-allowed' : 'glass-icon-button text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={18} /></button>
                     </div>
                   </td>
@@ -298,15 +298,15 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           {filteredUsers.map((u) => (
             <div key={u.id} className="p-6 space-y-4 active:bg-slate-50 transition-colors">
               <div className="flex justify-between items-start">
-                <div><div className="font-black text-slate-800 tracking-tight text-lg leading-tight">{u.name}</div><div className="text-[10px] text-oker-500 font-black uppercase tracking-widest mt-1">{u.role}</div></div>
-                <span className={cn('glass-chip px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', u.isActive !== false ? 'text-emerald-600' : 'text-red-600')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span>
+                <div><div className="font-black text-slate-800 tracking-tight text-lg leading-tight">{u.name}</div><div className="text-[10px] text-oker-500 font-black uppercase tracking-[0.08em] mt-1">{u.role}</div></div>
+                <span className={cn('glass-chip px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', u.isActive !== false ? 'text-emerald-600' : 'text-red-600')}>{u.isActive !== false ? 'Actief' : 'Inactief'}</span>
               </div>
               <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="p-3 bg-slate-50 rounded-2xl"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Laatst Actief</p><p className="text-xs font-bold text-slate-700 mt-1">{u.lastLogin || 'Nooit'}</p></div>
-                <div className="p-3 bg-slate-50 rounded-2xl"><p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Sessies</p><p className="text-xs font-bold text-slate-700 mt-1">{u.activeSessions || 0}</p></div>
+                <div className="p-3 bg-slate-50 rounded-2xl"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Laatst Actief</p><p className="text-xs font-bold text-slate-700 mt-1">{u.lastLogin || 'Nooit'}</p></div>
+                <div className="p-3 bg-slate-50 rounded-2xl"><p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Sessies</p><p className="text-xs font-bold text-slate-700 mt-1">{u.activeSessions || 0}</p></div>
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={() => setEditingUser(u)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-widest active:scale-95 transition-all">Bewerken</button>
+                <button onClick={() => setEditingUser(u)} className="flex-1 bg-slate-900 text-white py-4 rounded-2xl text-xs font-black uppercase tracking-[0.08em] active:scale-95 transition-all">Bewerken</button>
                 <button onClick={() => setViewingHistoryUser(u)} className="glass-icon-button px-4 text-slate-500 rounded-2xl active:scale-95 transition-all" title="Verlof- en dienstruil-historiek"><Info size={20} /></button>
                 <button onClick={() => setViewingChangeLogUser(u)} className="glass-icon-button px-4 text-slate-500 rounded-2xl active:scale-95 transition-all" title="Wijzigingsgeschiedenis"><History size={20} /></button>
                 <button onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} className={cn('px-4 rounded-2xl active:scale-95 transition-all', isProtectedAdmin(u) ? 'bg-white/30 text-slate-300 cursor-not-allowed' : 'glass-icon-button text-red-500')} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'}><Trash2 size={20} /></button>
@@ -336,8 +336,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">GSM Nummer</label><input type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
           </div>
           <div className="flex gap-3 pt-2">
-            <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button>
-            <button type="submit" className="btn-primary ios-pressable flex-1 px-4 py-3 text-xs uppercase tracking-widest">Toevoegen</button>
+            <button type="button" onClick={() => setShowAddModal(false)} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button>
+            <button type="submit" className="btn-primary ios-pressable flex-1 px-4 py-3 text-xs uppercase tracking-[0.08em]">Toevoegen</button>
           </div>
         </form>
       </Modal>
@@ -378,7 +378,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <button type="button" onClick={() => setEditingUser({ ...editingUser, isActive: editingUser.isActive === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.isActive !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-white rounded-full transition-all', editingUser.isActive !== false ? 'left-7' : 'left-1')} /></button>
               </div>
               <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Laatst Ingelogd</p><p className="text-xs font-bold text-slate-700 mt-1">{editingUser.lastLogin || 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Actieve Sessies</p><p className="text-xs font-bold text-slate-700 mt-1">{editingUser.activeSessions || 0}</p></div></div>
-              <div className="flex gap-3 pt-2"><button type="button" onClick={() => setEditingUser(null)} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button><button type="submit" className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-colors hover:bg-slate-800">Opslaan</button></div>
+              <div className="flex gap-3 pt-2"><button type="button" onClick={() => setEditingUser(null)} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button><button type="submit" className="flex-1 rounded-2xl bg-slate-900 px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-white shadow-lg transition-colors hover:bg-slate-800">Opslaan</button></div>
             </form>
           </>
         )}
@@ -391,7 +391,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <div className="p-6 space-y-4">
               <div className="space-y-1.5"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.16em]">Tijdelijk wachtwoord</label><input type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 6 tekens" autoFocus /></div>
               <p className="text-xs text-slate-400 font-medium">De gebruiker logt daarna in met dit nieuwe wachtwoord.</p>
-              <div className="flex gap-3 pt-2"><button type="button" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button><button type="button" onClick={handleResetPassword} disabled={isResettingPassword} className={cn('flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-white shadow-lg transition-colors', isResettingPassword ? 'bg-amber-300 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20')}>{isResettingPassword ? 'Bezig...' : 'Resetten'}</button></div>
+              <div className="flex gap-3 pt-2"><button type="button" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }} className="flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-colors hover:bg-slate-50">Annuleren</button><button type="button" onClick={handleResetPassword} disabled={isResettingPassword} className={cn('flex-1 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-white shadow-lg transition-colors', isResettingPassword ? 'bg-amber-300 cursor-not-allowed' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20')}>{isResettingPassword ? 'Bezig...' : 'Resetten'}</button></div>
             </div>
           </>
         )}

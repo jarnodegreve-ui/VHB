@@ -194,7 +194,7 @@ export function LoginView({
             ref={cardRef}
             onPointerMove={handleCardMove}
             onPointerLeave={handleCardLeave}
-            className="panel ios-soft-panel relative w-full rounded-[28px] p-7 sm:p-9"
+            className="panel ios-soft-panel relative w-full rounded-3xl p-7 sm:p-9"
           >
             <AnimatePresence mode="wait">
                 <motion.div
@@ -205,10 +205,10 @@ export function LoginView({
                   transition={{ duration: 0.22 }}
                   className="mb-7 text-center"
                 >
-                  <h2 className="text-[1.75rem] font-black text-slate-900 tracking-[-0.02em] leading-tight">
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-[-0.02em] leading-tight">
                     {headerCopy.title}
                   </h2>
-                  <p className="mt-2 text-sm text-slate-500 font-medium">{headerCopy.description}</p>
+                  <p className="mt-2 text-sm text-slate-500 font-normal">{headerCopy.description}</p>
                 </motion.div>
               </AnimatePresence>
 
@@ -252,7 +252,7 @@ export function LoginView({
                       setMode('login');
                       resetFeedback();
                     }}
-                    className="w-full text-center text-xs font-bold uppercase tracking-widest text-slate-400 hover:text-slate-700 transition-colors pt-2"
+                    className="w-full text-center text-xs font-bold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-700 transition-colors pt-2"
                   >
                     ← Terug naar inloggen
                   </button>
@@ -291,7 +291,7 @@ export function LoginView({
                           setMode('forgot');
                           resetFeedback();
                         }}
-                        className="text-[10px] font-bold uppercase tracking-widest text-oker-600 hover:text-oker-700 transition-colors"
+                        className="text-[10px] font-bold uppercase tracking-[0.08em] text-oker-600 hover:text-oker-700 transition-colors"
                       >
                         Vergeten?
                       </button>
@@ -303,7 +303,7 @@ export function LoginView({
               )}
 
             {/* Trust badge */}
-            <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-slate-400">
+            <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-400">
               <ShieldCheck size={11} className="text-emerald-500" />
               Beveiligd via Supabase Auth
             </div>
@@ -318,7 +318,7 @@ export function LoginView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] text-center px-6 space-y-1"
+        className="absolute inset-x-0 bottom-0 text-[10px] font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6 space-y-1"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <div>Intern gebruik</div>
@@ -368,7 +368,7 @@ function FieldInput({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1 min-h-[14px]">
-        <label className="block text-[10px] font-black text-slate-500 uppercase tracking-[0.18em]">{label}</label>
+        <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">{label}</label>
         <div className="flex items-center gap-3">
           <AnimatePresence>
             {showCapsWarning && (
@@ -377,7 +377,7 @@ function FieldInput({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 6 }}
                 transition={{ duration: 0.18 }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-widest text-amber-600"
+                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-amber-600"
                 title="Caps Lock staat aan"
               >
                 <ArrowUp size={10} strokeWidth={3} />
@@ -462,11 +462,11 @@ function SubmitButton({ loading, children }: { loading: boolean; children: React
     <button
       type="submit"
       disabled={loading}
-      className="group w-full inline-flex items-center justify-center gap-2 py-4 mt-2 rounded-2xl text-sm font-black uppercase tracking-widest text-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
+      className="group w-full inline-flex items-center justify-center gap-2 py-3.5 mt-2 rounded-xl text-[15px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
       style={{
-        background: 'linear-gradient(135deg, #f59e0b 0%, #d97706 100%)',
+        background: 'linear-gradient(180deg, #f59e0b 0%, #d97706 100%)',
         boxShadow:
-          'inset 0 1px 0 rgba(255, 255, 255, 0.32), 0 8px 22px rgba(245, 158, 11, 0.30), 0 2px 6px rgba(245, 158, 11, 0.16)',
+          'inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(180, 83, 9, 0.25), 0 6px 16px rgba(245, 158, 11, 0.24)',
       }}
     >
       <span>{loading ? 'Even geduld…' : children}</span>

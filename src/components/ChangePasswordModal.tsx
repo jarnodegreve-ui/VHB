@@ -96,7 +96,7 @@ export function ChangePasswordModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
+            className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
           >
             <div className="p-6 md:p-8 border-b border-white/70 flex items-start justify-between gap-4 shrink-0">
               <div>
@@ -114,7 +114,7 @@ export function ChangePasswordModal({
 
             <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-5 overflow-y-auto flex-1">
               <div className="space-y-1.5">
-                <label htmlFor="cpm-current-password" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Huidig wachtwoord</label>
+                <label htmlFor="cpm-current-password" className="block text-xs font-bold text-slate-500 uppercase tracking-[0.08em]">Huidig wachtwoord</label>
                 <input
                   id="cpm-current-password"
                   type="password"
@@ -128,7 +128,7 @@ export function ChangePasswordModal({
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="cpm-new-password" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Nieuw wachtwoord</label>
+                <label htmlFor="cpm-new-password" className="block text-xs font-bold text-slate-500 uppercase tracking-[0.08em]">Nieuw wachtwoord</label>
                 <input
                   id="cpm-new-password"
                   type="password"
@@ -143,7 +143,7 @@ export function ChangePasswordModal({
               </div>
 
               <div className="space-y-1.5">
-                <label htmlFor="cpm-confirm-password" className="block text-xs font-bold text-slate-500 uppercase tracking-widest">Bevestig nieuw wachtwoord</label>
+                <label htmlFor="cpm-confirm-password" className="block text-xs font-bold text-slate-500 uppercase tracking-[0.08em]">Bevestig nieuw wachtwoord</label>
                 <input
                   id="cpm-confirm-password"
                   type="password"
@@ -175,14 +175,14 @@ export function ChangePasswordModal({
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="flex-1 px-4 py-3 rounded-full font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-widest text-xs border border-transparent hover:border-white/80"
+                  className="flex-1 px-4 py-3 rounded-full font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-[0.08em] text-xs border border-transparent hover:border-white/80"
                 >
                   Annuleren
                 </button>
                 <button
                   type="submit"
                   disabled={isSubmitting || success}
-                  className={cn('btn-primary ios-pressable flex-1 px-4 py-3 text-xs uppercase tracking-widest')}
+                  className={cn('btn-primary ios-pressable flex-1 px-4 py-3 text-xs uppercase tracking-[0.08em]')}
                 >
                   {isSubmitting ? 'Opslaan...' : 'Opslaan'}
                 </button>

@@ -191,7 +191,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         description="De actuele rit-informatie voor alle chauffeurs. Admins vervangen de PDF wanneer de dienstregeling wijzigt."
         actions={canEdit ? (
           <label className={cn(
-            'btn-primary ios-pressable px-6 py-3 text-xs uppercase tracking-widest flex items-center gap-2 cursor-pointer',
+            'btn-primary ios-pressable px-6 py-3 text-xs uppercase tracking-[0.08em] flex items-center gap-2 cursor-pointer',
             isUploading && 'opacity-60 cursor-not-allowed',
           )}>
             <Upload size={16} />
@@ -208,7 +208,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       />
 
       {isLoading ? (
-        <div className="surface-card p-8 rounded-[28px] flex items-center justify-center min-h-[200px]">
+        <div className="surface-card p-8 rounded-3xl flex items-center justify-center min-h-[200px]">
           <div className="flex items-center gap-3 text-slate-500">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
             <span className="text-sm font-bold">Ritblaadje laden...</span>
@@ -222,7 +222,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         />
       ) : (
         <div className="space-y-6">
-          <div className="surface-card rounded-[28px] p-6 md:p-8">
+          <div className="surface-card rounded-3xl p-6 md:p-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-oker-50 text-oker-600 ring-1 ring-oker-100 flex items-center justify-center shrink-0">
@@ -230,9 +230,9 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Huidige ritblaadjes</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Huidige ritblaadjes</p>
                     {fromCache && (
-                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-widest text-amber-600 ring-1 ring-amber-100">
+                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-amber-600 ring-1 ring-amber-100">
                         Offline
                       </span>
                     )}
@@ -253,7 +253,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 <a
                   href={current.url}
                   download={current.filename}
-                  className="btn-primary ios-pressable px-5 py-3 text-xs uppercase tracking-widest flex items-center gap-2"
+                  className="btn-primary ios-pressable px-5 py-3 text-xs uppercase tracking-[0.08em] flex items-center gap-2"
                 >
                   <Download size={16} />
                   Download
@@ -272,7 +272,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
             </div>
           </div>
 
-          <div className="surface-card rounded-[28px] overflow-hidden">
+          <div className="surface-card rounded-3xl overflow-hidden">
             <iframe
               src={current.url}
               title="Ritblaadje voorbeeld"

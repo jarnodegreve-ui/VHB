@@ -44,17 +44,12 @@ export function BottomNav({
   return (
     <nav
       className={cn(
-        'md:hidden fixed bottom-3 left-3 right-3 z-40 rounded-[24px] px-2 py-2 transition-all duration-300',
+        'md:hidden fixed bottom-3 left-3 right-3 z-40 rounded-2xl px-2 py-2 transition-all duration-300',
+        'bg-white/90 border border-slate-200/80 backdrop-blur-xl shadow-[0_8px_28px_rgba(15,23,42,0.12)]',
         hidden && 'pointer-events-none opacity-0 translate-y-4',
       )}
       aria-hidden={hidden || undefined}
       style={{
-        background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(255, 255, 255, 0.6) 100%)',
-        backdropFilter: 'blur(30px) saturate(160%)',
-        WebkitBackdropFilter: 'blur(30px) saturate(160%)',
-        border: '1px solid rgba(255, 255, 255, 0.85)',
-        boxShadow:
-          'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.42), 0 14px 36px rgba(15, 23, 42, 0.10), 0 4px 12px rgba(15, 23, 42, 0.05)',
         paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
       }}
       aria-label="Hoofdnavigatie"
@@ -69,7 +64,7 @@ export function BottomNav({
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={slot.label}
                 className={cn(
-                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-2xl transition-colors',
+                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-xl transition-colors',
                   isActive ? 'text-oker-700' : 'text-slate-400 hover:text-slate-700',
                 )}
               >
@@ -77,21 +72,15 @@ export function BottomNav({
                   <motion.span
                     layoutId="bottom-nav-active"
                     transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
-                    className="absolute inset-0 rounded-2xl"
-                    style={{
-                      background:
-                        'linear-gradient(135deg, rgba(254, 243, 199, 0.85) 0%, rgba(253, 230, 138, 0.65) 100%)',
-                      boxShadow:
-                        'inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 2px 6px rgba(245, 158, 11, 0.15)',
-                    }}
+                    className="absolute inset-0 rounded-xl bg-oker-100"
                   />
                 )}
                 <span className="relative z-10">{slot.icon}</span>
-                <span className="relative z-10 text-[9px] font-bold tracking-tight leading-tight truncate max-w-full px-1">
+                <span className="relative z-10 text-[9px] font-semibold tracking-tight leading-tight truncate max-w-full px-1">
                   {slot.label}
                 </span>
                 {slot.badge !== undefined && slot.badge > 0 && (
-                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-black bg-oker-500 text-white rounded-full shadow-sm">
+                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-bold bg-oker-500 text-white rounded-full">
                     {slot.badge > 9 ? '9+' : slot.badge}
                   </span>
                 )}

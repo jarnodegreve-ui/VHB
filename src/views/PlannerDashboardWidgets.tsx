@@ -40,11 +40,11 @@ export function PlannerDashboardWidgets({
           <SkeletonTile />
         </div>
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
-          <div className="rounded-[28px] p-5 surface-card">
+          <div className="rounded-3xl p-5 surface-card">
             <SkeletonRow />
             <SkeletonRow />
           </div>
-          <div className="rounded-[28px] p-5 surface-card">
+          <div className="rounded-3xl p-5 surface-card">
             <SkeletonRow />
             <SkeletonRow />
           </div>
@@ -73,8 +73,8 @@ export function PlannerDashboardWidgets({
   return (
     <section className="space-y-4">
       <div className="flex items-baseline justify-between px-1">
-        <h2 className="text-2xl font-black tracking-[-0.025em] text-slate-900">Overzicht</h2>
-        <p className="text-xs font-semibold text-slate-500">
+        <h2 className="text-[20px] font-bold tracking-[-0.02em] text-slate-900">Overzicht</h2>
+        <p className="text-xs font-medium text-slate-500">
           {new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
         </p>
       </div>
@@ -189,16 +189,14 @@ export function PlannerDashboardWidgets({
 // Dark mode flipt automatisch via de var.
 const PANEL_PALETTE = {
   oker: {
-    bg: 'var(--tile-bg-soft)',
-    shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 10px 28px rgba(245, 158, 11, 0.08), 0 2px 8px rgba(15, 23, 42, 0.04)',
-    sub: 'text-slate-500',
+    bg: 'var(--tile-bg)',
+    shadow: '0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(245, 158, 11, 0.06)',
+    sub: 'text-slate-400',
   },
   blue: {
-    bg: 'var(--tile-bg-soft)',
-    shadow:
-      'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 10px 28px rgba(59, 130, 246, 0.06), 0 2px 8px rgba(15, 23, 42, 0.04)',
-    sub: 'text-slate-500',
+    bg: 'var(--tile-bg)',
+    shadow: '0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 24px rgba(59, 130, 246, 0.05)',
+    sub: 'text-slate-400',
   },
 } as const;
 
@@ -219,33 +217,35 @@ function BentoListPanel({
   onSeeAll: () => void;
   children: ReactNode;
 }) {
+  void iconBg;
   const p = PANEL_PALETTE[accent];
+  const chip = accent === 'oker'
+    ? 'bg-oker-500/15 text-oker-600 dark:text-oker-400'
+    : 'bg-blue-500/12 text-blue-600 dark:text-blue-400';
   return (
     <div
-      className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
+      className="glow-top rounded-3xl p-5 relative overflow-hidden"
       style={{
         background: p.bg,
-        backdropFilter: 'blur(30px) saturate(155%)',
-        WebkitBackdropFilter: 'blur(30px) saturate(155%)',
         border: 'var(--tile-border-soft)',
         boxShadow: p.shadow,
       }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2.5">
-          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${iconBg} text-white shadow-md shadow-black/10`}>
+          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${chip}`}>
             {icon}
           </div>
-          <h3 className="text-sm font-black text-slate-900 tracking-tight">{title}</h3>
+          <h3 className="text-[13.5px] font-bold text-slate-900 tracking-tight">{title}</h3>
         </div>
-        <span className={`text-[10px] font-bold uppercase tracking-widest ${p.sub}`}>
+        <span className={`text-[10px] font-semibold uppercase tracking-[0.08em] ${p.sub}`}>
           {count} totaal
         </span>
       </div>
       <div className="space-y-1.5">{children}</div>
       <button
         onClick={onSeeAll}
-        className="mt-3 w-full inline-flex items-center justify-center gap-1 rounded-2xl bg-white/60 ring-1 ring-white/80 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-slate-700 hover:bg-white hover:shadow-sm transition-all"
+        className="mt-3 w-full inline-flex items-center justify-center gap-1 rounded-xl bg-white/70 ring-1 ring-slate-200/70 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-600 hover:bg-white hover:text-slate-900 hover:shadow-sm transition-all"
       >
         Bekijk alle
         <ArrowUpRight size={12} />
@@ -256,10 +256,10 @@ function BentoListPanel({
 
 function PendingRow({ primary, secondary }: { primary: string; secondary: string }) {
   return (
-    <div className="flex items-start justify-between gap-3 rounded-2xl bg-white/65 ring-1 ring-white/80 px-3 py-2 hover:bg-white hover:shadow-sm transition-all">
+    <div className="flex items-start justify-between gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3 py-2 hover:bg-white hover:shadow-sm transition-all">
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-black text-slate-900 truncate">{primary}</p>
-        <p className="text-xs font-semibold text-slate-600/80 mt-0.5 truncate">{secondary}</p>
+        <p className="text-sm font-bold text-slate-900 truncate">{primary}</p>
+        <p className="text-xs font-medium text-slate-500 mt-0.5 truncate">{secondary}</p>
       </div>
     </div>
   );
@@ -287,24 +287,21 @@ function QuickActionTile({
     <button
       ref={setRefs}
       onClick={onClick}
-      className="glow-top glass-stack cursor-glow halo-on-hover group text-left rounded-[24px] p-4 relative overflow-hidden"
+      className="glow-top cursor-glow group text-left rounded-3xl p-4 relative overflow-hidden surface-card-hover"
       style={{
-        background: 'var(--tile-bg-soft)',
-        backdropFilter: 'blur(28px) saturate(155%)',
-        WebkitBackdropFilter: 'blur(28px) saturate(155%)',
-        border: 'var(--tile-border-soft)',
-        boxShadow:
-          'inset 0 1px 0 rgba(255, 255, 255, 0.95), inset 0 -1px 0 rgba(255, 255, 255, 0.4), 0 8px 24px rgba(15, 23, 42, 0.05), 0 2px 6px rgba(15, 23, 42, 0.04)',
+        background: 'var(--tile-bg)',
+        border: 'var(--tile-border)',
+        boxShadow: 'var(--tile-shadow)',
       }}
     >
       <span className="cursor-glow-layer" />
       <div className="relative z-10 flex items-center gap-3">
-        <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-slate-900 text-white shadow-md shadow-black/10">
+        <div className="inline-flex items-center justify-center w-10 h-10 rounded-xl bg-slate-900 text-white dark:bg-oker-500/15 dark:text-oker-400">
           {icon}
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-slate-900 tracking-tight">{label}</p>
-          <p className="text-xs font-semibold text-slate-500 mt-0.5">{subLabel}</p>
+          <p className="text-sm font-bold text-slate-900 tracking-tight">{label}</p>
+          <p className="text-xs font-medium text-slate-500 mt-0.5">{subLabel}</p>
         </div>
         <ArrowUpRight size={16} className="text-slate-400 group-hover:text-slate-900 transition-colors shrink-0" />
       </div>

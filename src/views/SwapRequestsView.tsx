@@ -205,17 +205,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Mijn Verzoeken</h4>
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Mijn Verzoeken</h4>
           {mySwaps.length > 0 ? (
             mySwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
               const target = users.find(u => u.id === swap.targetDriverId);
               return (
-                <div key={swap.id} className="surface-card p-6 rounded-[32px] flex items-center justify-between gap-4">
+                <div key={swap.id} className="surface-card p-6 rounded-3xl flex items-center justify-between gap-4">
                   <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst {getServiceNumber(shift)}</p>
+                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst {getServiceNumber(shift)}</p>
                     <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.08em]">{shift?.startTime} - {shift?.endTime}</p>
                     {target && (
                       <p className="text-xs font-bold text-slate-500 mt-2">Aan: <span className="text-slate-800">{target.name}</span></p>
                     )}
@@ -224,7 +224,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     )}
                   </div>
                   <span className={cn(
-                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest",
+                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]",
                     statusStyles[swap.status]
                   )}>
                     {statusLabels[swap.status]}
@@ -238,26 +238,26 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         </div>
 
         <div className="space-y-4">
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Openstaande Dienstruilen</h4>
+          <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Openstaande Dienstruilen</h4>
           {availableSwaps.length > 0 ? (
             availableSwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
               const requester = users.find(u => u.id === swap.requesterId);
               const canRespond = canRespondToSwap(user, swap);
               return (
-                <div key={swap.id} className="surface-card p-6 rounded-[32px] space-y-4">
+                <div key={swap.id} className="surface-card p-6 rounded-3xl space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst {getServiceNumber(shift)}</p>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst {getServiceNumber(shift)}</p>
                       <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">{shift?.startTime} - {shift?.endTime}</p>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Door: {requester?.name}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.08em]">{shift?.startTime} - {shift?.endTime}</p>
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.08em]">Door: {requester?.name}</p>
                       {returnLabel(swap) && (
                         <p className="text-xs font-bold text-indigo-600 mt-1 normal-case tracking-normal">Jij geeft: {returnLabel(swap)}</p>
                       )}
                     </div>
                     <span className={cn(
-                      'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0',
+                      'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em] shrink-0',
                       swap.status === 'accepted' ? statusStyles.accepted : 'bg-amber-50 text-amber-600',
                     )}>
                       {swap.status === 'accepted' ? 'Wacht op planner' : canRespond ? 'Jouw antwoord' : 'Wacht op planner'}
@@ -268,13 +268,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                     <div className="flex gap-2 pt-1">
                       <button
                         onClick={() => handleAccept(swap.id)}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all"
                       >
                         <Check size={16} /> Accepteren
                       </button>
                       <button
                         onClick={() => handleDecline(swap.id)}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all"
+                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all"
                       >
                         <X size={16} /> Weigeren
                       </button>
@@ -303,17 +303,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
         return (
           <div className="space-y-4 pt-8">
-            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Beheer Dienstruilen</h4>
-            <div className="surface-table rounded-[32px] overflow-hidden">
+            <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Beheer Dienstruilen</h4>
+            <div className="surface-table rounded-3xl overflow-hidden">
               {/* Desktop table */}
               <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 border-b border-slate-100">
                     <tr>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Chauffeur</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Status</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Acties</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Chauffeur</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Status</th>
+                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Acties</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -336,7 +336,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                             )}
                           </td>
                           <td className="px-6 py-4">
-                            <span className={cn('px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
+                            <span className={cn('px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                           </td>
                           <td className="px-6 py-4 flex gap-2">
                             <button onClick={() => setHistorySwap(swap)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"><History size={18} /></button>
@@ -350,7 +350,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                               <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen (wacht op collega)" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
                             )}
                             {swap.status === 'approved' && (
-                              <button onClick={() => handleCancel(swap.id)} className="px-3 py-2 text-[10px] font-black uppercase tracking-widest text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">Annuleren</button>
+                              <button onClick={() => handleCancel(swap.id)} className="px-3 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">Annuleren</button>
                             )}
                           </td>
                         </tr>
@@ -373,21 +373,21 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                             {requester?.name}
                             {swap.targetDriverId && <span className="font-medium text-slate-400"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
                           </p>
-                          <p className="text-[10px] font-black text-oker-700 uppercase tracking-widest mt-1">Dienst {getServiceNumber(shift)}</p>
+                          <p className="text-[10px] font-black text-oker-700 uppercase tracking-[0.08em] mt-1">Dienst {getServiceNumber(shift)}</p>
                           <p className="text-xs font-medium text-slate-500 mt-1">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
                           {returnLabel(swap) && (
                             <p className="text-[11px] font-bold text-indigo-600 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
                         </div>
-                        <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest shrink-0', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
+                        <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em] shrink-0', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
                       </div>
                       <div className="flex gap-2 pt-1">
                         {swap.status === 'accepted' && (
                           <>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                            <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all">
                               <Check size={16} /> Goedkeuren
                             </button>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-widest active:scale-95 transition-all">
+                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all">
                               <X size={16} /> Afwijzen
                             </button>
                           </>
@@ -395,13 +395,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                         {swap.status === 'pending' && (
                           <div className="flex-1 flex items-center justify-between gap-2">
                             <span className="text-[11px] font-bold text-amber-600">Wacht op antwoord collega</span>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="py-2 px-3 rounded-xl bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-widest active:scale-95 transition-all">
+                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="py-2 px-3 rounded-xl bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-[0.08em] active:scale-95 transition-all">
                               Afwijzen
                             </button>
                           </div>
                         )}
                         {swap.status === 'approved' && (
-                          <button onClick={() => handleCancel(swap.id)} className="flex-1 py-3 rounded-2xl border border-red-200 text-red-500 font-black text-xs uppercase tracking-widest hover:bg-red-50 transition-colors">
+                          <button onClick={() => handleCancel(swap.id)} className="flex-1 py-3 rounded-2xl border border-red-200 text-red-500 font-black text-xs uppercase tracking-[0.08em] hover:bg-red-50 transition-colors">
                             Annuleren
                           </button>
                         )}
@@ -422,7 +422,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
       <AnimatePresence>
         {showOfferModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-[28px] w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
                 <h4 className="text-xl font-black">Dienstruil aanvragen</h4>
                 <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
@@ -434,7 +434,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   </div>
                 )}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Selecteer Dienst</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Selecteer Dienst</label>
                   <select
                     value={selectedShift}
                     onChange={(e) => setSelectedShift(e.target.value)}
@@ -450,7 +450,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between ml-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Aan welke collega?</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Aan welke collega?</label>
                     {selectedShiftDate && (
                       <span className="text-[10px] font-bold text-slate-400">
                         {matchLoading
@@ -485,7 +485,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Wat neem jij in ruil?</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Wat neem jij in ruil?</label>
                   <select
                     value={returnPick}
                     onChange={(e) => setReturnPick(e.target.value)}
@@ -515,7 +515,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Info (optioneel)</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Info (optioneel)</label>
                   <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}

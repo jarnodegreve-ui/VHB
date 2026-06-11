@@ -81,7 +81,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               <button
                 onClick={() => toggleSort('number')}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-[0.08em] transition-all flex items-center gap-2",
                   sortBy === 'number' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
@@ -91,7 +91,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               <button
                 onClick={() => toggleSort('time')}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-2",
+                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-[0.08em] transition-all flex items-center gap-2",
                   sortBy === 'time' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
@@ -123,16 +123,16 @@ export function ServicesView({ services }: { services: Service[] }) {
         )}
       />
 
-      <div className="surface-table rounded-[28px] overflow-hidden">
+      <div className="surface-table rounded-3xl overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Dienst</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 1</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 2</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest border-b border-slate-100">Deel 3</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Dienst</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Deel 1</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Deel 2</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Deel 3</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
@@ -183,7 +183,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                 >
                   <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
                   <div className="flex items-center gap-3 shrink-0">
-                    <div className="glass-chip px-3 py-1 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-widest">
+                    <div className="glass-chip px-3 py-1 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-[0.08em]">
                       Dienst
                     </div>
                     <ChevronDown
@@ -195,7 +195,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                 {isExpanded && (
                   <div className="px-6 pb-6 grid grid-cols-1 gap-3">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 1</span>
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 1</span>
                       <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime} - {s.endTime}
@@ -203,7 +203,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                     </div>
                     {hasValidTime(s.startTime2, s.endTime2) && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 2</span>
                         <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
                           <Clock size={14} className="text-oker-500" />
                           {s.startTime2} - {s.endTime2}
@@ -212,7 +212,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                     )}
                     {hasValidTime(s.startTime3, s.endTime3) && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</span>
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 3</span>
                         <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
                           <Clock size={14} className="text-oker-500" />
                           {s.startTime3} - {s.endTime3}

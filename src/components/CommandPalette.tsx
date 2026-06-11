@@ -299,7 +299,7 @@ export function CommandPalette({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
-            className="relative w-full max-w-xl rounded-[24px] overflow-hidden"
+            className="relative w-full max-w-xl rounded-3xl overflow-hidden"
             style={{
               background:
                 'linear-gradient(180deg, rgba(255, 255, 255, 0.85) 0%, rgba(255, 255, 255, 0.7) 100%)',
@@ -388,7 +388,7 @@ export function CommandPalette({
                   Kies
                 </span>
               </div>
-              <span className="font-bold tracking-widest uppercase">{filtered.length} resultaten</span>
+              <span className="font-bold tracking-[0.08em] uppercase">{filtered.length} resultaten</span>
             </div>
           </motion.div>
         </motion.div>

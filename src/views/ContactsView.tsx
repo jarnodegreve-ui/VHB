@@ -40,14 +40,14 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-3 gap-y-5">
         {filteredUsers.map(u => (
-          <div key={u.id} className="surface-card surface-card-hover px-4 py-3 rounded-[20px] flex items-center justify-between gap-3 group">
+          <div key={u.id} className="surface-card surface-card-hover px-4 py-3 rounded-2xl flex items-center justify-between gap-3 group">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-black text-base shrink-0">
                 {u.name.charAt(0)}
               </div>
               <div className="min-w-0">
                 <h4 className="font-black text-slate-800 tracking-tight truncate">{u.name}</h4>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-widest">{u.role}</p>
+                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.08em]">{u.role}</p>
               </div>
             </div>
             {u.phone ? (

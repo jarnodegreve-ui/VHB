@@ -292,7 +292,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           <button 
             onClick={() => setConfirmSyncOpen(true)}
             disabled={isSyncing}
-            className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
+            className="w-full sm:w-auto bg-emerald-500 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-[0.08em] flex items-center justify-center gap-3 hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20 disabled:opacity-50 active:scale-95"
             title="Synchroniseer lokale JSON data naar Supabase"
           >
             <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
@@ -301,7 +301,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         ) : null}
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">
-        <div className="surface-card rounded-[32px] p-6 md:p-8">
+        <div className="surface-card rounded-3xl p-6 md:p-8">
           <AdminSubsectionHeader
             eyebrow="Importbronnen"
             title="Matrix en fallback-import"
@@ -309,14 +309,14 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             aside={showExcelInfo ? (
               <button
                 onClick={() => setShowExcelInfo(false)}
-                className="rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:text-slate-800"
+                className="rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 transition hover:text-slate-800"
               >
                 Info verbergen
               </button>
             ) : (
               <button
                 onClick={() => setShowExcelInfo(true)}
-                className="rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500 transition hover:text-slate-800"
+                className="rounded-full border border-white/70 bg-white/60 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 transition hover:text-slate-800"
               >
                 Info tonen
               </button>
@@ -324,7 +324,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           />
 
           {showExcelInfo && (
-            <div className="mt-5 rounded-[24px] border border-oker-100 bg-oker-50/80 p-5 text-sm">
+            <div className="mt-5 rounded-3xl border border-oker-100 bg-oker-50/80 p-5 text-sm">
               <p className="font-bold text-oker-800">Importvolgorde</p>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-oker-700">
                 <li>Upload het hele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab automatisch.</li>
@@ -349,7 +349,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               : { border: 'border-emerald-200', bg: 'bg-emerald-50/70', icon: 'bg-emerald-100 text-emerald-700', eyebrow: 'text-emerald-700', body: 'text-emerald-900', stamp: 'text-emerald-600' };
 
             return (
-              <div className={cn('mt-6 rounded-[28px] border p-5', accent.border, accent.bg)}>
+              <div className={cn('mt-6 rounded-3xl border p-5', accent.border, accent.bg)}>
                 <button
                   type="button"
                   onClick={() => hasChanges && setChangesExpanded((v) => !v)}
@@ -361,7 +361,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {hasChanges ? <AlertTriangle size={18} /> : <Activity size={18} />}
                     </div>
                     <div>
-                      <p className={cn('text-[10px] font-black uppercase tracking-[0.18em]', accent.eyebrow)}>Voor je uploadt</p>
+                      <p className={cn('text-[10px] font-black uppercase tracking-[0.08em]', accent.eyebrow)}>Voor je uploadt</p>
                       <h4 className="mt-1 text-base font-black tracking-tight text-slate-900">
                         {hasChanges ? 'Wijzigingen sinds vorige import' : 'Geen wijzigingen sinds vorige import'}
                       </h4>
@@ -370,7 +370,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           ? `${changesSinceImport.approvedLeave.length} verlof${changesSinceImport.approvedLeave.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd. Controleer of deze in jouw Excel verwerkt zijn.`
                           : 'Geen verloven of dienstruilen goedgekeurd in de app sinds je laatste matrix-import. Excel en app zijn in sync.'}
                       </p>
-                      <p className={cn('mt-1 text-[10px] font-bold uppercase tracking-widest', accent.stamp)}>
+                      <p className={cn('mt-1 text-[10px] font-bold uppercase tracking-[0.08em]', accent.stamp)}>
                         Laatste import: {lastImportLabel}
                       </p>
                     </div>
@@ -382,7 +382,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 {hasChanges && changesExpanded && (
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
-                      <p className={cn('text-[10px] font-black uppercase tracking-widest mb-2', accent.eyebrow)}>Verlof</p>
+                      <p className={cn('text-[10px] font-black uppercase tracking-[0.08em] mb-2', accent.eyebrow)}>Verlof</p>
                       {changesSinceImport.approvedLeave.length > 0 ? (
                         <ul className="space-y-1.5 text-xs text-slate-700">
                           {changesSinceImport.approvedLeave.map((l) => (
@@ -402,7 +402,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       )}
                     </div>
                     <div>
-                      <p className={cn('text-[10px] font-black uppercase tracking-widest mb-2', accent.eyebrow)}>Dienstruil</p>
+                      <p className={cn('text-[10px] font-black uppercase tracking-[0.08em] mb-2', accent.eyebrow)}>Dienstruil</p>
                       {changesSinceImport.approvedSwaps.length > 0 ? (
                         <ul className="space-y-1.5 text-xs text-slate-700">
                           {changesSinceImport.approvedSwaps.map((s) => (
@@ -427,27 +427,27 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           })()}
 
           <div className="mt-6 grid gap-4 lg:grid-cols-2">
-            <div className="rounded-[28px] border border-emerald-100 bg-emerald-50/70 p-5">
+            <div className="rounded-3xl border border-emerald-100 bg-emerald-50/70 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-emerald-700">Primair</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-emerald-700">Primair</p>
                   <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">Excel Matrix Upload</h4>
                   <p className="mt-2 text-sm font-medium text-slate-600">
                     Upload je originele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
                   </p>
                   {pendingMatrixFilename && (
-                    <p className="mt-2 text-[11px] font-bold uppercase tracking-widest text-emerald-700">
+                    <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.08em] text-emerald-700">
                       Geladen: {pendingMatrixFilename}
                     </p>
                   )}
                 </div>
-                <span className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-emerald-700">
+                <span className="rounded-full border border-emerald-200 bg-white/80 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-emerald-700">
                   Aangeraden
                 </span>
               </div>
               <label
                 className={cn(
-                  "mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-widest transition-all",
+                  "mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-3 rounded-2xl px-6 py-4 text-xs font-black uppercase tracking-[0.08em] transition-all",
                   isMatrixImporting ? "bg-slate-200 text-slate-400 cursor-not-allowed" : "bg-slate-900 text-white hover:bg-slate-800"
                 )}
               >
@@ -464,16 +464,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             </div>
 
             {canAdminOverride ? (
-            <div className="rounded-[28px] border border-white/70 bg-white/45 p-5">
+            <div className="rounded-3xl border border-white/70 bg-white/45 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Fallback</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Fallback</p>
                   <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">JSON Import</h4>
                   <p className="mt-2 text-sm font-medium text-slate-500">
                     Gebruik dit alleen als je planning al per dienst in JSON is geëxporteerd. Dit pad is bedoeld voor oudere dataflows.
                   </p>
                 </div>
-                <span className="rounded-full border border-white/70 bg-white/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <span className="rounded-full border border-white/70 bg-white/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
                   Legacy
                 </span>
               </div>
@@ -485,22 +485,22 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               />
               <button
                 onClick={handleImport}
-                className="btn-primary ios-pressable mt-4 inline-flex w-full items-center justify-center px-6 py-4 text-xs uppercase tracking-widest"
+                className="btn-primary ios-pressable mt-4 inline-flex w-full items-center justify-center px-6 py-4 text-xs uppercase tracking-[0.08em]"
               >
                 Importeer JSON Planning
               </button>
             </div>
             ) : (
-            <div className="rounded-[28px] border border-white/70 bg-white/45 p-5">
+            <div className="rounded-3xl border border-white/70 bg-white/45 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Admin pad</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Admin pad</p>
                   <h4 className="mt-2 text-base font-black tracking-tight text-slate-900">Fallback en sync</h4>
                   <p className="mt-2 text-sm font-medium text-slate-500">
                     JSON fallback-import, handmatige planning sync en directe overschrijvingen zijn afgeschermd voor admins. Gebruik als planner de matrix-upload hierboven.
                   </p>
                 </div>
-                <span className="rounded-full border border-white/70 bg-white/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                <span className="rounded-full border border-white/70 bg-white/75 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
                   Admin only
                 </span>
               </div>
@@ -510,22 +510,22 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         </div>
 
         {canAdminOverride ? (
-        <div className="surface-card rounded-[32px] p-6 md:p-8">
+        <div className="surface-card rounded-3xl p-6 md:p-8">
           <AdminSubsectionHeader
             eyebrow="Database"
             title="Actieve planning herschrijven"
             description="Gebruik sync om de actuele planning opnieuw op te bouwen of wis de planning volledig wanneer een nieuwe planning later volgt."
           />
           <div className="mt-5 space-y-4">
-            <div className="rounded-[24px] border border-white/70 bg-white/45 p-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Opnieuw opbouwen</p>
+            <div className="rounded-3xl border border-white/70 bg-white/45 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Opnieuw opbouwen</p>
               <p className="mt-2 text-sm font-medium text-slate-500">
                 Dit pad vervangt de actieve planning met de recentste matrixopbouw. Gebruik dit als je de matrix al gecontroleerd hebt en de actuele planning wilt overschrijven.
               </p>
               <button
                 onClick={() => setConfirmSyncOpen(true)}
                 disabled={isSyncing}
-                className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-4 text-xs font-black uppercase tracking-widest text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600 disabled:opacity-50 active:scale-95"
+                className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl bg-emerald-500 px-6 py-4 text-xs font-black uppercase tracking-[0.08em] text-white shadow-lg shadow-emerald-500/20 transition-all hover:bg-emerald-600 disabled:opacity-50 active:scale-95"
                 title="Synchroniseer lokale JSON data naar Supabase"
               >
                 <RotateCcw size={18} className={isSyncing ? "animate-spin" : ""} />
@@ -533,15 +533,15 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               </button>
             </div>
 
-            <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
-              <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-700">Leegmaken</p>
+            <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-red-700">Leegmaken</p>
               <p className="mt-2 text-sm font-medium text-red-700/80">
                 Wis alle actieve roosterregels in het portaal. Handig wanneer de planning volledig vervangen wordt en je eerst een lege toestand wilt.
               </p>
               <button
                 onClick={() => setConfirmClearOpen(true)}
                 disabled={isClearingPlanning}
-                className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-red-200 bg-white px-6 py-4 text-xs font-black uppercase tracking-widest text-red-700 transition-all hover:bg-red-100 disabled:opacity-50 active:scale-95"
+                className="mt-5 inline-flex w-full items-center justify-center gap-3 rounded-2xl border border-red-200 bg-white px-6 py-4 text-xs font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100 disabled:opacity-50 active:scale-95"
               >
                 <Trash2 size={18} />
                 {isClearingPlanning ? 'Wissen...' : 'Planning Wissen'}
@@ -553,7 +553,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       </div>
 
       {canAdminOverride ? (
-      <div className="surface-card p-6 md:p-8 rounded-[32px]">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Correcties"
           title="Handmatig toevoegen"
@@ -567,26 +567,26 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           <Input label="Dienst" type="text" placeholder="Bijv. 12" />
         </div>
         <div className="mt-6 flex justify-end">
-          <button className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-8 py-4 text-xs font-black uppercase tracking-widest text-white shadow-xl shadow-emerald-500/20 transition-all hover:bg-emerald-600 active:scale-95 sm:w-auto">
+          <button className="inline-flex w-full items-center justify-center rounded-2xl bg-emerald-500 px-8 py-4 text-xs font-black uppercase tracking-[0.08em] text-white shadow-xl shadow-emerald-500/20 transition-all hover:bg-emerald-600 active:scale-95 sm:w-auto">
             Dienst Opslaan
           </button>
         </div>
       </div>
       ) : null}
 
-      <div className="surface-card p-6 md:p-8 rounded-[32px]">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Historiek"
           title="Recente Matriximports"
           description="Laatste importmomenten met de belangrijkste controlecijfers."
-          aside={<div className="rounded-full border border-white/70 bg-white/50 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{history.length} logs</div>}
+          aside={<div className="rounded-full border border-white/70 bg-white/50 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{history.length} logs</div>}
         />
 
         <div className="mt-6 space-y-3">
           {history.length > 0 ? history.slice(0, 8).map((entry) => {
             const hasIssues = entry.unknownCodes.length > 0 || entry.unmatchedDrivers.length > 0;
             return (
-              <div key={entry.id} className="rounded-[24px] border border-white/70 bg-white/45 p-5">
+              <div key={entry.id} className="rounded-3xl border border-white/70 bg-white/45 p-5">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
@@ -604,25 +604,25 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         })}
                       </p>
                     </div>
-                    <p className="mt-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">
+                    <p className="mt-2 text-xs font-black uppercase tracking-[0.08em] text-slate-400">
                       {hasIssues ? 'Controle nodig' : 'Volledig herkenbaar'}
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-                    <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
                       {entry.importedDays} dagen
                     </span>
-                    <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                    <span className="rounded-full border border-white/70 bg-white/70 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
                       {entry.generatedShifts} diensten
                     </span>
                     <span className={cn(
-                      "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
+                      "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em]",
                       entry.unknownCodes.length > 0 ? "border-red-200 bg-red-50 text-red-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
                     )}>
                       {entry.unknownCodes.length} onbekend
                     </span>
                     <span className={cn(
-                      "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
+                      "rounded-full border px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em]",
                       entry.unmatchedDrivers.length > 0 ? "border-amber-200 bg-amber-50 text-amber-700" : "border-emerald-200 bg-emerald-50 text-emerald-700"
                     )}>
                       {entry.unmatchedDrivers.length} chauffeur
@@ -641,7 +641,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         </div>
       </div>
 
-      <div className="surface-card p-8 rounded-[24px]">
+      <div className="surface-card p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Export"
           title="Print Maandrooster"
@@ -649,7 +649,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         />
         <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto_auto] items-end">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Chauffeur</label>
+            <label className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 ml-1">Chauffeur</label>
             <select
               value={printDriverId}
               onChange={(e) => setPrintDriverId(e.target.value)}
@@ -665,7 +665,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             </select>
           </div>
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase tracking-widest text-slate-400 ml-1">Maand</label>
+            <label className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 ml-1">Maand</label>
             <input
               type="month"
               value={printMonth}
@@ -680,7 +680,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               const url = `${window.location.origin}${window.location.pathname}?print-driver=${encodeURIComponent(printDriverId)}&print-month=${encodeURIComponent(printMonth)}`;
               window.open(url, '_blank', 'noopener,noreferrer');
             }}
-            className="btn-primary ios-pressable px-6 py-3 text-xs uppercase tracking-widest disabled:opacity-40 disabled:cursor-not-allowed"
+            className="btn-primary ios-pressable px-6 py-3 text-xs uppercase tracking-[0.08em] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             Open print-weergave
           </button>
@@ -690,7 +690,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         </p>
       </div>
 
-      <div className="surface-card p-8 rounded-[24px]">
+      <div className="surface-card p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Controle"
           title="Huidige Planning"
@@ -733,10 +733,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[32px] w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+              className="glass-modal rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
             >
               <div className="p-8 border-b border-white/70 shrink-0">
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-oker-600">Matrix Import Preview</p>
+                <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">Matrix Import Preview</p>
                 <h4 className="mt-3 text-xl font-black tracking-tight">Controleer voor je de planning vervangt</h4>
                 <p className="mt-2 text-sm font-medium text-slate-500">
                   Deze stap schrijft nog niets weg. Bevestig pas als dagen, diensten en probleempunten correct ogen.
@@ -745,7 +745,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
               <div className="p-8 space-y-6 overflow-y-auto flex-1">
                 <div className={cn(
-                  "rounded-[24px] border p-5",
+                  "rounded-3xl border p-5",
                   matrixPreviewHasIssues ? "border-red-200 bg-red-50/80" : "border-emerald-200 bg-emerald-50/80"
                 )}>
                   <div className="flex items-start gap-3">
@@ -755,7 +755,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     )} />
                     <div>
                       <p className={cn(
-                        "text-xs font-black uppercase tracking-[0.2em]",
+                        "text-xs font-black uppercase tracking-[0.08em]",
                         matrixPreviewHasIssues ? "text-red-700" : "text-emerald-700"
                       )}>
                         {matrixPreviewHasIssues ? 'Import Geblokkeerd' : 'Klaar Voor Import'}
@@ -773,11 +773,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </div>
 
                 {matrixPreview.verlofConflicts.length > 0 && (
-                  <div className="rounded-[24px] border border-red-200 bg-red-50/70 p-5">
+                  <div className="rounded-3xl border border-red-200 bg-red-50/70 p-5">
                     <div className="flex items-start gap-3">
                       <div className="rounded-2xl bg-red-100 p-2 text-red-700"><AlertTriangle size={18} /></div>
                       <div className="flex-1">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-red-700">Conflict met goedgekeurd verlof</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.08em] text-red-700">Conflict met goedgekeurd verlof</p>
                         <p className="mt-1 text-sm font-medium text-red-900">
                           De Excel zet {matrixPreview.verlofConflicts.length} dienst{matrixPreview.verlofConflicts.length === 1 ? '' : 'en'} op een chauffeur die voor die dag al goedgekeurd verlof heeft.
                         </p>
@@ -804,26 +804,26 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
                 <div className="grid gap-4 md:grid-cols-4">
                   <div className="surface-muted rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Dagen</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Dagen</p>
                     <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.importedDays}</p>
                   </div>
                   <div className="surface-muted rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Chauffeurs</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Chauffeurs</p>
                     <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.detectedDrivers}</p>
                   </div>
                   <div className="surface-muted rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Diensten</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Diensten</p>
                     <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.generatedShifts}</p>
                   </div>
                   <div className="surface-muted rounded-2xl p-4">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Afwezigheden</p>
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Afwezigheden</p>
                     <p className="mt-2 text-2xl font-black text-slate-900">{matrixPreview.skippedAbsences}</p>
                   </div>
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-[24px] border border-white/70 bg-white/50 p-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Importbereik</p>
+                  <div className="rounded-3xl border border-white/70 bg-white/50 p-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Importbereik</p>
                     <p className="mt-2 text-lg font-black text-slate-900">
                       {matrixPreview.startDate
                         ? `${new Date(matrixPreview.startDate).toLocaleDateString('nl-BE')} ${matrixPreview.endDate && matrixPreview.endDate !== matrixPreview.startDate ? `t/m ${new Date(matrixPreview.endDate).toLocaleDateString('nl-BE')}` : ''}`
@@ -834,8 +834,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </p>
                   </div>
 
-                  <div className="rounded-[24px] border border-white/70 bg-white/50 p-5">
-                    <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Impact op actieve planning</p>
+                  <div className="rounded-3xl border border-white/70 bg-white/50 p-5">
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Impact op actieve planning</p>
                     <p className="mt-2 text-lg font-black text-slate-900">
                       {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels geraakt
                     </p>
@@ -845,15 +845,15 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   </div>
                 </div>
 
-                <div className="rounded-[24px] border border-oker-100 bg-oker-50/80 p-5">
+                <div className="rounded-3xl border border-oker-100 bg-oker-50/80 p-5">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-oker-700">Wat wordt overschreven</p>
+                      <p className="text-xs font-black uppercase tracking-[0.08em] text-oker-700">Wat wordt overschreven</p>
                       <p className="mt-2 text-sm font-medium text-oker-900">
                         {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels binnen het importbereik worden vervangen door {matrixPreview.generatedShifts} nieuw opgebouwde roosterregels.
                       </p>
                     </div>
-                    <div className="rounded-full border border-oker-200 bg-white/80 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-oker-700">
+                    <div className="rounded-full border border-oker-200 bg-white/80 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">
                       {matrixOverwriteSummary?.currentStartDate
                         ? `Actief: ${new Date(matrixOverwriteSummary.currentStartDate).toLocaleDateString('nl-BE')}${matrixOverwriteSummary.currentEndDate && matrixOverwriteSummary.currentEndDate !== matrixOverwriteSummary.currentStartDate ? ` t/m ${new Date(matrixOverwriteSummary.currentEndDate).toLocaleDateString('nl-BE')}` : ''}`
                         : 'Nog geen actieve planning'}
@@ -862,10 +862,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
+                  <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Onbekende Codes</p>
-                      <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-700">
+                      <p className="text-xs font-black uppercase tracking-[0.08em] text-red-700">Onbekende Codes</p>
+                      <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-red-700">
                         {matrixPreview.unknownCodes.length}
                       </span>
                     </div>
@@ -880,10 +880,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </div>
                   </div>
 
-                  <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
+                  <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 p-5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
-                      <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                      <p className="text-xs font-black uppercase tracking-[0.08em] text-amber-700">Niet-Gematchte Chauffeurs</p>
+                      <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">
                         {matrixPreview.unmatchedDrivers.length}
                       </span>
                     </div>
@@ -900,11 +900,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </div>
 
                 {matrixPreview.servicesWithoutSegments.length > 0 && (
-                  <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/70 p-5">
+                  <div className="rounded-3xl border border-amber-200/70 bg-amber-50/70 p-5">
                     <div className="flex items-start gap-3">
                       <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
                       <div className="flex-1">
-                        <p className="text-[10px] font-black uppercase tracking-[0.18em] text-amber-700">Services zonder geldige uren</p>
+                        <p className="text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">Services zonder geldige uren</p>
                         <p className="mt-1 text-sm font-medium text-amber-900">
                           {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
                         </p>
@@ -921,10 +921,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 )}
 
                 {matrixPreview.perDriver.length > 0 && (
-                  <div className="rounded-[24px] border border-white/70 bg-white/55 p-5">
+                  <div className="rounded-3xl border border-white/70 bg-white/55 p-5">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-600">Per-chauffeur breakdown</p>
-                      <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-slate-500">
+                      <p className="text-xs font-black uppercase tracking-[0.08em] text-slate-600">Per-chauffeur breakdown</p>
+                      <span className="rounded-full border border-white/70 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">
                         {matrixPreview.perDriver.length} chauffeurs
                       </span>
                     </div>
@@ -934,7 +934,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <div className="mt-4 overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="text-left text-[10px] font-black uppercase tracking-widest text-slate-400">
+                          <tr className="text-left text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
                             <th className="py-2 pr-3">Chauffeur</th>
                             <th className="py-2 px-2 text-right">Dagen</th>
                             <th className="py-2 px-2 text-right">Diensten</th>
@@ -983,7 +983,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     setPendingMatrixFilename('');
                     setMatrixPreview(null);
                   }}
-                  className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-widest text-xs border border-transparent hover:border-white/80"
+                  className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-[0.08em] text-xs border border-transparent hover:border-white/80"
                 >
                   Annuleren
                 </button>
@@ -992,7 +992,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   disabled={isMatrixImporting || matrixPreviewHasIssues}
                   title={matrixPreviewHasIssues ? 'Los eerst de fouten op in de Excel of in de planningscodes/chauffeurslijst.' : undefined}
                   className={cn(
-                    "flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-widest text-xs disabled:opacity-40 disabled:cursor-not-allowed",
+                    "flex-1 px-4 py-4 rounded-2xl font-black text-white transition-all shadow-xl uppercase tracking-[0.08em] text-xs disabled:opacity-40 disabled:cursor-not-allowed",
                     matrixPreviewHasIssues
                       ? "bg-slate-400"
                       : "bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/20"

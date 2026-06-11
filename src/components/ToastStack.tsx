@@ -25,7 +25,7 @@ export function ToastStack({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -12, scale: 0.96 }}
             className={cn(
-              'rounded-[24px] border px-5 py-4 shadow-2xl backdrop-blur-sm',
+              'rounded-3xl border px-5 py-4 shadow-2xl backdrop-blur-sm',
               toast.tone === 'success' && 'border-emerald-200 bg-emerald-50/95 text-emerald-900',
               toast.tone === 'error' && 'border-red-200 bg-red-50/95 text-red-900',
               (!toast.tone || toast.tone === 'info') && 'border-slate-200 bg-white/95 text-slate-900'

@@ -93,17 +93,17 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
         <StatCard icon={<Calendar className="text-emerald-600" />} label="Planning" value={entries.filter((entry) => entry.category === 'planning' || entry.category === 'planning_codes').length.toString()} subValue="Imports, sync en codes" />
       </div>
 
-      <section className="surface-card rounded-[32px] p-6 md:p-8">
+      <section className="surface-card rounded-3xl p-6 md:p-8">
         <AdminSubsectionHeader
           eyebrow="Auditspoor"
           title="Recente activiteit"
           description="Alleen admins zien hier recente beheeracties en belangrijke wijzigingen."
-          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredEntries.length} items</div>}
+          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{filteredEntries.length} items</div>}
         />
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
           <div className="space-y-4">
-            <label className="surface-muted flex items-center gap-3 rounded-[24px] px-4 py-3">
+            <label className="surface-muted flex items-center gap-3 rounded-3xl px-4 py-3">
               <Search size={18} className="text-slate-400" />
               <input
                 value={searchTerm}
@@ -203,7 +203,7 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
 
         <div className="mt-6 space-y-3">
           {filteredEntries.length > 0 ? filteredEntries.map((entry) => (
-            <div key={entry.id} className="rounded-[24px] border border-white/70 bg-white/50 p-5">
+            <div key={entry.id} className="rounded-3xl border border-white/70 bg-white/50 p-5">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
