@@ -98,7 +98,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
       <div className="space-y-4">
         {filteredDiversions.length > 0 ? (
           filteredDiversions.map(div => (
-            <div key={div.id} className="surface-card surface-card-hover rounded-[32px] overflow-hidden group duration-300">
+            <div key={div.id} className="surface-card surface-card-hover rounded-3xl overflow-hidden group duration-300">
             <div 
               onClick={() => setSelectedDiversion(selectedDiversion?.id === div.id ? null : div)}
               className="p-6 md:p-8 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-start justify-between gap-4"
@@ -114,9 +114,9 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <h4 className="font-black text-lg md:text-xl text-slate-800 tracking-tight">{div.title}</h4>
-                    <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">{div.line}</span>
+                    <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-[0.08em]">{div.line}</span>
                   </div>
-                  <p className="text-slate-400 text-xs md:text-sm font-bold uppercase tracking-widest">
+                  <p className="text-slate-400 text-xs md:text-sm font-bold uppercase tracking-[0.08em]">
                     {selectedDiversion?.id === div.id ? 'Tik om te sluiten' : 'Tik voor meer info'}
                   </p>
                 </div>
@@ -145,12 +145,12 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                         </div>
                         
                         <div className="flex flex-wrap items-center gap-4 md:gap-8">
-                          <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
+                          <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-[0.08em]">
                             <Calendar size={14} className="text-oker-400" />
                             <span>Start: {div.startDate}</span>
                           </div>
                           {div.endDate && (
-                            <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-widest">
+                            <div className="flex items-center gap-2 text-[10px] md:text-xs text-slate-400 font-black uppercase tracking-[0.08em]">
                               <Calendar size={14} className="text-oker-400" />
                               <span>Eind: {div.endDate}</span>
                             </div>
@@ -178,7 +178,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                           </div>
                         ) : (
                           <div className="p-4 bg-slate-100/50 rounded-2xl border border-dashed border-slate-200 text-center">
-                            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest">Geen PDF bijlage beschikbaar</p>
+                            <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.08em]">Geen PDF bijlage beschikbaar</p>
                           </div>
                         )}
                       </div>
@@ -188,8 +188,8 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                         if (!coords) return null;
                         return (
                           <div className="space-y-2">
-                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Visuele Omleiding</p>
-                            <div className="h-64 rounded-[24px] overflow-hidden border border-slate-100 shadow-inner z-0">
+                            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] mb-1">Visuele Omleiding</p>
+                            <div className="h-64 rounded-3xl overflow-hidden border border-slate-100 shadow-inner z-0">
                               <Suspense
                                 fallback={
                                   <div className="flex h-full items-center justify-center bg-white/60 text-sm font-bold text-slate-500">
@@ -214,7 +214,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
           </div>
         ))
       ) : (
-        <div className="text-center py-20 surface-card rounded-[28px] border border-dashed border-white/80">
+        <div className="text-center py-20 surface-card rounded-3xl border border-dashed border-white/80">
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Search size={32} className="text-slate-300" />
           </div>
@@ -222,7 +222,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
           <p className="text-slate-400 font-medium mt-2">Geen omleidingen gevonden voor "{searchQuery}"</p>
           <button 
             onClick={() => setSearchQuery('')}
-            className="mt-6 text-oker-500 font-black uppercase tracking-widest text-xs hover:text-oker-600 transition-colors"
+            className="mt-6 text-oker-500 font-black uppercase tracking-[0.08em] text-xs hover:text-oker-600 transition-colors"
           >
             Wis zoekopdracht
           </button>

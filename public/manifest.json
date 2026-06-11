@@ -5,7 +5,7 @@
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#111111",
+  "background_color": "#0D0D0F",
   "theme_color": "#e8a33d",
   "orientation": "portrait-primary",
   "categories": ["business", "productivity"],
@@ -13,22 +13,28 @@
   "dir": "ltr",
   "icons": [
     {
-      "src": "/vhb-favicon.svg",
+      "src": "/vhb-icoon.svg",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any maskable"
+      "purpose": "any"
     },
     {
-      "src": "/vhb-favicon-180.png",
-      "sizes": "180x180",
+      "src": "/vhb-icoon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/vhb-favicon-512.png",
+      "src": "/vhb-icoon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any maskable"
+      "purpose": "any"
+    },
+    {
+      "src": "/vhb-icoon-maskable.png",
+      "sizes": "1024x1024",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ]
 }

@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 
 export type Toast = {
@@ -8,6 +8,27 @@ export type Toast = {
   tone?: 'success' | 'error' | 'info';
 };
 
+const TONE_STYLES = {
+  success: {
+    icon: CheckCircle2,
+    chip: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400',
+  },
+  error: {
+    icon: AlertTriangle,
+    chip: 'bg-red-500/12 text-red-600 dark:text-red-400',
+  },
+  info: {
+    icon: Info,
+    chip: 'bg-oker-500/15 text-oker-600 dark:text-oker-400',
+  },
+} as const;
+
+const EASE_OUT = [0.22, 1, 0.36, 1] as const;
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
 export function ToastStack({
   toasts,
   onDismiss,
@@ -15,40 +36,53 @@ export function ToastStack({
   toasts: Toast[];
   onDismiss: (id: number) => void;
 }) {
+  const reduced = prefersReducedMotion();
+
   return (
-    <div className="fixed top-4 right-4 z-[120] w-[calc(100vw-2rem)] max-w-sm space-y-3">
+    <div
+      aria-live="polite"
+      className="fixed top-4 right-4 z-[120] w-[calc(100vw-2rem)] max-w-sm space-y-2.5"
+      style={{ paddingTop: 'env(safe-area-inset-top)' }}
+    >
       <AnimatePresence>
-        {toasts.map((toast) => (
-          <motion.div
-            key={toast.id}
-            initial={{ opacity: 0, y: -12, scale: 0.96 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -12, scale: 0.96 }}
-            className={cn(
-              'rounded-[24px] border px-5 py-4 shadow-2xl backdrop-blur-sm',
-              toast.tone === 'success' && 'border-emerald-200 bg-emerald-50/95 text-emerald-900',
-              toast.tone === 'error' && 'border-red-200 bg-red-50/95 text-red-900',
-              (!toast.tone || toast.tone === 'info') && 'border-slate-200 bg-white/95 text-slate-900'
-            )}
-          >
-            <div className="flex items-start gap-3">
-              <div className={cn(
-                'mt-0.5 h-2.5 w-2.5 rounded-full',
-                toast.tone === 'success' && 'bg-emerald-500',
-                toast.tone === 'error' && 'bg-red-500',
-                (!toast.tone || toast.tone === 'info') && 'bg-oker-500'
-              )} />
-              <p className="flex-1 text-sm font-bold leading-5">{toast.message}</p>
-              <button
-                onClick={() => onDismiss(toast.id)}
-                className="rounded-full p-1 text-slate-400 transition-colors hover:bg-black/5 hover:text-slate-700"
-                aria-label="Sluit melding"
-              >
-                <X size={16} />
-              </button>
-            </div>
-          </motion.div>
-        ))}
+        {toasts.map((toast) => {
+          const tone = TONE_STYLES[toast.tone ?? 'info'];
+          const ToneIcon = tone.icon;
+
+          return (
+            <motion.div
+              key={toast.id}
+              layout={!reduced}
+              role="status"
+              initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+              animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
+              exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
+              transition={{ duration: 0.24, ease: EASE_OUT }}
+              className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm"
+            >
+              <div className="flex items-start gap-3">
+                <div
+                  className={cn(
+                    'flex h-7 w-7 shrink-0 items-center justify-center rounded-lg',
+                    tone.chip
+                  )}
+                >
+                  <ToneIcon size={15} strokeWidth={2} />
+                </div>
+                <p className="min-w-0 flex-1 pt-1 text-[13px] font-medium leading-snug text-slate-800">
+                  {toast.message}
+                </p>
+                <button
+                  onClick={() => onDismiss(toast.id)}
+                  className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  aria-label="Sluit melding"
+                >
+                  <X size={15} />
+                </button>
+              </div>
+            </motion.div>
+          );
+        })}
       </AnimatePresence>
     </div>
   );

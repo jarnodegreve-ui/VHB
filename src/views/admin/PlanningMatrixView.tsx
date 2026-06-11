@@ -240,7 +240,7 @@ export function PlanningMatrixView({
         />
       </div>
 
-      <section className="surface-card rounded-[32px] p-5 md:p-6">
+      <section className="surface-card rounded-3xl p-5 md:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h3 className="text-lg font-black tracking-tight">Controlefilters</h3>
@@ -252,7 +252,7 @@ export function PlanningMatrixView({
             <button
               onClick={() => setShowOnlyIssues((current) => !current)}
               className={cn(
-                "rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] transition-all",
+                "rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
                 showOnlyIssues ? "border-red-200 bg-red-50 text-red-700" : "border-white/70 bg-white/55 text-slate-500 hover:bg-white/80"
               )}
             >
@@ -261,7 +261,7 @@ export function PlanningMatrixView({
             {highlightedCode ? (
               <button
                 onClick={() => setHighlightedCode(null)}
-                className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] text-oker-700 transition-all hover:bg-oker-100"
+                className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] text-oker-700 transition-all hover:bg-oker-100"
               >
                 Reset Codefilter
               </button>
@@ -270,7 +270,7 @@ export function PlanningMatrixView({
               onClick={exportProblemReport}
               disabled={derived.globalUnknownCodes.length === 0 && derived.globalUnmatchedDrivers.length === 0}
               className={cn(
-                "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.18em] transition-all",
+                "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
                 derived.globalUnknownCodes.length === 0 && derived.globalUnmatchedDrivers.length === 0
                   ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
                   : "border-white/70 bg-white/55 text-slate-600 hover:bg-white/80"
@@ -288,24 +288,24 @@ export function PlanningMatrixView({
               key={code}
               onClick={() => setHighlightedCode(code)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all",
+                "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
                 highlightedCode === code ? "border-red-300 bg-red-100 text-red-800" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
               )}
             >
               {code}
             </button>
           )) : (
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-widest text-emerald-700">
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-emerald-700">
               Geen onbekende codes
             </span>
           )}
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
+          <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Onbekende Codes</p>
-              <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-700">
+              <p className="text-xs font-black uppercase tracking-[0.08em] text-red-700">Onbekende Codes</p>
+              <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-red-700">
                 {derived.globalUnknownCodes.length}
               </span>
             </div>
@@ -315,7 +315,7 @@ export function PlanningMatrixView({
                   key={`list-${code}`}
                   onClick={() => setHighlightedCode(code)}
                   className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-widest transition-all",
+                    "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
                     highlightedCode === code ? "border-red-300 bg-red-100 text-red-800" : "border-red-200 bg-white/80 text-red-700 hover:bg-red-100"
                   )}
                 >
@@ -330,14 +330,14 @@ export function PlanningMatrixView({
                 <button
                   type="button"
                   onClick={onOpenPlanningCodes}
-                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
                 >
                   Open Planningscodes
                 </button>
                 <button
                   type="button"
                   onClick={onOpenServiceOverview}
-                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
                 >
                   Open Dienstoverzicht
                 </button>
@@ -345,10 +345,10 @@ export function PlanningMatrixView({
             ) : null}
           </div>
 
-          <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
+          <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 p-5">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
-              <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+              <p className="text-xs font-black uppercase tracking-[0.08em] text-amber-700">Niet-Gematchte Chauffeurs</p>
+              <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">
                 {derived.globalUnmatchedDrivers.length}
               </span>
             </div>
@@ -367,7 +367,7 @@ export function PlanningMatrixView({
                   <button
                     type="button"
                     onClick={onOpenUserManagement}
-                    className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 transition-all hover:bg-amber-100"
+                    className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700 transition-all hover:bg-amber-100"
                   >
                     Open Gebruikersbeheer
                   </button>
@@ -383,7 +383,7 @@ export function PlanningMatrixView({
       </section>
 
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <section className="surface-card rounded-[32px] p-6">
+        <section className="surface-card rounded-3xl p-6">
           <div className="mb-5">
             <h3 className="text-lg font-black tracking-tight">Geuploade Dagen</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
@@ -410,11 +410,11 @@ export function PlanningMatrixView({
                   <p className="text-sm font-black text-slate-800">
                     {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
-                  <div className="mt-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <div className="mt-2 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
                     <span>Dagtype {row.day_type || '-'}</span>
                     <span>{assignmentCount} codes</span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <div className="mt-1 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
                     <span>{generatedServices} diensten</span>
                     {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
                       ? <span>controle nodig</span>
@@ -423,12 +423,12 @@ export function PlanningMatrixView({
                   {(rowUnknownCodes > 0 || rowUnmatchedDrivers > 0) ? (
                     <div className="mt-2 flex flex-wrap gap-2">
                       {rowUnknownCodes > 0 ? (
-                        <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-red-700">
+                        <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-red-700">
                           {rowUnknownCodes} onbekend
                         </span>
                       ) : null}
                       {rowUnmatchedDrivers > 0 ? (
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-widest text-amber-700">
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">
                           {rowUnmatchedDrivers} chauffeur
                         </span>
                       ) : null}
@@ -446,7 +446,7 @@ export function PlanningMatrixView({
             {visibleRows.length > visibleDayRows.length ? (
               <button
                 onClick={() => setVisibleDayCount((current) => current + 60)}
-                className="w-full rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-xs font-black uppercase tracking-[0.18em] text-slate-500 transition-all hover:bg-white/80"
+                className="w-full rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-all hover:bg-white/80"
               >
                 Toon Meer Dagen ({visibleRows.length - visibleDayRows.length} resterend)
               </button>
@@ -454,7 +454,7 @@ export function PlanningMatrixView({
           </div>
         </section>
 
-        <section className="surface-card rounded-[32px] p-6">
+        <section className="surface-card rounded-3xl p-6">
           {selectedRow ? (
             <>
               <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -466,7 +466,7 @@ export function PlanningMatrixView({
                     Dagtype {selectedRow.day_type || '-'} met {assignments.length} ingevulde chauffeurcodes.
                   </p>
                 </div>
-                <div className="glass-chip rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.18em] text-oker-700">
+                <div className="glass-chip rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">
                   Matrix staging
                 </div>
               </div>
@@ -494,8 +494,8 @@ export function PlanningMatrixView({
 
               {(unknownAssignments > 0 || unmatchedDriversForSelectedDay.length > 0 || highlightedCode) ? (
                 <div className="mt-6 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-[24px] border border-amber-200/70 bg-amber-50/80 p-5">
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-amber-700">Niet-Gematchte Chauffeurs</p>
+                  <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 p-5">
+                    <p className="text-xs font-black uppercase tracking-[0.08em] text-amber-700">Niet-Gematchte Chauffeurs</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {unmatchedDriversForSelectedDay.length > 0 ? unmatchedDriversForSelectedDay.map((driver) => (
                         <span key={driver} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
@@ -511,7 +511,7 @@ export function PlanningMatrixView({
                           <button
                             type="button"
                             onClick={onOpenUserManagement}
-                            className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-amber-700 transition-all hover:bg-amber-100"
+                            className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700 transition-all hover:bg-amber-100"
                           >
                             Open Gebruikersbeheer
                           </button>
@@ -523,8 +523,8 @@ export function PlanningMatrixView({
                       </div>
                     ) : null}
                   </div>
-                  <div className="rounded-[24px] border border-red-200/70 bg-red-50/80 p-5">
-                    <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">
+                  <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
+                    <p className="text-xs font-black uppercase tracking-[0.08em] text-red-700">
                       {unknownAssignments > 0 ? 'Onbekende Codes' : 'Codefilter'}
                     </p>
                     <p className="mt-3 text-sm font-medium text-red-700">
@@ -539,14 +539,14 @@ export function PlanningMatrixView({
                         <button
                           type="button"
                           onClick={onOpenPlanningCodes}
-                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
                         >
                           Open Planningscodes
                         </button>
                         <button
                           type="button"
                           onClick={onOpenServiceOverview}
-                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.18em] text-red-700 transition-all hover:bg-red-100"
+                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
                         >
                           Open Dienstoverzicht
                         </button>
@@ -556,15 +556,15 @@ export function PlanningMatrixView({
                 </div>
               ) : null}
 
-              <div className="mt-6 surface-table rounded-[28px] overflow-hidden">
+              <div className="mt-6 surface-table rounded-3xl overflow-hidden">
                 <div className="hidden md:block overflow-x-auto">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50/60">
                       <tr>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Chauffeur</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Code</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Interpretatie</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Uren / status</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Chauffeur</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Code</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Interpretatie</th>
+                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Uren / status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -573,7 +573,7 @@ export function PlanningMatrixView({
                           <td className="px-6 py-4 text-sm font-bold text-slate-800">{assignment.driver}</td>
                           <td className="px-6 py-4">
                             <span className={cn(
-                              'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest',
+                              'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em]',
                               assignment.kind === 'service' && 'glass-chip text-emerald-700',
                               assignment.kind === 'leave' && 'glass-chip text-sky-700',
                               assignment.kind === 'training' && 'glass-chip text-violet-700',
@@ -597,7 +597,7 @@ export function PlanningMatrixView({
                       <p className="text-sm font-black text-slate-800">{assignment.driver}</p>
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         <span className={cn(
-                          'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-widest',
+                          'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em]',
                           assignment.kind === 'service' && 'glass-chip text-emerald-700',
                           assignment.kind === 'leave' && 'glass-chip text-sky-700',
                           assignment.kind === 'training' && 'glass-chip text-violet-700',
@@ -628,9 +628,9 @@ export function PlanningMatrixView({
   } catch (error) {
     console.error('Planning Overzicht renderfout:', error);
     return (
-      <div className="surface-card rounded-[32px] p-8">
-        <div className="rounded-[24px] border border-red-200 bg-red-50/80 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-red-700">Schermfout</p>
+      <div className="surface-card rounded-3xl p-8">
+        <div className="rounded-3xl border border-red-200 bg-red-50/80 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.08em] text-red-700">Schermfout</p>
           <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">Planning Overzicht kon niet geladen worden</h3>
           <p className="mt-2 text-sm font-medium text-slate-600">
             {error instanceof Error ? error.message : 'Onbekende renderfout'}

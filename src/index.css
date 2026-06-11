@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Nunito:wght@600;700;800&family=Sora:wght@600;700;800&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,400..800&family=Manrope:wght@500..800&display=swap");
 @import "tailwindcss";
 
 /* Class-based dark mode: laat Tailwind `dark:`-utilities de app-toggle
@@ -8,19 +8,67 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Manrope", system-ui, sans-serif;
-  --font-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", "Sora", system-ui, sans-serif;
-  --font-brand: "Nunito", sans-serif;
-  --color-oker-50: #fffbeb;
-  --color-oker-100: #fef3c7;
-  --color-oker-200: #fde68a;
-  --color-oker-300: #fcd34d;
-  --color-oker-400: #fbbf24;
-  --color-oker-500: #f59e0b;
-  --color-oker-600: #d97706;
-  --color-oker-700: #b45309;
-  --color-oker-800: #92400e;
-  --color-oker-900: #78350f;
+  /* Officiële VHB-huisstijl typografie: Inter voor UI/body, Manrope
+     (ExtraBold) voor koppen en de wordmark. Beide variabel via Google
+     Fonts zodat alle gewichten beschikbaar zijn op elk platform. */
+  --font-sans: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  /* Gewichten getemperd: `font-black` rendert als 800 i.p.v. 900. Dat
+     kalmeert alle koppen/labels in één keer zonder honderden class-edits. */
+  --font-weight-extrabold: 750;
+  --font-weight-black: 800;
+
+  /* Strakkere radius-schaal (pro-tool i.p.v. bento): xl 10 · 2xl 14 · 3xl 18.
+     Alle kaarten/inputs verwijzen naar deze tokens. */
+  --radius-xl: 0.625rem;
+  --radius-2xl: 0.875rem;
+  --radius-3xl: 1.125rem;
+
+  /* === VHB Amber (huisstijl #E8A33D als anker op 500) ===
+     De `oker`-naam blijft (honderden usages); de waardes zijn de
+     officiële brand-schaal. 600/700 zijn verdiept voor tekst-contrast. */
+  --color-oker-50: #FCF7ED;
+  --color-oker-100: #F8ECD4;
+  --color-oker-200: #F2DCAE;
+  --color-oker-300: #F0CB82;
+  --color-oker-400: #ECB75F;
+  --color-oker-500: #E8A33D;
+  --color-oker-600: #C9851F;
+  --color-oker-700: #A2691A;
+  --color-oker-800: #7C4F14;
+  --color-oker-900: #5C3A0F;
+
+  /* amber-* aliast naar dezelfde brand-schaal: waarschuwings-states
+     (bg-amber-50, text-amber-700, …) spreken zo exact hetzelfde VHB
+     Amber als oker-* — geen oud-Tailwind-amber naast brand-amber. */
+  --color-amber-50: #FCF7ED;
+  --color-amber-100: #F8ECD4;
+  --color-amber-200: #F2DCAE;
+  --color-amber-300: #F0CB82;
+  --color-amber-400: #ECB75F;
+  --color-amber-500: #E8A33D;
+  --color-amber-600: #C9851F;
+  --color-amber-700: #A2691A;
+  --color-amber-800: #7C4F14;
+  --color-amber-900: #5C3A0F;
+
+  /* === VHB-neutralen (huisstijl) ===
+     De volledige slate-schaal wordt geretuned naar de brand-neutralen:
+     Light Grey #F2F3F4 (100), Graphite #2C3137 (700), VHB Black #0D0D0F
+     (900/950). Daarmee verliest de hele app z'n blauwige zweem en spreekt
+     elke view automatisch de huisstijl. */
+  --color-slate-50: #F7F8F8;
+  --color-slate-100: #F2F3F4;
+  --color-slate-200: #E4E6E8;
+  --color-slate-300: #CDD1D5;
+  --color-slate-400: #9AA1A9;
+  --color-slate-500: #6E767F;
+  --color-slate-600: #4F575F;
+  --color-slate-700: #2C3137;
+  --color-slate-800: #1C2025;
+  --color-slate-900: #0D0D0F;
+  --color-slate-950: #08090A;
 }
 
 /* === Tile-surface variabelen ===
@@ -29,40 +77,36 @@
    glass; in dark mode worden ze automatisch near-black warm zodat de
    tiles netjes meebewegen met de rest van het thema. */
 :root {
-  --tile-bg: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
-  --tile-border: 1px solid rgba(226, 232, 240, 0.7);
+  --tile-bg: rgba(255, 255, 255, 0.96);
+  --tile-border: 1px solid rgba(228, 230, 232, 0.9);
   --tile-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 8px 24px rgba(15, 23, 42, 0.04),
-    0 2px 6px rgba(15, 23, 42, 0.03);
-  --tile-bg-soft: linear-gradient(135deg, rgba(255, 255, 255, 0.68) 0%, rgba(248, 250, 252, 0.55) 100%);
-  --tile-border-soft: 1px solid rgba(255, 255, 255, 0.85);
-  --tile-bg-hero: linear-gradient(135deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
+    0 1px 2px rgba(13, 13, 15, 0.04),
+    0 6px 20px rgba(13, 13, 15, 0.04);
+  --tile-bg-soft: rgba(255, 255, 255, 0.85);
+  --tile-border-soft: 1px solid rgba(228, 230, 232, 0.75);
+  --tile-bg-hero: rgba(255, 255, 255, 0.97);
   --tile-shadow-hero:
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    0 12px 32px rgba(15, 23, 42, 0.05),
-    0 4px 12px rgba(15, 23, 42, 0.03);
+    0 1px 2px rgba(13, 13, 15, 0.05),
+    0 12px 32px rgba(13, 13, 15, 0.06);
 }
 
 html.dark {
-  --tile-bg: linear-gradient(135deg, rgba(22, 22, 26, 0.88) 0%, rgba(16, 16, 20, 0.82) 100%);
-  --tile-border: 1px solid rgba(255, 255, 255, 0.06);
+  --tile-bg: rgba(23, 24, 26, 0.92);
+  --tile-border: 1px solid rgba(255, 255, 255, 0.07);
   --tile-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.04),
-    0 8px 24px rgba(0, 0, 0, 0.42),
-    0 2px 6px rgba(0, 0, 0, 0.22);
-  --tile-bg-soft: linear-gradient(135deg, rgba(22, 22, 26, 0.72) 0%, rgba(16, 16, 20, 0.62) 100%);
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.4);
+  --tile-bg-soft: rgba(23, 24, 26, 0.75);
   --tile-border-soft: 1px solid rgba(255, 255, 255, 0.06);
-  --tile-bg-hero: linear-gradient(135deg, rgba(22, 22, 26, 0.92) 0%, rgba(14, 14, 18, 0.86) 100%);
+  --tile-bg-hero: rgba(21, 22, 25, 0.94);
   --tile-shadow-hero:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    0 12px 32px rgba(0, 0, 0, 0.50),
-    0 4px 12px rgba(0, 0, 0, 0.26);
+    0 1px 2px rgba(0, 0, 0, 0.35),
+    0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {
   html {
-    background: linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
+    background: linear-gradient(180deg, #fafbfc 0%, #F2F3F4 100%);
     min-height: 100vh;
     background-attachment: fixed;
     /* Subtiele neutrale schaduw via .parallax-bg blijft mogelijk — geen
@@ -71,17 +115,20 @@ html.dark {
 
   body {
     font-family: var(--font-sans);
-    color: #0f172a;
+    color: #0D0D0F;
     background: transparent;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    /* Planningstool: tijden en aantallen lijnen overal netjes uit. */
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "cv05", "cv08";
   }
 
   /* Apple-style focus rings: subtle colored halo instead of harsh outline. */
   :focus-visible {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.28);
+    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.28);
     border-radius: inherit;
   }
   /* Elements with their own focus treatment can opt out via class. */
@@ -103,12 +150,12 @@ html.dark {
 
   h1, h2, h3, h4, h5, h6 {
     font-family: var(--font-display);
-    letter-spacing: -0.03em;
+    letter-spacing: -0.022em;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgba(203, 213, 225, 0.6) transparent;
+    scrollbar-color: rgba(205, 209, 213, 0.6) transparent;
   }
 
   *::-webkit-scrollbar {
@@ -120,199 +167,161 @@ html.dark {
   }
 
   *::-webkit-scrollbar-thumb {
-    background-color: rgba(203, 213, 225, 0.6);
+    background-color: rgba(205, 209, 213, 0.6);
     border-radius: 999px;
   }
 }
 
 @layer utilities {
-  .brand-wordmark {
-    font-family: var(--font-brand);
-    letter-spacing: -0.045em;
-    line-height: 0.96;
-    text-transform: uppercase;
-    font-weight: 700;
-  }
-
+  /* === Oppervlakken — kalm, near-opaque, haarlijn-randen ===
+   * Eén consistente familie i.p.v. zwaar gestapeld glas: witte kaarten met
+   * een fijne slate-rand en twee zachte schaduwlagen. Blur alleen waar
+   * content er echt onderdoor schuift (topbar, modals). */
   .panel {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.88) 0%, rgba(255, 255, 255, 0.78) 100%);
-    backdrop-filter: blur(36px) saturate(140%);
-    -webkit-backdrop-filter: blur(36px) saturate(140%);
-    border: 1px solid rgba(226, 232, 240, 0.7);
+    background: rgba(255, 255, 255, 0.94);
+    backdrop-filter: blur(12px) saturate(140%);
+    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    border: 1px solid rgba(228, 230, 232, 0.85);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.85),
-      0 8px 24px rgba(15, 23, 42, 0.04),
-      0 2px 6px rgba(15, 23, 42, 0.03);
+      0 1px 2px rgba(13, 13, 15, 0.04),
+      0 8px 24px rgba(13, 13, 15, 0.05);
     transition:
-      transform 380ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 380ms cubic-bezier(0.22, 1, 0.36, 1),
-      background 380ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 380ms cubic-bezier(0.22, 1, 0.36, 1),
-      backdrop-filter 380ms cubic-bezier(0.22, 1, 0.36, 1),
-      -webkit-backdrop-filter 380ms cubic-bezier(0.22, 1, 0.36, 1);
+      box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  /* Variant voor de sticky-header wanneer er onder gescrolld wordt — bijna
-     volledig opaak zodat absoluut niets doorheen schemert. */
+  /* Variant voor sticky elementen wanneer er onder gescrolld wordt. */
   .panel--scrolled {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.94) 100%);
-    backdrop-filter: blur(44px) saturate(160%);
-    -webkit-backdrop-filter: blur(44px) saturate(160%);
-    border-color: rgba(226, 232, 240, 0.85);
+    background: rgba(255, 255, 255, 0.97);
+    border-color: rgba(228, 230, 232, 0.95);
   }
 
+  /* Sidebar-rail: vaste, rustige flank van de app. Bewust géén
+     backdrop-filter: blur + transform (mobile slide-in) op hetzelfde
+     element geeft compositing-glitches; near-opaque heeft 't niet nodig. */
   .panel-dark {
-    background:
-      radial-gradient(circle at top right, rgba(245, 158, 11, 0.14), transparent 34%),
-      linear-gradient(180deg, rgba(248, 250, 252, 0.78) 0%, rgba(239, 244, 248, 0.68) 100%);
-    backdrop-filter: blur(24px) saturate(145%);
-    -webkit-backdrop-filter: blur(24px) saturate(145%);
-    border: 1px solid rgba(255, 255, 255, 0.88);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.28),
-      0 10px 28px rgba(15, 23, 42, 0.05);
+    background: rgba(252, 253, 254, 0.97);
+    border-right: 1px solid rgba(228, 230, 232, 0.8);
     transition:
       transform 420ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 420ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 420ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 420ms cubic-bezier(0.22, 1, 0.36, 1);
+      background-color 420ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  /* Topbar: full-width werkbalk met haarlijn-onderrand. */
+  .topbar {
+    background: rgba(250, 251, 252, 0.82);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    border-bottom: 1px solid rgba(228, 230, 232, 0.7);
+    transition:
+      background 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .topbar--scrolled {
+    background: rgba(255, 255, 255, 0.92);
+    border-bottom-color: rgba(228, 230, 232, 0.95);
+    box-shadow: 0 4px 16px rgba(13, 13, 15, 0.04);
   }
 
   .glass {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.54) 100%);
-    backdrop-filter: blur(16px) saturate(138%);
-    -webkit-backdrop-filter: blur(16px) saturate(138%);
-    border: 1px solid rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
+    border: 1px solid rgba(228, 230, 232, 0.8);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.84),
-      0 10px 24px rgba(15, 23, 42, 0.05);
+      0 1px 2px rgba(13, 13, 15, 0.03),
+      0 8px 20px rgba(13, 13, 15, 0.04);
     transition:
-      transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 320ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 320ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  
-  .glass-oker {
-    background:
-      linear-gradient(180deg, rgba(251, 191, 36, 0.2) 0%, rgba(255, 250, 229, 0.38) 100%);
-    backdrop-filter: blur(18px) saturate(145%);
-    -webkit-backdrop-filter: blur(18px) saturate(145%);
-    border: 1px solid rgba(251, 191, 36, 0.28);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.7),
-      0 14px 36px rgba(251, 191, 36, 0.12);
+      box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  /* --- Premium glass tiles (Bento DNA) ---
-   * Hogere blur + lagere opacity zodat de background door het glas
-   * schijnt. Dubbele inset-highlight (top + bottom rim) geeft het
-   * "edge-lit"-effect typisch voor Apple Wallet / Vision Pro panels.
-   */
   .surface-card {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.92) 0%, rgba(255, 255, 255, 0.82) 100%);
-    backdrop-filter: blur(28px) saturate(140%);
-    -webkit-backdrop-filter: blur(28px) saturate(140%);
-    border: 1px solid rgba(226, 232, 240, 0.7);
+    background: rgba(255, 255, 255, 0.96);
+    border: 1px solid rgba(228, 230, 232, 0.9);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.85),
-      0 8px 24px rgba(15, 23, 42, 0.04),
-      0 2px 6px rgba(15, 23, 42, 0.03);
+      0 1px 2px rgba(13, 13, 15, 0.04),
+      0 6px 20px rgba(13, 13, 15, 0.04);
     transition:
-      transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      background 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 340ms cubic-bezier(0.22, 1, 0.36, 1);
+      transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .surface-card-hover {
     transition:
-      transform 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      background-color 340ms cubic-bezier(0.22, 1, 0.36, 1),
-      border-color 340ms cubic-bezier(0.22, 1, 0.36, 1);
+      transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      background-color 280ms cubic-bezier(0.22, 1, 0.36, 1),
+      border-color 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .surface-card-hover:hover {
-    transform: translateY(-3px) scale(1.008);
+    transform: translateY(-2px);
+    border-color: rgba(205, 209, 213, 0.9);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.98),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.5),
-      0 16px 40px rgba(15, 23, 42, 0.08),
-      0 4px 12px rgba(15, 23, 42, 0.05);
+      0 2px 4px rgba(13, 13, 15, 0.04),
+      0 14px 32px rgba(13, 13, 15, 0.08);
   }
 
   .surface-table {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.66) 0%, rgba(255, 255, 255, 0.48) 100%);
-    backdrop-filter: blur(30px) saturate(155%);
-    -webkit-backdrop-filter: blur(30px) saturate(155%);
-    border: 1px solid rgba(255, 255, 255, 0.85);
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(228, 230, 232, 0.85);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.95),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.4),
-      0 10px 28px rgba(15, 23, 42, 0.05);
+      0 1px 2px rgba(13, 13, 15, 0.03),
+      0 8px 24px rgba(13, 13, 15, 0.04);
   }
 
   .glass-modal {
-    background:
-      radial-gradient(circle at top left, rgba(255, 255, 255, 0.54), transparent 45%),
-      linear-gradient(180deg, rgba(255, 255, 255, 0.78) 0%, rgba(248, 250, 252, 0.6) 100%);
-    backdrop-filter: blur(36px) saturate(165%);
-    -webkit-backdrop-filter: blur(36px) saturate(165%);
-    border: 1px solid rgba(255, 255, 255, 0.9);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(24px) saturate(160%);
+    -webkit-backdrop-filter: blur(24px) saturate(160%);
+    border: 1px solid rgba(228, 230, 232, 0.9);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.98),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.4),
-      0 28px 80px rgba(15, 23, 42, 0.16);
+      0 1px 2px rgba(13, 13, 15, 0.05),
+      0 28px 80px rgba(13, 13, 15, 0.18);
   }
 
   .surface-muted {
-    background: rgba(248, 250, 252, 0.48);
-    backdrop-filter: blur(20px) saturate(150%);
-    -webkit-backdrop-filter: blur(20px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.7);
+    background: rgba(247, 248, 248, 0.8);
+    border: 1px solid rgba(228, 230, 232, 0.7);
   }
 
-  /* --- Depth utilities (5. depth & parallax) --- */
+  /* --- Depth utilities --- */
 
-  /* Tilt-card: 3D-perspective hover. De parent moet perspective hebben. */
+  /* Tilt-card: heel subtiele 3D-hover — net voelbaar, niet speels. */
   .tilt-card {
     transform-style: preserve-3d;
-    transition: transform 480ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 480ms cubic-bezier(0.22, 1, 0.36, 1);
+    transition: transform 320ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1);
     will-change: transform;
   }
   .tilt-card:hover {
-    transform: perspective(1200px) rotateX(2deg) rotateY(-3deg) translateY(-4px) translateZ(0);
+    transform: perspective(1200px) rotateX(0.8deg) rotateY(-1.2deg) translateY(-2px) translateZ(0);
   }
 
-  /* Light-source glow: licht uit de bovenkant van de kaart.
-   * Altijd lichtjes zichtbaar (mobile ook), versterkt op hover.
-   * Iets warme tint (oker) gemengd met wit voor brand-consistency. */
+  /* Light-source glow: vleugje licht aan de bovenrand van een kaart. */
   .glow-top::before {
     content: "";
     position: absolute;
     inset: 0;
     background:
       radial-gradient(
-        ellipse 90% 60% at 50% -10%,
-        rgba(255, 255, 255, 0.7) 0%,
-        rgba(255, 248, 230, 0.35) 30%,
-        transparent 70%
+        ellipse 90% 50% at 50% -10%,
+        rgba(255, 255, 255, 0.5) 0%,
+        transparent 60%
       );
     pointer-events: none;
-    opacity: 0.55;
-    transition: opacity 480ms ease;
+    opacity: 0.4;
+    transition: opacity 320ms ease;
     border-radius: inherit;
   }
   .glow-top:hover::before {
-    opacity: 1;
+    opacity: 0.7;
   }
 
   /* Multi-layer glass — extra diffuse achtergrond achter de tegel */
@@ -325,7 +334,7 @@ html.dark {
     position: absolute;
     inset: -10px;
     background:
-      radial-gradient(ellipse at 30% 20%, rgba(245, 158, 11, 0.08), transparent 50%),
+      radial-gradient(ellipse at 30% 20%, rgba(232, 163, 61, 0.08), transparent 50%),
       radial-gradient(ellipse at 80% 80%, rgba(99, 102, 241, 0.05), transparent 50%);
     filter: blur(40px);
     z-index: -1;
@@ -375,51 +384,18 @@ html.dark {
       inset 0 1px 0 rgba(255, 255, 255, 0.95);
   }
 
-  /* Parallax-background: fixed laag met subtiele neutrale dieptelagen.
-     Geen gekleurde blobs meer — alleen een vleugje warmth/cool in slate
-     voor wat textuur. */
+  /* Parallax-background: fixed laag met subtiele neutrale dieptelagen. */
   .parallax-bg {
     position: fixed;
     inset: -10vh -10vw;
     z-index: -1;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 700px 500px at 15% 18%, rgba(148, 163, 184, 0.10) 0%, transparent 55%),
-      radial-gradient(ellipse 600px 400px at 85% 70%, rgba(148, 163, 184, 0.06) 0%, transparent 55%);
+      radial-gradient(ellipse 700px 500px at 15% 18%, rgba(154, 161, 169, 0.07) 0%, transparent 55%),
+      radial-gradient(ellipse 600px 400px at 85% 70%, rgba(154, 161, 169, 0.04) 0%, transparent 55%);
     transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.18), 0);
     will-change: transform;
     filter: blur(1px);
-  }
-  /* Brand-wordmark micro-animatie: rustige adem-pulse + warmer op hover.
-     6s cycle = ongeveer menselijke ademhaling. Combineert subtiele scale
-     met oker drop-shadow voor een tactiel 'levend'-gevoel. */
-  .brand-wordmark-anim {
-    animation: brand-breathe 6s ease-in-out infinite;
-    transition: filter 320ms ease, transform 320ms ease;
-    transform-origin: center center;
-    will-change: transform, filter;
-  }
-  @keyframes brand-breathe {
-    0%, 100% {
-      transform: scale(1);
-      filter: brightness(1) drop-shadow(0 0 0 rgba(245, 158, 11, 0));
-    }
-    50% {
-      transform: scale(1.012);
-      filter: brightness(1.06) drop-shadow(0 0 14px rgba(245, 158, 11, 0.30));
-    }
-  }
-  .brand-wordmark-anim:hover {
-    filter: brightness(1.1) drop-shadow(0 0 18px rgba(245, 158, 11, 0.5));
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .brand-wordmark-anim { animation: none; }
-  }
-  .brand-wordmark-anim:hover .brand-accent {
-    color: #d97706;
-  }
-  .brand-accent {
-    transition: color 240ms ease;
   }
 
   /* Brand bus sway — voor empty state mascotte. Levendiger nu: dubbele
@@ -496,9 +472,9 @@ html.dark {
   .skeleton {
     background: linear-gradient(
       90deg,
-      rgba(255, 255, 255, 0.45) 25%,
-      rgba(255, 255, 255, 0.75) 50%,
-      rgba(255, 255, 255, 0.45) 75%
+      rgba(228, 230, 232, 0.55) 25%,
+      rgba(242, 243, 244, 0.95) 50%,
+      rgba(228, 230, 232, 0.55) 75%
     );
     background-size: 200% 100%;
     animation: shimmer 1.4s linear infinite;
@@ -507,34 +483,21 @@ html.dark {
   .dark .skeleton {
     background: linear-gradient(
       90deg,
-      rgba(71, 85, 105, 0.25) 25%,
-      rgba(71, 85, 105, 0.45) 50%,
-      rgba(71, 85, 105, 0.25) 75%
+      rgba(79, 87, 95, 0.25) 25%,
+      rgba(79, 87, 95, 0.45) 50%,
+      rgba(79, 87, 95, 0.25) 75%
     );
     background-size: 200% 100%;
   }
 
-  /* Subtle grain — premium textuur over alles */
-  .grain-overlay::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.08 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-    pointer-events: none;
-    border-radius: inherit;
-    mix-blend-mode: overlay;
-    opacity: 0.5;
-  }
-
   .control-input {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.56) 100%);
-    backdrop-filter: blur(16px) saturate(145%);
-    -webkit-backdrop-filter: blur(16px) saturate(145%);
-    border: 1px solid rgba(255, 255, 255, 0.78);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.88),
-      0 6px 16px rgba(15, 23, 42, 0.035);
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(205, 209, 213, 0.7);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.03);
+    transition:
+      border-color 200ms ease,
+      box-shadow 200ms ease,
+      background-color 200ms ease;
   }
 
   /* iOS Safari zoomt naar input-velden in als de font-size < 16px.
@@ -549,11 +512,9 @@ html.dark {
   }
 
   .control-input:focus {
-    border-color: rgba(245, 158, 11, 0.6);
-    box-shadow:
-      0 0 0 4px rgba(245, 158, 11, 0.1),
-      inset 0 1px 0 rgba(255, 255, 255, 0.94),
-      0 12px 24px rgba(245, 158, 11, 0.07);
+    background: #ffffff;
+    border-color: rgba(232, 163, 61, 0.55);
+    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.12);
   }
 
   /* Ademende oker-glow ROND een gefocust input-veld (voor LoginView).
@@ -565,140 +526,29 @@ html.dark {
   @keyframes field-glow-breathe {
     0%, 100% {
       box-shadow:
-        0 0 0 0 rgba(245, 158, 11, 0),
-        0 0 0 0 rgba(245, 158, 11, 0);
+        0 0 0 0 rgba(232, 163, 61, 0),
+        0 0 0 0 rgba(232, 163, 61, 0);
     }
     50% {
       box-shadow:
-        0 0 0 6px rgba(245, 158, 11, 0.12),
-        0 0 24px rgba(245, 158, 11, 0.18);
+        0 0 0 6px rgba(232, 163, 61, 0.12),
+        0 0 24px rgba(232, 163, 61, 0.18);
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .field-glow { animation: none; box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.10); }
-  }
-
-  /* === Iridescent border voor het login form-card ===
-     Een dunne conische gradient die traag draait — geeft een holografische
-     shimmer over de hele rand van de card. ::before tekent de gradient,
-     ::after maakt 'm dun door een witte ring eroverheen (inner border-radius).
-     Gebruik op een wrapper rond .panel. */
-  .iridescent-frame {
-    position: relative;
-    border-radius: inherit;
-  }
-  .iridescent-frame::before {
-    content: '';
-    position: absolute;
-    inset: -1px;
-    border-radius: inherit;
-    padding: 1px;
-    /* Pure oker-palette conic — subtiel maar net iets warmer zichtbaar.
-       Opaciteit een tikje hoger dan de "barely there" versie zodat de
-       rand voelbaar aanwezig is zonder af te leiden. */
-    background: conic-gradient(
-      from 0deg,
-      rgba(245, 158, 11, 0.38) 0%,
-      rgba(251, 191, 36, 0.22) 25%,
-      rgba(217, 119, 6, 0.30) 50%,
-      rgba(251, 191, 36, 0.22) 75%,
-      rgba(245, 158, 11, 0.38) 100%
-    );
-    /* Mask zodat alleen de border-rand zichtbaar is, niet de fill */
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-            mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-            mask-composite: exclude;
-    animation: iridescent-rotate 20s linear infinite;
-    pointer-events: none;
-  }
-  @keyframes iridescent-rotate {
-    to { transform: rotate(360deg); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .iridescent-frame::before { animation: none; }
-  }
-
-  /* === Stacked glass depth ===
-     Twee panelen achter het form-card met lichte offset + lagere opacity.
-     Geeft echte z-as diepte zonder 3D-engine. Position absolute relatief
-     aan de stack-wrapper. Border-radius matcht expliciet de hoofd-card. */
-  .glass-stack-wrap {
-    position: relative;
-    width: 100%;
-  }
-  .glass-stack-back {
-    position: absolute;
-    inset: 0;
-    border-radius: 28px;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 255, 255, 0.40) 100%);
-    border: 1px solid rgba(226, 232, 240, 0.55);
-    backdrop-filter: blur(20px) saturate(130%);
-    -webkit-backdrop-filter: blur(20px) saturate(130%);
-    box-shadow:
-      0 12px 32px rgba(15, 23, 42, 0.05),
-      0 4px 10px rgba(15, 23, 42, 0.03);
-    pointer-events: none;
-  }
-  .glass-stack-back-1 {
-    transform: translate(8px, 10px) scale(0.98);
-    z-index: -1;
-    opacity: 0.85;
-  }
-  .glass-stack-back-2 {
-    transform: translate(16px, 20px) scale(0.96);
-    z-index: -2;
-    opacity: 0.55;
-  }
-
-  /* === Editorial divider lines ===
-     Drie dunne lijnen die zich op page-load uittekenen (~700ms each, staggered).
-     Bedoeld als decoratief moment, alleen bij eerste mount. */
-  .editorial-divider {
-    height: 1px;
-    width: 100%;
-    background: linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(148, 163, 184, 0.32) 50%,
-      transparent 100%
-    );
-    transform-origin: center;
-    animation: divider-draw 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
-  }
-  .editorial-divider-1 { animation-delay: 0.05s; }
-  .editorial-divider-2 { animation-delay: 0.20s; }
-  .editorial-divider-3 { animation-delay: 0.35s; }
-  @keyframes divider-draw {
-    from { transform: scaleX(0); opacity: 0; }
-    to   { transform: scaleX(1); opacity: 1; }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .editorial-divider { animation: none; }
+    .field-glow { animation: none; box-shadow: 0 0 0 4px rgba(232, 163, 61, 0.10); }
   }
 
   .control-button-soft {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.54) 100%);
-    backdrop-filter: blur(16px) saturate(145%);
-    -webkit-backdrop-filter: blur(16px) saturate(145%);
-    border: 1px solid rgba(255, 255, 255, 0.82);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.9),
-      0 8px 20px rgba(15, 23, 42, 0.05);
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(228, 230, 232, 0.9);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
   }
 
   .control-button-soft:hover {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.84) 0%, rgba(255, 255, 255, 0.64) 100%);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.96),
-      0 12px 24px rgba(15, 23, 42, 0.07);
+    background: #ffffff;
+    border-color: rgba(205, 209, 213, 0.95);
+    box-shadow: 0 2px 8px rgba(13, 13, 15, 0.06);
   }
 
   .ios-pressable {
@@ -733,26 +583,32 @@ html.dark {
     position: absolute;
     inset: 0;
     pointer-events: none;
-    background: linear-gradient(180deg, rgba(255,255,255,0.24), transparent 28%, transparent 72%, rgba(255,255,255,0.08));
-    opacity: 0.9;
+    background: linear-gradient(180deg, rgba(255,255,255,0.1), transparent 24%);
+    opacity: 0.7;
   }
 
   .btn-primary {
     background: linear-gradient(180deg, var(--color-oker-500) 0%, var(--color-oker-600) 100%);
     color: white;
-    font-weight: 800;
-    border-radius: 9999px;
-    box-shadow: 0 6px 16px rgba(245, 158, 11, 0.18);
+    font-weight: 700;
+    border-radius: 0.75rem;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 1px 2px rgba(162, 105, 26, 0.25),
+      0 4px 12px rgba(232, 163, 61, 0.2);
     transition:
-      transform 220ms cubic-bezier(0.22, 1, 0.36, 1),
-      box-shadow 220ms cubic-bezier(0.22, 1, 0.36, 1),
-      background 220ms cubic-bezier(0.22, 1, 0.36, 1);
+      transform 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      box-shadow 200ms cubic-bezier(0.22, 1, 0.36, 1),
+      background 200ms cubic-bezier(0.22, 1, 0.36, 1);
     will-change: transform;
   }
 
   .btn-primary:hover {
     background: linear-gradient(180deg, var(--color-oker-600) 0%, var(--color-oker-700) 100%);
-    box-shadow: 0 8px 20px rgba(245, 158, 11, 0.22);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      0 1px 2px rgba(162, 105, 26, 0.3),
+      0 6px 16px rgba(232, 163, 61, 0.24);
   }
 
   .btn-primary:active {
@@ -760,65 +616,50 @@ html.dark {
   }
 
   .btn-primary:disabled {
-    background: #e2e8f0;
-    color: #94a3b8;
+    background: #E4E6E8;
+    color: #9AA1A9;
     box-shadow: none;
     cursor: not-allowed;
     transform: none;
   }
 
   .glass-chip {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.74) 0%, rgba(255, 255, 255, 0.54) 100%);
-    backdrop-filter: blur(14px) saturate(150%);
-    -webkit-backdrop-filter: blur(14px) saturate(150%);
-    border: 1px solid rgba(255, 255, 255, 0.82);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.92),
-      0 8px 16px rgba(15, 23, 42, 0.045);
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(228, 230, 232, 0.9);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
   }
 
   .glass-segmented {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.58) 0%, rgba(255, 255, 255, 0.42) 100%);
-    backdrop-filter: blur(16px) saturate(145%);
-    -webkit-backdrop-filter: blur(16px) saturate(145%);
-    border: 1px solid rgba(255, 255, 255, 0.8);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.88),
-      0 10px 24px rgba(15, 23, 42, 0.05);
+    background: rgba(242, 243, 244, 0.75);
+    border: 1px solid rgba(228, 230, 232, 0.8);
+    box-shadow: inset 0 1px 2px rgba(13, 13, 15, 0.03);
   }
 
   .glass-icon-button {
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.72) 0%, rgba(255, 255, 255, 0.52) 100%);
-    backdrop-filter: blur(16px) saturate(145%);
-    -webkit-backdrop-filter: blur(16px) saturate(145%);
-    border: 1px solid rgba(255, 255, 255, 0.82);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.92),
-      0 10px 20px rgba(15, 23, 42, 0.06);
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(228, 230, 232, 0.9);
+    box-shadow: 0 1px 2px rgba(13, 13, 15, 0.04);
   }
 
   .glass-icon-button:hover {
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.98),
-      0 10px 18px rgba(15, 23, 42, 0.08);
+    background: #ffffff;
+    border-color: rgba(205, 209, 213, 0.95);
+    box-shadow: 0 2px 8px rgba(13, 13, 15, 0.07);
   }
 
   .section-title {
     font-family: var(--font-display);
-    letter-spacing: -0.035em;
+    letter-spacing: -0.025em;
   }
 
   .fine-divider {
-    border-color: rgba(148, 163, 184, 0.18);
+    border-color: rgba(154, 161, 169, 0.18);
   }
 
   /* Hairline divider: ~0.5px on retina, 1px elsewhere. Use on borders you
      want near-invisible but present, like iOS Settings list separators. */
   .hairline {
-    border-color: rgba(148, 163, 184, 0.22);
+    border-color: rgba(154, 161, 169, 0.22);
   }
   @media (min-resolution: 2dppx) {
     .hairline {
@@ -835,38 +676,38 @@ html.dark {
    glass-morphism classes above.
    ========================================================================== */
 
-/* Dark mode = login kleurschema: pure donker (#0a0a0c) met subtiele
+/* Dark mode = login kleurschema: pure donker (#0D0D0F) met subtiele
    oker vignet, geen indigo / koel-blauwe tinten meer. */
 html.dark {
   background:
     radial-gradient(
       ellipse 1000px 800px at 50% 30%,
-      rgba(245, 158, 11, 0.05) 0%,
+      rgba(232, 163, 61, 0.05) 0%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 700px 500px at 50% 95%,
-      rgba(217, 119, 6, 0.03) 0%,
+      rgba(201, 133, 31, 0.03) 0%,
       transparent 60%
     ),
-    #0a0a0c;
+    #0D0D0F;
   color-scheme: dark;
 }
 
 .dark .parallax-bg {
   /* Pure oker-vignet, geen indigo of pink meer. */
   background:
-    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(245, 158, 11, 0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(217, 119, 6, 0.07) 0%, transparent 55%);
+    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(232, 163, 61, 0.10) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(201, 133, 31, 0.07) 0%, transparent 55%);
   filter: blur(1px) saturate(120%);
 }
 
 .dark body {
-  color: #e2e8f0;
+  color: #E4E6E8;
 }
 
 .dark *::-webkit-scrollbar-thumb {
-  background-color: rgba(100, 116, 139, 0.55);
+  background-color: rgba(110, 118, 127, 0.55);
 }
 
 /* --- Custom glass-morphism classes (dark) ---
@@ -874,17 +715,11 @@ html.dark {
  * sterkere edge-lit highlights. */
 
 .dark .panel {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.62) 0%, rgba(14, 14, 18, 0.50) 100%);
-  /* Heel subtiele warme rand ipv koel-blauwe slate-600. Zo blijft de
-     edge zichtbaar genoeg voor depth maar geen harde "sharpie"-lijn
-     meer tegen de near-black bg. */
-  border: 1px solid rgba(255, 255, 255, 0.05);
+  background: rgba(21, 22, 25, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.05),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.02),
-    0 10px 28px rgba(0, 0, 0, 0.4),
-    0 2px 6px rgba(0, 0, 0, 0.2);
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
 /* iOS soft-panel ::after legt een wit hoogtepunt (0.24 → 0.08) over
@@ -905,76 +740,61 @@ html.dark {
 /* Dark variant van .panel--scrolled: zelfde lichte rand, iets meer
    opaak zodat de header nog stevig staat als je scrolt. */
 .dark .panel--scrolled {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.85) 0%, rgba(14, 14, 18, 0.78) 100%);
-  border-color: rgba(255, 255, 255, 0.06);
+  background: rgba(21, 22, 25, 0.96);
+  border-color: rgba(255, 255, 255, 0.08);
 }
 
 .dark .panel-dark {
-  background:
-    radial-gradient(circle at top right, rgba(245, 158, 11, 0.10), transparent 38%),
-    linear-gradient(180deg, rgba(14, 14, 18, 0.88) 0%, rgba(8, 8, 12, 0.92) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.28);
-  box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 10px 28px rgba(0, 0, 0, 0.38);
+  background: rgba(16, 17, 19, 0.97);
+  border-right: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.dark .topbar {
+  background: rgba(13, 13, 15, 0.82);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.dark .topbar--scrolled {
+  background: rgba(16, 17, 19, 0.92);
+  border-bottom-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
 .dark .glass {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.28);
+  background: rgba(23, 24, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 10px 24px rgba(0, 0, 0, 0.28);
-}
-
-.dark .glass-oker {
-  background:
-    linear-gradient(180deg, rgba(245, 158, 11, 0.14) 0%, rgba(60, 30, 2, 0.48) 100%);
-  border: 1px solid rgba(245, 158, 11, 0.24);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.06),
-    0 14px 36px rgba(245, 158, 11, 0.1);
+    0 1px 2px rgba(0, 0, 0, 0.25),
+    0 8px 20px rgba(0, 0, 0, 0.3);
 }
 
 .dark .surface-card {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.5) 0%, rgba(14, 14, 18, 0.35) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.35);
+  background: rgba(23, 24, 26, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.18),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.06),
-    0 8px 24px rgba(0, 0, 0, 0.4),
-    0 2px 6px rgba(0, 0, 0, 0.2);
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
 .dark .surface-card-hover:hover {
+  border-color: rgba(255, 255, 255, 0.12);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.22),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.08),
-    0 16px 40px rgba(0, 0, 0, 0.5),
-    0 4px 12px rgba(0, 0, 0, 0.25);
+    0 2px 4px rgba(0, 0, 0, 0.3),
+    0 14px 32px rgba(0, 0, 0, 0.5);
 }
 
 .dark .surface-table {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.5) 0%, rgba(14, 14, 18, 0.35) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.35);
+  background: rgba(23, 24, 26, 0.88);
+  border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.18),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.06),
-    0 10px 28px rgba(0, 0, 0, 0.4);
+    0 1px 2px rgba(0, 0, 0, 0.3),
+    0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
 .dark .glass-modal {
-  background:
-    radial-gradient(circle at top left, rgba(71, 85, 105, 0.30), transparent 45%),
-    linear-gradient(180deg, rgba(22, 22, 26, 0.78) 0%, rgba(14, 14, 18, 0.62) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.45);
+  background: rgba(23, 24, 26, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.20),
-    inset 0 -1px 0 rgba(148, 163, 184, 0.08),
+    0 1px 2px rgba(0, 0, 0, 0.4),
     0 28px 80px rgba(0, 0, 0, 0.7);
 }
 
@@ -991,216 +811,220 @@ html.dark {
 }
 .dark .halo-on-hover:hover {
   box-shadow:
-    0 0 0 1px rgba(245, 158, 11, 0.45),
-    0 0 18px 2px rgba(245, 158, 11, 0.25),
-    inset 0 1px 0 rgba(148, 163, 184, 0.25);
+    0 0 0 1px rgba(232, 163, 61, 0.45),
+    0 0 18px 2px rgba(232, 163, 61, 0.25),
+    inset 0 1px 0 rgba(154, 161, 169, 0.25);
 }
 .dark .cursor-glow > .cursor-glow-layer {
   /* Pure oker-glow, geen indigo bijmenging meer. */
   background: radial-gradient(
     circle 240px at var(--mx) var(--my),
-    rgba(245, 158, 11, 0.20),
-    rgba(217, 119, 6, 0.08) 40%,
+    rgba(232, 163, 61, 0.20),
+    rgba(201, 133, 31, 0.08) 40%,
     transparent 70%
   );
   mix-blend-mode: screen;
 }
 
 .dark .surface-muted {
-  background: rgba(22, 22, 26, 0.5);
-  border: 1px solid rgba(71, 85, 105, 0.28);
+  background: rgba(23, 24, 26, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .dark .control-input {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.68) 0%, rgba(14, 14, 18, 0.52) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.34);
-  color: #e2e8f0;
-  box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 6px 16px rgba(0, 0, 0, 0.22);
+  background: rgba(23, 24, 26, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #E4E6E8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .dark .control-input::placeholder {
-  color: rgba(148, 163, 184, 0.55);
+  color: rgba(154, 161, 169, 0.55);
 }
 
 .dark .control-input:focus {
-  border-color: rgba(245, 158, 11, 0.55);
-  box-shadow:
-    0 0 0 4px rgba(245, 158, 11, 0.14),
-    inset 0 1px 0 rgba(148, 163, 184, 0.12),
-    0 12px 24px rgba(245, 158, 11, 0.08);
+  background: rgba(29, 31, 34, 0.95);
+  border-color: rgba(232, 163, 61, 0.5);
+  box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.16);
 }
 
 .dark .control-button-soft {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.32);
-  color: #e2e8f0;
-  box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 8px 20px rgba(0, 0, 0, 0.22);
+  background: rgba(23, 24, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: #E4E6E8;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .dark .control-button-soft:hover {
-  background:
-    linear-gradient(180deg, rgba(36, 36, 42, 0.72) 0%, rgba(22, 22, 26, 0.56) 100%);
+  background: rgba(38, 40, 43, 0.9);
+  border-color: rgba(255, 255, 255, 0.14);
 }
 
 .dark .glass-chip {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.32);
-  box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 8px 16px rgba(0, 0, 0, 0.22);
+  background: rgba(23, 24, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
 .dark .glass-segmented {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.52) 0%, rgba(14, 14, 18, 0.38) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.30);
-  box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 10px 24px rgba(0, 0, 0, 0.22);
+  background: rgba(17, 18, 20, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
 .dark .glass-icon-button {
-  background:
-    linear-gradient(180deg, rgba(22, 22, 26, 0.64) 0%, rgba(14, 14, 18, 0.48) 100%);
-  border: 1px solid rgba(71, 85, 105, 0.32);
-  box-shadow:
-    inset 0 1px 0 rgba(148, 163, 184, 0.10),
-    0 10px 20px rgba(0, 0, 0, 0.22);
+  background: rgba(23, 24, 26, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.dark .fine-divider { border-color: rgba(148, 163, 184, 0.12); }
-.dark .hairline { border-color: rgba(148, 163, 184, 0.18); }
+.dark .fine-divider { border-color: rgba(154, 161, 169, 0.12); }
+.dark .hairline { border-color: rgba(154, 161, 169, 0.18); }
+
+/* Opacity-varianten van border-slate-200 (klassen mét /NN zijn aparte
+   classnamen, dus de kale override hierboven matcht ze niet). */
+.dark .border-slate-200\/60,
+.dark .border-slate-200\/70,
+.dark .border-slate-200\/80,
+.dark .border-slate-200\/90 { border-color: rgba(79, 87, 95, 0.38); }
+
+/* Ring-varianten op rijen/kaarten (OpsRow, PendingRow, QuickLink, …). */
+.dark .ring-slate-200\/60,
+.dark .ring-slate-200\/70 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
+.dark .hover\:ring-slate-300\/80:hover { --tw-ring-color: rgba(110, 118, 127, 0.45); }
+
+/* Status-teksten op geflipte tint-chips (pill 'Operationeel', severity-
+   badges): -700 is op near-black onleesbaar, flip naar lichte variant. */
+.dark .text-emerald-700 { color: rgb(110, 231, 183); }
+.dark .text-amber-700 { color: rgb(236, 183, 95); }
+.dark .text-red-700 { color: rgb(252, 165, 165); }
+
+/* Group-hover die in dark anders dood zou zijn (pijltjes in OpsRow e.d.). */
+.dark .group:hover .group-hover\:text-slate-700 { color: #E4E6E8; }
 
 /* --- Tailwind utility overrides (most-used) --- */
 
 /* White backgrounds */
-.dark .bg-white { background-color: rgba(22, 22, 26, 0.85); }
-.dark .bg-white\/30 { background-color: rgba(22, 22, 26, 0.40); }
-.dark .bg-white\/35 { background-color: rgba(22, 22, 26, 0.45); }
-.dark .bg-white\/40 { background-color: rgba(22, 22, 26, 0.50); }
-.dark .bg-white\/42 { background-color: rgba(22, 22, 26, 0.52); }
-.dark .bg-white\/45 { background-color: rgba(22, 22, 26, 0.55); }
-.dark .bg-white\/50 { background-color: rgba(22, 22, 26, 0.60); }
-.dark .bg-white\/55 { background-color: rgba(22, 22, 26, 0.65); }
-.dark .bg-white\/58 { background-color: rgba(22, 22, 26, 0.68); }
-.dark .bg-white\/60 { background-color: rgba(22, 22, 26, 0.68); }
-.dark .bg-white\/62 { background-color: rgba(22, 22, 26, 0.70); }
-.dark .bg-white\/65 { background-color: rgba(22, 22, 26, 0.72); }
-.dark .bg-white\/70 { background-color: rgba(22, 22, 26, 0.74); }
-.dark .bg-white\/74 { background-color: rgba(22, 22, 26, 0.76); }
-.dark .bg-white\/75 { background-color: rgba(22, 22, 26, 0.78); }
-.dark .bg-white\/80 { background-color: rgba(22, 22, 26, 0.82); }
-.dark .bg-white\/84 { background-color: rgba(22, 22, 26, 0.85); }
-.dark .bg-white\/88 { background-color: rgba(22, 22, 26, 0.88); }
-.dark .bg-white\/90 { background-color: rgba(22, 22, 26, 0.90); }
-.dark .bg-white\/95 { background-color: rgba(22, 22, 26, 0.92); }
-.dark .hover\:bg-white\/50:hover { background-color: rgba(36, 36, 42, 0.60); }
-.dark .hover\:bg-white\/70:hover { background-color: rgba(36, 36, 42, 0.72); }
+.dark .bg-white { background-color: rgba(23, 24, 26, 0.85); }
+.dark .bg-white\/30 { background-color: rgba(23, 24, 26, 0.40); }
+.dark .bg-white\/35 { background-color: rgba(23, 24, 26, 0.45); }
+.dark .bg-white\/40 { background-color: rgba(23, 24, 26, 0.50); }
+.dark .bg-white\/42 { background-color: rgba(23, 24, 26, 0.52); }
+.dark .bg-white\/45 { background-color: rgba(23, 24, 26, 0.55); }
+.dark .bg-white\/50 { background-color: rgba(23, 24, 26, 0.60); }
+.dark .bg-white\/55 { background-color: rgba(23, 24, 26, 0.65); }
+.dark .bg-white\/58 { background-color: rgba(23, 24, 26, 0.68); }
+.dark .bg-white\/60 { background-color: rgba(23, 24, 26, 0.68); }
+.dark .bg-white\/62 { background-color: rgba(23, 24, 26, 0.70); }
+.dark .bg-white\/65 { background-color: rgba(23, 24, 26, 0.72); }
+.dark .bg-white\/70 { background-color: rgba(23, 24, 26, 0.74); }
+.dark .bg-white\/74 { background-color: rgba(23, 24, 26, 0.76); }
+.dark .bg-white\/75 { background-color: rgba(23, 24, 26, 0.78); }
+.dark .bg-white\/80 { background-color: rgba(23, 24, 26, 0.82); }
+.dark .bg-white\/84 { background-color: rgba(23, 24, 26, 0.85); }
+.dark .bg-white\/88 { background-color: rgba(23, 24, 26, 0.88); }
+.dark .bg-white\/90 { background-color: rgba(23, 24, 26, 0.90); }
+.dark .bg-white\/95 { background-color: rgba(23, 24, 26, 0.92); }
+.dark .hover\:bg-white\/50:hover { background-color: rgba(38, 40, 43, 0.60); }
+.dark .hover\:bg-white\/70:hover { background-color: rgba(38, 40, 43, 0.72); }
 
 /* Slate surfaces */
-.dark .bg-slate-50 { background-color: rgba(22, 22, 26, 0.60); }
-.dark .bg-slate-50\/50 { background-color: rgba(22, 22, 26, 0.30); }
-.dark .bg-slate-50\/55 { background-color: rgba(22, 22, 26, 0.32); }
-.dark .bg-slate-50\/60 { background-color: rgba(22, 22, 26, 0.36); }
-.dark .bg-slate-50\/80 { background-color: rgba(22, 22, 26, 0.50); }
-.dark .bg-slate-50\/90 { background-color: rgba(22, 22, 26, 0.55); }
-.dark .bg-slate-100 { background-color: rgba(36, 36, 42, 0.60); }
-.dark .bg-slate-100\/60 { background-color: rgba(36, 36, 42, 0.38); }
-.dark .bg-slate-100\/70 { background-color: rgba(36, 36, 42, 0.45); }
-.dark .hover\:bg-slate-50:hover { background-color: rgba(36, 36, 42, 0.40); }
-.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(36, 36, 42, 0.26); }
-.dark .hover\:bg-slate-100:hover { background-color: rgba(36, 36, 42, 0.55); }
-.dark .hover\:bg-slate-100\/60:hover { background-color: rgba(71, 85, 105, 0.48); }
-.dark .hover\:bg-slate-100\/70:hover { background-color: rgba(71, 85, 105, 0.52); }
-.dark .hover\:bg-slate-200:hover { background-color: rgba(71, 85, 105, 0.55); }
-.dark .bg-slate-200 { background-color: rgba(71, 85, 105, 0.45); }
+.dark .bg-slate-50 { background-color: rgba(23, 24, 26, 0.60); }
+.dark .bg-slate-50\/50 { background-color: rgba(23, 24, 26, 0.30); }
+.dark .bg-slate-50\/55 { background-color: rgba(23, 24, 26, 0.32); }
+.dark .bg-slate-50\/60 { background-color: rgba(23, 24, 26, 0.36); }
+.dark .bg-slate-50\/80 { background-color: rgba(23, 24, 26, 0.50); }
+.dark .bg-slate-50\/90 { background-color: rgba(23, 24, 26, 0.55); }
+.dark .bg-slate-100 { background-color: rgba(38, 40, 43, 0.60); }
+.dark .bg-slate-100\/60 { background-color: rgba(38, 40, 43, 0.38); }
+.dark .bg-slate-100\/70 { background-color: rgba(38, 40, 43, 0.45); }
+.dark .hover\:bg-slate-50:hover { background-color: rgba(38, 40, 43, 0.40); }
+.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(38, 40, 43, 0.26); }
+.dark .hover\:bg-slate-100:hover { background-color: rgba(38, 40, 43, 0.55); }
+.dark .hover\:bg-slate-100\/60:hover { background-color: rgba(79, 87, 95, 0.48); }
+.dark .hover\:bg-slate-100\/70:hover { background-color: rgba(79, 87, 95, 0.52); }
+.dark .hover\:bg-slate-200:hover { background-color: rgba(79, 87, 95, 0.55); }
+.dark .bg-slate-200 { background-color: rgba(79, 87, 95, 0.45); }
 
 /* Deep-dark backgrounds (sign-in buttons, countdown hero) */
-.dark .bg-slate-900 { background-color: rgb(2, 6, 23); }
+.dark .bg-slate-900 { background-color: rgb(13, 13, 15); }
 .dark .bg-slate-900\/20 { background-color: rgba(0, 0, 0, 0.40); }
 .dark .bg-slate-900\/40 { background-color: rgba(0, 0, 0, 0.55); }
 .dark .bg-slate-900\/60 { background-color: rgba(0, 0, 0, 0.70); }
-.dark .hover\:bg-slate-800:hover { background-color: rgb(15, 23, 42); }
+.dark .hover\:bg-slate-800:hover { background-color: rgb(28, 32, 37); }
 
 /* Text colors */
-.dark .text-slate-900 { color: #f1f5f9; }
-.dark .text-slate-800 { color: #e2e8f0; }
-.dark .text-slate-700 { color: #cbd5e1; }
-.dark .text-slate-600 { color: #94a3b8; }
-.dark .text-slate-500 { color: #94a3b8; }
-.dark .text-slate-400 { color: #64748b; }
-.dark .text-slate-300 { color: #475569; }
-.dark .text-slate-200 { color: #334155; }
-.dark .hover\:text-slate-500:hover { color: #cbd5e1; }
-.dark .hover\:text-slate-600:hover { color: #cbd5e1; }
-.dark .hover\:text-slate-700:hover { color: #e2e8f0; }
-.dark .hover\:text-slate-800:hover { color: #f1f5f9; }
-.dark .group-focus-within\:text-oker-500 { color: rgb(252, 176, 64); }
-.dark .group-hover\:text-slate-600 { color: #cbd5e1; }
+.dark .text-slate-900 { color: #F2F3F4; }
+.dark .text-slate-800 { color: #E4E6E8; }
+.dark .text-slate-700 { color: #CDD1D5; }
+.dark .text-slate-600 { color: #9AA1A9; }
+.dark .text-slate-500 { color: #9AA1A9; }
+.dark .text-slate-400 { color: #6E767F; }
+.dark .text-slate-300 { color: #4F575F; }
+.dark .text-slate-200 { color: #2C3137; }
+.dark .hover\:text-slate-500:hover { color: #CDD1D5; }
+.dark .hover\:text-slate-600:hover { color: #CDD1D5; }
+.dark .hover\:text-slate-700:hover { color: #E4E6E8; }
+.dark .hover\:text-slate-800:hover { color: #F2F3F4; }
+.dark .group-focus-within\:text-oker-500 { color: rgb(236, 183, 95); }
+.dark .group-hover\:text-slate-600 { color: #CDD1D5; }
 
 /* Borders */
-.dark .border-slate-50 { border-color: rgba(71, 85, 105, 0.20); }
-.dark .border-slate-100 { border-color: rgba(71, 85, 105, 0.28); }
-.dark .border-slate-200 { border-color: rgba(71, 85, 105, 0.38); }
-.dark .border-slate-300 { border-color: rgba(100, 116, 139, 0.45); }
-.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.20); }
-.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.28); }
-.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(71, 85, 105, 0.38); }
-.dark .border-white\/60 { border-color: rgba(148, 163, 184, 0.18); }
-.dark .border-white\/70 { border-color: rgba(148, 163, 184, 0.20); }
-.dark .border-white\/75 { border-color: rgba(148, 163, 184, 0.22); }
-.dark .border-white\/80 { border-color: rgba(148, 163, 184, 0.22); }
-.dark .border-white\/88 { border-color: rgba(148, 163, 184, 0.25); }
-.dark .border-white\/92 { border-color: rgba(148, 163, 184, 0.26); }
-.dark .hover\:border-slate-200:hover { border-color: rgba(71, 85, 105, 0.42); }
-.dark .hover\:border-white\/80:hover { border-color: rgba(148, 163, 184, 0.26); }
+.dark .border-slate-50 { border-color: rgba(79, 87, 95, 0.20); }
+.dark .border-slate-100 { border-color: rgba(79, 87, 95, 0.28); }
+.dark .border-slate-200 { border-color: rgba(79, 87, 95, 0.38); }
+.dark .border-slate-300 { border-color: rgba(110, 118, 127, 0.45); }
+.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.20); }
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.28); }
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.38); }
+.dark .border-white\/60 { border-color: rgba(154, 161, 169, 0.18); }
+.dark .border-white\/70 { border-color: rgba(154, 161, 169, 0.20); }
+.dark .border-white\/75 { border-color: rgba(154, 161, 169, 0.22); }
+.dark .border-white\/80 { border-color: rgba(154, 161, 169, 0.22); }
+.dark .border-white\/88 { border-color: rgba(154, 161, 169, 0.25); }
+.dark .border-white\/92 { border-color: rgba(154, 161, 169, 0.26); }
+.dark .hover\:border-slate-200:hover { border-color: rgba(79, 87, 95, 0.42); }
+.dark .hover\:border-white\/80:hover { border-color: rgba(154, 161, 169, 0.26); }
 
 /* Rings */
-.dark .ring-slate-100 { --tw-ring-color: rgba(71, 85, 105, 0.32); }
+.dark .ring-slate-100 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
 .dark .ring-white\/60 { --tw-ring-color: rgba(255, 255, 255, 0.05); }
-.dark .ring-white\/80 { --tw-ring-color: rgba(148, 163, 184, 0.22); }
-.dark .ring-oker-100 { --tw-ring-color: rgba(245, 158, 11, 0.30); }
+.dark .ring-white\/80 { --tw-ring-color: rgba(154, 161, 169, 0.22); }
+.dark .ring-oker-100 { --tw-ring-color: rgba(232, 163, 61, 0.30); }
 
 /* Oker accents */
-.dark .bg-oker-50 { background-color: rgba(245, 158, 11, 0.10); }
-.dark .bg-oker-50\/80 { background-color: rgba(245, 158, 11, 0.08); }
-.dark .bg-oker-100 { background-color: rgba(245, 158, 11, 0.18); }
-.dark .bg-oker-500\/15 { background-color: rgba(245, 158, 11, 0.14); }
-.dark .bg-oker-500\/10 { background-color: rgba(245, 158, 11, 0.10); }
-.dark .border-oker-100 { border-color: rgba(245, 158, 11, 0.28); }
-.dark .border-oker-100\/60 { border-color: rgba(245, 158, 11, 0.20); }
-.dark .border-oker-200 { border-color: rgba(245, 158, 11, 0.32); }
-.dark .border-oker-200\/70 { border-color: rgba(245, 158, 11, 0.26); }
-.dark .border-oker-500\/20 { border-color: rgba(245, 158, 11, 0.28); }
-.dark .text-oker-600 { color: rgb(252, 176, 64); }
-.dark .text-oker-700 { color: rgb(252, 176, 64); }
-.dark .text-oker-800 { color: rgb(254, 215, 170); }
-.dark .text-oker-900 { color: rgb(255, 237, 213); }
-.dark .hover\:bg-oker-50\/70:hover { background-color: rgba(245, 158, 11, 0.10); }
-.dark .hover\:bg-oker-100:hover { background-color: rgba(245, 158, 11, 0.24); }
+.dark .bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
+.dark .bg-oker-50\/80 { background-color: rgba(232, 163, 61, 0.08); }
+.dark .bg-oker-100 { background-color: rgba(232, 163, 61, 0.18); }
+.dark .bg-oker-500\/15 { background-color: rgba(232, 163, 61, 0.14); }
+.dark .bg-oker-500\/10 { background-color: rgba(232, 163, 61, 0.10); }
+.dark .border-oker-100 { border-color: rgba(232, 163, 61, 0.28); }
+.dark .border-oker-100\/60 { border-color: rgba(232, 163, 61, 0.20); }
+.dark .border-oker-200 { border-color: rgba(232, 163, 61, 0.32); }
+.dark .border-oker-200\/70 { border-color: rgba(232, 163, 61, 0.26); }
+.dark .border-oker-500\/20 { border-color: rgba(232, 163, 61, 0.28); }
+.dark .text-oker-600 { color: rgb(236, 183, 95); }
+.dark .text-oker-700 { color: rgb(236, 183, 95); }
+.dark .text-oker-800 { color: rgb(242, 220, 174); }
+.dark .text-oker-900 { color: rgb(248, 236, 212); }
+.dark .hover\:bg-oker-50\/70:hover { background-color: rgba(232, 163, 61, 0.10); }
+.dark .hover\:bg-oker-100:hover { background-color: rgba(232, 163, 61, 0.24); }
 
 /* Emerald / red / amber / blue / green status tints */
 .dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
 .dark .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.12); }
 .dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.14); }
 .dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.22); }
-.dark .bg-amber-50 { background-color: rgba(245, 158, 11, 0.14); }
-.dark .bg-amber-50\/80 { background-color: rgba(245, 158, 11, 0.14); }
-.dark .bg-amber-100 { background-color: rgba(245, 158, 11, 0.22); }
+.dark .bg-amber-50 { background-color: rgba(232, 163, 61, 0.14); }
+.dark .bg-amber-50\/80 { background-color: rgba(232, 163, 61, 0.14); }
+.dark .bg-amber-100 { background-color: rgba(232, 163, 61, 0.22); }
 .dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
 .dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.14); }
 .dark .border-emerald-100 { border-color: rgba(16, 185, 129, 0.30); }
 .dark .border-red-100 { border-color: rgba(239, 68, 68, 0.30); }
-.dark .border-amber-100 { border-color: rgba(245, 158, 11, 0.30); }
-.dark .border-amber-200 { border-color: rgba(245, 158, 11, 0.38); }
-.dark .border-amber-200\/70 { border-color: rgba(245, 158, 11, 0.30); }
+.dark .border-amber-100 { border-color: rgba(232, 163, 61, 0.30); }
+.dark .border-amber-200 { border-color: rgba(232, 163, 61, 0.38); }
+.dark .border-amber-200\/70 { border-color: rgba(232, 163, 61, 0.30); }
 .dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.30); }
 .dark .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.18); }
 .dark .hover\:bg-red-50\/70:hover { background-color: rgba(239, 68, 68, 0.16); }
@@ -1219,15 +1043,15 @@ html.dark {
   background:
     radial-gradient(
       ellipse 1000px 800px at 50% 30%,
-      rgba(245, 158, 11, 0.08) 0%,
+      rgba(232, 163, 61, 0.08) 0%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 700px 500px at 50% 95%,
-      rgba(217, 119, 6, 0.05) 0%,
+      rgba(201, 133, 31, 0.05) 0%,
       transparent 60%
     ),
-    linear-gradient(180deg, #fafbfc 0%, #f1f5f9 100%);
+    linear-gradient(180deg, #fafbfc 0%, #F2F3F4 100%);
 }
 
 /* === Dark login redesign — bewaard maar niet langer gebruikt ===
@@ -1238,15 +1062,15 @@ html.dark {
   background:
     radial-gradient(
       ellipse 900px 700px at 50% 38%,
-      rgba(245, 158, 11, 0.07) 0%,
+      rgba(232, 163, 61, 0.07) 0%,
       transparent 55%
     ),
     radial-gradient(
       ellipse 600px 500px at 50% 95%,
-      rgba(217, 119, 6, 0.04) 0%,
+      rgba(201, 133, 31, 0.04) 0%,
       transparent 55%
     ),
-    #0a0a0c;
+    #0D0D0F;
 }
 
 .panel-login-dark {
@@ -1279,9 +1103,9 @@ html.dark {
 }
 .control-input-dark:focus {
   background: rgba(255, 255, 255, 0.07);
-  border-color: rgba(245, 158, 11, 0.55);
+  border-color: rgba(232, 163, 61, 0.55);
   box-shadow:
-    0 0 0 4px rgba(245, 158, 11, 0.10),
+    0 0 0 4px rgba(232, 163, 61, 0.10),
     inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
@@ -1302,24 +1126,13 @@ html.dark {
    Saturate verlagen we ook iets — anders ziet de lichtere blur er
    te flets uit. */
 @media (max-width: 767px) {
-  .panel {
-    backdrop-filter: blur(20px) saturate(135%);
-    -webkit-backdrop-filter: blur(20px) saturate(135%);
-  }
-  .panel--scrolled {
-    backdrop-filter: blur(24px) saturate(150%);
-    -webkit-backdrop-filter: blur(24px) saturate(150%);
-  }
-  .surface-card {
-    backdrop-filter: blur(16px) saturate(140%);
-    -webkit-backdrop-filter: blur(16px) saturate(140%);
-  }
-  .surface-table {
-    backdrop-filter: blur(18px) saturate(145%);
-    -webkit-backdrop-filter: blur(18px) saturate(145%);
+  .panel,
+  .topbar {
+    backdrop-filter: blur(10px) saturate(140%);
+    -webkit-backdrop-filter: blur(10px) saturate(140%);
   }
   .glass-modal {
-    backdrop-filter: blur(22px) saturate(155%);
-    -webkit-backdrop-filter: blur(22px) saturate(155%);
+    backdrop-filter: blur(14px) saturate(150%);
+    -webkit-backdrop-filter: blur(14px) saturate(150%);
   }
 }

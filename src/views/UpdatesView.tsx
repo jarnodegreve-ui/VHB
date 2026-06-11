@@ -26,7 +26,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 key={cat}
                 onClick={() => setFilter(cat)}
                 className={cn(
-                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all",
+                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-[0.08em] transition-all",
                   filter === cat ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
@@ -47,7 +47,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
               : update.content;
 
             return (
-            <div key={update.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-[26px] relative overflow-hidden group duration-300">
+            <div key={update.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-3xl relative overflow-hidden group duration-300">
               <div className={cn(
                 "absolute top-0 left-0 w-1.5 h-full",
                 update.isUrgent ? "bg-red-600" :
@@ -70,7 +70,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                     </span>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-[0.08em]">
                   <Clock size={12} className="text-slate-300" />
                   {update.date}
                 </div>
@@ -84,7 +84,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                   <button
                     type="button"
                     onClick={() => toggleExpanded(update.id)}
-                    className="text-[10px] font-black text-oker-500 uppercase tracking-widest hover:text-oker-600 transition-colors flex items-center gap-2"
+                    className="text-[10px] font-black text-oker-500 uppercase tracking-[0.08em] hover:text-oker-600 transition-colors flex items-center gap-2"
                   >
                     {isExpanded ? 'Toon minder' : 'Lees meer'}
                     <ChevronRight size={14} className={cn("transition-transform", isExpanded && "rotate-90")} />
@@ -95,7 +95,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
           );
           })
         ) : (
-          <div className="lg:col-span-2 surface-card p-12 rounded-[26px] text-center">
+          <div className="lg:col-span-2 surface-card p-12 rounded-3xl text-center">
             <Info size={48} className="mx-auto text-slate-200 mb-4" />
             <p className="text-slate-400 font-bold">Geen updates gevonden in deze categorie.</p>
           </div>

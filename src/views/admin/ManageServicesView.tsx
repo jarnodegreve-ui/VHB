@@ -240,7 +240,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 </label>
               </>
             ) : (
-              <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
+              <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
                 Excel import admin-only
               </div>
             )}
@@ -275,17 +275,17 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         )}
       />
 
-      <div className="surface-table rounded-[28px] overflow-hidden">
+      <div className="surface-table rounded-3xl overflow-hidden">
         {/* Desktop Table View */}
         <div className="hidden md:block overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Dienst</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 1</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Acties</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 1</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 2</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 3</th>
+                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] text-right">Acties</th>
               </tr>
             </thead>
             <tbody>
@@ -329,7 +329,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               
               <div className="grid grid-cols-1 gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 1</span>
+                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 1</span>
                   <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
                     <Clock size={14} className="text-oker-500" />
                     {s.startTime} - {s.endTime}
@@ -338,7 +338,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
                 {s.startTime2 && (
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 2</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 2</span>
                     <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
                       <Clock size={14} className="text-oker-500" />
                       {s.startTime2} - {s.endTime2}
@@ -348,7 +348,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
                 {s.startTime3 && (
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Deel 3</span>
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 3</span>
                     <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
                       <Clock size={14} className="text-oker-500" />
                       {s.startTime3} - {s.endTime3}
@@ -378,7 +378,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         </div>
         <form onSubmit={handleSubmit} className="p-8 space-y-5">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Dienstnummer</label>
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Dienstnummer</label>
             <input
               type="text" required value={formData.serviceNumber}
               onChange={(e) => setFormData({...formData, serviceNumber: e.target.value})}
@@ -387,7 +387,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 1)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Starttijd (Deel 1)</label>
               <input
                 type="time" required value={formData.startTime}
                 onChange={(e) => setFormData({...formData, startTime: e.target.value})}
@@ -395,7 +395,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 1)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Eindtijd (Deel 1)</label>
               <input
                 type="time" required value={formData.endTime}
                 onChange={(e) => setFormData({...formData, endTime: e.target.value})}
@@ -406,7 +406,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 2)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Starttijd (Deel 2)</label>
               <input
                 type="time" value={formData.startTime2}
                 onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
@@ -414,7 +414,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 2)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Eindtijd (Deel 2)</label>
               <input
                 type="time" value={formData.endTime2}
                 onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
@@ -425,7 +425,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Starttijd (Deel 3)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Starttijd (Deel 3)</label>
               <input
                 type="time" value={formData.startTime3}
                 onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
@@ -433,7 +433,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Eindtijd (Deel 3)</label>
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Eindtijd (Deel 3)</label>
               <input
                 type="time" value={formData.endTime3}
                 onChange={(e) => setFormData({...formData, endTime3: e.target.value})}

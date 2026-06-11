@@ -14,7 +14,9 @@
 //   diensten ook zonder signaal. Gecachet per volledige URL (incl.
 //   ?driverId=&month=), dus per gebruiker/maand geïsoleerd.
 // - Overige /api/*: network-only (geen stale-data risico).
-const CACHE_NAME = 'vhb-portaal-v3';
+// v4: nieuwe huisstijl-assets (logo's/iconen) — oude caches met het vorige
+// logo worden bij activate opgeruimd, anders blijven die cache-first hangen.
+const CACHE_NAME = 'vhb-portaal-v4';
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';

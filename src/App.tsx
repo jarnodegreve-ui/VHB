@@ -16,7 +16,6 @@ import {
   ChevronRight,
   ChevronUp,
   ChevronDown,
-  User as UserIcon,
   Info,
   FileText,
   Download,
@@ -43,6 +42,8 @@ import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveReques
 import { MOCK_DIVERSIONS, MOCK_SHIFTS, MOCK_UPDATES, MOCK_USERS, MOCK_SERVICES } from './constants';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
+import { fetchCoverageGaps, type DayGap } from './lib/coverage';
+import { isoDate } from './lib/availability';
 import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
@@ -150,6 +151,10 @@ export default function App() {
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  // Dekkingsgaten (vandaag + 6 dagen = 7-daags venster) voor het Operations
+  // Center van planner/admin. null = (nog) niet geladen — de cockpit toont
+  // dan 'onbekend' i.p.v. een vals-groen 'volledig gedekt'.
+  const [coverageDays, setCoverageDays] = useState<DayGap[] | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   // Eerste data-fetch nog niet rond? Views kunnen dit gebruiken om
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
@@ -198,6 +203,10 @@ export default function App() {
         ? { driverId: String(currentUser.id) }
         : undefined;
       fetchPlanning(undefined, planningFilter);
+      // Dekking beweegt mee met de planning (Operations Center).
+      if (currentUser && currentUser.role !== 'chauffeur') {
+        refreshCoverageGaps();
+      }
     },
   });
 
@@ -245,17 +254,32 @@ export default function App() {
         return;
       }
 
-      const { data } = await supabase.auth.getSession();
-      if (!isMounted) return;
+      // try/finally: wat er ook misgaat (netwerk, Supabase-lock-hang in een
+      // ander tabblad, API-fout), de app mag NOOIT eeuwig op 'Sessie
+      // laden...' blijven staan — dan liever terugvallen op het loginscherm.
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (!isMounted) return;
 
-      setSession(data.session);
-      if (data.session) {
-        await initializeAuthenticatedApp(data.session.access_token);
+        setSession(data.session);
+        if (data.session) {
+          await initializeAuthenticatedApp(data.session.access_token);
+        }
+      } catch (error) {
+        console.error('Auth bootstrap error:', error);
+      } finally {
+        if (isMounted) setAuthReady(true);
       }
-      setAuthReady(true);
     };
 
     bootstrap();
+
+    // Watchdog: mocht getSession() tóch blijven hangen (bekend Supabase-
+    // fenomeen met meerdere open tabbladen), forceer dan na 8s een render
+    // zodat de gebruiker kan inloggen i.p.v. naar een spinner te staren.
+    const watchdog = window.setTimeout(() => {
+      if (isMounted) setAuthReady(true);
+    }, 8000);
 
     const { data: authListener } = supabase?.auth.onAuthStateChange(async (event, nextSession) => {
       if (!isMounted) return;
@@ -299,6 +323,7 @@ export default function App() {
 
     return () => {
       isMounted = false;
+      window.clearTimeout(watchdog);
       authListener?.subscription.unsubscribe();
     };
   }, []);
@@ -366,10 +391,10 @@ export default function App() {
     return data as User;
   };
 
-  const initializeAuthenticatedApp = async (accessToken: string) => {
+  /** Achtergrond-dataload ná het profiel: blokkeert de eerste render niet —
+   *  de views tonen intussen skeletons (isInitialLoad). */
+  const loadAppData = async (appUser: User, accessToken: string) => {
     try {
-      setIsLoading(true);
-      const appUser = await fetchCurrentUser(accessToken);
       // Chauffeur: enkel eigen shifts ophalen (50× minder data op mobile).
       // Planner/admin: alle shifts (nodig voor beheer-views).
       const planningFilter = appUser.role === 'chauffeur' ? { driverId: String(appUser.id) } : undefined;
@@ -384,12 +409,24 @@ export default function App() {
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrix(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningCodes(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrixHistory(accessToken)] : []),
+        ...(appUser.role === 'planner' || appUser.role === 'admin' ? [refreshCoverageGaps()] : []),
         ...(appUser.role === 'admin' ? [fetchActivityLog(accessToken)] : []),
       ]);
     } catch (error) {
-      console.error('Error initializing app:', error);
+      console.error('Error loading app data:', error);
     } finally {
-      setIsLoading(false);
+      setIsInitialLoad(false);
+    }
+  };
+
+  const initializeAuthenticatedApp = async (accessToken: string) => {
+    // Progressieve boot: alleen het profiel (één snelle call) blokkeert de
+    // eerste render; alle overige data streamt op de achtergrond binnen.
+    try {
+      const appUser = await fetchCurrentUser(accessToken);
+      void loadAppData(appUser, accessToken);
+    } catch (error) {
+      console.error('Error initializing app:', error);
       setIsInitialLoad(false);
     }
   };
@@ -521,6 +558,19 @@ export default function App() {
     }
   };
 
+  const refreshCoverageGaps = async () => {
+    try {
+      const from = isoDate(new Date());
+      const to = isoDate(new Date(Date.now() + 6 * 86400000));
+      const res = await fetchCoverageGaps(from, to);
+      setCoverageDays(res.days);
+    } catch (error) {
+      // State blijft null (of houdt de vorige succesvolle fetch) — de
+      // cockpit toont dan 'onbekend' i.p.v. vals-groen.
+      console.error('Error fetching coverage gaps:', error);
+    }
+  };
+
   const fetchActivityLog = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/activity', {}, accessToken);
@@ -582,7 +632,9 @@ export default function App() {
   // Wachtende beslissingen voor planner/admin (sidebar badges op
   // Verlofbeheer en Dienstruil-tab).
   const pendingLeaveCount = leaveRequests.filter((r) => r.status === 'pending').length;
-  const pendingSwapsCount = swaps.filter((s) => s.status === 'pending').length;
+  // Zelfde definitie als de cockpit: 'accepted' wacht óók op de planner
+  // (validatie), dus telt mee als open werkvoorraad.
+  const pendingSwapsCount = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted').length;
 
   const saveLeave = async (newLeave: LeaveRequest[]) => {
     try {
@@ -812,7 +864,15 @@ export default function App() {
   };
 
   if (!authReady) {
-    return <div className="min-h-screen bg-oker-50 flex items-center justify-center text-slate-600 font-bold">Sessie laden...</div>;
+    return (
+      <div className="login-bg-light min-h-screen flex flex-col items-center justify-center gap-5">
+        <img src="/vhb-logo.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-14 w-auto select-none" draggable={false} />
+        <div className="flex items-center gap-2.5 text-slate-500">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+          <span className="text-[13px] font-medium">Sessie laden…</span>
+        </div>
+      </div>
+    );
   }
 
   // Print-modus: kale weergave zonder sidebar/header. Vereist authenticated
@@ -877,6 +937,13 @@ export default function App() {
     'beheer-debug': { title: 'Systeem Status', subtitle: 'Controleer koppelingen, tabellen en health checks.' },
   };
   const currentMeta = viewMeta[resolvedCurrentView] || { title: 'VHB Portaal', subtitle: 'Interne operationele omgeving.' };
+  const userInitials = currentUser.name
+    .split(' ')
+    .filter(Boolean)
+    .map((part) => part[0])
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || '?';
 
   return (
     <>
@@ -892,19 +959,19 @@ export default function App() {
         email={currentUser?.email || session?.user?.email || ''}
       />
       <AnimatePresence>
-        {isLoading && (
+        {isLoading && !isInitialLoad && (
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px]"
           >
-            <div className="rounded-[28px] border border-white/60 bg-white/95 px-6 py-5 shadow-2xl">
+            <div className="rounded-2xl border border-slate-200/80 bg-white/95 px-5 py-4 shadow-xl">
               <div className="flex items-center gap-4">
-                <div className="h-8 w-8 animate-spin rounded-full border-4 border-slate-200 border-t-oker-500" />
+                <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
                 <div>
-                  <p className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Bezig</p>
-                  <p className="text-sm font-bold text-slate-800">Gegevens verwerken...</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Bezig</p>
+                  <p className="text-sm font-semibold text-slate-800">Gegevens verwerken...</p>
                 </div>
               </div>
             </div>
@@ -925,93 +992,97 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* Sidebar */}
+      {/* Sidebar — vaste rail, full-height, haarlijn rechts */}
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark ios-soft-panel lg:m-3 lg:mr-0 rounded-none lg:rounded-[28px] flex flex-col z-50 transition-transform duration-500 transform lg:w-[19rem] lg:max-w-none lg:relative lg:translate-x-0 overflow-hidden",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.28, 0.64, 1)' }}
       >
-        <div className="pointer-events-none absolute inset-x-5 top-0 h-20 rounded-b-[28px] bg-white/30 blur-2xl opacity-80" />
-        <div className="pointer-events-none absolute -right-10 top-20 h-40 w-40 rounded-full bg-oker-200/18 blur-3xl" />
-        <div className="shrink-0 p-6 flex items-center justify-center border-b fine-divider relative z-10 text-center">
+        <div className="shrink-0 px-5 pt-5 pb-4 flex items-center justify-center relative text-center">
           <button
             type="button"
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
-            className="w-full rounded-2xl py-1 transition-all active:scale-[0.98] hover:opacity-80"
+            className="rounded-xl py-1 px-2 transition-all active:scale-[0.98] hover:opacity-80"
             title="Naar dashboard"
           >
-            {/* VHB-logo — vol-kleur variant in beide modes, zelfde als op
-                het login-scherm. Aspect-ratio van de SVG = ~1.66 (539x324). */}
+            {/* Officieel VHB-logo (huisstijl): zwartetekst op licht,
+                wittekst in dark mode. Strak bijgesneden SVG, ratio ~2.15. */}
             <img
               src="/vhb-logo.svg"
               alt="VHB — Van Hoorebeke & Zoon"
-              className="h-20 w-auto mx-auto select-none"
+              className="h-20 w-auto mx-auto select-none block dark:hidden"
+              draggable={false}
+            />
+            <img
+              src="/vhb-logo-wit.svg"
+              alt="VHB — Van Hoorebeke & Zoon"
+              className="h-20 w-auto mx-auto select-none hidden dark:block"
               draggable={false}
             />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
             aria-label="Menu sluiten"
-            className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 flex items-center justify-center text-slate-600 hover:text-slate-900 bg-white/60 hover:bg-white/90 rounded-2xl shadow-sm transition-colors lg:hidden"
+            className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 rounded-xl transition-colors lg:hidden"
           >
-            <X size={20} />
+            <X size={18} />
           </button>
         </div>
 
-        <nav className="flex-1 min-h-0 px-4 py-5 space-y-1.5 overflow-y-auto overscroll-contain">
+        <nav className="flex-1 min-h-0 px-3 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
           <NavItem 
-            icon={<LayoutDashboard size={20} />} 
+            icon={<LayoutDashboard size={18} />} 
             label="Dashboard" 
             active={currentView === 'dashboard'} 
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
-            icon={<Calendar size={20} />} 
+            icon={<Calendar size={18} />} 
             label="Mijn Rooster" 
             active={currentView === 'rooster'} 
             onClick={() => { setCurrentView('rooster'); setIsSidebarOpen(false); }} 
           />
           <NavItem 
-            icon={<MapPin size={20} />} 
+            icon={<MapPin size={18} />} 
             label="Omleidingen" 
             active={currentView === 'omleidingen'} 
             onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
           />
           <NavItem
-            icon={<FileText size={20} />}
+            icon={<FileText size={18} />}
             label="Ritblaadjes"
             active={currentView === 'ritblaadjes'}
             onClick={() => { setCurrentView('ritblaadjes'); setIsSidebarOpen(false); }}
           />
           <NavItem
-            icon={<Phone size={20} />}
+            icon={<Phone size={18} />}
             label="Contactlijst"
             active={currentView === 'contacten'}
             onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }}
           />
           <NavItem 
-            icon={<Bell size={20} />} 
+            icon={<Bell size={18} />} 
             label="Updates" 
             active={currentView === 'updates'} 
             onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
           />
           <NavItem
-            icon={<RotateCcw size={20} />}
+            icon={<RotateCcw size={18} />}
             label="Dienstruil"
             active={currentView === 'ruil-verzoeken'}
             onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }}
             badge={isPlanner ? pendingSwapsCount : undefined}
           />
           <NavItem
-            icon={<Users size={20} />}
+            icon={<Users size={18} />}
             label="Maandrooster"
             active={currentView === 'bezetting'}
             onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
           />
           <NavItem
-            icon={<Calendar size={20} />}
+            icon={<Calendar size={18} />}
             label="Verlof"
             active={currentView === 'verlof'}
             onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }}
@@ -1020,64 +1091,64 @@ export default function App() {
 
           {isPlanner && (
             <>
-              <div className="mt-5 mb-2 mx-3 border-t border-slate-200/50 pt-4 pb-1 px-1 text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">Beheer</div>
+              <div className="mt-6 mb-1.5 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Beheer</div>
               <NavItem
-                icon={<AlertTriangle size={20} />}
+                icon={<AlertTriangle size={18} />}
                 label="Openstaande diensten"
                 active={currentView === 'dekking'}
                 onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }}
               />
               <NavItem
-                icon={<Calendar size={20} />}
+                icon={<Calendar size={18} />}
                 label="Verlofbeheer"
                 active={currentView === 'verlof-beheer'}
                 onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }}
                 badge={pendingLeaveCount}
               />
               <NavItem
-                icon={<Calendar size={20} />}
+                icon={<Calendar size={18} />}
                 label="Verlof-kalender"
                 active={currentView === 'verlof-kalender'}
                 onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }}
               />
               <NavItem 
-                icon={<Settings size={20} />} 
+                icon={<Settings size={18} />} 
                 label="Beheer Roosters" 
                 active={currentView === 'beheer-roosters'} 
                 onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
-                icon={<FileText size={20} />} 
+                icon={<FileText size={18} />} 
                 label="Planning Overzicht" 
                 active={currentView === 'planning-matrix'} 
                 onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
-                icon={<Settings size={20} />} 
+                icon={<Settings size={18} />} 
                 label="Planningscodes" 
                 active={currentView === 'planning-codes'} 
                 onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
-                icon={<Plus size={20} />} 
+                icon={<Plus size={18} />} 
                 label="Beheer Updates" 
                 active={currentView === 'beheer-updates'} 
                 onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
-                icon={<MapIcon size={20} />} 
+                icon={<MapIcon size={18} />} 
                 label="Beheer Omleidingen" 
                 active={currentView === 'beheer-omleidingen'} 
                 onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} 
               />
               <NavItem
-                icon={<Bus size={20} />}
+                icon={<Bus size={18} />}
                 label="Dienstoverzicht"
                 active={currentView === 'dienstoverzicht'}
                 onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }}
               />
               <NavItem
-                icon={<Bus size={20} />}
+                icon={<Bus size={18} />}
                 label="Beheer Dienstoverzicht"
                 active={currentView === 'beheer-dienstoverzicht'}
                 onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }}
@@ -1087,21 +1158,21 @@ export default function App() {
 
           {isAdmin && (
             <>
-              <div className="mt-5 mb-2 mx-3 border-t border-slate-200/50 pt-4 pb-1 px-1 text-[10px] font-black text-slate-700 uppercase tracking-[0.2em]">Admin</div>
+              <div className="mt-6 mb-1.5 px-3 text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Admin</div>
               <NavItem 
-                icon={<Users size={20} />} 
+                icon={<Users size={18} />} 
                 label="Gebruikers" 
                 active={currentView === 'gebruikers'} 
                 onClick={() => { setCurrentView('gebruikers'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
-                icon={<Activity size={20} />} 
+                icon={<Activity size={18} />} 
                 label="Activiteit" 
                 active={currentView === 'activiteit'} 
                 onClick={() => { setCurrentView('activiteit'); setIsSidebarOpen(false); }} 
               />
               <NavItem 
-                icon={<Activity size={20} />} 
+                icon={<Activity size={18} />} 
                 label="Systeem Status" 
                 active={currentView === 'beheer-debug'} 
                 onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} 
@@ -1110,40 +1181,40 @@ export default function App() {
           )}
         </nav>
 
-        <div className="shrink-0 p-4 border-t fine-divider space-y-2">
+        <div className="shrink-0 p-3 border-t fine-divider space-y-0.5">
           {/* User profile card */}
-          <div className="flex items-center gap-3 px-3 py-2.5 rounded-2xl bg-white/40">
-            <div className="w-8 h-8 rounded-xl bg-oker-100 flex items-center justify-center text-oker-700 shrink-0">
-              <UserIcon size={16} />
+          <div className="flex items-center gap-2.5 px-3 py-2 mb-1.5 rounded-xl bg-slate-100/60">
+            <div className="w-8 h-8 rounded-lg bg-oker-100 flex items-center justify-center text-oker-700 shrink-0 text-[11px] font-bold">
+              {userInitials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-bold text-slate-800 truncate leading-tight">{currentUser.name}</p>
-              <p className="text-[11px] text-slate-600 font-semibold uppercase tracking-wide">{currentUser.role}</p>
+              <p className="text-[13px] font-semibold text-slate-800 truncate leading-tight">{currentUser.name}</p>
+              <p className="text-[10px] text-slate-500 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
             </div>
           </div>
           <button
             onClick={toggleTheme}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
           >
-            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+            <span className="text-slate-400 shrink-0">
               {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
             </span>
             <span>{theme === 'light' ? 'Donkere modus' : 'Lichte modus'}</span>
           </button>
           <button
             onClick={() => setShowChangePassword(true)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-oker-600 hover:bg-oker-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
           >
-            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+            <span className="text-slate-400 shrink-0">
               <KeyRound size={16} />
             </span>
             <span>Wachtwoord wijzigen</span>
           </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-2xl transition-all duration-200 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
           >
-            <span className="w-8 h-8 rounded-xl bg-white/50 flex items-center justify-center text-slate-500 shrink-0">
+            <span className="text-slate-400 shrink-0">
               <LogOut size={16} />
             </span>
             <span>Uitloggen</span>
@@ -1163,69 +1234,81 @@ export default function App() {
             setIsScrolled((current) => (current === next ? current : next));
           }}
         >
-          {/* Sticky header — kleeft aan top van scroll-area */}
-          <div className="sticky top-0 z-30 -mx-4 md:-mx-7 px-4 md:px-7 pt-3 pb-3 pointer-events-none">
-            <header className={cn(
-              "pointer-events-auto mx-auto w-full max-w-[1360px] rounded-[24px] panel ios-soft-panel flex items-center justify-between px-5 md:px-6 py-4 transition-shadow duration-500",
-              isScrolled && "panel--scrolled shadow-[0_10px_30px_rgba(15,23,42,0.08)] ring-1 ring-white/60"
-            )}>
-              <div className="flex items-center gap-3">
-                <button
-                  onClick={() => setIsSidebarOpen(true)}
-                  className="p-2 text-slate-400 hover:bg-slate-100/70 rounded-xl lg:hidden transition-colors"
-                >
-                  <Menu size={22} />
-                </button>
-                <div>
-                  <h2 className="section-title text-xl md:text-2xl font-black tracking-tight text-slate-900 leading-tight">
-                    {currentMeta.title}
-                  </h2>
-                  <p className="hidden md:block text-xs font-medium text-slate-400 mt-0.5 max-w-xl">{currentMeta.subtitle}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-emerald-50/80 border border-emerald-100">
-                  <div className="h-2 w-2 rounded-full bg-emerald-500" />
-                  <p className="text-xs font-semibold text-emerald-700">Online</p>
-                </div>
-                <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-100">
-                  <div className="w-9 h-9 bg-oker-50 rounded-xl flex items-center justify-center text-oker-600 border border-oker-100/60">
-                    <UserIcon size={17} />
+          {/* Sticky topbar — full-width werkbalk met haarlijn-onderrand */}
+          <div className="sticky top-0 z-30 -mx-4 md:-mx-7 mb-5">
+            <header className={cn("topbar px-4 md:px-7", isScrolled && "topbar--scrolled")}>
+              <div className="mx-auto flex w-full max-w-[1360px] items-center justify-between gap-3 py-2.5">
+                <div className="flex items-center gap-2 min-w-0">
+                  <button
+                    onClick={() => setIsSidebarOpen(true)}
+                    aria-label="Menu openen"
+                    className="p-2 -ml-1 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg lg:hidden transition-colors"
+                  >
+                    <Menu size={18} />
+                  </button>
+                  <div className="min-w-0">
+                    <h2 className="text-[15px] font-bold tracking-tight text-slate-900 leading-tight truncate">
+                      {currentMeta.title}
+                    </h2>
+                    <p className="hidden md:block text-[11.5px] font-normal text-slate-500 mt-px max-w-xl truncate">{currentMeta.subtitle}</p>
                   </div>
-                  <div className="text-left">
-                    <p className="text-sm font-bold text-slate-800 leading-tight">{currentUser.name}</p>
-                    <p className="text-[10px] text-slate-400 uppercase tracking-wide">{currentUser.role}</p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsCommandPaletteOpen(true)}
+                    className="hidden md:flex items-center gap-2 rounded-lg border border-slate-200/90 bg-white/70 pl-2.5 pr-1.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors"
+                  >
+                    <Search size={13} />
+                    <span>Zoeken</span>
+                    <kbd className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">⌘K</kbd>
+                  </button>
+                  <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50/80 border border-emerald-100">
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    <p className="text-[11px] font-semibold text-emerald-700">Online</p>
+                  </div>
+                  <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200/80">
+                    <div className="w-8 h-8 bg-oker-100 rounded-lg flex items-center justify-center text-oker-700 text-[11px] font-bold">
+                      {userInitials}
+                    </div>
+                    <div className="text-left">
+                      <p className="text-[13px] font-semibold text-slate-800 leading-tight">{currentUser.name}</p>
+                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
+                    </div>
                   </div>
                 </div>
               </div>
             </header>
-            {/* Soft fade-out onder de header zodat content er rustig onder verdwijnt */}
-            <div className="h-2 -mt-px bg-gradient-to-b from-transparent to-transparent" />
           </div>
           <AnimatePresence mode="wait">
             <motion.div
               key={resolvedCurrentView}
-              initial={{ opacity: 0, y: 18, scale: 0.985 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -12, scale: 0.99 }}
-              transition={{ duration: 0.42, ease: [0.22, 1, 0.36, 1] }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
               className="mx-auto w-full max-w-[1360px]"
             >
               {resolvedCurrentView === 'dashboard' && (
-                <div className="space-y-8">
-                  {(currentUser?.role === 'planner' || currentUser?.role === 'admin') && (
-                    <PlannerDashboardWidgets
-                      leaveRequests={leaveRequests}
-                      swaps={swaps}
-                      matrixHistory={planningMatrixHistory}
-                      diversionsCount={diversions.length}
-                      users={users}
-                      onNavigate={(view) => setCurrentView(view)}
-                      isInitialLoad={isInitialLoad}
-                    />
-                  )}
+                isPlanner ? (
+                  /* Planner/admin: Operations Center — één operationele cockpit
+                     i.p.v. een dubbel dashboard. */
+                  <PlannerDashboardWidgets
+                    currentUser={currentUser!}
+                    users={users}
+                    shifts={shifts}
+                    diversions={diversions}
+                    updates={updates}
+                    leaveRequests={leaveRequests}
+                    swaps={swaps}
+                    matrixHistory={planningMatrixHistory}
+                    activityLog={activityLog}
+                    coverageDays={coverageDays}
+                    onNavigate={(view) => setCurrentView(view)}
+                    isInitialLoad={isInitialLoad}
+                  />
+                ) : (
                   <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />
-                </div>
+                )
               )}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />}
@@ -1238,6 +1321,7 @@ export default function App() {
                   fetchPlanningMatrix(),
                   fetchPlanning(),
                   fetchPlanningMatrixHistory(),
+                  refreshCoverageGaps(),
                   ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
                 ]);
               }} />}

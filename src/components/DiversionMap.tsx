@@ -12,7 +12,7 @@ L.Icon.Default.mergeOptions({
 });
 
 export function DiversionMap({ coordinates, severity }: { coordinates: [number, number][]; severity: 'low' | 'medium' | 'high' }) {
-  const color = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#f59e0b' : '#3b82f6';
+  const color = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#E8A33D' : '#3b82f6';
 
   return (
     <MapContainer

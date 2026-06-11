@@ -47,7 +47,7 @@ export function MeshGradient({
           Alle opacities heel laag voor een whispered effect. */}
       <g filter={`url(#${filterId})`}>
         {/* Soft oker — warm linksboven, drift naar midden */}
-        <circle r="32" fill="rgba(245, 158, 11, 0.22)">
+        <circle r="32" fill="rgba(232, 163, 61, 0.22)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="20;38;28;20" dur="22s" repeatCount="indefinite" />
@@ -58,8 +58,8 @@ export function MeshGradient({
           {reducedMotion && <><animate attributeName="cx" values="20" dur="0s" fill="freeze" /><animate attributeName="cy" values="22" dur="0s" fill="freeze" /></>}
         </circle>
 
-        {/* Licht amber (oker-400 #fbbf24) — zachte diepte rechtsonder */}
-        <circle r="32" fill="rgba(251, 191, 36, 0.18)">
+        {/* Licht amber (oker-400 #ECB75F) — zachte diepte rechtsonder */}
+        <circle r="32" fill="rgba(236, 183, 95, 0.18)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="82;72;78;82" dur="26s" repeatCount="indefinite" />
@@ -70,8 +70,8 @@ export function MeshGradient({
           {reducedMotion && <><animate attributeName="cx" values="82" dur="0s" fill="freeze" /><animate attributeName="cy" values="78" dur="0s" fill="freeze" /></>}
         </circle>
 
-        {/* Soft cream (oker-100 #fef3c7) — lichte warmth rechtsboven */}
-        <circle r="28" fill="rgba(254, 243, 199, 0.30)">
+        {/* Soft cream (oker-100 #F8ECD4) — lichte warmth rechtsboven */}
+        <circle r="28" fill="rgba(248, 236, 212, 0.30)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="80;72;86;80" dur="28s" repeatCount="indefinite" />
@@ -84,7 +84,7 @@ export function MeshGradient({
 
         {/* Lichte slate-anker — zacht koel tegenwicht, voelt nu meer als
             een schaduw dan een blob */}
-        <circle r="20" fill="rgba(100, 116, 139, 0.08)">
+        <circle r="20" fill="rgba(110, 118, 127, 0.08)">
           {!reducedMotion && (
             <>
               <animate attributeName="cx" values="30;60;40;30" dur="32s" repeatCount="indefinite" />

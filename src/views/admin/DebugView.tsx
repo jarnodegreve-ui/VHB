@@ -150,12 +150,12 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       {healthData && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="surface-card p-6 rounded-[32px]">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Supabase Status</h4>
+            <div className="surface-card p-6 rounded-3xl">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] mb-4">Supabase Status</h4>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-sm font-bold text-slate-600">Configuratie:</span>
-                  <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', healthData.supabase === 'configured' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500')}>
+                  <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', healthData.supabase === 'configured' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500')}>
                     {healthData.supabase}
                   </span>
                 </div>
@@ -170,14 +170,14 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
               </div>
             </div>
 
-            <div className="surface-card p-6 rounded-[32px]">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Tabel Status</h4>
+            <div className="surface-card p-6 rounded-3xl">
+              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] mb-4">Tabel Status</h4>
               <div className="space-y-3">
                 {Object.entries(healthData.tables || {}).map(([name, status]: [string, any]) => (
                   <div key={name} className="flex flex-col gap-1">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-bold text-slate-600 capitalize">{name}:</span>
-                      <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest', status === 'OK' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500')}>
+                      <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', status === 'OK' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500')}>
                         {status === 'OK' ? 'OK' : 'ERROR'}
                       </span>
                     </div>
@@ -188,14 +188,14 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             </div>
           </div>
 
-          <div className="bg-slate-900 p-6 rounded-[32px] text-slate-300 font-mono text-xs overflow-auto max-h-64">
-            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-widest mb-4">Raw Health Data</h4>
+          <div className="bg-slate-900 p-6 rounded-3xl text-slate-300 font-mono text-xs overflow-auto max-h-64">
+            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.08em] mb-4">Raw Health Data</h4>
             <pre>{JSON.stringify(healthData, null, 2)}</pre>
           </div>
         </div>
       )}
 
-      <div className="surface-card p-8 rounded-[28px]">
+      <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-violet-500 text-white rounded-2xl shadow-lg shadow-violet-500/20">
             <FlaskConical size={24} />
@@ -224,7 +224,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       </div>
 
-      <div className="bg-oker-50 p-8 rounded-[28px] border border-oker-100">
+      <div className="bg-oker-50 p-8 rounded-3xl border border-oker-100">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-oker-500 text-white rounded-2xl shadow-lg shadow-oker-500/20">
             <Activity size={24} />

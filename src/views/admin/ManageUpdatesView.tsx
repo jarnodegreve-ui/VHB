@@ -22,7 +22,7 @@ function Input({
 }) {
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">{label}</label>
+      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">{label}</label>
       {type === 'select' ? (
         <select value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60">
           {options?.map((option) => (
@@ -125,7 +125,7 @@ export function ManageUpdatesView({
   return (
     <PageShell>
       <PageHeader eyebrow="Beheer" title="Beheer Updates" />
-      <div className="surface-card p-6 md:p-8 rounded-[32px]">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-emerald-500" />
           {editingId ? 'Update Bewerken' : 'Nieuwe Update Publiceren'}
@@ -143,13 +143,13 @@ export function ManageUpdatesView({
                   checked={updateForm.isUrgent}
                   onChange={(e) => setUpdateForm({ ...updateForm, isUrgent: e.target.checked })}
                 />
-                <label htmlFor="isUrgent" className="text-sm font-black text-red-700 uppercase tracking-widest cursor-pointer flex items-center gap-2">
+                <label htmlFor="isUrgent" className="text-sm font-black text-red-700 uppercase tracking-[0.08em] cursor-pointer flex items-center gap-2">
                   <AlertTriangle size={16} /> Markeer als DRINGEND (verstuurt automatische e-mail)
                 </label>
               </div>
             ) : (
               <div>
-                <p className="text-sm font-black uppercase tracking-widest text-red-700 flex items-center gap-2">
+                <p className="text-sm font-black uppercase tracking-[0.08em] text-red-700 flex items-center gap-2">
                   <AlertTriangle size={16} /> Dringende verzending admin-only
                 </p>
                 <p className="mt-2 text-sm font-medium text-red-700/80">
@@ -160,7 +160,7 @@ export function ManageUpdatesView({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">Inhoud van het bericht</label>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] mb-3">Inhoud van het bericht</label>
             <textarea
               className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
               placeholder="Schrijf hier het bericht voor de chauffeurs..."
@@ -174,7 +174,7 @@ export function ManageUpdatesView({
               type="submit"
               disabled={isPublishing}
               className={cn(
-                'w-full font-black px-8 py-4 rounded-2xl transition-all shadow-xl uppercase tracking-widest text-xs active:scale-95',
+                'w-full font-black px-8 py-4 rounded-2xl transition-all shadow-xl uppercase tracking-[0.08em] text-xs active:scale-95',
                 isPublishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20'
               )}
             >
@@ -184,7 +184,7 @@ export function ManageUpdatesView({
               <button
                 type="button"
                 onClick={handleCancelEdit}
-                className="w-full rounded-2xl border border-white/70 bg-white/55 px-8 py-4 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:bg-white/80 sm:w-auto"
+                className="w-full rounded-2xl border border-white/70 bg-white/55 px-8 py-4 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-all hover:bg-white/80 sm:w-auto"
               >
                 Annuleren
               </button>
@@ -193,7 +193,7 @@ export function ManageUpdatesView({
         </form>
       </div>
 
-      <div className="surface-card p-6 md:p-8 rounded-[32px]">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <div className="flex items-center justify-between gap-4">
           <div>
             <h3 className="text-lg font-black tracking-tight">Bestaande Updates</h3>
@@ -201,24 +201,24 @@ export function ManageUpdatesView({
               Beheer gepubliceerde berichten en verwijder updates die niet meer zichtbaar mogen zijn.
             </p>
           </div>
-          <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">
+          <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
             {updates.length} zichtbaar
           </div>
         </div>
 
         <div className="mt-6 space-y-3">
           {updates.length > 0 ? updates.map((update) => (
-            <div key={update.id} className="rounded-[24px] border border-white/70 bg-white/45 p-5">
+            <div key={update.id} className="rounded-3xl border border-white/70 bg-white/45 p-5">
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={cn(
-                      'rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-widest',
+                      'rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em]',
                       update.isUrgent ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-white/80 text-slate-500 border border-white/70'
                     )}>
                       {update.isUrgent ? 'Dringend' : update.category}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-widest text-slate-400">
+                    <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-[0.08em] text-slate-400">
                       <CalendarDays size={13} />
                       {update.date}
                     </span>
@@ -233,14 +233,14 @@ export function ManageUpdatesView({
                     type="button"
                     onClick={() => setHistoryUpdate(update)}
                     title="Wijzigingsgeschiedenis"
-                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black uppercase tracking-widest text-slate-500 transition-all hover:text-slate-800"
+                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-all hover:text-slate-800"
                   >
                     <History size={14} />
                   </button>
                   <button
                     type="button"
                     onClick={() => handleEdit(update)}
-                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest text-slate-600 transition-all hover:text-oker-600"
+                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-600 transition-all hover:text-oker-600"
                   >
                     <Pencil size={14} />
                     Bewerk
@@ -250,7 +250,7 @@ export function ManageUpdatesView({
                     onClick={() => handleDelete(update.id)}
                     disabled={deletingId === update.id}
                     className={cn(
-                      'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-widest transition-all',
+                      'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] transition-all',
                       deletingId === update.id
                         ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
                         : 'glass-button text-red-500 hover:text-red-600'
@@ -263,7 +263,7 @@ export function ManageUpdatesView({
               </div>
             </div>
           )) : (
-            <div className="rounded-[24px] border border-white/70 bg-white/45 p-6 text-sm font-medium text-slate-500">
+            <div className="rounded-3xl border border-white/70 bg-white/45 p-6 text-sm font-medium text-slate-500">
               Er zijn nog geen updates gepubliceerd.
             </div>
           )}

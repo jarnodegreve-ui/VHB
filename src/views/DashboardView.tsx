@@ -8,6 +8,7 @@ import { verlofBalans } from '../lib/leaveBalance';
 import { Sparkline } from '../components/Sparkline';
 import { BrandBus } from '../components/BrandBus';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
+import { SlideOver } from '../components/SlideOver';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -38,6 +39,8 @@ export function DashboardView({
   onNavigate?: (view: View) => void;
 }) {
   const [now, setNow] = useState(new Date());
+  // Detailvenster voor een omleiding — opent als side panel, geen paginawissel.
+  const [openDiversion, setOpenDiversion] = useState<Diversion | null>(null);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -88,6 +91,10 @@ export function DashboardView({
 
   const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
+  // "Lijn 5 & 8" vs "5": prefix alleen wanneer 't nog niet in de data zit.
+  const lineLabel = (line: string) =>
+    line.trim().toLowerCase().startsWith('lijn') ? line.trim() : `Lijn ${line.trim()}`;
+
   // Adaptief: voor < 24u is de countdown zelf de hero (dringend, hoe
   // lang nog tot je dienst). Voor > 24u is de DATUM bruikbaarder dan
   // "27 dagen" — dat zegt een chauffeur weinig. Subtitle krijgt dan
@@ -128,7 +135,7 @@ export function DashboardView({
           <Skeleton className="h-3 w-48" />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-[28px] h-44">
+          <div className="lg:col-span-2 rounded-3xl h-44">
             <SkeletonTile className="h-full" />
           </div>
           <div className="flex flex-col gap-4">
@@ -137,12 +144,12 @@ export function DashboardView({
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-[28px] p-5 surface-card">
+          <div className="rounded-3xl p-5 surface-card">
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
           </div>
-          <div className="rounded-[28px] p-5 surface-card">
+          <div className="rounded-3xl p-5 surface-card">
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
@@ -156,10 +163,10 @@ export function DashboardView({
     <div className="space-y-4">
       {/* === Gepersonaliseerde begroeting === */}
       <div className="px-1 pt-1">
-        <h1 className="text-2xl md:text-3xl font-black tracking-[-0.03em] text-slate-900">
+        <h1 className="text-[22px] md:text-[26px] font-bold tracking-[-0.02em] text-slate-900">
           {greeting}, <span className="text-oker-600">{firstName}</span>
         </h1>
-        <p className="text-xs font-medium text-slate-500 mt-1">
+        <p className="text-[13px] font-normal text-slate-500 mt-0.5">
           {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
           {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
         </p>
@@ -182,24 +189,22 @@ export function DashboardView({
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-              className="tilt-card glow-top glass-stack relative overflow-hidden rounded-[24px] p-5"
+              className="tilt-card glow-top relative overflow-hidden rounded-3xl p-5"
               style={{
                 background: 'var(--tile-bg)',
-                backdropFilter: 'blur(18px) saturate(150%)',
-                WebkitBackdropFilter: 'blur(18px) saturate(150%)',
                 border: 'var(--tile-border)',
                 boxShadow: 'var(--tile-shadow)',
               }}
             >
               <div className="relative">
-                <div className="flex items-start justify-between mb-2">
-                  <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500 text-white shadow-md shadow-black/10">
+                <div className="flex items-start justify-between mb-2.5">
+                  <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
                     <Clock size={18} />
                   </div>
                 </div>
-                <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Vandaag</p>
-                <p className="mt-1 text-3xl font-black tracking-[-0.03em] text-slate-900 leading-none">Vrij</p>
-                <p className="mt-1 text-xs font-semibold text-slate-500">Geniet van je vrije dag.</p>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Vandaag</p>
+                <p className="mt-1 text-[28px] leading-9 font-black tracking-[-0.02em] text-slate-900">Vrij</p>
+                <p className="mt-1 text-xs font-medium text-slate-500">Geniet van je vrije dag.</p>
               </div>
               <DrivingBus delay="0s" />
             </motion.div>
@@ -211,17 +216,15 @@ export function DashboardView({
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-            className="tilt-card glow-top glass-stack relative overflow-hidden rounded-[24px] p-5"
+            className="tilt-card glow-top relative overflow-hidden rounded-3xl p-5"
             style={{
               background: 'var(--tile-bg)',
-              backdropFilter: 'blur(18px) saturate(150%)',
-              WebkitBackdropFilter: 'blur(18px) saturate(150%)',
               border: 'var(--tile-border)',
               boxShadow: 'var(--tile-shadow)',
             }}
           >
-            <div className="flex items-start justify-between mb-2">
-              <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-oker-500 text-white shadow-md shadow-black/10">
+            <div className="flex items-start justify-between mb-2.5">
+              <div className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-oker-500/15 text-oker-600 dark:text-oker-400">
                 <Calendar size={18} />
               </div>
             </div>
@@ -229,13 +232,13 @@ export function DashboardView({
               const display = getNextShiftDisplay(nextShift.startDateTime);
               return (
                 <>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Volgende dienst
                   </p>
-                  <p className="mt-1 text-2xl font-black tracking-[-0.03em] text-slate-900 leading-tight">
+                  <p className="mt-1 text-[22px] font-black tracking-[-0.02em] text-slate-900 leading-tight">
                     {display.hero}
                   </p>
-                  <p className="mt-1 text-xs font-semibold text-slate-500">
+                  <p className="mt-1 text-xs font-medium text-slate-500 tabular-nums">
                     {display.sub} · {nextShift.startTime}–{nextShift.endTime}
                   </p>
                 </>
@@ -337,17 +340,22 @@ export function DashboardView({
           {newestDiversions.length > 0 ? (
             <div className="space-y-2">
               {newestDiversions.map((div) => (
-                <div key={div.id} className="group flex items-start gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all cursor-pointer">
-                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" />
+                <button
+                  type="button"
+                  key={div.id}
+                  onClick={() => setOpenDiversion(div)}
+                  className="group flex w-full items-start gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 text-left hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all"
+                >
+                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${div.severity === 'high' ? 'bg-red-500' : 'bg-oker-500'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <p className="text-sm font-black text-slate-900 truncate">{div.title}</p>
-                      <span className="shrink-0 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-black text-slate-700">{div.line}</span>
+                      <p className="text-sm font-bold text-slate-900 truncate">{div.title}</p>
+                      <span className="shrink-0 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{div.line}</span>
                     </div>
-                    <p className="mt-0.5 text-xs font-medium text-slate-600/80 line-clamp-2">{div.description}</p>
+                    <p className="mt-0.5 text-xs font-normal text-slate-500 line-clamp-2">{div.description}</p>
                   </div>
                   <ArrowUpRight size={14} className="text-slate-300 group-hover:text-slate-700 transition-colors shrink-0 mt-1" />
-                </div>
+                </button>
               ))}
             </div>
           ) : (
@@ -369,6 +377,73 @@ export function DashboardView({
           </div>
         )}
       </div>
+
+      {/* Omleiding-detail als premium side panel */}
+      <SlideOver
+        open={!!openDiversion}
+        onClose={() => setOpenDiversion(null)}
+        title={openDiversion?.title ?? 'Omleiding'}
+        subtitle={openDiversion ? lineLabel(openDiversion.line) : undefined}
+        icon={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
+            <MapPin size={17} />
+          </span>
+        }
+      >
+        {openDiversion && (
+          <div className="space-y-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                  openDiversion.severity === 'high'
+                    ? 'border-red-100 bg-red-50 text-red-700'
+                    : openDiversion.severity === 'medium'
+                    ? 'border-amber-100 bg-amber-50 text-amber-700'
+                    : 'border-slate-200 bg-slate-50 text-slate-600'
+                }`}
+              >
+                <span
+                  className={`h-1.5 w-1.5 rounded-full ${
+                    openDiversion.severity === 'high'
+                      ? 'bg-red-500'
+                      : openDiversion.severity === 'medium'
+                      ? 'bg-amber-500'
+                      : 'bg-slate-400'
+                  }`}
+                />
+                {openDiversion.severity === 'high' ? 'Hoge impact' : openDiversion.severity === 'medium' ? 'Matige impact' : 'Lage impact'}
+              </span>
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+                {lineLabel(openDiversion.line)}
+              </span>
+            </div>
+            <div className="surface-muted rounded-xl p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
+              <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
+                {openDiversion.startDate}
+                {openDiversion.endDate ? ` → ${openDiversion.endDate}` : ' → einde onbekend'}
+              </p>
+            </div>
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm font-normal leading-relaxed text-slate-700">
+                {openDiversion.description}
+              </p>
+            </div>
+            {openDiversion.pdfUrl && (
+              <a
+                href={openDiversion.pdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="control-button-soft inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all"
+              >
+                <FileText size={15} />
+                Bijlage openen (PDF)
+              </a>
+            )}
+          </div>
+        )}
+      </SlideOver>
     </div>
   );
 }
@@ -379,10 +454,10 @@ function QuickLink({ icon, label, onClick }: { icon: ReactNode; label: string; o
     <button
       type="button"
       onClick={onClick}
-      className="group flex items-center gap-2.5 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3 py-3 text-left hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all"
+      className="group flex items-center gap-2.5 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3 py-3 text-left hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all"
     >
-      <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-slate-100 text-slate-700 group-hover:bg-oker-100 group-hover:text-oker-700 transition-colors shrink-0">{icon}</span>
-      <span className="text-sm font-bold text-slate-800 truncate">{label}</span>
+      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-slate-100 text-slate-600 group-hover:bg-oker-100 group-hover:text-oker-700 transition-colors shrink-0">{icon}</span>
+      <span className="text-[13.5px] font-semibold text-slate-800 truncate">{label}</span>
     </button>
   );
 }
@@ -400,12 +475,14 @@ const NEUTRAL_BG = 'var(--tile-bg)';
 const NEUTRAL_BORDER = 'var(--tile-border)';
 const NEUTRAL_SHADOW = 'var(--tile-shadow)';
 
+// Soft-tint icoonchips (Stripe/Linear-stijl): getinte achtergrond + gekleurd
+// icoon i.p.v. massieve kleurblokken. Rustiger en professioneler.
 const TILE_PALETTE = {
   emerald: {
     bg: NEUTRAL_BG,
     shadow: NEUTRAL_SHADOW,
     border: NEUTRAL_BORDER,
-    iconBg: 'bg-emerald-500',
+    iconBg: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
@@ -413,7 +490,7 @@ const TILE_PALETTE = {
     bg: NEUTRAL_BG,
     shadow: NEUTRAL_SHADOW,
     border: NEUTRAL_BORDER,
-    iconBg: 'bg-rose-400',
+    iconBg: 'bg-rose-500/12 text-rose-600 dark:text-rose-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
@@ -421,7 +498,7 @@ const TILE_PALETTE = {
     bg: NEUTRAL_BG,
     shadow: NEUTRAL_SHADOW,
     border: NEUTRAL_BORDER,
-    iconBg: 'bg-oker-500',
+    iconBg: 'bg-oker-500/15 text-oker-600 dark:text-oker-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
@@ -429,7 +506,7 @@ const TILE_PALETTE = {
     bg: NEUTRAL_BG,
     shadow: NEUTRAL_SHADOW,
     border: NEUTRAL_BORDER,
-    iconBg: 'bg-blue-400',
+    iconBg: 'bg-blue-500/12 text-blue-600 dark:text-blue-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
@@ -437,7 +514,7 @@ const TILE_PALETTE = {
     bg: NEUTRAL_BG,
     shadow: NEUTRAL_SHADOW,
     border: NEUTRAL_BORDER,
-    iconBg: 'bg-slate-700',
+    iconBg: 'bg-slate-500/12 text-slate-600 dark:text-slate-300',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
@@ -499,18 +576,18 @@ export function StatTile({
   const splColor =
     sparklineColor ||
     (color === 'oker'
-      ? '#d97706'
+      ? '#C9851F'
       : color === 'rose'
       ? '#e11d48'
       : color === 'emerald'
       ? '#059669'
       : color === 'blue'
       ? '#2563eb'
-      : '#475569');
+      : '#4F575F');
   const Body = (
     <>
-      <div className="flex items-start justify-between mb-2">
-        <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl ${c.iconBg} text-white shadow-md shadow-black/10`}>
+      <div className="flex items-start justify-between mb-2.5">
+        <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl ${c.iconBg}`}>
           {icon}
         </div>
         {sparkline && sparkline.length > 1 ? (
@@ -519,15 +596,13 @@ export function StatTile({
           onClick && <ArrowUpRight size={14} className={`${c.sub} opacity-70`} />
         )}
       </div>
-      <p className={`text-[10px] font-bold uppercase tracking-[0.18em] ${c.sub}`}>{label}</p>
-      <p className={`mt-1 text-3xl font-black tabular-nums tracking-[-0.03em] ${c.text}`}>{value}</p>
-      {subValue && <p className={`mt-1 text-xs font-semibold ${c.sub}`}>{subValue}</p>}
+      <p className={`text-[11px] font-semibold uppercase tracking-[0.08em] ${c.sub}`}>{label}</p>
+      <p className={`mt-1 text-[28px] leading-9 font-black tabular-nums tracking-[-0.02em] ${c.text}`}>{value}</p>
+      {subValue && <p className={`mt-1 text-xs font-medium ${c.sub}`}>{subValue}</p>}
     </>
   );
   const tileStyle = {
     background: c.bg,
-    backdropFilter: 'blur(18px) saturate(150%)',
-    WebkitBackdropFilter: 'blur(18px) saturate(150%)',
     border: c.border,
     boxShadow: c.shadow,
   };
@@ -537,7 +612,7 @@ export function StatTile({
       <button
         ref={ref as RefObject<HTMLButtonElement>}
         onClick={onClick}
-        className="tilt-card glow-top glass-stack cursor-glow text-left flex-1 rounded-[24px] p-5 relative overflow-hidden active:scale-[0.99]"
+        className="tilt-card glow-top glass-stack cursor-glow text-left flex-1 rounded-3xl p-5 relative overflow-hidden active:scale-[0.99]"
         style={tileStyle}
       >
         <span className="cursor-glow-layer" />
@@ -549,7 +624,7 @@ export function StatTile({
   return (
     <div
       ref={ref as RefObject<HTMLDivElement>}
-      className="glow-top cursor-glow flex-1 rounded-[24px] p-5 relative overflow-hidden"
+      className="glow-top cursor-glow flex-1 rounded-3xl p-5 relative overflow-hidden"
       style={tileStyle}
     >
       <span className="cursor-glow-layer" />
@@ -574,29 +649,29 @@ function PremiumPanel({
   accent?: 'slate' | 'oker';
   children: ReactNode;
 }) {
-  // Strakke neutrale panelen — accent-prop blijft voor API-compat maar
-  // beïnvloedt niet langer de achtergrond (alleen icoon krijgt de tint
-  // via iconBg). Achtergrond via CSS-vars zodat dark mode mee-flipt.
-  void accent;
+  // Strakke neutrale panelen — accent/iconBg blijven voor API-compat, maar
+  // de chip is nu soft-tint per accent. Achtergrond via CSS-vars (dark-proof).
+  void iconBg;
+  const chip = accent === 'oker'
+    ? 'bg-oker-500/15 text-oker-600 dark:text-oker-400'
+    : 'bg-slate-500/12 text-slate-600 dark:text-slate-300';
   return (
     <div
-      className="glow-top glass-stack rounded-[28px] p-5 relative overflow-hidden"
+      className="glow-top rounded-3xl p-5 relative overflow-hidden"
       style={{
         background: 'var(--tile-bg)',
-        backdropFilter: 'blur(18px) saturate(140%)',
-        WebkitBackdropFilter: 'blur(18px) saturate(140%)',
         border: 'var(--tile-border)',
         boxShadow: 'var(--tile-shadow)',
       }}
     >
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2.5">
-          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-xl ${iconBg} text-white shadow-md shadow-black/10`}>
+          <div className={`inline-flex items-center justify-center w-8 h-8 rounded-lg ${chip}`}>
             {icon}
           </div>
-          <h3 className="text-sm font-black text-slate-900 tracking-tight">{title}</h3>
+          <h3 className="text-[13.5px] font-bold text-slate-900 tracking-tight">{title}</h3>
         </div>
-        {subtitle && <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">{subtitle}</span>}
+        {subtitle && <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{subtitle}</span>}
       </div>
       {children}
     </div>

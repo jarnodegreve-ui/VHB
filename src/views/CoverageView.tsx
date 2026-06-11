@@ -125,18 +125,18 @@ export function CoverageView() {
             <button type="button" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} aria-label="Vorige maand" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"><ChevronLeft size={18} /></button>
             <span className="px-3 text-sm font-black tracking-tight capitalize min-w-[130px] text-center">{MONTH_NAMES[monthIndex]} {year}</span>
             <button type="button" onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))} aria-label="Volgende maand" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"><ChevronRight size={18} /></button>
-            <button type="button" onClick={() => setShowConfig((v) => !v)} className={cn('ios-pressable ml-1 inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border text-[10px] font-black uppercase tracking-widest transition-colors', showConfig ? 'border-oker-300 bg-oker-50 text-oker-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50')}>
+            <button type="button" onClick={() => setShowConfig((v) => !v)} className={cn('ios-pressable ml-1 inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border text-[10px] font-black uppercase tracking-[0.08em] transition-colors', showConfig ? 'border-oker-300 bg-oker-50 text-oker-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50')}>
               <Settings2 size={14} /> Instellen
             </button>
           </div>
         )}
       />
 
-      {error && <div className="surface-card p-4 rounded-[20px] text-sm font-bold text-red-500">{error}</div>}
+      {error && <div className="surface-card p-4 rounded-2xl text-sm font-bold text-red-500">{error}</div>}
 
       {/* Config: verwachte diensten per dag-type */}
       {showConfig && (
-        <div className="surface-card rounded-[24px] p-6 space-y-5">
+        <div className="surface-card rounded-3xl p-6 space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div>
               <h3 className="text-sm font-black tracking-tight text-slate-900">Verwachte diensten per dag-type</h3>
@@ -160,7 +160,7 @@ export function CoverageView() {
                 return (
                   <div key={dt}>
                     <div className="flex items-baseline justify-between">
-                      <div className="text-[11px] font-black uppercase tracking-widest text-slate-600 capitalize">{dt || '—'}</div>
+                      <div className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-600 capitalize">{dt || '—'}</div>
                       <div className="text-[10px] font-bold text-slate-400">{selected.size} geselecteerd</div>
                     </div>
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -205,27 +205,27 @@ export function CoverageView() {
       </div>
 
       {loading ? (
-        <div className="surface-card p-8 rounded-[24px] flex items-center justify-center min-h-[140px]">
+        <div className="surface-card p-8 rounded-3xl flex items-center justify-center min-h-[140px]">
           <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
         </div>
       ) : !anyExpectations ? (
-        <div className="surface-card p-8 rounded-[24px] text-center">
+        <div className="surface-card p-8 rounded-3xl text-center">
           <p className="text-sm font-bold text-slate-500">Nog geen verwachte diensten ingesteld.</p>
           <p className="mt-1 text-xs font-medium text-slate-400">Klik op "Instellen" en kies per dag-type welke diensten horen te draaien.</p>
         </div>
       ) : visibleDays.length === 0 ? (
-        <div className="surface-card p-8 rounded-[24px] text-center">
+        <div className="surface-card p-8 rounded-3xl text-center">
           <p className="text-sm font-bold text-emerald-600">Geen gaten in {MONTH_NAMES[monthIndex]} {year}.</p>
         </div>
       ) : (
-        <div className="surface-card rounded-[24px] overflow-hidden divide-y divide-slate-100">
+        <div className="surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
           {visibleDays.map((d) => {
             const ok = d.missing.length === 0;
             return (
               <div key={d.date} className={cn('p-4 flex flex-col sm:flex-row sm:items-center gap-3', !ok && 'bg-red-50/40')}>
                 <div className="sm:w-44 shrink-0">
                   <div className="text-sm font-black text-slate-800 capitalize">{dayLabel(d.date)}</div>
-                  <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 capitalize">{d.dayType || '—'}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 capitalize">{d.dayType || '—'}</div>
                 </div>
                 <div className="shrink-0 sm:w-24">
                   <span className={cn('text-xs font-black tabular-nums', ok ? 'text-emerald-600' : 'text-red-600')}>{d.covered}/{d.expected}</span>
@@ -262,7 +262,7 @@ export function CoverageView() {
           <div className="p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[10px] font-black uppercase tracking-widest text-slate-400">Kandidaten voor dienst {pick.code}</div>
+                <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Kandidaten voor dienst {pick.code}</div>
                 <h3 className="mt-0.5 text-lg font-black tracking-tight text-slate-900 capitalize">{dayLabel(pick.date)}</h3>
               </div>
               <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
@@ -279,7 +279,7 @@ export function CoverageView() {
               <p className="mt-5 text-sm font-medium text-slate-400">Niemand is vrij op deze dag (geen dienst én geen verlof).</p>
             ) : (
               <div className="mt-4">
-                <div className="text-[10px] font-black uppercase tracking-widest text-emerald-600">{freeNames.length} vrij</div>
+                <div className="text-[10px] font-black uppercase tracking-[0.08em] text-emerald-600">{freeNames.length} vrij</div>
                 <div className="mt-2 flex flex-col gap-1.5">
                   {freeNames.map((name) => (
                     <div key={name} className="flex items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">

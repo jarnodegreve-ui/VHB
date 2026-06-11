@@ -144,7 +144,7 @@ export function PrintMonthlyScheduleView({
         <div className="no-print flex justify-end mb-4">
           <button
             onClick={() => window.print()}
-            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-slate-800 transition-colors"
+            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.08em] hover:bg-slate-800 transition-colors"
           >
             Print / Opslaan als PDF
           </button>
@@ -154,7 +154,7 @@ export function PrintMonthlyScheduleView({
         <header className="border-b-2 border-slate-900 pb-5 mb-7">
           <div className="flex items-start justify-between gap-6">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.22em] text-oker-600">
+              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">
                 VHB · Maldegem · Maandrooster
               </p>
               <h1 className="mt-2 text-3xl font-black tracking-tight">{driver.name}</h1>
@@ -168,15 +168,15 @@ export function PrintMonthlyScheduleView({
             <div className="text-right shrink-0">
               <div className="inline-flex flex-col items-end gap-1.5">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Diensten</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Diensten</p>
                   <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{monthShifts.length}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Totaal uren</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Totaal uren</p>
                   <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{formatHours(totalMinutes)}</p>
                 </div>
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
-                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Werkdagen</p>
+                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Werkdagen</p>
                   <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{totalDaysWorked}</p>
                 </div>
               </div>
@@ -221,7 +221,7 @@ export function PrintMonthlyScheduleView({
                       >
                         {/* Datum */}
                         <div>
-                          <p className={`text-xs font-black uppercase tracking-widest ${isWeekend ? 'text-oker-600' : 'text-slate-400'}`}>
+                          <p className={`text-xs font-black uppercase tracking-[0.08em] ${isWeekend ? 'text-oker-600' : 'text-slate-400'}`}>
                             {dayName.slice(0, 3)}
                           </p>
                           <p className="mt-0.5 text-sm font-black text-slate-900 tabular-nums">{dayLabel}</p>
@@ -240,7 +240,7 @@ export function PrintMonthlyScheduleView({
                             return (
                               <div key={i} className="flex items-baseline justify-between gap-3">
                                 <div className="flex items-baseline gap-2 min-w-0">
-                                  <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest ${catColors}`}>
+                                  <span className={`inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] ${catColors}`}>
                                     {CATEGORY_LABEL[cat]}
                                   </span>
                                   <span className="text-sm font-black text-slate-900">
@@ -257,7 +257,7 @@ export function PrintMonthlyScheduleView({
 
                         {/* Dagtotaal */}
                         <div className="text-right">
-                          <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Totaal</p>
+                          <p className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Totaal</p>
                           <p className="mt-0.5 text-sm font-black text-slate-900 tabular-nums">{formatHours(minutes)}</p>
                         </div>
                       </div>
@@ -274,14 +274,14 @@ export function PrintMonthlyScheduleView({
           <section className="print-card mt-10 pt-6 border-t border-slate-200">
             <div className="grid grid-cols-2 gap-12">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
                   Voor akkoord — chauffeur
                 </p>
                 <div className="border-b border-slate-400 h-10" />
                 <p className="mt-1 text-[10px] font-medium text-slate-400">Datum en handtekening</p>
               </div>
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-500 mb-8">
+                <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 mb-8">
                   Voor akkoord — planner
                 </p>
                 <div className="border-b border-slate-400 h-10" />

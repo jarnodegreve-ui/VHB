@@ -123,7 +123,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
             <button
               type="button"
               onClick={goToToday}
-              className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-widest text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+              className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
             >
               Vandaag
             </button>
@@ -134,12 +134,12 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
       {/* Desktop: volle 31-koloms kalender. Op mobile is dit onbruikbaar
           (~6px per dag-cel), dus tonen we hieronder een per-chauffeur
           stacked list. */}
-      <div className="hidden md:block surface-card rounded-[24px] overflow-hidden">
+      <div className="hidden md:block surface-card rounded-3xl overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/60 border-b border-slate-100">
-                <th className="sticky left-0 z-10 bg-slate-50/95 backdrop-blur px-4 py-3 text-[10px] font-black uppercase tracking-widest text-slate-500 min-w-[180px]">
+                <th className="sticky left-0 z-10 bg-slate-50/95 backdrop-blur px-4 py-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 min-w-[180px]">
                   Chauffeur
                 </th>
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
@@ -151,7 +151,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                       isToday(day) && 'bg-oker-50',
                     )}
                   >
-                    <div className="text-[9px] font-black uppercase tracking-widest text-slate-400">{weekdayLetter(day)}</div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
                     <div className={cn('text-xs font-black mt-0.5', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                     {absenceCountPerDay[day] > 0 && (
                       <div className="text-[9px] font-black text-emerald-600 mt-0.5">{absenceCountPerDay[day]}</div>
@@ -202,7 +202,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
 
       {/* Mobile: per-chauffeur lijst met afwezigheden in deze maand.
           Veel compacter dan een mini-grid; meest relevante info eerst. */}
-      <div className="md:hidden surface-card rounded-[24px] overflow-hidden divide-y divide-slate-100">
+      <div className="md:hidden surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
         {visibleUsers.map((u) => {
           const userMap = leaveByUserDay.get(u.id);
           // userMap heeft één entry per dag van een leave — dedup naar
@@ -216,7 +216,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
               <div className="flex items-baseline justify-between gap-2">
                 <div className="text-sm font-bold text-slate-800 truncate">{u.name}</div>
                 {uniqueLeaves.length > 0 && (
-                  <div className="shrink-0 text-[10px] font-black uppercase tracking-widest text-slate-400">
+                  <div className="shrink-0 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
                     {uniqueLeaves.length} {uniqueLeaves.length === 1 ? 'aanvraag' : 'aanvragen'}
                   </div>
                 )}
@@ -259,8 +259,8 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
       </div>
 
       {/* Legende */}
-      <div className="surface-card rounded-[24px] p-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
-        <span className="text-[10px] font-black uppercase tracking-widest text-slate-500">Legende</span>
+      <div className="surface-card rounded-3xl p-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
+        <span className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Legende</span>
         <div className="flex items-center gap-2">
           <div className="w-4 h-3 rounded-sm bg-emerald-500" />
           <span className="font-medium text-slate-600">Betaald verlof goedgekeurd</span>

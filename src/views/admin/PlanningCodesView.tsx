@@ -102,24 +102,24 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         <StatCard icon={<Info className="text-sky-600" />} label="Onbekend" value={summary.unknown.toString()} subValue="Nog te verfijnen" />
       </div>
 
-      <section className="surface-card rounded-[32px] p-6">
+      <section className="surface-card rounded-3xl p-6">
         <AdminSubsectionHeader
           eyebrow="Werkset"
           title="Codebeheer"
           description="Voeg matrixcodes toe, wijzig hun betekenis en bepaal of ze als dienst, verlof of afwezigheid tellen."
           aside={
             <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">{filteredCodes.length} zichtbaar</div>
+              <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{filteredCodes.length} zichtbaar</div>
               {!canAdminDelete ? (
-                <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-400">Delete admin-only</div>
+                <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Delete admin-only</div>
               ) : null}
             </div>
           }
         />
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto]">
-          <div className="rounded-[24px] border border-white/70 bg-white/45 p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Filter</p>
+          <div className="rounded-3xl border border-white/70 bg-white/45 p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Filter</p>
             <div className="mt-3 glass segmented-control inline-flex p-1">
               {[
                 { key: 'all', label: 'Alles' },
@@ -142,28 +142,28 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               ))}
             </div>
           </div>
-          <div className="rounded-[24px] border border-white/70 bg-white/45 p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">Interpretatie</p>
+          <div className="rounded-3xl border border-white/70 bg-white/45 p-4">
+            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Interpretatie</p>
             <p className="mt-3 text-sm font-medium text-slate-500">
               Dienstcodes worden doorgegeven aan de roosteropbouw. Verlof-, afwezigheids- en opleidingscodes blijven buiten de dienstgeneratie.
             </p>
           </div>
         </div>
 
-        <div className="mt-6 surface-table overflow-hidden rounded-[28px]">
+        <div className="mt-6 surface-table overflow-hidden rounded-3xl">
           {filteredCodes.length > 0 ? (
             <>
               <div className="hidden xl:block overflow-x-auto">
                 <table className="w-full min-w-[980px] text-left">
                   <thead className="bg-slate-50/60">
                     <tr>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Code</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Categorie</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Beschrijving</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Dienst</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Betaald</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Vrij</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-widest text-slate-400">Acties</th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Code</th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Categorie</th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Beschrijving</th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Dienst</th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Betaald</th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Vrij</th>
+                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Acties</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -232,7 +232,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                                   <Trash2 size={16} />
                                 </button>
                               ) : (
-                                <span className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-widest text-slate-300">
+                                <span className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-300">
                                   Admin
                                 </span>
                               )}

@@ -147,14 +147,14 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         title="Beheer Omleidingen"
       />
 
-      <div className="surface-card p-6 md:p-8 rounded-[32px] flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="surface-card p-6 md:p-8 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h4 className="text-lg font-black text-slate-800 tracking-tight">Nieuwe Omleiding</h4>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Voeg een omleiding toe voor de chauffeurs</p>
+          <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.08em] mt-1">Voeg een omleiding toe voor de chauffeurs</p>
         </div>
         <button 
           onClick={handleOpenAdd}
-          className="btn-primary ios-pressable w-full sm:w-auto px-8 py-4 text-xs uppercase tracking-widest flex items-center justify-center gap-3"
+          className="btn-primary ios-pressable w-full sm:w-auto px-8 py-4 text-xs uppercase tracking-[0.08em] flex items-center justify-center gap-3"
         >
           <Plus size={20} /> TOEVOEGEN
         </button>
@@ -162,7 +162,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
       <div className="grid grid-cols-1 gap-4">
         {diversions.map(div => (
-          <div key={div.id} className="surface-card surface-card-hover p-6 md:p-8 rounded-[32px] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group">
+          <div key={div.id} className="surface-card surface-card-hover p-6 md:p-8 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group">
             <div className="flex items-start gap-5">
               <div className={cn(
                 "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110",
@@ -174,9 +174,9 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h4 className="font-black text-slate-800 text-lg tracking-tight leading-tight">{div.title}</h4>
-                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-widest">Lijn {div.line}</span>
+                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-[0.08em]">Lijn {div.line}</span>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-widest">
+                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-[0.08em]">
                   <Calendar size={12} className="text-oker-400" />
                   {div.startDate} {div.endDate ? `t/m ${div.endDate}` : '(Geen einddatum)'}
                 </div>
@@ -232,7 +232,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-[28px] w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
+              className="glass-modal rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
             >
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
                 <div>
@@ -246,7 +246,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
               <form onSubmit={handleSubmit} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Lijn(en)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Lijn(en)</label>
                     <input 
                       type="text" 
                       required
@@ -257,7 +257,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Ernst</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Ernst</label>
                     <select 
                       value={formData.severity}
                       onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
@@ -271,7 +271,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Titel</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Titel</label>
                   <input 
                     type="text" 
                     required
@@ -283,7 +283,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Omschrijving</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Omschrijving</label>
                   <textarea 
                     required
                     rows={3}
@@ -296,7 +296,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Startdatum</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label>
                     <input 
                       type="date" 
                       required
@@ -306,7 +306,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Einddatum (Optioneel)</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum (Optioneel)</label>
                     <input 
                       type="date" 
                       value={formData.endDate || ''}
@@ -317,7 +317,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">PDF Bestand {editingId && '(Optioneel)'}</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">PDF Bestand {editingId && '(Optioneel)'}</label>
                   <div className="relative">
                     <input 
                       type="file" 
@@ -342,14 +342,14 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <button 
                     type="button"
                     onClick={() => setShowModal(false)}
-                    className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-slate-50 transition-all uppercase tracking-widest text-xs"
+                    className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-slate-50 transition-all uppercase tracking-[0.08em] text-xs"
                   >
                     Annuleren
                   </button>
                   <button
                     type="submit"
                     disabled={isUploading}
-                    className="btn-primary ios-pressable flex-1 px-4 py-4 uppercase tracking-widest text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="btn-primary ios-pressable flex-1 px-4 py-4 uppercase tracking-[0.08em] text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {isUploading ? 'PDF uploaden...' : editingId ? 'Opslaan' : 'Toevoegen'}
                   </button>

@@ -171,7 +171,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
         actions={
           <button
             onClick={() => setCalendarOpen(true)}
-            className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest text-slate-600 transition-all active:scale-95"
+            className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-[0.08em] text-slate-600 transition-all active:scale-95"
           >
             <CalendarPlus size={16} className="text-oker-500" />
             Aan agenda toevoegen
@@ -182,7 +182,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
       <CalendarSubscribeModal open={calendarOpen} onClose={() => setCalendarOpen(false)} onDownload={exportToICS} />
 
       {isInitialLoad ? (
-        <div className="surface-card rounded-[32px] overflow-hidden">
+        <div className="surface-card rounded-3xl overflow-hidden">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i}>
               <SkeletonRow className="border-b border-white/40 last:border-0" />
@@ -206,7 +206,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
             <div className="mt-6">
               <button
                 onClick={() => setShowPast((v) => !v)}
-                className="flex items-center gap-2 text-xs font-black uppercase tracking-widest text-slate-400 hover:text-slate-700 transition-colors"
+                className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-slate-400 hover:text-slate-700 transition-colors"
               >
                 <ChevronDown
                   size={14}
@@ -233,13 +233,13 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
   return (
     <>
       {/* Desktop tabel */}
-      <div className="hidden md:block surface-table rounded-[32px] overflow-hidden">
+      <div className="hidden md:block surface-table rounded-3xl overflow-hidden">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/50">
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Datum</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Dienst</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Tijdsvensters</th>
+              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Datum</th>
+              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst</th>
+              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Tijdsvensters</th>
             </tr>
           </thead>
           <tbody>
@@ -264,14 +264,14 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
                         {isToday && (
-                          <span className="inline-block rounded-full bg-oker-500/15 text-oker-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5">
+                          <span className="inline-block rounded-full bg-oker-500/15 text-oker-700 text-[9px] font-black uppercase tracking-[0.08em] px-2 py-0.5">
                             Vandaag
                           </span>
                         )}
                         {g.hasConflict && (
                           <span
                             title="Je staat ingepland terwijl je verlof goedgekeurd is. Neem contact op met de planner."
-                            className="inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border border-red-300/60"
+                            className="inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-[0.08em] px-2 py-0.5 border border-red-300/60"
                           >
                             <AlertTriangle size={10} /> Verlof-conflict
                           </span>
@@ -281,7 +281,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                   </td>
                   <td className="px-6 py-5">
                     <div className="inline-flex items-center gap-2">
-                      <span className={cn('inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', pill.className)}>
+                      <span className={cn('inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]', pill.className)}>
                         {pill.label}
                       </span>
                       <span className="font-black text-oker-700 text-lg">{g.line}</span>
@@ -330,20 +330,20 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
               {/* Datum + dienst-pill */}
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <p className={cn('text-xs font-black uppercase tracking-widest', isToday ? 'text-oker-600' : 'text-slate-400')}>
+                  <p className={cn('text-xs font-black uppercase tracking-[0.08em]', isToday ? 'text-oker-600' : 'text-slate-400')}>
                     {isToday ? 'Vandaag' : formatShortDate(g.date).split(' ')[0]}
                   </p>
                   <p className="text-sm font-black text-slate-900 mt-0.5">
                     {formatShortDate(g.date).split(' ').slice(1).join(' ')}
                   </p>
                   {g.hasConflict && (
-                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-widest px-2 py-0.5 border border-red-300/60">
+                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-[0.08em] px-2 py-0.5 border border-red-300/60">
                       <AlertTriangle size={10} /> Verlof-conflict
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={cn('inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-widest', pill.className)}>
+                  <span className={cn('inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]', pill.className)}>
                     {pill.label}
                   </span>
                   <span className="text-base font-black text-oker-700">{g.line}</span>
