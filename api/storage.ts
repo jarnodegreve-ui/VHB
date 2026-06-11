@@ -45,6 +45,14 @@ const requireDb = () => {
   return db;
 };
 
+// Herkent een rpc-fout die betekent "deze Postgres-functie bestaat niet"
+// (de transactionele replace-SQL is nog niet gedraaid). ENKEL dan vallen we
+// terug op het JS-pad. Bij een échte fout NIET terugvallen: de transactie is
+// dan al teruggerold (tabel intact) en delete+insert zou alsnog kunnen wissen.
+const isMissingDbFunction = (error: any): boolean =>
+  error?.code === "PGRST202" ||
+  /could not find the function|function .*does not exist|schema cache/i.test(String(error?.message ?? ""));
+
 // Supabase/PostgREST cap'pt by default op 1000 rijen per response. Voor
 // tabellen die door de tijd groeien (planning, matrix_rows, leave, ...)
 // MOETEN we expliciet paginëren — anders raakt elke caller stilletjes
@@ -110,6 +118,12 @@ export const replacePlanningData = async (data: ShiftRecord[]) => {
   if (!Array.isArray(data) || data.length === 0) {
     throw new Error("Lege planning-set geweigerd: dit zou alle planning wissen. Een import/sync hoort diensten te bevatten.");
   }
+  // Voorkeur: atomair via de Postgres-functie (delete+insert in één
+  // transactie) — geen leeg-tabel-venster als de insert zou falen.
+  const { error: rpcError } = await client.rpc('replace_planning', { rows: data });
+  if (!rpcError) return;
+  if (!isMissingDbFunction(rpcError)) throw rpcError;
+  // Functie bestaat (nog) niet → veilig JS-pad met de empty-guard hierboven.
   const { error: deleteError } = await client.from('planning').delete().neq('id', '__never__');
   if (deleteError) throw deleteError;
   const { error: insertError } = await client.from('planning').insert(data);
@@ -142,6 +156,11 @@ export const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
   if (!Array.isArray(rows) || rows.length === 0) {
     throw new Error("Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.");
   }
+  // Voorkeur: atomair via de Postgres-functie; val enkel terug op het JS-pad
+  // als die functie nog niet bestaat (SQL niet gedraaid).
+  const { error: rpcError } = await client.rpc('replace_planning_matrix_rows', { rows });
+  if (!rpcError) return;
+  if (!isMissingDbFunction(rpcError)) throw rpcError;
   const { error: deleteError } = await client.from('planning_matrix_rows').delete().neq('id', '__never__');
   if (deleteError) throw deleteError;
   const { error: insertError } = await client.from('planning_matrix_rows').insert(rows);
