@@ -1159,6 +1159,19 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
+    // Beleid: een ruil rechtstreeks goedkeuren vanuit 'pending' (dus zonder
+    // bevestiging van de collega) mag enkel een admin. Planners keuren pas
+    // goed nadat de collega accepteerde ('accepted' → 'approved'). Zo wordt de
+    // UI-keuze ook server-side afgedwongen, niet enkel via verborgen knoppen.
+    if (req.appUser?.role !== "admin") {
+      for (const next of newData) {
+        const prev = previousById.get(String(next.id));
+        if (prev && prev.status === "pending" && next.status === "approved") {
+          return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
+        }
+      }
+    }
+
     await saveSwapsData(newData);
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen.
