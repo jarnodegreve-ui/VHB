@@ -107,8 +107,16 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
     if (pdfFile) {
       setIsUploading(true);
-      uploadedPdfUrl = await uploadPdf(targetId, pdfFile);
-      setIsUploading(false);
+      try {
+        uploadedPdfUrl = await uploadPdf(targetId, pdfFile);
+      } catch (error: any) {
+        // fetch/FileReader kan ook gooien (offline, leesfout) — zonder deze
+        // catch bleef de knop eeuwig op 'PDF uploaden...' hangen.
+        notify(`Upload mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
+        return;
+      } finally {
+        setIsUploading(false);
+      }
       if (!uploadedPdfUrl) return; // notify reeds getoond
     }
 

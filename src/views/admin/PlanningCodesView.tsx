@@ -7,14 +7,25 @@ import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/
 import { StatCard } from '../../components/StatCard';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
+// Draft-rijen krijgen een stabiele key, los van de (bewerkbare) code-tekst.
+// De oude key bevatte code.code: elke toetsaanslag = nieuwe key = remount =
+// focusverlies na élke letter.
+type DraftCode = PlanningCode & { _key: string };
+const makeDraftKey = () =>
+  typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+    ? crypto.randomUUID()
+    : `k-${Math.random().toString(36).slice(2)}`;
+const withDraftKeys = (codes: PlanningCode[]): DraftCode[] =>
+  codes.map((code) => ({ ...code, _key: makeDraftKey() }));
+
 export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: PlanningCode[]; onSave: (codes: PlanningCode[]) => Promise<boolean>; canAdminDelete: boolean }) {
-  const [draftCodes, setDraftCodes] = useState<PlanningCode[]>(codes);
+  const [draftCodes, setDraftCodes] = useState<DraftCode[]>(() => withDraftKeys(codes));
   const [isSaving, setIsSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | PlanningCode['category']>('all');
   const [historyCode, setHistoryCode] = useState<PlanningCode | null>(null);
 
   useEffect(() => {
-    setDraftCodes(codes);
+    setDraftCodes(withDraftKeys(codes));
   }, [codes]);
 
   const updateCode = (index: number, patch: Partial<PlanningCode>) => {
@@ -27,6 +38,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     setDraftCodes((current) => [
       ...current,
       {
+        _key: makeDraftKey(),
         code: '',
         category: 'unknown',
         description: '',
@@ -47,7 +59,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
 
   const handleSave = async () => {
     const normalizedCodes = draftCodes
-      .map((code) => ({
+      .map(({ _key, ...code }) => ({
         ...code,
         code: code.code.trim().toLowerCase(),
         description: code.description.trim(),
@@ -171,7 +183,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                     {filteredCodes.map((code) => {
                       const index = draftCodes.findIndex((draft) => draft === code);
                       return (
-                        <tr key={`${code.code || 'new'}-${index}`} className="hover:bg-slate-50/60 transition-colors">
+                        <tr key={code._key} className="hover:bg-slate-50/60 transition-colors">
                           <Td>
                             <input
                               value={code.code}
@@ -253,7 +265,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                 {filteredCodes.map((code) => {
                   const index = draftCodes.findIndex((draft) => draft === code);
                   return (
-                    <div key={`${code.code || 'new-mobile'}-${index}`} className="space-y-4 p-5">
+                    <div key={code._key} className="space-y-4 p-5">
                       <div className="grid gap-4 md:grid-cols-2">
                         <input
                           value={code.code}
