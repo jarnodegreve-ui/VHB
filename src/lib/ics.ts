@@ -60,9 +60,15 @@ export function toFloatingDateTime(date: string, time: string): string {
   return `${compactDate}T${h.padStart(2, '0')}${min.padStart(2, '0')}00`;
 }
 
+// "9:00" < "17:00" faalt lexicografisch — vergelijk op minuten.
+function toMinutes(hhmm: string): number {
+  const [h, m] = String(hhmm).split(":");
+  return (Number(h) || 0) * 60 + (Number(m) || 0);
+}
+
 export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
   // Nachtdienst: eind <= start → einddatum is de volgende dag.
-  const endDate = ev.endTime <= ev.startTime ? addOneDay(ev.date) : ev.date;
+  const endDate = toMinutes(ev.endTime) <= toMinutes(ev.startTime) ? addOneDay(ev.date) : ev.date;
   const lines = [
     'BEGIN:VEVENT',
     `UID:${ev.uid}`,

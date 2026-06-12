@@ -122,6 +122,16 @@ export const savePlanningData = async (data: any) => {
   }
 };
 
+/** Eén shift gericht opzoeken (eigendoms-checks bij dienstruil). */
+export const getShiftById = async (id: string): Promise<{ id: string; driverId: string } | null> => {
+  if (!id) return null;
+  const client = requireDb();
+  const { data, error } = await client.from('planning').select('id, driverId').eq('id', id).maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return { id: String((data as any).id), driverId: String((data as any).driverId ?? '') };
+};
+
 /** Volledige planning wissen — alleen voor de expliciete admin-actie. */
 export const clearPlanningData = async () => {
   const client = requireDb();
@@ -1119,8 +1129,15 @@ export const getCoverageExpectations = async (): Promise<Record<string, string[]
   const client = requireDb();
   const { data, error } = await client.from('coverage_expectations').select('*');
   if (error) {
-    console.warn('coverage_expectations niet beschikbaar (migratie gedraaid?):', error.message);
-    return {};
+    // Alleen 'tabel bestaat (nog) niet' tolereren — andere fouten (netwerk,
+    // permissies) doorgooien, anders lijkt een transiente fout op een lege
+    // config en kan een goedbedoelde save de echte config overschrijven.
+    const missingTable = (error as any).code === '42P01' || /does not exist|relation .* not/i.test(error.message || '');
+    if (missingTable) {
+      console.warn('coverage_expectations niet beschikbaar (migratie gedraaid?):', error.message);
+      return {};
+    }
+    throw error;
   }
   const map: Record<string, string[]> = {};
   for (const row of data || []) {

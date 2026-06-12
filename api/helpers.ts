@@ -265,7 +265,12 @@ export const normalizePlanningMatrixDate = (raw: string) => {
   if (parts.length !== 3) return value;
 
   const [day, monthRaw, yearRaw] = parts;
-  const month = PLANNING_MATRIX_MONTHS[monthRaw.toLowerCase()];
+  // Numerieke maand ("06-04-2026" of "06/04/2026", dd-mm-jjjj) — kwam als
+  // tekst-cel uit Excel en werd stilzwijgend overgeslagen.
+  const numericMonth = /^\d{1,2}$/.test(monthRaw) && Number(monthRaw) >= 1 && Number(monthRaw) <= 12
+    ? String(monthRaw).padStart(2, "0")
+    : undefined;
+  const month = numericMonth ?? PLANNING_MATRIX_MONTHS[monthRaw.toLowerCase()];
   if (!month) return value;
 
   const year = yearRaw.length === 2 ? `20${yearRaw}` : yearRaw;
