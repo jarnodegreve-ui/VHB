@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { AlertTriangle, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { BrandEmptyState } from '../components/BrandEmptyState';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
@@ -18,10 +19,10 @@ const shiftCategory = (startTime: string): 'ochtend' | 'middag' | 'avond' => {
   return 'avond';
 };
 
-const CATEGORY_PILL: Record<string, { label: string; className: string }> = {
-  ochtend: { label: 'Vroeg', className: 'bg-amber-100 text-amber-700 border-amber-200' },
-  middag: { label: 'Middag', className: 'bg-emerald-100 text-emerald-700 border-emerald-200' },
-  avond: { label: 'Laat', className: 'bg-slate-200 text-slate-700 border-slate-300' },
+const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' | 'slate' }> = {
+  ochtend: { label: 'Vroeg', tone: 'amber' },
+  middag: { label: 'Middag', tone: 'emerald' },
+  avond: { label: 'Laat', tone: 'slate' },
 };
 
 type GroupedShift = {
@@ -169,13 +170,13 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
             : 'Overzicht van je komende diensten.'
         }
         actions={
-          <button
+          <Button
+            variant="secondary"
+            icon={<CalendarPlus size={16} className="text-oker-500" />}
             onClick={() => setCalendarOpen(true)}
-            className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-[0.08em] text-slate-600 transition-all active:scale-95"
           >
-            <CalendarPlus size={16} className="text-oker-500" />
             Aan agenda toevoegen
-          </button>
+          </Button>
         }
       />
 
@@ -206,7 +207,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
             <div className="mt-6">
               <button
                 onClick={() => setShowPast((v) => !v)}
-                className="flex items-center gap-2 text-xs font-black uppercase tracking-[0.08em] text-slate-400 hover:text-slate-700 transition-colors"
+                className="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors"
               >
                 <ChevronDown
                   size={14}
@@ -233,13 +234,13 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
   return (
     <>
       {/* Desktop tabel */}
-      <div className="hidden md:block surface-table rounded-3xl overflow-hidden">
+      <TableShell className="hidden md:block">
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/50">
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Datum</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst</th>
-              <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Tijdsvensters</th>
+              <Th className="px-6 py-4">Datum</Th>
+              <Th className="px-6 py-4">Dienst</Th>
+              <Th className="px-6 py-4">Tijdsvensters</Th>
             </tr>
           </thead>
           <tbody>
@@ -252,50 +253,41 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                 <tr
                   key={g.key}
                   className={cn(
-                    'hover:bg-slate-50/50 transition-colors group border-t border-slate-100',
+                    'hover:bg-slate-50/60 transition-colors group border-t border-slate-100',
                     isToday && 'bg-oker-50/30',
                     g.hasConflict && 'bg-red-50/40 hover:bg-red-50/60',
                   )}
                 >
-                  <td className="px-6 py-5">
+                  <Td className="px-6 py-4">
                     <div className="space-y-1">
-                      <p className={cn('font-black', isToday ? 'text-oker-700' : 'text-slate-800')}>
+                      <p className={cn('font-semibold tabular-nums', isToday ? 'text-oker-700' : 'text-slate-800')}>
                         {formatShiftDate(g.date)}
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
-                        {isToday && (
-                          <span className="inline-block rounded-full bg-oker-500/15 text-oker-700 text-[9px] font-black uppercase tracking-[0.08em] px-2 py-0.5">
-                            Vandaag
-                          </span>
-                        )}
+                        {isToday && <Badge tone="oker">Vandaag</Badge>}
                         {g.hasConflict && (
-                          <span
-                            title="Je staat ingepland terwijl je verlof goedgekeurd is. Neem contact op met de planner."
-                            className="inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-[0.08em] px-2 py-0.5 border border-red-300/60"
-                          >
-                            <AlertTriangle size={10} /> Verlof-conflict
+                          <span title="Je staat ingepland terwijl je verlof goedgekeurd is. Neem contact op met de planner.">
+                            <Badge tone="red" icon={<AlertTriangle size={11} />}>Verlof-conflict</Badge>
                           </span>
                         )}
                       </div>
                     </div>
-                  </td>
-                  <td className="px-6 py-5">
+                  </Td>
+                  <Td className="px-6 py-4">
                     <div className="inline-flex items-center gap-2">
-                      <span className={cn('inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]', pill.className)}>
-                        {pill.label}
-                      </span>
-                      <span className="font-black text-oker-700 text-lg">{g.line}</span>
+                      <Badge tone={pill.tone}>{pill.label}</Badge>
+                      <span className="text-lg font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
-                        <span className="text-[10px] font-bold text-slate-400">
+                        <span className="text-[10px] font-medium text-slate-400">
                           ({g.segments.length} blokken)
                         </span>
                       )}
                     </div>
-                  </td>
-                  <td className="px-6 py-5">
+                  </Td>
+                  <Td className="px-6 py-4">
                     <div className="space-y-1">
                       {g.segments.map((s) => (
-                        <div key={s.id} className="flex items-center gap-3 text-slate-700 font-bold">
+                        <div key={s.id} className="flex items-center gap-3 font-medium text-slate-700">
                           <Clock size={14} className="text-oker-400 shrink-0" />
                           <span className="tabular-nums">
                             {s.startTime} – {s.endTime}
@@ -303,13 +295,13 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                         </div>
                       ))}
                     </div>
-                  </td>
+                  </Td>
                 </tr>
               );
             })}
           </tbody>
         </table>
-      </div>
+      </TableShell>
 
       {/* Mobile cards — compacter */}
       <div className="md:hidden space-y-3">
@@ -330,23 +322,21 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
               {/* Datum + dienst-pill */}
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <p className={cn('text-xs font-black uppercase tracking-[0.08em]', isToday ? 'text-oker-600' : 'text-slate-400')}>
+                  <MicroLabel className={cn(isToday && 'text-oker-600')}>
                     {isToday ? 'Vandaag' : formatShortDate(g.date).split(' ')[0]}
-                  </p>
-                  <p className="text-sm font-black text-slate-900 mt-0.5">
+                  </MicroLabel>
+                  <p className="text-sm font-semibold text-slate-900 mt-0.5 tabular-nums">
                     {formatShortDate(g.date).split(' ').slice(1).join(' ')}
                   </p>
                   {g.hasConflict && (
-                    <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-red-500/15 text-red-700 text-[9px] font-black uppercase tracking-[0.08em] px-2 py-0.5 border border-red-300/60">
-                      <AlertTriangle size={10} /> Verlof-conflict
-                    </span>
+                    <Badge tone="red" icon={<AlertTriangle size={10} />} className="mt-1">
+                      Verlof-conflict
+                    </Badge>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <span className={cn('inline-block rounded border px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em]', pill.className)}>
-                    {pill.label}
-                  </span>
-                  <span className="text-base font-black text-oker-700">{g.line}</span>
+                  <Badge tone={pill.tone}>{pill.label}</Badge>
+                  <span className="text-base font-semibold text-oker-700 tabular-nums">{g.line}</span>
                 </div>
               </div>
 
@@ -355,7 +345,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                 {g.segments.map((s) => (
                   <div key={s.id} className="flex items-center gap-2 text-sm">
                     <Clock size={12} className="text-slate-400 shrink-0" />
-                    <span className="font-mono font-bold text-slate-700 tabular-nums">
+                    <span className="font-medium text-slate-700 tabular-nums">
                       {s.startTime} – {s.endTime}
                     </span>
                   </div>

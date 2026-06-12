@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, Plus } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { fetchAvailability } from '../lib/availability';
 import {
@@ -211,29 +212,35 @@ export function CoverageView() {
         description="Diensten die nog niet ingevuld zijn — per dag, t.o.v. de verwachte diensten per dag-type."
         actions={(
           <div className="flex items-center gap-2">
-            <button type="button" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} aria-label="Vorige maand" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"><ChevronLeft size={18} /></button>
-            <span className="px-3 text-sm font-black tracking-tight capitalize min-w-[130px] text-center">{MONTH_NAMES[monthIndex]} {year}</span>
-            <button type="button" onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))} aria-label="Volgende maand" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center"><ChevronRight size={18} /></button>
-            <button type="button" onClick={() => setShowConfig((v) => !v)} className={cn('ios-pressable ml-1 inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border text-[10px] font-black uppercase tracking-[0.08em] transition-colors', showConfig ? 'border-oker-300 bg-oker-50 text-oker-700' : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50')}>
-              <Settings2 size={14} /> Instellen
-            </button>
+            <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} />} aria-label="Vorige maand" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} />
+            <span className="px-3 text-sm font-bold tracking-tight capitalize min-w-[130px] text-center">{MONTH_NAMES[monthIndex]} {year}</span>
+            <Button variant="ghost" size="sm" icon={<ChevronRight size={18} />} aria-label="Volgende maand" onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))} />
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Settings2 size={14} />}
+              className={cn('ml-1', showConfig && 'bg-oker-50 text-oker-700 hover:text-oker-700')}
+              onClick={() => setShowConfig((v) => !v)}
+            >
+              Instellen
+            </Button>
           </div>
         )}
       />
 
-      {error && <div className="surface-card p-4 rounded-2xl text-sm font-bold text-red-500">{error}</div>}
+      {error && <div className="surface-card p-4 rounded-2xl text-sm font-semibold text-red-700">{error}</div>}
 
       {/* === Instellingen === */}
       {showConfig && (
         <div className="surface-card rounded-3xl p-6 space-y-6">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="text-sm font-black tracking-tight text-slate-900">Dekkingsinstellingen</h3>
+              <h3 className="text-sm font-bold tracking-tight text-slate-900">Dekkingsinstellingen</h3>
               <p className="text-xs font-medium text-slate-500 mt-0.5">Beheer je dag-types, de verwachte diensten per type, welk type elke weekdag is, en uitzonderingen.</p>
             </div>
-            <button type="button" onClick={handleSave} disabled={saving} className="btn-primary ios-pressable shrink-0 px-5 py-2.5 text-xs disabled:opacity-50">
+            <Button variant="primary" size="md" className="shrink-0" disabled={saving} onClick={handleSave}>
               {saving ? 'Opslaan…' : 'Opslaan'}
-            </button>
+            </Button>
           </div>
 
           {!config ? (
@@ -245,10 +252,10 @@ export function CoverageView() {
               {/* 1. Dag-types + verwachte diensten */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
-                  <h4 className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Dag-types &amp; verwachte diensten</h4>
-                  <button type="button" onClick={addDayType} className="ios-pressable inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-600 hover:bg-slate-50 transition-colors">
-                    <Plus size={13} /> Dag-type
-                  </button>
+                  <MicroLabel className="text-slate-500">Dag-types &amp; verwachte diensten</MicroLabel>
+                  <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addDayType}>
+                    Dag-type
+                  </Button>
                 </div>
                 {dayTypes.length === 0 ? (
                   <p className="text-sm font-medium text-slate-400">Nog geen dag-types. Klik op "Dag-type" om er een toe te voegen (bv. schooldag, vakantie, zaterdag, zondag).</p>
@@ -265,12 +272,10 @@ export function CoverageView() {
                               onChange={(e) => updateDayTypeName(i, e.target.value)}
                               placeholder="Naam dag-type"
                               aria-label="Naam dag-type"
-                              className="control-input flex-1 rounded-xl px-3 py-2 text-sm font-black outline-none"
+                              className="control-input flex-1 rounded-xl px-3 py-2 text-sm font-semibold outline-none"
                             />
-                            <span className="shrink-0 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</span>
-                            <button type="button" onClick={() => removeDayType(i)} aria-label="Dag-type verwijderen" className="ios-pressable shrink-0 w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors">
-                              <X size={15} />
-                            </button>
+                            <Badge tone="slate" className="shrink-0 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</Badge>
+                            <Button variant="ghost" size="sm" icon={<X size={15} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Dag-type verwijderen" onClick={() => removeDayType(i)} />
                           </div>
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {config.services.map((svc) => {
@@ -281,7 +286,7 @@ export function CoverageView() {
                                   type="button"
                                   onClick={() => toggleService(i, svc)}
                                   className={cn(
-                                    'rounded-lg px-2 py-1 text-[11px] font-black tabular-nums ring-1 transition-colors',
+                                    'rounded-lg px-2 py-1 text-[11px] font-semibold tabular-nums ring-1 transition-colors',
                                     on ? 'bg-oker-100 text-oker-700 ring-oker-300' : 'bg-white text-slate-400 ring-slate-200 hover:text-slate-600 hover:ring-slate-300',
                                   )}
                                 >
@@ -300,7 +305,7 @@ export function CoverageView() {
               {/* 2. Standaard dag-type per weekdag */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
                 <div>
-                  <h4 className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Standaard per weekdag</h4>
+                  <MicroLabel className="text-slate-500">Standaard per weekdag</MicroLabel>
                   <p className="text-xs font-medium text-slate-500 mt-0.5">Welk dag-type geldt standaard op elke weekdag (tenzij een uitzondering hieronder).</p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -325,12 +330,12 @@ export function CoverageView() {
               <div className="border-t border-slate-100 pt-5 space-y-3">
                 <div className="flex items-start justify-between gap-3">
                   <div>
-                    <h4 className="text-[11px] font-black uppercase tracking-[0.08em] text-slate-500">Uitzonderingen</h4>
+                    <MicroLabel className="text-slate-500">Uitzonderingen</MicroLabel>
                     <p className="text-xs font-medium text-slate-500 mt-0.5">Een periode die afwijkt van de weekdag-standaard — bv. een schoolvakantie of een feestdag (van = tot voor één dag).</p>
                   </div>
-                  <button type="button" onClick={addOverride} className="ios-pressable shrink-0 inline-flex items-center gap-1.5 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-600 hover:bg-slate-50 transition-colors">
-                    <Plus size={13} /> Uitzondering
-                  </button>
+                  <Button variant="secondary" size="sm" icon={<Plus size={13} />} className="shrink-0" onClick={addOverride}>
+                    Uitzondering
+                  </Button>
                 </div>
                 {overrides.length === 0 ? (
                   <p className="text-xs font-medium text-slate-400">Geen uitzonderingen — elke dag volgt de weekdag-standaard.</p>
@@ -341,14 +346,12 @@ export function CoverageView() {
                         <input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
                         <span className="text-[11px] font-bold text-slate-400">t/m</span>
                         <input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                        <span className="text-slate-400 font-black">→</span>
+                        <span className="text-slate-400 font-semibold">→</span>
                         <select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" className="control-input rounded-xl px-2 py-2 text-sm font-bold outline-none">
                           <option value="">— kies type —</option>
                           {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
-                        <button type="button" onClick={() => removeOverride(i)} aria-label="Uitzondering verwijderen" className="ios-pressable w-8 h-8 rounded-lg border border-slate-200 bg-white text-slate-400 hover:text-red-600 hover:border-red-200 flex items-center justify-center transition-colors">
-                          <X size={15} />
-                        </button>
+                        <Button variant="ghost" size="sm" icon={<X size={15} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Uitzondering verwijderen" onClick={() => removeOverride(i)} />
                       </div>
                     ))}
                   </div>
@@ -365,9 +368,9 @@ export function CoverageView() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
-            <span className="inline-flex items-center gap-1.5 font-black text-red-600"><AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-red-600 tabular-nums"><AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand</span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 font-black text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn gedekt</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn gedekt</span>
           )}
         </div>
         <label className="flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer select-none">
@@ -396,12 +399,13 @@ export function CoverageView() {
             return (
               <div key={d.date} className={cn('p-4 flex flex-col sm:flex-row sm:items-center gap-3', !ok && 'bg-red-50/40')}>
                 <div className="sm:w-44 shrink-0">
-                  <div className="text-sm font-black text-slate-800 capitalize">{dayLabel(d.date)}</div>
-                  <div className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 capitalize">{d.dayType || '—'}</div>
+                  <div className="text-sm font-semibold text-slate-800 capitalize tabular-nums">{dayLabel(d.date)}</div>
+                  <div className="mt-1">
+                    <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+                  </div>
                 </div>
-                <div className="shrink-0 sm:w-24">
-                  <span className={cn('text-xs font-black tabular-nums', ok ? 'text-emerald-600' : 'text-red-600')}>{d.covered}/{d.expected}</span>
-                  <span className="text-[10px] font-bold text-slate-400"> gedekt</span>
+                <div className="shrink-0 sm:w-28">
+                  <Badge tone={ok ? 'emerald' : 'red'} dot className="tabular-nums">{d.covered}/{d.expected} gedekt</Badge>
                 </div>
                 <div className="min-w-0 flex-1">
                   {ok ? (
@@ -414,7 +418,7 @@ export function CoverageView() {
                           type="button"
                           onClick={() => setPick({ date: d.date, code: svc })}
                           title="Klik om te zien wie vrij is"
-                          className="rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
+                          className="rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
                         >
                           {svc}
                         </button>
@@ -434,8 +438,8 @@ export function CoverageView() {
           <div className="p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Kandidaten voor dienst {pick.code}</div>
-                <h3 className="mt-0.5 text-lg font-black tracking-tight text-slate-900 capitalize">{dayLabel(pick.date)}</h3>
+                <MicroLabel className="tabular-nums">Kandidaten voor dienst {pick.code}</MicroLabel>
+                <h3 className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 capitalize">{dayLabel(pick.date)}</h3>
               </div>
               <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
                 <X size={16} />
@@ -451,7 +455,7 @@ export function CoverageView() {
               <p className="mt-5 text-sm font-medium text-slate-400">Niemand is vrij op deze dag (geen dienst én geen verlof).</p>
             ) : (
               <div className="mt-4">
-                <div className="text-[10px] font-black uppercase tracking-[0.08em] text-emerald-600">{freeNames.length} vrij</div>
+                <MicroLabel className="text-emerald-600 tabular-nums">{freeNames.length} vrij</MicroLabel>
                 <div className="mt-2 flex flex-col gap-1.5">
                   {freeNames.map((name) => (
                     <div key={name} className="flex items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">

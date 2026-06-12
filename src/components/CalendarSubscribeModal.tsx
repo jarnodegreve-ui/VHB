@@ -56,7 +56,7 @@ export function CalendarSubscribeModal({
               <CalendarPlus size={20} />
             </div>
             <div className="min-w-0">
-              <h3 className="text-lg font-black tracking-tight text-slate-900">Aan agenda toevoegen</h3>
+              <h3 className="text-lg font-bold tracking-tight text-slate-900">Aan agenda toevoegen</h3>
               <p className="text-xs font-medium text-slate-500">Je diensten in je eigen agenda — automatisch bijgewerkt.</p>
             </div>
           </div>
@@ -67,7 +67,7 @@ export function CalendarSubscribeModal({
 
         {/* Abonneren */}
         <div className="mt-5">
-          <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Abonneren (blijft up-to-date)</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Abonneren (blijft up-to-date)</div>
 
           {loading ? (
             <div className="mt-3 flex items-center gap-3 text-slate-500">
@@ -81,7 +81,7 @@ export function CalendarSubscribeModal({
               <div className="mt-3 flex flex-col sm:flex-row gap-2">
                 <a
                   href={links.webcal}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-black hover:bg-slate-800 transition-colors"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-800 transition-colors"
                 >
                   <CalendarPlus size={16} /> Apple / iPhone
                 </a>
@@ -89,7 +89,7 @@ export function CalendarSubscribeModal({
                   href={links.googleUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-black text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
                 >
                   <ExternalLink size={16} className="text-oker-500" /> Google Agenda
                 </a>
@@ -105,7 +105,7 @@ export function CalendarSubscribeModal({
                 <button
                   type="button"
                   onClick={copy}
-                  className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-black text-slate-600 hover:bg-slate-50 transition-colors"
+                  className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
                 >
                   {copied ? <><Check size={14} className="text-emerald-500" /> Gekopieerd</> : <><Copy size={14} /> Kopieer</>}
                 </button>
@@ -125,11 +125,11 @@ export function CalendarSubscribeModal({
 
         {/* Eenmalig downloaden */}
         <div className="mt-5 pt-4 border-t border-slate-100">
-          <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Of eenmalig</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Of eenmalig</div>
           <button
             type="button"
             onClick={() => { onDownload(); onClose(); }}
-            className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-black text-slate-700 hover:bg-slate-50 transition-colors"
+            className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
           >
             <Download size={16} className="text-oker-500" /> Download .ics-bestand
           </button>

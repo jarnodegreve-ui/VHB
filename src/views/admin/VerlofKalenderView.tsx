@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
 import { cn } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
+import { Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 
 const WEEKDAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 const MONTH_NAMES = [
@@ -103,30 +104,24 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
         description="Maandoverzicht van wie wanneer afwezig is. Eén oogopslag voor capaciteitsplanning."
         actions={(
           <div className="flex items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={goToPrev}
               aria-label="Vorige maand"
-              className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors"
-            >
-              <ChevronLeft size={18} />
-            </button>
-            <span className="px-3 text-base font-black tracking-tight capitalize min-w-[150px] text-center">{monthName} {year}</span>
-            <button
-              type="button"
+              icon={<ChevronLeft size={16} />}
+            />
+            <span className="px-3 text-base font-semibold tracking-tight capitalize min-w-[150px] text-center text-slate-800">{monthName} {year}</span>
+            <Button
+              variant="ghost"
+              size="sm"
               onClick={goToNext}
               aria-label="Volgende maand"
-              className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors"
-            >
-              <ChevronRight size={18} />
-            </button>
-            <button
-              type="button"
-              onClick={goToToday}
-              className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
-            >
+              icon={<ChevronRight size={16} />}
+            />
+            <Button variant="secondary" size="sm" className="ml-1" onClick={goToToday}>
               Vandaag
-            </button>
+            </Button>
           </div>
         )}
       />
@@ -134,29 +129,29 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
       {/* Desktop: volle 31-koloms kalender. Op mobile is dit onbruikbaar
           (~6px per dag-cel), dus tonen we hieronder een per-chauffeur
           stacked list. */}
-      <div className="hidden md:block surface-card rounded-3xl overflow-hidden">
-        <div className="overflow-x-auto">
+      <TableShell className="hidden md:block">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/60 border-b border-slate-100">
-                <th className="sticky left-0 z-10 bg-slate-50/95 backdrop-blur px-4 py-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 min-w-[180px]">
+                <Th className="sticky left-0 z-10 bg-slate-50/95 backdrop-blur min-w-[180px]">
                   Chauffeur
-                </th>
+                </Th>
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
-                  <th
-                    key={day}
-                    className={cn(
-                      'px-1 py-2 text-center font-medium border-l border-slate-100',
-                      isWeekend(day) && 'bg-slate-100/50',
-                      isToday(day) && 'bg-oker-50',
-                    )}
-                  >
-                    <div className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
-                    <div className={cn('text-xs font-black mt-0.5', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
-                    {absenceCountPerDay[day] > 0 && (
-                      <div className="text-[9px] font-black text-emerald-600 mt-0.5">{absenceCountPerDay[day]}</div>
-                    )}
-                  </th>
+                  <Fragment key={day}>
+                    <Th
+                      className={cn(
+                        'px-1 py-2 text-center border-l border-slate-100',
+                        isWeekend(day) && 'bg-slate-100/50',
+                        isToday(day) && 'bg-oker-50',
+                      )}
+                    >
+                      <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
+                      <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
+                      {absenceCountPerDay[day] > 0 && (
+                        <div className="text-[9px] font-semibold text-emerald-600 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
+                      )}
+                    </Th>
+                  </Fragment>
                 ))}
               </tr>
             </thead>
@@ -165,9 +160,9 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 const userMap = leaveByUserDay.get(u.id);
                 return (
                   <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
-                    <td className="sticky left-0 z-10 bg-white/95 backdrop-blur px-4 py-2 text-sm font-bold text-slate-800 min-w-[180px] truncate">
+                    <Td className="sticky left-0 z-10 bg-white/95 backdrop-blur py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
                       {u.name}
-                    </td>
+                    </Td>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
                       const leave = userMap?.get(day);
                       const title = leave
@@ -193,12 +188,11 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 );
               })}
               {visibleUsers.length === 0 && (
-                <tr><td colSpan={daysInMonth + 1} className="p-8 text-center text-sm italic text-slate-400">Geen actieve chauffeurs gevonden.</td></tr>
+                <tr><td colSpan={daysInMonth + 1} className="px-4 py-8 text-center text-sm italic text-slate-400">Geen actieve chauffeurs gevonden.</td></tr>
               )}
             </tbody>
           </table>
-        </div>
-      </div>
+      </TableShell>
 
       {/* Mobile: per-chauffeur lijst met afwezigheden in deze maand.
           Veel compacter dan een mini-grid; meest relevante info eerst. */}
@@ -214,11 +208,11 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
           return (
             <div key={u.id} className="p-4">
               <div className="flex items-baseline justify-between gap-2">
-                <div className="text-sm font-bold text-slate-800 truncate">{u.name}</div>
+                <div className="text-sm font-semibold text-slate-800 truncate">{u.name}</div>
                 {uniqueLeaves.length > 0 && (
-                  <div className="shrink-0 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  <MicroLabel className="shrink-0">
                     {uniqueLeaves.length} {uniqueLeaves.length === 1 ? 'aanvraag' : 'aanvragen'}
-                  </div>
+                  </MicroLabel>
                 )}
               </div>
               {uniqueLeaves.length === 0 ? (
@@ -233,7 +227,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                     return (
                       <li key={leave.id} className="flex items-center gap-2.5 text-xs">
                         <span className={cn('shrink-0 w-2.5 h-2.5 rounded-full', cellColor(leave.status, leave.type))} />
-                        <span className="font-bold text-slate-700">
+                        <span className="font-semibold text-slate-700 tabular-nums">
                           {sameMonthAsStart ? startDay : '←'}
                           {leave.startDate !== leave.endDate && ` — ${sameMonthAsEnd ? endDay : '→'}`}
                         </span>
@@ -260,7 +254,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
 
       {/* Legende */}
       <div className="surface-card rounded-3xl p-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
-        <span className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Legende</span>
+        <MicroLabel className="text-slate-500">Legende</MicroLabel>
         <div className="flex items-center gap-2">
           <div className="w-4 h-3 rounded-sm bg-emerald-500" />
           <span className="font-medium text-slate-600">Betaald verlof goedgekeurd</span>

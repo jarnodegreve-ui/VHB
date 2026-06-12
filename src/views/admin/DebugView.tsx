@@ -3,6 +3,7 @@ import { Activity, FlaskConical } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
+import { Badge, Button, MicroLabel } from '../../components/primitives';
 
 const TEST_SHIFT_ID_PREFIX = 'test-shift-';
 
@@ -116,20 +117,12 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         title="Systeem Status (Debug)"
         actions={(
           <div className="flex items-center gap-3">
-            <button
-              onClick={testWrite}
-              disabled={isTesting}
-              className="btn-primary ios-pressable px-4 py-2 text-sm"
-            >
+            <Button variant="primary" onClick={testWrite} disabled={isTesting}>
               {isTesting ? 'Testen...' : 'Test Schrijven'}
-            </button>
-            <button
-              onClick={checkHealth}
-              disabled={isCheckingHealth}
-              className="px-4 py-2 bg-slate-100 rounded-xl text-slate-600 font-bold text-sm hover:bg-slate-200 disabled:opacity-50"
-            >
+            </Button>
+            <Button variant="secondary" onClick={checkHealth} disabled={isCheckingHealth}>
               {isCheckingHealth ? 'Controleren...' : 'Ververs Status'}
-            </button>
+            </Button>
           </div>
         )}
       />
@@ -137,7 +130,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       {testResult && (
         <div
           className={cn(
-            'p-4 rounded-2xl text-sm font-bold',
+            'p-4 rounded-2xl text-sm font-semibold',
             testResult.startsWith('Succes')
               ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
               : 'bg-red-50 text-red-700 border border-red-100'
@@ -151,35 +144,35 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div className="surface-card p-6 rounded-3xl">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] mb-4">Supabase Status</h4>
+              <MicroLabel className="mb-4">Supabase Status</MicroLabel>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-slate-600">Configuratie:</span>
-                  <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', healthData.supabase === 'configured' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500')}>
+                  <span className="text-sm font-medium text-slate-600">Configuratie:</span>
+                  <Badge tone={healthData.supabase === 'configured' ? 'emerald' : 'red'} dot>
                     {healthData.supabase}
-                  </span>
+                  </Badge>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-slate-600">Omgeving:</span>
-                  <span className="text-sm font-black text-slate-800">{healthData.env}</span>
+                  <span className="text-sm font-medium text-slate-600">Omgeving:</span>
+                  <span className="text-sm font-semibold text-slate-800">{healthData.env}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm font-bold text-slate-600">Server Tijd:</span>
-                  <span className="text-xs font-mono text-slate-500">{new Date(healthData.time).toLocaleString()}</span>
+                  <span className="text-sm font-medium text-slate-600">Server Tijd:</span>
+                  <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(healthData.time).toLocaleString()}</span>
                 </div>
               </div>
             </div>
 
             <div className="surface-card p-6 rounded-3xl">
-              <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] mb-4">Tabel Status</h4>
+              <MicroLabel className="mb-4">Tabel Status</MicroLabel>
               <div className="space-y-3">
                 {Object.entries(healthData.tables || {}).map(([name, status]: [string, any]) => (
                   <div key={name} className="flex flex-col gap-1">
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-bold text-slate-600 capitalize">{name}:</span>
-                      <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', status === 'OK' ? 'bg-emerald-50 text-emerald-500' : 'bg-red-50 text-red-500')}>
-                        {status === 'OK' ? 'OK' : 'ERROR'}
-                      </span>
+                      <span className="text-sm font-medium text-slate-600 capitalize">{name}:</span>
+                      <Badge tone={status === 'OK' ? 'emerald' : 'red'} dot>
+                        {status === 'OK' ? 'OK' : 'Fout'}
+                      </Badge>
                     </div>
                     {status !== 'OK' && <p className="text-[10px] text-red-400 font-mono break-all bg-red-50 p-2 rounded-lg mt-1">{status}</p>}
                   </div>
@@ -189,7 +182,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           </div>
 
           <div className="bg-slate-900 p-6 rounded-3xl text-slate-300 font-mono text-xs overflow-auto max-h-64">
-            <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.08em] mb-4">Raw Health Data</h4>
+            <MicroLabel className="mb-4 text-slate-500">Raw Health Data</MicroLabel>
             <pre>{JSON.stringify(healthData, null, 2)}</pre>
           </div>
         </div>
@@ -201,24 +194,17 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             <FlaskConical size={24} />
           </div>
           <div className="flex-1">
-            <h4 className="text-slate-900 font-black text-lg mb-2">Test-omgeving</h4>
+            <h4 className="text-slate-900 font-semibold text-lg mb-2">Test-omgeving</h4>
             <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <code className="bg-slate-100 px-1 rounded font-black">TEST</code> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.
+              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <code className="bg-slate-100 px-1 rounded font-semibold">TEST</code> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.
             </p>
             <div className="flex flex-wrap items-center gap-3">
-              <button
-                onClick={addTestShift}
-                className="btn-primary ios-pressable px-4 py-2 text-sm"
-              >
+              <Button variant="primary" onClick={addTestShift}>
                 + Maak fictieve dienst voor mezelf
-              </button>
-              <button
-                onClick={clearTestShifts}
-                disabled={myTestShifts.length === 0}
-                className="px-4 py-2 bg-slate-100 rounded-xl text-slate-600 font-bold text-sm hover:bg-slate-200 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              </Button>
+              <Button variant="secondary" onClick={clearTestShifts} disabled={myTestShifts.length === 0}>
                 Verwijder mijn fictieve diensten ({myTestShifts.length})
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -230,10 +216,10 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             <Activity size={24} />
           </div>
           <div>
-            <h4 className="text-oker-900 font-black text-lg mb-2">Hulp bij problemen</h4>
+            <h4 className="text-oker-900 font-semibold text-lg mb-2">Hulp bij problemen</h4>
             <p className="text-oker-800 text-sm leading-relaxed font-medium">
               Als de tabellen hierboven "Error" of "Exception" aangeven, betekent dit dat de tabel waarschijnlijk nog niet bestaat in Supabase of dat de rechten niet goed staan.
-              Zorg ervoor dat je de tabellen <code className="bg-oker-100 px-1 rounded font-black">users</code>, <code className="bg-oker-100 px-1 rounded font-black">planning</code>, <code className="bg-oker-100 px-1 rounded font-black">diversions</code> en <code className="bg-oker-100 px-1 rounded font-black">services</code> hebt aangemaakt in je Supabase project.
+              Zorg ervoor dat je de tabellen <code className="bg-oker-100 px-1 rounded font-semibold">users</code>, <code className="bg-oker-100 px-1 rounded font-semibold">planning</code>, <code className="bg-oker-100 px-1 rounded font-semibold">diversions</code> en <code className="bg-oker-100 px-1 rounded font-semibold">services</code> hebt aangemaakt in je Supabase project.
             </p>
           </div>
         </div>

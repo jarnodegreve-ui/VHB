@@ -1,9 +1,16 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Bell, CalendarDays, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
-import { cn, notify } from '../../lib/ui';
+import { notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
+import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
+
+const CATEGORY_BADGE_TONE: Record<string, 'amber' | 'blue' | 'slate'> = {
+  veiligheid: 'amber',
+  technisch: 'blue',
+  algemeen: 'slate',
+};
 
 function Input({
   label,
@@ -22,9 +29,9 @@ function Input({
 }) {
   return (
     <div className="space-y-2">
-      <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">{label}</label>
+      <MicroLabel className="ml-1">{label}</MicroLabel>
       {type === 'select' ? (
-        <select value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60">
+        <select value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all bg-white/60">
           {options?.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -37,7 +44,7 @@ function Input({
           placeholder={placeholder}
           value={value}
           onChange={onChange}
-          className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all"
+          className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all"
         />
       )}
     </div>
@@ -125,8 +132,8 @@ export function ManageUpdatesView({
   return (
     <PageShell>
       <PageHeader eyebrow="Beheer" title="Beheer Updates" />
-      <div className="surface-card p-6 md:p-8 rounded-3xl">
-        <h3 className="text-lg font-black mb-8 flex items-center gap-3 tracking-tight">
+      <div className="surface-card p-5 md:p-6 rounded-3xl">
+        <h3 className="text-lg font-bold mb-6 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-emerald-500" />
           {editingId ? 'Update Bewerken' : 'Nieuwe Update Publiceren'}
         </h3>
@@ -143,13 +150,13 @@ export function ManageUpdatesView({
                   checked={updateForm.isUrgent}
                   onChange={(e) => setUpdateForm({ ...updateForm, isUrgent: e.target.checked })}
                 />
-                <label htmlFor="isUrgent" className="text-sm font-black text-red-700 uppercase tracking-[0.08em] cursor-pointer flex items-center gap-2">
-                  <AlertTriangle size={16} /> Markeer als DRINGEND (verstuurt automatische e-mail)
+                <label htmlFor="isUrgent" className="text-sm font-semibold text-red-700 cursor-pointer flex items-center gap-2">
+                  <AlertTriangle size={16} /> Markeer als dringend (verstuurt automatische e-mail)
                 </label>
               </div>
             ) : (
               <div>
-                <p className="text-sm font-black uppercase tracking-[0.08em] text-red-700 flex items-center gap-2">
+                <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
                   <AlertTriangle size={16} /> Dringende verzending admin-only
                 </p>
                 <p className="mt-2 text-sm font-medium text-red-700/80">
@@ -160,7 +167,7 @@ export function ManageUpdatesView({
           </div>
 
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] mb-3">Inhoud van het bericht</label>
+            <MicroLabel className="mb-3">Inhoud van het bericht</MicroLabel>
             <textarea
               className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
               placeholder="Schrijf hier het bericht voor de chauffeurs..."
@@ -169,41 +176,28 @@ export function ManageUpdatesView({
             />
           </div>
 
-          <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-            <button
-              type="submit"
-              disabled={isPublishing}
-              className={cn(
-                'w-full font-black px-8 py-4 rounded-2xl transition-all shadow-xl uppercase tracking-[0.08em] text-xs active:scale-95',
-                isPublishing ? 'bg-slate-200 text-slate-400 cursor-not-allowed' : 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-emerald-500/20'
-              )}
-            >
+          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <Button type="submit" variant="primary" size="lg" full disabled={isPublishing}>
               {isPublishing ? (editingId ? 'Bijwerken...' : 'Publiceren...') : (editingId ? 'Update Bijwerken' : 'Update Publiceren')}
-            </button>
+            </Button>
             {editingId ? (
-              <button
-                type="button"
-                onClick={handleCancelEdit}
-                className="w-full rounded-2xl border border-white/70 bg-white/55 px-8 py-4 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-all hover:bg-white/80 sm:w-auto"
-              >
+              <Button variant="secondary" size="lg" className="w-full sm:w-auto" onClick={handleCancelEdit}>
                 Annuleren
-              </button>
+              </Button>
             ) : null}
           </div>
         </form>
       </div>
 
-      <div className="surface-card p-6 md:p-8 rounded-3xl">
+      <div className="surface-card p-5 md:p-6 rounded-3xl">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-black tracking-tight">Bestaande Updates</h3>
+            <h3 className="text-lg font-bold tracking-tight">Bestaande Updates</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
               Beheer gepubliceerde berichten en verwijder updates die niet meer zichtbaar mogen zijn.
             </p>
           </div>
-          <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
-            {updates.length} zichtbaar
-          </div>
+          <Badge tone="slate" className="shrink-0 tabular-nums">{updates.length} zichtbaar</Badge>
         </div>
 
         <div className="mt-6 space-y-3">
@@ -212,53 +206,47 @@ export function ManageUpdatesView({
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span className={cn(
-                      'rounded-full px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em]',
-                      update.isUrgent ? 'bg-red-100 text-red-700 border border-red-200' : 'bg-white/80 text-slate-500 border border-white/70'
-                    )}>
-                      {update.isUrgent ? 'Dringend' : update.category}
-                    </span>
-                    <span className="inline-flex items-center gap-1 text-[11px] font-black uppercase tracking-[0.08em] text-slate-400">
+                    {update.isUrgent ? (
+                      <Badge tone="red" dot>Dringend</Badge>
+                    ) : (
+                      <Badge tone={CATEGORY_BADGE_TONE[update.category] ?? 'slate'} className="capitalize">{update.category}</Badge>
+                    )}
+                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 tabular-nums">
                       <CalendarDays size={13} />
                       {update.date}
                     </span>
                   </div>
-                  <h4 className="mt-3 text-lg font-black tracking-tight text-slate-900">{update.title}</h4>
+                  <h4 className="mt-3 text-lg font-bold tracking-tight text-slate-900">{update.title}</h4>
                   <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-7 text-slate-600">
                     {update.content}
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setHistoryUpdate(update)}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon={<History size={14} />}
+                    aria-label="Wijzigingsgeschiedenis"
                     title="Wijzigingsgeschiedenis"
-                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-all hover:text-slate-800"
-                  >
-                    <History size={14} />
-                  </button>
-                  <button
-                    type="button"
+                    onClick={() => setHistoryUpdate(update)}
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    icon={<Pencil size={14} />}
                     onClick={() => handleEdit(update)}
-                    className="glass-button inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-600 transition-all hover:text-oker-600"
                   >
-                    <Pencil size={14} />
                     Bewerk
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(update.id)}
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    icon={<Trash2 size={14} />}
                     disabled={deletingId === update.id}
-                    className={cn(
-                      'inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.08em] transition-all',
-                      deletingId === update.id
-                        ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
-                        : 'glass-button text-red-500 hover:text-red-600'
-                    )}
+                    onClick={() => handleDelete(update.id)}
                   >
-                    <Trash2 size={14} />
                     {deletingId === update.id ? 'Verwijderen...' : 'Verwijder'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>

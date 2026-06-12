@@ -30,7 +30,7 @@ export function BrandEmptyState({
           <BrandBus width={120} />
         </div>
       )}
-      <h4 className="text-base font-black tracking-tight text-slate-800">{title}</h4>
+      <h4 className="text-base font-bold tracking-tight text-slate-800">{title}</h4>
       {message && (
         <p className="mt-1.5 max-w-sm text-sm font-medium text-slate-500">
           {message}

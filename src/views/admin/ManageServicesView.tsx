@@ -3,6 +3,7 @@ import { Clock, Download, History, Pencil, Plus, Trash2, Upload, X } from 'lucid
 import type { Service, View } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -216,7 +217,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         title="Beheer Dienstoverzicht"
         description="Voeg diensten toe, bewerk of verwijder ze."
         actions={(
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             {canAdminOverride ? (
               <>
                 <input
@@ -230,29 +231,24 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 <label
                   htmlFor="services-upload"
                   className={cn(
-                    "control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all cursor-pointer active:scale-95",
-                    isImporting && "opacity-50 cursor-not-allowed"
+                    'control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-all hover:text-slate-900',
+                    isImporting && 'cursor-not-allowed opacity-50'
                   )}
                   title="Importeer vanuit Excel"
                 >
-                  <Upload size={20} className="text-oker-500" />
+                  <Upload size={16} />
                   {isImporting ? 'Importeren...' : 'Excel Import'}
                 </label>
               </>
             ) : (
-              <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
-                Excel import admin-only
-              </div>
+              <Badge tone="slate">Excel import admin-only</Badge>
             )}
-            <button
-              onClick={downloadCSV}
-              className="control-button-soft flex items-center gap-2 px-6 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
-              title="Download als CSV"
-            >
-              <Download size={20} className="text-oker-500" />
+            <Button variant="secondary" icon={<Download size={16} />} onClick={downloadCSV} title="Download als CSV">
               Download CSV
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              icon={<Plus size={16} />}
               onClick={() => {
                 setEditingId(null);
                 setFormData({
@@ -266,48 +262,46 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 });
                 setShowModal(true);
               }}
-              className="btn-primary ios-pressable px-6 py-3 flex items-center gap-2"
             >
-              <Plus size={20} />
               Nieuwe Dienst
-            </button>
+            </Button>
           </div>
         )}
       />
 
-      <div className="surface-table rounded-3xl overflow-hidden">
+      <TableShell>
         {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto">
+        <div className="hidden md:block">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 1</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 2</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 3</th>
-                <th className="px-6 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] text-right">Acties</th>
+                <Th>Dienst</Th>
+                <Th>Deel 1</Th>
+                <Th>Deel 2</Th>
+                <Th>Deel 3</Th>
+                <Th className="text-right">Acties</Th>
               </tr>
             </thead>
             <tbody>
               {services.map(s => (
-                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-6 py-5 font-black text-slate-800">{s.serviceNumber}</td>
-                  <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
+                  <Td className="font-semibold text-slate-800">{s.serviceNumber}</Td>
+                  <Td className="tabular-nums">
                     {s.startTime} - {s.endTime}
-                  </td>
-                  <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                  </Td>
+                  <Td className="tabular-nums">
                     {s.startTime2 ? `${s.startTime2} - ${s.endTime2}` : '-'}
-                  </td>
-                  <td className="px-6 py-5 text-slate-600 font-bold text-xs">
+                  </Td>
+                  <Td className="tabular-nums">
                     {s.startTime3 ? `${s.startTime3} - ${s.endTime3}` : '-'}
-                  </td>
-                  <td className="px-6 py-5 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      <button onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><History size={18} /></button>
-                      <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
-                      {canAdminOverride ? <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button> : null}
+                  </Td>
+                  <Td className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
+                      <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
+                      {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
                     </div>
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -315,22 +309,22 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         </div>
 
         {/* Mobile Card View */}
-        <div className="md:hidden divide-y divide-slate-50">
+        <div className="md:hidden divide-y divide-slate-100">
           {services.map(s => (
-            <div key={s.id} className="p-6 space-y-4 hover:bg-slate-50/50 transition-colors">
+            <div key={s.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
-                <div className="flex items-center gap-2">
-                  <button onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 transition-colors"><History size={18} /></button>
-                  <button onClick={() => handleEdit(s)} className="p-2 text-slate-400 hover:text-oker-500 transition-colors"><Pencil size={18} /></button>
-                  {canAdminOverride ? <button onClick={() => handleDelete(s.id)} className="p-2 text-slate-400 hover:text-red-500 transition-colors"><Trash2 size={18} /></button> : null}
+                <span className="text-lg font-bold text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
+                  <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
+                  {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
                 </div>
               </div>
-              
+
               <div className="grid grid-cols-1 gap-3">
                 <div className="flex flex-col gap-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 1</span>
-                  <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                  <MicroLabel>Deel 1</MicroLabel>
+                  <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
                     <Clock size={14} className="text-oker-500" />
                     {s.startTime} - {s.endTime}
                   </div>
@@ -338,8 +332,8 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
                 {s.startTime2 && (
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 2</span>
-                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                    <MicroLabel>Deel 2</MicroLabel>
+                    <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
                       <Clock size={14} className="text-oker-500" />
                       {s.startTime2} - {s.endTime2}
                     </div>
@@ -348,8 +342,8 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
                 {s.startTime3 && (
                   <div className="flex flex-col gap-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 3</span>
-                    <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                    <MicroLabel>Deel 3</MicroLabel>
+                    <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
                       <Clock size={14} className="text-oker-500" />
                       {s.startTime3} - {s.endTime3}
                     </div>
@@ -369,81 +363,81 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             />
           </div>
         )}
-      </div>
+      </TableShell>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg">
-        <div className="p-8 border-b border-white/70 flex items-center justify-between">
-          <h4 className="text-xl font-black">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
-          <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
+        <div className="p-6 md:p-8 border-b border-white/70 flex items-center justify-between">
+          <h4 className="text-lg font-bold tracking-tight">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
+          <Button variant="ghost" size="sm" className="px-2" icon={<X size={20} />} onClick={() => setShowModal(false)} aria-label="Sluiten" />
         </div>
-        <form onSubmit={handleSubmit} className="p-8 space-y-5">
+        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-5">
           <div className="space-y-2">
-            <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Dienstnummer</label>
+            <MicroLabel className="ml-1">Dienstnummer</MicroLabel>
             <input
               type="text" required value={formData.serviceNumber}
               onChange={(e) => setFormData({...formData, serviceNumber: e.target.value})}
-              className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+              className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Starttijd (Deel 1)</label>
+              <MicroLabel className="ml-1">Starttijd (Deel 1)</MicroLabel>
               <input
                 type="time" required value={formData.startTime}
                 onChange={(e) => setFormData({...formData, startTime: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Eindtijd (Deel 1)</label>
+              <MicroLabel className="ml-1">Eindtijd (Deel 1)</MicroLabel>
               <input
                 type="time" required value={formData.endTime}
                 onChange={(e) => setFormData({...formData, endTime: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Starttijd (Deel 2)</label>
+              <MicroLabel className="ml-1">Starttijd (Deel 2)</MicroLabel>
               <input
                 type="time" value={formData.startTime2}
                 onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Eindtijd (Deel 2)</label>
+              <MicroLabel className="ml-1">Eindtijd (Deel 2)</MicroLabel>
               <input
                 type="time" value={formData.endTime2}
                 onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Starttijd (Deel 3)</label>
+              <MicroLabel className="ml-1">Starttijd (Deel 3)</MicroLabel>
               <input
                 type="time" value={formData.startTime3}
                 onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Eindtijd (Deel 3)</label>
+              <MicroLabel className="ml-1">Eindtijd (Deel 3)</MicroLabel>
               <input
                 type="time" value={formData.endTime3}
                 onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
           </div>
-          <button type="submit" className="btn-primary ios-pressable w-full py-4 mt-4">
+          <Button type="submit" variant="primary" size="lg" full className="mt-4">
             {editingId ? 'Dienst Bijwerken' : 'Dienst Toevoegen'}
-          </button>
+          </Button>
         </form>
       </Modal>
 

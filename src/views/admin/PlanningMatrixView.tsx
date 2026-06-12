@@ -1,10 +1,20 @@
-import { useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, Clock, Download, FileText, Filter, Upload, Users } from 'lucide-react';
+import { Fragment, useDeferredValue, useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Calendar, Clock, Download, FileText, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { EmptyState } from '../../components/ui';
+import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { StatCard } from '../../components/StatCard';
 import { normalizePlanningToken, resolvePlanningAssignment } from '../../lib/planning';
+
+/** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
+const ASSIGNMENT_KIND_TONES: Record<'service' | 'leave' | 'absence' | 'training' | 'unknown', 'blue' | 'oker' | 'amber' | 'emerald' | 'red' | 'slate'> = {
+  service: 'blue',
+  leave: 'oker',
+  absence: 'amber',
+  training: 'emerald',
+  unknown: 'red',
+};
 
 export function PlanningMatrixView({
   rows,
@@ -243,42 +253,39 @@ export function PlanningMatrixView({
       <section className="surface-card rounded-3xl p-5 md:p-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
-            <h3 className="text-lg font-black tracking-tight">Controlefilters</h3>
+            <h3 className="text-lg font-bold tracking-tight">Controlefilters</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
               Filter op probleemdagen of klik een onbekende code om enkel die assignments te bekijken.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button
+            <Button
+              size="sm"
+              variant={showOnlyIssues ? 'ghost' : 'secondary'}
               onClick={() => setShowOnlyIssues((current) => !current)}
-              className={cn(
-                "rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
-                showOnlyIssues ? "border-red-200 bg-red-50 text-red-700" : "border-white/70 bg-white/55 text-slate-500 hover:bg-white/80"
-              )}
+              className={showOnlyIssues ? 'border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-700' : undefined}
             >
               {showOnlyIssues ? 'Alleen Probleemdagen' : 'Toon Alle Dagen'}
-            </button>
+            </Button>
             {highlightedCode ? (
-              <button
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => setHighlightedCode(null)}
-                className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] text-oker-700 transition-all hover:bg-oker-100"
+                className="border border-oker-200 bg-oker-50 text-oker-700 hover:bg-oker-100 hover:text-oker-700"
               >
                 Reset Codefilter
-              </button>
+              </Button>
             ) : null}
-            <button
+            <Button
+              size="sm"
+              variant="secondary"
+              icon={<Download size={14} />}
               onClick={exportProblemReport}
               disabled={derived.globalUnknownCodes.length === 0 && derived.globalUnmatchedDrivers.length === 0}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
-                derived.globalUnknownCodes.length === 0 && derived.globalUnmatchedDrivers.length === 0
-                  ? "cursor-not-allowed border-slate-100 bg-slate-50 text-slate-300"
-                  : "border-white/70 bg-white/55 text-slate-600 hover:bg-white/80"
-              )}
             >
-              <Download size={14} />
               Exporteer Problemen
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -288,26 +295,22 @@ export function PlanningMatrixView({
               key={code}
               onClick={() => setHighlightedCode(code)}
               className={cn(
-                "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
-                highlightedCode === code ? "border-red-300 bg-red-100 text-red-800" : "border-red-200 bg-red-50 text-red-700 hover:bg-red-100"
+                'ios-pressable rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+                highlightedCode === code ? 'border-red-300 bg-red-100 text-red-800' : 'border-red-100 bg-red-50 text-red-700 hover:bg-red-100'
               )}
             >
               {code}
             </button>
           )) : (
-            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] text-emerald-700">
-              Geen onbekende codes
-            </span>
+            <Badge tone="emerald">Geen onbekende codes</Badge>
           )}
         </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
+          <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-[0.08em] text-red-700">Onbekende Codes</p>
-              <span className="rounded-full border border-red-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-red-700">
-                {derived.globalUnknownCodes.length}
-              </span>
+              <MicroLabel className="text-red-700">Onbekende Codes</MicroLabel>
+              <Badge tone="red">{derived.globalUnknownCodes.length}</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {derived.globalUnknownCodes.length > 0 ? derived.globalUnknownCodes.map((code) => (
@@ -315,8 +318,8 @@ export function PlanningMatrixView({
                   key={`list-${code}`}
                   onClick={() => setHighlightedCode(code)}
                   className={cn(
-                    "rounded-full border px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em] transition-all",
-                    highlightedCode === code ? "border-red-300 bg-red-100 text-red-800" : "border-red-200 bg-white/80 text-red-700 hover:bg-red-100"
+                    'ios-pressable rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+                    highlightedCode === code ? 'border-red-300 bg-red-100 text-red-800' : 'border-red-100 bg-white/80 text-red-700 hover:bg-red-100'
                   )}
                 >
                   {code}
@@ -327,36 +330,24 @@ export function PlanningMatrixView({
             </div>
             {derived.globalUnknownCodes.length > 0 ? (
               <div className="mt-4 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={onOpenPlanningCodes}
-                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
-                >
+                <Button size="sm" variant="danger" onClick={onOpenPlanningCodes}>
                   Open Planningscodes
-                </button>
-                <button
-                  type="button"
-                  onClick={onOpenServiceOverview}
-                  className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
-                >
+                </Button>
+                <Button size="sm" variant="danger" onClick={onOpenServiceOverview}>
                   Open Dienstoverzicht
-                </button>
+                </Button>
               </div>
             ) : null}
           </div>
 
-          <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 p-5">
+          <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
             <div className="flex items-center justify-between gap-3">
-              <p className="text-xs font-black uppercase tracking-[0.08em] text-amber-700">Niet-Gematchte Chauffeurs</p>
-              <span className="rounded-full border border-amber-200 bg-white/80 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">
-                {derived.globalUnmatchedDrivers.length}
-              </span>
+              <MicroLabel className="text-amber-700">Niet-Gematchte Chauffeurs</MicroLabel>
+              <Badge tone="amber">{derived.globalUnmatchedDrivers.length}</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {derived.globalUnmatchedDrivers.length > 0 ? derived.globalUnmatchedDrivers.map((driver) => (
-                <span key={driver} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
-                  {driver}
-                </span>
+                <Fragment key={driver}><Badge tone="amber" className="bg-white/80">{driver}</Badge></Fragment>
               )) : (
                 <span className="text-sm font-medium text-amber-700">Alle chauffeurs zijn gekoppeld.</span>
               )}
@@ -364,17 +355,16 @@ export function PlanningMatrixView({
             {derived.globalUnmatchedDrivers.length > 0 ? (
               <div className="mt-4">
                 {canOpenUserManagement ? (
-                  <button
-                    type="button"
+                  <Button
+                    size="sm"
+                    variant="ghost"
                     onClick={onOpenUserManagement}
-                    className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700 transition-all hover:bg-amber-100"
+                    className="border border-amber-200 bg-white/80 text-amber-700 hover:bg-amber-100 hover:text-amber-700"
                   >
                     Open Gebruikersbeheer
-                  </button>
+                  </Button>
                 ) : (
-                  <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-amber-700">
-                    Gebruikersbeheer admin-only
-                  </div>
+                  <Badge tone="amber" className="bg-white/80">Gebruikersbeheer admin-only</Badge>
                 )}
               </div>
             ) : null}
@@ -385,7 +375,7 @@ export function PlanningMatrixView({
       <div className="grid gap-6 xl:grid-cols-[320px_minmax(0,1fr)]">
         <section className="surface-card rounded-3xl p-6">
           <div className="mb-5">
-            <h3 className="text-lg font-black tracking-tight">Geuploade Dagen</h3>
+            <h3 className="text-lg font-bold tracking-tight">Geuploade Dagen</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
               {visibleRows.length} getoond, {derived.rowsWithAssignments.length} met effectieve assignments en {derived.rowsWithIssues.length} met controlepunten.
             </p>
@@ -403,34 +393,30 @@ export function PlanningMatrixView({
                   key={row.id}
                   onClick={() => setSelectedDate(row.source_date)}
                   className={cn(
-                    "w-full rounded-2xl border px-4 py-4 text-left transition-all",
-                    isActive ? "border-oker-400 bg-oker-50 ring-2 ring-oker-500/10" : "border-white/70 bg-white/45 hover:bg-white/75"
+                    'ios-pressable w-full rounded-2xl border px-4 py-3 text-left transition-all',
+                    isActive ? 'border-oker-400 bg-oker-50 ring-2 ring-oker-500/10' : 'border-slate-100 bg-white/60 hover:bg-slate-50/60'
                   )}
                 >
-                  <p className="text-sm font-black text-slate-800">
+                  <p className="text-sm font-semibold text-slate-800 tabular-nums">
                     {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
-                  <div className="mt-2 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  <div className="mt-1.5 flex items-center justify-between text-[11px] font-medium text-slate-400 tabular-nums">
                     <span>Dagtype {row.day_type || '-'}</span>
                     <span>{assignmentCount} codes</span>
                   </div>
-                  <div className="mt-1 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">
+                  <div className="mt-0.5 flex items-center justify-between text-[11px] font-medium text-slate-400 tabular-nums">
                     <span>{generatedServices} diensten</span>
                     {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
-                      ? <span>controle nodig</span>
+                      ? <span className="font-semibold text-amber-700">controle nodig</span>
                       : <span>&nbsp;</span>}
                   </div>
                   {(rowUnknownCodes > 0 || rowUnmatchedDrivers > 0) ? (
-                    <div className="mt-2 flex flex-wrap gap-2">
+                    <div className="mt-2 flex flex-wrap gap-1.5">
                       {rowUnknownCodes > 0 ? (
-                        <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-red-700">
-                          {rowUnknownCodes} onbekend
-                        </span>
+                        <Badge tone="red">{rowUnknownCodes} onbekend</Badge>
                       ) : null}
                       {rowUnmatchedDrivers > 0 ? (
-                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700">
-                          {rowUnmatchedDrivers} chauffeur
-                        </span>
+                        <Badge tone="amber">{rowUnmatchedDrivers} chauffeur</Badge>
                       ) : null}
                     </div>
                   ) : null}
@@ -444,12 +430,14 @@ export function PlanningMatrixView({
               />
             )}
             {visibleRows.length > visibleDayRows.length ? (
-              <button
+              <Button
+                size="sm"
+                variant="secondary"
+                full
                 onClick={() => setVisibleDayCount((current) => current + 60)}
-                className="w-full rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-all hover:bg-white/80"
               >
                 Toon Meer Dagen ({visibleRows.length - visibleDayRows.length} resterend)
-              </button>
+              </Button>
             ) : null}
           </div>
         </section>
@@ -459,16 +447,14 @@ export function PlanningMatrixView({
             <>
               <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h3 className="text-2xl font-black tracking-tight">
+                  <h3 className="text-2xl font-semibold tracking-tight">
                     {new Date(selectedRow.source_date).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                   </h3>
                   <p className="mt-1 text-sm font-medium text-slate-500">
                     Dagtype {selectedRow.day_type || '-'} met {assignments.length} ingevulde chauffeurcodes.
                   </p>
                 </div>
-                <div className="glass-chip rounded-full px-4 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">
-                  Matrix staging
-                </div>
+                <Badge tone="oker">Matrix staging</Badge>
               </div>
 
               <div className="grid gap-4 md:grid-cols-3">
@@ -494,13 +480,11 @@ export function PlanningMatrixView({
 
               {(unknownAssignments > 0 || unmatchedDriversForSelectedDay.length > 0 || highlightedCode) ? (
                 <div className="mt-6 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 p-5">
-                    <p className="text-xs font-black uppercase tracking-[0.08em] text-amber-700">Niet-Gematchte Chauffeurs</p>
+                  <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
+                    <MicroLabel className="text-amber-700">Niet-Gematchte Chauffeurs</MicroLabel>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {unmatchedDriversForSelectedDay.length > 0 ? unmatchedDriversForSelectedDay.map((driver) => (
-                        <span key={driver} className="rounded-full border border-amber-200 bg-white/80 px-3 py-1.5 text-xs font-bold text-amber-800">
-                          {driver}
-                        </span>
+                        <Fragment key={driver}><Badge tone="amber" className="bg-white/80">{driver}</Badge></Fragment>
                       )) : (
                         <span className="text-sm font-medium text-amber-700">Geen niet-gematchte chauffeurs voor deze dag.</span>
                       )}
@@ -508,25 +492,24 @@ export function PlanningMatrixView({
                     {unmatchedDriversForSelectedDay.length > 0 ? (
                       <div className="mt-4">
                         {canOpenUserManagement ? (
-                          <button
-                            type="button"
+                          <Button
+                            size="sm"
+                            variant="ghost"
                             onClick={onOpenUserManagement}
-                            className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-amber-700 transition-all hover:bg-amber-100"
+                            className="border border-amber-200 bg-white/80 text-amber-700 hover:bg-amber-100 hover:text-amber-700"
                           >
                             Open Gebruikersbeheer
-                          </button>
+                          </Button>
                         ) : (
-                          <div className="rounded-2xl border border-amber-200 bg-white/80 px-4 py-3 text-xs font-black uppercase tracking-[0.16em] text-amber-700">
-                            Gebruikersbeheer admin-only
-                          </div>
+                          <Badge tone="amber" className="bg-white/80">Gebruikersbeheer admin-only</Badge>
                         )}
                       </div>
                     ) : null}
                   </div>
-                  <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
-                    <p className="text-xs font-black uppercase tracking-[0.08em] text-red-700">
+                  <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
+                    <MicroLabel className="text-red-700">
                       {unknownAssignments > 0 ? 'Onbekende Codes' : 'Codefilter'}
-                    </p>
+                    </MicroLabel>
                     <p className="mt-3 text-sm font-medium text-red-700">
                       {unknownAssignments > 0
                         ? `${unknownAssignments} assignment${unknownAssignments === 1 ? '' : 's'} op deze dag vragen nog interpretatie via Planningscodes of Dienstoverzicht.`
@@ -536,83 +519,61 @@ export function PlanningMatrixView({
                     </p>
                     {unknownAssignments > 0 ? (
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={onOpenPlanningCodes}
-                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
-                        >
+                        <Button size="sm" variant="danger" onClick={onOpenPlanningCodes}>
                           Open Planningscodes
-                        </button>
-                        <button
-                          type="button"
-                          onClick={onOpenServiceOverview}
-                          className="rounded-2xl border border-red-200 bg-white/80 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-700 transition-all hover:bg-red-100"
-                        >
+                        </Button>
+                        <Button size="sm" variant="danger" onClick={onOpenServiceOverview}>
                           Open Dienstoverzicht
-                        </button>
+                        </Button>
                       </div>
                     ) : null}
                   </div>
                 </div>
               ) : null}
 
-              <div className="mt-6 surface-table rounded-3xl overflow-hidden">
-                <div className="hidden md:block overflow-x-auto">
+              <TableShell className="mt-6">
+                <div className="hidden md:block">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50/60">
                       <tr>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Chauffeur</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Code</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Interpretatie</th>
-                        <th className="px-6 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Uren / status</th>
+                        <Th>Chauffeur</Th>
+                        <Th>Code</Th>
+                        <Th>Interpretatie</Th>
+                        <Th>Uren / status</Th>
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="divide-y divide-slate-100">
                       {filteredAssignments.map((assignment) => (
-                        <tr key={assignment.driver} className="hover:bg-slate-50/50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-bold text-slate-800">{assignment.driver}</td>
-                          <td className="px-6 py-4">
-                            <span className={cn(
-                              'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em]',
-                              assignment.kind === 'service' && 'glass-chip text-emerald-700',
-                              assignment.kind === 'leave' && 'glass-chip text-sky-700',
-                              assignment.kind === 'training' && 'glass-chip text-violet-700',
-                              assignment.kind === 'absence' && 'glass-chip text-amber-700',
-                              assignment.kind === 'unknown' && 'border border-red-200 bg-red-50 text-red-700'
-                            )}>
+                        <tr key={assignment.driver} className="hover:bg-slate-50/60 transition-colors">
+                          <Td className="font-semibold text-slate-800">{assignment.driver}</Td>
+                          <Td>
+                            <Badge tone={ASSIGNMENT_KIND_TONES[assignment.kind] ?? 'slate'} className="uppercase tracking-[0.08em]">
                               {assignment.code}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-sm font-bold text-slate-800">{assignment.label}</td>
-                          <td className="px-6 py-4 text-sm font-medium text-slate-500">{assignment.details}</td>
+                            </Badge>
+                          </Td>
+                          <Td className="font-semibold text-slate-800">{assignment.label}</Td>
+                          <Td className="text-slate-500 tabular-nums">{assignment.details}</Td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                <div className="divide-y divide-slate-50 md:hidden">
+                <div className="divide-y divide-slate-100 md:hidden">
                   {filteredAssignments.map((assignment) => (
                     <div key={assignment.driver} className="p-5">
-                      <p className="text-sm font-black text-slate-800">{assignment.driver}</p>
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span className={cn(
-                          'rounded-full px-3 py-1.5 text-xs font-black uppercase tracking-[0.08em]',
-                          assignment.kind === 'service' && 'glass-chip text-emerald-700',
-                          assignment.kind === 'leave' && 'glass-chip text-sky-700',
-                          assignment.kind === 'training' && 'glass-chip text-violet-700',
-                          assignment.kind === 'absence' && 'glass-chip text-amber-700',
-                          assignment.kind === 'unknown' && 'border border-red-200 bg-red-50 text-red-700'
-                        )}>
+                      <p className="text-sm font-semibold text-slate-800">{assignment.driver}</p>
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <Badge tone={ASSIGNMENT_KIND_TONES[assignment.kind] ?? 'slate'} className="uppercase tracking-[0.08em]">
                           {assignment.code}
-                        </span>
-                        <span className="text-xs font-black uppercase tracking-[0.14em] text-slate-400">{assignment.label}</span>
+                        </Badge>
+                        <span className="text-xs font-semibold text-slate-500">{assignment.label}</span>
                       </div>
-                      <p className="mt-3 text-sm font-medium text-slate-500">{assignment.details}</p>
+                      <p className="mt-2 text-sm font-medium text-slate-500 tabular-nums">{assignment.details}</p>
                     </div>
                   ))}
                 </div>
-              </div>
+              </TableShell>
             </>
           ) : (
             <EmptyState
@@ -628,10 +589,10 @@ export function PlanningMatrixView({
   } catch (error) {
     console.error('Planning Overzicht renderfout:', error);
     return (
-      <div className="surface-card rounded-3xl p-8">
-        <div className="rounded-3xl border border-red-200 bg-red-50/80 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.08em] text-red-700">Schermfout</p>
-          <h3 className="mt-3 text-2xl font-black tracking-tight text-slate-900">Planning Overzicht kon niet geladen worden</h3>
+      <div className="surface-card rounded-3xl p-6">
+        <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
+          <MicroLabel className="text-red-700">Schermfout</MicroLabel>
+          <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">Planning Overzicht kon niet geladen worden</h3>
           <p className="mt-2 text-sm font-medium text-slate-600">
             {error instanceof Error ? error.message : 'Onbekende renderfout'}
           </p>
@@ -640,4 +601,3 @@ export function PlanningMatrixView({
     );
   }
 }
-

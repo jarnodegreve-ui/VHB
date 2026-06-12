@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { History, X, Check } from 'lucide-react';
+import { ArrowLeftRight, ChevronRight, History, X, Check } from 'lucide-react';
 import type { Shift, SwapRequest, User } from '../types';
-import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
+import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { canRespondToSwap } from '../lib/authorization';
@@ -17,6 +18,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
   const [reason, setReason] = useState('');
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
+  // Beoordeling in een side panel: alle ruil-context + beslis-acties
+  // zonder paginawissel (zelfde patroon als LeaveManagementView).
+  const [reviewSwap, setReviewSwap] = useState<SwapRequest | null>(null);
   // Dienstruil-matching: wie is vrij op de dag van de gekozen dienst?
   const [freeForDate, setFreeForDate] = useState<Set<string> | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
@@ -181,23 +185,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
     handleStatusUpdate(swapId, 'cancelled');
   };
 
-  const statusLabels: Record<SwapRequest['status'], string> = {
-    pending: 'In behandeling',
-    accepted: 'Wacht op planner',
-    approved: 'Goedgekeurd',
-    rejected: 'Afgewezen',
-    cancelled: 'Geannuleerd',
-    completed: 'Voltooid',
-  };
-  const statusStyles: Record<SwapRequest['status'], string> = {
-    pending: 'bg-amber-50 text-amber-600',
-    accepted: 'bg-indigo-50 text-indigo-600',
-    approved: 'bg-emerald-50 text-emerald-600',
-    rejected: 'bg-red-50 text-red-600',
-    cancelled: 'bg-slate-100 text-slate-500',
-    completed: 'bg-blue-50 text-blue-600',
-  };
-
   return (
     <PageShell>
       <PageHeader
@@ -214,30 +201,25 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Mijn Verzoeken</h4>
+          <MicroLabel className="text-slate-500 ml-1">Mijn Verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
             mySwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
               const target = users.find(u => u.id === swap.targetDriverId);
               return (
-                <div key={swap.id} className="surface-card p-6 rounded-3xl flex items-center justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst {getServiceNumber(shift)}</p>
-                    <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.08em]">{shift?.startTime} - {shift?.endTime}</p>
+                <div key={swap.id} className="surface-card p-5 rounded-2xl flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <MicroLabel>Dienst {getServiceNumber(shift)}</MicroLabel>
+                    <p className="font-bold tracking-tight text-slate-800 mt-1 tabular-nums">{shift?.date}</p>
+                    <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
                     {target && (
-                      <p className="text-xs font-bold text-slate-500 mt-2">Aan: <span className="text-slate-800">{target.name}</span></p>
+                      <p className="text-xs font-medium text-slate-500 mt-2">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
                     )}
                     {returnLabel(swap) && (
-                      <p className="text-xs font-bold text-indigo-600 mt-1">In ruil: {returnLabel(swap)}</p>
+                      <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">In ruil: {returnLabel(swap)}</p>
                     )}
                   </div>
-                  <span className={cn(
-                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]",
-                    statusStyles[swap.status]
-                  )}>
-                    {statusLabels[swap.status]}
-                  </span>
+                  <StatusBadge status={swap.status} className="shrink-0" />
                 </div>
               );
             })
@@ -247,49 +229,40 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
         </div>
 
         <div className="space-y-4">
-          <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Openstaande Dienstruilen</h4>
+          <MicroLabel className="text-slate-500 ml-1">Openstaande Dienstruilen</MicroLabel>
           {availableSwaps.length > 0 ? (
             availableSwaps.map(swap => {
               const shift = shifts.find(s => s.id === swap.shiftId);
               const requester = users.find(u => u.id === swap.requesterId);
               const canRespond = canRespondToSwap(user, swap);
               return (
-                <div key={swap.id} className="surface-card p-6 rounded-3xl space-y-4">
+                <div key={swap.id} className="surface-card p-5 rounded-2xl space-y-4">
                   <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst {getServiceNumber(shift)}</p>
-                      <p className="font-black text-slate-800 mt-1">{shift?.date}</p>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.08em]">{shift?.startTime} - {shift?.endTime}</p>
-                      <p className="text-xs font-bold text-slate-400 uppercase tracking-[0.08em]">Door: {requester?.name}</p>
+                    <div className="min-w-0">
+                      <MicroLabel>Dienst {getServiceNumber(shift)}</MicroLabel>
+                      <p className="font-bold tracking-tight text-slate-800 mt-1 tabular-nums">{shift?.date}</p>
+                      <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
+                      <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
                       {returnLabel(swap) && (
-                        <p className="text-xs font-bold text-indigo-600 mt-1 normal-case tracking-normal">Jij geeft: {returnLabel(swap)}</p>
+                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Jij geeft: {returnLabel(swap)}</p>
                       )}
                     </div>
-                    <span className={cn(
-                      'px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em] shrink-0',
-                      swap.status === 'accepted' ? statusStyles.accepted : 'bg-amber-50 text-amber-600',
-                    )}>
-                      {swap.status === 'accepted' ? 'Wacht op planner' : canRespond ? 'Jouw antwoord' : 'Wacht op planner'}
+                    <span className="shrink-0">
+                      {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <StatusBadge status={swap.status} />}
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
                   {canRespond ? (
                     <div className="flex gap-2 pt-1">
-                      <button
-                        onClick={() => handleAccept(swap.id)}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all"
-                      >
-                        <Check size={16} /> Accepteren
-                      </button>
-                      <button
-                        onClick={() => handleDecline(swap.id)}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all"
-                      >
-                        <X size={16} /> Weigeren
-                      </button>
+                      <Button variant="success" className="flex-1" icon={<Check size={15} />} onClick={() => handleAccept(swap.id)}>
+                        Accepteren
+                      </Button>
+                      <Button variant="danger" className="flex-1" icon={<X size={15} />} onClick={() => handleDecline(swap.id)}>
+                        Weigeren
+                      </Button>
                     </div>
                   ) : swap.status === 'accepted' && swap.targetDriverId === user.id ? (
-                    <p className="text-[11px] font-bold text-indigo-500">Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).</p>
+                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).</p>
                   ) : null}
                 </div>
               );
@@ -312,17 +285,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
 
         return (
           <div className="space-y-4 pt-8">
-            <h4 className="text-xs font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Beheer Dienstruilen</h4>
-            <div className="surface-table rounded-3xl overflow-hidden">
+            <MicroLabel className="text-slate-500 ml-1">Beheer Dienstruilen</MicroLabel>
+            <TableShell>
               {/* Desktop table */}
-              <div className="hidden md:block overflow-x-auto">
+              <div className="hidden md:block">
                 <table className="w-full text-left">
                   <thead className="bg-slate-50 border-b border-slate-100">
                     <tr>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Chauffeur</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Dienst</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Status</th>
-                      <th className="px-6 py-4 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Acties</th>
+                      <Th>Chauffeur</Th>
+                      <Th>Dienst</Th>
+                      <Th>Status</Th>
+                      <Th>Acties</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
@@ -330,46 +303,56 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                       const shift = shifts.find(s => s.id === swap.shiftId);
                       const requester = users.find(u => u.id === swap.requesterId);
                       return (
-                        <tr key={swap.id}>
-                          <td className="px-6 py-4 font-bold text-sm">
-                            {requester?.name}
-                            {swap.targetDriverId && (
-                              <span className="block text-[11px] font-medium text-slate-400">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 text-xs font-medium">
-                            <span className="font-black text-oker-700">Dienst {getServiceNumber(shift)}</span>
-                            <span className="text-slate-500"> — {shift?.date} ({shift?.startTime} - {shift?.endTime})</span>
+                        <tr key={swap.id} className="hover:bg-slate-50/60 transition-colors">
+                          <Td>
+                            <button
+                              type="button"
+                              onClick={() => setReviewSwap(swap)}
+                              title="Details bekijken"
+                              className="group inline-flex items-center gap-1.5 text-left"
+                            >
+                              <span className="min-w-0">
+                                <span className="block font-semibold text-slate-800">{requester?.name}</span>
+                                {swap.targetDriverId && (
+                                  <span className="block text-[11px] font-medium text-slate-400">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
+                                )}
+                              </span>
+                              <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
+                            </button>
+                          </Td>
+                          <Td>
+                            <span className="font-semibold text-oker-700">Dienst {getServiceNumber(shift)}</span>
+                            <span className="text-slate-500 tabular-nums"> — {shift?.date} ({shift?.startTime} - {shift?.endTime})</span>
                             {returnLabel(swap) && (
-                              <span className="block text-[11px] font-bold text-indigo-600 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
+                              <span className="block text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
-                          </td>
-                          <td className="px-6 py-4">
-                            <span className={cn('px-2 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em]', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
-                          </td>
-                          <td className="px-6 py-4 flex gap-2">
-                            <button onClick={() => setHistorySwap(swap)} title="Wijzigingsgeschiedenis" className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-50 rounded-lg transition-colors"><History size={18} /></button>
-                            {swap.status === 'accepted' && (
-                              <>
-                                <button onClick={() => handleStatusUpdate(swap.id, 'approved')} title="Goedkeuren (rij-/rusttijden ok)" className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Check size={18} /></button>
-                                <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
-                              </>
-                            )}
-                            {swap.status === 'pending' && (isAdmin ? (
-                              <>
-                                <button onClick={() => handleAdminForceApprove(swap.id)} title="Direct goedkeuren — collega heeft nog niet bevestigd" className="p-2 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors"><Check size={18} /></button>
-                                <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
-                              </>
-                            ) : (
-                              <>
-                                <span className="self-center text-[11px] font-bold text-amber-600 whitespace-nowrap">wacht op collega</span>
-                                <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} title="Afwijzen" className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"><X size={18} /></button>
-                              </>
-                            ))}
-                            {swap.status === 'approved' && (
-                              <button onClick={() => handleCancel(swap.id)} className="px-3 py-2 text-[10px] font-black uppercase tracking-[0.08em] text-red-500 border border-red-200 rounded-lg hover:bg-red-50 transition-colors">Annuleren</button>
-                            )}
-                          </td>
+                          </Td>
+                          <Td><StatusBadge status={swap.status} /></Td>
+                          <Td>
+                            <div className="flex items-center gap-1.5">
+                              <Button variant="ghost" size="sm" icon={<History size={16} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistorySwap(swap)} />
+                              {swap.status === 'accepted' && (
+                                <>
+                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Goedkeuren" title="Goedkeuren (rij-/rusttijden ok)" onClick={() => handleStatusUpdate(swap.id, 'approved')} />
+                                  <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                </>
+                              )}
+                              {swap.status === 'pending' && (isAdmin ? (
+                                <>
+                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Direct goedkeuren" title="Direct goedkeuren — collega heeft nog niet bevestigd" onClick={() => handleAdminForceApprove(swap.id)} />
+                                  <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                </>
+                              ) : (
+                                <>
+                                  <Badge tone="amber" dot className="whitespace-nowrap">wacht op collega</Badge>
+                                  <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
+                                </>
+                              ))}
+                              {swap.status === 'approved' && (
+                                <Button variant="danger" size="sm" onClick={() => handleCancel(swap.id)}>Annuleren</Button>
+                              )}
+                            </div>
+                          </Td>
                         </tr>
                       );
                     })}
@@ -385,51 +368,59 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   return (
                     <div key={swap.id} className="p-5 space-y-3">
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-black text-slate-800 tracking-tight">
-                            {requester?.name}
-                            {swap.targetDriverId && <span className="font-medium text-slate-400"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
-                          </p>
-                          <p className="text-[10px] font-black text-oker-700 uppercase tracking-[0.08em] mt-1">Dienst {getServiceNumber(shift)}</p>
-                          <p className="text-xs font-medium text-slate-500 mt-1">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
+                        <div className="min-w-0">
+                          <button
+                            type="button"
+                            onClick={() => setReviewSwap(swap)}
+                            title="Details bekijken"
+                            className="group flex items-center gap-1.5 text-left"
+                          >
+                            <span className="font-bold tracking-tight text-slate-800">
+                              {requester?.name}
+                              {swap.targetDriverId && <span className="font-medium text-slate-400"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
+                            </span>
+                            <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
+                          </button>
+                          <MicroLabel className="text-oker-700 mt-1">Dienst {getServiceNumber(shift)}</MicroLabel>
+                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
                           {returnLabel(swap) && (
-                            <p className="text-[11px] font-bold text-indigo-600 mt-1">↔ in ruil: {returnLabel(swap)}</p>
+                            <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
                         </div>
-                        <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em] shrink-0', statusStyles[swap.status])}>{statusLabels[swap.status]}</span>
+                        <StatusBadge status={swap.status} className="shrink-0" />
                       </div>
                       <div className="flex gap-2 pt-1">
                         {swap.status === 'accepted' && (
                           <>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'approved')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-emerald-50 text-emerald-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all">
-                              <Check size={16} /> Goedkeuren
-                            </button>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-2xl bg-red-50 text-red-600 font-black text-xs uppercase tracking-[0.08em] active:scale-95 transition-all">
-                              <X size={16} /> Afwijzen
-                            </button>
+                            <Button variant="success" className="flex-1" icon={<Check size={15} />} onClick={() => handleStatusUpdate(swap.id, 'approved')}>
+                              Goedkeuren
+                            </Button>
+                            <Button variant="danger" className="flex-1" icon={<X size={15} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                              Afwijzen
+                            </Button>
                           </>
                         )}
                         {swap.status === 'pending' && (isAdmin ? (
                           <>
-                            <button onClick={() => handleAdminForceApprove(swap.id)} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-emerald-50 text-emerald-700 font-semibold text-sm active:scale-95 transition-all">
-                              <Check size={16} /> Goedkeuren
-                            </button>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-red-50 text-red-700 font-semibold text-sm active:scale-95 transition-all">
-                              <X size={16} /> Afwijzen
-                            </button>
+                            <Button variant="success" className="flex-1" icon={<Check size={15} />} onClick={() => handleAdminForceApprove(swap.id)}>
+                              Goedkeuren
+                            </Button>
+                            <Button variant="danger" className="flex-1" icon={<X size={15} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                              Afwijzen
+                            </Button>
                           </>
                         ) : (
                           <div className="flex-1 flex items-center justify-between gap-2">
-                            <span className="text-[11px] font-bold text-amber-600">Wacht op antwoord collega</span>
-                            <button onClick={() => handleStatusUpdate(swap.id, 'rejected')} className="py-2 px-3 rounded-xl bg-red-50 text-red-600 font-black text-[10px] uppercase tracking-[0.08em] active:scale-95 transition-all">
+                            <Badge tone="amber" dot>Wacht op collega</Badge>
+                            <Button variant="danger" size="sm" onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
                               Afwijzen
-                            </button>
+                            </Button>
                           </div>
                         ))}
                         {swap.status === 'approved' && (
-                          <button onClick={() => handleCancel(swap.id)} className="flex-1 py-3 rounded-2xl border border-red-200 text-red-500 font-black text-xs uppercase tracking-[0.08em] hover:bg-red-50 transition-colors">
+                          <Button variant="danger" full onClick={() => handleCancel(swap.id)}>
                             Annuleren
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -439,7 +430,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   <p className="text-center text-slate-400 font-medium italic py-8">Geen openstaande of goedgekeurde dienstruilen.</p>
                 )}
               </div>
-            </div>
+            </TableShell>
           </div>
         );
       })()}
@@ -450,7 +441,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
-                <h4 className="text-xl font-black">Dienstruil aanvragen</h4>
+                <h4 className="text-xl font-bold tracking-tight">Dienstruil aanvragen</h4>
                 <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
               </div>
               <form onSubmit={handleOfferShift} className="p-8 space-y-6 overflow-y-auto flex-1">
@@ -460,7 +451,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   </div>
                 )}
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Selecteer Dienst</label>
+                  <MicroLabel className="ml-1">Selecteer Dienst</MicroLabel>
                   <select
                     value={selectedShift}
                     onChange={(e) => setSelectedShift(e.target.value)}
@@ -476,9 +467,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                 </div>
                 <div className="space-y-2">
                   <div className="flex items-center justify-between ml-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Aan welke collega?</label>
+                    <MicroLabel>Aan welke collega?</MicroLabel>
                     {selectedShiftDate && (
-                      <span className="text-[10px] font-bold text-slate-400">
+                      <span className="text-[10px] font-medium text-slate-400">
                         {matchLoading
                           ? 'Beschikbaarheid laden…'
                           : freeCount !== null
@@ -511,7 +502,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Wat neem jij in ruil?</label>
+                  <MicroLabel className="ml-1">Wat neem jij in ruil?</MicroLabel>
                   <select
                     value={returnPick}
                     onChange={(e) => setReturnPick(e.target.value)}
@@ -541,7 +532,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
                   )}
                 </div>
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Info (optioneel)</label>
+                  <MicroLabel className="ml-1">Info (optioneel)</MicroLabel>
                   <textarea
                     value={reason}
                     onChange={(e) => setReason(e.target.value)}
@@ -563,6 +554,133 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
       </AnimatePresence>,
         document.body,
       )}
+
+      {/* Beoordeling in een side panel: volledige ruil-context + dezelfde
+          beslis-acties als de tabelrij, zonder paginawissel. */}
+      <SlideOver
+        open={!!reviewSwap}
+        onClose={() => setReviewSwap(null)}
+        title={reviewSwap ? (users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend') : 'Dienstruil'}
+        subtitle={reviewSwap ? `Aangevraagd op ${reviewSwap.createdAt.split('T')[0]}` : undefined}
+        icon={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
+            <ArrowLeftRight size={17} />
+          </span>
+        }
+        footer={reviewSwap ? (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="md"
+              icon={<History size={14} />}
+              onClick={() => setHistorySwap(reviewSwap)}
+              aria-label="Wijzigingsgeschiedenis"
+              title="Wijzigingsgeschiedenis"
+            />
+            {reviewSwap.status === 'accepted' && (
+              <>
+                <Button
+                  variant="danger"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected'); setReviewSwap(null); }}
+                >
+                  Afwijzen
+                </Button>
+                <Button
+                  variant="success"
+                  size="lg"
+                  className="flex-1"
+                  icon={<Check size={15} />}
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'approved'); setReviewSwap(null); }}
+                >
+                  Goedkeuren
+                </Button>
+              </>
+            )}
+            {reviewSwap.status === 'pending' && (isAdmin ? (
+              <>
+                <Button
+                  variant="danger"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected'); setReviewSwap(null); }}
+                >
+                  Afwijzen
+                </Button>
+                <Button
+                  variant="success"
+                  size="lg"
+                  className="flex-1"
+                  icon={<Check size={15} />}
+                  onClick={() => { handleAdminForceApprove(reviewSwap.id); setReviewSwap(null); }}
+                >
+                  Goedkeuren
+                </Button>
+              </>
+            ) : (
+              <>
+                <Badge tone="amber" dot className="mr-auto">Wacht op collega</Badge>
+                <Button
+                  variant="danger"
+                  size="lg"
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected'); setReviewSwap(null); }}
+                >
+                  Afwijzen
+                </Button>
+              </>
+            ))}
+            {reviewSwap.status === 'approved' && (
+              <Button
+                variant="danger"
+                size="lg"
+                className="flex-1"
+                onClick={() => { handleCancel(reviewSwap.id); setReviewSwap(null); }}
+              >
+                Annuleren
+              </Button>
+            )}
+          </div>
+        ) : undefined}
+      >
+        {reviewSwap && (() => {
+          const shift = shifts.find((s) => s.id === reviewSwap.shiftId);
+          const requester = users.find((u) => u.id === reviewSwap.requesterId);
+          const target = reviewSwap.targetDriverId ? users.find((u) => u.id === reviewSwap.targetDriverId) : undefined;
+          return (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={reviewSwap.status} />
+                <Badge tone="oker">Dienst {getServiceNumber(shift)}</Badge>
+                {shift?.date && (
+                  <Badge tone="slate" className="tabular-nums">{shift.date} · {shift.startTime} - {shift.endTime}</Badge>
+                )}
+              </div>
+
+              <div className="surface-muted rounded-xl p-4">
+                <MicroLabel className="text-slate-500">Ruil</MicroLabel>
+                <p className="mt-1.5 text-sm font-semibold text-slate-800">
+                  {requester?.name ?? 'Onbekend'}
+                  <span className="mx-1.5 font-medium text-slate-400">→</span>
+                  {target?.name ?? 'open verzoek'}
+                </p>
+                {returnLabel(reviewSwap) && (
+                  <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">↔ in ruil: {returnLabel(reviewSwap)}</p>
+                )}
+              </div>
+
+              {reviewSwap.reason && (
+                <div>
+                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                    {reviewSwap.reason}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </SlideOver>
 
       <EntityHistoryModal
         open={!!historySwap}

@@ -100,7 +100,7 @@ export function ChangePasswordModal({
           >
             <div className="p-6 md:p-8 border-b border-white/70 flex items-start justify-between gap-4 shrink-0">
               <div>
-                <h4 className="text-xl font-black tracking-tight">Wachtwoord wijzigen</h4>
+                <h4 className="text-lg font-bold tracking-tight">Wachtwoord wijzigen</h4>
                 <p className="mt-2 text-sm text-slate-500 font-medium">Kies een nieuw wachtwoord voor {email}.</p>
               </div>
               <button
@@ -175,7 +175,7 @@ export function ChangePasswordModal({
                 <button
                   type="button"
                   onClick={handleClose}
-                  className="flex-1 px-4 py-3 rounded-full font-black text-slate-500 hover:bg-white/70 transition-all uppercase tracking-[0.08em] text-xs border border-transparent hover:border-white/80"
+                  className="flex-1 px-4 py-3 rounded-xl font-semibold text-slate-600 hover:bg-white/70 hover:text-slate-900 transition-all text-sm border border-transparent hover:border-white/80"
                 >
                   Annuleren
                 </button>

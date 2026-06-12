@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertTriangle, ChevronLeft, ChevronRight, History, Plus, User as UserIcon, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives';
+import { SlideOver } from '../components/SlideOver';
 import { verlofBalans } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { leaveIdsWithConflict, shiftsConflictingWithLeave } from '../lib/conflicts';
@@ -143,6 +145,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
   // Bulk-selectie voor planner-goedkeuring van meerdere pending aanvragen.
   const [selectedPendingIds, setSelectedPendingIds] = useState<Set<string>>(new Set());
   const [historyLeave, setHistoryLeave] = useState<LeaveRequest | null>(null);
+  // Beoordeling in een side panel: alle context (saldo, conflicten,
+  // toelichting) + beslis-acties zonder paginawissel.
+  const [reviewLeave, setReviewLeave] = useState<LeaveRequest | null>(null);
   const togglePendingSelection = (id: string) => {
     setSelectedPendingIds((prev) => {
       const next = new Set(prev);
@@ -262,7 +267,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                 >
                   <ChevronLeft size={18} />
                 </button>
-                <h4 className="text-lg font-black tracking-tight capitalize min-w-[160px] text-center">{monthName}</h4>
+                <h4 className="text-lg font-bold tracking-tight capitalize min-w-[160px] text-center">{monthName}</h4>
                 <button
                   type="button"
                   onClick={goToNextMonth}
@@ -275,19 +280,19 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                   <button
                     type="button"
                     onClick={goToCurrentMonth}
-                    className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
+                    className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[11px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors"
                   >
                     Vandaag
                   </button>
                 )}
               </div>
               <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Voldoende</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Krap</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Voldoende</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Krap</span></div>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
-              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-[10px] font-black text-slate-300 uppercase tracking-[0.08em] mb-2">{d}</div>)}
+              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-[10px] font-semibold text-slate-300 uppercase tracking-[0.08em] mb-2">{d}</div>)}
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -308,7 +313,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                       isDraftEdge && 'border-oker-500 bg-oker-100 ring-4 ring-oker-500/10'
                     )}
                   >
-                    <span className={cn('text-sm font-black transition-colors', (isSelected || isInDraftRange) ? 'text-oker-600' : 'text-slate-400 group-hover:text-slate-600')}>{day}</span>
+                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-oker-600' : 'text-slate-400 group-hover:text-slate-600')}>{day}</span>
                     {occupancyCount > 0 && <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} />}
                   </button>
                 );
@@ -319,7 +324,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
           {selectedDate && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-8 rounded-3xl">
               <div className="flex items-center justify-between mb-6">
-                <h4 className="font-black text-slate-800">Afwezigheid op {new Date(selectedDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
+                <h4 className="font-bold tracking-tight text-slate-800">Afwezigheid op {new Date(selectedDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
                 <button onClick={() => setSelectedDate(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
               <div className="space-y-3">
@@ -330,17 +335,17 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
                         <div>
-                          <p className="font-black text-slate-800 text-sm">{requester?.name}</p>
+                          <p className="font-semibold text-slate-800 text-sm">{requester?.name}</p>
                           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.08em]">{formatLeaveType(req.type)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">{req.startDate} - {req.endDate}</span>
+                        <span className="text-[11px] font-medium text-slate-400 tabular-nums">{req.startDate} – {req.endDate}</span>
                         {isPlanner && (
                           <button
                             type="button"
                             onClick={() => handleCancel(req.id)}
-                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-red-500 hover:bg-red-50 transition-colors"
+                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-white text-[11px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
                           >
                             Annuleren
                           </button>
@@ -368,14 +373,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
             });
             const allSelected = plannerPending.length > 0 && plannerPending.every((r) => selectedPendingIds.has(r.id));
             return (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between ml-2">
-                  <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Wachtend op Goedkeuring</h4>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <MicroLabel className="text-slate-500">Wachtend op goedkeuring</MicroLabel>
                   {plannerPending.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setSelectedPendingIds(allSelected ? new Set() : new Set(plannerPending.map((r) => r.id)))}
-                      className="text-[10px] font-black text-slate-500 hover:text-oker-600 uppercase tracking-[0.08em] transition-colors"
+                      className="text-[11px] font-semibold text-slate-500 hover:text-oker-700 transition-colors"
                     >
                       {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
                     </button>
@@ -383,81 +388,62 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                 </div>
                 {selectedPendingIds.size > 0 && (
                   <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50/80 border border-slate-200">
-                    <span className="text-xs font-bold text-slate-700">
+                    <span className="text-xs font-semibold text-slate-700">
                       {selectedPendingIds.size} {selectedPendingIds.size === 1 ? 'aanvraag' : 'aanvragen'} geselecteerd
                     </span>
                     <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        onClick={handleBulkReject}
-                        className="px-3 py-2 bg-white border border-red-200 text-red-600 rounded-xl font-black text-[10px] uppercase tracking-[0.08em] hover:bg-red-50 transition-all"
-                      >
-                        Weigeren ({selectedPendingIds.size})
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleBulkApprove}
-                        className="px-3 py-2 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-[0.08em] hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20"
-                      >
-                        Goedkeuren ({selectedPendingIds.size})
-                      </button>
+                      <Button variant="danger" size="sm" onClick={handleBulkReject}>Weigeren ({selectedPendingIds.size})</Button>
+                      <Button variant="success" size="sm" icon={<Check size={13} />} onClick={handleBulkApprove}>Goedkeuren ({selectedPendingIds.size})</Button>
                     </div>
                   </div>
                 )}
-                <div className="space-y-4">
+                <div className="space-y-1.5">
                   {plannerPending.length > 0 ? plannerPending.map((req) => {
                     const requester = users.find((u) => u.id === req.userId);
                     const isSelected = selectedPendingIds.has(req.id);
                     const conflictShifts = shiftsConflictingWithLeave(shifts, req);
                     return (
-                      <div key={req.id} className={cn('surface-card p-6 rounded-3xl space-y-4 transition-all', isSelected && 'ring-2 ring-emerald-400/50')}>
-                        <div className="flex items-start gap-3">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => togglePendingSelection(req.id)}
-                            className="mt-1 w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400 cursor-pointer"
-                            aria-label={`Selecteer ${requester?.name}`}
-                          />
-                          <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-oker-500 shrink-0"><UserIcon size={24} /></div>
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="font-black text-slate-800 truncate">{requester?.name}</p>
+                      <div
+                        key={req.id}
+                        className={cn(
+                          'group flex items-center gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 transition-all hover:bg-white hover:ring-slate-300/80 hover:shadow-sm',
+                          isSelected && 'ring-2 ring-emerald-400/50',
+                        )}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => togglePendingSelection(req.id)}
+                          className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400 cursor-pointer shrink-0"
+                          aria-label={`Selecteer ${requester?.name}`}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setReviewLeave(req)}
+                          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <span className="min-w-0 flex-1">
+                            <span className="flex items-center gap-2">
+                              <span className="truncate text-[13.5px] font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
                               {conflictShifts.length > 0 && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[9px] font-black uppercase tracking-[0.08em] border border-red-200">
-                                  <AlertTriangle size={10} />
-                                  {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'}
+                                <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
+                                  <AlertTriangle size={13} className="shrink-0 text-red-500" />
                                 </span>
                               )}
-                            </div>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.08em]">{formatLeaveType(req.type)} • {req.createdAt.split('T')[0]}</p>
-                          </div>
-                        </div>
-                        <div className="bg-slate-50 p-4 rounded-2xl space-y-2">
-                          <div className="flex justify-between text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]"><span>Periode</span><span className="text-slate-800">{req.startDate} t/m {req.endDate}</span></div>
-                          {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
-                          {conflictShifts.length > 0 && (
-                            <div className="mt-2 pt-2 border-t border-slate-200/80 space-y-1">
-                              <p className="text-[10px] font-black text-red-600 uppercase tracking-[0.08em]">⚠ Conflict met planning</p>
-                              <p className="text-[11px] font-medium text-slate-600">
-                                {conflictShifts.length === 1
-                                  ? `Op ${conflictShifts[0].date} staat dienst ${conflictShifts[0].line} ingepland (${conflictShifts[0].startTime}–${conflictShifts[0].endTime}).`
-                                  : `${conflictShifts.length} diensten staan ingepland in deze periode. Herverdelen bij goedkeuring.`}
-                              </p>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex gap-2">
-                          <button onClick={() => setHistoryLeave(req)} title="Wijzigingsgeschiedenis" className="px-3 py-3 bg-white border border-slate-200 text-slate-500 rounded-xl hover:text-slate-800 hover:bg-slate-50 transition-all">
-                            <History size={14} />
-                          </button>
-                          <button onClick={() => handleStatusUpdate(req.id, 'approved')} className="flex-1 py-3 bg-emerald-500 text-white rounded-xl font-black text-[10px] uppercase tracking-[0.08em] hover:bg-emerald-600 transition-all shadow-lg shadow-emerald-500/20">Goedkeuren</button>
-                          <button onClick={() => handleStatusUpdate(req.id, 'rejected')} className="flex-1 py-3 bg-white border border-slate-200 text-red-500 rounded-xl font-black text-[10px] uppercase tracking-[0.08em] hover:bg-red-50 transition-all">Afwijzen</button>
-                        </div>
+                            </span>
+                            <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">
+                              {req.startDate}{req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · {formatLeaveType(req.type)}
+                            </span>
+                          </span>
+                          <ChevronRightSmall size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
+                        </button>
                       </div>
                     );
                   }) : (
-                    <div className="surface-card p-8 rounded-3xl text-center"><p className="text-slate-400 font-bold text-sm">Geen openstaande aanvragen.</p></div>
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3.5">
+                      <p className="text-[13px] font-semibold text-slate-800">Alles beoordeeld</p>
+                      <p className="text-xs font-normal text-slate-500">Geen openstaande verlofaanvragen.</p>
+                    </div>
                   )}
                 </div>
               </div>
@@ -497,10 +483,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
         {showRequestModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-xl font-black">Verlof Aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
+              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof Aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
-                  <p className="font-black text-oker-700 uppercase tracking-[0.08em] text-[10px]">Periode kiezen</p>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
                       ? 'Klik op de startdatum.'
@@ -520,7 +506,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                     >
                       <ChevronLeft size={16} />
                     </button>
-                    <span className="text-sm font-black capitalize">{monthName}</span>
+                    <span className="text-sm font-semibold capitalize">{monthName}</span>
                     <button
                       type="button"
                       onClick={goToNextMonth}
@@ -532,7 +518,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                   </div>
                   <div className="grid grid-cols-7 gap-1">
                     {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => (
-                      <div key={d} className="text-center text-[9px] font-black text-slate-300 uppercase tracking-[0.15em] py-1">{d}</div>
+                      <div key={d} className="text-center text-[9px] font-semibold text-slate-300 uppercase tracking-[0.08em] py-1">{d}</div>
                     ))}
                     {calendarDays.map((day, i) => {
                       if (day === null) return <div key={`m-empty-${i}`} />;
@@ -549,7 +535,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                           title={isPast ? 'Je kan geen verlof aanvragen in het verleden.' : undefined}
                           onClick={() => handleCalendarDateClick(dateStr)}
                           className={cn(
-                            'aspect-square rounded-xl text-xs font-black transition-colors flex items-center justify-center',
+                            'aspect-square rounded-xl text-xs font-semibold transition-colors flex items-center justify-center',
                             isPast && 'text-slate-300 cursor-not-allowed',
                             !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
                             !isPast && inRange && !edge && 'bg-oker-100 text-oker-700',
@@ -564,14 +550,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
-                  <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
                 </div>
-                <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-black uppercase tracking-[0.08em] text-slate-500 transition-colors hover:bg-slate-50">
+                <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50">
                   Periode wissen
                 </button>
-                <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
-                <div className="space-y-2"><label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
+                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
+                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="w-full px-4 py-3 rounded-2xl border border-slate-200 font-bold text-sm outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
 
                 {/* Live impact-preview: budget + shift-conflicten */}
                 {requestPreview && (
@@ -585,7 +571,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                           : 'bg-emerald-50/60 border-emerald-200/80 text-emerald-700'
                       )}>
                         <div className="flex items-center justify-between gap-3">
-                          <span className="font-black">
+                          <span className="font-semibold">
                             {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} aangevraagd
                           </span>
                           <span className="font-bold tabular-nums">
@@ -605,7 +591,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                       <div className="rounded-2xl px-4 py-3 text-xs font-medium border bg-amber-50/80 border-amber-200 text-amber-800">
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={14} className="shrink-0" />
-                          <span className="font-black">
+                          <span className="font-semibold">
                             {requestPreview.conflictingShifts.length}{' '}
                             {requestPreview.conflictingShifts.length === 1 ? 'dienst staat' : 'diensten staan'} al ingepland in deze periode
                           </span>
@@ -627,6 +613,130 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
         document.body,
       )}
 
+      {/* Beoordeling in een side panel: volledige context + beslissing
+          zonder paginawissel. */}
+      <SlideOver
+        open={!!reviewLeave}
+        onClose={() => setReviewLeave(null)}
+        title={reviewLeave ? (users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend') : 'Verlofaanvraag'}
+        subtitle={reviewLeave ? `Aangevraagd op ${reviewLeave.createdAt.split('T')[0]}` : undefined}
+        icon={
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
+            <UserIcon size={17} />
+          </span>
+        }
+        footer={reviewLeave && reviewLeave.status === 'pending' ? (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="md"
+              icon={<History size={14} />}
+              onClick={() => { setHistoryLeave(reviewLeave); }}
+              aria-label="Wijzigingsgeschiedenis"
+            />
+            <Button
+              variant="danger"
+              size="lg"
+              className="flex-1"
+              onClick={() => { handleStatusUpdate(reviewLeave.id, 'rejected'); setReviewLeave(null); }}
+            >
+              Afwijzen
+            </Button>
+            <Button
+              variant="success"
+              size="lg"
+              className="flex-1"
+              icon={<Check size={15} />}
+              onClick={() => { handleStatusUpdate(reviewLeave.id, 'approved'); setReviewLeave(null); }}
+            >
+              Goedkeuren
+            </Button>
+          </div>
+        ) : undefined}
+      >
+        {reviewLeave && (() => {
+          const requester = users.find((u) => u.id === reviewLeave.userId);
+          const conflictShifts = shiftsConflictingWithLeave(shifts, reviewLeave);
+          const startD = new Date(`${reviewLeave.startDate}T00:00:00`);
+          const endD = new Date(`${reviewLeave.endDate}T00:00:00`);
+          const dayCount = Math.max(1, Math.floor((endD.getTime() - startD.getTime()) / 86400000) + 1);
+          const requestYear = parseInt(reviewLeave.startDate.slice(0, 4), 10);
+          const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester?.verlofBudget);
+          const exceeds = reviewLeave.type === 'betaald_verlof'
+            && balance.betaaldGebruikt + dayCount > balance.betaaldBudget;
+          return (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={reviewLeave.status} />
+                <Badge tone="slate">{formatLeaveType(reviewLeave.type)}</Badge>
+                {conflictShifts.length > 0 && (
+                  <Badge tone="red" icon={<AlertTriangle size={11} />}>
+                    {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'} ingepland
+                  </Badge>
+                )}
+              </div>
+
+              <div className="surface-muted rounded-xl p-4">
+                <MicroLabel className="text-slate-500">Periode</MicroLabel>
+                <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
+                  {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
+                  <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'dag' : 'dagen'})</span>
+                </p>
+              </div>
+
+              {/* Saldo-context van de aanvrager — beslis met het budget in beeld. */}
+              {reviewLeave.type === 'betaald_verlof' && (
+                <div className={cn(
+                  'rounded-xl border px-4 py-3',
+                  exceeds ? 'border-red-100 bg-red-50' : 'border-emerald-100 bg-emerald-50',
+                )}>
+                  <div className="flex items-center justify-between gap-3">
+                    <MicroLabel className={exceeds ? 'text-red-700' : 'text-emerald-700'}>
+                      Verlofsaldo {requestYear}
+                    </MicroLabel>
+                    <span className={cn('text-sm font-semibold tabular-nums', exceeds ? 'text-red-700' : 'text-emerald-700')}>
+                      {balance.betaaldGebruikt + dayCount} / {balance.betaaldBudget}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs font-normal text-slate-600">
+                    {exceeds
+                      ? `Deze aanvraag gaat ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget} ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget === 1 ? 'dag' : 'dagen'} over het jaarbudget.`
+                      : `Na goedkeuring resteren ${balance.betaaldBudget - balance.betaaldGebruikt - dayCount} dagen.`}
+                  </p>
+                </div>
+              )}
+
+              {conflictShifts.length > 0 && (
+                <div>
+                  <MicroLabel className="text-red-600">Conflict met planning</MicroLabel>
+                  <div className="mt-2 space-y-1.5">
+                    {conflictShifts.slice(0, 5).map((s) => (
+                      <div key={s.id} className="flex items-center justify-between rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs">
+                        <span className="font-semibold text-slate-800 tabular-nums">{s.date}</span>
+                        <span className="font-medium text-slate-600 tabular-nums">Dienst {s.line} · {s.startTime}–{s.endTime}</span>
+                      </div>
+                    ))}
+                    {conflictShifts.length > 5 && (
+                      <p className="text-[11px] font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs font-normal text-slate-500">Bij goedkeuring moeten deze diensten herverdeeld worden.</p>
+                </div>
+              )}
+
+              {reviewLeave.comment && (
+                <div>
+                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                    {reviewLeave.comment}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </SlideOver>
+
       <EntityHistoryModal
         open={!!historyLeave}
         onClose={() => setHistoryLeave(null)}
@@ -639,65 +749,50 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
 }
 
 function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void }) {
-  const statusLabels: Record<LeaveRequest['status'], string> = {
-    pending: 'In behandeling',
-    approved: 'Goedgekeurd',
-    rejected: 'Afgewezen',
-    cancelled: 'Geannuleerd',
-  };
-  const statusColors: Record<LeaveRequest['status'], { accent: string; text: string }> = {
-    pending: { accent: 'bg-amber-500', text: 'text-amber-500' },
-    approved: { accent: 'bg-emerald-500', text: 'text-emerald-500' },
-    rejected: { accent: 'bg-red-500', text: 'text-red-500' },
-    cancelled: { accent: 'bg-slate-400', text: 'text-slate-500' },
+  const statusAccents: Record<LeaveRequest['status'], string> = {
+    pending: 'bg-amber-500',
+    approved: 'bg-emerald-500',
+    rejected: 'bg-red-500',
+    cancelled: 'bg-slate-400',
   };
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between ml-2">
-        <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">{title}</h4>
-        <span className="text-[10px] font-black text-slate-300 uppercase tracking-[0.08em]">{count}</span>
+      <div className="flex items-center justify-between px-1">
+        <MicroLabel className="text-slate-500">{title}</MicroLabel>
+        <MicroLabel>{count}</MicroLabel>
       </div>
-      <div className="space-y-4">
+      <div className="space-y-3">
         {requests.length > 0 ? requests.map((req) => {
           const fresh = isNew?.(req) ?? false;
-          const colors = statusColors[req.status];
           return (
-            <div key={req.id} className={cn('surface-card p-6 rounded-3xl relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
-              <div className={cn('absolute top-0 left-0 w-1 h-full', colors.accent)} />
-              <div className="flex justify-between items-start mb-4 gap-3">
-                <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[8px] font-black uppercase tracking-[0.08em]">{formatLeaveType(req.type)}</span>
+            <div key={req.id} className={cn('surface-card p-5 rounded-2xl relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
+              <div className={cn('absolute top-0 left-0 w-1 h-full', statusAccents[req.status])} />
+              <div className="flex justify-between items-start mb-3 gap-3">
+                <Badge tone="slate">{formatLeaveType(req.type)}</Badge>
                 <div className="flex items-center gap-2">
-                  {fresh && <span className="px-2 py-1 bg-oker-500 text-white rounded-full text-[8px] font-black uppercase tracking-[0.08em]">Nieuw</span>}
-                  <span className={cn('text-[10px] font-black uppercase tracking-[0.08em]', colors.text)}>{statusLabels[req.status]}</span>
+                  {fresh && <Badge tone="oker">Nieuw</Badge>}
+                  <StatusBadge status={req.status} />
                 </div>
               </div>
-              <p className="font-black text-slate-800 text-sm mb-1">{new Date(req.startDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} - {new Date(req.endDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.08em]">Aangevraagd op {req.createdAt.split('T')[0]}</p>
-              {req.comment && <p className="text-xs text-slate-500 italic mt-3">"{req.comment}"</p>}
+              <p className="font-bold text-slate-800 text-sm mb-0.5">{new Date(req.startDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(req.endDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
+              <p className="text-[11px] font-medium text-slate-400 tabular-nums">Aangevraagd op {req.createdAt.split('T')[0]}</p>
+              {req.comment && <p className="text-xs text-slate-500 italic mt-2.5">"{req.comment}"</p>}
               {onCancel && req.status === 'approved' && (
-                <button
-                  type="button"
-                  onClick={() => onCancel(req.id)}
-                  className="ios-pressable mt-4 w-full rounded-2xl border border-red-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-red-500 hover:bg-red-50 transition-colors"
-                >
+                <Button variant="danger" size="sm" full className="mt-3.5" onClick={() => onCancel(req.id)}>
                   Verlof annuleren
-                </button>
+                </Button>
               )}
               {onWithdraw && req.status === 'pending' && (
-                <button
-                  type="button"
-                  onClick={() => onWithdraw(req.id)}
-                  className="ios-pressable mt-4 w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
-                >
+                <Button variant="secondary" size="sm" full className="mt-3.5" onClick={() => onWithdraw(req.id)}>
                   Aanvraag intrekken
-                </button>
+                </Button>
               )}
             </div>
           );
         }) : (
-          <div className="surface-card p-8 rounded-3xl text-center">
-            <p className="text-slate-400 font-bold text-sm">{emptyText}</p>
+          <div className="surface-card p-6 rounded-2xl text-center">
+            <p className="text-slate-400 font-medium text-sm">{emptyText}</p>
           </div>
         )}
       </div>

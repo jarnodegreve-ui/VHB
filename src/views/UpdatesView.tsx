@@ -1,8 +1,21 @@
 import { useState } from 'react';
-import { AlertTriangle, ChevronRight, Clock, Info } from 'lucide-react';
+import { ChevronRight, Clock, Info } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { Badge } from '../components/primitives';
+
+const CATEGORY_TONES: Record<string, 'amber' | 'blue' | 'slate'> = {
+  veiligheid: 'amber',
+  technisch: 'blue',
+  algemeen: 'slate',
+};
+
+const CATEGORY_ACCENTS: Record<string, string> = {
+  veiligheid: 'bg-amber-500',
+  technisch: 'bg-blue-500',
+  algemeen: 'bg-slate-300',
+};
 
 export function UpdatesView({ updates }: { updates: Update[] }) {
   const [filter, setFilter] = useState<'all' | 'algemeen' | 'veiligheid' | 'technisch'>('all');
@@ -26,8 +39,8 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 key={cat}
                 onClick={() => setFilter(cat)}
                 className={cn(
-                  "px-4 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-[0.08em] transition-all",
-                  filter === cat ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
+                  "px-4 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all",
+                  filter === cat ? "glass-chip text-oker-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
                 {cat === 'all' ? 'Alles' : cat}
@@ -49,42 +62,34 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
             return (
             <div key={update.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-3xl relative overflow-hidden group duration-300">
               <div className={cn(
-                "absolute top-0 left-0 w-1.5 h-full",
-                update.isUrgent ? "bg-red-600" :
-                update.category === 'veiligheid' ? "bg-red-500" : 
-                update.category === 'technisch' ? "bg-blue-500" : "bg-emerald-500"
+                "absolute top-0 left-0 w-1 h-full",
+                update.isUrgent ? "bg-red-500" : (CATEGORY_ACCENTS[update.category] ?? "bg-slate-300")
               )} />
-              
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex gap-2">
-                  <span className={cn(
-                    "px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em]",
-                    update.category === 'veiligheid' ? "bg-red-50 text-red-600" : 
-                    update.category === 'technisch' ? "bg-blue-50 text-blue-600" : "bg-emerald-50 text-emerald-600"
-                  )}>
+
+              <div className="flex justify-between items-center mb-4 gap-3">
+                <div className="flex flex-wrap gap-2">
+                  <Badge tone={CATEGORY_TONES[update.category] ?? 'slate'} className="capitalize">
                     {update.category}
-                  </span>
+                  </Badge>
                   {update.isUrgent && (
-                    <span className="px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.15em] bg-red-600 text-white flex items-center gap-1">
-                      <AlertTriangle size={10} /> DRINGEND
-                    </span>
+                    <Badge tone="red" dot>Dringend</Badge>
                   )}
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-[0.08em]">
+                <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 tabular-nums">
                   <Clock size={12} className="text-slate-300" />
                   {update.date}
                 </div>
               </div>
-              
-              <h4 className="text-lg font-black text-slate-800 mb-3 group-hover:text-oker-500 transition-colors leading-tight">{update.title}</h4>
-              <p className="text-slate-600 leading-relaxed font-medium text-sm whitespace-pre-wrap">{visibleContent}</p>
+
+              <h4 className="text-lg font-bold tracking-tight text-slate-800 mb-3 leading-tight">{update.title}</h4>
+              <p className="text-sm font-normal text-slate-600 leading-relaxed whitespace-pre-wrap">{visibleContent}</p>
 
               {shouldTruncate ? (
-                <div className="mt-5 pt-5 border-t border-slate-50 flex justify-end">
+                <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
                   <button
                     type="button"
                     onClick={() => toggleExpanded(update.id)}
-                    className="text-[10px] font-black text-oker-500 uppercase tracking-[0.08em] hover:text-oker-600 transition-colors flex items-center gap-2"
+                    className="ios-pressable flex items-center gap-1.5 text-xs font-semibold text-oker-600 hover:text-oker-700 transition-colors"
                   >
                     {isExpanded ? 'Toon minder' : 'Lees meer'}
                     <ChevronRight size={14} className={cn("transition-transform", isExpanded && "rotate-90")} />
@@ -95,13 +100,12 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
           );
           })
         ) : (
-          <div className="lg:col-span-2 surface-card p-12 rounded-3xl text-center">
+          <div className="lg:col-span-2 surface-card p-10 rounded-3xl text-center">
             <Info size={48} className="mx-auto text-slate-200 mb-4" />
-            <p className="text-slate-400 font-bold">Geen updates gevonden in deze categorie.</p>
+            <p className="text-sm font-medium text-slate-400">Geen updates gevonden in deze categorie.</p>
           </div>
         )}
       </div>
     </PageShell>
   );
 }
-

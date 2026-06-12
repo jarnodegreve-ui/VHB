@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
+import { Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
@@ -169,29 +170,29 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronLeft size={18} />
             </button>
-            <span className="px-3 text-sm font-black tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
+            <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
             <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronRight size={18} />
             </button>
-            <button type="button" onClick={goToday} className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-white text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 hover:text-slate-800 hover:bg-slate-50 transition-colors">
+            <Button variant="secondary" size="sm" className="ml-1 h-9 rounded-xl" onClick={goToday}>
               Vandaag
-            </button>
+            </Button>
           </div>
         )}
       />
 
       {error ? (
-        <div className="surface-card p-8 rounded-3xl text-center"><p className="text-sm font-bold text-red-500">{error}</p></div>
+        <div className="surface-card p-6 rounded-3xl text-center"><p className="text-sm font-semibold text-red-500">{error}</p></div>
       ) : loading ? (
-        <div className="surface-card p-8 rounded-3xl flex items-center justify-center min-h-[200px]">
+        <div className="surface-card p-6 rounded-3xl flex items-center justify-center min-h-[200px]">
           <div className="flex items-center gap-3 text-slate-500">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
-            <span className="text-sm font-bold">Maandplanning laden...</span>
+            <span className="text-sm font-semibold">Maandplanning laden...</span>
           </div>
         </div>
       ) : !hasData ? (
-        <div className="surface-card p-10 rounded-3xl text-center">
-          <p className="text-sm font-bold text-slate-500">Geen planning gevonden voor {MONTH_NAMES[monthIndex]} {year}.</p>
+        <div className="surface-card p-6 rounded-3xl text-center">
+          <p className="text-sm font-semibold text-slate-500">Geen planning gevonden voor {MONTH_NAMES[monthIndex]} {year}.</p>
           <p className="mt-1 text-xs font-medium text-slate-400">Zodra de planning voor deze maand geïmporteerd is, verschijnt ze hier.</p>
         </div>
       ) : (
@@ -202,7 +203,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[10px] font-black uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
+                    <th className="sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
@@ -215,8 +216,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             today ? 'bg-oker-100' : h.weekend ? 'bg-slate-100' : 'bg-slate-50',
                           )}
                         >
-                          <div className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
-                          <div className={cn('text-xs font-black mt-0.5', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
+                          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
+                          <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
                         </th>
                       );
                     })}
@@ -231,7 +232,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       <tr key={drv.id} className={cn('group border-b border-slate-200', rowBg)}>
                         <td
                           className={cn(
-                            'sticky left-0 z-10 px-4 py-2 text-sm font-bold min-w-[180px] truncate border-r-2 border-slate-300 transition-colors',
+                            'sticky left-0 z-10 px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-slate-300 transition-colors',
                             rowBg,
                             'group-hover:bg-oker-50',
                             isOwn ? 'text-oker-800' : 'text-slate-800',
@@ -240,7 +241,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <span className="inline-flex items-center gap-1.5">
                             {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500" aria-hidden />}
                             {drv.name}
-                            {isOwn && <span className="text-[9px] font-black uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                            {isOwn && <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
                           </span>
                         </td>
                         {visibleDates.map((iso) => {
@@ -261,7 +262,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                 <button
                                   type="button"
                                   onClick={() => setSelected({ driverName: drv.name, iso, cell })}
-                                  className={cn('inline-block min-w-[30px] rounded-md px-1 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-black/5 cursor-pointer transition hover:ring-2 hover:ring-oker-400', KIND_CLS[cell.kind])}
+                                  className={cn('inline-block min-w-[30px] rounded-md px-1 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-black/5 cursor-pointer transition hover:ring-2 hover:ring-oker-400', KIND_CLS[cell.kind])}
                                   title={`${KIND_LABEL[cell.kind]} · ${cell.code} — klik voor details`}
                                 >
                                   {cell.code}
@@ -287,12 +288,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               return (
                 <div key={drv.id} className={cn('p-4', isOwn && 'bg-oker-50')}>
                   <div className="flex items-baseline justify-between gap-2">
-                    <div className={cn('text-sm font-bold truncate inline-flex items-center gap-1.5', isOwn ? 'text-oker-800' : 'text-slate-800')}>
+                    <div className={cn('text-sm font-semibold truncate inline-flex items-center gap-1.5', isOwn ? 'text-oker-800' : 'text-slate-800')}>
                       {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" aria-hidden />}
                       {drv.name}
-                      {isOwn && <span className="text-[9px] font-black uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                      {isOwn && <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
                     </div>
-                    <div className="shrink-0 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{entries.length}</div>
+                    <MicroLabel className="shrink-0 tabular-nums">{entries.length}</MicroLabel>
                   </div>
                   {entries.length === 0 ? (
                     <div className="mt-2 text-xs text-slate-300 italic">Niets gepland in deze periode.</div>
@@ -312,8 +313,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             onClick={() => setSelected({ driverName: drv.name, iso, cell })}
                             className="w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left active:bg-black/[0.04] transition-colors"
                           >
-                            <span className={cn('w-11 shrink-0 text-xs font-bold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
-                            <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-[11px] font-black tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
+                            <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
+                            <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
                             <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">{summary}</span>
                           </button>
                         );
@@ -327,10 +328,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
           {/* Legende */}
           <div className="surface-card rounded-3xl p-5 flex flex-wrap items-center gap-x-5 gap-y-3 text-xs">
-            <span className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Legende</span>
+            <MicroLabel className="text-slate-500">Legende</MicroLabel>
             {(['service', 'leave', 'absence', 'training', 'unknown'] as CellKind[]).map((k) => (
               <div key={k} className="flex items-center gap-2">
-                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[10px] font-black', KIND_CLS[k])}>{k === 'service' ? '4101' : KIND_LABEL[k].slice(0, 3)}</span>
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold', KIND_CLS[k])}>{k === 'service' ? '4101' : KIND_LABEL[k].slice(0, 3)}</span>
                 <span className="font-medium text-slate-600">{KIND_LABEL[k]}</span>
               </div>
             ))}
@@ -344,8 +345,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           <div className="p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400 capitalize">{formatDateLong(selected.iso)}</div>
-                <h3 className="mt-0.5 text-lg font-black tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
+                <MicroLabel className="capitalize">{formatDateLong(selected.iso)}</MicroLabel>
+                <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
               </div>
               <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
                 <X size={16} />
@@ -353,16 +354,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             </div>
 
             <div className="mt-4 flex items-center gap-2.5">
-              <span className={cn('inline-block rounded-lg px-2.5 py-1 text-sm font-black tabular-nums ring-1 ring-black/5', KIND_CLS[selected.cell.kind])}>{selected.cell.code}</span>
-              <span className="text-sm font-bold text-slate-700">{selected.cell.label}</span>
+              <span className={cn('inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[selected.cell.kind])}>{selected.cell.code}</span>
+              <span className="text-sm font-semibold text-slate-700">{selected.cell.label}</span>
             </div>
 
             {selected.cell.kind === 'service' ? (
               selected.cell.segments.length > 0 ? (
                 <div className="mt-5 space-y-2">
-                  <div className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Uren</div>
+                  <MicroLabel>Uren</MicroLabel>
                   {selected.cell.segments.map((seg, idx) => (
-                    <div key={idx} className="flex items-center gap-2 text-base font-black text-slate-800 tabular-nums">
+                    <div key={idx} className="flex items-center gap-2 text-base font-semibold text-slate-800 tabular-nums">
                       <Clock size={16} className="text-oker-500 shrink-0" /> {seg}
                     </div>
                   ))}
