@@ -12,7 +12,7 @@ import { canRespondToSwap } from '../lib/authorization';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
-export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void }) {
+export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean> }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [selectedShift, setSelectedShift] = useState<string>('');
   const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
@@ -153,6 +153,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
   };
 
   const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status']) => {
+    // Delta-pad (PATCH per record, met conflictdetectie): twee mensen die
+    // tegelijk beoordelen overschrijven elkaar niet meer — de tweede krijgt
+    // een nette melding en een verse lijst.
+    if (onDecide) {
+      void onDecide(swapId, newStatus);
+      return;
+    }
     // 'accepted' is een tussenstap (collega akkoord) — nog géén beslismoment;
     // decidedAt zetten we pas bij een definitieve beslissing.
     const isFinal = newStatus !== 'pending' && newStatus !== 'accepted';

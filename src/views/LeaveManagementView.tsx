@@ -19,7 +19,7 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
 };
 const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
@@ -138,6 +138,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
     showRequestModal && (dateStr === formData.startDate || dateStr === formData.endDate);
 
   const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status']) => {
+    // Delta-pad (PATCH per record): conflictveilig bij twee gelijktijdige
+    // beoordelaars — de tweede krijgt een melding i.p.v. een stille overschrijf.
+    if (onDecide) {
+      void onDecide(requestId, newStatus);
+      return;
+    }
     const decidedAt = new Date().toISOString();
     onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, status: newStatus, decidedAt } : r)));
   };
@@ -155,28 +161,32 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
       return next;
     });
   };
+  const bulkDecide = (status: 'approved' | 'rejected') => {
+    const ids = leaveRequests
+      .filter((r) => selectedPendingIds.has(r.id) && r.status === 'pending')
+      .map((r) => r.id);
+    if (onDecide) {
+      // Sequentieel per record: elk met eigen conflictdetectie — een aanvraag
+      // die intussen al behandeld is, geeft een melding en slaat over.
+      void (async () => {
+        for (const id of ids) await onDecide(id, status);
+      })();
+      return;
+    }
+    const decidedAt = new Date().toISOString();
+    onSave(leaveRequests.map((r) => (ids.includes(r.id) ? { ...r, status, decidedAt } : r)));
+  };
+
   const handleBulkApprove = () => {
     if (selectedPendingIds.size === 0) return;
-    const decidedAt = new Date().toISOString();
-    const updated = leaveRequests.map((r) =>
-      selectedPendingIds.has(r.id) && r.status === 'pending'
-        ? { ...r, status: 'approved' as const, decidedAt }
-        : r,
-    );
-    onSave(updated);
+    bulkDecide('approved');
     setSelectedPendingIds(new Set());
   };
 
   const handleBulkReject = () => {
     if (selectedPendingIds.size === 0) return;
     if (!window.confirm(`${selectedPendingIds.size} aanvragen weigeren? Dit kan niet ongedaan gemaakt worden.`)) return;
-    const decidedAt = new Date().toISOString();
-    const updated = leaveRequests.map((r) =>
-      selectedPendingIds.has(r.id) && r.status === 'pending'
-        ? { ...r, status: 'rejected' as const, decidedAt }
-        : r,
-    );
-    onSave(updated);
+    bulkDecide('rejected');
     setSelectedPendingIds(new Set());
   };
 
@@ -188,6 +198,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
       ? 'Deze goedgekeurde verlofaanvraag annuleren? De aanvrager ziet dit terug onder zijn historiek.'
       : 'Eigen verlofaanvraag annuleren?';
     if (!window.confirm(message)) return;
+    if (onDecide) {
+      void onDecide(requestId, 'cancelled');
+      return;
+    }
     const update: Partial<LeaveRequest> = { status: 'cancelled' };
     if (cancelledByOther) update.decidedAt = new Date().toISOString();
     onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, ...update } : r)));

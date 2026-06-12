@@ -1,0 +1,81 @@
+# VHB Planner — constraint toggles, legal parameters and soft weights.
+# Every solver constraint family can be switched off individually to debug
+# infeasibility (same dotted names as the CLI --disable flag and the report).
+# All durations are integer minutes. The effective config used for a run is
+# echoed into the output workbook's Rapport sheet.
+
+[solver]
+max_time_s = 60.0
+workers = 8
+relaxation_pass = true          # layer-3 infeasibility diagnosis (re-solves)
+relaxation_time_s = 10.0
+
+[eu561]
+# H1 — EU 561/2006 Art. 6(1): max 9h driving/day, 10h max twice a week.
+max_daily_driving = true
+daily_driving_max = 540
+extended_daily_driving_max = 600
+extended_days_per_week = 2
+
+# H2 — Art. 8(2,4): daily rest >= 11h, reducible to 9h max 3x per week
+# (Phase 1 counts per fixed Mon-Sun week; see DESIGN.md §4).
+daily_rest = true
+daily_rest_min = 660
+reduced_daily_rest_min = 540
+reduced_daily_rests_per_week = 3
+strict_24h_window = true        # duty spread > 13h consumes a reduced-rest credit
+
+# H3 — Art. 8(6,9): weekly rest >= 45h, straddling rest counts in one week.
+weekly_rest = true
+weekly_rest_min = 2700
+weekly_rest_mode = "gap"        # "gap" = exact; "two_days_off" = stricter debug mode
+allow_reduced_weekly_rest = false   # 24h+compensation untrackable in one period
+reduced_weekly_rest_min = 1440
+
+# H5/H6 — Art. 6(2,3): driving caps per fixed week / adjacent week pair.
+weekly_driving_cap = true
+weekly_driving_max = 3360
+biweekly_driving_cap = true
+biweekly_driving_max = 5400
+
+# Art. 8(6) 144h between weekly rests — post-solve report check in Phase 1.
+report_gap_between_weekly_rests = true
+max_gap_between_weekly_rests = 8640
+
+[cao]
+# H7 — KB 10-08-2005 amplitude: 14h, 16h when longest coupure >= 4h (Q3).
+max_amplitude = true
+amplitude_max = 840
+amplitude_max_interrupted = 960
+min_interruption_for_extension = 240
+
+# H8 — max 6 consecutive working days (rolling window).
+max_consecutive_days = true
+consecutive_days_max = 6
+
+# H10 — contract hours, period-average semantics (Q1): hard cap on the
+# period total = contract x weeks + tolerance; weeks deviate softly.
+contract_hours = true
+contract_tolerance_period = 0
+paid_absence_credit = true      # paid absence day credits contract/5
+absence_credit_divisor = 5
+
+[kb2005]
+# H11 — KB 10-08-2005 working time on diensttijd (Q1).
+daily_working_time = true
+daily_working_max = 720         # 12h geregeld vervoer
+weekly_working_time = true
+weekly_working_max = 3000
+
+[soft]
+fair_early = 3
+fair_late = 3
+fair_broken = 3
+fair_night = 3
+fair_weekend = 5
+hours_balance = 4
+early_after_late = 2
+early_after_late_graded = false
+
+[validate]
+duty_break_slack = "warning"    # H4: rijtijd > 4:30 needs >= 45 min non-driving slack

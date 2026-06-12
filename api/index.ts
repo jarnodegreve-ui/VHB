@@ -1513,6 +1513,85 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// Delta-endpoint voor beslissingen: één record, met optimistic-concurrency
+// via ifStatus. Twee planners die tegelijk beoordelen kunnen elkaars
+// beslissing zo niet meer stilletjes overschrijven (de whole-array-POST kon
+// dat wel): de tweede krijgt een 409 en een verse lijst.
+app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const status = String(req.body?.status ?? "");
+    const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
+
+    const all = await getSwapsData();
+    const current = all.find((s) => String(s.id) === id);
+    if (!current) {
+      return res.status(404).json({ error: "Deze dienstruil bestaat niet (meer) — mogelijk net ingetrokken." });
+    }
+    if (ifStatus && String(current.status) !== ifStatus) {
+      return res.status(409).json({
+        error: `Deze ruil is intussen al '${current.status}' — de lijst is ververst.`,
+        currentStatus: current.status,
+      });
+    }
+
+    const role = req.appUser!.role;
+    const selfId = String(req.appUser!.id);
+    if (role === "chauffeur") {
+      // Alleen de aangezochte collega mag een openstaande ruil accepteren
+      // of weigeren — zelfde regels als de array-route.
+      const isTarget = String(current.targetDriverId ?? "") === selfId && String(current.requesterId) !== selfId;
+      const validTransition = current.status === "pending" && (status === "accepted" || status === "rejected");
+      if (!isTarget || !validTransition) {
+        return res.status(403).json({ error: "Niet toegestaan: je mag een aan jou gerichte, openstaande ruil alleen accepteren of weigeren." });
+      }
+    } else {
+      const allowed = ["accepted", "approved", "rejected", "cancelled", "completed"];
+      if (!allowed.includes(status)) {
+        return res.status(400).json({ error: "Ongeldige status." });
+      }
+      // Force-approve vanuit pending blijft admin-only (zelfde beleid als POST).
+      if (role !== "admin" && current.status === "pending" && status === "approved") {
+        return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
+      }
+    }
+
+    // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —
+    // decidedAt hoort pas bij een definitieve beslissing (zelfde semantiek
+    // als de array-route/UI).
+    const updated = status === "accepted"
+      ? { ...current, status }
+      : { ...current, status, decidedAt: new Date().toISOString() };
+    await saveSwapsData([updated], []);
+
+    const usersForLog = await getUsersData();
+    const userName = (uid: string) => usersForLog.find((u) => String(u.id) === String(uid))?.name || `Onbekende gebruiker (${uid})`;
+    const actionLabels: Record<string, string> = {
+      accepted: "Dienstruil geaccepteerd",
+      approved: "Dienstruil goedgekeurd",
+      rejected: "Dienstruil afgewezen",
+      cancelled: "Dienstruil geannuleerd",
+      completed: "Dienstruil voltooid",
+    };
+    const action = actionLabels[status] ?? "Dienstruil bijgewerkt";
+    await logActivity(req, "swaps", action, `${userName(String(current.requesterId))} — dienstruil (${current.status} → ${status}).`, { type: "swap", id });
+
+    const betrokkenen = [String(current.requesterId), String(current.targetDriverId ?? "")]
+      .filter((uid) => uid && uid !== selfId);
+    await sendPushToUsers(betrokkenen, {
+      title: action,
+      body: status === "accepted"
+        ? `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil — wacht op goedkeuring van de planner.`
+        : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
+      url: "/",
+    });
+
+    res.json({ success: true, swap: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: "Beslissing opslaan is mislukt", details: err.message });
+  }
+});
+
 app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const data = await getLeaveData();
@@ -1680,6 +1759,75 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save leave", details: err.message });
+  }
+});
+
+// Delta-endpoint voor verlofbeslissingen (zie PATCH /api/swaps/:id voor het
+// waarom). Beslissen is planner/admin-werk; chauffeurs trekken in via de
+// array-route (volledige verwijdering van eigen pending).
+app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const status = String(req.body?.status ?? "");
+    const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
+    const allowed = ["approved", "rejected", "cancelled"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ error: "Ongeldige status." });
+    }
+
+    const all = await getLeaveData();
+    const current = all.find((l) => String(l.id) === id);
+    if (!current) {
+      return res.status(404).json({ error: "Deze verlofaanvraag bestaat niet (meer) — mogelijk net ingetrokken." });
+    }
+    if (ifStatus && String(current.status) !== ifStatus) {
+      return res.status(409).json({
+        error: `Deze aanvraag is intussen al '${current.status}' — de lijst is ververst.`,
+        currentStatus: current.status,
+      });
+    }
+
+    const decidedAt = new Date().toISOString();
+    const updated = { ...current, status, decidedAt };
+    await saveLeaveData([updated], []);
+
+    const users = await getUsersData();
+    const requester = users.find((u) => String(u.id) === String(current.userId));
+    const requesterName = requester?.name || `Onbekende gebruiker (${current.userId})`;
+    const period = current.startDate === current.endDate ? current.startDate : `${current.startDate} t/m ${current.endDate}`;
+    const leaveTypeLabels: Record<string, string> = { betaald_verlof: "Betaald verlof", klein_verlet: "Klein verlet" };
+    const typeLabel = leaveTypeLabels[current.type] ?? current.type;
+    const actionLabels: Record<string, string> = {
+      approved: "Verlof goedgekeurd",
+      rejected: "Verlof afgewezen",
+      cancelled: "Verlof geannuleerd",
+    };
+    const action = actionLabels[status]!;
+    await logActivity(req, "leave", action, `${requesterName} — ${typeLabel} (${period}).`, { type: "leave", id });
+
+    // E-mail + push naar de aanvrager — niet de actor zelf.
+    if (req.appUser && String(req.appUser.id) !== String(current.userId)) {
+      if (requester?.email) {
+        await sendLeaveDecisionEmail({
+          to: requester.email,
+          recipientName: requester.name,
+          decidedByName: req.appUser.name || "Planning",
+          typeLabel,
+          startDate: current.startDate,
+          endDate: current.endDate,
+          action: status as LeaveDecisionAction,
+        });
+      }
+      await sendPushToUsers([String(current.userId)], {
+        title: action,
+        body: `${typeLabel} (${period}) — beslist door ${req.appUser.name || "Planning"}.`,
+        url: "/",
+      });
+    }
+
+    res.json({ success: true, leave: updated });
+  } catch (err: any) {
+    res.status(500).json({ error: "Beslissing opslaan is mislukt", details: err.message });
   }
 });
 
