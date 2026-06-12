@@ -1143,6 +1143,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     const previousSwaps = await getSwapsData();
     const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
     const newById = new Map(newData.map((s: any) => [String(s.id), s]));
+    const swapIdsToDelete: string[] = [];
 
     if (req.appUser?.role === "chauffeur") {
       const selfId = String(req.appUser.id);
@@ -1158,6 +1159,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (String(prev.requesterId) !== selfId || prev.status !== "pending") {
             return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen openstaande wisselverzoeken intrekken." });
           }
+          swapIdsToDelete.push(String(id));
         }
       }
 
@@ -1227,7 +1229,13 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveSwapsData(newData);
+    if (req.appUser?.role !== "chauffeur") {
+      for (const [id] of previousById) {
+        if (!newById.has(String(id))) swapIdsToDelete.push(String(id));
+      }
+    }
+
+    await saveSwapsData(newData, swapIdsToDelete);
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen.
     const usersForLog = await getUsersData();
@@ -1294,6 +1302,9 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     // Server-side autorisatie: chauffeurs kunnen alleen eigen pending-aanvragen
     // toevoegen of intrekken. Status-overgangen en bewerken van anderen vereist
     // planner/admin.
+    const payloadLeaveIds = new Set(newData.map((r: any) => String(r.id)));
+    const leaveIdsToDelete: string[] = [];
+
     if (req.appUser?.role === "chauffeur") {
       const newById = new Map(newData.map((r: any) => [String(r.id), r]));
       const selfId = String(req.appUser.id);
@@ -1308,6 +1319,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           if (prev.status !== "pending") {
             return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen openstaande verlofaanvraag intrekken." });
           }
+          leaveIdsToDelete.push(String(id));
         }
       }
 
@@ -1334,7 +1346,24 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveLeaveData(newData);
+    // Planner/admin: alles wat uit de (volledige) payload is weggelaten is
+    // een bewuste verwijdering door een vertrouwde rol.
+    if (req.appUser?.role !== "chauffeur") {
+      for (const [id] of previousById) {
+        if (!payloadLeaveIds.has(String(id))) leaveIdsToDelete.push(String(id));
+      }
+    }
+
+    await saveLeaveData(newData, leaveIdsToDelete);
+
+    if (leaveIdsToDelete.length > 0) {
+      await logActivity(
+        req,
+        "leave",
+        "Verlof ingetrokken",
+        `${leaveIdsToDelete.length} verlofaanvra${leaveIdsToDelete.length === 1 ? "ag" : "gen"} ingetrokken/verwijderd.`,
+      );
+    }
 
     for (const next of newData) {
       const prev = previousById.get(next.id);

@@ -1027,11 +1027,18 @@ export const getSwapsData = async () => {
   return rows.map(toPublicSwap);
 };
 
-export const saveSwapsData = async (data: any) => {
+export const saveSwapsData = async (data: any, idsToDelete: string[] = []) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicSwap) : [];
-  const { error } = await client.from('swaps').upsert(normalizedData.map(toDatabaseSwap));
-  if (error) throw error;
+  if (normalizedData.length > 0) {
+    const { error } = await client.from('swaps').upsert(normalizedData.map(toDatabaseSwap));
+    if (error) throw error;
+  }
+  // Intrekkingen: gevalideerd door de handler (zie POST /api/swaps).
+  if (idsToDelete.length > 0) {
+    const { error } = await client.from('swaps').delete().in('id', idsToDelete.map(String));
+    if (error) throw error;
+  }
 };
 
 // --- Leave ---
@@ -1044,11 +1051,20 @@ export const getLeaveData = async () => {
   return rows.map(toPublicLeave);
 };
 
-export const saveLeaveData = async (data: any) => {
+export const saveLeaveData = async (data: any, idsToDelete: string[] = []) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicLeave) : [];
-  const { error } = await client.from('leave').upsert(normalizedData.map(toDatabaseLeave));
-  if (error) throw error;
+  if (normalizedData.length > 0) {
+    const { error } = await client.from('leave').upsert(normalizedData.map(toDatabaseLeave));
+    if (error) throw error;
+  }
+  // Intrekkingen: de handler valideert scope + status; hier alleen uitvoeren.
+  // Zonder dit was 'aanvraag intrekken' een stille no-op (upsert raakt
+  // ontbrekende rijen niet) en kwam de aanvraag na refresh terug.
+  if (idsToDelete.length > 0) {
+    const { error } = await client.from('leave').delete().in('id', idsToDelete.map(String));
+    if (error) throw error;
+  }
 };
 
 // --- Coverage expectations (verwachte diensten per dag-type) ---
