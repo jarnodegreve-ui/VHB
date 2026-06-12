@@ -1014,6 +1014,60 @@ export const saveServicesData = async (data: any) => {
   }
 };
 
+// --- Client errors ---
+
+export type ClientErrorEntry = {
+  message: string;
+  stack?: string;
+  source?: string;
+  url?: string;
+  userAgent?: string;
+  userId?: string;
+};
+
+/** Best-effort: de `client_errors`-tabel is optioneel — zonder tabel (of
+ *  zonder db) blijft de console.error in de route-handler het vangnet
+ *  (zichtbaar in de Vercel-functielogs). Mag zelf nooit throwen. */
+export const logClientError = async (entry: ClientErrorEntry) => {
+  if (!db) return;
+  try {
+    await db.from("client_errors").insert({
+      message: entry.message,
+      stack: entry.stack || null,
+      source: entry.source || null,
+      url: entry.url || null,
+      user_agent: entry.userAgent || null,
+      user_id: entry.userId || null,
+    });
+  } catch {
+    // tabel ontbreekt of insert faalt — bewust stil
+  }
+};
+
+export const getClientErrors = async (limit = 100) => {
+  if (!db) return [];
+  try {
+    const { data, error } = await db
+      .from("client_errors")
+      .select("*")
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) return [];
+    return (data ?? []).map((row: any) => ({
+      id: row.id,
+      createdAt: row.created_at,
+      message: row.message,
+      stack: row.stack ?? undefined,
+      source: row.source ?? undefined,
+      url: row.url ?? undefined,
+      userAgent: row.user_agent ?? undefined,
+      userId: row.user_id ?? undefined,
+    }));
+  } catch {
+    return [];
+  }
+};
+
 // --- Updates ---
 
 export const getUpdatesData = async () => {

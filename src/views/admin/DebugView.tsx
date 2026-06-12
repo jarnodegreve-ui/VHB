@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Activity, FlaskConical } from 'lucide-react';
+import { Activity, Bug, DownloadCloud, FlaskConical } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { PageHeader, PageShell } from '../../components/ui';
@@ -12,6 +12,43 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [clientErrors, setClientErrors] = useState<Array<{ id: string | number; createdAt: string; message: string; source?: string; url?: string; userId?: string }> | null>(null);
+
+  const downloadBackup = async () => {
+    try {
+      setIsExporting(true);
+      const response = await fetch('/api/backup', { headers: await getSupabaseAuthHeaders() });
+      if (!response.ok) {
+        const err = await response.json().catch(() => ({} as any));
+        notify(err.details || err.error || `Back-up mislukt (${response.status}).`, 'error');
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `vhb-backup-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      notify('Back-up gedownload.', 'success');
+    } catch {
+      notify('Back-up downloaden is mislukt.', 'error');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const fetchClientErrors = async () => {
+    try {
+      const response = await fetch('/api/client-errors', { headers: await getSupabaseAuthHeaders() });
+      if (!response.ok) return;
+      const data = await response.json();
+      if (Array.isArray(data)) setClientErrors(data);
+    } catch {
+      // niet-kritisch: kaart toont dan 'niet beschikbaar'
+    }
+  };
 
   const checkHealth = async () => {
     try {
@@ -92,6 +129,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
   useEffect(() => {
     checkHealth();
+    fetchClientErrors();
   }, []);
 
   return (
@@ -171,6 +209,57 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           </div>
         </div>
       )}
+
+      <div className="surface-card p-8 rounded-3xl">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-lg shadow-slate-900/20">
+            <DownloadCloud size={24} />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-slate-900 font-semibold text-lg mb-2">Back-up</h4>
+            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
+              Download alle gegevens (gebruikers, planning, diensten, omleidingen, updates, verlof, dienstruilen, planningscodes en de audit-log) als één JSON-bestand. Bewaar dit op een veilige plek — het is je herstelpad als er ooit iets misgaat. De PDF-bestanden van omleidingen zitten er niet in; die staan apart in Supabase Storage.
+            </p>
+            <Button variant="primary" onClick={downloadBackup} disabled={isExporting}>
+              {isExporting ? 'Exporteren...' : 'Download volledige back-up'}
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      <div className="surface-card p-8 rounded-3xl">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-red-500 text-white rounded-2xl shadow-lg shadow-red-500/20">
+            <Bug size={24} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h4 className="text-slate-900 font-semibold text-lg mb-2">Recente client-fouten</h4>
+            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
+              Fouten die bij gebruikers in de browser optraden (crashes én fout-toasts) worden automatisch gerapporteerd. Ze staan altijd in de Vercel-functielogs; hieronder verschijnen ze zodra de optionele <code className="bg-slate-100 px-1 rounded font-semibold">client_errors</code>-tabel in Supabase bestaat.
+            </p>
+            {clientErrors === null ? (
+              <p className="text-sm font-medium text-slate-400">Niet beschikbaar.</p>
+            ) : clientErrors.length === 0 ? (
+              <p className="text-sm font-medium text-emerald-700">Geen fouten gerapporteerd. 🎉</p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {clientErrors.slice(0, 25).map((e) => (
+                  <div key={e.id} className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <Badge tone="red" dot>{e.source || 'onbekend'}</Badge>
+                      <span className="text-[10px] font-mono text-slate-400 tabular-nums shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
+                    </div>
+                    <p className="mt-1.5 text-xs font-medium text-slate-700 break-words">{e.message}</p>
+                    {(e.url || e.userId) && (
+                      <p className="mt-1 text-[10px] font-mono text-slate-400 break-all">{[e.url, e.userId && `gebruiker ${e.userId}`].filter(Boolean).join(' · ')}</p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
 
       <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
