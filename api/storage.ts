@@ -1014,6 +1014,51 @@ export const saveServicesData = async (data: any) => {
   }
 };
 
+// --- Back-ups (Supabase Storage) ---
+
+export const BACKUPS_BUCKET = "backups";
+const BACKUP_RETENTION_DAYS = 30;
+
+/** Slaat een back-up-JSON op in de (private) backups-bucket en ruimt
+ *  bestanden ouder dan de retentietermijn op. Maakt de bucket aan bij de
+ *  eerste run. Gooit bij falen — de cron-route logt en rapporteert dat. */
+export const storeBackup = async (filename: string, body: string): Promise<{ removedOld: number }> => {
+  if (!supabaseAdmin) {
+    throw new Error("Back-ups vereisen de service-role client (SUPABASE_SERVICE_ROLE_KEY).");
+  }
+
+  const upload = () =>
+    supabaseAdmin.storage.from(BACKUPS_BUCKET).upload(filename, Buffer.from(body, "utf8"), {
+      contentType: "application/json",
+      upsert: true,
+    });
+
+  let { error } = await upload();
+  if (error && /bucket.*not.*found/i.test(error.message ?? "")) {
+    const { error: createError } = await supabaseAdmin.storage.createBucket(BACKUPS_BUCKET, { public: false });
+    if (createError) throw new Error(`Backups-bucket aanmaken mislukt: ${createError.message}`);
+    ({ error } = await upload());
+  }
+  if (error) throw new Error(`Back-up uploaden mislukt: ${error.message}`);
+
+  // Retentie: verwijder back-ups ouder dan BACKUP_RETENTION_DAYS (datum uit
+  // de bestandsnaam, niet uit metadata — namen zijn de bron van waarheid).
+  let removedOld = 0;
+  const { data: files } = await supabaseAdmin.storage.from(BACKUPS_BUCKET).list(undefined, { limit: 1000 });
+  const cutoff = Date.now() - BACKUP_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  const oldFiles = (files ?? [])
+    .map((f: any) => f.name as string)
+    .filter((name) => {
+      const m = name.match(/^vhb-backup-(\d{4}-\d{2}-\d{2})\.json$/);
+      return m ? new Date(`${m[1]}T00:00:00Z`).getTime() < cutoff : false;
+    });
+  if (oldFiles.length > 0) {
+    const { error: removeError } = await supabaseAdmin.storage.from(BACKUPS_BUCKET).remove(oldFiles);
+    if (!removeError) removedOld = oldFiles.length;
+  }
+  return { removedOld };
+};
+
 // --- Client errors ---
 
 export type ClientErrorEntry = {
