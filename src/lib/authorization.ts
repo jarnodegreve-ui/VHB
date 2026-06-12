@@ -67,9 +67,6 @@ export const canManageUsers = (user: Pick<User, 'role'> | null | undefined) => i
 export const canManagePlanning = (user: Pick<User, 'role'> | null | undefined) =>
   isPlannerOrAdmin(user);
 
-/** Mag de gebruiker omleidingen beheren? */
-export const canManageDiversions = (user: Pick<User, 'role'> | null | undefined) =>
-  isPlannerOrAdmin(user);
 
 /** Mag de gebruiker updates posten? */
 export const canPostUpdates = (user: Pick<User, 'role'> | null | undefined) =>

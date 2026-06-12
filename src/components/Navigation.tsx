@@ -2,26 +2,6 @@ import React from 'react';
 import { motion } from 'motion/react';
 import { cn } from '../lib/ui';
 
-export function MobileNavItem({ icon, active, onClick }: { icon: React.ReactNode, active: boolean, onClick: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={cn(
-        "ios-pressable p-3 rounded-xl transition-all duration-300 relative",
-        active ? "text-oker-600 bg-oker-50" : "text-slate-400 hover:text-slate-600"
-      )}
-    >
-      {active && (
-        <motion.div
-          layoutId="activeTab"
-          transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.8 }}
-          className="absolute inset-0 bg-oker-500/10 rounded-xl -z-10"
-        />
-      )}
-      {icon}
-    </button>
-  );
-}
 
 export function NavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, badge?: number }) {
   return (

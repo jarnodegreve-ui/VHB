@@ -9,8 +9,7 @@ type Mode = 'login' | 'forgot';
  * Login-scherm — light variant.
  *
  * Lichte achtergrond met subtiele oker vignet, gecentreerde single-column
- * layout. VHB PORTAAL wordmark boven de form-card. Card gebruikt .panel
- * (licht glas) + .iridescent-frame voor de roterende oker rand.
+ * layout. VHB PORTAAL wordmark boven de form-card. Card gebruikt .panel.
  *
  * Login is altijd licht, los van de globale theme-toggle in de portal.
  * Tilt-parallax blijft op muis, uit op touch.

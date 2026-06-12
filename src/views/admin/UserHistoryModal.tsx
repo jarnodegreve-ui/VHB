@@ -1,4 +1,3 @@
-import React from 'react';
 import { Calendar, Clock, RotateCcw, X } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';

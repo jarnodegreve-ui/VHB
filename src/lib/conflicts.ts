@@ -72,15 +72,6 @@ export function shiftIdsWithConflict(
   return new Set(conflicts.map((c) => c.shiftId));
 }
 
-/** Verzameling leave-IDs die een conflict hebben — bv. om in verlofbeheer te flaggen. */
-export function leaveIdsWithConflict(
-  shifts: Shift[],
-  leaves: LeaveRequest[],
-  options?: { onlyApproved?: boolean },
-): Set<string> {
-  const conflicts = detectShiftLeaveConflicts(shifts, leaves, options);
-  return new Set(conflicts.map((c) => c.leaveId));
-}
 
 /**
  * Voor een specifieke verlofaanvraag: vind alle shifts van deze chauffeur die

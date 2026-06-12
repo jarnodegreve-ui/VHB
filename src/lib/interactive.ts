@@ -36,63 +36,6 @@ export function useCursorGlow<T extends HTMLElement = HTMLElement>() {
   return ref;
 }
 
-/**
- * useMagnetic — trekt het element subtiel richting de cursor binnen een
- * radius. Geeft CTAs een "magnetisch" gevoel. Gebruik spaarzaam (alleen
- * op key actions) om niet overweldigend te worden.
- *
- * `strength`: 0..1 (default 0.25)
- * `radius`: pixels rond het centrum waarbinnen de aantrekking werkt
- */
-export function useMagnetic<T extends HTMLElement = HTMLElement>(
-  strength = 0.25,
-  radius = 90,
-) {
-  const ref = useRef<T>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    if (typeof window !== 'undefined' && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    let raf = 0;
-    let active = false;
-
-    const onMove = (e: MouseEvent) => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const rect = el.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
-        const dx = e.clientX - cx;
-        const dy = e.clientY - cy;
-        const dist = Math.hypot(dx, dy);
-        if (dist < radius) {
-          const factor = (1 - dist / radius) * strength;
-          el.style.transform = `translate(${dx * factor}px, ${dy * factor}px)`;
-          active = true;
-        } else if (active) {
-          el.style.transform = '';
-          active = false;
-        }
-      });
-    };
-
-    const onLeave = () => {
-      el.style.transform = '';
-      active = false;
-    };
-
-    document.addEventListener('mousemove', onMove);
-    el.addEventListener('mouseleave', onLeave);
-    return () => {
-      document.removeEventListener('mousemove', onMove);
-      el.removeEventListener('mouseleave', onLeave);
-      cancelAnimationFrame(raf);
-      el.style.transform = '';
-    };
-  }, [strength, radius]);
-  return ref;
-}
 
 /**
  * useParallaxScroll — schrijft de huidige scrollY naar

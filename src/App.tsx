@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { Suspense, lazy, useState, useEffect, useDeferredValue, useMemo, useRef } from 'react';
+import { Suspense, lazy, useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -12,23 +12,23 @@ import {
   LogOut, 
   Bus, 
   AlertTriangle, 
-  Clock, 
-  ChevronRight,
-  ChevronUp,
-  ChevronDown,
-  Info,
+
+
+
+
+
   FileText,
-  Download,
+
   Plus,
   Settings,
   Users,
-  Upload,
-  Trash2,
+
+
   RotateCcw,
   Menu,
   X,
   Map as MapIcon,
-  Pencil,
+
   Search,
   Phone,
   Activity,
@@ -40,17 +40,15 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { cn, getSupabaseAuthHeaders, notify } from './lib/ui';
+import { cn } from './lib/ui';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
 import { isoDate } from './lib/availability';
-import { AdminPageHeader, AdminSubsectionHeader, ConfirmationModal, EmptyState, ViewLoader } from './components/ui';
+import { ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
-import { MobileNavItem, NavItem } from './components/Navigation';
+import { NavItem } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
-import { Input } from './components/Input';
-import { StatCard } from './components/StatCard';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
 import { ContactsView } from './views/ContactsView';
