@@ -7,7 +7,7 @@ import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
-export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[]) => void, canAdminOverride: boolean }) {
+export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[], opts?: { bulkReplace?: boolean }) => void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -205,7 +205,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       return;
     }
     if (!pendingImportedServices) return;
-    onSave(pendingImportedServices);
+    // Bewuste volledige vervanging (al bevestigd in de dialoog hierboven) —
+    // meld dat aan de server zodat de bulk-wipe-vangrail niet blokkeert.
+    onSave(pendingImportedServices, { bulkReplace: true });
     setPendingImportedServices(null);
     setPendingImportCount(0);
   };
