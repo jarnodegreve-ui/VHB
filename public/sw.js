@@ -16,7 +16,7 @@
 // - Overige /api/*: network-only (geen stale-data risico).
 // v5: cache-hardening — v4-caches kunnen door de SPA-rewrite index.html
 // onder asset-URLs bevatten (cache-first = blijvend kapot); bump ruimt op.
-const CACHE_NAME = 'vhb-portaal-v5';
+const CACHE_NAME = 'vhb-portaal-v6';
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';

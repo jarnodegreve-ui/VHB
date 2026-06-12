@@ -39,19 +39,19 @@
   --color-oker-800: #7C4F14;
   --color-oker-900: #5C3A0F;
 
-  /* amber-* aliast naar dezelfde brand-schaal: waarschuwings-states
-     (bg-amber-50, text-amber-700, …) spreken zo exact hetzelfde VHB
-     Amber als oker-* — geen oud-Tailwind-amber naast brand-amber. */
-  --color-amber-50: #FCF7ED;
-  --color-amber-100: #F8ECD4;
-  --color-amber-200: #F2DCAE;
-  --color-amber-300: #F0CB82;
-  --color-amber-400: #ECB75F;
-  --color-amber-500: #E8A33D;
-  --color-amber-600: #C9851F;
-  --color-amber-700: #A2691A;
-  --color-amber-800: #7C4F14;
-  --color-amber-900: #5C3A0F;
+  /* amber-* is de semantische wáárschuwingskleur en wijkt bewust af van
+     het merk-amber (oker-*): zo betekent #E8A33D exclusief "VHB" en is
+     een waarschuwing visueel een waarschuwing (warm oranje). */
+  --color-amber-50: #FFF7ED;
+  --color-amber-100: #FFEDD5;
+  --color-amber-200: #FED7AA;
+  --color-amber-300: #FDBA74;
+  --color-amber-400: #FB923C;
+  --color-amber-500: #F97316;
+  --color-amber-600: #EA580C;
+  --color-amber-700: #C2410C;
+  --color-amber-800: #9A3412;
+  --color-amber-900: #7C2D12;
 
   /* === VHB-neutralen (huisstijl) ===
      De volledige slate-schaal wordt geretuned naar de brand-neutralen:
@@ -560,8 +560,10 @@ html.dark {
   }
 
   .btn-primary {
-    background: linear-gradient(180deg, var(--color-oker-500) 0%, var(--color-oker-600) 100%);
-    color: white;
+    background: linear-gradient(180deg, var(--color-oker-400) 0%, var(--color-oker-500) 100%);
+    /* VHB Black op amber — wit op #E8A33D haalt maar 2,2:1 contrast,
+       zwart haalt ~10:1 en is de huisstijl-pairing (amber + black). */
+    color: #0D0D0F;
     font-weight: 700;
     border-radius: 0.75rem;
     box-shadow:
@@ -576,7 +578,7 @@ html.dark {
   }
 
   .btn-primary:hover {
-    background: linear-gradient(180deg, var(--color-oker-600) 0%, var(--color-oker-700) 100%);
+    background: linear-gradient(180deg, var(--color-oker-500) 0%, var(--color-oker-600) 100%);
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, 0.16),
       0 1px 2px rgba(162, 105, 26, 0.3),
@@ -822,7 +824,7 @@ html.dark {
 /* Status-teksten op geflipte tint-chips (pill 'Operationeel', severity-
    badges): -700 is op near-black onleesbaar, flip naar lichte variant. */
 .dark .text-emerald-700 { color: rgb(110, 231, 183); }
-.dark .text-amber-700 { color: rgb(236, 183, 95); }
+.dark .text-amber-700 { color: rgb(253, 186, 116); }
 .dark .text-red-700 { color: rgb(252, 165, 165); }
 
 /* Group-hover die in dark anders dood zou zijn (pijltjes in OpsRow e.d.). */
@@ -941,16 +943,16 @@ html.dark {
 .dark .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.12); }
 .dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.14); }
 .dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.22); }
-.dark .bg-amber-50 { background-color: rgba(232, 163, 61, 0.14); }
-.dark .bg-amber-50\/80 { background-color: rgba(232, 163, 61, 0.14); }
-.dark .bg-amber-100 { background-color: rgba(232, 163, 61, 0.22); }
+.dark .bg-amber-50 { background-color: rgba(249, 115, 22, 0.14); }
+.dark .bg-amber-50\/80 { background-color: rgba(249, 115, 22, 0.14); }
+.dark .bg-amber-100 { background-color: rgba(249, 115, 22, 0.22); }
 .dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
 .dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.14); }
 .dark .border-emerald-100 { border-color: rgba(16, 185, 129, 0.30); }
 .dark .border-red-100 { border-color: rgba(239, 68, 68, 0.30); }
-.dark .border-amber-100 { border-color: rgba(232, 163, 61, 0.30); }
-.dark .border-amber-200 { border-color: rgba(232, 163, 61, 0.38); }
-.dark .border-amber-200\/70 { border-color: rgba(232, 163, 61, 0.30); }
+.dark .border-amber-100 { border-color: rgba(249, 115, 22, 0.30); }
+.dark .border-amber-200 { border-color: rgba(249, 115, 22, 0.38); }
+.dark .border-amber-200\/70 { border-color: rgba(249, 115, 22, 0.30); }
 .dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.30); }
 .dark .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.18); }
 .dark .hover\:bg-red-50\/70:hover { background-color: rgba(239, 68, 68, 0.16); }

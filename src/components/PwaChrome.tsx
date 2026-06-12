@@ -123,7 +123,7 @@ export function InstallPrompt() {
           style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
         >
           <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/70 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-sm max-w-sm">
-            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500 text-white">
+            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500 text-slate-950">
               <Download size={16} />
             </div>
             <div className="min-w-0 flex-1">

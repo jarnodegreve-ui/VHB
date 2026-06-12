@@ -539,7 +539,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
                             isPast && 'text-slate-300 cursor-not-allowed',
                             !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
                             !isPast && inRange && !edge && 'bg-oker-100 text-oker-700',
-                            !isPast && edge && 'bg-oker-500 text-white shadow-sm shadow-oker-500/30',
+                            !isPast && edge && 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30',
                             !isPast && isToday && !inRange && !edge && 'ring-1 ring-oker-300',
                           )}
                         >

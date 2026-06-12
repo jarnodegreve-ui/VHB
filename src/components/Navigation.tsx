@@ -31,7 +31,7 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
       </span>
       <span className="flex-1 leading-none truncate">{label}</span>
       {badge !== undefined && badge > 0 && (
-        <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-[10px] font-bold bg-oker-500 text-white rounded-full">
+        <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-[10px] font-bold bg-oker-500 text-slate-950 rounded-full">
           {badge}
         </span>
       )}
