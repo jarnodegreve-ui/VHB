@@ -1150,6 +1150,11 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       // Verwijderingen: alleen eigen pending-aanvragen mogen weg.
       for (const [id, prev] of previousById) {
         if (!newById.has(id)) {
+          // GET /api/swaps is voor chauffeurs gescoped op ruilen waar ze
+          // zélf bij betrokken zijn — andermans ruilen ontbreken dus altijd
+          // in hun payload en zijn géén intrekking.
+          const involved = String(prev.requesterId) === selfId || String(prev.targetDriverId ?? "") === selfId;
+          if (!involved) continue;
           if (String(prev.requesterId) !== selfId || prev.status !== "pending") {
             return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen openstaande wisselverzoeken intrekken." });
           }
@@ -1295,7 +1300,12 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
 
       for (const [id, prev] of previousById) {
         if (!newById.has(String(id))) {
-          if (String(prev.userId) !== selfId || prev.status !== "pending") {
+          // GET /api/leave is voor chauffeurs gescoped op eigen records:
+          // verlof van collega's zit dus nooit in hun payload en mag hier
+          // niet als 'intrekking' gelden — anders krijgt elke chauffeur
+          // 403 zodra een collega ook maar één verlofrecord heeft.
+          if (String(prev.userId) !== selfId) continue;
+          if (prev.status !== "pending") {
             return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen openstaande verlofaanvraag intrekken." });
           }
         }
