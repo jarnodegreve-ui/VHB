@@ -9,7 +9,7 @@ import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives
 import { SlideOver } from '../components/SlideOver';
 import { verlofBalans } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
-import { leaveIdsWithConflict, shiftsConflictingWithLeave } from '../lib/conflicts';
+import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 

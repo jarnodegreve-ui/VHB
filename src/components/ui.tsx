@@ -52,10 +52,6 @@ export function PageHeader({
   );
 }
 
-// Backwards-compat: kept so existing admin views keep working.
-// New code should use PageHeader directly.
-export const AdminPageHeader = PageHeader;
-
 export function AdminSubsectionHeader({
   eyebrow,
   title,

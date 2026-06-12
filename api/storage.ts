@@ -5,14 +5,12 @@ import type {
   AppUser,
   AuthenticatedRequest,
   IncomingUser,
-  LeaveRecord,
   PlanningCodeRecord,
   PlanningMatrixImportHistoryRecord,
   PlanningMatrixImportHistoryRow,
   PlanningMatrixRow,
   ServiceRecord,
   ShiftRecord,
-  SwapRecord,
 } from "./types.js";
 import {
   countAdmins,

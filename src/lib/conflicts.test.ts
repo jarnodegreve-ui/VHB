@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import type { LeaveRequest, Shift } from '../types';
 import {
   detectShiftLeaveConflicts,
-  leaveIdsWithConflict,
   shiftIdsWithConflict,
   shiftsConflictingWithLeave,
 } from './conflicts';
@@ -140,11 +139,6 @@ describe('conflicts — set helpers', () => {
     expect(ids.size).toBe(2);
   });
 
-  it('leaveIdsWithConflict geeft alleen IDs van verlofaanvragen met conflict', () => {
-    const ids = leaveIdsWithConflict(shifts, leaves);
-    expect(ids.has('l1')).toBe(true);
-    expect(ids.has('l2')).toBe(false);
-  });
 });
 
 describe('conflicts — shiftsConflictingWithLeave', () => {

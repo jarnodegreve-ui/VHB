@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { BrandEmptyState } from '../components/BrandEmptyState';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
