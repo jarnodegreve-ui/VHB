@@ -29,6 +29,8 @@ const mem = vi.hoisted(() => ({
   activity: [] as any[],
   clientErrors: [] as any[],
   storedBackups: [] as Array<{ filename: string; size: number }>,
+  pushSubscriptions: [] as any[],
+  pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -53,6 +55,18 @@ vi.mock('../api/db.js', () => {
     db: {},
   };
 });
+
+vi.mock('../api/push.js', async (importOriginal) => ({
+  ...(await importOriginal<any>()),
+  getVapidPublicKey: () => 'test-public-key',
+  savePushSubscription: async (record: any) => { mem.pushSubscriptions.push(record); },
+  deletePushSubscription: async (endpoint: string) => {
+    mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => s.endpoint !== endpoint);
+  },
+  sendPushToUsers: async (userIds: string[], payload: any) => {
+    if (userIds.length > 0) mem.pushesSent.push({ userIds, payload });
+  },
+}));
 
 vi.mock('../api/email.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
@@ -177,6 +191,8 @@ beforeEach(() => {
   mem.activity = [];
   mem.clientErrors = [];
   mem.storedBackups = [];
+  mem.pushSubscriptions = [];
+  mem.pushesSent = [];
 });
 
 describe('authenticatie & rollen', () => {
@@ -397,6 +413,52 @@ describe('client-foutmonitoring', () => {
     const admin = await api('GET', '/api/client-errors', { token: 'tok-admin' });
     expect(admin.status).toBe(200);
     expect(admin.json).toHaveLength(1);
+  });
+});
+
+describe('push-notificaties', () => {
+  it('geeft de public key aan ingelogde gebruikers', async () => {
+    const res = await api('GET', '/api/push/public-key', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.publicKey).toBe('test-public-key');
+    const anon = await api('GET', '/api/push/public-key');
+    expect(anon.status).toBe(401);
+  });
+
+  it('registreert en verwijdert een abonnement', async () => {
+    const sub = { endpoint: 'https://push.example/abc', keys: { p256dh: 'pk', auth: 'au' } };
+    const res = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: sub });
+    expect(res.status).toBe(200);
+    expect(mem.pushSubscriptions).toEqual([{ userId: '3', endpoint: 'https://push.example/abc', p256dh: 'pk', auth: 'au' }]);
+
+    const ongeldid = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: '' } });
+    expect(ongeldid.status).toBe(400);
+
+    const del = await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/abc' } });
+    expect(del.status).toBe(200);
+    expect(mem.pushSubscriptions).toHaveLength(0);
+  });
+
+  it('stuurt een push naar de chauffeur bij een verlofbeslissing', async () => {
+    const payload = mem.leave.map((l) => (l.id === 'l-a1' ? { ...l, status: 'approved', decidedAt: '2026-06-12T09:00:00Z' } : l));
+    const res = await api('POST', '/api/leave', { token: 'tok-planner', body: payload });
+    expect(res.status).toBe(200);
+    const verlofPush = mem.pushesSent.find((p) => p.payload.title === 'Verlof goedgekeurd');
+    expect(verlofPush).toBeTruthy();
+    expect(verlofPush!.userIds).toEqual(['3']);
+  });
+
+  it('stuurt een push naar de aangezochte collega bij een nieuwe ruil', async () => {
+    const own = mem.swaps.filter((s) => s.requesterId === '3' || s.targetDriverId === '3');
+    const nieuw = {
+      id: 's-nieuw', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-12T08:00:00Z', returnDate: '2026-07-09', returnCode: 'VRIJ',
+    };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, nieuw] });
+    expect(res.status).toBe(200);
+    const ruilPush = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe dienstruil-aanvraag');
+    expect(ruilPush).toBeTruthy();
+    expect(ruilPush!.userIds).toEqual(['4']);
   });
 });
 

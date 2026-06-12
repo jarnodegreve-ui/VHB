@@ -19,6 +19,7 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
 import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
+import { getVapidPublicKey, savePushSubscription, deletePushSubscription, sendPushToUsers } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
@@ -725,6 +726,14 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       `${rows.length} dagen verwerkt (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
     );
 
+    // Chauffeurs met diensten in deze import krijgen een seintje.
+    const affectedDriverIds = [...new Set(generatedPlanning.shifts.map((s: any) => String(s.driverId)))];
+    await sendPushToUsers(affectedDriverIds, {
+      title: "Planning bijgewerkt",
+      body: `Nieuwe planning geïmporteerd (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}). Bekijk je rooster.`,
+      url: "/",
+    });
+
     res.json({
       success: true,
       importedDays: rows.length,
@@ -989,6 +998,36 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
     console.error("Error saving users data:", errorMessage);
     res.status(500).json({ error: "Failed to save data", details: errorMessage });
   }
+});
+
+// --- Push-notificaties ---
+app.get("/api/push/public-key", authenticate, (_req, res) => {
+  // null = push staat uit (geen VAPID-keys geconfigureerd) — de client
+  // verbergt de meldingen-knop dan.
+  res.json({ publicKey: getVapidPublicKey() });
+});
+
+app.post("/api/push/subscribe", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const sub = req.body;
+    const endpoint = String(sub?.endpoint ?? "");
+    const p256dh = String(sub?.keys?.p256dh ?? "");
+    const auth = String(sub?.keys?.auth ?? "");
+    if (!endpoint || !p256dh || !auth) {
+      return res.status(400).json({ error: "Ongeldig push-abonnement." });
+    }
+    await savePushSubscription({ userId: String(req.appUser!.id), endpoint, p256dh, auth });
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ error: "Abonneren mislukt", details: err?.message });
+  }
+});
+
+app.post("/api/push/unsubscribe", authenticate, async (req, res) => {
+  const endpoint = String(req.body?.endpoint ?? "");
+  if (!endpoint) return res.status(400).json({ error: "endpoint is verplicht" });
+  await deletePushSubscription(endpoint);
+  res.json({ success: true });
 });
 
 // --- Client-foutmonitoring ---
@@ -1434,6 +1473,14 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       const prev = previousById.get(String(next.id));
       if (!prev) {
         await logActivity(req, "swaps", "Dienstruil aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor ruil.`, { type: "swap", id: next.id });
+        // De aangezochte collega krijgt direct een seintje.
+        if (next.targetDriverId) {
+          await sendPushToUsers([String(next.targetDriverId)], {
+            title: "Nieuwe dienstruil-aanvraag",
+            body: `${userName(next.requesterId)} wil een dienst met je ruilen.`,
+            url: "/",
+          });
+        }
         continue;
       }
       if (prev.status !== next.status && next.status !== "pending") {
@@ -1445,6 +1492,17 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         else if (next.status === "completed") action = "Dienstruil voltooid";
         if (action) {
           await logActivity(req, "swaps", action, `${userName(next.requesterId)} — dienstruil (${prev.status} → ${next.status}).`, { type: "swap", id: next.id });
+          // Push naar de betrokkenen, behalve degene die de actie deed.
+          const actorId = String(req.appUser?.id ?? "");
+          const betrokkenen = [String(prev.requesterId), String(prev.targetDriverId ?? "")]
+            .filter((id) => id && id !== actorId);
+          await sendPushToUsers(betrokkenen, {
+            title: action,
+            body: next.status === "accepted"
+              ? `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil — wacht op goedkeuring van de planner.`
+              : `Dienstruil van ${userName(next.requesterId)}: ${prev.status} → ${next.status}.`,
+            url: "/",
+          });
         }
       }
     }
@@ -1568,6 +1626,15 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
           { type: "leave", id: next.id },
         );
+        // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins.
+        if (req.appUser?.role === "chauffeur") {
+          const beslissers = users.filter((u) => u.role === "planner" || u.role === "admin").map((u) => String(u.id));
+          await sendPushToUsers(beslissers, {
+            title: "Nieuwe verlofaanvraag",
+            body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
+            url: "/",
+          });
+        }
         continue;
       }
 
@@ -1586,8 +1653,8 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           { type: "leave", id: next.id },
         );
 
-        // E-mail de aanvrager — niet de actor zelf (geen mail naar jezelf
-        // als planner/admin je eigen verlof beslist).
+        // E-mail + push naar de aanvrager — niet de actor zelf (geen mail
+        // naar jezelf als planner/admin je eigen verlof beslist).
         if (emailAction && req.appUser && String(req.appUser.id) !== String(next.userId)) {
           const recipient = users.find((u) => String(u.id) === String(next.userId));
           if (recipient?.email) {
@@ -1601,6 +1668,11 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
               action: emailAction,
             });
           }
+          await sendPushToUsers([String(next.userId)], {
+            title: action,
+            body: `${typeLabel} (${period}) — beslist door ${req.appUser.name || "Planning"}.`,
+            url: "/",
+          });
         }
       }
     }
@@ -1619,7 +1691,13 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
   }
 
   const emails = recipients.map((u: any) => u.email).filter(Boolean);
-  
+
+  // Push naar álle ontvangers (ook wie geen e-mail heeft) — best-effort.
+  await sendPushToUsers(
+    recipients.map((u: any) => String(u?.id ?? "")).filter(Boolean),
+    { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: "/" },
+  );
+
   if (emails.length === 0) {
     return res.json({ success: true, message: "No recipients with email found" });
   }

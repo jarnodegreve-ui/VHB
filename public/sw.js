@@ -16,7 +16,7 @@
 // - Overige /api/*: network-only (geen stale-data risico).
 // v5: cache-hardening — v4-caches kunnen door de SPA-rewrite index.html
 // onder asset-URLs bevatten (cache-first = blijvend kapot); bump ruimt op.
-const CACHE_NAME = 'vhb-portaal-v6';
+const CACHE_NAME = 'vhb-portaal-v7';
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
@@ -125,6 +125,41 @@ self.addEventListener('fetch', (event) => {
         }
         return res;
       });
+    }),
+  );
+});
+
+// --- Push-notificaties ---
+self.addEventListener('push', (event) => {
+  let payload = { title: 'VHB Portaal', body: '', url: '/' };
+  try {
+    if (event.data) payload = { ...payload, ...event.data.json() };
+  } catch {
+    // geen geldige JSON — toon de generieke titel
+  }
+  event.waitUntil(
+    self.registration.showNotification(payload.title, {
+      body: payload.body,
+      icon: '/vhb-icoon-192.png',
+      badge: '/vhb-icoon-192.png',
+      data: { url: payload.url || '/' },
+    }),
+  );
+});
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      // Bestaand tabblad focussen als het portaal al open staat.
+      for (const win of wins) {
+        if ('focus' in win) {
+          win.navigate?.(url);
+          return win.focus();
+        }
+      }
+      return clients.openWindow(url);
     }),
   );
 });
