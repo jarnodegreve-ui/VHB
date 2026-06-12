@@ -46,6 +46,7 @@ import {
   savePlanningCodesData,
   savePlanningData,
   clearPlanningData,
+  updateUserSessionMeta,
   savePlanningMatrixHistoryEntry,
   savePlanningMatrixRows,
   saveServicesData,
@@ -145,9 +146,10 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
         : Math.max(0, (currentUser.activeSessions || 1) - 1),
     };
 
-    const allUsers = await getUsersData();
-    const updatedUsers = allUsers.map((user) => user.id === nextUser.id ? nextUser : user);
-    await saveUsersData(updatedUsers);
+    await updateUserSessionMeta(nextUser.id, {
+      lastLogin: nextUser.lastLogin,
+      activeSessions: nextUser.activeSessions,
+    });
     res.json(nextUser);
   } catch (error: any) {
     res.status(500).json({ error: "Kon sessie niet bijwerken.", details: error.message });

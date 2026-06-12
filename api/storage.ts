@@ -911,6 +911,23 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
   if (error) throw error;
 };
 
+/** Gericht sessie-metadata bijwerken — alléén de eigen rij.
+ * Voorheen liep elke login/logout via saveUsersData (replace-all incl.
+ * Supabase-auth-sync): gelijktijdige logins raceten met elkaar én met
+ * admin-bewerkingen (een net verwijderde gebruiker kon zo terugkomen). */
+export const updateUserSessionMeta = async (
+  userId: string,
+  fields: { lastLogin?: string; activeSessions?: number },
+) => {
+  const client = requireDb();
+  const patch: Record<string, unknown> = {};
+  if (fields.lastLogin !== undefined) patch.lastlogin = fields.lastLogin;
+  if (fields.activeSessions !== undefined) patch.activesessions = fields.activeSessions;
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await client.from('users').update(patch).eq('id', String(userId));
+  if (error) throw error;
+};
+
 // --- Diversions ---
 
 export const DIVERSIONS_BUCKET = "diversions";
