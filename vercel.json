@@ -1,6 +1,12 @@
 {
   "version": 2,
   "outputDirectory": "dist",
+  "crons": [
+    {
+      "path": "/api/cron/backup",
+      "schedule": "0 2 * * *"
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/(.*)",

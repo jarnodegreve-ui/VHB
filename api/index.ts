@@ -42,6 +42,7 @@ import {
   logActivity,
   logClientError,
   getClientErrors,
+  storeBackup,
   replacePlanningData,
   saveDiversionsData,
   saveLeaveData,
@@ -1027,41 +1028,65 @@ app.get("/api/client-errors", authenticate, requireRole("admin"), async (_req, r
   }
 });
 
-// --- Back-up: alle collecties als één JSON (admin) ---
+// --- Back-up: alle collecties als één JSON ---
+const buildBackupPayload = async () => {
+  const [users, planning, services, diversions, updates, leave, swaps, planningCodes, planningMatrixRows, coverageExpectations, activityLog] = await Promise.all([
+    getUsersData(),
+    getPlanningData(),
+    getServicesData(),
+    getDiversionsData(),
+    getUpdatesData(),
+    getLeaveData(),
+    getSwapsData(),
+    getPlanningCodesData(),
+    getPlanningMatrixRows(),
+    getCoverageExpectations(),
+    getActivityLog(),
+  ]);
+  return {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    collections: {
+      users,
+      planning,
+      services,
+      diversions,
+      updates,
+      leave,
+      swaps,
+      planningCodes,
+      planningMatrixRows,
+      coverageExpectations,
+      activityLog,
+    },
+  };
+};
+
 app.get("/api/backup", authenticate, requireRole("admin"), async (_req, res) => {
   try {
-    const [users, planning, services, diversions, updates, leave, swaps, planningCodes, planningMatrixRows, coverageExpectations, activityLog] = await Promise.all([
-      getUsersData(),
-      getPlanningData(),
-      getServicesData(),
-      getDiversionsData(),
-      getUpdatesData(),
-      getLeaveData(),
-      getSwapsData(),
-      getPlanningCodesData(),
-      getPlanningMatrixRows(),
-      getCoverageExpectations(),
-      getActivityLog(),
-    ]);
-    res.json({
-      exportedAt: new Date().toISOString(),
-      version: 1,
-      collections: {
-        users,
-        planning,
-        services,
-        diversions,
-        updates,
-        leave,
-        swaps,
-        planningCodes,
-        planningMatrixRows,
-        coverageExpectations,
-        activityLog,
-      },
-    });
+    res.json(await buildBackupPayload());
   } catch (err: any) {
     res.status(500).json({ error: "Back-up genereren is mislukt", details: err?.message });
+  }
+});
+
+// Nachtelijke back-up, aangeroepen door de Vercel-cron (zie vercel.json).
+// Vercel stuurt automatisch `Authorization: Bearer ${CRON_SECRET}` mee als
+// die env-var in het project staat — zonder geldig secret: 401.
+app.get("/api/cron/backup", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: "Niet toegestaan." });
+  }
+  try {
+    const payload = await buildBackupPayload();
+    const filename = `vhb-backup-${payload.exportedAt.slice(0, 10)}.json`;
+    const stored = await storeBackup(filename, JSON.stringify(payload));
+    console.log(`[cron-backup] ${filename} opgeslagen, ${stored.removedOld} oude back-up(s) opgeruimd.`);
+    res.json({ success: true, filename, removedOld: stored.removedOld });
+  } catch (err: any) {
+    console.error("[cron-backup] mislukt:", err?.message || err);
+    res.status(500).json({ error: "Back-up mislukt", details: err?.message });
   }
 });
 

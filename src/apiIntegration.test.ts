@@ -15,6 +15,7 @@ import type { AddressInfo } from 'node:net';
 // luisteren of Vite-middleware start.
 process.env.VERCEL = '1';
 process.env.NODE_ENV = 'production';
+process.env.CRON_SECRET = 'test-cron-secret';
 
 const mem = vi.hoisted(() => ({
   users: [] as any[],
@@ -27,6 +28,7 @@ const mem = vi.hoisted(() => ({
   planningCodes: [] as any[],
   activity: [] as any[],
   clientErrors: [] as any[],
+  storedBackups: [] as Array<{ filename: string; size: number }>,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -98,6 +100,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getCoverageExpectations: async () => ({}),
     logClientError: async (entry: any) => { mem.clientErrors.push(entry); },
     getClientErrors: async () => mem.clientErrors,
+    storeBackup: async (filename: string, body: string) => {
+      mem.storedBackups.push({ filename, size: body.length });
+      return { removedOld: 0 };
+    },
   };
 });
 
@@ -170,6 +176,7 @@ beforeEach(() => {
   mem.planningCodes = [];
   mem.activity = [];
   mem.clientErrors = [];
+  mem.storedBackups = [];
 });
 
 describe('authenticatie & rollen', () => {
@@ -399,6 +406,20 @@ describe('back-up export', () => {
     expect(planner.status).toBe(403);
     const chauffeur = await api('GET', '/api/backup', { token: 'tok-a' });
     expect(chauffeur.status).toBe(403);
+  });
+
+  it('cron-route weigert zonder of met fout secret (401), draait met juist secret', async () => {
+    const zonder = await api('GET', '/api/cron/backup');
+    expect(zonder.status).toBe(401);
+    const fout = await api('GET', '/api/cron/backup', { headers: { Authorization: 'Bearer verkeerd' } });
+    expect(fout.status).toBe(401);
+
+    const goed = await api('GET', '/api/cron/backup', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(goed.status).toBe(200);
+    expect(goed.json.success).toBe(true);
+    expect(mem.storedBackups).toHaveLength(1);
+    expect(mem.storedBackups[0].filename).toMatch(/^vhb-backup-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(mem.storedBackups[0].size).toBeGreaterThan(100);
   });
 
   it('levert alle collecties in één JSON met export-metadata', async () => {
