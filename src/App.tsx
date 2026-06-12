@@ -34,7 +34,9 @@ import {
   Activity,
   KeyRound,
   Moon,
-  Sun
+  Sun,
+  BellRing,
+  BellOff
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
@@ -42,6 +44,7 @@ import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveReques
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn } from './lib/ui';
 import { reportHandledError, setMonitoringUser } from './lib/monitoring';
+import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
 import { addDays, isoDate } from './lib/availability';
 import { ViewLoader } from './components/ui';
@@ -257,6 +260,48 @@ export default function App() {
       document.documentElement.classList.toggle('dark', initial === 'dark');
     }
   }, []);
+
+  // Push-notificaties: key=null betekent dat de server geen VAPID-keys heeft
+  // (feature uit) — de knop verschijnt dan niet.
+  const [pushPublicKey, setPushPublicKey] = useState<string | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+
+  useEffect(() => {
+    if (!currentUser || !session?.access_token || !isPushSupported()) return;
+    let cancelled = false;
+    (async () => {
+      const key = await fetchPushPublicKey({ Authorization: `Bearer ${session.access_token}` });
+      if (cancelled) return;
+      setPushPublicKey(key);
+      if (key) {
+        const existing = await getExistingSubscription();
+        if (!cancelled) setPushEnabled(Boolean(existing));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [currentUser?.id, session?.access_token]);
+
+  const togglePush = async () => {
+    if (!pushPublicKey || !session?.access_token) return;
+    const headers = { Authorization: `Bearer ${session.access_token}` };
+    if (pushEnabled) {
+      await unsubscribeFromPush(headers);
+      setPushEnabled(false);
+      showToast('Meldingen uitgeschakeld.', 'info');
+      return;
+    }
+    const result = await subscribeToPush(pushPublicKey, headers);
+    if (result === 'subscribed') {
+      setPushEnabled(true);
+      showToast('Meldingen ingeschakeld — je krijgt voortaan een seintje bij planning, verlof en dienstruil.', 'success');
+    } else if (result === 'denied') {
+      showToast('Meldingen geweigerd — sta notificaties toe in je browserinstellingen en probeer opnieuw.', 'info');
+    } else {
+      showToast('Meldingen inschakelen is mislukt.', 'error');
+    }
+  };
 
   const toggleTheme = () => {
     setTheme((current) => {
@@ -1363,6 +1408,17 @@ export default function App() {
             </span>
             <span>{theme === 'light' ? 'Donkere modus' : 'Lichte modus'}</span>
           </button>
+          {pushPublicKey && isPushSupported() && (
+            <button
+              onClick={togglePush}
+              className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
+            >
+              <span className="text-slate-400 shrink-0">
+                {pushEnabled ? <BellOff size={16} /> : <BellRing size={16} />}
+              </span>
+              <span>{pushEnabled ? 'Meldingen uitschakelen' : 'Meldingen inschakelen'}</span>
+            </button>
+          )}
           <button
             onClick={() => setShowChangePassword(true)}
             className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
