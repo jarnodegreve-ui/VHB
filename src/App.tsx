@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, lazy, useState, useEffect, useRef } from 'react';
+import { Suspense, lazy, useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -35,6 +35,7 @@ import {
   KeyRound,
   Moon,
   Sun,
+  ShieldCheck,
   BellRing,
   BellOff
 } from 'lucide-react';
@@ -75,6 +76,8 @@ import { VerlofKalenderView } from './views/admin/VerlofKalenderView';
 import { RitblaadjesView } from './views/RitblaadjesView';
 import { CapacityView } from './views/CapacityView';
 import { CoverageView } from './views/CoverageView';
+import { ComplianceView } from './views/admin/ComplianceView';
+import { analyzeCompliance } from './lib/compliance';
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazy(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -95,6 +98,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
+    'rusttijden',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -116,6 +120,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
+    'rusttijden',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -767,6 +772,13 @@ export default function App() {
       ).length
     : 0;
 
+  // Rusttijd-overtredingen in de geladen planning (sidebar-badge) — alleen
+  // relevant voor planner/admin; chauffeurs hebben enkel hun eigen shifts.
+  const complianceViolations = useMemo(
+    () => (currentUser && currentUser.role !== 'chauffeur' ? analyzeCompliance(shifts).violations : 0),
+    [shifts, currentUser?.role],
+  );
+
   // Wachtende beslissingen voor planner/admin (sidebar badges op
   // Verlofbeheer en Dienstruil-tab).
   const pendingLeaveCount = leaveRequests.filter((r) => r.status === 'pending').length;
@@ -1306,6 +1318,13 @@ export default function App() {
                 onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }}
               />
               <NavItem
+                icon={<ShieldCheck size={18} />}
+                label="Rij- & rusttijden"
+                active={currentView === 'rusttijden'}
+                onClick={() => { setCurrentView('rusttijden'); setIsSidebarOpen(false); }}
+                badge={complianceViolations}
+              />
+              <NavItem
                 icon={<Calendar size={18} />}
                 label="Verlofbeheer"
                 active={currentView === 'verlof-beheer'}
@@ -1581,6 +1600,7 @@ export default function App() {
               {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <CoverageView />}
+              {resolvedCurrentView === 'rusttijden' && <ComplianceView shifts={shifts} users={users} />}
               {resolvedCurrentView === 'verlof-kalender' && <VerlofKalenderView users={users} leaveRequests={leaveRequests} />}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
                 <Suspense fallback={<ViewLoader />}>
