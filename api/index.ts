@@ -1096,8 +1096,13 @@ app.get("/api/updates", authenticate, async (req, res) => {
 app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const newData = req.body;
+    // Zonder deze guard normaliseerde saveUpdatesData een niet-array naar []
+    // en wiste vervolgens ALLE updates — met een vrolijke success-response.
+    if (!Array.isArray(newData)) {
+      return res.status(400).json({ error: "Invalid data format. Expected an array." });
+    }
     const previousUpdates = await getUpdatesData();
-    const arr = Array.isArray(newData) ? newData : [];
+    const arr = newData;
     await saveUpdatesData(newData);
     await logActivity(
       req,

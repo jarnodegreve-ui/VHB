@@ -969,17 +969,23 @@ export const saveServicesData = async (data: any) => {
   const client = requireDb();
   const normalized = Array.isArray(data) ? data.map(toPublicService) : [];
   const rows = normalized.map(toDatabaseService);
-  // Replace-all semantics: drop then insert. Upsert fallback if delete fails
-  // (for example when RLS policies prevent delete on an empty table).
-  const { error: deleteError } = await client.from('services').delete().neq('id', '0');
-  if (deleteError) {
+  // Replace-semantiek zónder leeg-tabel-venster: eerst upserten, daarna pas
+  // de ontbrekende rijen verwijderen. Het oude delete-alles-dan-insert kon
+  // bij een insert-fout (netwerk/constraint/timeout) een lege dienstentabel
+  // achterlaten — en daarmee elke volgende matrix-import breken.
+  const incomingIds = new Set(rows.map((r: any) => String(r.id)));
+  const { data: existing, error: fetchError } = await client.from('services').select('id');
+  if (fetchError) throw fetchError;
+  if (rows.length > 0) {
     const { error: upsertError } = await client.from('services').upsert(rows);
     if (upsertError) throw upsertError;
-    return;
   }
-  if (rows.length > 0) {
-    const { error: insertError } = await client.from('services').insert(rows);
-    if (insertError) throw insertError;
+  const idsToDelete = (existing ?? [])
+    .map((row: any) => String(row.id))
+    .filter((id) => !incomingIds.has(id));
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('services').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
   }
 };
 
