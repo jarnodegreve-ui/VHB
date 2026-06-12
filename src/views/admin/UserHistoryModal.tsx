@@ -35,7 +35,7 @@ const SWAP_STATUS_LABELS: Record<SwapRequest['status'], string> = {
 };
 const SWAP_STATUS_STYLES: Record<SwapRequest['status'], string> = {
   pending: 'bg-amber-50 text-amber-600',
-  accepted: 'bg-indigo-50 text-indigo-600',
+  accepted: 'bg-blue-50 text-blue-700',
   approved: 'bg-emerald-50 text-emerald-600',
   rejected: 'bg-red-50 text-red-600',
   cancelled: 'bg-slate-100 text-slate-500',
@@ -87,8 +87,8 @@ export function UserHistoryModal({
     <Modal open={!!user} onClose={onClose} maxWidth="2xl">
       <div className="p-8 border-b border-white/70 shrink-0 flex items-start justify-between gap-4">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Historiek {currentYear}</p>
-          <h4 className="mt-1 text-xl font-black tracking-tight">{user.name}</h4>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Historiek {currentYear}</p>
+          <h4 className="mt-1 text-lg font-bold tracking-tight">{user.name}</h4>
           <p className="text-sm font-medium text-slate-500 capitalize">{user.role}{user.employeeId ? ` · #${user.employeeId}` : ''}</p>
         </div>
         <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl shrink-0">
@@ -103,25 +103,25 @@ export function UserHistoryModal({
         {/* Stats overview */}
         <div className="grid grid-cols-3 gap-3">
           <div className="surface-muted rounded-2xl p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Diensten</p>
-            <p className="mt-1 text-2xl font-black text-slate-900">{allShifts.length}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Diensten</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{allShifts.length}</p>
             <p className="text-[10px] font-medium text-slate-400 mt-1">{upcomingShifts.length} komende</p>
           </div>
           <div className="surface-muted rounded-2xl p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Verlof</p>
-            <p className="mt-1 text-2xl font-black text-slate-900">{approvedLeaveCount}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Verlof</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{approvedLeaveCount}</p>
             <p className="text-[10px] font-medium text-slate-400 mt-1">goedgekeurd</p>
           </div>
           <div className="surface-muted rounded-2xl p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Dienstruilen</p>
-            <p className="mt-1 text-2xl font-black text-slate-900">{userSwaps.length}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Dienstruilen</p>
+            <p className="mt-1 text-2xl font-semibold text-slate-900">{userSwaps.length}</p>
             <p className="text-[10px] font-medium text-slate-400 mt-1">totaal</p>
           </div>
         </div>
 
         {/* Verlof */}
         <section className="space-y-3">
-          <h5 className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Verlof dit jaar</h5>
+          <h5 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Verlof dit jaar</h5>
           {userLeave.length === 0 ? (
             <p className="text-sm italic text-slate-400">Geen verlof geregistreerd in {currentYear}.</p>
           ) : (
@@ -129,12 +129,12 @@ export function UserHistoryModal({
               {userLeave.map((l) => (
                 <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/55">
                   <div className="min-w-0">
-                    <p className="text-sm font-black text-slate-800">
+                    <p className="text-sm font-semibold text-slate-800">
                       {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
                     </p>
                     <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? ` — "${l.comment}"` : ''}</p>
                   </div>
-                  <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em] shrink-0', LEAVE_STATUS_STYLES[l.status])}>
+                  <span className={cn('px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-[0.08em] shrink-0', LEAVE_STATUS_STYLES[l.status])}>
                     {LEAVE_STATUS_LABELS[l.status]}
                   </span>
                 </div>
@@ -145,7 +145,7 @@ export function UserHistoryModal({
 
         {/* Dienstruilen */}
         <section className="space-y-3">
-          <h5 className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Dienstruilen dit jaar</h5>
+          <h5 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Dienstruilen dit jaar</h5>
           {userSwaps.length === 0 ? (
             <p className="text-sm italic text-slate-400">Geen dienstruilen in {currentYear}.</p>
           ) : (
@@ -160,10 +160,10 @@ export function UserHistoryModal({
                       <span className="font-medium text-slate-500">
                         {isRequester ? 'Aan' : 'Van'}
                       </span>
-                      <span className="font-black text-slate-800 truncate">{userName(counterpartId)}</span>
+                      <span className="font-semibold text-slate-800 truncate">{userName(counterpartId)}</span>
                       <span className="text-xs text-slate-400 shrink-0">· {s.createdAt.slice(0, 10)}</span>
                     </div>
-                    <span className={cn('px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-[0.08em] shrink-0', SWAP_STATUS_STYLES[s.status])}>
+                    <span className={cn('px-3 py-1 rounded-full text-[10px] font-semibold uppercase tracking-[0.08em] shrink-0', SWAP_STATUS_STYLES[s.status])}>
                       {SWAP_STATUS_LABELS[s.status]}
                     </span>
                   </div>
@@ -175,7 +175,7 @@ export function UserHistoryModal({
 
         {/* Komende diensten */}
         <section className="space-y-3">
-          <h5 className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Komende diensten</h5>
+          <h5 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Komende diensten</h5>
           {upcomingShifts.length === 0 ? (
             <p className="text-sm italic text-slate-400">Geen geplande diensten.</p>
           ) : (
@@ -184,7 +184,7 @@ export function UserHistoryModal({
                 <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/55">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
-                    <span className="text-sm font-black text-slate-800">{s.date}</span>
+                    <span className="text-sm font-semibold text-slate-800">{s.date}</span>
                     <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{getServiceNumber(s)}</span></span>
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">
@@ -203,13 +203,13 @@ export function UserHistoryModal({
         {/* Laatste 5 voorbije diensten */}
         {pastShifts.length > 0 && (
           <section className="space-y-3">
-            <h5 className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-500">Recent gewerkt</h5>
+            <h5 className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Recent gewerkt</h5>
             <div className="space-y-2">
               {pastShifts.slice(0, 5).map((s) => (
                 <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/40 opacity-80">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
-                    <span className="text-sm font-black text-slate-700">{s.date}</span>
+                    <span className="text-sm font-semibold text-slate-700">{s.date}</span>
                     <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{getServiceNumber(s)}</span></span>
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">

@@ -317,9 +317,9 @@ export function DashboardView({
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
                         <span className="text-slate-300">·</span>
-                        <span className="text-[10px] font-black uppercase tracking-wider text-oker-700">Dienst {getServiceNumber(shift)}</span>
+                        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-oker-700">Dienst {getServiceNumber(shift)}</span>
                       </div>
-                      <p className="mt-0.5 text-base font-black text-slate-900 tabular-nums tracking-tight">
+                      <p className="mt-0.5 text-base font-bold text-slate-900 tabular-nums tracking-tight">
                         {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
                       </p>
                     </div>
@@ -684,7 +684,7 @@ function EmptyTile({ icon, title, subtitle }: { icon: ReactNode; title: string; 
       <div className="w-12 h-12 rounded-2xl bg-white ring-1 ring-slate-200/60 flex items-center justify-center text-slate-300 mb-3 shadow-sm">
         {icon}
       </div>
-      <p className="text-sm font-black text-slate-700">{title}</p>
+      <p className="text-sm font-bold text-slate-700">{title}</p>
       <p className="mt-0.5 text-xs font-semibold text-slate-500">{subtitle}</p>
     </div>
   );

@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Phone, Search, Users } from 'lucide-react';
 import type { User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { MicroLabel } from '../components/primitives';
 
 export function ContactsView({ users, currentUser }: { users: User[], currentUser: User }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -10,9 +11,9 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
     // Hide 'beheerder' from others, but let 'beheerder' see themselves
     const isBeheerder = u.name.toLowerCase() === 'beheerder';
     const isMe = u.id === currentUser.id;
-    
+
     if (isBeheerder && !isMe) return false;
-    
+
     return u.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
            (u.phone && u.phone.includes(searchQuery));
   }).sort((a, b) => a.name.localeCompare(b.name));
@@ -42,24 +43,25 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
         {filteredUsers.map(u => (
           <div key={u.id} className="surface-card surface-card-hover px-4 py-3 rounded-2xl flex items-center justify-between gap-3 group">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-black text-base shrink-0">
+              <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-bold text-base shrink-0">
                 {u.name.charAt(0)}
               </div>
               <div className="min-w-0">
-                <h4 className="font-black text-slate-800 tracking-tight truncate">{u.name}</h4>
-                <p className="text-[10px] text-slate-400 font-black uppercase tracking-[0.08em]">{u.role}</p>
+                <h4 className="font-bold text-slate-800 tracking-tight truncate">{u.name}</h4>
+                <MicroLabel className="truncate">{u.role}</MicroLabel>
               </div>
             </div>
             {u.phone ? (
               <a
                 href={`tel:${u.phone.replace(/\s/g, '')}`}
-                className="w-10 h-10 shrink-0 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all active:scale-90"
+                aria-label={`Bel ${u.name}`}
                 title={`Bel ${u.name}`}
+                className="ios-pressable inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:border-emerald-500 hover:text-white transition-colors"
               >
                 <Phone size={18} />
               </a>
             ) : (
-              <div className="text-[10px] text-slate-300 font-bold italic shrink-0">Geen nummer</div>
+              <p className="text-[11px] font-medium italic text-slate-400 shrink-0">Geen nummer</p>
             )}
           </div>
         ))}
@@ -76,4 +78,3 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
     </PageShell>
   );
 }
-

@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Download, FileText, Trash2, Upload } from 'lucide-react';
 import type { User } from '../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
+import { getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
+import { Badge, Button, MicroLabel } from '../components/primitives';
 
 type RitblaadjeMeta = {
   filename: string;
@@ -62,6 +63,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canEdit = currentUser.role === 'admin';
   const canDelete = currentUser.role === 'admin';
@@ -190,20 +192,24 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         title="Ritblaadjes"
         description="De actuele rit-informatie voor alle chauffeurs. Admins vervangen de PDF wanneer de dienstregeling wijzigt."
         actions={canEdit ? (
-          <label className={cn(
-            'btn-primary ios-pressable px-6 py-3 text-xs uppercase tracking-[0.08em] flex items-center gap-2 cursor-pointer',
-            isUploading && 'opacity-60 cursor-not-allowed',
-          )}>
-            <Upload size={16} />
-            {isUploading ? 'Uploaden...' : current ? 'Vervang PDF' : 'Upload PDF'}
+          <>
             <input
+              ref={fileInputRef}
               type="file"
               accept="application/pdf,.pdf"
               className="hidden"
               onChange={handleFile}
               disabled={isUploading}
             />
-          </label>
+            <Button
+              variant="primary"
+              icon={<Upload size={16} />}
+              disabled={isUploading}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {isUploading ? 'Uploaden...' : current ? 'Vervang PDF' : 'Upload PDF'}
+            </Button>
+          </>
         ) : undefined}
       />
 
@@ -211,7 +217,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         <div className="surface-card p-8 rounded-3xl flex items-center justify-center min-h-[200px]">
           <div className="flex items-center gap-3 text-slate-500">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
-            <span className="text-sm font-bold">Ritblaadje laden...</span>
+            <span className="text-sm font-medium">Ritblaadje laden...</span>
           </div>
         </div>
       ) : !current ? (
@@ -230,14 +236,10 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Huidige ritblaadjes</p>
-                    {fromCache && (
-                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-amber-600 ring-1 ring-amber-100">
-                        Offline
-                      </span>
-                    )}
+                    <MicroLabel>Huidige ritblaadjes</MicroLabel>
+                    {fromCache && <Badge tone="amber" dot>Offline</Badge>}
                   </div>
-                  <h4 className="mt-1 text-lg font-black text-slate-900 tracking-tight break-all">{current.filename}</h4>
+                  <h4 className="mt-1 text-lg font-semibold text-slate-900 tracking-tight break-all">{current.filename}</h4>
                   <p className="mt-1 text-xs font-medium text-slate-500">
                     Geüpload {current.uploadedBy ? `door ${current.uploadedBy} ` : ''}op {formatUploadedAt(current.uploadedAt)}
                     {current.sizeBytes ? ` · ${formatSize(current.sizeBytes)}` : ''}
@@ -250,23 +252,26 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* Anchor i.p.v. Button-primitief: native download-attribuut moet blijven werken.
+                    Klassen spiegelen Button variant="secondary" size="md". */}
                 <a
                   href={current.url}
                   download={current.filename}
-                  className="btn-primary ios-pressable px-5 py-3 text-xs uppercase tracking-[0.08em] flex items-center gap-2"
+                  className="control-button-soft ios-pressable inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 hover:text-slate-900 transition-all"
                 >
                   <Download size={16} />
                   Download
                 </a>
                 {canDelete && (
-                  <button
+                  <Button
+                    variant="danger"
+                    icon={<Trash2 size={16} />}
                     onClick={() => setConfirmDeleteOpen(true)}
-                    className="glass-icon-button p-3 rounded-full text-red-500 active:scale-95 transition-all"
                     title="Verwijder ritblaadje"
                     aria-label="Verwijder ritblaadje"
                   >
-                    <Trash2 size={18} />
-                  </button>
+                    <span className="hidden sm:inline">Verwijderen</span>
+                  </Button>
                 )}
               </div>
             </div>
@@ -281,7 +286,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
           </div>
 
           <p className="text-xs font-medium text-slate-400 text-center">
-            Werkt de preview niet op je toestel? Gebruik de <span className="text-slate-600 font-bold">Download</span>-knop om het bestand lokaal te openen.
+            Werkt de preview niet op je toestel? Gebruik de <span className="text-slate-600 font-semibold">Download</span>-knop om het bestand lokaal te openen.
           </p>
         </div>
       )}

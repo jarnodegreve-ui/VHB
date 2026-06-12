@@ -69,7 +69,7 @@ export function EntityHistoryModal({
                   <History size={18} />
                 </div>
                 <div>
-                  <h4 className="text-base font-black text-slate-900 leading-none">Wijzigingsgeschiedenis</h4>
+                  <h4 className="text-base font-bold tracking-tight text-slate-900 leading-none">Wijzigingsgeschiedenis</h4>
                   {title && <p className="text-xs font-medium text-slate-500 mt-1">{title}</p>}
                 </div>
               </div>
@@ -114,7 +114,7 @@ export function EntityHistoryModal({
                       )} />
                       <div className="rounded-2xl border border-slate-100 bg-white/60 p-3.5">
                         <div className="flex items-baseline justify-between gap-3">
-                          <p className="text-sm font-black text-slate-800">{entry.action}</p>
+                          <p className="text-sm font-semibold text-slate-800">{entry.action}</p>
                           <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 shrink-0">
                             <Clock size={10} className="inline -mt-0.5 mr-1" />
                             {new Date(entry.createdAt).toLocaleString('nl-BE', {

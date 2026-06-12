@@ -915,6 +915,7 @@ export default function App() {
     );
   }
 
+
   if (!session || !currentUser) {
     return <LoginView onLogin={handleLogin} />;
   }

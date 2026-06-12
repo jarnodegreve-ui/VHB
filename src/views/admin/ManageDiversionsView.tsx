@@ -5,7 +5,14 @@ import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload, X } 
 import type { Diversion } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
+
+const SEVERITY_BADGE: Record<string, { tone: 'red' | 'amber' | 'slate'; label: string }> = {
+  high: { tone: 'red', label: 'Hoog' },
+  medium: { tone: 'amber', label: 'Medium' },
+  low: { tone: 'slate', label: 'Laag' },
+};
 
 export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
   const [showModal, setShowModal] = useState(false);
@@ -147,74 +154,79 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         title="Beheer Omleidingen"
       />
 
-      <div className="surface-card p-6 md:p-8 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="surface-card p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h4 className="text-lg font-black text-slate-800 tracking-tight">Nieuwe Omleiding</h4>
-          <p className="text-xs text-slate-400 font-bold uppercase tracking-[0.08em] mt-1">Voeg een omleiding toe voor de chauffeurs</p>
+          <h4 className="text-lg font-bold text-slate-800 tracking-tight">Nieuwe Omleiding</h4>
+          <p className="text-xs text-slate-500 font-medium mt-1">Voeg een omleiding toe voor de chauffeurs.</p>
         </div>
-        <button 
-          onClick={handleOpenAdd}
-          className="btn-primary ios-pressable w-full sm:w-auto px-8 py-4 text-xs uppercase tracking-[0.08em] flex items-center justify-center gap-3"
-        >
-          <Plus size={20} /> TOEVOEGEN
-        </button>
+        <Button variant="primary" size="lg" icon={<Plus size={16} />} className="w-full sm:w-auto" onClick={handleOpenAdd}>
+          Toevoegen
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {diversions.map(div => (
-          <div key={div.id} className="surface-card surface-card-hover p-6 md:p-8 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group">
+        {diversions.map(div => {
+          const sev = SEVERITY_BADGE[div.severity] ?? SEVERITY_BADGE.medium;
+          return (
+          <div key={div.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group">
             <div className="flex items-start gap-5">
               <div className={cn(
                 "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110",
-                div.severity === 'high' ? "bg-red-50 text-red-600 border border-red-100" : 
-                div.severity === 'medium' ? "bg-amber-50 text-amber-600 border border-amber-100" : "bg-blue-50 text-blue-600 border border-blue-100"
+                div.severity === 'high' ? "bg-red-50 text-red-700 border border-red-100" :
+                div.severity === 'medium' ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-slate-50 text-slate-500 border border-slate-100"
               )}>
                 <MapPin size={28} />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h4 className="font-black text-slate-800 text-lg tracking-tight leading-tight">{div.title}</h4>
-                  <span className="px-3 py-1 bg-slate-100 text-slate-600 rounded-full text-[10px] font-black uppercase tracking-[0.08em]">Lijn {div.line}</span>
+                  <h4 className="font-bold text-slate-800 text-lg tracking-tight leading-tight">{div.title}</h4>
+                  <Badge tone="slate">Lijn {div.line}</Badge>
+                  <Badge tone={sev.tone}>{sev.label}</Badge>
                 </div>
-                <div className="flex items-center gap-2 text-[10px] text-slate-400 font-black uppercase tracking-[0.08em]">
+                <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium tabular-nums">
                   <Calendar size={12} className="text-oker-400" />
                   {div.startDate} {div.endDate ? `t/m ${div.endDate}` : '(Geen einddatum)'}
                 </div>
               </div>
             </div>
-            
+
             <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-50">
               <div className="flex items-center gap-2">
                 {div.pdfUrl && (
-                  <div className="w-10 h-10 flex items-center justify-center text-emerald-500 bg-emerald-50 border border-emerald-100 rounded-xl" title="PDF Beschikbaar">
-                    <FileText size={20} />
+                  <div className="w-9 h-9 flex items-center justify-center text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl" title="PDF Beschikbaar">
+                    <FileText size={18} />
                   </div>
                 )}
-                <button
-                  onClick={() => setHistoryDiversion(div)}
-                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 border border-slate-100 rounded-xl transition-all active:scale-90"
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<History size={18} />}
+                  aria-label="Wijzigingsgeschiedenis"
                   title="Wijzigingsgeschiedenis"
-                >
-                  <History size={20} />
-                </button>
-                <button
-                  onClick={() => handleOpenEdit(div)}
-                  className="w-10 h-10 flex items-center justify-center text-slate-400 hover:text-oker-600 hover:bg-oker-50 border border-slate-100 rounded-xl transition-all active:scale-90"
+                  onClick={() => setHistoryDiversion(div)}
+                />
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon={<Pencil size={18} />}
+                  aria-label="Bewerken"
                   title="Bewerken"
-                >
-                  <Pencil size={20} />
-                </button>
+                  onClick={() => handleOpenEdit(div)}
+                />
               </div>
-              <button
-                onClick={() => setConfirmDeleteId(div.id)}
-                className="w-10 h-10 flex items-center justify-center text-slate-300 hover:text-red-500 hover:bg-red-50 border border-slate-100 rounded-xl transition-all active:scale-90"
+              <Button
+                variant="ghost"
+                size="sm"
+                icon={<Trash2 size={18} />}
+                className="text-red-700 hover:text-red-700 hover:bg-red-50"
+                aria-label="Verwijderen"
                 title="Verwijderen"
-              >
-                <Trash2 size={20} />
-              </button>
+                onClick={() => setConfirmDeleteId(div.id)}
+              />
             </div>
           </div>
-        ))}
+          );
+        })}
         {diversions.length === 0 && (
           <EmptyState
             icon={<MapPin size={28} />}
@@ -234,19 +246,17 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="glass-modal rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
             >
-              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
+              <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
                 <div>
-                  <h4 className="text-xl font-black">{editingId ? 'Omleiding Bewerken' : 'Nieuwe Omleiding'}</h4>
+                  <h4 className="text-xl font-bold tracking-tight">{editingId ? 'Omleiding Bewerken' : 'Nieuwe Omleiding'}</h4>
                   <p className="text-sm text-slate-500 font-medium">Vul de details in en upload eventueel een PDF.</p>
                 </div>
-                <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl">
-                  <X size={24} />
-                </button>
+                <Button variant="ghost" size="sm" icon={<X size={20} />} aria-label="Sluiten" onClick={() => setShowModal(false)} />
               </div>
-              <form onSubmit={handleSubmit} className="p-8 space-y-5 overflow-y-auto flex-1">
+              <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Lijn(en)</label>
+                    <MicroLabel className="ml-1">Lijn(en)</MicroLabel>
                     <input 
                       type="text" 
                       required
@@ -257,7 +267,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Ernst</label>
+                    <MicroLabel className="ml-1">Ernst</MicroLabel>
                     <select 
                       value={formData.severity}
                       onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
@@ -271,7 +281,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Titel</label>
+                  <MicroLabel className="ml-1">Titel</MicroLabel>
                   <input 
                     type="text" 
                     required
@@ -283,7 +293,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Omschrijving</label>
+                  <MicroLabel className="ml-1">Omschrijving</MicroLabel>
                   <textarea 
                     required
                     rows={3}
@@ -296,7 +306,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label>
+                    <MicroLabel className="ml-1">Startdatum</MicroLabel>
                     <input 
                       type="date" 
                       required
@@ -306,7 +316,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum (Optioneel)</label>
+                    <MicroLabel className="ml-1">Einddatum (Optioneel)</MicroLabel>
                     <input 
                       type="date" 
                       value={formData.endDate || ''}
@@ -317,21 +327,21 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] ml-1">PDF Bestand {editingId && '(Optioneel)'}</label>
+                  <MicroLabel className="ml-1">PDF Bestand {editingId && '(Optioneel)'}</MicroLabel>
                   <div className="relative">
-                    <input 
-                      type="file" 
+                    <input
+                      type="file"
                       accept=".pdf"
                       onChange={(e) => setPdfFile(e.target.files?.[0] || null)}
                       className="hidden"
                       id="pdf-upload"
                     />
-                    <label 
+                    <label
                       htmlFor="pdf-upload"
-                      className="w-full px-4 py-4 rounded-2xl border-2 border-dashed border-slate-200 hover:border-oker-400 hover:bg-oker-50 transition-all flex flex-col items-center justify-center gap-2 cursor-pointer group"
+                      className="ios-pressable control-button-soft inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-all hover:text-slate-900"
                     >
-                      <Upload className="text-slate-300 group-hover:text-oker-500 transition-colors" size={24} />
-                      <span className="text-xs font-bold text-slate-400 group-hover:text-oker-600">
+                      <Upload size={16} />
+                      <span className="truncate">
                         {pdfFile ? pdfFile.name : (editingId ? 'Klik om PDF te vervangen' : 'Klik om PDF te selecteren')}
                       </span>
                     </label>
@@ -339,20 +349,12 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 </div>
 
                 <div className="pt-4 flex gap-3">
-                  <button 
-                    type="button"
-                    onClick={() => setShowModal(false)}
-                    className="flex-1 px-4 py-4 rounded-2xl font-black text-slate-500 hover:bg-slate-50 transition-all uppercase tracking-[0.08em] text-xs"
-                  >
+                  <Button variant="secondary" size="lg" className="flex-1" onClick={() => setShowModal(false)}>
                     Annuleren
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isUploading}
-                    className="btn-primary ios-pressable flex-1 px-4 py-4 uppercase tracking-[0.08em] text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  </Button>
+                  <Button type="submit" variant="primary" size="lg" className="flex-1" disabled={isUploading}>
                     {isUploading ? 'PDF uploaden...' : editingId ? 'Opslaan' : 'Toevoegen'}
-                  </button>
+                  </Button>
                 </div>
               </form>
             </motion.div>

@@ -123,7 +123,7 @@ export function InstallPrompt() {
               <Download size={16} />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-sm font-black text-slate-900 leading-tight">
+              <p className="text-sm font-semibold text-slate-900 leading-tight">
                 Voeg toe aan beginscherm
               </p>
               <p className="text-xs font-medium text-slate-500">

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Bus, Calendar, FileText, Filter, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bus, Calendar, FileText, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
 import type { PlanningCode, User } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { StatCard } from '../../components/StatCard';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -84,12 +85,12 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         description="Beheer de betekenis van matrixcodes en bepaal welke codes als dienst, verlof of afwezigheid verwerkt mogen worden."
         actions={(
           <>
-            <button onClick={addCode} className="glass-button rounded-2xl px-5 py-3 text-sm font-black text-slate-800">
-              <span className="inline-flex items-center gap-2"><Plus size={16} /> Code Toevoegen</span>
-            </button>
-            <button onClick={handleSave} disabled={isSaving} className="btn-primary ios-pressable px-5 py-3 text-sm">
+            <Button variant="secondary" size="lg" icon={<Plus size={16} />} onClick={addCode}>
+              Code Toevoegen
+            </Button>
+            <Button variant="primary" size="lg" onClick={handleSave} disabled={isSaving}>
               {isSaving ? 'Opslaan...' : 'Opslaan'}
-            </button>
+            </Button>
           </>
         )}
       />
@@ -109,18 +110,18 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           description="Voeg matrixcodes toe, wijzig hun betekenis en bepaal of ze als dienst, verlof of afwezigheid tellen."
           aside={
             <div className="flex flex-wrap items-center gap-2">
-              <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{filteredCodes.length} zichtbaar</div>
+              <Badge tone="slate">{filteredCodes.length} zichtbaar</Badge>
               {!canAdminDelete ? (
-                <div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Delete admin-only</div>
+                <Badge tone="slate">Delete admin-only</Badge>
               ) : null}
             </div>
           }
         />
 
         <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto]">
-          <div className="rounded-3xl border border-white/70 bg-white/45 p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Filter</p>
-            <div className="mt-3 glass segmented-control inline-flex p-1">
+          <div className="rounded-2xl border border-slate-100 bg-white/50 p-4">
+            <MicroLabel>Filter</MicroLabel>
+            <div className="mt-3 glass-segmented rounded-2xl inline-flex p-1">
               {[
                 { key: 'all', label: 'Alles' },
                 { key: 'service', label: 'Dienst' },
@@ -133,7 +134,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                   key={option.key}
                   onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
                   className={cn(
-                    'rounded-2xl px-4 py-2 text-xs font-black uppercase tracking-[0.16em] transition-all',
+                    'rounded-xl px-4 py-2 text-xs font-semibold transition-all',
                     filter === option.key ? 'bg-white text-oker-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
                   )}
                 >
@@ -142,48 +143,48 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               ))}
             </div>
           </div>
-          <div className="rounded-3xl border border-white/70 bg-white/45 p-4">
-            <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Interpretatie</p>
+          <div className="rounded-2xl border border-slate-100 bg-white/50 p-4">
+            <MicroLabel>Interpretatie</MicroLabel>
             <p className="mt-3 text-sm font-medium text-slate-500">
               Dienstcodes worden doorgegeven aan de roosteropbouw. Verlof-, afwezigheids- en opleidingscodes blijven buiten de dienstgeneratie.
             </p>
           </div>
         </div>
 
-        <div className="mt-6 surface-table overflow-hidden rounded-3xl">
+        <TableShell className="mt-6">
           {filteredCodes.length > 0 ? (
             <>
-              <div className="hidden xl:block overflow-x-auto">
+              <div className="hidden xl:block">
                 <table className="w-full min-w-[980px] text-left">
                   <thead className="bg-slate-50/60">
                     <tr>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Code</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Categorie</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Beschrijving</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Dienst</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Betaald</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Vrij</th>
-                      <th className="px-5 py-4 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Acties</th>
+                      <Th>Code</Th>
+                      <Th>Categorie</Th>
+                      <Th>Beschrijving</Th>
+                      <Th>Dienst</Th>
+                      <Th>Betaald</Th>
+                      <Th>Vrij</Th>
+                      <Th>Acties</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredCodes.map((code) => {
                       const index = draftCodes.findIndex((draft) => draft === code);
                       return (
-                        <tr key={`${code.code || 'new'}-${index}`} className="hover:bg-white/55">
-                          <td className="px-5 py-4">
+                        <tr key={`${code.code || 'new'}-${index}`} className="hover:bg-slate-50/60 transition-colors">
+                          <Td>
                             <input
                               value={code.code}
                               onChange={(event) => updateCode(index, { code: event.target.value })}
-                              className="control-input w-full rounded-2xl px-4 py-3 text-sm font-black uppercase tracking-[0.16em]"
+                              className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
                               placeholder="bv"
                             />
-                          </td>
-                          <td className="px-5 py-4">
+                          </Td>
+                          <Td>
                             <select
                               value={code.category}
                               onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
-                              className="control-input w-full rounded-2xl px-4 py-3 text-sm font-bold"
+                              className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-medium"
                             >
                               <option value="service">Dienst</option>
                               <option value="absence">Afwezigheid</option>
@@ -191,53 +192,56 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                               <option value="training">Opleiding</option>
                               <option value="unknown">Onbekend</option>
                             </select>
-                          </td>
-                          <td className="px-5 py-4">
+                          </Td>
+                          <Td>
                             <input
                               value={code.description}
                               onChange={(event) => updateCode(index, { description: event.target.value })}
-                              className="control-input w-full rounded-2xl px-4 py-3 text-sm font-medium"
+                              className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-medium"
                               placeholder="Beschrijving"
                             />
-                          </td>
-                          <td className="px-5 py-4">
+                          </Td>
+                          <Td>
                             <label className="flex items-center justify-center">
                               <input type="checkbox" checked={code.countsAsShift} onChange={(event) => updateCode(index, { countsAsShift: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                             </label>
-                          </td>
-                          <td className="px-5 py-4">
+                          </Td>
+                          <Td>
                             <label className="flex items-center justify-center">
                               <input type="checkbox" checked={code.isPaidAbsence} onChange={(event) => updateCode(index, { isPaidAbsence: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                             </label>
-                          </td>
-                          <td className="px-5 py-4">
+                          </Td>
+                          <Td>
                             <label className="flex items-center justify-center">
                               <input type="checkbox" checked={code.isDayOff} onChange={(event) => updateCode(index, { isDayOff: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                             </label>
-                          </td>
-                          <td className="px-5 py-4">
-                            <div className="flex items-center justify-end gap-2">
+                          </Td>
+                          <Td>
+                            <div className="flex items-center justify-end gap-1">
                               {code.code && (
-                                <button
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
                                   onClick={() => setHistoryCode(code)}
-                                  className="glass-button rounded-2xl p-3 text-slate-400 hover:text-slate-700"
                                   title="Wijzigingsgeschiedenis"
                                   aria-label="Wijzigingsgeschiedenis"
-                                >
-                                  <History size={16} />
-                                </button>
+                                  icon={<History size={15} />}
+                                />
                               )}
                               {canAdminDelete ? (
-                                <button onClick={() => removeCode(index)} className="glass-button rounded-2xl p-3 text-red-500 hover:text-red-600" aria-label="Verwijder code">
-                                  <Trash2 size={16} />
-                                </button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => removeCode(index)}
+                                  aria-label="Verwijder code"
+                                  className="text-red-500 hover:text-red-600 hover:bg-red-50"
+                                  icon={<Trash2 size={15} />}
+                                />
                               ) : (
-                                <span className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-300">
-                                  Admin
-                                </span>
+                                <Badge tone="slate">Admin</Badge>
                               )}
                             </div>
-                          </td>
+                          </Td>
                         </tr>
                       );
                     })}
@@ -254,13 +258,13 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                         <input
                           value={code.code}
                           onChange={(event) => updateCode(index, { code: event.target.value })}
-                          className="control-input rounded-2xl px-4 py-3 text-sm font-black uppercase tracking-[0.16em]"
+                          className="control-input rounded-xl px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
                           placeholder="Code"
                         />
                         <select
                           value={code.category}
                           onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
-                          className="control-input rounded-2xl px-4 py-3 text-sm font-bold"
+                          className="control-input rounded-xl px-3 py-2.5 text-sm font-medium"
                         >
                           <option value="service">Dienst</option>
                           <option value="absence">Afwezigheid</option>
@@ -272,31 +276,29 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                       <input
                         value={code.description}
                         onChange={(event) => updateCode(index, { description: event.target.value })}
-                        className="control-input w-full rounded-2xl px-4 py-3 text-sm font-medium"
+                        className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-medium"
                         placeholder="Beschrijving"
                       />
                       <div className="grid gap-3 sm:grid-cols-3">
-                        <label className="glass-chip flex items-center justify-between rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-600">
+                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs font-semibold text-slate-600">
                           Dienst
                           <input type="checkbox" checked={code.countsAsShift} onChange={(event) => updateCode(index, { countsAsShift: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                         </label>
-                        <label className="glass-chip flex items-center justify-between rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-600">
+                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs font-semibold text-slate-600">
                           Betaald
                           <input type="checkbox" checked={code.isPaidAbsence} onChange={(event) => updateCode(index, { isPaidAbsence: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                         </label>
-                        <label className="glass-chip flex items-center justify-between rounded-2xl px-4 py-3 text-xs font-black uppercase tracking-[0.14em] text-slate-600">
+                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs font-semibold text-slate-600">
                           Vrij
                           <input type="checkbox" checked={code.isDayOff} onChange={(event) => updateCode(index, { isDayOff: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                         </label>
                       </div>
                       {canAdminDelete ? (
-                        <button onClick={() => removeCode(index)} className="glass-button rounded-2xl px-4 py-3 text-sm font-black text-red-500 hover:text-red-600">
+                        <Button variant="danger" size="md" icon={<Trash2 size={15} />} onClick={() => removeCode(index)}>
                           Verwijder Code
-                        </button>
+                        </Button>
                       ) : (
-                        <div className="rounded-2xl border border-white/70 bg-white/55 px-4 py-3 text-sm font-black uppercase tracking-[0.16em] text-slate-300">
-                          Verwijderen admin-only
-                        </div>
+                        <Badge tone="slate">Verwijderen admin-only</Badge>
                       )}
                     </div>
                   );
@@ -304,7 +306,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               </div>
             </>
           ) : (
-            <div className="p-8">
+            <div className="p-6">
               <EmptyState
                 icon={<Settings size={28} />}
                 title="Nog geen planningscodes"
@@ -312,7 +314,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               />
             </div>
           )}
-        </div>
+        </TableShell>
       </section>
 
       <EntityHistoryModal
@@ -327,5 +329,4 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
 }
 
 type UserDraft = User & { password?: string };
-
 

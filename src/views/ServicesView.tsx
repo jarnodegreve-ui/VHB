@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, Download, Search } from 'lucide-react';
-import type { Service, View } from '../types';
+import type { Service } from '../types';
 import { cn } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 
 export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,7 +22,7 @@ export function ServicesView({ services }: { services: Service[] }) {
   const hasValidTime = (start?: string, end?: string) =>
     !!start && !!end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end);
 
-  const filteredServices = services.filter(s => 
+  const filteredServices = services.filter(s =>
     s.serviceNumber.toLowerCase().includes(searchQuery.toLowerCase())
   ).sort((a, b) => {
     let comparison = 0;
@@ -45,20 +46,20 @@ export function ServicesView({ services }: { services: Service[] }) {
   const downloadCSV = () => {
     const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Start 2', 'Eind 2', 'Start 3', 'Eind 3'];
     const rows = filteredServices.map(s => [
-      `"${s.serviceNumber}"`, 
-      `"${s.startTime}"`, 
+      `"${s.serviceNumber}"`,
+      `"${s.startTime}"`,
       `"${s.endTime}"`,
       `"${s.startTime2 || ''}"`,
       `"${s.endTime2 || ''}"`,
       `"${s.startTime3 || ''}"`,
       `"${s.endTime3 || ''}"`
     ]);
-    
+
     const csvContent = [
       headers.join(','),
       ...rows.map(r => r.join(','))
     ].join('\n');
-    
+
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -81,7 +82,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               <button
                 onClick={() => toggleSort('number')}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-[0.08em] transition-all flex items-center gap-2",
+                  "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-2",
                   sortBy === 'number' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
@@ -91,7 +92,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               <button
                 onClick={() => toggleSort('time')}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-[0.08em] transition-all flex items-center gap-2",
+                  "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-2",
                   sortBy === 'time' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
@@ -99,14 +100,14 @@ export function ServicesView({ services }: { services: Service[] }) {
                 {sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
               </button>
             </div>
-            <button
+            <Button
+              variant="secondary"
               onClick={downloadCSV}
-              className="control-button-soft flex items-center gap-2 px-4 py-3 rounded-2xl text-slate-600 font-bold text-sm transition-all active:scale-95"
               title="Download als CSV"
+              icon={<Download size={16} className="text-oker-500" />}
             >
-              <Download size={18} className="text-oker-500" />
               <span className="hidden sm:inline">CSV</span>
-            </button>
+            </Button>
             <div className="relative flex-1 md:w-64 group">
               <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
                 <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
@@ -123,46 +124,46 @@ export function ServicesView({ services }: { services: Service[] }) {
         )}
       />
 
-      <div className="surface-table rounded-3xl overflow-hidden">
+      <TableShell>
         {/* Desktop Table View */}
-        <div className="hidden md:block overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50">
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Dienst</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Deel 1</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Deel 2</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.08em] border-b border-slate-100">Deel 3</th>
+        <div className="hidden md:block">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b border-slate-100">
+              <tr>
+                <Th>Dienst</Th>
+                <Th>Deel 1</Th>
+                <Th>Deel 2</Th>
+                <Th>Deel 3</Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-50">
               {filteredServices.map(s => (
-                <tr key={s.id} className="hover:bg-slate-50/50 transition-colors group">
-                  <td className="px-8 py-5">
-                    <span className="font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
-                  </td>
-                  <td className="px-8 py-5">
-                    <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
+                <tr key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                  <Td>
+                    <span className="font-semibold text-slate-800">{s.serviceNumber}</span>
+                  </Td>
+                  <Td>
+                    <div className="flex items-center gap-2 font-medium tabular-nums">
                       <Clock size={14} className="text-oker-500" />
                       {s.startTime} - {s.endTime}
                     </div>
-                  </td>
-                  <td className="px-8 py-5">
+                  </Td>
+                  <Td>
                     {hasValidTime(s.startTime2, s.endTime2) ? (
-                      <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
+                      <div className="flex items-center gap-2 font-medium tabular-nums">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime2} - {s.endTime2}
                       </div>
                     ) : null}
-                  </td>
-                  <td className="px-8 py-5">
+                  </Td>
+                  <Td>
                     {hasValidTime(s.startTime3, s.endTime3) ? (
-                      <div className="flex items-center gap-2 text-slate-600 font-bold text-sm">
+                      <div className="flex items-center gap-2 font-medium tabular-nums">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime3} - {s.endTime3}
                       </div>
                     ) : null}
-                  </td>
+                  </Td>
                 </tr>
               ))}
             </tbody>
@@ -174,18 +175,16 @@ export function ServicesView({ services }: { services: Service[] }) {
           {filteredServices.map((s) => {
             const isExpanded = expandedIds.has(s.id);
             return (
-              <div key={s.id} className="hover:bg-slate-50/50 transition-colors">
+              <div key={s.id} className="hover:bg-slate-50/60 transition-colors">
                 <button
                   type="button"
                   onClick={() => toggleExpanded(s.id)}
                   aria-expanded={isExpanded}
-                  className="w-full p-6 flex items-center justify-between gap-3 text-left"
+                  className="w-full p-5 flex items-center justify-between gap-3 text-left"
                 >
-                  <span className="text-lg font-black text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                  <span className="text-lg font-semibold text-slate-800 tracking-tight">{s.serviceNumber}</span>
                   <div className="flex items-center gap-3 shrink-0">
-                    <div className="glass-chip px-3 py-1 text-oker-600 rounded-full text-[10px] font-black uppercase tracking-[0.08em]">
-                      Dienst
-                    </div>
+                    <Badge tone="oker">Dienst</Badge>
                     <ChevronDown
                       size={18}
                       className={cn('text-slate-400 transition-transform duration-200', isExpanded && 'rotate-180')}
@@ -193,18 +192,18 @@ export function ServicesView({ services }: { services: Service[] }) {
                   </div>
                 </button>
                 {isExpanded && (
-                  <div className="px-6 pb-6 grid grid-cols-1 gap-3">
+                  <div className="px-5 pb-5 grid grid-cols-1 gap-3">
                     <div className="flex flex-col gap-1">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 1</span>
-                      <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                      <MicroLabel>Deel 1</MicroLabel>
+                      <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime} - {s.endTime}
                       </div>
                     </div>
                     {hasValidTime(s.startTime2, s.endTime2) && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 2</span>
-                        <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                        <MicroLabel>Deel 2</MicroLabel>
+                        <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
                           <Clock size={14} className="text-oker-500" />
                           {s.startTime2} - {s.endTime2}
                         </div>
@@ -212,8 +211,8 @@ export function ServicesView({ services }: { services: Service[] }) {
                     )}
                     {hasValidTime(s.startTime3, s.endTime3) && (
                       <div className="flex flex-col gap-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.08em]">Deel 3</span>
-                        <div className="flex items-center gap-2 text-slate-700 font-bold text-sm">
+                        <MicroLabel>Deel 3</MicroLabel>
+                        <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
                           <Clock size={14} className="text-oker-500" />
                           {s.startTime3} - {s.endTime3}
                         </div>
@@ -235,8 +234,7 @@ export function ServicesView({ services }: { services: Service[] }) {
             />
           </div>
         )}
-      </div>
+      </TableShell>
     </PageShell>
   );
 }
-

@@ -1,9 +1,39 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { Activity, Calendar, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
+import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+
+const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
+  users: 'oker',
+  planning: 'blue',
+  planning_codes: 'blue',
+  services: 'emerald',
+  diversions: 'amber',
+  updates: 'slate',
+  auth: 'slate',
+  leave: 'amber',
+  swaps: 'blue',
+};
+
+function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'ios-pressable rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors',
+        active
+          ? 'border-oker-200 bg-oker-50 text-oker-700'
+          : 'border-slate-200 bg-white/70 text-slate-500 hover:bg-slate-50 hover:text-slate-700',
+      )}
+    >
+      {children}
+    </button>
+  );
+}
 
 export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
   const categoryLabels: Record<ActivityLogEntry['category'], string> = {
@@ -98,138 +128,89 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
           eyebrow="Auditspoor"
           title="Recente activiteit"
           description="Alleen admins zien hier recente beheeracties en belangrijke wijzigingen."
-          aside={<div className="rounded-full border border-white/70 bg-white/55 px-3 py-1.5 text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">{filteredEntries.length} items</div>}
+          aside={<Badge tone="slate">{filteredEntries.length} items</Badge>}
         />
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
           <div className="space-y-4">
-            <label className="surface-muted flex items-center gap-3 rounded-3xl px-4 py-3">
+            <label className="surface-muted flex items-center gap-3 rounded-2xl px-4 py-3">
               <Search size={18} className="text-slate-400" />
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Zoek op actie, details of actor..."
-                className="w-full bg-transparent text-sm font-semibold text-slate-700 outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
               />
             </label>
             <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setDateWindow('today')}
-                className={cn(
-                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
-                  dateWindow === 'today'
-                    ? 'border-oker-200 bg-oker-50 text-oker-700'
-                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
-                )}
-              >
-                Vandaag
-              </button>
-              <button
-                onClick={() => setDateWindow('7d')}
-                className={cn(
-                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
-                  dateWindow === '7d'
-                    ? 'border-oker-200 bg-oker-50 text-oker-700'
-                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
-                )}
-              >
-                7 dagen
-              </button>
-              <button
-                onClick={() => setDateWindow('30d')}
-                className={cn(
-                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
-                  dateWindow === '30d'
-                    ? 'border-oker-200 bg-oker-50 text-oker-700'
-                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
-                )}
-              >
-                30 dagen
-              </button>
-              <button
-                onClick={() => setDateWindow('all')}
-                className={cn(
-                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
-                  dateWindow === 'all'
-                    ? 'border-oker-200 bg-oker-50 text-oker-700'
-                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
-                )}
-              >
-                Alles
-              </button>
+              <FilterPill active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterPill>
+              <FilterPill active={dateWindow === '7d'} onClick={() => setDateWindow('7d')}>7 dagen</FilterPill>
+              <FilterPill active={dateWindow === '30d'} onClick={() => setDateWindow('30d')}>30 dagen</FilterPill>
+              <FilterPill active={dateWindow === 'all'} onClick={() => setDateWindow('all')}>Alles</FilterPill>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 lg:max-w-[32rem] lg:justify-end">
-            <button
-              onClick={() => setActiveCategory('all')}
-              className={cn(
-                'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
-                activeCategory === 'all'
-                  ? 'border-oker-200 bg-oker-50 text-oker-700'
-                  : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
-              )}
-            >
-              Alles
-            </button>
+            <FilterPill active={activeCategory === 'all'} onClick={() => setActiveCategory('all')}>Alles</FilterPill>
             {(Object.keys(categoryLabels) as ActivityLogEntry['category'][]).map((category) => (
-              <button
-                key={category}
-                onClick={() => setActiveCategory(category)}
-                className={cn(
-                  'rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
-                  activeCategory === category
-                    ? 'border-oker-200 bg-oker-50 text-oker-700'
-                    : 'border-white/80 bg-white/70 text-slate-500 hover:text-slate-700',
-                )}
-              >
-                {categoryLabels[category]}
-              </button>
+              <Fragment key={category}>
+                <FilterPill active={activeCategory === category} onClick={() => setActiveCategory(category)}>
+                  {categoryLabels[category]}
+                </FilterPill>
+              </Fragment>
             ))}
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
+              icon={<Download size={14} />}
               onClick={exportFilteredActivity}
               disabled={filteredEntries.length === 0}
-              className={cn(
-                'inline-flex items-center gap-2 rounded-full border px-3 py-2 text-[10px] font-black uppercase tracking-[0.16em] transition-colors',
-                filteredEntries.length === 0
-                  ? 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-300'
-                  : 'border-white/80 bg-white/80 text-slate-600 hover:text-slate-900',
-              )}
             >
-              <Download size={14} />
               Exporteer CSV
-            </button>
+            </Button>
           </div>
         </div>
 
-        <div className="mt-6 space-y-3">
-          {filteredEntries.length > 0 ? filteredEntries.map((entry) => (
-            <div key={entry.id} className="rounded-3xl border border-white/70 bg-white/50 p-5">
-              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="rounded-full border border-white/80 bg-white/80 px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] text-slate-500">
-                      {categoryLabels[entry.category]}
-                    </span>
-                    <p className="text-sm font-black text-slate-900">{entry.action}</p>
-                  </div>
-                  <p className="mt-2 text-sm font-medium leading-6 text-slate-500">{entry.details}</p>
-                </div>
-                <div className="shrink-0 text-left md:text-right">
-                  <p className="text-xs font-black uppercase tracking-[0.16em] text-slate-400">{entry.actorRole}</p>
-                  <p className="mt-1 text-sm font-bold text-slate-800">{entry.actorName}</p>
-                  <p className="mt-1 text-xs font-medium text-slate-400">
-                    {new Date(entry.createdAt).toLocaleString('nl-BE', {
-                      day: '2-digit',
-                      month: '2-digit',
-                      year: 'numeric',
-                      hour: '2-digit',
-                      minute: '2-digit',
-                    })}
-                  </p>
-                </div>
-              </div>
-            </div>
-          )) : (
+        <div className="mt-6">
+          {filteredEntries.length > 0 ? (
+            <TableShell>
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="bg-slate-50/60 border-b border-slate-100">
+                    <Th>Tijdstip</Th>
+                    <Th>Categorie</Th>
+                    <Th>Actie</Th>
+                    <Th className="text-right">Actor</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredEntries.map((entry) => (
+                    <tr key={entry.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors">
+                      <Td className="whitespace-nowrap align-top text-slate-500 tabular-nums">
+                        {new Date(entry.createdAt).toLocaleString('nl-BE', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
+                      </Td>
+                      <Td className="align-top">
+                        <Badge tone={CATEGORY_TONES[entry.category]}>{categoryLabels[entry.category]}</Badge>
+                      </Td>
+                      <Td className="align-top">
+                        <p className="font-semibold text-slate-800">{entry.action}</p>
+                        <p className="mt-0.5 text-xs font-normal leading-5 text-slate-500">{entry.details}</p>
+                      </Td>
+                      <Td className="align-top text-right">
+                        <p className="font-semibold text-slate-800">{entry.actorName}</p>
+                        <MicroLabel className="mt-0.5">{entry.actorRole}</MicroLabel>
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </TableShell>
+          ) : (
             <EmptyState
               icon={<Activity size={28} />}
               title={entries.length > 0 ? 'Geen resultaten voor deze filter' : 'Nog geen activiteit gelogd'}
@@ -241,5 +222,3 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
     </PageShell>
   );
 }
-
-
