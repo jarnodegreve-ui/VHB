@@ -6,7 +6,6 @@ import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
-import { Input } from '../../components/Input';
 import { ScheduleView } from '../ScheduleView';
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
