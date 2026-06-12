@@ -1,6 +1,6 @@
 # VHB Planner — Phase 1 Design
 
-**Status: v0.2 — Q1–Q3 answered by the owner (2026-06-12): contract hours run on diensttijd with period-average semantics; gebroken diensten have max 3 segments; amplitude 14u/16u. Remaining before solver code: data-model sign-off + Q4/Q5 confirmation in §10.**
+**Status: v1.0 — APPROVED by the owner on 2026-06-12.** Q1–Q3: contract hours run on diensttijd with period-average semantics; gebroken diensten max 3 segments; amplitude 14u/16u. Q4: periods always start on Monday after a full weekly rest; the optional Historiek sheet stays (blank = fully rested). Q5: no structural exceptions — one duty per day absolute, no reserve duties, no pinned assignments in Phase 1. Implementation runs on Python 3.14 (≥ 3.12 as specified).
 
 Produced by a three-way design panel (solver-first, compliance-first, Excel/IO-first) plus an adversarial gap review. Where the designs disagreed, the resolution is noted inline. Interpretations and constants are aligned with the owner's Shiftglide compliance checker (`~/Shiftglide/src/rules/eu-561.ts`, `kb-2005-08-10.ts`) so both tools agree out of the box.
 
@@ -306,10 +306,8 @@ Sheet `Infeasibiliteit` + identical plain-text mirror `infeasibiliteit.txt` + co
 - **Q2 — Gebroken diensten: YES, max 3 segments.** One Excel row (Begin/Einde 1–3), assigned as one indivisible unit; coupure unpaid (not in diensttijd).
 - **Q3 — Amplitude: 14u standard / 16u when longest coupure ≥ 4u.** Fixed limits, pure input validation — identical to the Shiftglide constants.
 
-**Remaining (defaults are designed in; confirm or correct):**
-
-- **Q4 — Period boundaries & history.** Default: periods start on Monday; the optional Historiek sheet supplies carry-in per driver, blank = fully rested (flagged in Rapport). Minimum useful field: rijtijd vorige week (needed for 90h/2-weeks even with a clean Monday start).
-- **Q5 — Structural exceptions.** Defaults: one-duty-per-day is absolute; no reserve/standby duties; no pinned fixed assignments in Phase 1.
+- **Q4 — Period boundaries & history: MONDAY START confirmed.** Periods always start on Monday after a full weekly rest. The optional Historiek sheet supplies carry-in per driver, blank = fully rested (flagged in Rapport); most useful field: rijtijd vorige week (needed for 90h/2-weeks even with a clean Monday start).
+- **Q5 — Structural exceptions: NONE.** One-duty-per-day is absolute; no reserve/standby duties; no pinned fixed assignments in Phase 1.
 
 ### Working assumptions (flag if wrong)
 
