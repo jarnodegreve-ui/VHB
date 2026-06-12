@@ -62,7 +62,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
       notify('Je kan geen verlof aanvragen in het verleden.', 'error');
       return;
     }
-    onSave([...leaveRequests, { id: Date.now().toString(), userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]);
+    onSave([...leaveRequests, { id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]);
     setShowRequestModal(false);
     setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
   };
@@ -324,7 +324,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, lastSe
           {selectedDate && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-8 rounded-3xl">
               <div className="flex items-center justify-between mb-6">
-                <h4 className="font-bold tracking-tight text-slate-800">Afwezigheid op {new Date(selectedDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
+                <h4 className="font-bold tracking-tight text-slate-800">Afwezigheid op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
                 <button onClick={() => setSelectedDate(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
               <div className="space-y-3">
@@ -775,7 +775,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                   <StatusBadge status={req.status} />
                 </div>
               </div>
-              <p className="font-bold text-slate-800 text-sm mb-0.5">{new Date(req.startDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(req.endDate).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
+              <p className="font-bold text-slate-800 text-sm mb-0.5">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
               <p className="text-[11px] font-medium text-slate-400 tabular-nums">Aangevraagd op {req.createdAt.split('T')[0]}</p>
               {req.comment && <p className="text-xs text-slate-500 italic mt-2.5">"{req.comment}"</p>}
               {onCancel && req.status === 'approved' && (

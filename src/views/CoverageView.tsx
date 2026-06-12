@@ -129,16 +129,30 @@ export function CoverageView() {
     firstNameRef.current?.scrollIntoView?.({ block: 'nearest' });
   }, [focusTick]);
 
-  // Hernoemen: werk meteen de verwijzingen in weekdagen + uitzonderingen mee
-  // bij (per toetsaanslag), zodat een toewijzing niet stilletjes verloren gaat.
+  // Hernoemen: verwijzingen in weekdagen + uitzonderingen mee-hernoemen.
+  // Per toetsaanslag alléén bij niet-lege namen (oud patroon hernoemde naar
+  // '' zodra het veld leeggemaakt werd → mappings definitief kwijt bij
+  // leegmaken-en-hertypen). Het anker bij focus + de remap bij blur dekt
+  // dat hertyp-scenario af.
+  const nameEditAnchorRef = useRef<string | null>(null);
+  const remapDayTypeName = (old: string, neu: string) => {
+    if (!old || !neu || old === neu) return;
+    setWeekdays((prev) => prev.map((x) => (x === old ? neu : x)));
+    setOverrides((prev) => prev.map((x) => (x.dayType === old ? { ...x, dayType: neu } : x)));
+  };
   const updateDayTypeName = (i: number, name: string) => {
     const old = (dayTypes[i]?.name ?? '').trim();
     const neu = name.trim();
     setDayTypes((prev) => prev.map((dt, idx) => (idx === i ? { ...dt, name } : dt)));
-    if (old && old !== neu) {
-      setWeekdays((prev) => prev.map((x) => (x === old ? neu : x)));
-      setOverrides((prev) => prev.map((x) => (x.dayType === old ? { ...x, dayType: neu } : x)));
-    }
+    remapDayTypeName(old, neu);
+  };
+  const beginDayTypeNameEdit = (i: number) => {
+    nameEditAnchorRef.current = (dayTypes[i]?.name ?? '').trim();
+  };
+  const finishDayTypeNameEdit = (i: number) => {
+    const anchor = nameEditAnchorRef.current;
+    nameEditAnchorRef.current = null;
+    if (anchor) remapDayTypeName(anchor, (dayTypes[i]?.name ?? '').trim());
   };
 
   const toggleService = (i: number, svc: string) => {
@@ -270,6 +284,8 @@ export function CoverageView() {
                               ref={i === 0 ? firstNameRef : undefined}
                               value={dt.name}
                               onChange={(e) => updateDayTypeName(i, e.target.value)}
+                              onFocus={() => beginDayTypeNameEdit(i)}
+                              onBlur={() => finishDayTypeNameEdit(i)}
                               placeholder="Naam dag-type"
                               aria-label="Naam dag-type"
                               className="control-input flex-1 rounded-xl px-3 py-2 text-sm font-semibold outline-none"
