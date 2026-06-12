@@ -103,8 +103,31 @@ export const savePlanningData = async (data: any) => {
   if (!Array.isArray(data)) {
     throw new Error("Ongeldige planning-data: een array van diensten verwacht.");
   }
+  // Volledige wipe gaat bewust NIET via dit pad (zie clearPlanningData +
+  // de admin-check in de handler) — een per ongeluk lege payload mag de
+  // planning nooit stil wissen.
   if (data.length === 0) return;
+  // Replace-semantiek: eerst upserten, daarna pas de ontbrekende rijen
+  // verwijderen. Faalt de delete, dan staan er hooguit extra rijen — nooit
+  // een (deels) lege tabel.
+  const incomingIds = new Set(data.map((s: any) => String(s.id)));
+  const { data: existing, error: fetchError } = await client.from('planning').select('id');
+  if (fetchError) throw fetchError;
   const { error } = await client.from('planning').upsert(data);
+  if (error) throw error;
+  const idsToDelete = (existing ?? [])
+    .map((row: any) => String(row.id))
+    .filter((id) => !incomingIds.has(id));
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('planning').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
+  }
+};
+
+/** Volledige planning wissen — alleen voor de expliciete admin-actie. */
+export const clearPlanningData = async () => {
+  const client = requireDb();
+  const { error } = await client.from('planning').delete().neq('id', '__never_match__');
   if (error) throw error;
 };
 
@@ -888,6 +911,23 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
   if (error) throw error;
 };
 
+/** Gericht sessie-metadata bijwerken — alléén de eigen rij.
+ * Voorheen liep elke login/logout via saveUsersData (replace-all incl.
+ * Supabase-auth-sync): gelijktijdige logins raceten met elkaar én met
+ * admin-bewerkingen (een net verwijderde gebruiker kon zo terugkomen). */
+export const updateUserSessionMeta = async (
+  userId: string,
+  fields: { lastLogin?: string; activeSessions?: number },
+) => {
+  const client = requireDb();
+  const patch: Record<string, unknown> = {};
+  if (fields.lastLogin !== undefined) patch.lastlogin = fields.lastLogin;
+  if (fields.activeSessions !== undefined) patch.activesessions = fields.activeSessions;
+  if (Object.keys(patch).length === 0) return;
+  const { error } = await client.from('users').update(patch).eq('id', String(userId));
+  if (error) throw error;
+};
+
 // --- Diversions ---
 
 export const DIVERSIONS_BUCKET = "diversions";
@@ -946,17 +986,23 @@ export const saveServicesData = async (data: any) => {
   const client = requireDb();
   const normalized = Array.isArray(data) ? data.map(toPublicService) : [];
   const rows = normalized.map(toDatabaseService);
-  // Replace-all semantics: drop then insert. Upsert fallback if delete fails
-  // (for example when RLS policies prevent delete on an empty table).
-  const { error: deleteError } = await client.from('services').delete().neq('id', '0');
-  if (deleteError) {
+  // Replace-semantiek zónder leeg-tabel-venster: eerst upserten, daarna pas
+  // de ontbrekende rijen verwijderen. Het oude delete-alles-dan-insert kon
+  // bij een insert-fout (netwerk/constraint/timeout) een lege dienstentabel
+  // achterlaten — en daarmee elke volgende matrix-import breken.
+  const incomingIds = new Set(rows.map((r: any) => String(r.id)));
+  const { data: existing, error: fetchError } = await client.from('services').select('id');
+  if (fetchError) throw fetchError;
+  if (rows.length > 0) {
     const { error: upsertError } = await client.from('services').upsert(rows);
     if (upsertError) throw upsertError;
-    return;
   }
-  if (rows.length > 0) {
-    const { error: insertError } = await client.from('services').insert(rows);
-    if (insertError) throw insertError;
+  const idsToDelete = (existing ?? [])
+    .map((row: any) => String(row.id))
+    .filter((id) => !incomingIds.has(id));
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('services').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
   }
 };
 
@@ -1027,11 +1073,18 @@ export const getSwapsData = async () => {
   return rows.map(toPublicSwap);
 };
 
-export const saveSwapsData = async (data: any) => {
+export const saveSwapsData = async (data: any, idsToDelete: string[] = []) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicSwap) : [];
-  const { error } = await client.from('swaps').upsert(normalizedData.map(toDatabaseSwap));
-  if (error) throw error;
+  if (normalizedData.length > 0) {
+    const { error } = await client.from('swaps').upsert(normalizedData.map(toDatabaseSwap));
+    if (error) throw error;
+  }
+  // Intrekkingen: gevalideerd door de handler (zie POST /api/swaps).
+  if (idsToDelete.length > 0) {
+    const { error } = await client.from('swaps').delete().in('id', idsToDelete.map(String));
+    if (error) throw error;
+  }
 };
 
 // --- Leave ---
@@ -1044,11 +1097,20 @@ export const getLeaveData = async () => {
   return rows.map(toPublicLeave);
 };
 
-export const saveLeaveData = async (data: any) => {
+export const saveLeaveData = async (data: any, idsToDelete: string[] = []) => {
   const client = requireDb();
   const normalizedData = Array.isArray(data) ? data.map(toPublicLeave) : [];
-  const { error } = await client.from('leave').upsert(normalizedData.map(toDatabaseLeave));
-  if (error) throw error;
+  if (normalizedData.length > 0) {
+    const { error } = await client.from('leave').upsert(normalizedData.map(toDatabaseLeave));
+    if (error) throw error;
+  }
+  // Intrekkingen: de handler valideert scope + status; hier alleen uitvoeren.
+  // Zonder dit was 'aanvraag intrekken' een stille no-op (upsert raakt
+  // ontbrekende rijen niet) en kwam de aanvraag na refresh terug.
+  if (idsToDelete.length > 0) {
+    const { error } = await client.from('leave').delete().in('id', idsToDelete.map(String));
+    if (error) throw error;
+  }
 };
 
 // --- Coverage expectations (verwachte diensten per dag-type) ---

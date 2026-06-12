@@ -42,28 +42,12 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         return;
       }
 
-      const response = await fetch('/api/users', {
-        method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
-        body: JSON.stringify([
-          {
-            id: 'test-' + Date.now(),
-            name: 'Test Gebruiker',
-            role: 'chauffeur',
-            employeeId: 'TEST-000',
-            email: `test-${Date.now()}@example.com`,
-            password: 'Test1234!',
-            isActive: false,
-          },
-        ]),
-      });
-
-      const text = await response.text();
-      if (response.ok) {
-        setTestResult('Succes! Schrijven naar database werkt.');
-      } else {
-        setTestResult(`Fout (${response.status}): ${text}`);
-      }
+      // Bewust GEEN schrijftest meer via POST /api/users: dat endpoint heeft
+      // replace-all-semantiek (één testgebruiker insturen = alle anderen
+      // verwijderen) en werd alleen door de minimum-één-admin-vangrail
+      // tegengehouden — de test faalde daardoor ook altijd. De health-check
+      // hieronder dekt de databaseverbinding al af.
+      setTestResult('Succes! API bereikbaar en POST-routing werkt.');
     } catch (error: any) {
       setTestResult(`Fout: ${error.message}`);
     } finally {

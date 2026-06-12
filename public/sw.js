@@ -14,9 +14,9 @@
 //   diensten ook zonder signaal. Gecachet per volledige URL (incl.
 //   ?driverId=&month=), dus per gebruiker/maand geïsoleerd.
 // - Overige /api/*: network-only (geen stale-data risico).
-// v4: nieuwe huisstijl-assets (logo's/iconen) — oude caches met het vorige
-// logo worden bij activate opgeruimd, anders blijven die cache-first hangen.
-const CACHE_NAME = 'vhb-portaal-v4';
+// v5: cache-hardening — v4-caches kunnen door de SPA-rewrite index.html
+// onder asset-URLs bevatten (cache-first = blijvend kapot); bump ruimt op.
+const CACHE_NAME = 'vhb-portaal-v5';
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
@@ -93,8 +93,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          // Alleen een gezonde shell cachen — een 500/503 tijdens een deploy
+          // mag de werkende offline-shell niet overschrijven.
+          if (res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
           return res;
         })
         .catch(() => caches.match(req).then((c) => c || caches.match('/'))),
@@ -102,12 +106,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Assets: cache-first
+  // Assets: cache-first. NOOIT html cachen onder een asset-URL: de Vercel
+  // SPA-rewrite beantwoordt onbestaande paden met 200 + index.html, en
+  // cache-first zou die vergissing voor eeuwig vastzetten (JS-URL die HTML
+  // serveert = blijvend kapotte app tot een cache-bump).
   event.respondWith(
     caches.match(req).then((cached) => {
       if (cached) return cached;
       return fetch(req).then((res) => {
-        if (res.ok && (res.type === 'basic' || res.type === 'opaque')) {
+        const contentType = res.headers.get('content-type') || '';
+        if (
+          res.ok &&
+          (res.type === 'basic' || res.type === 'opaque') &&
+          !contentType.includes('text/html')
+        ) {
           const copy = res.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
         }
