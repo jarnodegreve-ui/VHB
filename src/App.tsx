@@ -809,6 +809,56 @@ export default function App() {
     }
   };
 
+  /** Delta-beslissing op één record (PATCH) met optimistic-concurrency:
+   *  bij een 409/404 is een collega ons voor geweest — verse lijst ophalen
+   *  i.p.v. stilletjes overschrijven. Geldt voor verlof én dienstruil. */
+  const decideViaPatch = async (
+    kind: 'leave' | 'swaps',
+    id: string,
+    status: string,
+    ifStatus: string | undefined,
+    refetch: () => Promise<void> | void,
+    applyLocal: (updated: any) => void,
+  ): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`/api/${kind}/${encodeURIComponent(id)}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status, ifStatus }),
+      });
+      const data = await response.json().catch(() => ({} as any));
+      if (response.ok) {
+        applyLocal(data?.leave ?? data?.swap ?? { status });
+        if (currentUser?.role === 'admin') void fetchActivityLog();
+        return true;
+      }
+      if (response.status === 409 || response.status === 404) {
+        showToast(data.error || 'Dit is intussen al behandeld door een collega — de lijst is ververst.', 'info');
+        void refetch();
+        return false;
+      }
+      showToast(data.details || data.error || 'Beslissing opslaan is mislukt.', 'error');
+      return false;
+    } catch (error) {
+      console.error(`Error deciding ${kind}:`, error);
+      showToast('Beslissing opslaan is mislukt.', 'error');
+      return false;
+    }
+  };
+
+  const decideLeave = (id: string, status: LeaveRequest['status']): Promise<boolean> => {
+    const current = leaveRequests.find((r) => r.id === id);
+    return decideViaPatch('leave', id, status, current?.status, fetchLeave, (updated) => {
+      setLeaveRequests((curr) => curr.map((r) => (r.id === id ? { ...r, ...updated } : r)));
+    });
+  };
+
+  const decideSwap = (id: string, status: SwapRequest['status']): Promise<boolean> => {
+    const current = swaps.find((s) => s.id === id);
+    return decideViaPatch('swaps', id, status, current?.status, fetchSwaps, (updated) => {
+      setSwaps((curr) => curr.map((s) => (s.id === id ? { ...s, ...updated } : s)));
+    });
+  };
+
   const fetchServices = async (accessToken = session?.access_token) => {
     try {
       beginLoading();
@@ -1597,7 +1647,7 @@ export default function App() {
                   <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} />}
+              {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} onDecide={decideSwap} />}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <CoverageView />}
               {resolvedCurrentView === 'rusttijden' && <ComplianceView shifts={shifts} users={users} />}
@@ -1609,6 +1659,7 @@ export default function App() {
                     leaveRequests={leaveRequests}
                     users={users}
                     onSave={saveLeave}
+                    onDecide={currentUser.role !== 'chauffeur' ? decideLeave : undefined}
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
                     shifts={shifts}

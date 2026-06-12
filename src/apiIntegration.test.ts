@@ -416,6 +416,59 @@ describe('client-foutmonitoring', () => {
   });
 });
 
+describe('delta-endpoints (PATCH per record, anti-race)', () => {
+  it('laat de planner een verlofaanvraag goedkeuren via PATCH', async () => {
+    const res = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(res.status).toBe(200);
+    expect(res.json.leave.status).toBe('approved');
+    expect(res.json.leave.decidedAt).toBeTruthy();
+    expect(mem.leave.find((l) => l.id === 'l-a1')?.status).toBe('approved');
+    // De aanvrager kreeg e-mail-equivalent push.
+    expect(mem.pushesSent.find((p) => p.payload.title === 'Verlof goedgekeurd')?.userIds).toEqual(['3']);
+  });
+
+  it('detecteert een race: tweede beslisser krijgt 409 en de eerste beslissing blijft staan', async () => {
+    const eerste = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(eerste.status).toBe(200);
+    const tweede = await api('PATCH', '/api/leave/l-a1', { token: 'tok-admin', body: { status: 'rejected', ifStatus: 'pending' } });
+    expect(tweede.status).toBe(409);
+    expect(tweede.json.currentStatus).toBe('approved');
+    expect(mem.leave.find((l) => l.id === 'l-a1')?.status).toBe('approved');
+  });
+
+  it('geeft 404 voor een intussen ingetrokken aanvraag en 403 voor chauffeurs', async () => {
+    const weg = await api('PATCH', '/api/leave/bestaat-niet', { token: 'tok-planner', body: { status: 'approved' } });
+    expect(weg.status).toBe(404);
+    const chauffeur = await api('PATCH', '/api/leave/l-a1', { token: 'tok-a', body: { status: 'approved' } });
+    expect(chauffeur.status).toBe(403);
+  });
+
+  it('laat de aangezochte collega accepteren via PATCH (zonder decidedAt) en de planner daarna goedkeuren', async () => {
+    const accept = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    expect(accept.status).toBe(200);
+    expect(accept.json.swap.status).toBe('accepted');
+    expect(accept.json.swap.decidedAt).toBeFalsy();
+
+    const approve = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(approve.status).toBe(200);
+    expect(approve.json.swap.decidedAt).toBeTruthy();
+    expect(mem.swaps.find((s) => s.id === 's-1')?.status).toBe('approved');
+  });
+
+  it('handhaaft de force-approve-regel ook op het delta-pad', async () => {
+    const planner = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(planner.status).toBe(403);
+    const admin = await api('PATCH', '/api/swaps/s-1', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(admin.status).toBe(200);
+  });
+
+  it('weigert een chauffeur die niet de aangezochte collega is (403)', async () => {
+    // Chauffeur A is requester van s-1, niet target — accepteren mag niet.
+    const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-a', body: { status: 'accepted' } });
+    expect(res.status).toBe(403);
+  });
+});
+
 describe('push-notificaties', () => {
   it('geeft de public key aan ingelogde gebruikers', async () => {
     const res = await api('GET', '/api/push/public-key', { token: 'tok-a' });
