@@ -52,7 +52,7 @@ export function CalendarSubscribeModal({
       <div className="p-6">
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-oker-500 text-white shadow-md shadow-black/10 shrink-0">
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-oker-500 text-slate-950 shadow-md shadow-black/10 shrink-0">
               <CalendarPlus size={20} />
             </div>
             <div className="min-w-0">

@@ -450,7 +450,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               <label
                 className={cn(
                   "ios-pressable mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition-all",
-                  isMatrixImporting ? "cursor-not-allowed bg-slate-200 text-slate-400" : "btn-primary text-white"
+                  isMatrixImporting ? "cursor-not-allowed bg-slate-200 text-slate-400" : "btn-primary"
                 )}
               >
                 <Upload size={16} />

@@ -80,7 +80,7 @@ export function BottomNav({
                   {slot.label}
                 </span>
                 {slot.badge !== undefined && slot.badge > 0 && (
-                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-bold bg-oker-500 text-white rounded-full">
+                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-bold bg-oker-500 text-slate-950 rounded-full">
                     {slot.badge > 9 ? '9+' : slot.badge}
                   </span>
                 )}

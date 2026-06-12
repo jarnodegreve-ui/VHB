@@ -196,7 +196,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="bg-oker-50 p-8 rounded-3xl border border-oker-100">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-oker-500 text-white rounded-2xl shadow-lg shadow-oker-500/20">
+          <div className="p-3 bg-oker-500 text-slate-950 rounded-2xl shadow-lg shadow-oker-500/20">
             <Activity size={24} />
           </div>
           <div>
