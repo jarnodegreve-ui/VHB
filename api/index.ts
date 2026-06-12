@@ -40,6 +40,8 @@ import {
   getUpdatesData,
   getUsersData,
   logActivity,
+  logClientError,
+  getClientErrors,
   replacePlanningData,
   saveDiversionsData,
   saveLeaveData,
@@ -985,6 +987,81 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving users data:", errorMessage);
     res.status(500).json({ error: "Failed to save data", details: errorMessage });
+  }
+});
+
+// --- Client-foutmonitoring ---
+// Bewust zónder authenticate: fouten op het loginscherm of bij een verlopen
+// sessie moeten ook binnenkomen. De client dedupet en plafonneert zelf
+// (max 20/sessie); hier kappen we payloads af zodat misbruik niets oplevert.
+app.post("/api/client-errors", async (req, res) => {
+  try {
+    const b = req.body ?? {};
+    const cut = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+    const entry = {
+      message: cut(b.message, 1000),
+      stack: cut(b.stack, 4000),
+      source: cut(b.source, 50),
+      url: cut(b.url, 300),
+      userAgent: cut(b.userAgent, 300),
+      userId: cut(b.userId, 100),
+    };
+    if (!entry.message) {
+      return res.status(400).json({ error: "message is verplicht" });
+    }
+    // Vangnet dat altijd werkt: zichtbaar in de Vercel-functielogs.
+    console.error("[client-error]", JSON.stringify(entry));
+    await logClientError(entry);
+    res.status(204).end();
+  } catch {
+    // Foutrapportage mag nooit zelf een fout-loop veroorzaken.
+    res.status(204).end();
+  }
+});
+
+app.get("/api/client-errors", authenticate, requireRole("admin"), async (_req, res) => {
+  try {
+    res.json(await getClientErrors(100));
+  } catch {
+    res.json([]);
+  }
+});
+
+// --- Back-up: alle collecties als één JSON (admin) ---
+app.get("/api/backup", authenticate, requireRole("admin"), async (_req, res) => {
+  try {
+    const [users, planning, services, diversions, updates, leave, swaps, planningCodes, planningMatrixRows, coverageExpectations, activityLog] = await Promise.all([
+      getUsersData(),
+      getPlanningData(),
+      getServicesData(),
+      getDiversionsData(),
+      getUpdatesData(),
+      getLeaveData(),
+      getSwapsData(),
+      getPlanningCodesData(),
+      getPlanningMatrixRows(),
+      getCoverageExpectations(),
+      getActivityLog(),
+    ]);
+    res.json({
+      exportedAt: new Date().toISOString(),
+      version: 1,
+      collections: {
+        users,
+        planning,
+        services,
+        diversions,
+        updates,
+        leave,
+        swaps,
+        planningCodes,
+        planningMatrixRows,
+        coverageExpectations,
+        activityLog,
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: "Back-up genereren is mislukt", details: err?.message });
   }
 });
 

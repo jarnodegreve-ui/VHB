@@ -41,6 +41,7 @@ import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn } from './lib/ui';
+import { reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
 import { addDays, isoDate } from './lib/availability';
 import { ViewLoader } from './components/ui';
@@ -277,6 +278,9 @@ export default function App() {
   };
 
   const showToast = (message: string, tone: Toast['tone'] = 'info') => {
+    // Elke fout-toast is een gebroken flow — meld die ook aan de monitoring,
+    // anders blijven afgehandelde fouten (catch-blokken) onzichtbaar.
+    if (tone === 'error') reportHandledError(message);
     const id = ++toastIdRef.current;
     setToasts((current) => [...current, { id, message, tone }]);
     window.setTimeout(() => {
@@ -358,6 +362,7 @@ export default function App() {
       } else {
         setRecoveryMode(false);
         setCurrentUser(null);
+        setMonitoringUser(null);
         initializedUserIdRef.current = null;
         loadedCollectionsRef.current.clear();
         setUsers([]);
@@ -451,6 +456,7 @@ export default function App() {
       throw new Error('Ongeldig profiel-antwoord van de server.');
     }
     setCurrentUser(data);
+    setMonitoringUser(String(data.id));
     return data as User;
   };
 
@@ -992,6 +998,7 @@ export default function App() {
       await supabase?.auth.signOut();
       setSession(null);
       setCurrentUser(null);
+      setMonitoringUser(null);
       initializedUserIdRef.current = null;
     }
   };

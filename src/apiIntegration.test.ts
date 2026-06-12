@@ -26,6 +26,7 @@ const mem = vi.hoisted(() => ({
   planning: [] as any[],
   planningCodes: [] as any[],
   activity: [] as any[],
+  clientErrors: [] as any[],
 }));
 
 vi.mock('../api/db.js', () => {
@@ -93,6 +94,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     getActivityLog: async () => mem.activity,
     updateUserSessionMeta: async () => {},
+    getPlanningMatrixRows: async () => [],
+    getCoverageExpectations: async () => ({}),
+    logClientError: async (entry: any) => { mem.clientErrors.push(entry); },
+    getClientErrors: async () => mem.clientErrors,
   };
 });
 
@@ -164,6 +169,7 @@ beforeEach(() => {
   mem.diversions = [];
   mem.planningCodes = [];
   mem.activity = [];
+  mem.clientErrors = [];
 });
 
 describe('authenticatie & rollen', () => {
@@ -358,5 +364,57 @@ describe('bulk-wipe-vangrail (PR #71)', () => {
   it('weigert non-array payloads (400)', async () => {
     const res = await api('POST', '/api/updates', { token: 'tok-planner', body: { hack: true } });
     expect(res.status).toBe(400);
+  });
+});
+
+describe('client-foutmonitoring', () => {
+  it('accepteert een foutmelding zonder authenticatie (204) en kapt lange velden af', async () => {
+    const res = await api('POST', '/api/client-errors', {
+      body: { message: 'x'.repeat(5000), source: 'error-toast', url: '/dashboard' },
+    });
+    expect(res.status).toBe(204);
+    expect(mem.clientErrors).toHaveLength(1);
+    expect(mem.clientErrors[0].message).toHaveLength(1000);
+  });
+
+  it('weigert een melding zonder message (400)', async () => {
+    const res = await api('POST', '/api/client-errors', { body: { source: 'window.onerror' } });
+    expect(res.status).toBe(400);
+    expect(mem.clientErrors).toHaveLength(0);
+  });
+
+  it('toont de foutenlijst alleen aan admins', async () => {
+    mem.clientErrors = [{ id: 1, createdAt: '2026-06-12T10:00:00Z', message: 'boem' }];
+    const planner = await api('GET', '/api/client-errors', { token: 'tok-planner' });
+    expect(planner.status).toBe(403);
+    const admin = await api('GET', '/api/client-errors', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json).toHaveLength(1);
+  });
+});
+
+describe('back-up export', () => {
+  it('is alleen toegankelijk voor admins (403 voor planner/chauffeur)', async () => {
+    const planner = await api('GET', '/api/backup', { token: 'tok-planner' });
+    expect(planner.status).toBe(403);
+    const chauffeur = await api('GET', '/api/backup', { token: 'tok-a' });
+    expect(chauffeur.status).toBe(403);
+  });
+
+  it('levert alle collecties in één JSON met export-metadata', async () => {
+    const res = await api('GET', '/api/backup', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.version).toBe(1);
+    expect(typeof res.json.exportedAt).toBe('string');
+    const c = res.json.collections;
+    expect(c.users).toHaveLength(4);
+    expect(c.leave).toHaveLength(3);
+    expect(c.swaps).toHaveLength(2);
+    expect(c.services).toHaveLength(6);
+    expect(c.updates).toHaveLength(6);
+    expect(c.planning).toHaveLength(2);
+    expect(Array.isArray(c.diversions)).toBe(true);
+    expect(Array.isArray(c.planningCodes)).toBe(true);
+    expect(Array.isArray(c.activityLog)).toBe(true);
   });
 });
