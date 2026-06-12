@@ -169,6 +169,9 @@ export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const isPasswordRecoveryRef = useRef(false);
+  // Dubbele-init-guard: bootstrap én het INITIAL_SESSION/SIGNED_IN-event
+  // proberen allebei te initialiseren; per gebruiker doen we het één keer.
+  const initializedUserIdRef = useRef<string | null>(null);
   const setRecoveryMode = (v: boolean) => {
     isPasswordRecoveryRef.current = v;
     setIsPasswordRecovery(v);
@@ -265,7 +268,7 @@ export default function App() {
 
         setSession(data.session);
         if (data.session) {
-          await initializeAuthenticatedApp(data.session.access_token);
+          await initializeAuthenticatedApp(data.session.access_token, data.session.user.id);
         }
       } catch (error) {
         console.error('Auth bootstrap error:', error);
@@ -302,11 +305,19 @@ export default function App() {
       }
 
       setSession(nextSession);
+      // TOKEN_REFRESHED/USER_UPDATED: alleen de sessie verversen — een
+      // volledige her-init (12 fetches + overlay) elk uur is onnodig en
+      // stoort de gebruiker midden in z'n werk.
+      if (event === 'TOKEN_REFRESHED' || event === 'USER_UPDATED') {
+        setAuthReady(true);
+        return;
+      }
       if (nextSession) {
-        await initializeAuthenticatedApp(nextSession.access_token);
+        await initializeAuthenticatedApp(nextSession.access_token, nextSession.user.id);
       } else {
         setRecoveryMode(false);
         setCurrentUser(null);
+        initializedUserIdRef.current = null;
         setUsers([]);
         setShifts([]);
         setDiversions([]);
@@ -388,7 +399,15 @@ export default function App() {
 
   const fetchCurrentUser = async (accessToken = session?.access_token) => {
     const response = await apiFetch('/api/me', {}, accessToken);
+    // Zonder deze checks werd een JSON-errorbody ({error: ...}) als
+    // gebruiker gezet → crash op currentUser.name verderop.
+    if (!response.ok) {
+      throw new Error('Profiel kon niet geladen worden.');
+    }
     const data = await response.json();
+    if (!data?.id || !data?.role) {
+      throw new Error('Ongeldig profiel-antwoord van de server.');
+    }
     setCurrentUser(data);
     return data as User;
   };
@@ -422,9 +441,13 @@ export default function App() {
     }
   };
 
-  const initializeAuthenticatedApp = async (accessToken: string) => {
+  const initializeAuthenticatedApp = async (accessToken: string, authUserId?: string) => {
     // Progressieve boot: alleen het profiel (één snelle call) blokkeert de
     // eerste render; alle overige data streamt op de achtergrond binnen.
+    if (authUserId) {
+      if (initializedUserIdRef.current === authUserId) return;
+      initializedUserIdRef.current = authUserId;
+    }
     try {
       const appUser = await fetchCurrentUser(accessToken);
       void loadAppData(appUser, accessToken);
@@ -654,6 +677,9 @@ export default function App() {
           await fetchActivityLog();
         }
         showToast('Verlofaanvraag bijgewerkt.', 'success');
+      } else {
+        const err = await response.json().catch(() => ({} as any));
+        showToast(err.details || err.error || 'Opslaan van verlofaanvragen is mislukt.', 'error');
       }
     } catch (error) {
       console.error('Error saving leave:', error);
@@ -690,6 +716,9 @@ export default function App() {
           await fetchActivityLog();
         }
         showToast('Diensten succesvol opgeslagen.', 'success');
+      } else {
+        const err = await response.json().catch(() => ({} as any));
+        showToast(err.details || err.error || 'Opslaan van diensten is mislukt.', 'error');
       }
     } catch (error) {
       console.error('Error saving services:', error);
@@ -792,6 +821,9 @@ export default function App() {
           await fetchActivityLog();
         }
         showToast('Planning succesvol opgeslagen.', 'success');
+      } else {
+        const err = await response.json().catch(() => ({} as any));
+        showToast(err.details || err.error || 'Opslaan van planning is mislukt.', 'error');
       }
     } catch (error) {
       console.error('Error saving planning:', error);
@@ -829,6 +861,9 @@ export default function App() {
           await fetchActivityLog();
         }
         showToast('Omleidingen succesvol opgeslagen.', 'success');
+      } else {
+        const err = await response.json().catch(() => ({} as any));
+        showToast(err.details || err.error || 'Opslaan van omleidingen is mislukt.', 'error');
       }
     } catch (error) {
       console.error('Error saving diversions:', error);
@@ -853,6 +888,9 @@ export default function App() {
     } catch {
       throw new Error('De server gaf geen geldig antwoord terug. Controleer of de nieuwste backend deploy actief is.');
     }
+    if (!response.ok || !user?.id || !user?.role) {
+      throw new Error(user?.error || 'Sessie kon niet gestart worden. Probeer opnieuw.');
+    }
     setCurrentUser(user);
     await fetchUsers(token);
     setCurrentView('dashboard');
@@ -872,6 +910,7 @@ export default function App() {
       await supabase?.auth.signOut();
       setSession(null);
       setCurrentUser(null);
+      initializedUserIdRef.current = null;
     }
   };
 
