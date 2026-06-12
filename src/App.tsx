@@ -839,7 +839,7 @@ export default function App() {
     }
   };
 
-  const savePlanning = async (newShifts: Shift[]) => {
+  const savePlanning = async (newShifts: Shift[]): Promise<boolean> => {
     try {
       beginLoading();
       const response = await apiFetch('/api/planning', {
@@ -852,13 +852,15 @@ export default function App() {
           await fetchActivityLog();
         }
         showToast('Planning succesvol opgeslagen.', 'success');
-      } else {
-        const err = await response.json().catch(() => ({} as any));
-        showToast(err.details || err.error || 'Opslaan van planning is mislukt.', 'error');
+        return true;
       }
+      const err = await response.json().catch(() => ({} as any));
+      showToast(err.details || err.error || 'Opslaan van planning is mislukt.', 'error');
+      return false;
     } catch (error) {
       console.error('Error saving planning:', error);
       showToast('Opslaan van planning is mislukt.', 'error');
+      return false;
     } finally {
       endLoading();
     }

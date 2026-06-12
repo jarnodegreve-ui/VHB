@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { AlertTriangle, Bell, CalendarDays, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { notify } from '../../lib/ui';
-import { PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -117,6 +117,10 @@ export function ManageUpdatesView({
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
   };
+
+  // Eén misklik naast 'Bewerk' verwijderde een update direct en definitief —
+  // nu eerst bevestigen, zoals in alle andere beheer-views.
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
@@ -243,7 +247,7 @@ export function ManageUpdatesView({
                     size="sm"
                     icon={<Trash2 size={14} />}
                     disabled={deletingId === update.id}
-                    onClick={() => handleDelete(update.id)}
+                    onClick={() => setConfirmDeleteId(update.id)}
                   >
                     {deletingId === update.id ? 'Verwijderen...' : 'Verwijder'}
                   </Button>
@@ -264,6 +268,15 @@ export function ManageUpdatesView({
         entityType="update"
         entityId={historyUpdate?.id ?? ''}
         title={historyUpdate?.title}
+      />
+
+      <ConfirmationModal
+        isOpen={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId(null)}
+        onConfirm={() => { if (confirmDeleteId) handleDelete(confirmDeleteId); }}
+        title="Update verwijderen?"
+        message="Deze update verdwijnt definitief voor alle chauffeurs. Dit kan niet ongedaan gemaakt worden."
+        confirmText="Verwijderen"
       />
     </PageShell>
   );

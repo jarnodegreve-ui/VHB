@@ -42,14 +42,17 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     .filter((u) => roleFilter === 'all' || u.role === roleFilter)
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingUser) return;
     if (!newUser.name) return;
     if (!newUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
     if (newUser.password.length < 6) return notify('Gebruik een tijdelijk wachtwoord van minstens 6 tekens.', 'error');
 
     const userToAdd: UserDraft = {
-      id: Date.now().toString(),
+      id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       name: newUser.name,
       role: newUser.role as any,
       employeeId: newUser.employeeId || `VHB-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -59,7 +62,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       isActive: true,
     };
 
-    const success = await onSave([...users, userToAdd]);
+    setIsSubmittingUser(true);
+    const success = await onSave([...users, userToAdd]).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     setShowAddModal(false);
     setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
@@ -72,6 +76,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
 
   const handleUpdateUser = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmittingUser) return;
     if (!editingUser) return;
     if (!editingUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
     if (editingUser.password && editingUser.password.length < 6) return notify('Een nieuw wachtwoord moet minstens 6 tekens hebben.', 'error');
@@ -81,7 +86,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     const adminWouldBeRemoved = editingUser.role !== 'admin' || editingUser.isActive === false;
     if (isOnlyActiveAdmin && adminWouldBeRemoved) return notify('Je kunt de laatste actieve admin niet degraderen of deactiveren.', 'error');
 
-    const success = await onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u)));
+    setIsSubmittingUser(true);
+    const success = await onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u))).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     setEditingUser(null);
   };
@@ -121,6 +127,10 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       });
       setConfirmResetUser(null);
       setResetPasswordValue('');
+    } catch (error: any) {
+      // fetch kan ook gooien (offline) — zonder catch leek de reset gelukt
+      // terwijl het wachtwoord nooit gezet was.
+      notify(`Reset mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
     } finally {
       setIsResettingPassword(false);
     }
@@ -137,7 +147,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         const data = new Uint8Array(event.target?.result as ArrayBuffer);
         const workbook = XLSX.read(data, { type: 'array' });
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+        // raw:false: anders worden gsm-nummers numeriek gelezen en valt de leidende 0 weg
+        const jsonData = XLSX.utils.sheet_to_json(worksheet, { defval: '', raw: false });
         if (!Array.isArray(jsonData) || jsonData.length === 0) return notify('Het Excel-bestand lijkt leeg te zijn of heeft geen herkenbare gegevens.', 'error');
 
         const keys = Object.keys(jsonData[0] as any);
@@ -161,7 +172,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               employeeId: findValue(['id', 'employee', 'personeel', 'nummer', 'code', 'nr'])?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
               password: findValue(['wachtwoord', 'password', 'pass', 'wacht', 'pw'])?.toString() || '',
               phone: findValue(['gsm', 'telefoon', 'phone', 'mobiel', 'gsm-nummer', 'tel'])?.toString().trim() || undefined,
-              email: findValue(['email', 'mail', 'e-mail', 'adres'])?.toString().trim() || undefined,
+              // géén 'adres' als patroon (matchte de straat-kolom) en eis een '@'
+              email: (() => { const v = findValue(['email', 'mail', 'e-mail'])?.toString().trim(); return v && v.includes('@') ? v : undefined; })(),
               isActive: true,
             };
           })
@@ -347,7 +359,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           </div>
           <div className="flex gap-3 pt-2">
             <Button variant="ghost" className="flex-1" onClick={() => setShowAddModal(false)}>Annuleren</Button>
-            <Button type="submit" variant="primary" className="flex-1">Toevoegen</Button>
+            <Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Toevoegen'}</Button>
           </div>
         </form>
       </Modal>
@@ -388,7 +400,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <button type="button" onClick={() => setEditingUser({ ...editingUser, isActive: editingUser.isActive === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.isActive !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-white rounded-full transition-all', editingUser.isActive !== false ? 'left-7' : 'left-1')} /></button>
               </div>
               <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin || 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
-              <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1">Opslaan</Button></div>
+              <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
             </form>
           </>
         )}

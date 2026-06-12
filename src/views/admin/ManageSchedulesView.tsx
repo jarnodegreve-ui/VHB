@@ -9,7 +9,7 @@ import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 import { Input } from '../../components/Input';
 import { ScheduleView } from '../ScheduleView';
 
-export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | Promise<void>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
+export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
   const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
@@ -96,7 +96,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     };
   }, [matrixPreview, shifts]);
 
-  const handleImport = () => {
+  const handleImport = async () => {
     if (!canAdminOverride) {
       notify('JSON fallback-import is alleen beschikbaar voor admins.', 'error');
       return;
@@ -104,9 +104,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     try {
       const data = JSON.parse(jsonInput);
       if (Array.isArray(data)) {
-        onSave(data);
-        setJsonInput('');
-        notify('Planning succesvol geïmporteerd!', 'success');
+        // Minimale shape-check: zonder deze kon [{}] 'succesvol' importeren.
+        const invalid = data.find((s: any) => !s || !s.id || !s.date || !s.driverId);
+        if (invalid !== undefined) {
+          notify('Ongeldig formaat: elke dienst heeft minstens id, date en driverId nodig.', 'error');
+          return;
+        }
+        // Wacht op de échte save; App toont zelf de succes-/fouttoast.
+        // De oude flow toastte 'succesvol' vóór (en ongeacht) het opslaan.
+        const ok = await Promise.resolve(onSave(data));
+        if (ok !== false) setJsonInput('');
       } else {
         notify('Ongeldig formaat. Zorg dat het een array van diensten is.', 'error');
       }
@@ -273,9 +280,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     }
     try {
       setIsClearingPlanning(true);
-      await Promise.resolve(onSave([]));
-      notify('Actieve planning gewist.', 'success');
-      setConfirmClearOpen(false);
+      // App toast zelf succes/fout — geen valse 'gewist'-melding meer
+      // wanneer de server de wipe weigert.
+      const ok = await Promise.resolve(onSave([]));
+      if (ok !== false) setConfirmClearOpen(false);
     } catch (error: any) {
       notify(`Planning wissen mislukt: ${error.message || 'Onbekende fout'}`, 'error');
     } finally {
@@ -545,28 +553,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         </div>
         ) : null}
       </div>
-
-      {canAdminOverride ? (
-      <div className="surface-card p-6 md:p-8 rounded-3xl">
-        <AdminSubsectionHeader
-          eyebrow="Correcties"
-          title="Handmatig toevoegen"
-          description="Gebruik dit alleen voor uitzonderingen of snelle correcties buiten de matrixflow."
-        />
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-5 md:gap-6">
-          <Input label="Datum" type="date" />
-          <Input label="Chauffeur" type="select" options={[...users].filter(u => u.role === 'chauffeur' && u.isActive !== false).sort((a, b) => a.name.localeCompare(b.name)).map(u => ({ label: u.name, value: u.id }))} />
-          <Input label="Start Tijd" type="time" />
-          <Input label="Eind Tijd" type="time" />
-          <Input label="Dienst" type="text" placeholder="Bijv. 12" />
-        </div>
-        <div className="mt-6 flex justify-end">
-          <Button variant="success" size="lg" className="w-full sm:w-auto">
-            Dienst Opslaan
-          </Button>
-        </div>
-      </div>
-      ) : null}
 
       <div className="surface-card p-6 md:p-8 rounded-3xl">
         <AdminSubsectionHeader

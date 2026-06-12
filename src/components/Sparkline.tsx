@@ -1,3 +1,4 @@
+import { useId } from 'react';
 /**
  * Sparkline — kleine inline-SVG trendlijn voor KPI-tegels.
  * Lichtgewicht, geen chart-library nodig. Toont een 30-day trend.
@@ -21,6 +22,9 @@ export function Sparkline({
   strokeWidth?: number;
   className?: string;
 }) {
+  // SVG-ids zijn document-globaal: een gedeeld id liet alle sparklines de
+  // gradient-kleur van de eerste instantie gebruiken.
+  const gradientId = useId();
   if (data.length < 2) return null;
 
   const max = Math.max(...data);
@@ -55,12 +59,12 @@ export function Sparkline({
       aria-hidden="true"
     >
       <defs>
-        <linearGradient id="sparkline-fill" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity={fillOpacity} />
           <stop offset="100%" stopColor={color} stopOpacity={0} />
         </linearGradient>
       </defs>
-      <path d={fillD} fill="url(#sparkline-fill)" />
+      <path d={fillD} fill={`url(#${gradientId})`} />
       <path
         d={pathD}
         fill="none"
