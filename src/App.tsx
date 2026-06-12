@@ -172,11 +172,24 @@ export default function App() {
   const loadingCountRef = useRef(0);
   const beginLoading = () => {
     loadingCountRef.current += 1;
-    beginLoading();
+    setIsLoading(true);
   };
   const endLoading = () => {
     loadingCountRef.current = Math.max(0, loadingCountRef.current - 1);
-    if (loadingCountRef.current === 0) endLoading();
+    if (loadingCountRef.current === 0) setIsLoading(false);
+  };
+  // Vangrail tegen dataverlies: het write-model POST telkens de volledige
+  // collectie — opslaan vanuit een nooit-geladen staat zou de server alle
+  // "ontbrekende" records laten verwijderen. Een collectie is pas
+  // beschrijfbaar nadat haar GET aantoonbaar geslaagd is.
+  const loadedCollectionsRef = useRef<Set<string>>(new Set());
+  const markCollectionLoaded = (key: string) => {
+    loadedCollectionsRef.current.add(key);
+  };
+  const guardCollectionLoaded = (key: string, label: string): boolean => {
+    if (loadedCollectionsRef.current.has(key)) return true;
+    showToast(`${label} is nog niet geladen — opslaan is geblokkeerd om dataverlies te voorkomen. Vernieuw de pagina en probeer het opnieuw.`, 'error');
+    return false;
   };
   // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
   // verwijderde dan twee meldingen tegelijk).
@@ -346,6 +359,7 @@ export default function App() {
         setRecoveryMode(false);
         setCurrentUser(null);
         initializedUserIdRef.current = null;
+        loadedCollectionsRef.current.clear();
         setUsers([]);
         setShifts([]);
         setDiversions([]);
@@ -490,7 +504,10 @@ export default function App() {
     try {
       const response = await apiFetch('/api/updates', {}, accessToken);
       const data = await response.json();
-      if (data && Array.isArray(data)) setUpdates(data);
+      if (data && Array.isArray(data)) {
+        setUpdates(data);
+        markCollectionLoaded('updates');
+      }
     } catch (error) {
       console.error('Error fetching updates:', error);
       showToast('Kon de updates niet laden.', 'error');
@@ -498,6 +515,7 @@ export default function App() {
   };
 
   const saveUpdates = async (newUpdates: Update[]) => {
+    if (!guardCollectionLoaded('updates', 'De updates zijn')) return false;
     try {
       const response = await apiFetch('/api/updates', {
         method: 'POST',
@@ -544,7 +562,10 @@ export default function App() {
     try {
       const response = await apiFetch('/api/swaps', {}, accessToken);
       const data = await response.json();
-      if (data && Array.isArray(data)) setSwaps(data);
+      if (data && Array.isArray(data)) {
+        setSwaps(data);
+        markCollectionLoaded('swaps');
+      }
     } catch (error) {
       console.error('Error fetching swaps:', error);
       showToast('Kon de dienstruilen niet laden.', 'error');
@@ -552,6 +573,7 @@ export default function App() {
   };
 
   const saveSwaps = async (newSwaps: SwapRequest[]) => {
+    if (!guardCollectionLoaded('swaps', 'De dienstruilen zijn')) return;
     try {
       const response = await apiFetch('/api/swaps', {
         method: 'POST',
@@ -577,7 +599,10 @@ export default function App() {
     try {
       const response = await apiFetch('/api/leave', {}, accessToken);
       const data = await response.json();
-      if (data && Array.isArray(data)) setLeaveRequests(data);
+      if (data && Array.isArray(data)) {
+        setLeaveRequests(data);
+        markCollectionLoaded('leave');
+      }
     } catch (error) {
       console.error('Error fetching leave:', error);
       showToast('Kon de verlofaanvragen niet laden.', 'error');
@@ -600,6 +625,7 @@ export default function App() {
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setPlanningCodes(data);
+        markCollectionLoaded('planningCodes');
       }
     } catch (error) {
       console.error('Error fetching planning codes:', error);
@@ -644,6 +670,7 @@ export default function App() {
   };
 
   const savePlanningCodes = async (newCodes: PlanningCode[]) => {
+    if (!guardCollectionLoaded('planningCodes', 'De planningscodes zijn')) return false;
     try {
       beginLoading();
       const response = await apiFetch('/api/planning-codes', {
@@ -697,6 +724,7 @@ export default function App() {
   const pendingSwapsCount = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted').length;
 
   const saveLeave = async (newLeave: LeaveRequest[]) => {
+    if (!guardCollectionLoaded('leave', 'De verlofaanvragen zijn')) return;
     try {
       const response = await apiFetch('/api/leave', {
         method: 'POST',
@@ -725,6 +753,7 @@ export default function App() {
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setServices(data);
+        markCollectionLoaded('services');
       }
     } catch (error) {
       console.error('Error fetching services:', error);
@@ -734,11 +763,15 @@ export default function App() {
     }
   };
 
-  const saveServices = async (newServices: Service[]) => {
+  const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean }) => {
+    if (!guardCollectionLoaded('services', 'Het dienstoverzicht is')) return;
     try {
       beginLoading();
       const response = await apiFetch('/api/services', {
         method: 'POST',
+        // Import vervangt legitiem de hele collectie; de header laat de
+        // server z'n bulk-wipe-vangrail voor deze save overslaan.
+        headers: opts?.bulkReplace ? { 'x-bulk-replace': '1' } : undefined,
         body: JSON.stringify(newServices),
       });
       if (response.ok) {
@@ -765,6 +798,7 @@ export default function App() {
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setUsers(data);
+        markCollectionLoaded('users');
       }
     } catch (error) {
       console.error('Error fetching users:', error);
@@ -773,6 +807,7 @@ export default function App() {
   };
 
   const saveUsers = async (newUsers: Array<User & { password?: string }>) => {
+    if (!guardCollectionLoaded('users', 'De gebruikerslijst is')) return false;
     try {
       beginLoading();
       const response = await apiFetch('/api/users', {
@@ -830,6 +865,7 @@ export default function App() {
       // `length > 0` de oude/mock-data staan; nu enkel guarden op array-vorm.
       if (Array.isArray(data)) {
         setShifts(data);
+        markCollectionLoaded('planning');
       }
     } catch (error) {
       console.error('Error fetching planning:', error);
@@ -840,6 +876,7 @@ export default function App() {
   };
 
   const savePlanning = async (newShifts: Shift[]): Promise<boolean> => {
+    if (!guardCollectionLoaded('planning', 'De planning is')) return false;
     try {
       beginLoading();
       const response = await apiFetch('/api/planning', {
@@ -873,6 +910,7 @@ export default function App() {
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setDiversions(data);
+        markCollectionLoaded('diversions');
       }
     } catch (error) {
       console.error('Error fetching diversions:', error);
@@ -882,6 +920,7 @@ export default function App() {
   };
 
   const saveDiversions = async (newDiversions: Diversion[]) => {
+    if (!guardCollectionLoaded('diversions', 'De omleidingen zijn')) return;
     try {
       beginLoading();
       const response = await apiFetch('/api/diversions', {

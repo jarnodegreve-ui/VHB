@@ -880,6 +880,29 @@ app.get("/api/planning-codes", authenticate, requireRole("planner", "admin"), as
   }
 });
 
+/** Vangrail tegen bulk-wipes: het write-model vervangt de hele collectie,
+ *  dus een client die opslaat vanuit een niet-geladen staat zou álles als
+ *  "verwijderd" aanbieden. Een POST die meer dan de helft van een bestaande
+ *  collectie (≥ 5 records) schrapt, is vrijwel zeker zo'n vergissing.
+ *  Retourneert het aantal te verwijderen records als de save geblokkeerd
+ *  moet worden, anders null. */
+const detectMassDelete = (
+  previous: any[],
+  incoming: any[],
+  idOf: (x: any) => string = (x) => String(x?.id),
+): number | null => {
+  if (previous.length < 5) return null;
+  const incomingIds = new Set(incoming.map(idOf));
+  const removed = previous.filter((p) => !incomingIds.has(idOf(p))).length;
+  return removed > previous.length / 2 ? removed : null;
+};
+
+const massDeleteResponse = (res: any, removed: number, total: number, label: string) =>
+  res.status(409).json({
+    error: "Bulk-verwijdering geblokkeerd",
+    details: `Deze opslag zou ${removed} van de ${total} ${label} verwijderen. Vermoedelijk was je scherm niet volledig geladen — vernieuw de pagina en probeer opnieuw, of verwijder in kleinere stappen.`,
+  });
+
 app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const codes = req.body;
@@ -888,6 +911,8 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
     }
 
     const previousCodes = await getPlanningCodesData();
+    const codesRemoved = detectMassDelete(previousCodes, codes, (c) => String(c?.code));
+    if (codesRemoved !== null) return massDeleteResponse(res, codesRemoved, previousCodes.length, "planningscodes");
     await savePlanningCodesData(codes);
     await logActivity(
       req,
@@ -930,6 +955,8 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
     const newData = req.body;
     if (Array.isArray(newData)) {
       const previousUsers = await getUsersData();
+      const usersRemoved = detectMassDelete(previousUsers, newData);
+      if (usersRemoved !== null) return massDeleteResponse(res, usersRemoved, previousUsers.length, "gebruikers");
       await saveUsersData(newData);
       await logActivity(
         req,
@@ -976,6 +1003,8 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
     const newData = req.body;
     if (Array.isArray(newData)) {
       const previousDiversions = await getDiversionsData();
+      const diversionsRemoved = detectMassDelete(previousDiversions, newData);
+      if (diversionsRemoved !== null) return massDeleteResponse(res, diversionsRemoved, previousDiversions.length, "omleidingen");
       await saveDiversionsData(newData);
       await logActivity(
         req,
@@ -1065,6 +1094,13 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
     const newData = req.body;
     if (Array.isArray(newData)) {
       const previousServices = await getServicesData();
+      // De import-flow in dienstoverzicht-beheer vervangt legitiem de hele
+      // collectie (verse ids per upload) en meldt dat expliciet via header.
+      const isBulkReplace = req.headers["x-bulk-replace"] === "1";
+      if (!isBulkReplace) {
+        const servicesRemoved = detectMassDelete(previousServices, newData);
+        if (servicesRemoved !== null) return massDeleteResponse(res, servicesRemoved, previousServices.length, "diensten");
+      }
       await saveServicesData(newData);
 
       // Global summary entry (zoals voorheen)
@@ -1118,6 +1154,8 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
       return res.status(400).json({ error: "Invalid data format. Expected an array." });
     }
     const previousUpdates = await getUpdatesData();
+    const updatesRemoved = detectMassDelete(previousUpdates, newData);
+    if (updatesRemoved !== null) return massDeleteResponse(res, updatesRemoved, previousUpdates.length, "updates");
     const arr = newData;
     await saveUpdatesData(newData);
     await logActivity(
