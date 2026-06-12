@@ -133,7 +133,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave }: { user:
     const returnCode = returnPick.slice(sep + 1);
 
     const newSwap: SwapRequest = {
-      id: Date.now().toString(),
+      id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       shiftId: selectedShift,
       requesterId: user.id,
       targetDriverId: selectedTargetDriver,

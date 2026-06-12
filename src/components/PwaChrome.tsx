@@ -73,7 +73,11 @@ export function InstallPrompt() {
     if (typeof window === 'undefined') return;
     // Al geïnstalleerd? Dan niets tonen.
     if (window.matchMedia?.('(display-mode: standalone)').matches) return;
-    if (localStorage.getItem(INSTALL_DISMISS_KEY) === '1') return;
+    try {
+      if (localStorage.getItem(INSTALL_DISMISS_KEY) === '1') return;
+    } catch {
+      // localStorage geblokkeerd — prompt dan gewoon tonen
+    }
 
     const onPrompt = (e: Event) => {
       e.preventDefault(); // voorkom de default mini-infobar

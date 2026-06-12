@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, CheckCircle, X } from 'lucide-react';
@@ -20,6 +20,12 @@ export function ChangePasswordModal({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Succes-timer opruimen: zonder cleanup sloot een heropende modal na
+  // <1,8s vanzelf weer (oude timer vuurde alsnog).
+  const closeTimerRef = useRef<number | null>(null);
+  useEffect(() => () => {
+    if (closeTimerRef.current !== null) window.clearTimeout(closeTimerRef.current);
+  }, []);
 
   const reset = () => {
     setCurrentPassword('');
@@ -84,7 +90,7 @@ export function ChangePasswordModal({
 
     setSuccess(true);
     setIsSubmitting(false);
-    setTimeout(handleClose, 1800);
+    closeTimerRef.current = window.setTimeout(handleClose, 1800);
   };
 
   if (typeof document === 'undefined') return null;

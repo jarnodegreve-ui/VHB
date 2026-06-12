@@ -336,7 +336,7 @@ export function DashboardView({
           })()}
         </PremiumPanel>
 
-        <PremiumPanel icon={<AlertTriangle size={16} />} iconBg="bg-oker-500" title="Omleidingen" subtitle={`${newestDiversions.length} actief`} accent="oker">
+        <PremiumPanel icon={<AlertTriangle size={16} />} iconBg="bg-oker-500" title="Omleidingen" subtitle={`${diversions.length} actief`} accent="oker">
           {newestDiversions.length > 0 ? (
             <div className="space-y-2">
               {newestDiversions.map((div) => (

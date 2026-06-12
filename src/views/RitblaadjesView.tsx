@@ -68,12 +68,21 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   const canEdit = currentUser.role === 'admin';
   const canDelete = currentUser.role === 'admin';
 
+  // Unmount-guard: fetchCurrent kan nog lopen terwijl de gebruiker al
+  // weggenavigeerd is — geen setState/fouttoast meer op een andere pagina.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
+  }, []);
+
   const fetchCurrent = async () => {
     setIsLoading(true);
     try {
       const response = await fetch('/api/ritblaadje', { headers: await getSupabaseAuthHeaders() });
       if (!response.ok) throw new Error(`Server antwoordde ${response.status}`);
       const data = await response.json();
+      if (!mountedRef.current) return;
       setCurrent(data);
       setFromCache(false);
       // Cache de metadata + sync-tijd voor offline-fallback.
@@ -87,6 +96,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         // localStorage geblokkeerd — geen fallback, geen ramp
       }
     } catch (error: any) {
+      if (!mountedRef.current) return;
       // Offline / server onbereikbaar → val terug op de gecachte metadata.
       let recovered = false;
       try {
@@ -105,7 +115,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         setCurrent(null);
       }
     } finally {
-      setIsLoading(false);
+      if (mountedRef.current) setIsLoading(false);
     }
   };
 

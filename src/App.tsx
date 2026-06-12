@@ -42,7 +42,7 @@ import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveReques
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn } from './lib/ui';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
-import { isoDate } from './lib/availability';
+import { addDays, isoDate } from './lib/availability';
 import { ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
@@ -167,6 +167,20 @@ export default function App() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const isPasswordRecoveryRef = useRef(false);
+  // Overlay-logica: meerdere fetches kunnen parallel lopen — een boolean
+  // zette de overlay uit zodra de éérste klaar was. Teller fixt dat.
+  const loadingCountRef = useRef(0);
+  const beginLoading = () => {
+    loadingCountRef.current += 1;
+    beginLoading();
+  };
+  const endLoading = () => {
+    loadingCountRef.current = Math.max(0, loadingCountRef.current - 1);
+    if (loadingCountRef.current === 0) endLoading();
+  };
+  // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
+  // verwijderde dan twee meldingen tegelijk).
+  const toastIdRef = useRef(0);
   // Dubbele-init-guard: bootstrap én het INITIAL_SESSION/SIGNED_IN-event
   // proberen allebei te initialiseren; per gebruiker doen we het één keer.
   const initializedUserIdRef = useRef<string | null>(null);
@@ -198,14 +212,14 @@ export default function App() {
   useRealtimeSync(!!session && !!currentUser, {
     refetchLeave: () => fetchLeave(),
     refetchSwaps: () => fetchSwaps(),
-    refetchDiversions: () => fetchDiversions(),
+    refetchDiversions: () => fetchDiversions(undefined, { silent: true }),
     refetchUpdates: () => fetchUpdates(),
     refetchPlanning: () => {
       // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
       const planningFilter = currentUser?.role === 'chauffeur'
         ? { driverId: String(currentUser.id) }
         : undefined;
-      fetchPlanning(undefined, planningFilter);
+      fetchPlanning(undefined, planningFilter, { silent: true });
       // Dekking beweegt mee met de planning (Operations Center).
       if (currentUser && currentUser.role !== 'chauffeur') {
         refreshCoverageGaps();
@@ -217,7 +231,12 @@ export default function App() {
   // (geen system-preference fallback meer — gebruikers die dark willen
   // klikken zelf de toggle).
   useEffect(() => {
-    const stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-theme') : null;
+    let stored: string | null = null;
+    try {
+      stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-theme') : null;
+    } catch {
+      // localStorage geblokkeerd (privacy-modus) — val terug op licht.
+    }
     const initial: 'light' | 'dark' = stored === 'dark' || stored === 'light' ? stored : 'light';
     setTheme(initial);
     if (typeof document !== 'undefined') {
@@ -229,7 +248,11 @@ export default function App() {
     setTheme((current) => {
       const next = current === 'light' ? 'dark' : 'light';
       if (typeof window !== 'undefined') {
-        window.localStorage.setItem('vhb-theme', next);
+        try {
+          window.localStorage.setItem('vhb-theme', next);
+        } catch {
+          // opslag geblokkeerd — thema geldt dan alleen voor deze sessie
+        }
         document.documentElement.classList.toggle('dark', next === 'dark');
       }
       return next;
@@ -241,7 +264,7 @@ export default function App() {
   };
 
   const showToast = (message: string, tone: Toast['tone'] = 'info') => {
-    const id = Date.now() + Math.floor(Math.random() * 1000);
+    const id = ++toastIdRef.current;
     setToasts((current) => [...current, { id, message, tone }]);
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
@@ -250,6 +273,13 @@ export default function App() {
 
   useEffect(() => {
     let isMounted = true;
+
+    // Zonder client géén listener registreren: de destructure hieronder zou
+    // op undefined crashen vóór het config-foutscherm ooit rendert.
+    if (!supabase) {
+      setAuthReady(true);
+      return;
+    }
 
     const bootstrap = async () => {
       if (!supabase) {
@@ -452,6 +482,7 @@ export default function App() {
     } catch (error) {
       console.error('Error initializing app:', error);
       setIsInitialLoad(false);
+      showToast('Kon je profiel niet laden. Vernieuw de pagina of log opnieuw in.', 'error');
     }
   };
 
@@ -497,9 +528,11 @@ export default function App() {
           recipients: users.filter(u => u.email)
         }),
       });
-      const data = await response.json();
-      if (data.success) {
+      const data = await response.json().catch(() => ({} as any));
+      if (response.ok && data.success) {
         showToast(data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails succesvol verzonden naar alle chauffeurs!', 'success');
+      } else {
+        showToast(data.details || data.error || 'Verzenden van de e-mailupdate is mislukt.', 'error');
       }
     } catch (error) {
       console.error('Error sending urgent email:', error);
@@ -588,7 +621,7 @@ export default function App() {
   const refreshCoverageGaps = async () => {
     try {
       const from = isoDate(new Date());
-      const to = isoDate(new Date(Date.now() + 6 * 86400000));
+      const to = isoDate(addDays(new Date(), 6));
       const res = await fetchCoverageGaps(from, to);
       setCoverageDays(res.days);
     } catch (error) {
@@ -612,7 +645,7 @@ export default function App() {
 
   const savePlanningCodes = async (newCodes: PlanningCode[]) => {
     try {
-      setIsLoading(true);
+      beginLoading();
       const response = await apiFetch('/api/planning-codes', {
         method: 'POST',
         body: JSON.stringify(newCodes),
@@ -632,7 +665,7 @@ export default function App() {
       showToast(`Opslaan van planningscodes is mislukt: ${error.message}`, 'error');
       return false;
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
   };
 
@@ -687,7 +720,7 @@ export default function App() {
 
   const fetchServices = async (accessToken = session?.access_token) => {
     try {
-      setIsLoading(true);
+      beginLoading();
       const response = await apiFetch('/api/services', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) {
@@ -697,13 +730,13 @@ export default function App() {
       console.error('Error fetching services:', error);
       showToast('Kon het dienstoverzicht niet laden.', 'error');
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
   };
 
   const saveServices = async (newServices: Service[]) => {
     try {
-      setIsLoading(true);
+      beginLoading();
       const response = await apiFetch('/api/services', {
         method: 'POST',
         body: JSON.stringify(newServices),
@@ -722,7 +755,7 @@ export default function App() {
       console.error('Error saving services:', error);
       showToast('Opslaan van diensten is mislukt.', 'error');
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
   };
 
@@ -741,7 +774,7 @@ export default function App() {
 
   const saveUsers = async (newUsers: Array<User & { password?: string }>) => {
     try {
-      setIsLoading(true);
+      beginLoading();
       const response = await apiFetch('/api/users', {
         method: 'POST',
         body: JSON.stringify(newUsers),
@@ -776,13 +809,13 @@ export default function App() {
       showToast('Fout bij het opslaan van gebruikers: ' + error.message, 'error');
       return false;
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
   };
 
-  const fetchPlanning = async (accessToken = session?.access_token, filters?: { driverId?: string; month?: string }) => {
+  const fetchPlanning = async (accessToken = session?.access_token, filters?: { driverId?: string; month?: string }, opts?: { silent?: boolean }) => {
     try {
-      setIsLoading(true);
+      if (!opts?.silent) beginLoading();
       // Chauffeurs krijgen alleen hun eigen shifts — 50x minder data
       // dan het volledige rooster. Planner/admin krijgt alles.
       const params = new URLSearchParams();
@@ -802,13 +835,13 @@ export default function App() {
       console.error('Error fetching planning:', error);
       showToast('Kon de planning niet laden. Probeer te vernieuwen.', 'error');
     } finally {
-      setIsLoading(false);
+      if (!opts?.silent) endLoading();
     }
   };
 
-  const savePlanning = async (newShifts: Shift[]) => {
+  const savePlanning = async (newShifts: Shift[]): Promise<boolean> => {
     try {
-      setIsLoading(true);
+      beginLoading();
       const response = await apiFetch('/api/planning', {
         method: 'POST',
         body: JSON.stringify(newShifts),
@@ -819,21 +852,23 @@ export default function App() {
           await fetchActivityLog();
         }
         showToast('Planning succesvol opgeslagen.', 'success');
-      } else {
-        const err = await response.json().catch(() => ({} as any));
-        showToast(err.details || err.error || 'Opslaan van planning is mislukt.', 'error');
+        return true;
       }
+      const err = await response.json().catch(() => ({} as any));
+      showToast(err.details || err.error || 'Opslaan van planning is mislukt.', 'error');
+      return false;
     } catch (error) {
       console.error('Error saving planning:', error);
       showToast('Opslaan van planning is mislukt.', 'error');
+      return false;
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
   };
 
-  const fetchDiversions = async (accessToken = session?.access_token) => {
+  const fetchDiversions = async (accessToken = session?.access_token, opts?: { silent?: boolean }) => {
     try {
-      setIsLoading(true);
+      if (!opts?.silent) beginLoading();
       const response = await apiFetch('/api/diversions', {}, accessToken);
       const data = await response.json();
       if (data && Array.isArray(data)) {
@@ -842,13 +877,13 @@ export default function App() {
     } catch (error) {
       console.error('Error fetching diversions:', error);
     } finally {
-      setIsLoading(false);
+      if (!opts?.silent) endLoading();
     }
   };
 
   const saveDiversions = async (newDiversions: Diversion[]) => {
     try {
-      setIsLoading(true);
+      beginLoading();
       const response = await apiFetch('/api/diversions', {
         method: 'POST',
         body: JSON.stringify(newDiversions),
@@ -867,7 +902,7 @@ export default function App() {
       console.error('Error saving diversions:', error);
       showToast('Opslaan van omleidingen is mislukt.', 'error');
     } finally {
-      setIsLoading(false);
+      endLoading();
     }
   };
 
@@ -905,6 +940,16 @@ export default function App() {
     } catch (error) {
       console.error('Error ending session:', error);
     } finally {
+      // Gedeeld toestel (depot-tablet): het stale-while-revalidate-rooster
+      // van deze gebruiker mag niet in Cache Storage achterblijven.
+      try {
+        if ('caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+      } catch {
+        // cache-API geblokkeerd — geen blocker voor uitloggen
+      }
       await supabase?.auth.signOut();
       setSession(null);
       setCurrentUser(null);
@@ -953,7 +998,28 @@ export default function App() {
   }
 
 
-  if (!session || !currentUser) {
+  if (!currentUser) {
+    // Wél een sessie maar (nog) geen profiel: toon een laadscherm met
+    // retry i.p.v. het loginformulier aan een al-ingelogde gebruiker
+    // (de 8s-watchdog kon hier anders een login-flits veroorzaken).
+    if (session) {
+      return (
+        <div className="login-bg-light min-h-screen flex flex-col items-center justify-center gap-5">
+          <img src="/vhb-logo.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-14 w-auto select-none" draggable={false} />
+          <div className="flex items-center gap-2.5 text-slate-500">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+            <span className="text-[13px] font-medium">Profiel laden…</span>
+          </div>
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+          >
+            Duurt het te lang? Vernieuw de pagina
+          </button>
+        </div>
+      );
+    }
     return <LoginView onLogin={handleLogin} />;
   }
 
@@ -1280,8 +1346,12 @@ export default function App() {
         <div
           className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
           onScroll={(e) => {
-            const next = (e.currentTarget.scrollTop ?? 0) > 8;
+            const top = e.currentTarget.scrollTop ?? 0;
+            const next = top > 8;
             setIsScrolled((current) => (current === next ? current : next));
+            // Parallax-laag: het window scrolt nooit (interne container),
+            // dus de --scroll-y-var moet hiér gezet worden.
+            document.documentElement.style.setProperty('--scroll-y', `${top}px`);
           }}
         >
           {/* Sticky topbar — full-width werkbalk met haarlijn-onderrand */}

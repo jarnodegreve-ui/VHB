@@ -47,6 +47,7 @@ import {
   savePlanningData,
   clearPlanningData,
   updateUserSessionMeta,
+  getShiftById,
   savePlanningMatrixHistoryEntry,
   savePlanningMatrixRows,
   saveServicesData,
@@ -220,10 +221,12 @@ app.get("/api/planning", authenticate, async (req, res) => {
 // (auto-update). De token is een HMAC over het user-id met een server-
 // secret — stateless, geen DB-kolom nodig. De feed bevat enkel de eigen
 // diensten (geen gevoelige data), maar behandel de URL als privé.
+// Bewust GEEN anon-key in de fallback-keten: die zit publiek in de
+// frontend-bundle en zou token-forging mogelijk maken zodra de service-
+// role-key ontbreekt.
 const CAL_SECRET =
   process.env.CALENDAR_FEED_SECRET ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  process.env.SUPABASE_ANON_KEY ||
   "vhb-portaal-calendar-fallback-secret";
 
 const calendarToken = (userId: string) =>
@@ -265,6 +268,11 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
       getUsersData(),
     ]);
     const user = users.find((u: any) => String(u.id) === userId);
+    // Gedeactiveerde/verwijderde medewerkers verliezen hun feed (de token
+    // is stateless en kan niet ingetrokken worden — dit is de check).
+    if (!user || user.isActive === false) {
+      return res.status(404).send("Not found");
+    }
     const events: IcsEvent[] = (shifts as any[]).map((s) => ({
       uid: `vhb-shift-${s.id}@vhb-portaal`,
       date: String(s.date),
@@ -331,6 +339,12 @@ app.get("/api/availability", authenticate, async (req, res) => {
     const to = typeof req.query.to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(req.query.to) ? req.query.to : undefined;
     if (!from || !to || from > to) {
       return res.status(400).json({ error: "Geef geldige from/to-datums (YYYY-MM-DD), met from <= to." });
+    }
+    // Expliciete fout i.p.v. stilletjes afkappen: een afgekapt antwoord
+    // leek compleet en gaf foute bezettingsbeelden.
+    const spanDays = Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86400000) + 1;
+    if (spanDays > 120) {
+      return res.status(400).json({ error: "Bereik te groot: maximaal 120 dagen per aanvraag." });
     }
 
     // Datums in [from, to] enumereren (guard van 120 dagen tegen runaway).
@@ -1203,6 +1217,18 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (next.decidedAt) {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
           }
+          // Eigendom: de aangeboden dienst moet van de aanvrager zelf zijn
+          // (anders kan je andermans dienst te ruil zetten) en de collega
+          // moet een bestaande, actieve gebruiker zijn.
+          const offeredShift = await getShiftById(String(next.shiftId ?? ""));
+          if (!offeredShift || String(offeredShift.driverId) !== selfId) {
+            return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen dienst te ruil aanbieden." });
+          }
+          const allUsersForCheck = await getUsersData();
+          const targetUser = allUsersForCheck.find((u: any) => String(u.id) === String(next.targetDriverId));
+          if (!targetUser || targetUser.isActive === false) {
+            return res.status(400).json({ error: "De gekozen collega bestaat niet (meer) of is inactief." });
+          }
         } else {
           // De aangeduide collega mag een aan hem/haar gerichte, openstaande
           // ruil accepteren (pending → accepted) of weigeren (pending → rejected).
@@ -1243,6 +1269,12 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         const prev = previousById.get(String(next.id));
         if (prev && prev.status === "pending" && next.status === "approved") {
           return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
+        }
+        // Bypass-gat: zonder deze check kon een planner het pending-record
+        // onder een NIEUW id met status 'approved' insturen en zo dezelfde
+        // regel omzeilen. Nieuwe records starten dus altijd als 'pending'.
+        if (!prev && next.status !== "pending") {
+          return res.status(403).json({ error: "Niet toegestaan: nieuwe wisselverzoeken starten als 'pending'." });
         }
       }
     }
@@ -1626,7 +1658,8 @@ app.delete("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Au
       return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
     }
 
-    const { data: existing } = await supabaseAdmin.from("ritblaadje").select("*").eq("id", "current").maybeSingle();
+    const { data: existing, error: selectError } = await supabaseAdmin.from("ritblaadje").select("*").eq("id", "current").maybeSingle();
+    if (selectError) throw selectError;
     if (!existing) return res.json({ success: true });
 
     const { error: removeError } = await supabaseAdmin.storage
