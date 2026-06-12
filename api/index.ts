@@ -45,6 +45,7 @@ import {
   saveLeaveData,
   savePlanningCodesData,
   savePlanningData,
+  clearPlanningData,
   savePlanningMatrixHistoryEntry,
   savePlanningMatrixRows,
   saveServicesData,
@@ -285,10 +286,20 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
   }
 });
 
-app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (req, res) => {
+app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
+      if (newData.length === 0) {
+        // Volledige wipe is een bewuste, zware actie ('Planning wissen'):
+        // alleen admin, en expliciet — nooit als bijwerking van een lege save.
+        if (req.appUser?.role !== "admin") {
+          return res.status(403).json({ error: "Alleen een admin kan de volledige planning wissen." });
+        }
+        await clearPlanningData();
+        await logActivity(req, "planning", "Planning gewist", "De volledige actieve planning is gewist.");
+        return res.json({ success: true, count: 0 });
+      }
       await savePlanningData(newData);
       await logActivity(
         req,

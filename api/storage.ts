@@ -103,8 +103,31 @@ export const savePlanningData = async (data: any) => {
   if (!Array.isArray(data)) {
     throw new Error("Ongeldige planning-data: een array van diensten verwacht.");
   }
+  // Volledige wipe gaat bewust NIET via dit pad (zie clearPlanningData +
+  // de admin-check in de handler) — een per ongeluk lege payload mag de
+  // planning nooit stil wissen.
   if (data.length === 0) return;
+  // Replace-semantiek: eerst upserten, daarna pas de ontbrekende rijen
+  // verwijderen. Faalt de delete, dan staan er hooguit extra rijen — nooit
+  // een (deels) lege tabel.
+  const incomingIds = new Set(data.map((s: any) => String(s.id)));
+  const { data: existing, error: fetchError } = await client.from('planning').select('id');
+  if (fetchError) throw fetchError;
   const { error } = await client.from('planning').upsert(data);
+  if (error) throw error;
+  const idsToDelete = (existing ?? [])
+    .map((row: any) => String(row.id))
+    .filter((id) => !incomingIds.has(id));
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('planning').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
+  }
+};
+
+/** Volledige planning wissen — alleen voor de expliciete admin-actie. */
+export const clearPlanningData = async () => {
+  const client = requireDb();
+  const { error } = await client.from('planning').delete().neq('id', '__never_match__');
   if (error) throw error;
 };
 
