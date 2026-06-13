@@ -1,9 +1,22 @@
-import { useEffect, useState } from 'react';
-import { Activity, Bug, DownloadCloud, FlaskConical } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Activity, Bug, DownloadCloud, FlaskConical, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
+
+const COLLECTION_LABELS: Record<string, string> = {
+  users: 'Gebruikers',
+  planning: 'Planning (diensten)',
+  services: 'Dienstoverzicht',
+  diversions: 'Omleidingen',
+  updates: 'Updates',
+  leave: 'Verlofaanvragen',
+  swaps: 'Dienstruilen',
+  planningCodes: 'Planningscodes',
+  planningMatrixRows: 'Planning-matrix',
+  coverageExpectations: 'Dekkingsverwachtingen',
+};
 
 const TEST_SHIFT_ID_PREFIX = 'test-shift-';
 
@@ -14,6 +27,70 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   const [isTesting, setIsTesting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [clientErrors, setClientErrors] = useState<Array<{ id: string | number; createdAt: string; message: string; source?: string; url?: string; userId?: string }> | null>(null);
+
+  // Restore-flow: bestand inlezen → preview tonen → bevestigen → toepassen.
+  const restoreInputRef = useRef<HTMLInputElement>(null);
+  const [pendingRestore, setPendingRestore] = useState<{ exportedAt?: string; collections: Record<string, any> } | null>(null);
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  const handleRestoreFile = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      if (!parsed?.collections || typeof parsed.collections !== 'object') {
+        notify('Dit lijkt geen geldig VHB-back-upbestand (geen "collections").', 'error');
+        return;
+      }
+      const users = parsed.collections.users;
+      if (Array.isArray(users) && !users.some((u: any) => u?.role === 'admin')) {
+        notify('Herstel geweigerd: deze back-up bevat geen admin-account.', 'error');
+        return;
+      }
+      setPendingRestore(parsed);
+      setRestoreConfirmOpen(true);
+    } catch {
+      notify('Kon het bestand niet lezen — is het een geldig JSON-back-upbestand?', 'error');
+    } finally {
+      if (restoreInputRef.current) restoreInputRef.current.value = '';
+    }
+  };
+
+  const applyRestore = async () => {
+    if (!pendingRestore) return;
+    try {
+      setIsRestoring(true);
+      const response = await fetch('/api/restore', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify(pendingRestore),
+      });
+      const data = await response.json().catch(() => ({} as any));
+      if (!response.ok) {
+        notify(data.details || data.error || `Herstellen mislukt (${response.status}).`, 'error');
+        return;
+      }
+      notify('Back-up hersteld. De pagina wordt herladen…', 'success');
+      // Alle collecties zijn vervangen — een harde reload is de eenvoudigste,
+      // betrouwbaarste manier om de hele app-state opnieuw op te bouwen.
+      setTimeout(() => window.location.reload(), 1200);
+    } catch {
+      notify('Herstellen is mislukt.', 'error');
+    } finally {
+      setIsRestoring(false);
+      setPendingRestore(null);
+    }
+  };
+
+  const restorePreview = pendingRestore
+    ? Object.entries(pendingRestore.collections)
+        .filter(([key]) => key in COLLECTION_LABELS)
+        .map(([key, value]) => ({
+          key,
+          label: COLLECTION_LABELS[key],
+          count: Array.isArray(value) ? value.length : (value && typeof value === 'object' ? Object.keys(value).length : 0),
+        }))
+    : [];
 
   const downloadBackup = async () => {
     try {
@@ -227,6 +304,30 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       </div>
 
+      <div className="surface-card p-8 rounded-3xl border-2 border-red-100">
+        <div className="flex items-start gap-4">
+          <div className="p-3 bg-red-500 text-white rounded-2xl shadow-lg shadow-red-500/20">
+            <UploadCloud size={24} />
+          </div>
+          <div className="flex-1">
+            <h4 className="text-slate-900 font-semibold text-lg mb-2">Herstellen vanuit back-up</h4>
+            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
+              Zet alle gegevens terug naar de inhoud van een back-upbestand. <strong className="text-red-600">Dit overschrijft de huidige planning, gebruikers, verlof, dienstruilen en meer</strong> — gebruik dit enkel om een verlies te herstellen. Je krijgt eerst een overzicht te zien en moet bevestigen. De audit-log en import-historiek blijven ongewijzigd.
+            </p>
+            <input
+              ref={restoreInputRef}
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={(e) => handleRestoreFile(e.target.files?.[0])}
+            />
+            <Button variant="secondary" onClick={() => restoreInputRef.current?.click()}>
+              Kies back-upbestand…
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-red-500 text-white rounded-2xl shadow-lg shadow-red-500/20">
@@ -297,6 +398,20 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           </div>
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={restoreConfirmOpen}
+        onClose={() => { setRestoreConfirmOpen(false); setPendingRestore(null); }}
+        onConfirm={applyRestore}
+        title="Back-up terugzetten?"
+        variant="danger"
+        confirmText={isRestoring ? 'Bezig…' : 'Ja, alles terugzetten'}
+        message={
+          pendingRestore
+            ? `Je staat op het punt de huidige gegevens te overschrijven met de back-up${pendingRestore.exportedAt ? ` van ${new Date(pendingRestore.exportedAt).toLocaleString()}` : ''}. Dit wordt teruggezet: ${restorePreview.map((p) => `${p.label} (${p.count})`).join(' · ')}. Deze actie kan niet ongedaan gemaakt worden — maak desgewenst eerst een verse download-back-up.`
+            : ''
+        }
+      />
     </PageShell>
   );
 }

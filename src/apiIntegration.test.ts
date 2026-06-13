@@ -118,6 +118,16 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.storedBackups.push({ filename, size: body.length });
       return { removedOld: 0 };
     },
+    restoreFromBackup: async (collections: any) => {
+      const summary: Record<string, number> = {};
+      for (const key of ['users', 'planning', 'services', 'diversions', 'updates', 'leave', 'swaps', 'planningCodes']) {
+        if (Array.isArray(collections[key])) {
+          (mem as any)[key] = collections[key];
+          summary[key] = collections[key].length;
+        }
+      }
+      return summary;
+    },
   };
 });
 
@@ -512,6 +522,43 @@ describe('push-notificaties', () => {
     const ruilPush = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe dienstruil-aanvraag');
     expect(ruilPush).toBeTruthy();
     expect(ruilPush!.userIds).toEqual(['4']);
+  });
+});
+
+describe('restore vanuit back-up', () => {
+  const backup = (collections: any) => ({ exportedAt: '2026-06-13T02:00:00Z', version: 1, collections });
+
+  it('is alleen toegankelijk voor admins (403 voor planner)', async () => {
+    const res = await api('POST', '/api/restore', { token: 'tok-planner', body: backup({ users: mem.users }) });
+    expect(res.status).toBe(403);
+  });
+
+  it('weigert een payload zonder collections (400)', async () => {
+    const res = await api('POST', '/api/restore', { token: 'tok-admin', body: { exportedAt: 'x', version: 1 } });
+    expect(res.status).toBe(400);
+  });
+
+  it('weigert een back-up zonder admin-account (400)', async () => {
+    const zonderAdmin = [{ id: '9', name: 'X', email: 'x@vhb.be', role: 'chauffeur', isActive: true }];
+    const res = await api('POST', '/api/restore', { token: 'tok-admin', body: backup({ users: zonderAdmin }) });
+    expect(res.status).toBe(400);
+    expect(res.json.error).toMatch(/admin/i);
+  });
+
+  it('zet de collecties terug en geeft een samenvatting', async () => {
+    const nieuweServices = mem.services.slice(0, 2);
+    const res = await api('POST', '/api/restore', {
+      token: 'tok-admin',
+      body: backup({ users: mem.users, services: nieuweServices, leave: [] }),
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    expect(res.json.summary.services).toBe(2);
+    expect(res.json.summary.leave).toBe(0);
+    expect(mem.services).toHaveLength(2);
+    expect(mem.leave).toHaveLength(0);
+    // De restore-actie staat in de audit-log.
+    expect(mem.activity.find((a) => a.action === 'Back-up hersteld')).toBeTruthy();
   });
 });
 
