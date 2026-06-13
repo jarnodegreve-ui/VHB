@@ -44,6 +44,7 @@ import {
   logClientError,
   getClientErrors,
   storeBackup,
+  restoreFromBackup,
   replacePlanningData,
   saveDiversionsData,
   saveLeaveData,
@@ -1126,6 +1127,41 @@ app.get("/api/cron/backup", async (req, res) => {
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
     res.status(500).json({ error: "Back-up mislukt", details: err?.message });
+  }
+});
+
+// Herstellen vanuit een back-up (admin). Overschrijft de operationele
+// collecties met de inhoud van een eerder gedownload/automatisch back-up-
+// bestand. Bewust een aparte, expliciete route (niet via de array-POSTs) —
+// de bulk-wipe-vangrails gelden hier dus niet: dit ís een bewuste volledige
+// vervanging, beveiligd met admin-rol + bevestiging in de UI.
+app.post("/api/restore", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = req.body ?? {};
+    const collections = body?.collections;
+    if (!collections || typeof collections !== "object" || Array.isArray(collections)) {
+      return res.status(400).json({ error: "Ongeldig back-up-bestand: 'collections' ontbreekt." });
+    }
+    // Minimale sanity-check: een geldige back-up heeft minstens gebruikers,
+    // en die set moet een admin bevatten (anders sluit je jezelf buiten).
+    if (Array.isArray(collections.users)) {
+      const hasAdmin = collections.users.some((u: any) => u?.role === "admin");
+      if (!hasAdmin) {
+        return res.status(400).json({ error: "Herstel geweigerd: de back-up bevat geen admin-account." });
+      }
+    }
+    const summary = await restoreFromBackup(collections);
+    const total = Object.values(summary).reduce((a, b) => a + b, 0);
+    await logActivity(
+      req,
+      "system",
+      "Back-up hersteld",
+      `Volledige restore uitgevoerd (${body.exportedAt ? `back-up van ${String(body.exportedAt).slice(0, 10)}` : "onbekende datum"}). ${total} records over ${Object.keys(summary).length} collecties teruggezet.`,
+    );
+    res.json({ success: true, summary });
+  } catch (err: any) {
+    console.error("Restore mislukt:", err?.message || err);
+    res.status(500).json({ error: "Herstellen is mislukt", details: err?.message });
   }
 });
 

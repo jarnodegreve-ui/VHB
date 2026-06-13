@@ -1263,3 +1263,91 @@ export const saveCoverageExpectations = async (map: Record<string, string[]>) =>
   const { error: insertError } = await client.from('coverage_expectations').insert(rows);
   if (insertError) throw insertError;
 };
+
+// --- Restore vanuit een back-up-bestand ---
+
+export type RestorableCollections = {
+  users?: any[];
+  planning?: any[];
+  services?: any[];
+  diversions?: any[];
+  updates?: any[];
+  leave?: any[];
+  swaps?: any[];
+  planningCodes?: any[];
+  planningMatrixRows?: any[];
+  coverageExpectations?: Record<string, string[]>;
+};
+
+/** De collecties die een restore overschrijft. De audit-log
+ *  (activityLog) en de import-historiek blijven bewust ongemoeid: dat is
+ *  geschiedenis, geen state — anders zou de restore z'n eigen spoor wissen. */
+export const RESTORABLE_KEYS: Array<keyof RestorableCollections> = [
+  'users', 'planning', 'services', 'diversions', 'updates',
+  'leave', 'swaps', 'planningCodes', 'planningMatrixRows', 'coverageExpectations',
+];
+
+/**
+ * Zet alle operationele collecties terug naar de inhoud van een back-up.
+ * Volgorde bewust: eerst users (de min-1-admin-vangrail mag niet door een
+ * lege set vallen), dan de rest. Per collectie wordt vervangen via dezelfde
+ * save-paden als de gewone flows. Geeft per collectie het aantal records terug.
+ */
+export const restoreFromBackup = async (collections: RestorableCollections): Promise<Record<string, number>> => {
+  const summary: Record<string, number> = {};
+
+  if (Array.isArray(collections.users)) {
+    await saveUsersData(collections.users);
+    summary.users = collections.users.length;
+  }
+  if (Array.isArray(collections.planning)) {
+    // Planning wordt rechtstreeks opgeslagen (geen public/db-conversie).
+    // Niet-leeg → replace-semantiek; leeg → bewust volledig wissen (restore
+    // is een expliciete, bevestigde admin-actie, dus faithful terugzetten).
+    if (collections.planning.length > 0) await savePlanningData(collections.planning);
+    else await clearPlanningData();
+    summary.planning = collections.planning.length;
+  }
+  if (Array.isArray(collections.services)) {
+    await saveServicesData(collections.services);
+    summary.services = collections.services.length;
+  }
+  if (Array.isArray(collections.diversions)) {
+    await saveDiversionsData(collections.diversions);
+    summary.diversions = collections.diversions.length;
+  }
+  if (Array.isArray(collections.updates)) {
+    await saveUpdatesData(collections.updates);
+    summary.updates = collections.updates.length;
+  }
+  if (Array.isArray(collections.planningCodes)) {
+    await savePlanningCodesData(collections.planningCodes as PlanningCodeRecord[]);
+    summary.planningCodes = collections.planningCodes.length;
+  }
+  if (Array.isArray(collections.leave)) {
+    const existing = await getLeaveData();
+    const keep = new Set(collections.leave.map((l: any) => String(l.id)));
+    const idsToDelete = existing.map((l) => String(l.id)).filter((id) => !keep.has(id));
+    await saveLeaveData(collections.leave, idsToDelete);
+    summary.leave = collections.leave.length;
+  }
+  if (Array.isArray(collections.swaps)) {
+    const existing = await getSwapsData();
+    const keep = new Set(collections.swaps.map((s: any) => String(s.id)));
+    const idsToDelete = existing.map((s) => String(s.id)).filter((id) => !keep.has(id));
+    await saveSwapsData(collections.swaps, idsToDelete);
+    summary.swaps = collections.swaps.length;
+  }
+  // Matrix-rijen alleen terugzetten als er iets in zit (de save weigert een
+  // lege set om dataverlies te voorkomen).
+  if (Array.isArray(collections.planningMatrixRows) && collections.planningMatrixRows.length > 0) {
+    await savePlanningMatrixRows(collections.planningMatrixRows as PlanningMatrixRow[]);
+    summary.planningMatrixRows = collections.planningMatrixRows.length;
+  }
+  if (collections.coverageExpectations && typeof collections.coverageExpectations === 'object') {
+    await saveCoverageExpectations(collections.coverageExpectations);
+    summary.coverageExpectations = Object.keys(collections.coverageExpectations).length;
+  }
+
+  return summary;
+};

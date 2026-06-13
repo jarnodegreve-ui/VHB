@@ -83,7 +83,8 @@ export type ActivityCategory =
   | "updates"
   | "auth"
   | "leave"
-  | "swaps";
+  | "swaps"
+  | "system";
 
 export type ActivityEntityType =
   | "user"
