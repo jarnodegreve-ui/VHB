@@ -36,6 +36,7 @@ import {
   Moon,
   Sun,
   ShieldCheck,
+  BarChart3,
   BellRing,
   BellOff
 } from 'lucide-react';
@@ -77,6 +78,7 @@ import { RitblaadjesView } from './views/RitblaadjesView';
 import { CapacityView } from './views/CapacityView';
 import { CoverageView } from './views/CoverageView';
 import { ComplianceView } from './views/admin/ComplianceView';
+import { ReportsView } from './views/admin/ReportsView';
 import { analyzeCompliance } from './lib/compliance';
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
@@ -99,6 +101,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'bezetting',
     'dekking',
     'rusttijden',
+    'rapportage',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -121,6 +124,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'bezetting',
     'dekking',
     'rusttijden',
+    'rapportage',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -1375,6 +1379,12 @@ export default function App() {
                 badge={complianceViolations}
               />
               <NavItem
+                icon={<BarChart3 size={18} />}
+                label="Rapportage"
+                active={currentView === 'rapportage'}
+                onClick={() => { setCurrentView('rapportage'); setIsSidebarOpen(false); }}
+              />
+              <NavItem
                 icon={<Calendar size={18} />}
                 label="Verlofbeheer"
                 active={currentView === 'verlof-beheer'}
@@ -1651,6 +1661,7 @@ export default function App() {
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <CoverageView />}
               {resolvedCurrentView === 'rusttijden' && <ComplianceView shifts={shifts} users={users} />}
+              {resolvedCurrentView === 'rapportage' && <ReportsView shifts={shifts} leaveRequests={leaveRequests} users={users} />}
               {resolvedCurrentView === 'verlof-kalender' && <VerlofKalenderView users={users} leaveRequests={leaveRequests} />}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
                 <Suspense fallback={<ViewLoader />}>
