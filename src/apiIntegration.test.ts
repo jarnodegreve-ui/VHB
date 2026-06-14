@@ -11,11 +11,21 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
 import type { AddressInfo } from 'node:net';
 
+// Dynamisch geladen ná de env-set hieronder (statische imports worden
+// gehoist en zouden rateLimit.ts met de default-limiet laden vóór
+// RATE_LIMIT_MAX gezet is — dezelfde reden waarom de app dynamisch importeert).
+let resetAllRateLimiters: () => void;
+let invalidateUsersCache: () => void;
+
 // Vóór de import van de app: voorkom dat index.ts zelf op poort 3000 gaat
 // luisteren of Vite-middleware start.
 process.env.VERCEL = '1';
 process.env.NODE_ENV = 'production';
 process.env.CRON_SECRET = 'test-cron-secret';
+// Lagere limiet zodat de 429-test snel triggert; per test resetten we de
+// telstand in beforeEach, dus geen overloop tussen testen.
+process.env.RATE_LIMIT_MAX = '50';
+process.env.RATE_LIMIT_ANON_MAX = '50';
 
 const mem = vi.hoisted(() => ({
   users: [] as any[],
@@ -136,6 +146,8 @@ let server: ReturnType<typeof import('express')['application']['listen']> | any;
 
 beforeAll(async () => {
   const app = (await import('../api/index')).default;
+  resetAllRateLimiters = (await import('../api/rateLimit')).resetAllRateLimiters;
+  invalidateUsersCache = (await import('../api/userCache')).invalidateUsersCache;
   await new Promise<void>((resolve) => {
     server = app.listen(0, '127.0.0.1', () => resolve());
   });
@@ -166,6 +178,11 @@ const api = async (
 };
 
 beforeEach(() => {
+  // Telstand van de rate-limiter en de auth-cache per test wissen: anders
+  // bloedt verbruik over tussen tests (en kan een onschuldige test 429 of
+  // stale users zien).
+  resetAllRateLimiters();
+  invalidateUsersCache();
   mem.users = [
     { id: '1', name: 'Annelies Admin', email: 'admin@vhb.be', role: 'admin', isActive: true },
     { id: '2', name: 'Pieter Planner', email: 'planner@vhb.be', role: 'planner', isActive: true },
@@ -599,5 +616,27 @@ describe('back-up export', () => {
     expect(Array.isArray(c.diversions)).toBe(true);
     expect(Array.isArray(c.planningCodes)).toBe(true);
     expect(Array.isArray(c.activityLog)).toBe(true);
+  });
+});
+
+describe('rate limiting', () => {
+  it('blokkeert met 429 zodra een token de limiet (50/venster) overschrijdt', async () => {
+    // RATE_LIMIT_MAX=50 in deze testomgeving; beforeEach heeft gereset.
+    const statuses: number[] = [];
+    for (let i = 0; i < 55; i++) {
+      const res = await api('GET', '/api/leave', { token: 'tok-a' });
+      statuses.push(res.status);
+    }
+    const allowed = statuses.filter((s) => s !== 429).length;
+    const blocked = statuses.filter((s) => s === 429).length;
+    expect(allowed).toBe(50);
+    expect(blocked).toBe(5);
+  });
+
+  it('houdt de limiet per token bij — een andere gebruiker wordt niet geraakt', async () => {
+    for (let i = 0; i < 55; i++) await api('GET', '/api/leave', { token: 'tok-a' });
+    // tok-b heeft een eigen budget en mag gewoon door.
+    const res = await api('GET', '/api/leave', { token: 'tok-b' });
+    expect(res.status).toBe(200);
   });
 });
