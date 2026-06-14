@@ -23,6 +23,8 @@ import { getVapidPublicKey, savePushSubscription, deletePushSubscription, sendPu
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
+import { rateLimitMiddleware } from "./rateLimit.js";
+import { invalidateUsersCache } from "./userCache.js";
 import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser } from "./helpers.js";
 import {
   buildPlanningFromMatrix,
@@ -85,6 +87,11 @@ const PORT = 3000;
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
+
+// Rem op tollende/vastgelopen clients — per ingelogde gebruiker (token),
+// niet per IP, zodat het hele bedrijfsnetwerk achter één NAT niet samen één
+// limiet deelt. Zie rateLimit.ts voor de serverless-nuance.
+app.use("/api", rateLimitMiddleware);
 
 app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
@@ -971,6 +978,9 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       const usersRemoved = detectMassDelete(previousUsers, newData);
       if (usersRemoved !== null) return massDeleteResponse(res, usersRemoved, previousUsers.length, "gebruikers");
       await saveUsersData(newData);
+      // Auth-cache verversen: rol/isActive/e-mail-wijzigingen moeten meteen
+      // doorwerken, niet pas na de TTL.
+      invalidateUsersCache();
       await logActivity(
         req,
         "users",
@@ -1151,6 +1161,8 @@ app.post("/api/restore", authenticate, requireRole("admin"), async (req: Authent
       }
     }
     const summary = await restoreFromBackup(collections);
+    // Restore kan de gebruikers (incl. rollen) hebben vervangen → auth-cache wissen.
+    invalidateUsersCache();
     const total = Object.values(summary).reduce((a, b) => a + b, 0);
     await logActivity(
       req,

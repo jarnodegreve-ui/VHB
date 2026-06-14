@@ -1,7 +1,7 @@
 import type express from "express";
 import { supabase } from "./db.js";
-import { getUsersData } from "./storage.js";
 import { normalizeEmail } from "./helpers.js";
+import { getUsersCached } from "./userCache.js";
 import type { AppUser, AuthenticatedRequest, Role } from "./types.js";
 
 export const getBearerToken = (req: express.Request) => {
@@ -14,7 +14,9 @@ export const findUserByEmail = async (email?: string | null): Promise<AppUser | 
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
 
-  const users = await getUsersData();
+  // Gecachte lijst: de auth-hot-path draait bij elke request en hoeft niet
+  // telkens de volledige users-tabel op te halen (zie userCache.ts).
+  const users = await getUsersCached();
   return users.find((user) => normalizeEmail(user.email) === normalizedEmail) || null;
 };
 
