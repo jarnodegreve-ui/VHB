@@ -180,7 +180,7 @@ const api = async (
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
   });
   const json = await res.json().catch(() => null);
-  return { status: res.status, json };
+  return { status: res.status, json, headers: res.headers };
 };
 
 beforeEach(() => {
@@ -678,6 +678,80 @@ describe('foutmelding-digest (cron)', () => {
     } finally {
       delete process.env.ALERT_EMAIL;
     }
+  });
+});
+
+describe('optimistic concurrency (revisie-tokens, anti-overschrijf)', () => {
+  const REV = 'x-collection-revision';
+
+  it('GET /api/services geeft een revisie-header', async () => {
+    const res = await api('GET', '/api/services', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.headers.get(REV)).toBeTruthy();
+  });
+
+  it('dezelfde data geeft een stabiele revisie (geen vals conflict)', async () => {
+    const a = await api('GET', '/api/services', { token: 'tok-planner' });
+    const b = await api('GET', '/api/services', { token: 'tok-admin' });
+    expect(a.headers.get(REV)).toBe(b.headers.get(REV));
+  });
+
+  it('POST met de juiste base-revisie slaagt en geeft een nieuwe revisie terug', async () => {
+    const get = await api('GET', '/api/services', { token: 'tok-planner' });
+    const rev = get.headers.get(REV)!;
+    const edited = mem.services.map((s, i) => (i === 0 ? { ...s, startTime: '05:30' } : s));
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: edited, headers: { [REV]: rev } });
+    expect(res.status).toBe(200);
+    const newRev = res.headers.get(REV);
+    expect(newRev).toBeTruthy();
+    expect(newRev).not.toBe(rev); // inhoud veranderde → andere revisie
+    expect(mem.services[0].startTime).toBe('05:30');
+  });
+
+  it('POST met een verouderde base-revisie geeft 409 en slaat niets op', async () => {
+    const edited = mem.services.map((s, i) => (i === 0 ? { ...s, startTime: '05:30' } : s));
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: edited, headers: { [REV]: 'verouderd-token' } });
+    expect(res.status).toBe(409);
+    expect(res.json.conflict).toBe('revision');
+    expect(mem.services[0].startTime).toBe('06:00');
+  });
+
+  it('POST zonder revisie-header blijft toegestaan (oudere client / backward compatible)', async () => {
+    const edited = mem.services.map((s, i) => (i === 0 ? { ...s, startTime: '05:30' } : s));
+    const res = await api('POST', '/api/services', { token: 'tok-planner', body: edited });
+    expect(res.status).toBe(200);
+  });
+
+  it('twee-beheerders-race: de tweede save overschrijft de eerste niet (409)', async () => {
+    const a = await api('GET', '/api/services', { token: 'tok-admin' });
+    const revA = a.headers.get(REV)!;
+    // Beheerder B laadt vers en slaat op.
+    const b = await api('GET', '/api/services', { token: 'tok-planner' });
+    const editedB = mem.services.map((s, i) => (i === 0 ? { ...s, serviceNumber: 'B' } : s));
+    const bSave = await api('POST', '/api/services', { token: 'tok-planner', body: editedB, headers: { [REV]: b.headers.get(REV)! } });
+    expect(bSave.status).toBe(200);
+    // Beheerder A slaat op met de inmiddels verouderde revisie → geweigerd.
+    const editedA = mem.services.map((s, i) => (i === 0 ? { ...s, serviceNumber: 'A' } : s));
+    const aSave = await api('POST', '/api/services', { token: 'tok-admin', body: editedA, headers: { [REV]: revA } });
+    expect(aSave.status).toBe(409);
+    expect(mem.services[0].serviceNumber).toBe('B'); // B's wijziging blijft staan
+  });
+
+  it('bulk-replace-import omzeilt de revisie-check', async () => {
+    const res = await api('POST', '/api/services', {
+      token: 'tok-admin',
+      body: mem.services.slice(0, 2),
+      headers: { [REV]: 'maakt-niet-uit', 'x-bulk-replace': '1' },
+    });
+    expect(res.status).toBe(200);
+  });
+
+  it('handhaaft de revisie ook op updates en planningscodes', async () => {
+    const upd = await api('POST', '/api/updates', { token: 'tok-planner', body: mem.updates, headers: { [REV]: 'oud' } });
+    expect(upd.status).toBe(409);
+    mem.planningCodes = [{ code: 'V', description: 'Verlof', category: 'absence' }];
+    const pc = await api('POST', '/api/planning-codes', { token: 'tok-planner', body: [], headers: { [REV]: 'oud' } });
+    expect(pc.status).toBe(409);
   });
 });
 
