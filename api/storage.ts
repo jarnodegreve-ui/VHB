@@ -1089,6 +1089,17 @@ export const logClientError = async (entry: ClientErrorEntry) => {
   }
 };
 
+const mapClientErrorRow = (row: any) => ({
+  id: row.id,
+  createdAt: row.created_at,
+  message: row.message,
+  stack: row.stack ?? undefined,
+  source: row.source ?? undefined,
+  url: row.url ?? undefined,
+  userAgent: row.user_agent ?? undefined,
+  userId: row.user_id ?? undefined,
+});
+
 export const getClientErrors = async (limit = 100) => {
   if (!db) return [];
   try {
@@ -1098,16 +1109,24 @@ export const getClientErrors = async (limit = 100) => {
       .order("created_at", { ascending: false })
       .limit(limit);
     if (error) return [];
-    return (data ?? []).map((row: any) => ({
-      id: row.id,
-      createdAt: row.created_at,
-      message: row.message,
-      stack: row.stack ?? undefined,
-      source: row.source ?? undefined,
-      url: row.url ?? undefined,
-      userAgent: row.user_agent ?? undefined,
-      userId: row.user_id ?? undefined,
-    }));
+    return (data ?? []).map(mapClientErrorRow);
+  } catch {
+    return [];
+  }
+};
+
+/** Fouten sinds een ISO-tijdstip (voor de periodieke alert-digest). */
+export const getClientErrorsSince = async (sinceIso: string, limit = 1000) => {
+  if (!db) return [];
+  try {
+    const { data, error } = await db
+      .from("client_errors")
+      .select("*")
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (error) return [];
+    return (data ?? []).map(mapClientErrorRow);
   } catch {
     return [];
   }
