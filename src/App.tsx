@@ -204,6 +204,20 @@ export default function App() {
     showToast(`${label} is nog niet geladen — opslaan is geblokkeerd om dataverlies te voorkomen. Vernieuw de pagina en probeer het opnieuw.`, 'error');
     return false;
   };
+  // Optimistic-concurrency: per collectie de laatst geladen revisie bewaren
+  // (ondoorzichtige token uit de X-Collection-Revision-header). Bij opslaan
+  // sturen we 'm mee; matcht hij niet meer met de serverstaat, dan heeft een
+  // collega ondertussen opgeslagen → 409, wij verversen i.p.v. te overschrijven.
+  const REVISION_HEADER = 'x-collection-revision';
+  const collectionRevisionsRef = useRef<Record<string, string>>({});
+  const captureRevision = (key: string, response: Response) => {
+    const rev = response.headers.get(REVISION_HEADER);
+    if (rev) collectionRevisionsRef.current[key] = rev;
+  };
+  const revisionHeader = (key: string): Record<string, string> => {
+    const rev = collectionRevisionsRef.current[key];
+    return rev ? { [REVISION_HEADER]: rev } : {};
+  };
   // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
   // verwijderde dan twee meldingen tegelijk).
   const toastIdRef = useRef(0);
@@ -567,6 +581,7 @@ export default function App() {
       if (data && Array.isArray(data)) {
         setUpdates(data);
         markCollectionLoaded('updates');
+        captureRevision('updates', response);
       }
     } catch (error) {
       console.error('Error fetching updates:', error);
@@ -579,13 +594,20 @@ export default function App() {
     try {
       const response = await apiFetch('/api/updates', {
         method: 'POST',
+        headers: revisionHeader('updates'),
         body: JSON.stringify(newUpdates),
       });
+      if (response.status === 409) {
+        showToast('De updates zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchUpdates();
+        return false;
+      }
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
         throw new Error(data?.details || data?.error || 'Opslaan mislukt.');
       }
       setUpdates(newUpdates);
+      captureRevision('updates', response);
       if (currentUser?.role === 'admin') {
         await fetchActivityLog();
       }
@@ -686,6 +708,7 @@ export default function App() {
       if (data && Array.isArray(data)) {
         setPlanningCodes(data);
         markCollectionLoaded('planningCodes');
+        captureRevision('planningCodes', response);
       }
     } catch (error) {
       console.error('Error fetching planning codes:', error);
@@ -735,13 +758,20 @@ export default function App() {
       beginLoading();
       const response = await apiFetch('/api/planning-codes', {
         method: 'POST',
+        headers: revisionHeader('planningCodes'),
         body: JSON.stringify(newCodes),
       });
+      if (response.status === 409) {
+        showToast('De planningscodes zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchPlanningCodes();
+        return false;
+      }
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data?.details || data?.error || 'Opslaan mislukt.');
       }
       setPlanningCodes(newCodes);
+      captureRevision('planningCodes', response);
       if (currentUser?.role === 'admin') {
         await fetchActivityLog();
       }
@@ -871,6 +901,7 @@ export default function App() {
       if (data && Array.isArray(data)) {
         setServices(data);
         markCollectionLoaded('services');
+        captureRevision('services', response);
       }
     } catch (error) {
       console.error('Error fetching services:', error);
@@ -887,12 +918,19 @@ export default function App() {
       const response = await apiFetch('/api/services', {
         method: 'POST',
         // Import vervangt legitiem de hele collectie; de header laat de
-        // server z'n bulk-wipe-vangrail voor deze save overslaan.
-        headers: opts?.bulkReplace ? { 'x-bulk-replace': '1' } : undefined,
+        // server z'n bulk-wipe-vangrail voor deze save overslaan. Bij een
+        // gewone bewerking sturen we de revisie mee voor conflictdetectie.
+        headers: opts?.bulkReplace ? { 'x-bulk-replace': '1' } : revisionHeader('services'),
         body: JSON.stringify(newServices),
       });
+      if (response.status === 409) {
+        showToast('Het dienstoverzicht is intussen door iemand anders gewijzigd — ik ververs het, probeer je wijziging opnieuw.', 'info');
+        await fetchServices();
+        return;
+      }
       if (response.ok) {
         setServices(newServices);
+        captureRevision('services', response);
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
@@ -1028,6 +1066,7 @@ export default function App() {
       if (data && Array.isArray(data)) {
         setDiversions(data);
         markCollectionLoaded('diversions');
+        captureRevision('diversions', response);
       }
     } catch (error) {
       console.error('Error fetching diversions:', error);
@@ -1042,10 +1081,17 @@ export default function App() {
       beginLoading();
       const response = await apiFetch('/api/diversions', {
         method: 'POST',
+        headers: revisionHeader('diversions'),
         body: JSON.stringify(newDiversions),
       });
+      if (response.status === 409) {
+        showToast('De omleidingen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchDiversions(undefined, { silent: true });
+        return;
+      }
       if (response.ok) {
         setDiversions(newDiversions);
+        captureRevision('diversions', response);
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }

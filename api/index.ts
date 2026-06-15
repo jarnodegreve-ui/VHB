@@ -895,6 +895,7 @@ app.get("/api/planning-matrix/changes-since-import", authenticate, requireRole("
 app.get("/api/planning-codes", authenticate, requireRole("planner", "admin"), async (_req, res) => {
   try {
     const codes = await getPlanningCodesData();
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(codes));
     res.json(codes);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to read planning codes", details: err.message });
@@ -924,6 +925,39 @@ const massDeleteResponse = (res: any, removed: number, total: number, label: str
     details: `Deze opslag zou ${removed} van de ${total} ${label} verwijderen. Vermoedelijk was je scherm niet volledig geladen — vernieuw de pagina en probeer opnieuw, of verwijder in kleinere stappen.`,
   });
 
+/**
+ * Optimistic-concurrency voor de "hele lijst opslaan"-collecties (diensten,
+ * omleidingen, updates, planningscodes). Twee beheerders die tegelijk
+ * dezelfde lijst bewerken konden elkaar stil overschrijven; nu krijgt de
+ * tweede een 409.
+ *
+ * De revisie is een hash van de huidige collectie. GET zet 'm als header;
+ * de client stuurt 'm bij POST terug in x-base-revision. Omdat zowel GET als
+ * POST de revisie over dezelfde getX()-output berekenen (identieke
+ * normalisatie + sortering op id/code), is de vergelijking stabiel. De client
+ * behandelt de waarde als ondoorzichtig en hasht zelf niets.
+ */
+const COLLECTION_REVISION_HEADER = "x-collection-revision";
+const revisionOf = (rows: any[]): string => {
+  const sorted = [...(Array.isArray(rows) ? rows : [])].sort((a, b) =>
+    String(a?.id ?? a?.code ?? "").localeCompare(String(b?.id ?? b?.code ?? "")),
+  );
+  return crypto.createHash("sha256").update(JSON.stringify(sorted)).digest("base64url").slice(0, 22);
+};
+/** True als de client een base-revisie meegaf die niet meer overeenkomt met
+ *  de huidige serverstaat → iemand anders heeft intussen opgeslagen. */
+const revisionConflict = (req: AuthenticatedRequest, current: any[]): boolean => {
+  const base = req.headers[COLLECTION_REVISION_HEADER];
+  if (typeof base !== "string" || base.length === 0) return false; // oudere client → check overslaan
+  return base !== revisionOf(current);
+};
+const revisionConflictResponse = (res: any, label: string) =>
+  res.status(409).json({
+    error: "Gewijzigd door iemand anders",
+    details: `${label} is intussen door iemand anders aangepast. De lijst wordt ververst — bekijk de wijziging en probeer je aanpassing opnieuw.`,
+    conflict: "revision",
+  });
+
 app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     const codes = req.body;
@@ -932,6 +966,7 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
     }
 
     const previousCodes = await getPlanningCodesData();
+    if (revisionConflict(req, previousCodes)) return revisionConflictResponse(res, "De planningscodes");
     const codesRemoved = detectMassDelete(previousCodes, codes, (c) => String(c?.code));
     if (codesRemoved !== null) return massDeleteResponse(res, codesRemoved, previousCodes.length, "planningscodes");
     await savePlanningCodesData(codes);
@@ -955,6 +990,9 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
       await logActivity(req, "planning_codes", "Code verwijderd", fmtCode(c), { type: "planning_code", id: c.code });
     }
 
+    // Revisie over de gecanoniseerde serverstaat (save normaliseert/dedupt),
+    // zodat de volgende save geen vals conflict ziet.
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getPlanningCodesData()));
     res.json({ success: true, count: codes.length });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save planning codes", details: err.message });
@@ -1247,6 +1285,7 @@ app.post("/api/restore", authenticate, requireRole("admin"), async (req: Authent
 app.get("/api/diversions", authenticate, async (req, res) => {
   try {
     const data = await getDiversionsData();
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     res.json(data);
   } catch (err) {
     console.error("Error reading diversions data:", err);
@@ -1259,6 +1298,7 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
     const newData = req.body;
     if (Array.isArray(newData)) {
       const previousDiversions = await getDiversionsData();
+      if (revisionConflict(req, previousDiversions)) return revisionConflictResponse(res, "De omleidingen");
       const diversionsRemoved = detectMassDelete(previousDiversions, newData);
       if (diversionsRemoved !== null) return massDeleteResponse(res, diversionsRemoved, previousDiversions.length, "omleidingen");
       await saveDiversionsData(newData);
@@ -1282,6 +1322,7 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
         await logActivity(req, "diversions", "Omleiding verwijderd", fmtDiv(d), { type: "diversion", id: d.id });
       }
 
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1338,6 +1379,7 @@ app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), a
 app.get("/api/services", authenticate, async (req, res) => {
   try {
     const data = await getServicesData();
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     res.json(data);
   } catch (err) {
     console.error("Error reading services data:", err);
@@ -1354,6 +1396,9 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
       // collectie (verse ids per upload) en meldt dat expliciet via header.
       const isBulkReplace = req.headers["x-bulk-replace"] === "1";
       if (!isBulkReplace) {
+        // Bulk-import vervangt bewust de hele collectie → revisie-/wipe-checks
+        // alleen voor gewone bewerkingen.
+        if (revisionConflict(req, previousServices)) return revisionConflictResponse(res, "Het dienstoverzicht");
         const servicesRemoved = detectMassDelete(previousServices, newData);
         if (servicesRemoved !== null) return massDeleteResponse(res, servicesRemoved, previousServices.length, "diensten");
       }
@@ -1381,6 +1426,7 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
         await logActivity(req, "services", "Dienst verwijderd", formatService(s), { type: "service", id: s.id });
       }
 
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getServicesData()));
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Invalid data format. Expected an array." });
@@ -1395,6 +1441,7 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
 app.get("/api/updates", authenticate, async (req, res) => {
   try {
     const data = await getUpdatesData();
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Failed to read updates" });
@@ -1410,6 +1457,7 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
       return res.status(400).json({ error: "Invalid data format. Expected an array." });
     }
     const previousUpdates = await getUpdatesData();
+    if (revisionConflict(req, previousUpdates)) return revisionConflictResponse(res, "De updates");
     const updatesRemoved = detectMassDelete(previousUpdates, newData);
     if (updatesRemoved !== null) return massDeleteResponse(res, updatesRemoved, previousUpdates.length, "updates");
     const arr = newData;
@@ -1434,6 +1482,7 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
       await logActivity(req, "updates", "Update verwijderd", fmtUpd(u), { type: "update", id: u.id });
     }
 
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
     res.json({ success: true });
   } catch (err: any) {
     res.status(500).json({ error: "Failed to save updates", details: err.message });
