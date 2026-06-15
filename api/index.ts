@@ -86,7 +86,11 @@ console.log("Supabase Service Role present:", !!process.env.SUPABASE_SERVICE_ROL
 const app = express();
 const PORT = 3000;
 
-app.use(cors());
+// exposedHeaders: laat clients de custom response-headers lezen. Same-origin
+// (de huidige opzet) heeft dit niet nodig, maar het maakt de revisie-check en
+// de 429-Retry-After robuust mochten app en API ooit op verschillende origins
+// draaien (review-bevinding van de optimistic-concurrency-PR).
+app.use(cors({ exposedHeaders: ["X-Collection-Revision", "Retry-After"] }));
 app.use(express.json({ limit: '25mb' }));
 
 // Rem op tollende/vastgelopen clients — per ingelogde gebruiker (token),
