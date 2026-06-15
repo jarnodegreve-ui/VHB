@@ -38,6 +38,7 @@ const mem = vi.hoisted(() => ({
   planningCodes: [] as any[],
   activity: [] as any[],
   clientErrors: [] as any[],
+  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
   pushSubscriptions: [] as any[],
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
@@ -80,8 +81,11 @@ vi.mock('../api/push.js', async (importOriginal) => ({
 
 vi.mock('../api/email.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
-  sendLeaveDecisionEmail: vi.fn(async () => ({ sent: false, reason: 'test' })),
-  sendEmail: vi.fn(async () => ({ sent: false, reason: 'test' })),
+  sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
+  sendEmail: vi.fn(async (opts: any) => {
+    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });
+    return { ok: true, mocked: true };
+  }),
 }));
 
 vi.mock('../api/storage.js', async (importOriginal) => {
@@ -124,6 +128,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getCoverageExpectations: async () => ({}),
     logClientError: async (entry: any) => { mem.clientErrors.push(entry); },
     getClientErrors: async () => mem.clientErrors,
+    getClientErrorsSince: async (sinceIso: string) =>
+      mem.clientErrors.filter((e) => String(e.createdAt) >= sinceIso),
     storeBackup: async (filename: string, body: string) => {
       mem.storedBackups.push({ filename, size: body.length });
       return { removedOld: 0 };
@@ -217,6 +223,7 @@ beforeEach(() => {
   mem.planningCodes = [];
   mem.activity = [];
   mem.clientErrors = [];
+  mem.emailsSent = [];
   mem.storedBackups = [];
   mem.pushSubscriptions = [];
   mem.pushesSent = [];
@@ -616,6 +623,61 @@ describe('back-up export', () => {
     expect(Array.isArray(c.diversions)).toBe(true);
     expect(Array.isArray(c.planningCodes)).toBe(true);
     expect(Array.isArray(c.activityLog)).toBe(true);
+  });
+});
+
+describe('foutmelding-digest (cron)', () => {
+  const recent = () => new Date().toISOString();
+
+  it('weigert zonder of met fout secret (401)', async () => {
+    expect((await api('GET', '/api/cron/error-digest')).status).toBe(401);
+    expect((await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer fout' } })).status).toBe(401);
+  });
+
+  it('mailt een samenvatting naar admins als er recente fouten zijn', async () => {
+    mem.clientErrors = [
+      { id: 1, createdAt: recent(), message: 'Kon planning niet laden', source: 'error-toast', url: '/' },
+      { id: 2, createdAt: recent(), message: 'Kon planning niet laden', source: 'error-toast', url: '/' },
+      { id: 3, createdAt: recent(), message: 'TypeError: x is undefined', source: 'window.onerror', url: '/rooster' },
+    ];
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(res.json.alerted).toBe(true);
+    expect(res.json.count).toBe(3);
+    expect(mem.emailsSent).toHaveLength(1);
+    // Default-ontvanger = admin-account (admin@vhb.be).
+    expect(mem.emailsSent[0].to).toContain('admin@vhb.be');
+    expect(mem.emailsSent[0].subject).toContain('3 fouten');
+    expect(mem.emailsSent[0].context).toBe('error-digest');
+  });
+
+  it('stuurt niets als er geen recente fouten zijn', async () => {
+    mem.clientErrors = [];
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(res.json.alerted).toBe(false);
+    expect(mem.emailsSent).toHaveLength(0);
+  });
+
+  it('negeert fouten ouder dan het interval', async () => {
+    mem.clientErrors = [
+      { id: 1, createdAt: '2020-01-01T00:00:00.000Z', message: 'oud', source: 'error-toast' },
+    ];
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.json.alerted).toBe(false);
+    expect(mem.emailsSent).toHaveLength(0);
+  });
+
+  it('respecteert ALERT_EMAIL als die gezet is', async () => {
+    process.env.ALERT_EMAIL = 'ops@vhb.be, baas@vhb.be';
+    mem.clientErrors = [{ id: 1, createdAt: recent(), message: 'boem', source: 'window.onerror' }];
+    try {
+      const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200);
+      expect(mem.emailsSent[0].to).toEqual(['ops@vhb.be', 'baas@vhb.be']);
+    } finally {
+      delete process.env.ALERT_EMAIL;
+    }
   });
 });
 

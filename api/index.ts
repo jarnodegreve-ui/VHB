@@ -18,7 +18,7 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 // interne sleutels (bv. een vroegere __vakantieperiodes__) de dag-type-lijst niet.
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
-import { sendLeaveDecisionEmail, type LeaveDecisionAction } from "./email.js";
+import { sendLeaveDecisionEmail, sendEmail, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscription, sendPushToUsers } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
@@ -45,6 +45,7 @@ import {
   logActivity,
   logClientError,
   getClientErrors,
+  getClientErrorsSince,
   storeBackup,
   restoreFromBackup,
   replacePlanningData,
@@ -1137,6 +1138,72 @@ app.get("/api/cron/backup", async (req, res) => {
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
     res.status(500).json({ error: "Back-up mislukt", details: err?.message });
+  }
+});
+
+// Foutmelding-digest: periodiek (Vercel-cron) de client-fouten van het
+// afgelopen interval samenvatten en mailen, zodat een storing/foutenpiek niet
+// onopgemerkt blijft tot een chauffeur klaagt. DB-gebaseerd (geen per-instance
+// telprobleem). Stuurt naar ALERT_EMAIL als die env-var bestaat, anders naar
+// alle admin-accounts. Stuurt niets als er geen fouten zijn.
+app.get("/api/cron/error-digest", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+    return res.status(401).json({ error: "Niet toegestaan." });
+  }
+  try {
+    const intervalMin = Number(process.env.ERROR_DIGEST_INTERVAL_MIN) > 0
+      ? Number(process.env.ERROR_DIGEST_INTERVAL_MIN)
+      : 60;
+    const minCount = Number(process.env.ERROR_DIGEST_MIN_COUNT) > 0
+      ? Number(process.env.ERROR_DIGEST_MIN_COUNT)
+      : 1;
+    const sinceMs = Date.now() - intervalMin * 60 * 1000;
+    const sinceIso = new Date(sinceMs).toISOString();
+
+    const errors = await getClientErrorsSince(sinceIso);
+    if (errors.length < minCount) {
+      return res.json({ success: true, count: errors.length, alerted: false });
+    }
+
+    // Bepaal de ontvangers.
+    const explicit = (process.env.ALERT_EMAIL || "")
+      .split(",")
+      .map((e) => e.trim())
+      .filter(Boolean);
+    const recipients = explicit.length > 0
+      ? explicit
+      : (await getUsersData())
+          .filter((u) => u.role === "admin" && u.isActive !== false && u.email)
+          .map((u) => u.email as string);
+    if (recipients.length === 0) {
+      return res.json({ success: true, count: errors.length, alerted: false, reason: "geen ontvangers" });
+    }
+
+    // Groepeer op bron + bericht.
+    const groups = new Map<string, { source: string; message: string; count: number; lastUrl?: string }>();
+    for (const e of errors) {
+      const key = `${e.source || "?"}::${e.message}`;
+      const g = groups.get(key) ?? { source: e.source || "onbekend", message: e.message, count: 0, lastUrl: e.url };
+      g.count += 1;
+      groups.set(key, g);
+    }
+    const sorted = [...groups.values()].sort((a, b) => b.count - a.count);
+    const topLines = sorted.slice(0, 15)
+      .map((g) => `• [${g.count}×] ${g.source}: ${g.message}${g.lastUrl ? ` (${g.lastUrl})` : ""}`)
+      .join("\n");
+    const moreLine = sorted.length > 15 ? `\n…en nog ${sorted.length - 15} andere foutsoorten.` : "";
+
+    const subject = `⚠️ VHB Portaal: ${errors.length} fout${errors.length === 1 ? "" : "en"} in de afgelopen ${intervalMin} min`;
+    const text = `In de afgelopen ${intervalMin} minuten zijn er ${errors.length} client-fouten gemeld (${sorted.length} unieke soorten).\n\n${topLines}${moreLine}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
+    const html = `<p>In de afgelopen <strong>${intervalMin} minuten</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${g.source}] ${g.message}${g.lastUrl ? ` <em>(${g.lastUrl})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+
+    const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
+    console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
+    res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
+  } catch (err: any) {
+    console.error("[error-digest] mislukt:", err?.message || err);
+    res.status(500).json({ error: "Digest mislukt", details: err?.message });
   }
 });
 
