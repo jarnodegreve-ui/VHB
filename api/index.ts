@@ -1194,9 +1194,12 @@ app.get("/api/cron/error-digest", async (req, res) => {
     return res.status(401).json({ error: "Niet toegestaan." });
   }
   try {
+    // Default 1440 min (24u): de cron draait dagelijks — een Hobby-plan staat
+    // geen vaker-dan-daagse cron toe. Op Pro kun je de cron frequenter zetten
+    // en deze env navenant verlagen (bv. 60 voor uurlijks).
     const intervalMin = Number(process.env.ERROR_DIGEST_INTERVAL_MIN) > 0
       ? Number(process.env.ERROR_DIGEST_INTERVAL_MIN)
-      : 60;
+      : 1440;
     const minCount = Number(process.env.ERROR_DIGEST_MIN_COUNT) > 0
       ? Number(process.env.ERROR_DIGEST_MIN_COUNT)
       : 1;
@@ -1236,9 +1239,10 @@ app.get("/api/cron/error-digest", async (req, res) => {
       .join("\n");
     const moreLine = sorted.length > 15 ? `\n…en nog ${sorted.length - 15} andere foutsoorten.` : "";
 
-    const subject = `⚠️ VHB Portaal: ${errors.length} fout${errors.length === 1 ? "" : "en"} in de afgelopen ${intervalMin} min`;
-    const text = `In de afgelopen ${intervalMin} minuten zijn er ${errors.length} client-fouten gemeld (${sorted.length} unieke soorten).\n\n${topLines}${moreLine}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
-    const html = `<p>In de afgelopen <strong>${intervalMin} minuten</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${g.source}] ${g.message}${g.lastUrl ? ` <em>(${g.lastUrl})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+    const windowLabel = intervalMin % 60 === 0 ? `${intervalMin / 60} uur` : `${intervalMin} min`;
+    const subject = `⚠️ VHB Portaal: ${errors.length} fout${errors.length === 1 ? "" : "en"} in de afgelopen ${windowLabel}`;
+    const text = `In de afgelopen ${windowLabel} zijn er ${errors.length} client-fouten gemeld (${sorted.length} unieke soorten).\n\n${topLines}${moreLine}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
+    const html = `<p>In de afgelopen <strong>${windowLabel}</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${g.source}] ${g.message}${g.lastUrl ? ` <em>(${g.lastUrl})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
