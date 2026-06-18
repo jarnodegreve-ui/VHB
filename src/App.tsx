@@ -431,6 +431,13 @@ export default function App() {
         setRecoveryMode(false);
         setCurrentUser(null);
         setMonitoringUser(null);
+        // Reactief uitloggen (sessie verlopen/elders afgemeld): zet het
+        // browser-push-abonnement uit zodat een volgende gebruiker op dit
+        // toestel geen meldingen van het vorige account erft. Best-effort —
+        // de server-cleanup kan zonder geldig token mislukken (gedicht in
+        // handleLogout), de lokale unsubscribe werkt sowieso.
+        if (isPushSupported()) void unsubscribeFromPush({}).catch(() => {});
+        setPushEnabled(false);
         initializedUserIdRef.current = null;
         loadedCollectionsRef.current.clear();
         setUsers([]);
@@ -1152,6 +1159,17 @@ export default function App() {
       } catch {
         // cache-API geblokkeerd — geen blocker voor uitloggen
       }
+      // Push-abonnement opruimen vóór signOut (vereist nog een geldig token):
+      // op een gedeeld toestel mag de vorige gebruiker geen meldingen blijven
+      // krijgen, en de DB-koppeling endpoint→user moet weg.
+      try {
+        if (session?.access_token && isPushSupported()) {
+          await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}` });
+        }
+      } catch {
+        // best-effort — nooit het uitloggen blokkeren
+      }
+      setPushEnabled(false);
       await supabase?.auth.signOut();
       setSession(null);
       setCurrentUser(null);
