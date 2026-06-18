@@ -120,6 +120,20 @@ describe('wekelijkse rust', () => {
     const findings = analyzeDriverCompliance('1', shifts);
     expect(findings.filter((f) => f.rule === 'wekelijkse-rust')).toHaveLength(0);
   });
+
+  it('mist een week-overschrijdende nachtdienst niet (geen vals-groen)', () => {
+    // Elke dag een nachtdienst 22:00→06:00 over drie weken. De middenweek
+    // (22/06) is volledig omsloten; de rust tussen nachtdiensten is telkens
+    // 16u (<24u). De zondag→maandag-nachtdienst loopt over de weekgrens —
+    // vóór de fix viel die uit prevEnd en bleef de overtreding vals-groen.
+    const dagen: string[] = [];
+    for (let d = 15; d <= 30; d++) dagen.push(`2026-06-${String(d).padStart(2, '0')}`);
+    for (let d = 1; d <= 6; d++) dagen.push(`2026-07-0${d}`);
+    const shifts = dagen.map((iso) => shift(iso, '22:00', '06:00'));
+    const findings = analyzeDriverCompliance('1', shifts);
+    const midden = findings.filter((f) => f.rule === 'wekelijkse-rust' && f.severity === 'violation' && f.date === '2026-06-22');
+    expect(midden).toHaveLength(1);
+  });
 });
 
 describe('analyzeCompliance (rapport)', () => {

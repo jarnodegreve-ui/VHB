@@ -109,8 +109,11 @@ export const savePlanningData = async (data: any) => {
   // verwijderen. Faalt de delete, dan staan er hooguit extra rijen — nooit
   // een (deels) lege tabel.
   const incomingIds = new Set(data.map((s: any) => String(s.id)));
-  const { data: existing, error: fetchError } = await client.from('planning').select('id');
-  if (fetchError) throw fetchError;
+  // Gepagineerd ophalen: een ongepagineerde select('id') cap't op 1000 rijen,
+  // waardoor planning >1000 shifts stale rijen liet staan na import/herstel.
+  const existing = await paginatedFetch((from, to) =>
+    client.from('planning').select('id').order('id', { ascending: true }).range(from, to),
+  );
   const { error } = await client.from('planning').upsert(data);
   if (error) throw error;
   const idsToDelete = (existing ?? [])
@@ -960,8 +963,9 @@ export const saveDiversionsData = async (data: any) => {
   const normalized = Array.isArray(data) ? data.map(toPublicDiversion) : [];
   const incomingIds = new Set(normalized.map((d) => String(d.id)));
 
-  const { data: existing, error: fetchError } = await client.from('diversions').select('id');
-  if (fetchError) throw fetchError;
+  const existing = await paginatedFetch((from, to) =>
+    client.from('diversions').select('id').order('id', { ascending: true }).range(from, to),
+  );
 
   const idsToDelete = (existing ?? [])
     .map((row: any) => String(row.id))
@@ -999,8 +1003,9 @@ export const saveServicesData = async (data: any) => {
   // bij een insert-fout (netwerk/constraint/timeout) een lege dienstentabel
   // achterlaten — en daarmee elke volgende matrix-import breken.
   const incomingIds = new Set(rows.map((r: any) => String(r.id)));
-  const { data: existing, error: fetchError } = await client.from('services').select('id');
-  if (fetchError) throw fetchError;
+  const existing = await paginatedFetch((from, to) =>
+    client.from('services').select('id').order('id', { ascending: true }).range(from, to),
+  );
   if (rows.length > 0) {
     const { error: upsertError } = await client.from('services').upsert(rows);
     if (upsertError) throw upsertError;
@@ -1147,8 +1152,9 @@ export const saveUpdatesData = async (data: any) => {
   const normalizedData = Array.isArray(data) ? data.map(toPublicUpdate) : [];
 
   const incomingIds = new Set(normalizedData.map((u) => String(u.id)));
-  const { data: existing, error: fetchError } = await client.from('updates').select('id');
-  if (fetchError) throw fetchError;
+  const existing = await paginatedFetch((from, to) =>
+    client.from('updates').select('id').order('id', { ascending: true }).range(from, to),
+  );
 
   const idsToDelete = (existing ?? [])
     .map((row: any) => String(row.id))

@@ -207,10 +207,15 @@ export const analyzeDriverCompliance = (driverId: string, shifts: Shift[]): Comp
     const weekStart = Date.parse(`${weekKey}T00:00:00Z`);
     const weekEnd = weekStart + 7 * MS_PER_DAY;
     // Voor de randen tellen ook de laatste dienst vóór en eerste ná de week.
-    const prevEnd = Math.max(weekStart - 7 * MS_PER_DAY, ...spans.filter((s) => s.end <= weekStart).map((s) => s.end));
+    // prevEnd ankert op de laatste dienst die VÓÓR weekStart begint (op start
+    // filteren, niet op end): een nachtdienst die zondag start en maandag over
+    // de weekgrens eindigt telt zo correct mee als bezetting i.p.v. als rust —
+    // anders werd zo'n bridge-dienst weggefilterd en bleef een echte
+    // rusttijdschending vals-groen.
+    const prevEnd = Math.max(weekStart - 7 * MS_PER_DAY, ...spans.filter((s) => s.start < weekStart).map((s) => s.end));
     const nextStart = Math.min(weekEnd + 7 * MS_PER_DAY, ...spans.filter((s) => s.start >= weekEnd).map((s) => s.start));
     const sorted = [...weekSpans].sort((a, b) => a.start - b.start);
-    let longestRest = sorted[0].start - Math.min(prevEnd, sorted[0].start);
+    let longestRest = Math.max(0, sorted[0].start - prevEnd);
     for (let i = 1; i < sorted.length; i++) {
       longestRest = Math.max(longestRest, sorted[i].start - sorted[i - 1].end);
     }

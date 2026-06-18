@@ -155,25 +155,45 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         const importedUsers: UserDraft[] = jsonData
           .map((row: any, index) => {
             const rowKeys = Object.keys(row);
+            // Elke kolom mag maar één veld voeden (used-set), en specifieke
+            // velden claimen hun kolom vóór de generieke. Anders kaapte een
+            // greedy patroon ('nummer'/'id') de kolom 'Telefoonnummer' voor
+            // employeeId, of stopte de naam-match al op een 'Voornaam'-kolom.
+            const used = new Set<string>();
             const findValue = (patterns: string[]) => {
-              const foundKey = rowKeys.find((k) => patterns.some((p) => k.toString().trim().toLowerCase().includes(p)));
+              const foundKey = rowKeys.find((k) => !used.has(k) && patterns.some((p) => k.toString().trim().toLowerCase().includes(p)));
+              if (foundKey) used.add(foundKey);
               return foundKey ? row[foundKey] : undefined;
             };
-            const rawRole = (findValue(['rol', 'role', 'functie', 'type']) || 'chauffeur').toString().toLowerCase();
+
+            // 1) Specifieke velden eerst (claimen hun kolom).
+            const email = (() => { const v = findValue(['email', 'mail', 'e-mail'])?.toString().trim(); return v && v.includes('@') ? v : undefined; })();
+            const phone = findValue(['gsm', 'telefoon', 'phone', 'mobiel', 'tel'])?.toString().trim() || undefined;
+            const password = findValue(['wachtwoord', 'password', 'pass', 'wacht', 'pw'])?.toString() || '';
+            const rawRole = (findValue(['rol', 'role', 'functie']) || 'chauffeur').toString().toLowerCase();
             let role: 'admin' | 'planner' | 'chauffeur' = 'chauffeur';
             if (rawRole.includes('admin') || rawRole.includes('beheer')) role = 'admin';
             else if (rawRole.includes('plan') || rawRole.includes('dispo')) role = 'planner';
 
+            // 2) Naam: aparte voornaam/achternaam-kolommen worden samengevoegd;
+            //    een gecombineerde 'Naam'-kolom heeft voorrang.
+            const voornaam = findValue(['voornaam', 'firstname', 'first name'])?.toString().trim();
+            const achternaam = findValue(['achternaam', 'familienaam', 'lastname', 'last name', 'surname'])?.toString().trim();
+            const volleNaam = findValue(['naam', 'name', 'medewerker', 'chauffeur', 'gebruiker', 'user'])?.toString().trim();
+            const name = volleNaam || [voornaam, achternaam].filter(Boolean).join(' ');
+
             const generatedId = (Date.now() + index).toString();
+            // 3) employeeId als laatste — pakt enkel een nog niet-geclaimde
+            //    kolom (geen losse 'id'/'code' meer die van alles kaapt).
+            const employeeId = findValue(['personeelsnummer', 'personeelsnr', 'personeel', 'stamnummer', 'badge', 'matricule', 'employee', 'nummer', 'nr'])?.toString().trim() || `VHB-${generatedId.slice(-4)}`;
             return {
               id: generatedId,
-              name: findValue(['naam', 'name', 'voornaam', 'achternaam', 'medewerker', 'chauffeur', 'gebruiker', 'user'])?.toString().trim() || '',
+              name,
               role,
-              employeeId: findValue(['id', 'employee', 'personeel', 'nummer', 'code', 'nr'])?.toString().trim() || `VHB-${generatedId.slice(-4)}`,
-              password: findValue(['wachtwoord', 'password', 'pass', 'wacht', 'pw'])?.toString() || '',
-              phone: findValue(['gsm', 'telefoon', 'phone', 'mobiel', 'gsm-nummer', 'tel'])?.toString().trim() || undefined,
-              // géén 'adres' als patroon (matchte de straat-kolom) en eis een '@'
-              email: (() => { const v = findValue(['email', 'mail', 'e-mail'])?.toString().trim(); return v && v.includes('@') ? v : undefined; })(),
+              employeeId,
+              password,
+              phone,
+              email,
               isActive: true,
             };
           })
