@@ -6,7 +6,6 @@ import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
-import { ScheduleView } from '../ScheduleView';
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
   const [jsonInput, setJsonInput] = useState('');
@@ -665,7 +664,54 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           description="Bekijk de actieve planning zoals die nu in het portaal beschikbaar is."
         />
         <div className="mt-6">
-        <ScheduleView user={{ id: '0', name: 'Admin', role: 'admin', employeeId: 'ADMIN' }} shifts={shifts} users={users} />
+        {(() => {
+          // All-chauffeurs-overzicht (ScheduleView is strikt per-chauffeur en
+          // toonde met een synthetische admin altijd leeg). Toont de actieve
+          // planning vanaf vandaag, gegroepeerd per dag.
+          const today = new Date().toLocaleDateString('en-CA');
+          const nameById = new Map(users.map((u) => [String(u.id), u.name]));
+          const upcoming = shifts
+            .filter((s) => s.date && s.date >= today)
+            .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime || '').localeCompare(String(b.startTime || '')));
+          if (upcoming.length === 0) {
+            return <EmptyState title="Geen actieve planning" message={shifts.length === 0 ? 'Er is nog geen planning geïmporteerd.' : 'Geen diensten vanaf vandaag — importeer of synchroniseer een planning.'} />;
+          }
+          const byDate = new Map<string, Shift[]>();
+          for (const s of upcoming) {
+            const list = byDate.get(s.date) ?? [];
+            list.push(s);
+            byDate.set(s.date, list);
+          }
+          const driverCount = new Set(upcoming.map((s) => String(s.driverId))).size;
+          return (
+            <>
+              <div className="flex flex-wrap gap-2 mb-4">
+                <Badge tone="oker" dot>{upcoming.length} diensten vanaf vandaag</Badge>
+                <Badge tone="slate" dot>{byDate.size} dagen</Badge>
+                <Badge tone="slate" dot>{driverCount} chauffeurs</Badge>
+              </div>
+              <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
+                {[...byDate.entries()].map(([date, daysShifts]) => (
+                  <div key={date}>
+                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 mb-1.5">
+                      {new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: '2-digit', month: 'long' })}
+                      <span className="ml-2 text-slate-400">· {daysShifts.length}</span>
+                    </div>
+                    <div className="rounded-2xl border border-slate-200/70 divide-y divide-slate-100">
+                      {daysShifts.map((s) => (
+                        <div key={s.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                          <span className="font-semibold text-slate-800 min-w-0 flex-1 truncate">{nameById.get(String(s.driverId)) || `Chauffeur ${s.driverId}`}</span>
+                          <span className="text-slate-500 tabular-nums">{s.line || '--'}</span>
+                          <span className="text-slate-400 text-xs tabular-nums whitespace-nowrap">{s.startTime}–{s.endTime}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          );
+        })()}
         </div>
       </div>
 

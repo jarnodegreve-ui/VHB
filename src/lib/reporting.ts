@@ -70,7 +70,23 @@ export function buildDriverReport(
   const drivers = users.filter((u) => u.role === 'chauffeur');
 
   const periodShifts = shifts.filter((s) => inPeriod(s.date, period));
-  const compliance = analyzeCompliance(periodShifts);
+
+  // Rusttijd-analyse op een verbreed venster (±8 dagen rond de periode) zodat
+  // week-/rusttijd-overtredingen over de periodegrens niet gemist worden;
+  // daarna houden we alleen findings binnen de periode zelf (consistent met
+  // ComplianceView). De diensten/uren-telling blijft op periodShifts.
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const shiftIso = (iso: string, days: number) =>
+    new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)) + days))
+      .toISOString().slice(0, 10);
+  const startIso = period.month === null ? `${period.year}-01-01` : `${period.year}-${pad(period.month)}-01`;
+  const endIso = period.month === null
+    ? `${period.year}-12-31`
+    : `${period.year}-${pad(period.month)}-${pad(new Date(Date.UTC(period.year, period.month, 0)).getUTCDate())}`;
+  const widenStart = shiftIso(startIso, -8);
+  const widenEnd = shiftIso(endIso, 8);
+  const widenedShifts = shifts.filter((s) => s.date >= widenStart && s.date <= widenEnd);
+  const compliance = analyzeCompliance(widenedShifts);
 
   const shiftsByDriver = new Map<string, Shift[]>();
   for (const s of periodShifts) {

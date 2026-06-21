@@ -65,9 +65,16 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify(pendingRestore),
       });
+      if (response.status === 413) {
+        notify('De back-up is te groot om te herstellen via de browser. Neem contact op zodat we hem rechtstreeks kunnen terugzetten.', 'error');
+        return;
+      }
       const data = await response.json().catch(() => ({} as any));
       if (!response.ok) {
-        notify(data.details || data.error || `Herstellen mislukt (${response.status}).`, 'error');
+        const partial = data.appliedSoFar && Object.keys(data.appliedSoFar).length
+          ? ` Al teruggezet: ${Object.entries(data.appliedSoFar).map(([k, v]) => `${k} (${v})`).join(', ')}.`
+          : '';
+        notify((data.details || data.error || `Herstellen mislukt (${response.status}).`) + partial, 'error');
         return;
       }
       notify('Back-up hersteld. De pagina wordt herladen…', 'success');

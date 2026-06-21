@@ -19,13 +19,13 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
 import { sendLeaveDecisionEmail, sendEmail, type LeaveDecisionAction } from "./email.js";
-import { getVapidPublicKey, savePushSubscription, deletePushSubscription, sendPushToUsers } from "./push.js";
+import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
 import { rateLimitMiddleware } from "./rateLimit.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken } from "./helpers.js";
 import {
   buildPlanningFromMatrix,
   getActivityLog,
@@ -55,6 +55,7 @@ import {
   savePlanningData,
   clearPlanningData,
   updateUserSessionMeta,
+  bumpActiveSessions,
   getShiftById,
   savePlanningMatrixHistoryEntry,
   savePlanningMatrixRows,
@@ -156,18 +157,22 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: "Ongeldige sessieactie." });
     }
 
+    // Teller atomair bijwerken (RPC) i.p.v. read-modify-write op de gecachte
+    // waarde — anders telt het mis bij ~gelijktijdig in/uitloggen.
+    await bumpActiveSessions(String(currentUser.id), action === "start" ? 1 : -1);
+    const lastLogin = action === "start" ? new Date().toLocaleString("nl-BE") : currentUser.lastLogin;
+    if (action === "start") {
+      await updateUserSessionMeta(String(currentUser.id), { lastLogin });
+    }
+    // Optimistische teller in de respons (exact-genoeg voor weergave; de
+    // DB-waarde is gezaghebbend en nu wél race-vrij).
     const nextUser: AppUser = {
       ...currentUser,
-      lastLogin: action === "start" ? new Date().toLocaleString("nl-BE") : currentUser.lastLogin,
+      lastLogin,
       activeSessions: action === "start"
         ? (currentUser.activeSessions || 0) + 1
         : Math.max(0, (currentUser.activeSessions || 1) - 1),
     };
-
-    await updateUserSessionMeta(nextUser.id, {
-      lastLogin: nextUser.lastLogin,
-      activeSessions: nextUser.activeSessions,
-    });
     res.json(nextUser);
   } catch (error: any) {
     res.status(500).json({ error: "Kon sessie niet bijwerken.", details: error.message });
@@ -442,24 +447,35 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
       .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
     const dates = monthRows.map((r: any) => String(r.source_date));
 
+    // Naam- en code-resolutie identiek aan buildPlanningFromMatrix (toLookupToken
+    // strikt: accenten/interpunctie/hoofdletters genormaliseerd). Anders kreeg
+    // /month-planning lege of foute cellen voor accent-/omgekeerde namen en
+    // toonde een dienst met scheidingsteken als 'onbekend'.
+    const sortedNameToken = (name: string) =>
+      toLookupToken(name).split(/\s+/).filter(Boolean).sort().join(" ");
     const chauffeurs = users
       .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && norm(u.name) !== "beheerder")
-      .map((u: any) => ({ id: String(u.id), name: u.name as string, key: norm(u.name) }))
+      .map((u: any) => ({ id: String(u.id), name: u.name as string }))
       .sort((a, b) => a.name.localeCompare(b.name));
-    const idByNameKey = new Map(chauffeurs.map((c) => [c.key, c.id]));
+    // Volgorde-onafhankelijke index: zowel "Jan Janssen" als "Janssen Jan" matcht.
+    const idByNameKey = new Map<string, string>();
+    for (const c of chauffeurs) {
+      idByNameKey.set(toLookupToken(c.name), c.id);
+      idByNameKey.set(sortedNameToken(c.name), c.id);
+    }
 
-    // Code-resolutie — zelfde logica als lib/planning.ts, server-side.
+    // Code-resolutie — zelfde token-normalisatie als de matrix-import.
     // We geven ook label + uren-segmenten mee zodat de UI per cel een
     // detail kan tonen zonder de services/codes naar elke client te sturen.
-    const serviceByNorm = new Map(services.map((s: any) => [norm(s.serviceNumber), s]));
-    const codeByNorm = new Map(codes.map((c: any) => [norm(c.code), c]));
+    const serviceByNorm = new Map(services.map((s: any) => [toLookupToken(s.serviceNumber), s]));
+    const codeByNorm = new Map(codes.map((c: any) => [toLookupToken(c.code), c]));
     const segmentsOf = (s: any): string[] => [
       s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : "",
       s.startTime2 && s.endTime2 ? `${s.startTime2} - ${s.endTime2}` : "",
       s.startTime3 && s.endTime3 ? `${s.startTime3} - ${s.endTime3}` : "",
     ].filter(Boolean);
     const resolve = (code: string): { kind: string; label: string; segments: string[] } | null => {
-      const n = norm(code);
+      const n = toLookupToken(code);
       if (!n) return null;
       const svc = serviceByNorm.get(n);
       if (svc) return { kind: "service", label: `Dienst ${svc.serviceNumber}`, segments: segmentsOf(svc) };
@@ -473,7 +489,7 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
       const date = String(row.source_date);
       const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? row.assignments : {};
       for (const [driverName, rawCode] of Object.entries(assignments)) {
-        const id = idByNameKey.get(norm(driverName));
+        const id = idByNameKey.get(toLookupToken(driverName)) ?? idByNameKey.get(sortedNameToken(driverName));
         if (!id) continue;
         const code = String(rawCode ?? "").trim();
         if (!code) continue;
@@ -1077,10 +1093,11 @@ app.post("/api/push/subscribe", authenticate, async (req: AuthenticatedRequest, 
   }
 });
 
-app.post("/api/push/unsubscribe", authenticate, async (req, res) => {
+app.post("/api/push/unsubscribe", authenticate, async (req: AuthenticatedRequest, res) => {
   const endpoint = String(req.body?.endpoint ?? "");
   if (!endpoint) return res.status(400).json({ error: "endpoint is verplicht" });
-  await deletePushSubscription(endpoint);
+  // Alleen je eigen abonnement mag je afmelden (geen IDOR op andermans endpoint).
+  await deletePushSubscriptionForUser(endpoint, String(req.appUser!.id));
   res.json({ success: true });
 });
 
@@ -1286,7 +1303,17 @@ app.post("/api/restore", authenticate, requireRole("admin"), async (req: Authent
     res.json({ success: true, summary });
   } catch (err: any) {
     console.error("Restore mislukt:", err?.message || err);
-    res.status(500).json({ error: "Herstellen is mislukt", details: err?.message });
+    // Restore is niet transactioneel: log + meld wat al wel toegepast is, zodat
+    // de admin de staat begrijpt en niet half-en-half blijft gokken.
+    const appliedSoFar = err?.appliedSoFar && typeof err.appliedSoFar === "object" ? err.appliedSoFar : null;
+    if (appliedSoFar) {
+      invalidateUsersCache();
+      try {
+        await logActivity(req, "system", "Back-up gedeeltelijk hersteld",
+          `Restore halverwege gefaald. Wél teruggezet: ${Object.entries(appliedSoFar).map(([k, v]) => `${k} (${v})`).join(", ") || "niets"}. Fout: ${err?.message || "onbekend"}.`);
+      } catch { /* logging mag de foutrespons niet blokkeren */ }
+    }
+    res.status(500).json({ error: "Herstellen is mislukt", details: err?.message, appliedSoFar });
   }
 });
 
@@ -1395,7 +1422,7 @@ app.get("/api/services", authenticate, async (req, res) => {
   }
 });
 
-app.post("/api/services", authenticate, requireRole("planner", "admin"), async (req, res) => {
+app.post("/api/services", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
@@ -1403,6 +1430,11 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
       // De import-flow in dienstoverzicht-beheer vervangt legitiem de hele
       // collectie (verse ids per upload) en meldt dat expliciet via header.
       const isBulkReplace = req.headers["x-bulk-replace"] === "1";
+      // De volledige-vervang-import is in de UI admin-only; dwing dat ook
+      // server-side af (de header omzeilt anders de wipe-vangrail).
+      if (isBulkReplace && req.appUser?.role !== "admin") {
+        return res.status(403).json({ error: "Bulk-import van het dienstoverzicht is alleen voor admins." });
+      }
       if (!isBulkReplace) {
         // Bulk-import vervangt bewust de hele collectie → revisie-/wipe-checks
         // alleen voor gewone bewerkingen.
@@ -1527,9 +1559,19 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
     const newById = new Map(newData.map((s: any) => [String(s.id), s]));
     const swapIdsToDelete: string[] = [];
+    // Eén open/goedgekeurde ruil per dienst — voorkomt dat twee gelijktijdige
+    // verzoeken voor dezelfde shift allebei blijven lopen of goedgekeurd raken.
+    const OPEN_SWAP_STATES = new Set(["pending", "accepted", "approved"]);
+    // Wat er werkelijk weggeschreven wordt. Planner/admin schrijven de hele
+    // payload (vertrouwde rol); voor een chauffeur bouwen we de set op uit
+    // enkel de records die hij/zij legitiem toevoegt of beantwoordt — zo
+    // overschrijft een echo van ongewijzigde records nooit een gelijktijdige
+    // wijziging van een ander (geen vals 403, geen clobber).
+    let recordsToWrite: any[] = newData;
 
     if (req.appUser?.role === "chauffeur") {
       const selfId = String(req.appUser.id);
+      const writes: any[] = [];
 
       // Verwijderingen: alleen eigen pending-aanvragen mogen weg.
       for (const [id, prev] of previousById) {
@@ -1575,11 +1617,16 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (!offeredShift || String(offeredShift.driverId) !== selfId) {
             return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen dienst te ruil aanbieden." });
           }
+          // Exclusiviteit per dienst: geen tweede open verzoek voor dezelfde shift.
+          if (previousSwaps.some((s) => String(s.shiftId) === String(next.shiftId) && OPEN_SWAP_STATES.has(String(s.status)))) {
+            return res.status(409).json({ error: "Voor deze dienst loopt al een ruilverzoek. Trek dat eerst in of wacht de beslissing af." });
+          }
           const allUsersForCheck = await getUsersData();
           const targetUser = allUsersForCheck.find((u: any) => String(u.id) === String(next.targetDriverId));
           if (!targetUser || targetUser.isActive === false) {
             return res.status(400).json({ error: "De gekozen collega bestaat niet (meer) of is inactief." });
           }
+          writes.push(next);
         } else {
           // De aangeduide collega mag een aan hem/haar gerichte, openstaande
           // ruil accepteren (pending → accepted) of weigeren (pending → rejected).
@@ -1599,16 +1646,14 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
                 return res.status(403).json({ error: "Niet toegestaan: je mag een aanvraag alleen accepteren of weigeren." });
               }
             }
-          } else {
-            const fields = ["shiftId", "requesterId", "targetDriverId", "status", "createdAt", "reason", "decidedAt", "returnDate", "returnCode"] as const;
-            for (const f of fields) {
-              if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
-                return res.status(403).json({ error: "Niet toegestaan: bestaande wisselverzoeken kunnen alleen door planner/admin worden aangepast." });
-              }
-            }
+            writes.push(next);
           }
+          // Anders: ongewijzigde echo of een gelijktijdig door een ander
+          // gewijzigd record → bewust NIET wegschrijven (geen 403, geen
+          // overschrijving van de verse serverstaat).
         }
       }
+      recordsToWrite = writes;
     }
 
     // Beleid: een ruil rechtstreeks goedkeuren vanuit 'pending' (dus zonder
@@ -1636,7 +1681,18 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveSwapsData(newData, swapIdsToDelete);
+    // Exclusiviteit bij goedkeuren: een dienst kan niet via twee ruilen
+    // tegelijk goedgekeurd raken. Blokkeer een approve-overgang als er al een
+    // ándere goedgekeurde ruil voor dezelfde shift bestaat.
+    for (const next of newData) {
+      const prev = previousById.get(String(next.id));
+      const becomesApproved = next.status === "approved" && (!prev || prev.status !== "approved");
+      if (becomesApproved && previousSwaps.some((s) => String(s.id) !== String(next.id) && String(s.shiftId) === String(next.shiftId) && String(s.status) === "approved")) {
+        return res.status(409).json({ error: "Voor deze dienst is al een andere ruil goedgekeurd." });
+      }
+    }
+
+    await saveSwapsData(recordsToWrite, swapIdsToDelete);
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen.
     const usersForLog = await getUsersData();
@@ -1726,6 +1782,13 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       if (role !== "admin" && current.status === "pending" && status === "approved") {
         return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
       }
+    }
+
+    // Exclusiviteit: een dienst kan niet via twee ruilen tegelijk goedgekeurd
+    // raken (zie ook POST /api/swaps).
+    if (status === "approved" && current.status !== "approved" &&
+        all.some((s) => String(s.id) !== id && String(s.shiftId) === String(current.shiftId) && String(s.status) === "approved")) {
+      return res.status(409).json({ error: "Voor deze dienst is al een andere ruil goedgekeurd." });
     }
 
     // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —

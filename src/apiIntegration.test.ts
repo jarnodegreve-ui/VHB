@@ -74,6 +74,9 @@ vi.mock('../api/push.js', async (importOriginal) => ({
   deletePushSubscription: async (endpoint: string) => {
     mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => s.endpoint !== endpoint);
   },
+  deletePushSubscriptionForUser: async (endpoint: string, userId: string) => {
+    mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => !(s.endpoint === endpoint && String(s.userId) === String(userId)));
+  },
   sendPushToUsers: async (userIds: string[], payload: any) => {
     if (userIds.length > 0) mem.pushesSent.push({ userIds, payload });
   },
@@ -207,6 +210,7 @@ beforeEach(() => {
   mem.planning = [
     { id: 'sh-a', driverId: '3', date: '2026-07-01', code: '12' },
     { id: 'sh-b', driverId: '4', date: '2026-07-02', code: '14' },
+    { id: 'sh-c', driverId: '3', date: '2026-07-08', code: '12' }, // vrije dienst van chauffeur 3 (geen open ruil)
   ];
   mem.services = [
     { id: 'd1', serviceNumber: '10', startTime: '06:00', endTime: '14:00' },
@@ -385,13 +389,21 @@ describe('bulk-wipe-vangrail (PR #71)', () => {
     expect(mem.services).toHaveLength(6);
   });
 
-  it('staat dezelfde save toe mét expliciete x-bulk-replace header', async () => {
-    const res = await api('POST', '/api/services', {
+  it('staat de x-bulk-replace alleen toe voor admin (planner krijgt 403)', async () => {
+    const planner = await api('POST', '/api/services', {
       token: 'tok-planner',
       body: mem.services.slice(0, 2),
       headers: { 'x-bulk-replace': '1' },
     });
-    expect(res.status).toBe(200);
+    expect(planner.status).toBe(403);
+    expect(mem.services).toHaveLength(6); // niks gewijzigd
+
+    const admin = await api('POST', '/api/services', {
+      token: 'tok-admin',
+      body: mem.services.slice(0, 2),
+      headers: { 'x-bulk-replace': '1' },
+    });
+    expect(admin.status).toBe(200);
     expect(mem.services).toHaveLength(2);
   });
 
@@ -538,7 +550,7 @@ describe('push-notificaties', () => {
   it('stuurt een push naar de aangezochte collega bij een nieuwe ruil', async () => {
     const own = mem.swaps.filter((s) => s.requesterId === '3' || s.targetDriverId === '3');
     const nieuw = {
-      id: 's-nieuw', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending',
+      id: 's-nieuw', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
       reason: '', createdAt: '2026-06-12T08:00:00Z', returnDate: '2026-07-09', returnCode: 'VRIJ',
     };
     const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, nieuw] });
@@ -619,7 +631,7 @@ describe('back-up export', () => {
     expect(c.swaps).toHaveLength(2);
     expect(c.services).toHaveLength(6);
     expect(c.updates).toHaveLength(6);
-    expect(c.planning).toHaveLength(2);
+    expect(c.planning).toHaveLength(3);
     expect(Array.isArray(c.diversions)).toBe(true);
     expect(Array.isArray(c.planningCodes)).toBe(true);
     expect(Array.isArray(c.activityLog)).toBe(true);
@@ -774,5 +786,42 @@ describe('rate limiting', () => {
     // tok-b heeft een eigen budget en mag gewoon door.
     const res = await api('GET', '/api/leave', { token: 'tok-b' });
     expect(res.status).toBe(200);
+  });
+});
+
+describe('concurrency & IDOR (middel-fixes)', () => {
+  it('weigert een tweede open ruil voor dezelfde dienst (409)', async () => {
+    // sh-a heeft al een open ruil (s-1). Chauffeur 3 biedt sh-a nogmaals aan.
+    const own = mem.swaps.filter((s) => s.requesterId === '3' || s.targetDriverId === '3');
+    const dubbel = {
+      id: 's-dup', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-12T08:00:00Z', returnDate: '2026-07-09', returnCode: 'VRIJ',
+    };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, dubbel] });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s) => s.id === 's-dup')).toBeFalsy();
+  });
+
+  it('weigert een tweede goedkeuring voor dezelfde dienst (409, via PATCH)', async () => {
+    mem.swaps = [
+      { id: 'x1', shiftId: 'sh-z', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' },
+      { id: 'x2', shiftId: 'sh-z', requesterId: '3', targetDriverId: '2', status: 'accepted', reason: '', createdAt: '2026-06-01T09:00:00Z', returnDate: '2026-07-03', returnCode: '12' },
+    ];
+    const eerste = await api('PATCH', '/api/swaps/x1', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(eerste.status).toBe(200);
+    const tweede = await api('PATCH', '/api/swaps/x2', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(tweede.status).toBe(409);
+    expect(mem.swaps.find((s) => s.id === 'x2')?.status).toBe('accepted');
+  });
+
+  it('push-unsubscribe verwijdert niet het abonnement van een ándere gebruiker (geen IDOR)', async () => {
+    await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/owned-by-3', keys: { p256dh: 'pk', auth: 'au' } } });
+    // Gebruiker 4 probeert het endpoint van gebruiker 3 af te melden → geen effect.
+    const idor = await api('POST', '/api/push/unsubscribe', { token: 'tok-b', body: { endpoint: 'https://push.example/owned-by-3' } });
+    expect(idor.status).toBe(200);
+    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://push.example/owned-by-3')).toBe(true);
+    // De eigenaar zelf kan het wél afmelden.
+    await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/owned-by-3' } });
+    expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://push.example/owned-by-3')).toBe(false);
   });
 });
