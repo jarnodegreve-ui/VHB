@@ -52,6 +52,15 @@ export const deletePushSubscription = async (endpoint: string) => {
   await db.from("push_subscriptions").delete().eq("endpoint", endpoint);
 };
 
+/** Verwijdert een abonnement alleen als het van de gegeven gebruiker is —
+ *  voor de publieke unsubscribe-route (voorkomt dat iemand andermans
+ *  endpoint kan afmelden). De user-agnostische variant blijft voor de
+ *  interne 404/410-opruiming in sendPushToUsers. */
+export const deletePushSubscriptionForUser = async (endpoint: string, userId: string) => {
+  if (!db) return;
+  await db.from("push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", String(userId));
+};
+
 const getSubscriptionsForUsers = async (userIds: string[]): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> => {
   if (!db || userIds.length === 0) return [];
   const { data, error } = await db

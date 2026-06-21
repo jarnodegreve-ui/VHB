@@ -849,6 +849,25 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
       .map((user): [string, SupabaseAuthUser] => [normalizeEmail(user.email) as string, user]),
   );
 
+  const removedUserIds = currentUsers
+    .map((user) => String(user.id))
+    .filter((id) => !incomingIds.has(id));
+
+  // DB-writes EERST. De Auth-mutaties hieronder zijn onomkeerbaar; door de
+  // database vooraf te schrijven faalt een DB-fout vóór er ook maar één
+  // Auth-account is aangemaakt of verwijderd (geen weeskonten / verweesde
+  // profielen door een halverwege gefaalde write).
+  if (removedUserIds.length > 0) {
+    const { error } = await client.from('users').delete().in('id', removedUserIds);
+    if (error) throw error;
+  }
+  const databaseUsers = sanitizedUsers.map(toDatabaseUser);
+  {
+    const { error } = await client.from('users').upsert(databaseUsers);
+    if (error) throw error;
+  }
+
+  // Daarna pas de Auth-kant. Verwijderde gebruikers: bijhorend Auth-account weg.
   for (const currentUser of currentUsers) {
     if (incomingIds.has(String(currentUser.id))) continue;
     const existingAuth = normalizeEmail(currentUser.email)
@@ -860,10 +879,6 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
       if (error) throw error;
     }
   }
-
-  const removedUserIds = currentUsers
-    .map((user) => String(user.id))
-    .filter((id) => !incomingIds.has(id));
 
   for (const incomingUser of incomingUsers) {
     const sanitizedUser = sanitizeIncomingUser(incomingUser);
@@ -911,15 +926,7 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
       if (error) throw error;
     }
   }
-
-  if (removedUserIds.length > 0) {
-    const { error } = await client.from('users').delete().in('id', removedUserIds);
-    if (error) throw error;
-  }
-
-  const databaseUsers = sanitizedUsers.map(toDatabaseUser);
-  const { error } = await client.from('users').upsert(databaseUsers);
-  if (error) throw error;
+  // (DB-delete + DB-upsert zijn hierboven al uitgevoerd, vóór de Auth-mutaties.)
 };
 
 /** Gericht sessie-metadata bijwerken — alléén de eigen rij.
@@ -937,6 +944,22 @@ export const updateUserSessionMeta = async (
   if (Object.keys(patch).length === 0) return;
   const { error } = await client.from('users').update(patch).eq('id', String(userId));
   if (error) throw error;
+};
+
+/** Verhoog/verlaag de activeSessions-teller ATOMAIR via een Postgres-RPC.
+ *  Voorkomt de lost-update-race wanneer meerdere mensen ~tegelijk in/uitloggen
+ *  (read-modify-write op de gecachte waarde telde mis). Valt terug op een
+ *  read-modify-write zolang de RPC nog niet in de DB staat (zie
+ *  supabase/active_sessions_rpc.sql). */
+export const bumpActiveSessions = async (userId: string, delta: number) => {
+  const client = requireDb();
+  const { error } = await client.rpc('bump_active_sessions', { uid: String(userId), delta });
+  if (!error) return;
+  if (!isMissingDbFunction(error)) throw error;
+  // Fallback (migratie nog niet gedraaid): niet-atomair, maar functioneel.
+  const { data } = await client.from('users').select('activesessions').eq('id', String(userId)).maybeSingle();
+  const current = Number((data as any)?.activesessions ?? 0);
+  await client.from('users').update({ activesessions: Math.max(0, current + delta) }).eq('id', String(userId));
 };
 
 // --- Diversions ---
@@ -971,16 +994,19 @@ export const saveDiversionsData = async (data: any) => {
     .map((row: any) => String(row.id))
     .filter((id) => !incomingIds.has(id));
 
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await client.from('diversions').delete().in('id', idsToDelete);
-    if (deleteError) throw deleteError;
-    // Best-effort: also remove the PDFs from Storage.
-    await removeDiversionPdfs(idsToDelete);
-  }
-
+  // Eerst upserten, dan pas verwijderen: faalt de upsert, dan zijn er nog géén
+  // rijen (en PDF's) onomkeerbaar weggegooid. Andersom verloor je bij een
+  // upsert-fout de zojuist verwijderde records.
   if (normalized.length > 0) {
     const { error: upsertError } = await client.from('diversions').upsert(normalized.map(toDatabaseDiversion));
     if (upsertError) throw upsertError;
+  }
+
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('diversions').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
+    // Best-effort: also remove the PDFs from Storage (pas ná geslaagde delete).
+    await removeDiversionPdfs(idsToDelete);
   }
 };
 
@@ -1160,11 +1186,6 @@ export const saveUpdatesData = async (data: any) => {
     .map((row: any) => String(row.id))
     .filter((id) => !incomingIds.has(id));
 
-  if (idsToDelete.length > 0) {
-    const { error: deleteError } = await client.from('updates').delete().in('id', idsToDelete);
-    if (deleteError) throw deleteError;
-  }
-
   const payloadWithoutUrgent = normalizedData.map((update) => ({
     id: String(update.id),
     date: String(update.date || ""),
@@ -1172,9 +1193,16 @@ export const saveUpdatesData = async (data: any) => {
     category: update.category || "algemeen",
     content: update.content || "",
   }));
+  // Eerst upserten, dan pas de ontbrekende rijen verwijderen — faalt de
+  // upsert, dan zijn er nog geen records verloren.
   if (payloadWithoutUrgent.length > 0) {
     const { error } = await client.from('updates').upsert(payloadWithoutUrgent);
     if (error) throw error;
+  }
+
+  if (idsToDelete.length > 0) {
+    const { error: deleteError } = await client.from('updates').delete().in('id', idsToDelete);
+    if (deleteError) throw deleteError;
   }
 
   // Best-effort: persist the urgent flag only when the production schema supports it.
@@ -1321,6 +1349,10 @@ export const RESTORABLE_KEYS: Array<keyof RestorableCollections> = [
 export const restoreFromBackup = async (collections: RestorableCollections): Promise<Record<string, number>> => {
   const summary: Record<string, number> = {};
 
+  // Restore is niet transactioneel (meerdere tabellen). Bij een fout halverwege
+  // hangen we de tot dan toe geslaagde collecties aan de error, zodat de route
+  // dat kan loggen en terugmelden (de admin weet dan wat al toegepast is).
+  try {
   if (Array.isArray(collections.users)) {
     await saveUsersData(collections.users);
     summary.users = collections.users.length;
@@ -1375,4 +1407,8 @@ export const restoreFromBackup = async (collections: RestorableCollections): Pro
   }
 
   return summary;
+  } catch (err: any) {
+    if (err && typeof err === 'object') err.appliedSoFar = summary;
+    throw err;
+  }
 };
