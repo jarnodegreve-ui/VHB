@@ -6,7 +6,7 @@ import type { LeaveRequest } from '../types';
 // deeltijdse contracten, etc.).
 export const BETAALD_VERLOF_BUDGET = 24;
 
-const daysBetween = (startIso: string, endIso: string): number => {
+export const daysBetween = (startIso: string, endIso: string): number => {
   if (!startIso || !endIso) return 0;
   // UTC-rekenen i.p.v. lokale tijd: een lokale dag is bij de overgang naar
   // zomertijd (laatste zondag maart) maar 23u, waardoor floor() een hele

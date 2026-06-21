@@ -7,7 +7,7 @@ import { cn, notify } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
-import { verlofBalans } from '../lib/leaveBalance';
+import { verlofBalans, daysBetween } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
@@ -74,11 +74,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const requestPreview = useMemo(() => {
     if (!formData.startDate || !formData.endDate) return null;
     const requestedYear = parseInt(formData.startDate.slice(0, 4), 10);
-    const startD = new Date(`${formData.startDate}T00:00:00`);
-    const endD = new Date(`${formData.endDate}T00:00:00`);
-    const ms = endD.getTime() - startD.getTime();
-    if (Number.isNaN(ms) || ms < 0) return null;
-    const requestedDays = Math.floor(ms / (1000 * 60 * 60 * 24)) + 1;
+    // DST-veilig tellen via UTC (zie leaveBalance.daysBetween) — lokale
+    // middernacht + floor telde 1 dag te weinig over de lente-DST-zondag.
+    const requestedDays = daysBetween(formData.startDate, formData.endDate);
+    if (requestedDays <= 0) return null;
 
     const currentBalance = verlofBalans(leaveRequests, user.id, requestedYear, user.verlofBudget);
     const wouldExceed =
@@ -671,9 +670,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         {reviewLeave && (() => {
           const requester = users.find((u) => u.id === reviewLeave.userId);
           const conflictShifts = shiftsConflictingWithLeave(shifts, reviewLeave);
-          const startD = new Date(`${reviewLeave.startDate}T00:00:00`);
-          const endD = new Date(`${reviewLeave.endDate}T00:00:00`);
-          const dayCount = Math.max(1, Math.floor((endD.getTime() - startD.getTime()) / 86400000) + 1);
+          const dayCount = Math.max(1, daysBetween(reviewLeave.startDate, reviewLeave.endDate));
           const requestYear = parseInt(reviewLeave.startDate.slice(0, 4), 10);
           const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester?.verlofBudget);
           const exceeds = reviewLeave.type === 'betaald_verlof'

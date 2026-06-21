@@ -503,6 +503,17 @@ export default function App() {
     }
   }, [currentUser?.id]);
 
+  // Idempotente harde logout vanuit een API-respons (verlopen sessie /
+  // gedeactiveerd account). Eén keer per sessie: onAuthStateChange(SIGNED_OUT)
+  // wist verder alle state en toont LoginView.
+  const forceSignOutRef = useRef(false);
+  const forceSignOut = async (msg: string) => {
+    if (forceSignOutRef.current) return;
+    forceSignOutRef.current = true;
+    showToast(msg, 'error');
+    try { await supabase?.auth.signOut(); } catch { /* val sowieso terug op login */ }
+  };
+
   const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token) => {
     const headers = new Headers(init.headers || {});
     if (!headers.has('Content-Type') && init.body) {
@@ -513,8 +524,20 @@ export default function App() {
     }
 
     const response = await fetch(url, { ...init, headers });
-    if (response.status === 401 || response.status === 403) {
-      throw new Error('Je sessie is verlopen of je hebt geen toegang.');
+    // 401 = sessie ongeldig/verlopen → forceer relogin. 403 alleen forceren bij
+    // een gedeactiveerd account; een gewone "onvoldoende rechten"-403 is enkel
+    // een fout op die actie en mag de gebruiker niet uitloggen.
+    if (response.status === 401) {
+      void forceSignOut('Je sessie is verlopen. Log opnieuw in.');
+      throw new Error('Je sessie is verlopen.');
+    }
+    if (response.status === 403) {
+      const body = await response.clone().json().catch(() => ({} as any));
+      if (/gedeactiveerd/i.test(body?.error || '')) {
+        void forceSignOut('Je account is gedeactiveerd. Neem contact op met de planning.');
+        throw new Error('Je account is gedeactiveerd.');
+      }
+      throw new Error(body?.error || 'Je hebt geen toegang tot deze actie.');
     }
     return response;
   };
@@ -532,6 +555,7 @@ export default function App() {
     }
     setCurrentUser(data);
     setMonitoringUser(String(data.id));
+    forceSignOutRef.current = false; // geldige sessie → her-arm de auto-logout
     return data as User;
   };
 
@@ -567,15 +591,17 @@ export default function App() {
   const initializeAuthenticatedApp = async (accessToken: string, authUserId?: string) => {
     // Progressieve boot: alleen het profiel (één snelle call) blokkeert de
     // eerste render; alle overige data streamt op de achtergrond binnen.
-    if (authUserId) {
-      if (initializedUserIdRef.current === authUserId) return;
-      initializedUserIdRef.current = authUserId;
-    }
+    if (authUserId && initializedUserIdRef.current === authUserId) return;
     try {
       const appUser = await fetchCurrentUser(accessToken);
+      // Pas NA een geslaagd profiel de dedup-vlag zetten — anders blijft de
+      // gebruiker bij een transiente /api/me-fout vasthangen op 'Profiel
+      // laden…' (een volgend auth-event werd door de vlag kortgesloten).
+      if (authUserId) initializedUserIdRef.current = authUserId;
       void loadAppData(appUser, accessToken);
     } catch (error) {
       console.error('Error initializing app:', error);
+      if (authUserId) initializedUserIdRef.current = null; // her-init toestaan bij een volgend auth-event
       setIsInitialLoad(false);
       showToast('Kon je profiel niet laden. Vernieuw de pagina of log opnieuw in.', 'error');
     }

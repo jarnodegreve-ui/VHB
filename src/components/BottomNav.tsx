@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, Calendar, MapPin, Bell, FileText } from 'lucide-react';
+import { LayoutDashboard, Calendar, MapPin, CalendarCheck, FileText } from 'lucide-react';
 import type { View } from '../types';
 import { cn } from '../lib/ui';
 
@@ -38,7 +38,10 @@ export function BottomNav({
     { view: 'rooster', label: 'Rooster', icon: <Calendar size={20} /> },
     { view: 'omleidingen', label: 'Omleidingen', icon: <MapPin size={20} /> },
     { view: 'ritblaadjes', label: 'Ritblaadjes', icon: <FileText size={20} /> },
-    { view: 'updates', label: 'Updates', icon: <Bell size={20} />, badge: unseenLeaveCount },
+    // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount),
+    // dus die hoort hier — op 'Updates' was hij misleidend. Updates blijven op
+    // het dashboard zichtbaar.
+    { view: 'verlof', label: 'Verlof', icon: <CalendarCheck size={20} />, badge: unseenLeaveCount },
   ];
 
   return (
