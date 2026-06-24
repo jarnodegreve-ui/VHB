@@ -29,6 +29,7 @@ import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToke
 import {
   buildPlanningFromMatrix,
   getActivityLog,
+  getLoginActivity,
   getCoverageExpectations,
   saveCoverageExpectations,
   getEntityHistory,
@@ -163,6 +164,10 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
     const lastLogin = action === "start" ? new Date().toLocaleString("nl-BE") : currentUser.lastLogin;
     if (action === "start") {
       await updateUserSessionMeta(String(currentUser.id), { lastLogin });
+      // Login-event vastleggen: lastLogin wordt overschreven, maar de
+      // activiteitenlog bewaart elke aanmelding apart → historiek "wie wanneer"
+      // + basis voor het per-dag-actieve-gebruikers-overzicht.
+      await logActivity(req, "auth", "Aangemeld", `${currentUser.name} meldde zich aan.`, { type: "user", id: String(currentUser.id) });
     }
     // Optimistische teller in de respons (exact-genoeg voor weergave; de
     // DB-waarde is gezaghebbend en nu wél race-vrij).
@@ -643,6 +648,21 @@ app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) =
     res.json(activity);
   } catch (err: any) {
     res.status(500).json({ error: "Failed to read activity log", details: err.message });
+  }
+});
+
+// Aanmeldingen (login-events) voor het aanwezigheids-overzicht: wie wanneer
+// op het portaal kwam + per-dag actieve gebruikers. Standaard de laatste 30
+// dagen; ?days= override (1–365).
+app.get("/api/activity/logins", authenticate, requireRole("admin"), async (req, res) => {
+  try {
+    const reqDays = Number(req.query.days);
+    const days = Number.isFinite(reqDays) && reqDays >= 1 && reqDays <= 365 ? Math.floor(reqDays) : 30;
+    const sinceIso = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+    const logins = await getLoginActivity(sinceIso);
+    res.json({ days, logins });
+  } catch (err: any) {
+    res.status(500).json({ error: "Failed to read login activity", details: err.message });
   }
 });
 

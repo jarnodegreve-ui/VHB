@@ -164,6 +164,7 @@ export default function App() {
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
+  const [loginActivity, setLoginActivity] = useState<ActivityLogEntry[]>([]);
   // Dekkingsgaten (vandaag + 6 dagen = 7-daags venster) voor het Operations
   // Center van planner/admin. null = (nog) niet geladen — de cockpit toont
   // dan 'onbekend' i.p.v. een vals-groen 'volledig gedekt'.
@@ -476,6 +477,7 @@ export default function App() {
   useEffect(() => {
     if (currentView === 'activiteit' && currentUser?.role === 'admin') {
       fetchActivityLog();
+      fetchLoginActivity();
     }
   }, [currentView, currentUser?.role]);
 
@@ -782,6 +784,18 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching activity log:', error);
+    }
+  };
+
+  const fetchLoginActivity = async (accessToken = session?.access_token) => {
+    try {
+      const response = await apiFetch('/api/activity/logins', {}, accessToken);
+      const data = await response.json();
+      if (data && Array.isArray(data.logins)) {
+        setLoginActivity(data.logins);
+      }
+    } catch (error) {
+      console.error('Error fetching login activity:', error);
     }
   };
 
@@ -1739,7 +1753,7 @@ export default function App() {
                   <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} />}
+              {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} logins={loginActivity} />}
               {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} />}
               {resolvedCurrentView === 'beheer-contactlijst' && (
