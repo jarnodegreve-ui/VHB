@@ -35,7 +35,27 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
   );
 }
 
-export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
+export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLogEntry[]; logins?: ActivityLogEntry[] }) {
+  // Aanwezigheid: per dag het aantal unieke aangemelde gebruikers (distinct
+  // op user-id/naam), nieuwste dag eerst.
+  const dailyActive = useMemo(() => {
+    const byDay = new Map<string, Set<string>>();
+    for (const e of logins) {
+      const day = new Date(e.createdAt).toLocaleDateString('en-CA'); // yyyy-mm-dd, lokaal
+      const key = String(e.entityId || e.actorName);
+      const set = byDay.get(day) ?? new Set<string>();
+      set.add(key);
+      byDay.set(day, set);
+    }
+    return [...byDay.entries()]
+      .map(([day, set]) => ({ day, count: set.size }))
+      .sort((a, b) => b.day.localeCompare(a.day));
+  }, [logins]);
+  const maxDaily = Math.max(1, ...dailyActive.map((d) => d.count));
+  const recentLogins = useMemo(
+    () => [...logins].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30),
+    [logins],
+  );
   const categoryLabels: Record<ActivityLogEntry['category'], string> = {
     users: 'Gebruikers',
     planning: 'Planning',
@@ -122,6 +142,51 @@ export function ActivityLogView({ entries }: { entries: ActivityLogEntry[] }) {
         <StatCard icon={<Users className="text-slate-600" />} label="Gebruikersacties" value={entries.filter((entry) => entry.category === 'users').length.toString()} subValue="Accounts en rollen" />
         <StatCard icon={<Calendar className="text-emerald-600" />} label="Planning" value={entries.filter((entry) => entry.category === 'planning' || entry.category === 'planning_codes').length.toString()} subValue="Imports, sync en codes" />
       </div>
+
+      <section className="surface-card rounded-3xl p-6 md:p-8">
+        <AdminSubsectionHeader
+          eyebrow="Aanwezigheid"
+          title="Aanmeldingen op het portaal"
+          description="Wie kwam wanneer op het portaal, en hoeveel unieke gebruikers waren er per dag actief (laatste 30 dagen)."
+        />
+        {logins.length === 0 ? (
+          <div className="mt-6">
+            <EmptyState icon={<Users size={28} />} title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
+          </div>
+        ) : (
+          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+            <div>
+              <MicroLabel className="mb-3">Actieve gebruikers per dag</MicroLabel>
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+                {dailyActive.map((d) => (
+                  <div key={d.day} className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
+                      {new Date(`${d.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
+                    </span>
+                    <div className="flex-1 h-5 rounded-md bg-slate-100 overflow-hidden">
+                      <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.count / maxDaily) * 100)}%` }} />
+                    </div>
+                    <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-700 tabular-nums">{d.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div>
+              <MicroLabel className="mb-3">Recente aanmeldingen</MicroLabel>
+              <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+                {recentLogins.map((e) => (
+                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 hover:bg-slate-50">
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{e.actorName}</span>
+                    <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">
+                      {new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+      </section>
 
       <section className="surface-card rounded-3xl p-6 md:p-8">
         <AdminSubsectionHeader

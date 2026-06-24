@@ -299,12 +299,33 @@ export const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): Ac
 
 export const getActivityLog = async (): Promise<ActivityLogRecord[]> => {
   const client = requireDb();
+  // Login-events ('auth' / 'Aangemeld') worden bewust uit het auditspoor
+  // gefilterd: ze zijn hoog-volume en zouden de 100-cap vullen met logins,
+  // waardoor de echte beheeracties verdwijnen. Logins komen via
+  // getLoginActivity() in een eigen overzicht.
   const { data, error } = await client
     .from("activity_log")
     .select("*")
+    .or("category.neq.auth,action.neq.Aangemeld")
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) throw error;
+  return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
+};
+
+/** Login-events (aanmeldingen) sinds een ISO-tijdstip — voor het
+ *  aanwezigheids-overzicht (wie wanneer + per-dag actieve gebruikers). */
+export const getLoginActivity = async (sinceIso: string, limit = 3000): Promise<ActivityLogRecord[]> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from("activity_log")
+    .select("*")
+    .eq("category", "auth")
+    .eq("action", "Aangemeld")
+    .gte("created_at", sinceIso)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) return [];
   return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
 };
 

@@ -126,7 +126,9 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.activity.push({ domain, action, message });
     },
     getActivityLog: async () => mem.activity,
+    getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld'),
     updateUserSessionMeta: async () => {},
+    bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async () => [],
     getCoverageExpectations: async () => ({}),
     logClientError: async (entry: any) => { mem.clientErrors.push(entry); },
@@ -823,5 +825,26 @@ describe('concurrency & IDOR (middel-fixes)', () => {
     // De eigenaar zelf kan het wél afmelden.
     await api('POST', '/api/push/unsubscribe', { token: 'tok-a', body: { endpoint: 'https://push.example/owned-by-3' } });
     expect(mem.pushSubscriptions.some((s) => s.endpoint === 'https://push.example/owned-by-3')).toBe(false);
+  });
+});
+
+describe('aanmeldingen (login-activiteit)', () => {
+  it('logt een aanmelding bij sessie-start', async () => {
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start' } });
+    expect(res.status).toBe(200);
+    const login = mem.activity.find((a) => a.action === 'Aangemeld');
+    expect(login).toBeTruthy();
+    expect(login.domain).toBe('auth');
+  });
+
+  it('GET /api/activity/logins: admin krijgt logins, planner 403', async () => {
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start' } });
+    const planner = await api('GET', '/api/activity/logins', { token: 'tok-planner' });
+    expect(planner.status).toBe(403);
+    const admin = await api('GET', '/api/activity/logins', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json.days).toBe(30);
+    expect(Array.isArray(admin.json.logins)).toBe(true);
+    expect(admin.json.logins.length).toBeGreaterThanOrEqual(1);
   });
 });
