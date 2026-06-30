@@ -26,6 +26,9 @@ process.env.CRON_SECRET = 'test-cron-secret';
 // telstand in beforeEach, dus geen overloop tussen testen.
 process.env.RATE_LIMIT_MAX = '50';
 process.env.RATE_LIMIT_ANON_MAX = '50';
+// OCPI: token + publieke basis zodat de gehoste endpoints testbaar zijn.
+process.env.OCPI_TOKEN_A = 'test-token-a';
+process.env.OCPI_PUBLIC_BASE_URL = 'https://test.example';
 
 const mem = vi.hoisted(() => ({
   users: [] as any[],
@@ -846,5 +849,36 @@ describe('aanmeldingen (login-activiteit)', () => {
     expect(admin.json.days).toBe(30);
     expect(Array.isArray(admin.json.logins)).toBe(true);
     expect(admin.json.logins.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('OCPI 2.2.1 — gehoste endpoints + handshake-auth', () => {
+  const tok = (s: string) => 'Token ' + Buffer.from(s, 'utf8').toString('base64');
+
+  it('versions vereist een geldig OCPI-token (anders 401)', async () => {
+    expect((await api('GET', '/api/ocpi/versions')).status).toBe(401);
+    expect((await api('GET', '/api/ocpi/versions', { headers: { Authorization: tok('fout') } })).status).toBe(401);
+  });
+
+  it('versions geeft het OCPI-envelope met 2.2.1 bij geldig Token A', async () => {
+    const res = await api('GET', '/api/ocpi/versions', { headers: { Authorization: tok('test-token-a') } });
+    expect(res.status).toBe(200);
+    expect(res.json.status_code).toBe(1000);
+    expect(res.json.data[0].version).toBe('2.2.1');
+    expect(res.json.data[0].url).toContain('/api/ocpi/2.2.1');
+  });
+
+  it('version-details vermeldt de credentials-module', async () => {
+    const res = await api('GET', '/api/ocpi/2.2.1', { headers: { Authorization: tok('test-token-a') } });
+    expect(res.status).toBe(200);
+    expect(res.json.data.endpoints.some((e: any) => e.identifier === 'credentials')).toBe(true);
+  });
+
+  it('register en status zijn admin-only', async () => {
+    expect((await api('POST', '/api/ocpi/register', { token: 'tok-a' })).status).toBe(403);
+    expect((await api('GET', '/api/ocpi/status', { token: 'tok-planner' })).status).toBe(403);
+    const admin = await api('GET', '/api/ocpi/status', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json).toHaveProperty('registered');
   });
 });
