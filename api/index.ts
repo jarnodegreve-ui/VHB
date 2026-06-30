@@ -213,7 +213,11 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
     });
     if (authListError) throw authListError;
 
-    const authUser = authPage.users.find((user) => normalizeEmail(user.email) === normalizeEmail(targetUser.email));
+    // Expliciete cast: Vercel's function-builder typeert authPage.users soms
+    // als never[] (striktere TS/supabase-types dan lokaal/CI) → bouwfout. De
+    // cast maakt de vorm versie-onafhankelijk.
+    const authUsers = (authPage?.users ?? []) as Array<{ id: string; email?: string | null }>;
+    const authUser = authUsers.find((user) => normalizeEmail(user.email) === normalizeEmail(targetUser.email));
     if (!authUser) {
       return res.status(404).json({ error: "Geen gekoppeld auth-account gevonden." });
     }
