@@ -4,6 +4,7 @@ import type { Service, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { OcpiCard } from './OcpiCard';
 
 const COLLECTION_LABELS: Record<string, string> = {
   users: 'Gebruikers',
@@ -293,6 +294,8 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           </div>
         </div>
       )}
+
+      <OcpiCard />
 
       <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
