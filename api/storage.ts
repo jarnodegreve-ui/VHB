@@ -865,7 +865,7 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
   if (authListError) throw authListError;
 
   const authUsersByEmail = new Map<string, SupabaseAuthUser>(
-    (authPage.users || [])
+    ((authPage?.users ?? []) as SupabaseAuthUser[])
       .filter((user) => user.email)
       .map((user): [string, SupabaseAuthUser] => [normalizeEmail(user.email) as string, user]),
   );
