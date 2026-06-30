@@ -174,6 +174,167 @@ export const registerWithCpo = async (): Promise<{ version: string; cpoPartyId: 
   return { version: chosen.version, cpoPartyId: cpoRole?.party_id ?? null, endpoints: cpoEndpoints.length };
 };
 
+// ============================================================================
+// Stap 3 — type-veilige OCPI-client (Sender-kant pollen met Token C).
+// Velden volgen de OCPI 2.2.1-spec; [k: string]: unknown houdt de rest open
+// (de sync bewaart het volledige object als `raw`).
+// ============================================================================
+
+export type OcpiGeoLocation = { latitude: string; longitude: string };
+export type OcpiPrice = { excl_vat?: number; incl_vat?: number };
+
+export interface OcpiConnector {
+  id: string;
+  standard?: string;
+  format?: string;
+  power_type?: string;
+  max_voltage?: number;
+  max_amperage?: number;
+  max_electric_power?: number;
+  last_updated?: string;
+  [k: string]: unknown;
+}
+export interface OcpiEvse {
+  uid: string;
+  evse_id?: string;
+  status?: string;
+  physical_reference?: string;
+  connectors?: OcpiConnector[];
+  last_updated?: string;
+  [k: string]: unknown;
+}
+export interface OcpiLocation {
+  country_code: string;
+  party_id: string;
+  id: string;
+  name?: string;
+  address?: string;
+  city?: string;
+  postal_code?: string;
+  country?: string;
+  coordinates?: OcpiGeoLocation;
+  time_zone?: string;
+  publish?: boolean;
+  evses?: OcpiEvse[];
+  last_updated?: string;
+  [k: string]: unknown;
+}
+export interface OcpiSession {
+  country_code: string;
+  party_id: string;
+  id: string;
+  status?: string;
+  start_date_time?: string;
+  end_date_time?: string;
+  kwh?: number;
+  currency?: string;
+  total_cost?: OcpiPrice;
+  location_id?: string;
+  evse_uid?: string;
+  connector_id?: string;
+  auth_method?: string;
+  last_updated?: string;
+  [k: string]: unknown;
+}
+export interface OcpiCdr {
+  country_code: string;
+  party_id: string;
+  id: string;
+  session_id?: string;
+  start_date_time?: string;
+  end_date_time?: string;
+  total_energy?: number;
+  total_time?: number;
+  total_cost?: OcpiPrice;
+  currency?: string;
+  auth_method?: string;
+  cdr_location?: { evse_uid?: string; connector_id?: string; [k: string]: unknown };
+  last_updated?: string;
+  [k: string]: unknown;
+}
+
+/** Parseer de OCPI-paginatie: de URL bij rel="next" in de Link-header. */
+export const parseNextLink = (linkHeader: string | null): string | null => {
+  if (!linkHeader) return null;
+  for (const part of linkHeader.split(",")) {
+    const m = /<([^>]+)>\s*;\s*rel\s*=\s*"?next"?/i.exec(part.trim());
+    if (m) return m[1];
+  }
+  return null;
+};
+
+const withParams = (url: string, params: Record<string, string | undefined>): string => {
+  const u = new URL(url);
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== "") u.searchParams.set(k, v);
+  }
+  if (!u.searchParams.has("limit")) u.searchParams.set("limit", "100");
+  return u.toString();
+};
+
+/** GET alle pagina's: volgt de Link-header (rel="next") tot er geen meer is. */
+const ocpiGetAll = async <T>(startUrl: string, token: string): Promise<T[]> => {
+  const items: T[] = [];
+  let url: string | null = startUrl;
+  let guard = 0;
+  while (url && guard++ < 500) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30_000);
+    let res: Response;
+    try {
+      res = await fetch(url, { headers: { Authorization: authHeader(token), Accept: "application/json" }, signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
+    const text = await res.text();
+    if (!res.ok) throw new OcpiError(`OCPI HTTP ${res.status} bij ${url}: ${text.slice(0, 200)}`);
+    let json: any = null;
+    try { json = text ? JSON.parse(text) : null; } catch { /* niet-JSON */ }
+    if (json && typeof json.status_code === "number" && json.status_code !== 1000) {
+      throw new OcpiError(`OCPI status ${json.status_code} (${json.status_message ?? "?"}) bij ${url}`);
+    }
+    if (Array.isArray(json?.data)) items.push(...(json.data as T[]));
+    url = parseNextLink(res.headers.get("Link") ?? res.headers.get("link"));
+  }
+  return items;
+};
+
+const requireRegistration = async (): Promise<OcpiRegistration> => {
+  const reg = await getOcpiRegistration();
+  if (!reg?.cpo_token_c) {
+    throw new Error("OCPI: nog niet geregistreerd (geen Token C). Voer eerst de handshake uit.");
+  }
+  return reg;
+};
+
+/** Zoek de Sender-endpoint-URL van de CPO voor een module (locations/sessions/cdrs). */
+const resolveSenderEndpoint = (reg: OcpiRegistration, identifier: string): string | null => {
+  const eps = reg.cpo_endpoints ?? [];
+  const sender = eps.find((e) => e.identifier === identifier && (e.role ?? "").toUpperCase() === "SENDER");
+  return (sender ?? eps.find((e) => e.identifier === identifier))?.url ?? null;
+};
+
+export const fetchLocations = async (): Promise<OcpiLocation[]> => {
+  const reg = await requireRegistration();
+  const url = resolveSenderEndpoint(reg, "locations");
+  if (!url) throw new Error("OCPI: geen 'locations' Sender-endpoint bij de CPO.");
+  return ocpiGetAll<OcpiLocation>(withParams(url, {}), reg.cpo_token_c!);
+};
+
+export const fetchSessions = async (opts: { dateFrom?: string; dateTo?: string } = {}): Promise<OcpiSession[]> => {
+  const reg = await requireRegistration();
+  const url = resolveSenderEndpoint(reg, "sessions");
+  if (!url) throw new Error("OCPI: geen 'sessions' Sender-endpoint bij de CPO.");
+  return ocpiGetAll<OcpiSession>(withParams(url, { date_from: opts.dateFrom, date_to: opts.dateTo }), reg.cpo_token_c!);
+};
+
+export const fetchCdrs = async (opts: { dateFrom?: string; dateTo?: string } = {}): Promise<OcpiCdr[]> => {
+  const reg = await requireRegistration();
+  const url = resolveSenderEndpoint(reg, "cdrs");
+  if (!url) throw new Error("OCPI: geen 'cdrs' Sender-endpoint bij de CPO.");
+  return ocpiGetAll<OcpiCdr>(withParams(url, { date_from: opts.dateFrom, date_to: opts.dateTo }), reg.cpo_token_c!);
+};
+
 // ---- Auth voor ÓNZE gehoste OCPI-endpoints ----
 // Geldig is: Token A (tijdens registratie) of onze Token B (daarna). De CPO
 // stuurt 'Token <base64>'; we vergelijken zowel base64 als plain (2.1.1).
