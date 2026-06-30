@@ -29,7 +29,21 @@ create table if not exists public.ocpi_registration (
 alter table public.ocpi_registration enable row level security;
 -- Bewust geen policies: enkel de service-role (server) mag hierbij.
 
--- Houd updated_at automatisch bij (hergebruikt de functie uit setup_security.sql).
+-- Zelfvoorzienend: zorg dat de updated_at-helper bestaat. (create or replace is
+-- idempotent en botst niet met de identieke definitie in setup_security.sql.)
+-- Nodig omdat deze migratie los gedraaid kan worden vóór setup_security.sql;
+-- ontbrak de functie, dan rolde de hele transactie terug → geen tabel.
+create or replace function public.set_updated_at()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$$;
+
+-- Houd updated_at automatisch bij.
 drop trigger if exists ocpi_registration_set_updated_at on public.ocpi_registration;
 create trigger ocpi_registration_set_updated_at
 before update on public.ocpi_registration
