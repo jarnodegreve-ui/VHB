@@ -133,6 +133,11 @@ export const registerWithCpo = async (): Promise<{ version: string; cpoPartyId: 
   // 3) Onze credentials POST'en met Token A. Wij genereren Token B (waarmee de
   //    CPO óns mag bellen). 2.2.1 credentials-object: token, url, roles[].
   const ourTokenB = randomToken();
+  // BELANGRIJK: Token B eerst opslaan. Tijdens de POST hieronder haalt de CPO
+  // synchroon ónze versions/version-details op, geauthenticeerd met deze Token B.
+  // Staat hij nog niet in de DB, dan geeft ocpiAuth 401 en meldt de CPO
+  // "unable to reach versions endpoint" (OCPI-status 3001).
+  await saveOcpiRegistration({ our_token_b: ourTokenB, ocpi_version: chosen.version });
   const ourCredentials = {
     token: ourTokenB,
     url: OUR_VERSIONS_URL,
