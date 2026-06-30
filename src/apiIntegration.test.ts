@@ -882,3 +882,21 @@ describe('OCPI 2.2.1 — gehoste endpoints + handshake-auth', () => {
     expect(admin.json).toHaveProperty('registered');
   });
 });
+
+describe('OCPI-client — paginatie (parseNextLink)', () => {
+  it('haalt de next-URL uit de Link-header', async () => {
+    const { parseNextLink } = await import('../api/ocpi');
+    expect(parseNextLink('<https://kempower.io/api/ocpi/2.2.1/locations?offset=100&limit=100>; rel="next"'))
+      .toBe('https://kempower.io/api/ocpi/2.2.1/locations?offset=100&limit=100');
+  });
+  it('geeft null als er geen next is', async () => {
+    const { parseNextLink } = await import('../api/ocpi');
+    expect(parseNextLink('<https://x/y?offset=0>; rel="prev"')).toBeNull();
+    expect(parseNextLink(null)).toBeNull();
+    expect(parseNextLink('')).toBeNull();
+  });
+  it('kiest de next-link uit meerdere', async () => {
+    const { parseNextLink } = await import('../api/ocpi');
+    expect(parseNextLink('<https://a>; rel="prev", <https://b>; rel="next"')).toBe('https://b');
+  });
+});
