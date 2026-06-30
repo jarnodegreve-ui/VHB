@@ -900,3 +900,19 @@ describe('OCPI-client — paginatie (parseNextLink)', () => {
     expect(parseNextLink('<https://a>; rel="prev", <https://b>; rel="next"')).toBe('https://b');
   });
 });
+
+describe('OCPI-sync — autorisatie', () => {
+  it('POST /api/ocpi/sync is admin-only', async () => {
+    expect((await api('POST', '/api/ocpi/sync', { token: 'tok-a' })).status).toBe(403);
+    expect((await api('POST', '/api/ocpi/sync', { token: 'tok-planner' })).status).toBe(403);
+    const admin = await api('POST', '/api/ocpi/sync', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json).toHaveProperty('errors');
+  });
+  it('cron-sync vereist het CRON_SECRET', async () => {
+    expect((await api('GET', '/api/cron/ocpi-sync')).status).toBe(401);
+    const ok = await api('GET', '/api/cron/ocpi-sync?parts=locations', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(ok.status).toBe(200);
+    expect(ok.json).toHaveProperty('errors');
+  });
+});
