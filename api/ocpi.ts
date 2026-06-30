@@ -335,6 +335,133 @@ export const fetchCdrs = async (opts: { dateFrom?: string; dateTo?: string } = {
   return ocpiGetAll<OcpiCdr>(withParams(url, { date_from: opts.dateFrom, date_to: opts.dateTo }), reg.cpo_token_c!);
 };
 
+// ============================================================================
+// Stap 4 — sync-laag: client → upsert naar Supabase. Per-module foutafhandeling
+// zodat één fout de rest niet meesleurt; idempotent via upsert op de PK's.
+// ============================================================================
+
+export type OcpiSyncSummary = {
+  locations: number;
+  evses: number;
+  connectors: number;
+  sessions: number;
+  cdrs: number;
+  errors: string[];
+};
+
+const toTs = (v: unknown): string | null => (typeof v === "string" && v ? v : null);
+const toNum = (v: unknown): number | null => (typeof v === "number" && Number.isFinite(v) ? v : null);
+
+// Upsert in brokken (PostgREST/payload-veilig); idempotent op de opgegeven PK.
+const upsertChunked = async (table: string, rows: any[], onConflict: string): Promise<number> => {
+  if (!db || rows.length === 0) return 0;
+  let written = 0;
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500);
+    const { error } = await db.from(table).upsert(chunk, { onConflict });
+    if (error) throw new Error(`${table}: ${error.message}`);
+    written += chunk.length;
+  }
+  return written;
+};
+
+const syncLocations = async (summary: OcpiSyncSummary): Promise<void> => {
+  const locations = await fetchLocations();
+  const locRows: any[] = [];
+  const evseRows: any[] = [];
+  const connRows: any[] = [];
+  for (const loc of locations) {
+    try {
+      locRows.push({
+        country_code: loc.country_code, party_id: loc.party_id, id: loc.id,
+        name: loc.name ?? null, address: loc.address ?? null, city: loc.city ?? null,
+        postal_code: loc.postal_code ?? null, country: loc.country ?? null,
+        latitude: loc.coordinates?.latitude ?? null, longitude: loc.coordinates?.longitude ?? null,
+        time_zone: loc.time_zone ?? null, publish: typeof loc.publish === "boolean" ? loc.publish : null,
+        last_updated: toTs(loc.last_updated), raw: loc, synced_at: nowIso(),
+      });
+      for (const evse of loc.evses ?? []) {
+        evseRows.push({
+          uid: evse.uid, evse_id: evse.evse_id ?? null,
+          location_country_code: loc.country_code, location_party_id: loc.party_id, location_id: loc.id,
+          status: evse.status ?? null, physical_reference: evse.physical_reference ?? null,
+          last_updated: toTs(evse.last_updated), raw: evse, synced_at: nowIso(),
+        });
+        for (const conn of evse.connectors ?? []) {
+          connRows.push({
+            evse_uid: evse.uid, id: conn.id, standard: conn.standard ?? null, format: conn.format ?? null,
+            power_type: conn.power_type ?? null, max_voltage: toNum(conn.max_voltage), max_amperage: toNum(conn.max_amperage),
+            max_electric_power: toNum(conn.max_electric_power), last_updated: toTs(conn.last_updated), raw: conn, synced_at: nowIso(),
+          });
+        }
+      }
+    } catch (e: any) {
+      summary.errors.push(`location ${loc?.id}: ${e?.message ?? e}`);
+    }
+  }
+  summary.locations += await upsertChunked("ocpi_locations", locRows, "country_code,party_id,id");
+  summary.evses += await upsertChunked("ocpi_evses", evseRows, "uid");
+  summary.connectors += await upsertChunked("ocpi_connectors", connRows, "evse_uid,id");
+};
+
+const syncSessions = async (summary: OcpiSyncSummary, opts: { dateFrom?: string } = {}): Promise<void> => {
+  const dateFrom = opts.dateFrom ?? new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString();
+  const sessions = await fetchSessions({ dateFrom });
+  const rows = sessions.map((s) => ({
+    country_code: s.country_code, party_id: s.party_id, id: s.id, status: s.status ?? null,
+    start_date_time: toTs(s.start_date_time), end_date_time: toTs(s.end_date_time),
+    kwh: toNum(s.kwh), currency: s.currency ?? null,
+    total_cost_excl_vat: toNum(s.total_cost?.excl_vat), total_cost_incl_vat: toNum(s.total_cost?.incl_vat),
+    location_id: s.location_id ?? null, evse_uid: s.evse_uid ?? null, connector_id: s.connector_id ?? null,
+    auth_method: s.auth_method ?? null, last_updated: toTs(s.last_updated), raw: s, synced_at: nowIso(),
+  }));
+  summary.sessions += await upsertChunked("ocpi_sessions", rows, "country_code,party_id,id");
+};
+
+const syncCdrs = async (summary: OcpiSyncSummary, opts: { dateFrom?: string } = {}): Promise<void> => {
+  const dateFrom = opts.dateFrom ?? new Date(Date.now() - 35 * 24 * 3600 * 1000).toISOString();
+  const cdrs = await fetchCdrs({ dateFrom });
+  const rows = cdrs.map((c) => {
+    const loc = (c.cdr_location ?? {}) as { id?: string; evse_uid?: string; connector_id?: string };
+    return {
+      country_code: c.country_code, party_id: c.party_id, id: c.id, session_id: c.session_id ?? null,
+      start_date_time: toTs(c.start_date_time), end_date_time: toTs(c.end_date_time),
+      total_energy: toNum(c.total_energy), total_time: toNum(c.total_time),
+      total_cost_excl_vat: toNum(c.total_cost?.excl_vat), total_cost_incl_vat: toNum(c.total_cost?.incl_vat),
+      currency: c.currency ?? null, auth_method: c.auth_method ?? null,
+      location_id: loc.id ?? null, evse_uid: loc.evse_uid ?? null, connector_id: loc.connector_id ?? null,
+      last_updated: toTs(c.last_updated), raw: c, synced_at: nowIso(),
+    };
+  });
+  summary.cdrs += await upsertChunked("ocpi_cdrs", rows, "country_code,party_id,id");
+};
+
+/**
+ * Draai de OCPI-sync. Elke module heeft eigen foutafhandeling: een fout (bv. een
+ * onbereikbare pal of een DB-hapering) wordt in `errors` gezet maar laat de
+ * andere modules gewoon doorlopen. Niet-geregistreerd → vroege, nette return.
+ */
+export const runOcpiSync = async (
+  parts: { locations?: boolean; sessions?: boolean; cdrs?: boolean } = { locations: true, sessions: true, cdrs: true },
+): Promise<OcpiSyncSummary> => {
+  const summary: OcpiSyncSummary = { locations: 0, evses: 0, connectors: 0, sessions: 0, cdrs: 0, errors: [] };
+  const reg = await getOcpiRegistration();
+  if (!reg?.cpo_token_c) {
+    summary.errors.push("OCPI nog niet geregistreerd (geen Token C).");
+    return summary;
+  }
+  if (parts.locations) {
+    try { await syncLocations(summary); } catch (e: any) { summary.errors.push(`locations: ${e?.message ?? e}`); }
+  }
+  if (parts.sessions) {
+    try { await syncSessions(summary); } catch (e: any) { summary.errors.push(`sessions: ${e?.message ?? e}`); }
+  }
+  if (parts.cdrs) {
+    try { await syncCdrs(summary); } catch (e: any) { summary.errors.push(`cdrs: ${e?.message ?? e}`); }
+  }
+  return summary;
+};
+
 // ---- Auth voor ÓNZE gehoste OCPI-endpoints ----
 // Geldig is: Token A (tijdens registratie) of onze Token B (daarna). De CPO
 // stuurt 'Token <base64>'; we vergelijken zowel base64 als plain (2.1.1).
@@ -440,5 +567,43 @@ export const mountOcpiRoutes = (app: express.Express) => {
       registeredAt: reg?.registered_at ?? null,
       configured: Boolean(CPO_VERSIONS_URL && TOKEN_A && PUBLIC_BASE),
     });
+  });
+
+  // Beheer: handmatig synchroniseren (knop in de OCPI-kaart). Standaard alles.
+  app.post("/api/ocpi/sync", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const body = (req.body ?? {}) as { locations?: boolean; sessions?: boolean; cdrs?: boolean };
+      const parts = (body.locations || body.sessions || body.cdrs)
+        ? body
+        : { locations: true, sessions: true, cdrs: true };
+      const summary = await runOcpiSync(parts);
+      res.json({ success: summary.errors.length === 0, ...summary });
+    } catch (err: any) {
+      console.error("[ocpi] sync mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-sync mislukt", details: err?.message ?? String(err) });
+    }
+  });
+
+  // Cron-route (Vercel stuurt Authorization: Bearer ${CRON_SECRET} mee).
+  // ?parts=locations|sessions|cdrs|all bepaalt wat er gesynct wordt, zodat
+  // verschillende schema's verschillende frequenties kunnen hebben.
+  app.get("/api/cron/ocpi-sync", async (req, res) => {
+    const secret = process.env.CRON_SECRET;
+    if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+      return res.status(401).json({ error: "Niet toegestaan." });
+    }
+    const which = String(req.query.parts ?? "all");
+    const parts = which === "all"
+      ? { locations: true, sessions: true, cdrs: true }
+      : { locations: which === "locations", sessions: which === "sessions", cdrs: which === "cdrs" };
+    try {
+      const summary = await runOcpiSync(parts);
+      if (summary.errors.length) console.warn(`[cron-ocpi:${which}] ${summary.errors.length} fout(en):`, summary.errors.join(" | "));
+      else console.log(`[cron-ocpi:${which}] ok`, summary);
+      res.json({ success: summary.errors.length === 0, ...summary });
+    } catch (err: any) {
+      console.error(`[cron-ocpi:${which}] mislukt:`, err?.message ?? err);
+      res.status(500).json({ error: "OCPI-sync mislukt", details: err?.message ?? String(err) });
+    }
   });
 };

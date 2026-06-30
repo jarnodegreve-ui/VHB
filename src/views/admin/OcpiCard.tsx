@@ -22,6 +22,8 @@ export function OcpiCard() {
   const [status, setStatus] = useState<OcpiStatus | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isRegistering, setIsRegistering] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [lastSync, setLastSync] = useState<string | null>(null);
 
   const fetchStatus = async () => {
     setIsLoading(true);
@@ -61,6 +63,29 @@ export function OcpiCard() {
     }
   };
 
+  const sync = async () => {
+    setIsSyncing(true);
+    try {
+      const response = await fetch('/api/ocpi/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        notify(data.details || data.error || `Sync mislukt (${response.status}).`, 'error');
+      } else {
+        const s = `${data.locations ?? 0} locaties · ${data.evses ?? 0} palen · ${data.sessions ?? 0} sessies · ${data.cdrs ?? 0} CDR's`;
+        setLastSync(s);
+        if (data.errors?.length) notify(`Sync deels gelukt (${data.errors.length} fout(en)): ${s}`, 'error');
+        else notify(`Sync klaar: ${s}`, 'success');
+      }
+    } catch {
+      notify('Sync mislukt — probeer opnieuw.', 'error');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   return (
     <div className="surface-card p-8 rounded-3xl">
       <div className="flex items-start gap-4">
@@ -73,14 +98,24 @@ export function OcpiCard() {
               <h3 className="text-base font-bold text-slate-800">OCPI-koppeling (ChargEye)</h3>
               <p className="text-sm text-slate-500 mt-0.5">Read-only monitoring van de Kempower-laadpalen (eMSP, OCPI 2.2.1).</p>
             </div>
-            <Button
-              variant="primary"
-              onClick={register}
-              disabled={isRegistering || (status ? !status.configured : false)}
-            >
-              {isRegistering ? 'Registreren…' : status?.registered ? 'Herregistreren' : 'Registreren'}
-            </Button>
+            <div className="flex items-center gap-2.5">
+              {status?.registered && (
+                <Button variant="secondary" onClick={sync} disabled={isSyncing}>
+                  {isSyncing ? 'Synchroniseren…' : 'Nu synchroniseren'}
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={register}
+                disabled={isRegistering || (status ? !status.configured : false)}
+              >
+                {isRegistering ? 'Registreren…' : status?.registered ? 'Herregistreren' : 'Registreren'}
+              </Button>
+            </div>
           </div>
+          {lastSync && (
+            <p className="mt-2 text-[11px] text-slate-500">Laatste sync: {lastSync}</p>
+          )}
 
           <div className="mt-5 space-y-3">
             <div className="flex justify-between items-center">
