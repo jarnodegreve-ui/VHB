@@ -24,6 +24,7 @@ import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
 import { rateLimitMiddleware } from "./rateLimit.js";
+import { mountOcpiRoutes } from "./ocpi.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken } from "./helpers.js";
 import {
@@ -104,6 +105,10 @@ app.use((req, res, next) => {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
   next();
 });
+
+// OCPI 2.2.1 (eMSP, read-only monitoring van ChargEye) — eigen token-auth,
+// los van de Supabase-auth. Zie api/ocpi.ts.
+mountOcpiRoutes(app);
 
 // Health check
 app.get("/api/health", async (req, res) => {
