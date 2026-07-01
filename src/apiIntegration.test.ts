@@ -916,3 +916,10 @@ describe('OCPI-sync — autorisatie', () => {
     expect(ok.json).toHaveProperty('errors');
   });
 });
+
+describe('OCPI-dashboard — autorisatie', () => {
+  it('GET /api/ocpi/dashboard is admin-only', async () => {
+    expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-planner' })).status).toBe(403);
+    expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-a' })).status).toBe(403);
+  });
+});

@@ -606,4 +606,80 @@ export const mountOcpiRoutes = (app: express.Express) => {
       res.status(500).json({ error: "OCPI-sync mislukt", details: err?.message ?? String(err) });
     }
   });
+
+  // Dashboard-data (stap 5): leest de gesynchroniseerde OCPI-tabellen (service-role)
+  // en levert een kant-en-klare payload voor de monitoring-view.
+  app.get("/api/ocpi/dashboard", authenticate, requireRole("admin"), async (_req: AuthenticatedRequest, res) => {
+    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
+    try {
+      const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
+      const [locsR, evsesR, connsR, sessR, cdrsR] = await Promise.all([
+        db.from("ocpi_locations").select("country_code,party_id,id,name,city").order("name", { ascending: true }),
+        db.from("ocpi_evses").select("uid,evse_id,status,location_id"),
+        db.from("ocpi_connectors").select("evse_uid,id,standard,power_type,max_electric_power"),
+        db.from("ocpi_sessions").select("id,evse_uid,location_id,status,start_date_time,kwh").eq("status", "ACTIVE").order("start_date_time", { ascending: false }),
+        db.from("ocpi_cdrs").select("start_date_time,total_energy").gte("start_date_time", since30),
+      ]);
+
+      const locRows = (locsR.data ?? []) as any[];
+      const evseRows = (evsesR.data ?? []) as any[];
+      const connRows = (connsR.data ?? []) as any[];
+      const activeSessions = (sessR.data ?? []) as any[];
+      const cdrRows = (cdrsR.data ?? []) as any[];
+
+      // Connectors groeperen per EVSE.
+      const connByEvse = new Map<string, any[]>();
+      for (const c of connRows) {
+        const list = connByEvse.get(c.evse_uid) ?? [];
+        list.push({ id: c.id, standard: c.standard, power_type: c.power_type, max_electric_power: c.max_electric_power });
+        connByEvse.set(c.evse_uid, list);
+      }
+      // EVSEs groeperen per locatie + statustelling.
+      const evsesByLoc = new Map<string, any[]>();
+      const statusCounts: Record<string, number> = {};
+      for (const e of evseRows) {
+        const st = e.status ?? "UNKNOWN";
+        statusCounts[st] = (statusCounts[st] ?? 0) + 1;
+        const list = evsesByLoc.get(e.location_id) ?? [];
+        list.push({ uid: e.uid, evse_id: e.evse_id, status: e.status, connectors: connByEvse.get(e.uid) ?? [] });
+        evsesByLoc.set(e.location_id, list);
+      }
+      const locations = locRows.map((l) => ({
+        id: l.id, name: l.name, city: l.city, evses: evsesByLoc.get(l.id) ?? [],
+      }));
+
+      // kWh per dag (laatste 30d aanwezig in CDR's).
+      const perDay = new Map<string, { kwh: number; sessions: number }>();
+      for (const c of cdrRows) {
+        const d = String(c.start_date_time ?? "").slice(0, 10);
+        if (!d) continue;
+        const cur = perDay.get(d) ?? { kwh: 0, sessions: 0 };
+        cur.kwh += Number(c.total_energy) || 0;
+        cur.sessions += 1;
+        perDay.set(d, cur);
+      }
+      const kwhPerDay = [...perDay.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([date, v]) => ({ date, kwh: Math.round(v.kwh * 10) / 10, sessions: v.sessions }));
+      const kwh30d = Math.round([...perDay.values()].reduce((a, v) => a + v.kwh, 0) * 10) / 10;
+
+      res.json({
+        totals: {
+          locations: locRows.length,
+          evses: evseRows.length,
+          connectors: connRows.length,
+          activeSessions: activeSessions.length,
+          cdrs30d: cdrRows.length,
+          kwh30d,
+        },
+        statusCounts,
+        locations,
+        activeSessions,
+        kwhPerDay,
+      });
+    } catch (err: any) {
+      console.error("[ocpi] dashboard mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-dashboard mislukt", details: err?.message ?? String(err) });
+    }
+  });
 };
