@@ -38,7 +38,8 @@ import {
   ShieldCheck,
   BarChart3,
   BellRing,
-  BellOff
+  BellOff,
+  Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
@@ -68,6 +69,7 @@ import { ScheduleView } from './views/ScheduleView';
 import { UpdatesView } from './views/UpdatesView';
 import { SwapRequestsView } from './views/SwapRequestsView';
 import { ActivityLogView } from './views/admin/ActivityLogView';
+import { OcpiDashboardView } from './views/admin/OcpiDashboardView';
 import { ManageSchedulesView } from './views/admin/ManageSchedulesView';
 import { PlanningMatrixView } from './views/admin/PlanningMatrixView';
 import { PlanningCodesView } from './views/admin/PlanningCodesView';
@@ -137,6 +139,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-contactlijst',
     'gebruikers',
     'activiteit',
+    'ocpi-monitoring',
     'beheer-debug',
   ],
 };
@@ -1311,6 +1314,7 @@ export default function App() {
     'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
     'beheer-dienstoverzicht': { title: 'Beheer Dienstoverzicht', subtitle: 'Onderhoud het dienstschema en importeer uit Excel.' },
     'beheer-contactlijst': { title: 'Beheer Contactlijst', subtitle: 'Werk medewerkers, rollen en gegevens bij.' },
+    'ocpi-monitoring': { title: 'Laadpalen (OCPI)', subtitle: 'Status, sessies en verbruik van de Kempower-laadpalen.' },
     'beheer-debug': { title: 'Systeem Status', subtitle: 'Controleer koppelingen, tabellen en health checks.' },
   };
   const currentMeta = viewMeta[resolvedCurrentView] || { title: 'VHB Portaal', subtitle: 'Interne operationele omgeving.' };
@@ -1561,11 +1565,17 @@ export default function App() {
                 active={currentView === 'activiteit'} 
                 onClick={() => { setCurrentView('activiteit'); setIsSidebarOpen(false); }} 
               />
-              <NavItem 
-                icon={<Activity size={18} />} 
-                label="Systeem Status" 
-                active={currentView === 'beheer-debug'} 
-                onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} 
+              <NavItem
+                icon={<Zap size={18} />}
+                label="Laadpalen (OCPI)"
+                active={currentView === 'ocpi-monitoring'}
+                onClick={() => { setCurrentView('ocpi-monitoring'); setIsSidebarOpen(false); }}
+              />
+              <NavItem
+                icon={<Activity size={18} />}
+                label="Systeem Status"
+                active={currentView === 'beheer-debug'}
+                onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }}
               />
             </>
           )}
@@ -1754,6 +1764,7 @@ export default function App() {
                 </Suspense>
               )}
               {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} logins={loginActivity} />}
+              {resolvedCurrentView === 'ocpi-monitoring' && <OcpiDashboardView />}
               {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} />}
               {resolvedCurrentView === 'beheer-contactlijst' && (
