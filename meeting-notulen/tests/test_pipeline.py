@@ -53,9 +53,42 @@ class PipelineTests(unittest.TestCase):
 
         self.assertEqual(result.output_path, self.tmpdir / "gesprek-notulen.md")
         self.assertTrue(result.output_path.exists())
+        self.assertEqual(result.destinations, [str(result.output_path)])
         content = result.output_path.read_text(encoding="utf-8")
         self.assertIn("# Teststandup", content)
         self.assertIn("model: stub-model", content)
+
+    def test_extra_writer_is_invoked(self):
+        from notulen.output import MarkdownWriter
+        from notulen.output.base import OutputWriter
+
+        class StubWriter(OutputWriter):
+            def __init__(self):
+                self.calls = 0
+
+            def write(self, minutes, transcript, *, model):
+                self.calls += 1
+                return "stub:bestemming"
+
+        config = PipelineConfig(audio_path=self.audio)
+        stub_writer = StubWriter()
+        result = NotulenPipeline(
+            config,
+            transcriber=StubTranscriber(),
+            summarizer=StubSummarizer(),
+            writers=[MarkdownWriter(config.resolve_output_path()), stub_writer],
+        ).run()
+
+        self.assertEqual(stub_writer.calls, 1)
+        self.assertIn("stub:bestemming", result.destinations)
+        self.assertTrue(result.output_path.exists())
+
+    def test_supabase_without_credentials_raises_configuration_error(self):
+        config = PipelineConfig(audio_path=self.audio, store_supabase=True)
+        with self.assertRaises(ConfigurationError):
+            NotulenPipeline(
+                config, transcriber=StubTranscriber(), summarizer=StubSummarizer()
+            ).run()
 
     def test_explicit_output_path_wins(self):
         target = self.tmpdir / "sub" / "eigen-naam.md"

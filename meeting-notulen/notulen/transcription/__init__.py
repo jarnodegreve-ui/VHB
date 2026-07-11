@@ -34,7 +34,7 @@ DEFAULT_BACKEND = "faster-whisper"
 
 
 def create_transcriber(config: "PipelineConfig", backend: str = DEFAULT_BACKEND) -> Transcriber:
-    """Maak een transcriber aan op basis van de backend-naam."""
+    """Maak een transcriber aan; met config.diarize komt er een diarization-laag omheen."""
     try:
         factory = TRANSCRIBER_FACTORIES[backend]
     except KeyError:
@@ -42,7 +42,18 @@ def create_transcriber(config: "PipelineConfig", backend: str = DEFAULT_BACKEND)
         raise ConfigurationError(
             f"Onbekende transcriptie-backend '{backend}'. Beschikbaar: {available}"
         ) from None
-    return factory(config)
+    transcriber = factory(config)
+
+    if config.diarize:
+        from .diarization import PyannoteDiarizedTranscriber
+
+        transcriber = PyannoteDiarizedTranscriber(
+            base=transcriber,
+            hf_token=config.hf_token,
+            model_name=config.diarization_model,
+            device=config.whisper_device if config.whisper_device != "auto" else "cpu",
+        )
+    return transcriber
 
 
 __all__ = ["Transcriber", "create_transcriber", "TRANSCRIBER_FACTORIES", "DEFAULT_BACKEND"]

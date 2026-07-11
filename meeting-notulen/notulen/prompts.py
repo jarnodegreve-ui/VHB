@@ -20,7 +20,9 @@ Richtlijnen:
 - Als de datum van de meeting in het gesprek genoemd wordt, gebruik die.
   Anders mag je de bestandsdatum uit de context gebruiken, of null.
 - Herken deelnemers aan hoe ze elkaar aanspreken of zichzelf voorstellen.
-  Het transcript heeft geen sprekerlabels, dus wees voorzichtig met toeschrijvingen.
+- Als het transcript automatische sprekerlabels bevat (bv. "SPREKER_1:"), koppel
+  die waar mogelijk aan echte namen uit het gesprek. Zonder sprekerlabels: wees
+  voorzichtig met toeschrijvingen.
 """
 
 # JSON-schema voor structured output. Nederlandstalige sleutels zodat het

@@ -1,0 +1,10 @@
+# Extra dependencies voor sprekerherkenning (--diarize).
+# Let op: dit trekt PyTorch binnen (~2 GB). Alleen installeren als je
+# diarization echt nodig hebt:
+#
+#   pip install -r requirements.txt -r requirements-diarization.txt
+#
+# Het model is gated: accepteer eenmalig de voorwaarden op
+# https://huggingface.co/pyannote/speaker-diarization-3.1 en zet
+# HUGGINGFACE_TOKEN in je .env.
+pyannote.audio>=3.1

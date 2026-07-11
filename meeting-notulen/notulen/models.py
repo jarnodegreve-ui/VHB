@@ -10,11 +10,15 @@ from typing import Any, Optional
 
 @dataclass(frozen=True)
 class TranscriptSegment:
-    """Eén uitgesproken segment met tijdcodes (in seconden)."""
+    """Eén uitgesproken segment met tijdcodes (in seconden).
+
+    `speaker` is gevuld wanneer diarization actief is (bv. "SPREKER_1").
+    """
 
     start: float
     end: float
     text: str
+    speaker: Optional[str] = None
 
     @property
     def timestamp(self) -> str:
@@ -41,12 +45,20 @@ class Transcript:
         """Plat transcript zonder tijdcodes."""
         return "\n".join(seg.text.strip() for seg in self.segments if seg.text.strip())
 
+    @property
+    def has_speakers(self) -> bool:
+        return any(seg.speaker for seg in self.segments)
+
     def as_timestamped_text(self) -> str:
-        """Transcript met tijdcodes, zoals het naar het taalmodel gaat."""
+        """Transcript met tijdcodes (en sprekerlabels indien aanwezig)."""
         lines = []
         for seg in self.segments:
             text = seg.text.strip()
-            if text:
+            if not text:
+                continue
+            if seg.speaker:
+                lines.append(f"[{seg.timestamp}] {seg.speaker}: {text}")
+            else:
                 lines.append(f"[{seg.timestamp}] {text}")
         return "\n".join(lines)
 
@@ -109,3 +121,6 @@ class PipelineResult:
     output_path: Path
     generated_at: datetime
     model: str
+    # Alle bestemmingen waar de notulen naartoe geschreven zijn
+    # (markdown-pad, supabase-record, ...), voor de eindrapportage.
+    destinations: list[str] = field(default_factory=list)

@@ -64,6 +64,22 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Claude-model voor de samenvatting (default: {DEFAULT_CLAUDE_MODEL})",
     )
     parser.add_argument(
+        "--diarize",
+        action="store_true",
+        help=(
+            "voeg sprekerlabels toe via pyannote (vereist "
+            "requirements-diarization.txt en HUGGINGFACE_TOKEN)"
+        ),
+    )
+    parser.add_argument(
+        "--supabase",
+        action="store_true",
+        help=(
+            "sla de notulen ook gestructureerd op in Supabase (vereist "
+            "SUPABASE_URL en SUPABASE_SERVICE_ROLE_KEY; zie supabase/notulen_schema.sql)"
+        ),
+    )
+    parser.add_argument(
         "--print",
         dest="print_output",
         action="store_true",
@@ -100,6 +116,8 @@ def main(argv: list[str] | None = None) -> int:
         whisper_device=args.device,
         claude_model=args.claude_model,
         meeting_context=args.context,
+        diarize=args.diarize or None,
+        store_supabase=args.supabase or None,
     )
 
     try:
@@ -113,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
 
     logger.info("")
     logger.info("Klaar ✓  Notulen: %s", result.output_path)
+    for destination in result.destinations:
+        if destination != str(result.output_path):
+            logger.info("         ook opgeslagen: %s", destination)
     logger.info(
         "  %d deelnemers · %d kernpunten · %d beslissingen · %d actiepunten",
         len(result.minutes.participants),

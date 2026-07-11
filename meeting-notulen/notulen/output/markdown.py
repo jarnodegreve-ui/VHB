@@ -98,19 +98,17 @@ def render_markdown(
 class MarkdownWriter(OutputWriter):
     """Schrijft de notulen als markdown-bestand naar schijf."""
 
-    def write(
-        self,
-        minutes: MeetingMinutes,
-        transcript: Transcript,
-        destination: Path,
-        *,
-        model: str,
-    ) -> Path:
+    def __init__(self, destination: Path) -> None:
+        self.destination = destination
+
+    def write(self, minutes: MeetingMinutes, transcript: Transcript, *, model: str) -> str:
         content = render_markdown(minutes, transcript, model=model)
         try:
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            destination.write_text(content, encoding="utf-8")
+            self.destination.parent.mkdir(parents=True, exist_ok=True)
+            self.destination.write_text(content, encoding="utf-8")
         except OSError as exc:
-            raise OutputError(f"Kon notulen niet wegschrijven naar {destination}: {exc}") from exc
-        logger.info("Notulen weggeschreven naar %s", destination)
-        return destination
+            raise OutputError(
+                f"Kon notulen niet wegschrijven naar {self.destination}: {exc}"
+            ) from exc
+        logger.info("Notulen weggeschreven naar %s", self.destination)
+        return str(self.destination)
