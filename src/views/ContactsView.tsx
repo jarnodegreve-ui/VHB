@@ -48,7 +48,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
               </div>
               <div className="min-w-0">
                 <h4 className="font-bold text-slate-800 tracking-tight truncate">{u.name}</h4>
-                <MicroLabel className="truncate">{u.role}</MicroLabel>
+                <MicroLabel className="truncate">{u.role === 'chauffeur' ? 'Chauffeur' : u.role === 'planner' ? 'Planning' : u.role === 'admin' ? 'Beheer' : u.role}</MicroLabel>
               </div>
             </div>
             {u.phone ? (
@@ -56,7 +56,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 href={`tel:${u.phone.replace(/\s/g, '')}`}
                 aria-label={`Bel ${u.name}`}
                 title={`Bel ${u.name}`}
-                className="ios-pressable inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:border-emerald-500 hover:text-white transition-colors"
+                className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:border-emerald-500 hover:text-white transition-colors"
               >
                 <Phone size={18} />
               </a>

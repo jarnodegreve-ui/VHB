@@ -240,7 +240,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
             <tr className="bg-slate-50/50">
               <Th className="px-6 py-4">Datum</Th>
               <Th className="px-6 py-4">Dienst</Th>
-              <Th className="px-6 py-4">Tijdsvensters</Th>
+              <Th className="px-6 py-4">Uren</Th>
             </tr>
           </thead>
           <tbody>
@@ -329,9 +329,12 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                     {formatShortDate(g.date).split(' ').slice(1).join(' ')}
                   </p>
                   {g.hasConflict && (
-                    <Badge tone="red" icon={<AlertTriangle size={10} />} className="mt-1">
-                      Verlof-conflict
-                    </Badge>
+                    <div className="mt-1">
+                      <Badge tone="red" icon={<AlertTriangle size={10} />}>
+                        Verlof-conflict
+                      </Badge>
+                      <p className="text-[11px] font-medium text-red-600 mt-1">Je hebt hier verlof — bel de planner.</p>
+                    </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">

@@ -515,7 +515,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       type="button"
                       onClick={goToPrevMonth}
                       aria-label="Vorige maand"
-                      className="ios-pressable w-8 h-8 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                      className="ios-pressable w-11 h-11 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
                     >
                       <ChevronLeft size={16} />
                     </button>
@@ -524,7 +524,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       type="button"
                       onClick={goToNextMonth}
                       aria-label="Volgende maand"
-                      className="ios-pressable w-8 h-8 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                      className="ios-pressable w-11 h-11 rounded-xl border border-slate-200 text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
                     >
                       <ChevronRight size={16} />
                     </button>

@@ -107,6 +107,7 @@ export function CommandPalette({
         label: 'Dienstoverzicht',
         icon: <FileText size={16} />,
         keywords: 'dienst overzicht service nummers',
+        roles: ['planner', 'admin'],
         action: () => onNavigate('dienstoverzicht'),
       },
       {

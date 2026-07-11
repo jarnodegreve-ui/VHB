@@ -219,11 +219,13 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
           <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-6">
             <Search size={32} className="text-slate-300" />
           </div>
-          <h4 className="text-xl font-bold text-slate-800 tracking-tight">Geen resultaten</h4>
-          <p className="text-sm font-normal text-slate-500 mt-2">Geen omleidingen gevonden voor "{searchQuery}"</p>
-          <Button variant="secondary" size="sm" className="mt-6" onClick={() => setSearchQuery('')}>
-            Wis zoekopdracht
-          </Button>
+          <h4 className="text-xl font-bold text-slate-800 tracking-tight">{searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}</h4>
+          <p className="text-sm font-normal text-slate-500 mt-2">{searchQuery ? `Geen omleidingen gevonden voor "${searchQuery}"` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}</p>
+          {searchQuery && (
+            <Button variant="secondary" size="sm" className="mt-6" onClick={() => setSearchQuery('')}>
+              Wis zoekopdracht
+            </Button>
+          )}
         </div>
       )}
     </div>

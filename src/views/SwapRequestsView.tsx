@@ -181,7 +181,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
   };
 
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
-  const handleAccept = (swapId: string) => handleStatusUpdate(swapId, 'accepted');
+  const handleAccept = (swapId: string) => {
+    if (!window.confirm('Deze dienstruil accepteren? De planner beoordeelt ze daarna.')) return;
+    handleStatusUpdate(swapId, 'accepted');
+  };
   const handleDecline = (swapId: string) => {
     if (!window.confirm('Deze dienstruil weigeren?')) return;
     handleStatusUpdate(swapId, 'rejected');
