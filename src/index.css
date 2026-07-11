@@ -918,10 +918,13 @@ html.dark {
 .dark .ring-white\/60 { --tw-ring-color: rgba(255, 255, 255, 0.05); }
 .dark .ring-white\/80 { --tw-ring-color: rgba(154, 161, 169, 0.22); }
 .dark .ring-oker-100 { --tw-ring-color: rgba(232, 163, 61, 0.30); }
+.dark .ring-oker-300 { --tw-ring-color: rgba(232, 163, 61, 0.42); }
+.dark .ring-red-300 { --tw-ring-color: rgba(239, 68, 68, 0.42); }
 
 /* Oker accents */
 .dark .bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
 .dark .bg-oker-50\/80 { background-color: rgba(232, 163, 61, 0.08); }
+.dark .bg-oker-50\/30 { background-color: rgba(232, 163, 61, 0.05); }
 .dark .bg-oker-100 { background-color: rgba(232, 163, 61, 0.18); }
 .dark .bg-oker-500\/15 { background-color: rgba(232, 163, 61, 0.14); }
 .dark .bg-oker-500\/10 { background-color: rgba(232, 163, 61, 0.10); }
@@ -942,6 +945,9 @@ html.dark {
 .dark .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.12); }
 .dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.14); }
 .dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.22); }
+.dark .bg-red-50\/40 { background-color: rgba(239, 68, 68, 0.08); }
+.dark .bg-red-50\/30 { background-color: rgba(239, 68, 68, 0.06); }
+.dark .hover\:bg-red-50\/60:hover { background-color: rgba(239, 68, 68, 0.11); }
 .dark .bg-amber-50 { background-color: rgba(249, 115, 22, 0.14); }
 .dark .bg-amber-50\/80 { background-color: rgba(249, 115, 22, 0.14); }
 .dark .bg-amber-100 { background-color: rgba(249, 115, 22, 0.22); }
