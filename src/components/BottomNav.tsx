@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, Calendar, MapPin, CalendarCheck, FileText } from 'lucide-react';
+import { LayoutDashboard, Calendar, MapPin, CalendarCheck, FileText, Menu } from 'lucide-react';
 import type { View } from '../types';
 import { cn } from '../lib/ui';
 
@@ -24,11 +24,15 @@ export function BottomNav({
   currentView,
   onSelect,
   unseenLeaveCount = 0,
+  onMore,
   hidden = false,
 }: {
   currentView: View;
   onSelect: (view: View) => void;
   unseenLeaveCount?: number;
+  /** Opent het "Meer"-menu (de volledige sidebar-sheet) op de telefoon,
+   *  zodat de bottom-nav het enige nav-systeem is (geen aparte hamburger). */
+  onMore?: () => void;
   /** Verberg de balk wanneer er bv. een sidebar/sheet open is, zodat
    *  hij niet onder de overlay door piept. */
   hidden?: boolean;
@@ -91,6 +95,18 @@ export function BottomNav({
             </li>
           );
         })}
+        {onMore && (
+          <li className="flex-1">
+            <button
+              onClick={onMore}
+              aria-label="Meer"
+              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-xl transition-colors text-slate-400 hover:text-slate-700"
+            >
+              <span className="relative z-10"><Menu size={20} /></span>
+              <span className="relative z-10 text-[9px] font-semibold tracking-tight leading-tight truncate max-w-full px-1">Meer</span>
+            </button>
+          </li>
+        )}
       </ul>
     </nav>
   );
