@@ -12,7 +12,8 @@ L.Icon.Default.mergeOptions({
 });
 
 export function DiversionMap({ coordinates, severity }: { coordinates: [number, number][]; severity: 'low' | 'medium' | 'high' }) {
-  const color = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#E8A33D' : '#3b82f6';
+  // Semantische ernst-schaal (los van de merkkleur oker): high=rood, medium=amber, low=slate.
+  const color = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#f59e0b' : '#94a3b8';
 
   return (
     <MapContainer

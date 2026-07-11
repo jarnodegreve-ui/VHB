@@ -244,8 +244,6 @@ export function DashboardView({
                 </>
               );
             })()}
-            {/* Busje verschijnt hier (delay 4s) als vandaag vrij. */}
-            {!todaysShift && <DrivingBus delay="4s" />}
           </motion.div>
 
           <StatTile
@@ -255,7 +253,6 @@ export function DashboardView({
             value={balans.betaaldResterend}
             subValue={`van ${balans.betaaldBudget} dagen over`}
             onClick={onNavigate ? () => onNavigate('verlof') : undefined}
-            overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
           />
 
           <StatTile
@@ -265,7 +262,6 @@ export function DashboardView({
             value={diversions.length}
             subValue="Actief in netwerk"
             onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
-            overlay={!todaysShift ? <DrivingBus delay="12s" /> : undefined}
           />
         </div>
       ) : (
@@ -287,7 +283,6 @@ export function DashboardView({
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
-            overlay={!todaysShift ? <DrivingBus delay="8s" /> : undefined}
           />
         </div>
       )}
@@ -346,7 +341,7 @@ export function DashboardView({
                   onClick={() => setOpenDiversion(div)}
                   className="group flex w-full items-start gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 text-left hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all"
                 >
-                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${div.severity === 'high' ? 'bg-red-500' : 'bg-oker-500'}`} />
+                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${div.severity === 'high' ? 'bg-red-500' : div.severity === 'medium' ? 'bg-amber-500' : 'bg-slate-400'}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-slate-900 truncate">{div.title}</p>
@@ -612,10 +607,9 @@ export function StatTile({
       <button
         ref={ref as RefObject<HTMLButtonElement>}
         onClick={onClick}
-        className="tilt-card glow-top glass-stack cursor-glow text-left flex-1 rounded-3xl p-5 relative overflow-hidden active:scale-[0.99]"
+        className="tilt-card glow-top glass-stack text-left flex-1 rounded-3xl p-5 relative overflow-hidden active:scale-[0.99]"
         style={tileStyle}
       >
-        <span className="cursor-glow-layer" />
         <span className="relative z-10 block">{Body}</span>
         {overlay}
       </button>
@@ -624,7 +618,7 @@ export function StatTile({
   return (
     <div
       ref={ref as RefObject<HTMLDivElement>}
-      className="glow-top cursor-glow flex-1 rounded-3xl p-5 relative overflow-hidden"
+      className="glow-top flex-1 rounded-3xl p-5 relative overflow-hidden"
       style={tileStyle}
     >
       <span className="cursor-glow-layer" />
