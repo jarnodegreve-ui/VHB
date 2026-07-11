@@ -26,6 +26,7 @@ import {
 
   RotateCcw,
   Menu,
+  CalendarCheck,
   X,
   Map as MapIcon,
 
@@ -1301,7 +1302,7 @@ export default function App() {
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
-    bezetting: { title: 'Maandrooster', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
+    bezetting: { title: 'Team-maandrooster', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
     dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
@@ -1459,12 +1460,12 @@ export default function App() {
           />
           <NavItem
             icon={<Users size={18} />}
-            label="Maandrooster"
+            label="Team-maandrooster"
             active={currentView === 'bezetting'}
             onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
           />
           <NavItem
-            icon={<Calendar size={18} />}
+            icon={<CalendarCheck size={18} />}
             label="Verlof"
             active={currentView === 'verlof'}
             onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }}
@@ -1658,7 +1659,7 @@ export default function App() {
                   <button
                     onClick={() => setIsSidebarOpen(true)}
                     aria-label="Menu openen"
-                    className="p-2 -ml-1 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg lg:hidden transition-colors"
+                    className="p-2 -ml-1 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg hidden md:block lg:hidden transition-colors"
                   >
                     <Menu size={18} />
                   </button>
@@ -1809,6 +1810,7 @@ export default function App() {
         currentView={resolvedCurrentView}
         onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
         unseenLeaveCount={unseenLeaveDecisionCount}
+        onMore={() => setIsSidebarOpen(true)}
         hidden={isSidebarOpen}
       />
 
