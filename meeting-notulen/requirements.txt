@@ -1,0 +1,8 @@
+# Transcriptie (lokaal, CTranslate2-implementatie van Whisper)
+faster-whisper>=1.0
+
+# Samenvatting via de Claude API
+anthropic>=0.40
+
+# Optioneel maar handig: .env-bestand laden voor ANTHROPIC_API_KEY e.d.
+python-dotenv>=1.0

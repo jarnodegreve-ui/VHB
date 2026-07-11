@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+
+# Audio en gegenereerde notulen horen niet in git
+*.mp3
+*.m4a
+*.wav
+*.flac
+*.ogg
+*-notulen.md
+notulen-output/
