@@ -882,7 +882,8 @@ export default function App() {
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
-        showToast('Verlofaanvraag bijgewerkt.', 'success');
+        const isNewRequest = newLeave.some((r) => !leaveRequests.some((p) => p.id === r.id));
+        showToast(isNewRequest ? 'Aanvraag ingediend — de planner beoordeelt ze.' : 'Verlofaanvraag bijgewerkt.', 'success');
       } else {
         const err = await response.json().catch(() => ({} as any));
         showToast(err.details || err.error || 'Opslaan van verlofaanvragen is mislukt.', 'error');
