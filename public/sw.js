@@ -16,7 +16,9 @@
 // - Overige /api/*: network-only (geen stale-data risico).
 // v5: cache-hardening — v4-caches kunnen door de SPA-rewrite index.html
 // onder asset-URLs bevatten (cache-first = blijvend kapot); bump ruimt op.
-const CACHE_NAME = 'vhb-portaal-v7';
+// v8: logo-SVG's gewijzigd (tagline 'SINDS 1922' verwijderd) — bump zodat
+// cache-first de nieuwe logo's serveert i.p.v. de oude gecachte.
+const CACHE_NAME = 'vhb-portaal-v8';
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
