@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode, type RefObject } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid, Eye } from 'lucide-react';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
@@ -29,6 +29,9 @@ export function DashboardView({
   leaveRequests = [],
   isInitialLoad = false,
   onNavigate,
+  canPreview = false,
+  previewActive = false,
+  onTogglePreview,
 }: {
   user: User;
   shifts: Shift[];
@@ -37,6 +40,10 @@ export function DashboardView({
   leaveRequests?: LeaveRequest[];
   isInitialLoad?: boolean;
   onNavigate?: (view: View) => void;
+  /** Admin-only: toon de 'bekijk als chauffeur'-switch. */
+  canPreview?: boolean;
+  previewActive?: boolean;
+  onTogglePreview?: () => void;
 }) {
   const [now, setNow] = useState(new Date());
   // Detailvenster voor een omleiding — opent als side panel, geen paginawissel.
@@ -161,6 +168,28 @@ export function DashboardView({
 
   return (
     <div className="space-y-4">
+      {/* Admin-preview: schakel de weergave naar hoe een chauffeur het portaal ziet
+          (enkel visueel — rechten/data blijven ongewijzigd). */}
+      {canPreview && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl border border-oker-200/70 bg-oker-500/10 px-4 py-2.5">
+          <div className="flex items-center gap-2 min-w-0">
+            <Eye size={15} className="shrink-0 text-oker-600" />
+            <span className="text-[12.5px] font-medium text-slate-600 truncate">
+              {previewActive ? 'Je bekijkt het portaal als een chauffeur.' : 'Bekijk het portaal als een chauffeur.'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onTogglePreview}
+            role="switch"
+            aria-checked={previewActive}
+            aria-label="Chauffeurs-weergave"
+            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${previewActive ? 'bg-oker-500' : 'bg-slate-300'}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${previewActive ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+      )}
       {/* === Gepersonaliseerde begroeting === */}
       <div className="px-1 pt-1">
         <h1 className="text-[22px] md:text-[26px] font-bold tracking-[-0.02em] text-slate-900">
