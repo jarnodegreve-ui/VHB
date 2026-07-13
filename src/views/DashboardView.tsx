@@ -196,8 +196,17 @@ export function DashboardView({
           {greeting}, <span className="text-oker-600">{firstName}</span>
         </h1>
         <p className="text-[13px] font-normal text-slate-500 mt-0.5">
-          {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
-          {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
+          {isChauffeur ? (
+            todaysShift ? (
+              <>Je rijdt vandaag <span className="font-semibold text-slate-700">dienst {getServiceNumber(todaysShift)}</span> · {todaysShift.startTime}–{todaysShift.endTime}</>
+            ) : nextShift ? (
+              <>Vrije dag · volgende dienst {nextShift.startDateTime.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} om {nextShift.startTime}</>
+            ) : (
+              <>Vrije dag · geen diensten gepland</>
+            )
+          ) : (
+            <>{now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} · {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}</>
+          )}
         </p>
       </div>
 
@@ -383,7 +392,7 @@ export function DashboardView({
               ))}
             </div>
           ) : (
-            <EmptyTile icon={<MapPin size={20} />} title="Geen actieve hinder" subtitle="Geen omleidingen geregistreerd." />
+            <EmptyTile icon={<MapPin size={20} />} title="Vrije baan" subtitle="Geen omleidingen op het netwerk." />
           )}
         </PremiumPanel>
 
