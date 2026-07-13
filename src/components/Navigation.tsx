@@ -1,5 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'motion/react';
+import { ChevronRight } from 'lucide-react';
 import { cn } from '../lib/ui';
 
 
@@ -36,5 +37,39 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
         </span>
       )}
     </button>
+  );
+}
+
+/**
+ * Inklapbare navigatiegroep voor de beheer-secties. Standaard dicht (rustige
+ * zijbalk); onthoudt de open/dicht-keuze per groep in localStorage. Klapt
+ * automatisch open wanneer de actieve view in deze groep zit, zodat je altijd
+ * ziet waar je bent. `count` toont het aantal items zolang de groep dicht is.
+ */
+export function NavSection({ title, count, active = false, children }: { title: string; count: number; active?: boolean; children: React.ReactNode }) {
+  const storageKey = `vhb-nav-${title}`;
+  const [open, setOpen] = useState(() => {
+    try { return localStorage.getItem(storageKey) === '1'; } catch { return false; }
+  });
+  const expanded = open || active;
+  const toggle = () => {
+    const next = !open;
+    setOpen(next);
+    try { localStorage.setItem(storageKey, next ? '1' : '0'); } catch { /* private mode */ }
+  };
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={toggle}
+        aria-expanded={expanded}
+        className="group flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-600 transition-colors"
+      >
+        <ChevronRight size={12} className={cn('shrink-0 transition-transform duration-200', expanded && 'rotate-90')} />
+        <span className="flex-1 text-left">{title}</span>
+        {!expanded && <span className="tabular-nums text-slate-300 group-hover:text-slate-400">{count}</span>}
+      </button>
+      {expanded && <div className="mt-0.5 space-y-0.5">{children}</div>}
+    </div>
   );
 }
