@@ -1302,7 +1302,7 @@ export default function App() {
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
-    bezetting: { title: 'Team-maandrooster', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
+    bezetting: { title: 'Maandplanning', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
     dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
@@ -1461,7 +1461,7 @@ export default function App() {
           />
           <NavItem
             icon={<Users size={18} />}
-            label="Team-maandrooster"
+            label="Maandplanning"
             active={currentView === 'bezetting'}
             onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
           />
