@@ -178,6 +178,9 @@ export default function App() {
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Admin-only preview: toont het portaal (nav + dashboard) zoals een chauffeur
+  // het ziet. Puur visueel — rechten/data blijven admin. Reset bij herladen.
+  const [previewChauffeur, setPreviewChauffeur] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
@@ -1289,8 +1292,14 @@ export default function App() {
     return <LoginView onLogin={handleLogin} />;
   }
 
-  const isPlanner = currentUser.role === 'planner' || currentUser.role === 'admin';
-  const isAdmin = currentUser.role === 'admin';
+  const isRealAdmin = currentUser.role === 'admin';
+  // In preview-modus rendert alles op chauffeur-niveau (nav-secties verdwijnen,
+  // dashboard toont de chauffeursvariant). allowedViews/guard blijven bewust op
+  // de échte rol zodat er niets wordt weg-geredirect.
+  const previewingChauffeur = isRealAdmin && previewChauffeur;
+  const effectiveRole = previewingChauffeur ? 'chauffeur' : currentUser.role;
+  const isPlanner = effectiveRole === 'planner' || effectiveRole === 'admin';
+  const isAdmin = effectiveRole === 'admin';
   const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
   const resolvedCurrentView = allowedViews.includes(currentView) ? currentView : 'dashboard';
   const viewMeta: Record<string, { title: string; subtitle: string }> = {
@@ -1649,7 +1658,7 @@ export default function App() {
                     isInitialLoad={isInitialLoad}
                   />
                 ) : (
-                  <DashboardView user={currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />
+                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} />
                 )
               )}
               {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
