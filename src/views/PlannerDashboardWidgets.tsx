@@ -133,11 +133,15 @@ export function PlannerDashboardWidgets({
   const daysSinceImport = lastImport
     ? Math.floor((now.getTime() - new Date(lastImport.createdAt).getTime()) / 86400000)
     : null;
+  // Zachte herinnering: er wérd al eens geïmporteerd, maar al > een week niet
+  // meer. (Nooit geïmporteerd = niet naggen — kan een niet-import-opzet zijn.)
+  const STALE_PLANNING_DAYS = 7;
+  const planningStale = daysSinceImport !== null && daysSinceImport > STALE_PLANNING_DAYS;
 
   // Eén bron van waarheid voor statuspil, teller én empty-state: alles wat
   // als rij in 'Aandacht vereist' verschijnt telt mee — niets anders.
   const attentionCount =
-    (importIssueCount > 0 ? 1 : 0) + criticalDiversions + gapDays.length + openTasks;
+    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + criticalDiversions + gapDays.length + openTasks;
   const needsAttention = attentionCount > 0;
   const userNameById = (id: string) =>
     users.find((u) => String(u.id) === String(id))?.name || 'Onbekend';
@@ -243,7 +247,7 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="max-md:col-span-2"
           icon={<CalendarClock size={16} />}
-          tone={importIssueCount > 0 ? 'rose' : 'slate'}
+          tone={importIssueCount > 0 ? 'rose' : planningStale ? 'oker' : 'slate'}
           label="Laatste import"
           text={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
           sub={
@@ -267,6 +271,15 @@ export function PlannerDashboardWidgets({
           aside={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item' : 'items'}` : undefined}
         >
           <div className="space-y-1.5">
+            {planningStale && (
+              <OpsRow
+                tone="oker"
+                icon={<CalendarClock size={15} />}
+                primary={`Planning al ${daysSinceImport} dagen niet bijgewerkt`}
+                secondary="Upload je laatste Excel zodat de planning actueel blijft."
+                onClick={() => onNavigate('beheer-roosters')}
+              />
+            )}
             {importIssueCount > 0 && lastImport && (
               <OpsRow
                 tone="rose"
