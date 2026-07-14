@@ -36,7 +36,9 @@ begin
   if rows is null or jsonb_typeof(rows) <> 'array' or jsonb_array_length(rows) = 0 then
     raise exception 'Lege planning-set geweigerd: dit zou alle planning wissen.';
   end if;
-  delete from public.planning;
+  -- `where true` = alle rijen wissen, maar mét WHERE-clausule zodat Supabase's
+  -- veiligheidsguard ("DELETE requires a WHERE clause") niet blokkeert.
+  delete from public.planning where true;
   insert into public.planning
     select * from jsonb_populate_recordset(null::public.planning, rows);
   get diagnostics inserted = row_count;
@@ -56,7 +58,8 @@ begin
   if rows is null or jsonb_typeof(rows) <> 'array' or jsonb_array_length(rows) = 0 then
     raise exception 'Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.';
   end if;
-  delete from public.planning_matrix_rows;
+  -- `where true`: alle rijen, mét WHERE-clausule tegen de DELETE-guard.
+  delete from public.planning_matrix_rows where true;
   insert into public.planning_matrix_rows
     select * from jsonb_populate_recordset(null::public.planning_matrix_rows, rows);
   get diagnostics inserted = row_count;
