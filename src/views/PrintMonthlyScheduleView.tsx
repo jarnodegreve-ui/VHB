@@ -1,5 +1,6 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Shift, User } from '../types';
+import { getSupabaseAuthHeaders } from '../lib/ui';
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -62,12 +63,39 @@ export function PrintMonthlyScheduleView({
   monthIso: string;
   shifts: Shift[];
 }) {
+  const [absences, setAbsences] = useState<Array<{ date: string; code: string; label: string }>>([]);
+  const [ready, setReady] = useState(false);
+
+  // Afwezigheden (alle niet-dienst-codes: BV/ziekte/KV/…) uit de matrix-
+  // maandplanning, zodat ze naast de diensten in het rooster verschijnen.
   useEffect(() => {
-    // Layout-render-tijd geven aan de browser voor we de print-dialoog
-    // openen.
-    const t = window.setTimeout(() => window.print(), 600);
+    let cancelled = false;
+    (async () => {
+      if (driver) {
+        try {
+          const res = await fetch(`/api/month-planning?month=${monthIso}`, { headers: await getSupabaseAuthHeaders() });
+          if (res.ok && !cancelled) {
+            const data = await res.json();
+            const cells = (data?.cells?.[driver.id] ?? {}) as Record<string, { code: string; kind: string; label: string }>;
+            const abs = Object.entries(cells)
+              .filter(([, c]) => c.kind !== 'service' && c.kind !== 'unknown')
+              .map(([date, c]) => ({ date, code: c.code, label: c.label }));
+            setAbsences(abs);
+          }
+        } catch { /* zonder afwezigheden verder */ }
+      }
+      if (!cancelled) setReady(true);
+    })();
+    return () => { cancelled = true; };
+  }, [driver, monthIso]);
+
+  // Print pas nadat de afwezigheden geladen zijn (of de fetch faalde), zodat
+  // ze mee in de PDF staan.
+  useEffect(() => {
+    if (!ready) return;
+    const t = window.setTimeout(() => window.print(), 400);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [ready]);
 
   const [yearStr, monthStr] = monthIso.split('-');
   const year = parseInt(yearStr, 10);
@@ -81,38 +109,45 @@ export function PrintMonthlyScheduleView({
       .sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime));
   }, [driver, shifts, yearStr, monthStr]);
 
-  // Groepeer per datum (multi-segment) en daarna per ISO-week.
+  // Groepeer per datum (diensten multi-segment + eventuele afwezigheid) en
+  // daarna per ISO-week. Een dag met een afwezigheidscode heeft geen diensten.
   const weeks = useMemo(() => {
-    const byDate = new Map<string, Shift[]>();
+    type Day = { date: string; shifts: Shift[]; minutes: number; absence?: { code: string; label: string } };
+    const byDate = new Map<string, Day>();
     for (const s of monthShifts) {
-      if (!byDate.has(s.date)) byDate.set(s.date, []);
-      byDate.get(s.date)!.push(s);
+      if (!byDate.has(s.date)) byDate.set(s.date, { date: s.date, shifts: [], minutes: 0 });
+      byDate.get(s.date)!.shifts.push(s);
     }
-    type WeekGroup = {
-      weekNumber: number;
-      days: Array<{ date: string; shifts: Shift[]; minutes: number }>;
-      totalMinutes: number;
-      totalDays: number;
-    };
+    for (const a of absences) {
+      if (!a.date.startsWith(`${yearStr}-${monthStr}`)) continue;
+      const existing = byDate.get(a.date);
+      if (existing) {
+        if (existing.shifts.length === 0 && !existing.absence) existing.absence = { code: a.code, label: a.label };
+      } else {
+        byDate.set(a.date, { date: a.date, shifts: [], minutes: 0, absence: { code: a.code, label: a.label } });
+      }
+    }
+    for (const day of byDate.values()) {
+      day.minutes = day.shifts.reduce((sum, s) => sum + minutesBetween(s.startTime, s.endTime), 0);
+    }
+    type WeekGroup = { weekNumber: number; days: Day[]; totalMinutes: number; totalDays: number };
     const weekMap = new Map<number, WeekGroup>();
-    for (const [date, dayShifts] of byDate.entries()) {
-      const d = new Date(`${date}T00:00:00`);
+    for (const day of byDate.values()) {
+      const d = new Date(`${day.date}T00:00:00`);
       const week = isoWeekNumber(d);
-      const dayMinutes = dayShifts.reduce((sum, s) => sum + minutesBetween(s.startTime, s.endTime), 0);
       let group = weekMap.get(week);
       if (!group) {
         group = { weekNumber: week, days: [], totalMinutes: 0, totalDays: 0 };
         weekMap.set(week, group);
       }
-      group.days.push({ date, shifts: dayShifts, minutes: dayMinutes });
-      group.totalMinutes += dayMinutes;
-      group.totalDays += 1;
+      group.days.push(day);
+      group.totalMinutes += day.minutes;
+      if (day.shifts.length > 0) group.totalDays += 1; // weektotaal telt enkel werkdagen
     }
-    // Sorteren op weeknummer, dagen sorteren op datum
     return Array.from(weekMap.values())
       .sort((a, b) => a.weekNumber - b.weekNumber)
       .map((w) => ({ ...w, days: w.days.sort((a, b) => a.date.localeCompare(b.date)) }));
-  }, [monthShifts]);
+  }, [monthShifts, absences, yearStr, monthStr]);
 
   const totalMinutes = monthShifts.reduce((sum, s) => sum + minutesBetween(s.startTime, s.endTime), 0);
   const totalDaysWorked = new Set(monthShifts.map((s) => s.date)).size;
@@ -179,14 +214,20 @@ export function PrintMonthlyScheduleView({
                   <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Werkdagen</p>
                   <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{totalDaysWorked}</p>
                 </div>
+                {absences.length > 0 && (
+                  <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-right">
+                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">Afwezig</p>
+                    <p className="mt-1 text-2xl font-black text-oker-700 tabular-nums">{absences.length}</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         </header>
 
-        {monthShifts.length === 0 ? (
+        {monthShifts.length === 0 && absences.length === 0 ? (
           <p className="text-center py-16 text-slate-400 italic">
-            Geen diensten geregistreerd in {monthName} {year}.
+            Geen diensten of afwezigheden geregistreerd in {monthName} {year}.
           </p>
         ) : (
           <div className="space-y-5">
@@ -206,7 +247,7 @@ export function PrintMonthlyScheduleView({
 
                 {/* Dagen */}
                 <div className="space-y-2">
-                  {week.days.map(({ date, shifts: dayShifts, minutes }) => {
+                  {week.days.map(({ date, shifts: dayShifts, minutes, absence }) => {
                     const d = new Date(`${date}T00:00:00`);
                     const dayName = WEEKDAY_FULL[d.getDay()];
                     const dayLabel = d.toLocaleDateString('nl-BE', { day: '2-digit', month: 'long' });
@@ -227,9 +268,16 @@ export function PrintMonthlyScheduleView({
                           <p className="mt-0.5 text-sm font-black text-slate-900 tabular-nums">{dayLabel}</p>
                         </div>
 
-                        {/* Diensten */}
+                        {/* Diensten of afwezigheid */}
                         <div className="space-y-1">
-                          {dayShifts.map((s, i) => {
+                          {absence ? (
+                            <div className="flex items-baseline gap-2">
+                              <span className="inline-block rounded border border-oker-200 bg-oker-50 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-[0.08em] text-oker-700">
+                                {absence.code.toUpperCase()}
+                              </span>
+                              <span className="text-sm font-bold text-slate-700">{absence.label}</span>
+                            </div>
+                          ) : dayShifts.map((s, i) => {
                             const cat = shiftCategory(s.startTime);
                             const catColors = {
                               ochtend: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -258,7 +306,7 @@ export function PrintMonthlyScheduleView({
                         {/* Dagtotaal */}
                         <div className="text-right">
                           <p className="text-[9px] font-black uppercase tracking-[0.08em] text-slate-400">Totaal</p>
-                          <p className="mt-0.5 text-sm font-black text-slate-900 tabular-nums">{formatHours(minutes)}</p>
+                          <p className="mt-0.5 text-sm font-black text-slate-900 tabular-nums">{absence ? '—' : formatHours(minutes)}</p>
                         </div>
                       </div>
                     );
@@ -270,7 +318,7 @@ export function PrintMonthlyScheduleView({
         )}
 
         {/* Handtekening */}
-        {monthShifts.length > 0 && (
+        {(monthShifts.length > 0 || absences.length > 0) && (
           <section className="print-card mt-10 pt-6 border-t border-slate-200">
             <div className="grid grid-cols-2 gap-12">
               <div>
