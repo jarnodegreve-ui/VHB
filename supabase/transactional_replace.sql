@@ -60,8 +60,17 @@ begin
   end if;
   -- `where true`: alle rijen, mét WHERE-clausule tegen de DELETE-guard.
   delete from public.planning_matrix_rows where true;
-  insert into public.planning_matrix_rows
-    select * from jsonb_populate_recordset(null::public.planning_matrix_rows, rows);
+  -- Expliciete kolommen + coalesce: jsonb_populate_recordset zet ontbrekende
+  -- keys op NULL, wat de `default now()` van created_at zou overschrijven
+  -- (NOT NULL-schending). Zo vult de default alsnog, en assignments valt terug
+  -- op '{}' als de bron 'm niet meelevert.
+  insert into public.planning_matrix_rows (id, source_date, day_type, assignments, raw_row, created_at)
+  select
+    r.id, r.source_date, r.day_type,
+    coalesce(r.assignments, '{}'::jsonb),
+    r.raw_row,
+    coalesce(r.created_at, now())
+  from jsonb_populate_recordset(null::public.planning_matrix_rows, rows) as r;
   get diagnostics inserted = row_count;
   return inserted;
 end;
