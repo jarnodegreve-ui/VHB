@@ -187,40 +187,39 @@ export function PrintMonthlyScheduleView({
 
         {/* Header */}
         <header className="border-b-2 border-slate-900 pb-5 mb-7">
-          <div className="flex items-start justify-between gap-6">
+          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">
+            VHB · Maldegem · Maandrooster
+          </p>
+          <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
             <div>
-              <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">
-                VHB · Maldegem · Maandrooster
-              </p>
-              <h1 className="mt-2 text-3xl font-black tracking-tight">{driver.name}</h1>
-              <p className="mt-1 text-xl font-bold text-slate-700">{monthName} {year}</p>
+              <h1 className="text-3xl font-black tracking-tight">{driver.name}</h1>
+              <p className="mt-1 text-lg font-bold text-slate-600">{monthName} {year}</p>
               {driver.employeeId && (
-                <p className="mt-2 text-xs font-medium text-slate-400">
+                <p className="mt-1.5 text-xs font-medium text-slate-400">
                   Personeelsnummer: {driver.employeeId}
                 </p>
               )}
             </div>
-            <div className="text-right shrink-0">
-              <div className="inline-flex flex-col items-end gap-1.5">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
-                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Diensten</p>
-                  <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{monthShifts.length}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
-                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Totaal uren</p>
-                  <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{formatHours(totalMinutes)}</p>
-                </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-right">
-                  <p className="text-[10px] font-black uppercase tracking-[0.08em] text-slate-400">Werkdagen</p>
-                  <p className="mt-1 text-2xl font-black text-slate-900 tabular-nums">{totalDaysWorked}</p>
-                </div>
-                {absences.length > 0 && (
-                  <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-right">
-                    <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">Afwezig</p>
-                    <p className="mt-1 text-2xl font-black text-oker-700 tabular-nums">{absences.length}</p>
-                  </div>
-                )}
+            {/* Lichte stat-strip: hairline-scheiders, geen kaders */}
+            <div className="flex items-stretch divide-x divide-slate-200">
+              <div className="pr-5">
+                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Diensten</p>
+                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{monthShifts.length}</p>
               </div>
+              <div className="px-5">
+                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Totaal uren</p>
+                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{formatHours(totalMinutes)}</p>
+              </div>
+              <div className="px-5">
+                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Werkdagen</p>
+                <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{totalDaysWorked}</p>
+              </div>
+              {absences.length > 0 && (
+                <div className="pl-5">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-600">Afwezig</p>
+                  <p className="mt-1 text-xl font-black text-oker-600 tabular-nums leading-none">{absences.length}</p>
+                </div>
+              )}
             </div>
           </div>
         </header>
