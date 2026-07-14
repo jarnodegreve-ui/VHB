@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, Info, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
+import { History, Info, Pause, Play, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
@@ -28,6 +28,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [pendingImportUsers, setPendingImportUsers] = useState<UserDraft[] | null>(null);
   const [pendingImportMessage, setPendingImportMessage] = useState('');
   const [credentialsModal, setCredentialsModal] = useState<{ title: string; email: string; password: string } | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
@@ -105,6 +107,33 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     if (!success) return;
     if (editingUser?.id === confirmDeleteId) setEditingUser(null);
     setConfirmDeleteId(null);
+  };
+
+  // --- Bulk-acties: pauzeren/activeren/verwijderen. Beschermd tegen het
+  //     raken van jezelf, het 'beheerder'-account of de laatste actieve admin.
+  const isBulkProtected = (u: User) => isProtectedAdmin(u) || u.id === currentUser.id || u.name.toLowerCase() === 'beheerder';
+  const toggleSelect = (id: string) => setSelectedIds((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const selectableIds = filteredUsers.filter((u) => !isBulkProtected(u)).map((u) => u.id);
+  const allSelected = selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+  const toggleSelectAll = () => setSelectedIds(allSelected ? new Set() : new Set(selectableIds));
+  const clearSelection = () => setSelectedIds(new Set());
+
+  const bulkSetActive = async (active: boolean) => {
+    const targetIds = new Set([...selectedIds].filter((id) => { const u = users.find((x) => x.id === id); return !!u && (active || !isBulkProtected(u)); }));
+    if (targetIds.size === 0) return notify('Geen gebruikers om te wijzigen.', 'error');
+    const success = await onSave(users.map((u) => (targetIds.has(u.id) ? { ...u, isActive: active } : u)));
+    if (success) { notify(`${targetIds.size} gebruiker(s) ${active ? 'geactiveerd' : 'gepauzeerd'}.`, 'success'); clearSelection(); }
+  };
+  const quickToggleActive = async (u: User) => {
+    if (u.isActive !== false && isProtectedAdmin(u)) return notify('Je kunt de laatste actieve admin niet pauzeren.', 'error');
+    await onSave(users.map((x) => (x.id === u.id ? { ...x, isActive: u.isActive === false } : x)));
+  };
+  const handleBulkDelete = async () => {
+    const targetIds = new Set([...selectedIds].filter((id) => { const u = users.find((x) => x.id === id); return !!u && !isBulkProtected(u); }));
+    setConfirmBulkDelete(false);
+    if (targetIds.size === 0) return notify('Geen gebruikers om te verwijderen (beschermde accounts overgeslagen).', 'error');
+    const success = await onSave(users.filter((u) => !targetIds.has(u.id)));
+    if (success) { notify(`${targetIds.size} gebruiker(s) verwijderd.`, 'success'); clearSelection(); }
   };
 
   const handleResetPassword = async () => {
@@ -290,6 +319,18 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         </div>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-oker-200/70 bg-oker-500/10 px-4 py-2.5">
+          <span className="text-[13px] font-semibold text-slate-700">{selectedIds.size} geselecteerd</span>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="secondary" size="sm" icon={<Pause size={15} />} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
+            <Button variant="secondary" size="sm" icon={<Play size={15} />} onClick={() => bulkSetActive(true)}>Activeren</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={15} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
+            <Button variant="ghost" size="sm" onClick={clearSelection}>Wissen</Button>
+          </div>
+        </div>
+      )}
+
       <TableShell>
         <div className="border-b border-white/70 px-5 py-4 md:px-6">
           <AdminSubsectionHeader
@@ -302,6 +343,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
+                <Th className="w-10"><input type="checkbox" aria-label="Alles selecteren" checked={allSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 accent-oker-500 cursor-pointer" /></Th>
                 <Th>Medewerker</Th>
                 <Th>Status</Th>
                 <Th>Laatst Actief</Th>
@@ -311,12 +353,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             </thead>
             <tbody>
               {filteredUsers.map((u) => (
-                <tr key={u.id} className="group transition-colors hover:bg-slate-50/60">
+                <tr key={u.id} className={cn('group transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
+                  <Td className="w-10"><input type="checkbox" aria-label={`Selecteer ${u.name}`} checked={selectedIds.has(u.id)} disabled={isBulkProtected(u)} onChange={() => toggleSelect(u.id)} className="h-4 w-4 rounded border-slate-300 accent-oker-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" /></Td>
                   <Td>
                     <div className="font-bold tracking-tight text-slate-800">{u.name}</div>
                     <div className="mt-1"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
                   </Td>
-                  <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Inactief'}</Badge></Td>
+                  <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>
                   <Td className="tabular-nums">{u.lastLogin ? u.lastLogin : <span className="italic text-slate-400">Nooit</span>}</Td>
                   <Td className="text-center"><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-400')}>{u.activeSessions || 0}</span></Td>
                   <Td className="text-right">
@@ -325,6 +368,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                       <Button variant="ghost" size="sm" className="px-2" onClick={() => setViewingChangeLogUser(u)} aria-label="Wijzigingsgeschiedenis (rol, naam, etc.)" title="Wijzigingsgeschiedenis (rol, naam, etc.)" icon={<History size={16} />} />
                       <Button variant="ghost" size="sm" className="px-2" onClick={() => setConfirmResetUser(u)} aria-label="Stel nieuw tijdelijk wachtwoord in" title="Stel nieuw tijdelijk wachtwoord in" icon={<RotateCcw size={16} />} />
                       <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
+                      <Button variant="ghost" size="sm" className="px-2" onClick={() => quickToggleActive(u)} disabled={u.isActive !== false && isProtectedAdmin(u)} aria-label={u.isActive !== false ? 'Pauzeer gebruiker' : 'Activeer gebruiker'} title={u.isActive !== false ? 'Pauzeer gebruiker' : 'Activeer gebruiker'} icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />} />
                       <Button variant="danger" size="sm" className="px-2" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} aria-label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} icon={<Trash2 size={16} />} />
                     </div>
                   </Td>
@@ -337,11 +381,14 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           {filteredUsers.map((u) => (
             <div key={u.id} className="p-5 space-y-4 active:bg-slate-50 transition-colors">
               <div className="flex justify-between items-start gap-3">
-                <div>
-                  <div className="font-bold tracking-tight text-slate-800 leading-tight">{u.name}</div>
-                  <div className="mt-1.5"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
+                <div className="flex items-start gap-3">
+                  <input type="checkbox" aria-label={`Selecteer ${u.name}`} checked={selectedIds.has(u.id)} disabled={isBulkProtected(u)} onChange={() => toggleSelect(u.id)} className="mt-1 h-4 w-4 rounded border-slate-300 accent-oker-500 disabled:opacity-30" />
+                  <div>
+                    <div className="font-bold tracking-tight text-slate-800 leading-tight">{u.name}</div>
+                    <div className="mt-1.5"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
+                  </div>
                 </div>
-                <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Inactief'}</Badge>
+                <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="p-3 bg-slate-50 rounded-2xl"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-[13px] font-semibold text-slate-700 tabular-nums">{u.lastLogin || 'Nooit'}</p></div>
@@ -361,6 +408,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       </TableShell>
 
       <ConfirmationModal isOpen={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker Verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
+      <ConfirmationModal isOpen={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
       <ConfirmationModal isOpen={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
 
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)}>
