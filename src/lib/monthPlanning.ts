@@ -20,8 +20,8 @@ export type MonthPlanning = {
   month: string;
   /** datums (yyyy-mm-dd) die een planning-rij hebben deze maand, oplopend */
   dates: string[];
-  /** actieve chauffeurs, op naam gesorteerd */
-  drivers: { id: string; name: string }[];
+  /** actieve chauffeurs, gesorteerd op sectie → naam; section null = geen sectie */
+  drivers: { id: string; name: string; section?: string | null }[];
   /** cells[driverId][date] = { code, kind } — alleen niet-lege cellen */
   cells: Record<string, Record<string, MonthCell>>;
 };

@@ -26,6 +26,7 @@ export const toPublicUser = (user: any): AppUser => ({
     ? (user.verlofBudget ?? user.verlofbudget)
     : undefined,
   showInContacts: (user.showInContacts ?? user.showincontacts) !== false,
+  section: (user.section ?? undefined) || undefined,
 });
 
 export const toRoleScopedUser = (user: AppUser, role: Role): AppUser => {
@@ -49,6 +50,7 @@ export const toRoleScopedUser = (user: AppUser, role: Role): AppUser => {
     phone: user.phone,
     email: user.email,
     showInContacts: user.showInContacts,
+    section: user.section,
   };
 };
 
@@ -64,6 +66,7 @@ export const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   email: normalizeEmail(user.email),
   verlofBudget: typeof user.verlofBudget === 'number' && user.verlofBudget >= 0 ? user.verlofBudget : undefined,
   showInContacts: user.showInContacts !== false,
+  section: user.section?.trim() || undefined,
 });
 
 export const toDatabaseUser = (user: AppUser) => ({
@@ -78,6 +81,7 @@ export const toDatabaseUser = (user: AppUser) => ({
   email: normalizeEmail(user.email),
   verlofbudget: typeof user.verlofBudget === 'number' && user.verlofBudget >= 0 ? user.verlofBudget : null,
   showincontacts: user.showInContacts !== false,
+  section: user.section?.trim() || null,
 });
 
 export const toPublicSwap = (swap: any): SwapRecord => ({
