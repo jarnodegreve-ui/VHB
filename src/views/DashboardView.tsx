@@ -1,8 +1,8 @@
-import { useEffect, useState, type ReactNode, type RefObject } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid, Eye } from 'lucide-react';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
-import { useCursorGlow, getDaypartGreeting } from '../lib/interactive';
+import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Sparkline } from '../components/Sparkline';
@@ -639,11 +639,9 @@ export function StatTile({
     border: c.border,
     boxShadow: c.shadow,
   };
-  const ref = useCursorGlow<HTMLElement>();
   if (onClick) {
     return (
       <button
-        ref={ref as RefObject<HTMLButtonElement>}
         onClick={onClick}
         className="tilt-card glow-top glass-stack text-left flex-1 rounded-3xl p-5 relative overflow-hidden active:scale-[0.99]"
         style={tileStyle}
@@ -655,11 +653,9 @@ export function StatTile({
   }
   return (
     <div
-      ref={ref as RefObject<HTMLDivElement>}
       className="glow-top flex-1 rounded-3xl p-5 relative overflow-hidden"
       style={tileStyle}
     >
-      <span className="cursor-glow-layer" />
       <span className="relative z-10 block">{Body}</span>
       {overlay}
     </div>

@@ -205,9 +205,10 @@ html.dark {
 
   /* Topbar: full-width werkbalk met haarlijn-onderrand. */
   .topbar {
-    background: rgba(250, 251, 252, 0.82);
-    backdrop-filter: blur(16px) saturate(150%);
-    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    /* Near-opaque i.p.v. backdrop-blur: een sticky bar met backdrop-filter
+       hertekent bij élke scroll-frame (zware jank op Windows/Chrome). Zelfde
+       keuze als de sidebar hierboven — near-opaque heeft de blur niet nodig. */
+    background: rgba(250, 251, 252, 0.97);
     border-bottom: 1px solid rgba(228, 230, 232, 0.7);
     transition:
       background 280ms cubic-bezier(0.22, 1, 0.36, 1),
@@ -696,7 +697,7 @@ html.dark {
 }
 
 .dark .topbar {
-  background: rgba(13, 13, 15, 0.82);
+  background: rgba(16, 17, 19, 0.95);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 .dark .topbar--scrolled {
