@@ -31,6 +31,15 @@ const KIND_LABEL: Record<CellKind, string> = {
   unknown: 'Onbekende code',
 };
 
+// Excel-look: platte tekstkleur i.p.v. gekleurde pillen.
+const KIND_TEXT: Record<CellKind, string> = {
+  service: 'text-slate-900 font-semibold',
+  leave: 'text-amber-700 font-semibold',
+  absence: 'text-slate-500',
+  training: 'text-blue-700 font-semibold',
+  unknown: 'text-red-600 font-semibold',
+};
+
 /**
  * Maandplanning — read-only weergave van de planning-matrix (chauffeur ×
  * datum met codes), zoals het overzicht dat in het chauffeurslokaal hangt.
@@ -197,7 +206,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         </div>
       ) : (
         <>
-          {/* Desktop: volledige maandgrid (chauffeur × dag). */}
+          <style>{`
+            .mp-weekend { background-color: rgba(241,245,249,0.85); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100,116,139,0.09) 3px, rgba(100,116,139,0.09) 4px); }
+            .dark .mp-weekend { background-color: rgba(255,255,255,0.03); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.05) 3px, rgba(255,255,255,0.05) 4px); }
+          `}</style>
+          {/* Desktop: Excel-achtig maandgrid (chauffeur × dag) — dunne gridlijnen,
+              platte dienstnummers, gearceerde weekend-kolommen. */}
           <div className="hidden md:block surface-card rounded-3xl overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-left border-collapse">
@@ -213,7 +227,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           className={cn(
                             'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-slate-300',
                             h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
-                            today ? 'bg-oker-100' : h.weekend ? 'bg-slate-100' : 'bg-slate-50',
+                            today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-slate-50',
                           )}
                         >
                           <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
@@ -227,7 +241,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   {drivers.map((drv, i) => {
                     const row = cells[drv.id] || {};
                     const isOwn = ownId && drv.id === ownId;
-                    const rowBg = isOwn ? 'bg-oker-50' : i % 2 === 1 ? 'bg-slate-50/70' : 'bg-white';
+                    const rowBg = isOwn ? 'bg-oker-50' : 'bg-white';
                     return (
                       <tr key={drv.id} className={cn('group border-b border-slate-200', rowBg)}>
                         <td
@@ -252,21 +266,22 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             <td
                               key={iso}
                               className={cn(
-                                'h-9 px-0.5 text-center transition-colors group-hover:bg-oker-50/60',
+                                'p-0 text-center',
                                 h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
-                                !cell && today && 'bg-oker-50/40',
-                                !cell && !today && h.weekend && 'bg-slate-100/50',
+                                today ? 'bg-oker-50/50' : h.weekend ? 'mp-weekend' : '',
                               )}
                             >
-                              {cell && (
+                              {cell ? (
                                 <button
                                   type="button"
                                   onClick={() => setSelected({ driverName: drv.name, iso, cell })}
-                                  className={cn('inline-block min-w-[30px] rounded-md px-1 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-black/5 cursor-pointer transition hover:ring-2 hover:ring-oker-400', KIND_CLS[cell.kind])}
+                                  className={cn('flex h-7 w-full items-center justify-center px-1 text-[11px] tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
                                   title={`${KIND_LABEL[cell.kind]} · ${cell.code} — klik voor details`}
                                 >
                                   {cell.code}
                                 </button>
+                              ) : (
+                                <div className="h-7" />
                               )}
                             </td>
                           );
