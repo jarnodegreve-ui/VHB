@@ -1630,15 +1630,11 @@ export default function App() {
               </div>
             </header>
           </div>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={resolvedCurrentView}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -6 }}
-              transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-              className="mx-auto w-full max-w-[1360px]"
-            >
+          {/* Directe view-wissel — geen AnimatePresence/motion. Een in/uit-
+              animatie op de hele view (mode="wait" = exit + enter, ~0.56s op
+              een grote DOM) veroorzaakte hapering bij het wisselen van pagina's
+              op tragere Windows-pc's. Instant = sneller en jank-vrij. */}
+          <div className="mx-auto w-full max-w-[1360px]">
               {resolvedCurrentView === 'dashboard' && (
                 isPlanner ? (
                   /* Planner/admin: Operations Center — één operationele cockpit
@@ -1733,8 +1729,7 @@ export default function App() {
                   <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
                 </Suspense>
               )}
-            </motion.div>
-          </AnimatePresence>
+          </div>
         </div>
       </main>
       </div>
