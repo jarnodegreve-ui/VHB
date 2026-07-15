@@ -450,6 +450,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 {editingUser.role === 'chauffeur' && (
                   <div className="space-y-1.5"><MicroLabel>Sectie (Maandplanning)</MicroLabel><select value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-white/60 text-sm font-medium"><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></select></div>
                 )}
+                <div className="space-y-1.5"><MicroLabel>In dienst sinds</MicroLabel><input type="date" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" /><p className="text-[10px] text-slate-400 font-medium px-1">Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning.</p></div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <MicroLabel>Verlofbudget (dagen)</MicroLabel>
                   <input

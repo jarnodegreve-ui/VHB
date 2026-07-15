@@ -16,6 +16,7 @@ export interface AppUser {
   verlofBudget?: number;
   showInContacts?: boolean;
   section?: string;
+  startDate?: string;
 }
 
 export interface IncomingUser extends AppUser {
