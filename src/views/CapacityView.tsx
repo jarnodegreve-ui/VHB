@@ -169,6 +169,35 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   const hasData = dates.length > 0 && drivers.length > 0;
 
+  // Legende: de codes die in de héle maand voorkomen, elk met hun betekenis.
+  // Data-gedreven (geen hardgecodeerde codes) → toont "BV = Verlof", "ziek =
+  // Afwezig", "tk = Tijdskrediet"… precies zoals ze geïmporteerd zijn. Betekenis
+  // = de omschrijving uit de planningscodes indien ingesteld, anders de categorie.
+  const codeLegend = useMemo(() => {
+    const map = new Map<string, { code: string; kind: CellKind; meaning: string }>();
+    let serviceExample: string | null = null;
+    for (const driverId of Object.keys(cells)) {
+      const row = cells[driverId];
+      for (const iso of Object.keys(row)) {
+        const c = row[iso];
+        if (c.kind === 'service') {
+          if (!serviceExample) serviceExample = c.code;
+          continue;
+        }
+        const key = c.code.trim().toLowerCase();
+        if (!key || map.has(key)) continue;
+        const hasDesc = !!c.label && c.label.trim().toLowerCase() !== key;
+        const meaning = c.kind === 'unknown' || !hasDesc ? KIND_LABEL[c.kind] : c.label;
+        map.set(key, { code: c.code, kind: c.kind, meaning });
+      }
+    }
+    const order: CellKind[] = ['leave', 'absence', 'training', 'unknown'];
+    const entries = Array.from(map.values()).sort(
+      (a, b) => order.indexOf(a.kind) - order.indexOf(b.kind) || a.code.localeCompare(b.code),
+    );
+    return { serviceExample, entries };
+  }, [cells]);
+
   return (
     <PageShell width="6xl">
       <PageHeader
@@ -341,13 +370,19 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             })}
           </div>
 
-          {/* Legende */}
+          {/* Legende — de codes die deze maand écht voorkomen, met hun betekenis. */}
           <div className="surface-card rounded-3xl p-5 flex flex-wrap items-center gap-x-5 gap-y-3 text-xs">
             <MicroLabel className="text-slate-500">Legende</MicroLabel>
-            {(['service', 'leave', 'absence', 'training', 'unknown'] as CellKind[]).map((k) => (
-              <div key={k} className="flex items-center gap-2">
-                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold', KIND_CLS[k])}>{k === 'service' ? '4101' : KIND_LABEL[k].slice(0, 3)}</span>
-                <span className="font-medium text-slate-600">{KIND_LABEL[k]}</span>
+            {codeLegend.serviceExample && (
+              <div className="flex items-center gap-2">
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums', KIND_CLS.service)}>{codeLegend.serviceExample}</span>
+                <span className="font-medium text-slate-600">Dienst</span>
+              </div>
+            )}
+            {codeLegend.entries.map((e) => (
+              <div key={e.code} className="flex items-center gap-2">
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold', KIND_CLS[e.kind])}>{e.code}</span>
+                <span className="font-medium text-slate-600">{e.meaning}</span>
               </div>
             ))}
             <span className="font-medium text-slate-400">Leeg = niets gepland</span>
