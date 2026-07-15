@@ -467,10 +467,18 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
     // toonde een dienst met scheidingsteken als 'onbekend'.
     const sortedNameToken = (name: string) =>
       toLookupToken(name).split(/\s+/).filter(Boolean).sort().join(" ");
+    // Groepering + volgorde per sectie (uit users.section, gezet in het
+    // gebruikersbeheer — staat los van de Excel-import). Onbekende/lege sectie
+    // sorteert achteraan; binnen een sectie alfabetisch op naam.
+    const SECTION_ORDER = ["Reguliere", "Nacht", "Flexi", "Schoolvervoer"];
+    const sectionRank = (s: string) => {
+      const i = SECTION_ORDER.findIndex((x) => x.toLowerCase() === s.trim().toLowerCase());
+      return i === -1 ? SECTION_ORDER.length : i;
+    };
     const chauffeurs = users
       .filter((u: any) => u.isActive !== false && u.role === "chauffeur" && norm(u.name) !== "beheerder")
-      .map((u: any) => ({ id: String(u.id), name: u.name as string }))
-      .sort((a, b) => a.name.localeCompare(b.name));
+      .map((u: any) => ({ id: String(u.id), name: u.name as string, section: String(u.section ?? "").trim() }))
+      .sort((a, b) => sectionRank(a.section) - sectionRank(b.section) || a.name.localeCompare(b.name));
     // Volgorde-onafhankelijke index: zowel "Jan Janssen" als "Janssen Jan" matcht.
     const idByNameKey = new Map<string, string>();
     for (const c of chauffeurs) {
@@ -514,7 +522,7 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
       }
     }
 
-    res.json({ month, dates, drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells });
+    res.json({ month, dates, drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })), cells });
   } catch (err: any) {
     console.error("Error computing month planning:", err);
     res.status(500).json({ error: "Kon maandplanning niet berekenen." });

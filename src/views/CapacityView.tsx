@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
@@ -169,6 +169,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   const hasData = dates.length > 0 && drivers.length > 0;
 
+  // Sectie-koppen tonen zodra minstens één chauffeur een sectie heeft (anders
+  // gedraagt de lijst zich als voorheen — één alfabetische groep, geen koppen).
+  // De API levert 'drivers' al gesorteerd op sectie → naam, dus we hoeven enkel
+  // een kop te tonen wanneer de sectie t.o.v. de vorige chauffeur wisselt.
+  const showSections = drivers.some((d) => !!d.section);
+  const sectionOf = (d: { section?: string | null }) => (d.section || 'Overige');
+
   // Legende: de codes die in de héle maand voorkomen, elk met hun betekenis.
   // Data-gedreven (geen hardgecodeerde codes) → toont "BV = Verlof", "ziek =
   // Afwezig", "tk = Tijdskrediet"… precies zoals ze geïmporteerd zijn. Betekenis
@@ -271,8 +278,20 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     const row = cells[drv.id] || {};
                     const isOwn = ownId && drv.id === ownId;
                     const rowBg = isOwn ? 'bg-oker-50' : 'bg-white';
+                    const section = sectionOf(drv);
+                    const showHeader = showSections && (i === 0 || sectionOf(drivers[i - 1]) !== section);
                     return (
-                      <tr key={drv.id} className={cn('group border-b border-slate-200', rowBg)}>
+                      <Fragment key={drv.id}>
+                      {showHeader && (
+                        <tr className="bg-slate-100/90">
+                          <td colSpan={visibleDates.length + 1} className="p-0 border-y border-slate-300">
+                            <div className="sticky left-0 inline-flex items-center px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                              {section}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                      <tr className={cn('group border-b border-slate-200', rowBg)}>
                         <td
                           className={cn(
                             'sticky left-0 z-10 px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-slate-300 transition-colors',
@@ -316,6 +335,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           );
                         })}
                       </tr>
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -325,12 +345,18 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
           {/* Mobile: per chauffeur de codes per dag als chips. */}
           <div className="md:hidden surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
-            {drivers.map((drv) => {
+            {drivers.map((drv, i) => {
               const row = cells[drv.id] || {};
               const entries = visibleDates.filter((iso) => row[iso]).map((iso) => ({ iso, cell: row[iso] }));
               const isOwn = ownId && drv.id === ownId;
+              const section = sectionOf(drv);
+              const showHeader = showSections && (i === 0 || sectionOf(drivers[i - 1]) !== section);
               return (
-                <div key={drv.id} className={cn('p-4', isOwn && 'bg-oker-50')}>
+                <Fragment key={drv.id}>
+                {showHeader && (
+                  <div className="bg-slate-100/80 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{section}</div>
+                )}
+                <div className={cn('p-4', isOwn && 'bg-oker-50')}>
                   <div className="flex items-baseline justify-between gap-2">
                     <div className={cn('text-sm font-semibold truncate inline-flex items-center gap-1.5', isOwn ? 'text-oker-800' : 'text-slate-800')}>
                       {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" aria-hidden />}
@@ -366,6 +392,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     </div>
                   )}
                 </div>
+                </Fragment>
               );
             })}
           </div>

@@ -12,6 +12,8 @@ export interface User {
   email?: string;
   verlofBudget?: number;
   showInContacts?: boolean;
+  /** Ploeg/sectie voor de Maandplanning-groepering (Reguliere/Nacht/Flexi/Schoolvervoer). */
+  section?: string;
 }
 
 export interface Diversion {
