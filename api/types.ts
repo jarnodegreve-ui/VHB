@@ -14,6 +14,7 @@ export interface AppUser {
   phone?: string;
   email?: string;
   verlofBudget?: number;
+  showInContacts?: boolean;
 }
 
 export interface IncomingUser extends AppUser {
