@@ -152,7 +152,17 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<View>('dashboard');
+  const [currentView, setCurrentView] = useState<View>(() => {
+    // Onthoud de laatst geopende pagina over een refresh heen. Een view die niet
+    // (meer) mag voor deze rol wordt door de allowedViews-guard hieronder alsnog
+    // teruggezet naar 'dashboard', en bij uitloggen wordt hij sowieso gereset.
+    try {
+      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-current-view') : null;
+      return (stored as View) || 'dashboard';
+    } catch {
+      return 'dashboard';
+    }
+  });
   // Start leeg (geen mock-data): tot de eerste fetch klaar is gate't
   // isInitialLoad de skeleton-staat. Geen risico meer dat mock-diensten/
   // gebruikers stilletjes als echte data getoond worden.
@@ -499,6 +509,16 @@ export default function App() {
       showToast('Dit scherm is niet beschikbaar voor jouw rol.', 'info');
     }
   }, [currentUser, currentView]);
+
+  // Onthoud de huidige pagina zodat een refresh op dezelfde plek blijft
+  // (i.p.v. terug naar het dashboard te springen).
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('vhb-current-view', currentView);
+    } catch {
+      // localStorage geblokkeerd (privacy-modus) — dan geen herinnering, geen probleem.
+    }
+  }, [currentView]);
 
   useEffect(() => {
     if (!currentUser) {
