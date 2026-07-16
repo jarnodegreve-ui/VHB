@@ -6,6 +6,7 @@ import crypto from "node:crypto";
 import dotenv from "dotenv";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
+import { TABLE_PROBES } from "./schemaProbes.js";
 import { computeDayGap, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
@@ -179,20 +180,8 @@ const runSchemaCheck = async (res: express.Response) => {
   if (!db) return res.status(503).json({ ok: false, error: "Database niet geconfigureerd." });
   const missing: string[] = [];
 
-  // Kolommen die de mappers in api/helpers.ts / api/storage.ts schrijven of
-  // lezen. Let op de bewuste casing-verschillen per tabel (users lowercase,
-  // planning/services quoted camelCase, planning_codes snake_case).
-  const TABLE_PROBES: Array<{ table: string; columns: string }> = [
-    { table: "users", columns: "id,name,role,employeeid,lastlogin,activesessions,isactive,phone,email,verlofbudget,showincontacts,section" },
-    { table: "planning", columns: "id,date,startTime,endTime,line,busNumber,loopnr,driverId" },
-    { table: "planning_matrix_rows", columns: "id,source_date,day_type,assignments,raw_row,created_at" },
-    { table: "planning_codes", columns: "code,category,description,counts_as_shift,is_paid_absence,is_day_off" },
-    { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3" },
-    { table: "diversions", columns: "id,line,title,description,startdate,enddate,severity,pdfurl,mapcoordinates" },
-    { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code" },
-    { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },
-    { table: "activity_log", columns: "id,created_at,actor_name,actor_role,category,action,details" },
-  ];
+  // Kolomlijsten gedeeld met de contracttest (src/schemaContract.test.ts):
+  // zie api/schemaProbes.ts.
   for (const probe of TABLE_PROBES) {
     const { error } = await db.from(probe.table).select(probe.columns).limit(0);
     if (error) missing.push(`${probe.table}: ${error.message}`);
