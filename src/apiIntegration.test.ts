@@ -628,7 +628,9 @@ describe('back-up export', () => {
   it('levert alle collecties in één JSON met export-metadata', async () => {
     const res = await api('GET', '/api/backup', { token: 'tok-admin' });
     expect(res.status).toBe(200);
-    expect(res.json.version).toBe(1);
+    // v2: + authUsers en ocpiRegistration als referentie-exports (DR).
+    expect(res.json.version).toBe(2);
+    expect(Array.isArray(res.json.authUsers)).toBe(true);
     expect(typeof res.json.exportedAt).toBe('string');
     const c = res.json.collections;
     expect(c.users).toHaveLength(4);
