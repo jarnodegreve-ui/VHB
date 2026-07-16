@@ -192,11 +192,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         description="Wie rijdt welke dienst, wie heeft verlof — zoals het overzicht in het chauffeurslokaal."
         actions={(
           <div className="flex items-center gap-2">
-            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronLeft size={18} />
             </button>
             <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
-            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronRight size={18} />
             </button>
             <Button variant="secondary" size="sm" className="ml-1 h-9 rounded-xl" onClick={goToday}>
@@ -437,7 +437,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <MicroLabel className="capitalize">{formatDateLong(selected.iso)}</MicroLabel>
                 <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
               </div>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:w-8 sm:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
                 <X size={16} />
               </button>
             </div>

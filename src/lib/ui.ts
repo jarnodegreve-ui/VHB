@@ -23,11 +23,16 @@ export async function getSupabaseAuthHeaders() {
  * Open a PDF in a new tab. Handles `data:` URLs by converting them to a
  * blob URL — modern browsers block top-level navigation to data: URLs as
  * an anti-phishing measure, which would otherwise result in a blank page.
+ *
+ * In een geïnstalleerde PWA (iOS-standalone) geeft window.open geregeld null
+ * terug (geen tabbladen in standalone) — dan navigeren we in hetzelfde
+ * venster; terug-swipen brengt de gebruiker weer in het portaal.
  */
 export function openPdfInNewTab(pdfUrl: string | undefined | null) {
   if (!pdfUrl) return;
   if (!pdfUrl.startsWith('data:')) {
-    window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+    const win = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
+    if (!win) window.location.assign(pdfUrl);
     return;
   }
   try {
@@ -38,7 +43,11 @@ export function openPdfInNewTab(pdfUrl: string | undefined | null) {
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
-    window.open(url, '_blank', 'noopener,noreferrer');
+    const win = window.open(url, '_blank', 'noopener,noreferrer');
+    if (!win) {
+      window.location.assign(url);
+      return; // niet revoken — het huidige venster gebruikt de blob-URL nog
+    }
     // Free the object URL after the new tab has had time to load it.
     setTimeout(() => URL.revokeObjectURL(url), 60_000);
   } catch (err) {

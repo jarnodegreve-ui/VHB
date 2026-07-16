@@ -7,9 +7,10 @@
 //   meteen de gecachte versie, ververs op de achtergrond. Veilig want het
 //   ritblaadje is één gedeelde resource (id "current"), geen per-gebruiker
 //   data.
-// - Ritblaadje-PDF (publieke storage-URL met /ritblaadjes/ in pad): cache-
-//   first met achtergrond-revalidate, zodat de PDF offline blijft werken in
-//   de iframe + download (opaque response — prima voor weergave/download).
+// - Ritblaadje-PDF (ondertekende storage-URL met /ritblaadjes/ in pad):
+//   cache-first met achtergrond-revalidate, zodat de PDF offline blijft
+//   werken in de iframe + download. Cache-key = URL zónder query: signed
+//   URLs wisselen per fetch van token en zouden anders blob na blob opstapelen.
 // - Rooster (/api/planning): stale-while-revalidate — chauffeur ziet z'n
 //   diensten ook zonder signaal. Gecachet per volledige URL (incl.
 //   ?driverId=&month=), dus per gebruiker/maand geïsoleerd.
@@ -18,7 +19,11 @@
 // onder asset-URLs bevatten (cache-first = blijvend kapot); bump ruimt op.
 // v8: logo-SVG's gewijzigd (tagline 'SINDS 1922' verwijderd) — bump zodat
 // cache-first de nieuwe logo's serveert i.p.v. de oude gecachte.
-const CACHE_NAME = 'vhb-portaal-v10';
+// v11: ritblad-PDF krijgt query-loze cache-key (signed URLs) — bump ruimt de
+// oude per-URL-entries op.
+const CACHE_NAME = 'vhb-portaal-v11';
+// Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
+const NAV_TIMEOUT_MS = 3000;
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
@@ -47,12 +52,15 @@ self.addEventListener('fetch', (event) => {
   // Match op het pad-segment /ritblaadjes/ ongeacht de (Supabase-)origin.
   // Opaque responses zijn prima om in een iframe te tonen of te downloaden.
   if (url.pathname.includes(RITBLAADJE_PDF_MARKER)) {
+    // Query strippen: het signed-URL-token wisselt per fetch, maar het is
+    // hetzelfde PDF-bestand — één cache-entry per pad.
+    const cacheKey = url.origin + url.pathname;
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
-        cache.match(req).then((cached) => {
+        cache.match(cacheKey).then((cached) => {
           const network = fetch(req)
             .then((res) => {
-              if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+              if (res && (res.ok || res.type === 'opaque')) cache.put(cacheKey, res.clone());
               return res;
             })
             .catch(() => cached);
@@ -90,11 +98,13 @@ self.addEventListener('fetch', (event) => {
   // Overige API: nooit cachen
   if (url.pathname.startsWith('/api/')) return;
 
-  // HTML navigatie: network-first, val terug op cache offline
+  // HTML navigatie: network-first met timeout — op een traag netwerk (bus
+  // onderweg) na NAV_TIMEOUT_MS de gecachte shell tonen i.p.v. op een
+  // hangende fetch te blijven wachten. Zonder cache wachten we gewoon door.
   if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
     event.respondWith(
-      fetch(req)
-        .then((res) => {
+      (async () => {
+        const network = fetch(req).then((res) => {
           // Alleen een gezonde shell cachen — een 500/503 tijdens een deploy
           // mag de werkende offline-shell niet overschrijven.
           if (res.ok) {
@@ -102,8 +112,17 @@ self.addEventListener('fetch', (event) => {
             caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
           }
           return res;
-        })
-        .catch(() => caches.match(req).then((c) => c || caches.match('/'))),
+        });
+        const slowOrDown = await Promise.race([
+          network.then(() => false).catch(() => true),
+          new Promise((resolve) => setTimeout(() => resolve(true), NAV_TIMEOUT_MS)),
+        ]);
+        if (slowOrDown) {
+          const cached = (await caches.match(req)) || (await caches.match('/'));
+          if (cached) return cached;
+        }
+        return network.catch(async () => (await caches.match(req)) || caches.match('/'));
+      })(),
     );
     return;
   }

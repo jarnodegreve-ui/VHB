@@ -315,7 +315,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   type="button"
                   onClick={goToPrevMonth}
                   aria-label="Vorige maand"
-                  className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                  className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -324,7 +324,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   type="button"
                   onClick={goToNextMonth}
                   aria-label="Volgende maand"
-                  className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                  className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -611,14 +611,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </div>
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
-                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-sm outline-none" /></div>
+                  {/* tabIndex -1: puur weergavevelden — focus zou op iOS alleen maar inzoomen */}
+                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly tabIndex={-1} value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly tabIndex={-1} value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
                 </div>
                 <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50">
                   Periode wissen
                 </button>
-                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
-                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
+                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
+                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
 
                 {/* Live impact-preview: budget + shift-conflicten */}
                 {requestPreview && (
