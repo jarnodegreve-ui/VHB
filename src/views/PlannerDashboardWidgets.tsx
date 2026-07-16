@@ -198,9 +198,13 @@ export function PlannerDashboardWidgets({
         </div>
       </div>
 
-      {/* === Status-strip === */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
+      {/* === Status-strip ===
+          Gat-vrije verdeling van 5 tegels op elke breedte: mobiel 2+2+1(vol),
+          medium een 6-koloms grid met 3 tegels van span-2 en 2 van span-3
+          (rijen altijd vol), breed 5 naast elkaar. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-5">
         <OpsStat
+          className="md:col-span-2 xl:col-span-1"
           icon={<Users size={16} />}
           tone="emerald"
           label="Chauffeurs actief"
@@ -211,6 +215,7 @@ export function PlannerDashboardWidgets({
         />
         {coverageKnown ? (
           <OpsStat
+            className="md:col-span-2 xl:col-span-1"
             icon={<AlertTriangle size={16} />}
             tone={openToday > 0 ? 'rose' : 'emerald'}
             label="Open diensten"
@@ -220,6 +225,7 @@ export function PlannerDashboardWidgets({
           />
         ) : (
           <OpsStat
+            className="md:col-span-2 xl:col-span-1"
             icon={<AlertTriangle size={16} />}
             tone="slate"
             label="Open diensten"
@@ -229,6 +235,7 @@ export function PlannerDashboardWidgets({
           />
         )}
         <OpsStat
+          className="md:col-span-2 xl:col-span-1"
           icon={<MapPin size={16} />}
           tone={criticalDiversions > 0 ? 'oker' : 'slate'}
           label="Omleidingen"
@@ -237,6 +244,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate('omleidingen')}
         />
         <OpsStat
+          className="md:col-span-3 xl:col-span-1"
           icon={<Inbox size={16} />}
           tone={openTasks > 0 ? 'oker' : 'emerald'}
           label="Open taken"
@@ -245,7 +253,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof-beheer')}
         />
         <OpsStat
-          className="max-md:col-span-2"
+          className="max-md:col-span-2 md:col-span-3 xl:col-span-1"
           icon={<CalendarClock size={16} />}
           tone={importIssueCount > 0 ? 'rose' : planningStale ? 'oker' : 'slate'}
           label="Laatste import"
@@ -261,8 +269,10 @@ export function PlannerDashboardWidgets({
         />
       </div>
 
-      {/* === Operations Center === */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3 items-start">
+      {/* === Operations Center ===
+          Geen items-start meer: beide kolommen rekken tot dezelfde hoogte,
+          zodat er geen leeg gat onder de kortste kolom valt. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Aandacht vereist — gecombineerde werkvoorraad */}
         <OpsPanel
           className="lg:col-span-2"
@@ -354,8 +364,9 @@ export function PlannerDashboardWidgets({
           </div>
         </OpsPanel>
 
-        {/* Rechterflank: systeemstatus + live activiteit */}
-        <div className="space-y-4">
+        {/* Rechterflank: systeemstatus + live activiteit. flex-kolom zodat het
+            onderste paneel meerekt tot de hoogte van de linkerkolom. */}
+        <div className="flex flex-col gap-4">
           <OpsPanel icon={<Activity size={15} />} title="Systeemstatus">
             <div className="space-y-0.5">
               <StatusRow label="Portaal" value="Online" tone="emerald" pulse />
@@ -378,6 +389,7 @@ export function PlannerDashboardWidgets({
 
           {isAdmin && activityLog.length > 0 ? (
             <OpsPanel
+              className="flex-1"
               icon={<Activity size={15} />}
               title="Live activiteit"
               aside="laatste acties"
@@ -393,6 +405,7 @@ export function PlannerDashboardWidgets({
           ) : (
             updates.length > 0 && (
               <OpsPanel
+                className="flex-1"
                 icon={<Bell size={15} />}
                 title="Recente updates"
                 onSeeAll={() => onNavigate('updates')}
