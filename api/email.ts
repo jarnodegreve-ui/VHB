@@ -19,6 +19,10 @@ const getSmtpConfig = () => ({
   host: process.env.SMTP_HOST || "smtp.example.com",
   port: parseInt(process.env.SMTP_PORT || "587"),
   secure: process.env.SMTP_SECURE === "true",
+  // STARTTLS afdwingen op niet-TLS-poorten: mails bevatten gevoelige inhoud
+  // (o.a. de wekelijkse back-up als bijlage) en mogen nooit plaintext de deur
+  // uit als de server geen TLS aanbiedt.
+  requireTLS: true,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,

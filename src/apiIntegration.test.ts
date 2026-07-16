@@ -457,6 +457,27 @@ describe('client-foutmonitoring', () => {
     expect(mem.clientErrors).toHaveLength(0);
   });
 
+  it('vervangt een opgegeven userId door de échte gebruiker bij een geldig token', async () => {
+    const res = await api('POST', '/api/client-errors', { token: 'tok-a', body: { message: 'boem', userId: '1' } });
+    expect(res.status).toBe(204);
+    expect(mem.clientErrors[0].userId).toBe('3');
+  });
+
+  it('markeert een userId zonder geldige sessie als onbevestigd', async () => {
+    const res = await api('POST', '/api/client-errors', { body: { message: 'boem', userId: '1' } });
+    expect(res.status).toBe(204);
+    expect(mem.clientErrors[0].userId).toBe('onbevestigd:1');
+  });
+
+  it('beperkt foutrapportage per IP: 429 zodra de eigen limiet vol is', async () => {
+    let last = 0;
+    for (let i = 0; i < 12; i++) {
+      last = (await api('POST', '/api/client-errors', { body: { message: `f${i}` } })).status;
+    }
+    expect(last).toBe(429);
+    expect(mem.clientErrors.length).toBeLessThanOrEqual(10);
+  });
+
   it('toont de foutenlijst alleen aan admins', async () => {
     mem.clientErrors = [{ id: 1, createdAt: '2026-06-12T10:00:00Z', message: 'boem' }];
     const planner = await api('GET', '/api/client-errors', { token: 'tok-planner' });

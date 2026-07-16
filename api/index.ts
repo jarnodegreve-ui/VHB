@@ -22,8 +22,8 @@ import { sendLeaveDecisionEmail, sendEmail, type LeaveDecisionAction } from "./e
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
-import { authenticate, requireRole } from "./middleware.js";
-import { rateLimitMiddleware } from "./rateLimit.js";
+import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken } from "./helpers.js";
@@ -163,9 +163,7 @@ app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, 
 // select met expliciete kolomnamen (PostgREST valideert die), per RPC een
 // probe-call. Toegang: admin-token of CRON_SECRET (voor een post-deploy curl).
 app.get("/api/health/schema", async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  const viaCronSecret = !!secret && req.headers.authorization === `Bearer ${secret}`;
-  if (!viaCronSecret) {
+  if (!isCronAuthorized(req)) {
     // Geen cron-secret → normale admin-auth vereisen.
     return authenticate(req as AuthenticatedRequest, res, () => {
       const role = (req as AuthenticatedRequest).appUser?.role;
@@ -1294,17 +1292,23 @@ app.post("/api/push/unsubscribe", authenticate, async (req: AuthenticatedRequest
 // Bewust zónder authenticate: fouten op het loginscherm of bij een verlopen
 // sessie moeten ook binnenkomen. De client dedupet en plafonneert zelf
 // (max 20/sessie); hier kappen we payloads af zodat misbruik niets oplevert.
-app.post("/api/client-errors", async (req, res) => {
+app.post("/api/client-errors", clientErrorRateLimit, async (req, res) => {
   try {
     const b = req.body ?? {};
     const cut = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+    // userId komt van de client en is zonder sessie niet te vertrouwen: met
+    // een geldig token overschrijven we hem met de échte gebruiker, anders
+    // markeren we hem expliciet als onbevestigd (route blijft bewust open
+    // voor fouten vanaf het loginscherm).
+    const verifiedUser = await resolveOptionalUser(req);
+    const claimedId = cut(b.userId, 80);
     const entry = {
       message: cut(b.message, 1000),
       stack: cut(b.stack, 4000),
       source: cut(b.source, 50),
       url: cut(b.url, 300),
       userAgent: cut(b.userAgent, 300),
-      userId: cut(b.userId, 100),
+      userId: verifiedUser ? verifiedUser.id : claimedId ? `onbevestigd:${claimedId}` : "",
     };
     if (!entry.message) {
       return res.status(400).json({ error: "message is verplicht" });
@@ -1401,8 +1405,7 @@ app.get("/api/backup", authenticate, requireRole("admin"), async (_req, res) => 
 // Vercel stuurt automatisch `Authorization: Bearer ${CRON_SECRET}` mee als
 // die env-var in het project staat — zonder geldig secret: 401.
 app.get("/api/cron/backup", async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req)) {
     return res.status(401).json({ error: "Niet toegestaan." });
   }
   try {
@@ -1449,8 +1452,7 @@ app.get("/api/cron/backup", async (req, res) => {
 // telprobleem). Stuurt naar ALERT_EMAIL als die env-var bestaat, anders naar
 // alle admin-accounts. Stuurt niets als er geen fouten zijn.
 app.get("/api/cron/error-digest", async (req, res) => {
-  const secret = process.env.CRON_SECRET;
-  if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+  if (!isCronAuthorized(req)) {
     return res.status(401).json({ error: "Niet toegestaan." });
   }
   try {
@@ -1503,7 +1505,9 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const windowLabel = intervalMin % 60 === 0 ? `${intervalMin / 60} uur` : `${intervalMin} min`;
     const subject = `⚠️ VHB Portaal: ${errors.length} fout${errors.length === 1 ? "" : "en"} in de afgelopen ${windowLabel}`;
     const text = `In de afgelopen ${windowLabel} zijn er ${errors.length} client-fouten gemeld (${sorted.length} unieke soorten).\n\n${topLines}${moreLine}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
-    const html = `<p>In de afgelopen <strong>${windowLabel}</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${g.source}] ${g.message}${g.lastUrl ? ` <em>(${g.lastUrl})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+    // g.source/message/lastUrl zijn door de client aangeleverd — escapen,
+    // anders is de digest-mail een HTML-injectiekanaal richting de admins.
+    const html = `<p>In de afgelopen <strong>${windowLabel}</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
@@ -2444,8 +2448,14 @@ app.get("/api/ritblaadje", authenticate, async (_req, res) => {
     if (error) throw error;
     if (!data) return res.json(null);
 
-    const { data: publicData } = db.storage.from(RITBLAADJE_BUCKET).getPublicUrl(data.storage_path);
-    return res.json(ritblaadjeRowToPublic(data, publicData.publicUrl));
+    // Ondertekende URL i.p.v. publieke: de bucket wordt privé gezet zodat het
+    // ritblad (interne dienstinfo) niet zonder sessie op te vragen is.
+    // 30 dagen geldig — ruim langer dan de client de metadata cachet.
+    const { data: signedData, error: signedError } = await db.storage
+      .from(RITBLAADJE_BUCKET)
+      .createSignedUrl(data.storage_path, 60 * 60 * 24 * 30);
+    if (signedError || !signedData?.signedUrl) throw signedError ?? new Error("Kon geen ondertekende URL maken.");
+    return res.json(ritblaadjeRowToPublic(data, signedData.signedUrl));
   } catch (err: any) {
     console.error("Ritblaadje fetch error:", err);
     console.error("Kon ritblaadje niet ophalen.", err);
@@ -2516,8 +2526,11 @@ app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Auth
 
     await logActivity(req, "planning", "Ritblaadje vervangen", `${filename} (${Math.round(buffer.length / 1024)} KB) geüpload.`);
 
-    const { data: publicData } = supabaseAdmin.storage.from(RITBLAADJE_BUCKET).getPublicUrl(storagePath);
-    res.json(ritblaadjeRowToPublic(row, publicData.publicUrl));
+    const { data: signedData, error: signedError } = await supabaseAdmin.storage
+      .from(RITBLAADJE_BUCKET)
+      .createSignedUrl(storagePath, 60 * 60 * 24 * 30);
+    if (signedError || !signedData?.signedUrl) throw signedError ?? new Error("Kon geen ondertekende URL maken.");
+    res.json(ritblaadjeRowToPublic(row, signedData.signedUrl));
   } catch (err: any) {
     console.error("Ritblaadje upload error:", err);
     console.error("Kon ritblaadje niet uploaden.", err);

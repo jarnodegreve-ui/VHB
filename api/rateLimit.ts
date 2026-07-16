@@ -63,9 +63,17 @@ const WINDOW_MS = num(process.env.RATE_LIMIT_WINDOW_MS, 60_000);
 // maar ver onder een tollende lus. Configureerbaar via env.
 const AUTHED_MAX = num(process.env.RATE_LIMIT_MAX, 300);
 const ANON_MAX = num(process.env.RATE_LIMIT_ANON_MAX, 60);
+// Backstop per IP over álle verkeer heen: ruim genoeg voor een heel depot
+// achter één NAT-IP, maar begrenst een aanvaller die verzonnen bearer-tokens
+// roteert om telkens een vers per-token-budget te krijgen.
+const IP_GUARD_MAX = num(process.env.RATE_LIMIT_IP_MAX, 900);
+// Foutrapportage is ongeauthenticeerd bereikbaar — eigen, strakke limiet.
+const ERRORS_MAX = num(process.env.RATE_LIMIT_ERRORS_MAX, 10);
 
 const authedLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: AUTHED_MAX });
 const anonLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: ANON_MAX });
+const ipGuardLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: IP_GUARD_MAX });
+const clientErrorLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: ERRORS_MAX });
 
 const clientIp = (req: express.Request): string => {
   const fwd = req.headers["x-forwarded-for"];
@@ -98,6 +106,28 @@ export const rateLimitMiddleware = (req: express.Request, res: express.Response,
     res.setHeader("Retry-After", String(retryAfterSec));
     return res.status(429).json({ error: "Te veel verzoeken in korte tijd. Probeer het zo dadelijk opnieuw." });
   }
+  // Het token wordt hier niet gevalideerd (dat doet `authenticate` later),
+  // dus een verzonnen Bearer mag niet volstaan om aan elke IP-limiet te
+  // ontsnappen: de ruime IP-backstop telt altijd mee.
+  const guard = ipGuardLimiter.check(`ip:${clientIp(req)}`);
+  if (!guard.allowed) {
+    res.setHeader("Retry-After", String(guard.retryAfterSec));
+    return res.status(429).json({ error: "Te veel verzoeken in korte tijd. Probeer het zo dadelijk opnieuw." });
+  }
+  next();
+};
+
+/**
+ * Extra strakke limiet voor de ongeauthenticeerde foutrapportage-route:
+ * één kapotte (of kwaadwillende) client mag de client_errors-tabel en de
+ * digest-mail niet vol spammen.
+ */
+export const clientErrorRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  const { allowed, retryAfterSec } = clientErrorLimiter.check(`ip:${clientIp(req)}`);
+  if (!allowed) {
+    res.setHeader("Retry-After", String(retryAfterSec));
+    return res.status(429).json({ error: "Te veel foutmeldingen in korte tijd." });
+  }
   next();
 };
 
@@ -105,4 +135,6 @@ export const rateLimitMiddleware = (req: express.Request, res: express.Response,
 export const resetAllRateLimiters = () => {
   authedLimiter.reset();
   anonLimiter.reset();
+  ipGuardLimiter.reset();
+  clientErrorLimiter.reset();
 };

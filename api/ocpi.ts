@@ -1,7 +1,7 @@
 import type express from "express";
 import { randomBytes } from "node:crypto";
 import { db } from "./db.js";
-import { authenticate, requireRole } from "./middleware.js";
+import { authenticate, requireRole, isCronAuthorized } from "./middleware.js";
 import { logCronHeartbeat } from "./storage.js";
 import type { AuthenticatedRequest } from "./types.js";
 
@@ -589,8 +589,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
   // ?parts=locations|sessions|cdrs|all bepaalt wat er gesynct wordt, zodat
   // verschillende schema's verschillende frequenties kunnen hebben.
   app.get("/api/cron/ocpi-sync", async (req, res) => {
-    const secret = process.env.CRON_SECRET;
-    if (!secret || req.headers.authorization !== `Bearer ${secret}`) {
+    if (!isCronAuthorized(req)) {
       return res.status(401).json({ error: "Niet toegestaan." });
     }
     const which = String(req.query.parts ?? "all");
