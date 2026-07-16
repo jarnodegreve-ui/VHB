@@ -4,6 +4,31 @@
  * verschillende schermen drie formaten door elkaar, incl. rauw ISO
  * ("2026-07-18") — dit is de enige plek die daarover beslist.
  */
+/**
+ * Datum + tijd in Belgische tijd ("vr 18 juli, 14:32"). Verwacht een
+ * ISO-timestamp; oudere niet-ISO-waarden (bv. al opgeslagen nl-BE-strings)
+ * worden ongewijzigd teruggegeven.
+ */
+export function formatDateTimeHuman(value: string | undefined | null): string {
+  if (!value) return '';
+  const s = String(value);
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(s)) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return s;
+  try {
+    return d.toLocaleString('nl-BE', {
+      timeZone: 'Europe/Brussels',
+      weekday: 'short',
+      day: 'numeric',
+      month: 'long',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  } catch {
+    return s;
+  }
+}
+
 export function formatDateHuman(iso: string | undefined | null): string {
   if (!iso) return '';
   const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);

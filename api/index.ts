@@ -89,12 +89,20 @@ console.log("Supabase Service Role present:", !!process.env.SUPABASE_SERVICE_ROL
 const app = express();
 const PORT = 3000;
 
-// exposedHeaders: laat clients de custom response-headers lezen. Same-origin
-// (de huidige opzet) heeft dit niet nodig, maar het maakt de revisie-check en
-// de 429-Retry-After robuust mochten app en API ooit op verschillende origins
-// draaien (review-bevinding van de optimistic-concurrency-PR).
-app.use(cors({ exposedHeaders: ["X-Collection-Revision", "Retry-After"] }));
-app.use(express.json({ limit: '25mb' }));
+// CORS beperkt tot de eigen origins (prod, Vercel-previews van dit project,
+// lokale dev) i.p.v. wildcard. De app draait same-origin, dus browsers hebben
+// dit zelden nodig — maar wildcard liet elke website met een gestolen token
+// cross-origin lezen. exposedHeaders: laat clients de custom response-headers
+// lezen (revisie-check + 429-Retry-After).
+const ALLOWED_ORIGINS: Array<string | RegExp> = [
+  "https://vhb-five.vercel.app",
+  /^https:\/\/vhb-[a-z0-9-]+-jarnodegreve-uis-projects\.vercel\.app$/,
+  /^http:\/\/localhost:\d+$/,
+];
+app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision", "Retry-After"] }));
+// 5 MB is eerlijk: Vercel kapt request-bodies sowieso op ~4,5 MB af — de
+// oude 25mb-limiet wekte de indruk dat grotere uploads (PDF's, Excels) konden.
+app.use(express.json({ limit: '5mb' }));
 
 // Rem op tollende/vastgelopen clients — per ingelogde gebruiker (token),
 // niet per IP, zodat het hele bedrijfsnetwerk achter één NAT niet samen één
@@ -110,44 +118,39 @@ app.use((req, res, next) => {
 // los van de Supabase-auth. Zie api/ocpi.ts.
 mountOcpiRoutes(app);
 
-// Health check
-app.get("/api/health", async (req, res) => {
-  let supabaseStatus = "not configured";
-  let tables: any = {};
-  
-  if (supabase) {
-    supabaseStatus = "configured";
-    try {
-      const checkTable = async (name: string) => {
-        try {
-          const { error } = await db!.from(name).select('*').limit(0);
-          return error ? `Error: ${error.message}` : "OK";
-        } catch (e: any) {
-          return `Exception: ${e.message}`;
-        }
-      };
-      
-      tables.users = await checkTable('users');
-      tables.planning = await checkTable('planning');
-      tables.diversions = await checkTable('diversions');
-      tables.services = await checkTable('services');
-    } catch (e: any) {
-      supabaseStatus = `Error: ${e.message}`;
-    }
-  }
-
-  res.json({ 
-    status: "ok", 
-    supabase: supabaseStatus, 
-    tables,
-    env: process.env.NODE_ENV, 
-    time: new Date().toISOString() 
-  });
+// Health check — publiek maar kaal: geen tabelstatussen/foutmeldingen/env
+// naar buiten (info-disclosure). Gedetailleerde checks alleen voor admins.
+app.get("/api/health", async (_req, res) => {
+  res.json({ status: "ok", time: new Date().toISOString() });
 });
 
-// API Routes
-app.post("/api/test", (req, res) => {
-  res.json({ success: true, message: "POST method is working", body: req.body });
+app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, res) => {
+  let supabaseStatus = "not configured";
+  const tables: Record<string, string> = {};
+
+  if (supabase) {
+    supabaseStatus = "configured";
+    const checkTable = async (name: string) => {
+      try {
+        const { error } = await db!.from(name).select('*').limit(0);
+        return error ? `Error: ${error.message}` : "OK";
+      } catch (e: any) {
+        return `Exception: ${e.message}`;
+      }
+    };
+    tables.users = await checkTable('users');
+    tables.planning = await checkTable('planning');
+    tables.diversions = await checkTable('diversions');
+    tables.services = await checkTable('services');
+  }
+
+  res.json({
+    status: "ok",
+    supabase: supabaseStatus,
+    tables,
+    env: process.env.NODE_ENV,
+    time: new Date().toISOString(),
+  });
 });
 
 app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
@@ -166,7 +169,9 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
     // Teller atomair bijwerken (RPC) i.p.v. read-modify-write op de gecachte
     // waarde — anders telt het mis bij ~gelijktijdig in/uitloggen.
     await bumpActiveSessions(String(currentUser.id), action === "start" ? 1 : -1);
-    const lastLogin = action === "start" ? new Date().toLocaleString("nl-BE") : currentUser.lastLogin;
+    // ISO opslaan (was een nl-BE-string in UTC-servertijd → stond 1-2u fout
+    // en sorteerde niet); de client formatteert naar Belgische tijd.
+    const lastLogin = action === "start" ? new Date().toISOString() : currentUser.lastLogin;
     if (action === "start") {
       await updateUserSessionMeta(String(currentUser.id), { lastLogin });
       // Login-event vastleggen: lastLogin wordt overschreven, maar de
@@ -185,7 +190,8 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
     };
     res.json(nextUser);
   } catch (error: any) {
-    res.status(500).json({ error: "Kon sessie niet bijwerken.", details: error.message });
+    console.error("Kon sessie niet bijwerken.", error);
+    res.status(500).json({ error: "Kon sessie niet bijwerken." });
   }
 });
 
@@ -228,7 +234,8 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
     await logActivity(req, "auth", "Wachtwoord gereset", `Wachtwoord opnieuw ingesteld voor ${targetUser.name}.`, { type: "user", id: targetUser.id });
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: "Wachtwoord reset mislukt.", details: error.message });
+    console.error("Wachtwoord reset mislukt.", error);
+    res.status(500).json({ error: "Wachtwoord reset mislukt." });
   }
 });
 
@@ -259,17 +266,22 @@ app.get("/api/planning", authenticate, async (req, res) => {
 // diensten (geen gevoelige data), maar behandel de URL als privé.
 // Bewust GEEN anon-key in de fallback-keten: die zit publiek in de
 // frontend-bundle en zou token-forging mogelijk maken zodra de service-
-// role-key ontbreekt.
+// role-key ontbreekt. Ook GEEN hardcoded fallback-secret meer (stond in de
+// publieke repo → tokens waren forgebaar zodra beide env-vars ontbraken):
+// zonder secret is de feed gewoon uitgeschakeld (fail-closed).
 const CAL_SECRET =
   process.env.CALENDAR_FEED_SECRET ||
   process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  "vhb-portaal-calendar-fallback-secret";
+  null;
 
-const calendarToken = (userId: string) =>
-  crypto.createHmac("sha256", CAL_SECRET).update(`calendar:${userId}`).digest("hex");
+const calendarToken = (userId: string) => {
+  if (!CAL_SECRET) return null;
+  return crypto.createHmac("sha256", CAL_SECRET).update(`calendar:${userId}`).digest("hex");
+};
 
 const verifyCalendarToken = (userId: string, token: string) => {
   const expected = calendarToken(userId);
+  if (!expected) return false;
   const a = Buffer.from(expected);
   const b = Buffer.from(String(token || ""));
   return a.length === b.length && crypto.timingSafeEqual(a, b);
@@ -281,6 +293,7 @@ app.get("/api/calendar-url", authenticate, async (req: AuthenticatedRequest, res
   if (!u) return res.status(401).json({ error: "Niet aangemeld." });
   const userId = String(u.id);
   const token = calendarToken(userId);
+  if (!token) return res.status(503).json({ error: "Agenda-feed is niet geconfigureerd op de server." });
   const proto = String(req.headers["x-forwarded-proto"] || req.protocol || "https").split(",")[0].trim();
   const host = String(req.headers["x-forwarded-host"] || req.headers.host || "").split(",")[0].trim();
   const feedPath = `/api/calendar/${encodeURIComponent(userId)}/${token}.ics`;
@@ -360,7 +373,8 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving planning data:", errorMessage);
-    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
+    console.error("Opslaan is mislukt.", errorMessage);
+    res.status(500).json({ error: "Opslaan is mislukt." });
   }
 });
 
@@ -646,7 +660,8 @@ app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), a
     const rows = await getPlanningMatrixRows();
     res.json(rows);
   } catch (err: any) {
-    res.status(500).json({ error: "Planning-overzicht laden is mislukt.", details: err.message });
+    console.error("Planning-overzicht laden is mislukt.", err);
+    res.status(500).json({ error: "Planning-overzicht laden is mislukt." });
   }
 });
 
@@ -655,7 +670,8 @@ app.get("/api/planning-matrix/history", authenticate, requireRole("planner", "ad
     const history = await getPlanningMatrixHistory();
     res.json(history);
   } catch (err: any) {
-    res.status(500).json({ error: "Import-geschiedenis laden is mislukt.", details: err.message });
+    console.error("Import-geschiedenis laden is mislukt.", err);
+    res.status(500).json({ error: "Import-geschiedenis laden is mislukt." });
   }
 });
 
@@ -664,7 +680,8 @@ app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) =
     const activity = await getActivityLog();
     res.json(activity);
   } catch (err: any) {
-    res.status(500).json({ error: "Activiteit laden is mislukt.", details: err.message });
+    console.error("Activiteit laden is mislukt.", err);
+    res.status(500).json({ error: "Activiteit laden is mislukt." });
   }
 });
 
@@ -679,7 +696,8 @@ app.get("/api/activity/logins", authenticate, requireRole("admin"), async (req, 
     const logins = await getLoginActivity(sinceIso);
     res.json({ days, logins });
   } catch (err: any) {
-    res.status(500).json({ error: "Aanmeldingen laden is mislukt.", details: err.message });
+    console.error("Aanmeldingen laden is mislukt.", err);
+    res.status(500).json({ error: "Aanmeldingen laden is mislukt." });
   }
 });
 
@@ -699,7 +717,8 @@ app.get(
       const history = await getEntityHistory(entityType as any, entityId);
       res.json(history);
     } catch (err: any) {
-      res.status(500).json({ error: "Geschiedenis laden is mislukt.", details: err.message });
+      console.error("Geschiedenis laden is mislukt.", err);
+      res.status(500).json({ error: "Geschiedenis laden is mislukt." });
     }
 });
 
@@ -714,8 +733,23 @@ const parseMatrixInput = (body: any) => {
   if (buffer.length === 0) {
     throw new Error("Excel-bestand is leeg.");
   }
+  // Harde limiet vóór het parsen: een .xlsx is een zip en kan bij het
+  // uitpakken exploderen (zip-bomb → geheugen-DoS van de functie). Een echte
+  // praktijk-tab is enkele honderden kB; 5 MB is ruim.
+  if (buffer.length > 5 * 1024 * 1024) {
+    throw new Error("Excel-bestand is te groot (max 5 MB). Exporteer enkel de praktijk-tab.");
+  }
   return { rows: parsePlanningMatrixXlsx(buffer) };
 };
+
+// Escape user-invoer vóór die in HTML-e-mails belandt (injectie-preventie).
+const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
@@ -815,7 +849,8 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       endDate,
     });
   } catch (err: any) {
-    res.status(500).json({ error: "Planning importeren is mislukt.", details: err.message });
+    console.error("Planning importeren is mislukt.", err);
+    res.status(500).json({ error: "Planning importeren is mislukt." });
   }
 });
 
@@ -876,7 +911,8 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       perDriver: generatedPlanning.summary.perDriver,
     });
   } catch (err: any) {
-    res.status(500).json({ error: "Import-voorbeeld maken is mislukt.", details: err.message });
+    console.error("Import-voorbeeld maken is mislukt.", err);
+    res.status(500).json({ error: "Import-voorbeeld maken is mislukt." });
   }
 });
 
@@ -892,7 +928,8 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
     );
     res.json({ success: true, ...generatedPlanning.summary });
   } catch (err: any) {
-    res.status(500).json({ error: "Planning opnieuw opbouwen is mislukt.", details: err.message });
+    console.error("Planning opnieuw opbouwen is mislukt.", err);
+    res.status(500).json({ error: "Planning opnieuw opbouwen is mislukt." });
   }
 });
 
@@ -945,7 +982,8 @@ app.get("/api/planning-matrix/changes-since-import", authenticate, requireRole("
     });
   } catch (err: any) {
     console.error("Changes-since-import error:", err);
-    res.status(500).json({ error: "Kon wijzigingen niet ophalen.", details: err.message });
+    console.error("Kon wijzigingen niet ophalen.", err);
+    res.status(500).json({ error: "Kon wijzigingen niet ophalen." });
   }
 });
 
@@ -955,7 +993,8 @@ app.get("/api/planning-codes", authenticate, requireRole("planner", "admin"), as
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(codes));
     res.json(codes);
   } catch (err: any) {
-    res.status(500).json({ error: "Planningscodes laden is mislukt.", details: err.message });
+    console.error("Planningscodes laden is mislukt.", err);
+    res.status(500).json({ error: "Planningscodes laden is mislukt." });
   }
 });
 
@@ -1052,7 +1091,8 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getPlanningCodesData()));
     res.json({ success: true, count: codes.length });
   } catch (err: any) {
-    res.status(500).json({ error: "Planningscodes opslaan is mislukt.", details: err.message });
+    console.error("Planningscodes opslaan is mislukt.", err);
+    res.status(500).json({ error: "Planningscodes opslaan is mislukt." });
   }
 });
 
@@ -1103,7 +1143,8 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving users data:", errorMessage);
-    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
+    console.error("Opslaan is mislukt.", errorMessage);
+    res.status(500).json({ error: "Opslaan is mislukt." });
   }
 });
 
@@ -1126,7 +1167,8 @@ app.post("/api/push/subscribe", authenticate, async (req: AuthenticatedRequest, 
     await savePushSubscription({ userId: String(req.appUser!.id), endpoint, p256dh, auth });
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: "Abonneren mislukt", details: err?.message });
+    console.error("Abonneren mislukt", err);
+    res.status(500).json({ error: "Abonneren mislukt" });
   }
 });
 
@@ -1213,7 +1255,8 @@ app.get("/api/backup", authenticate, requireRole("admin"), async (_req, res) => 
   try {
     res.json(await buildBackupPayload());
   } catch (err: any) {
-    res.status(500).json({ error: "Back-up genereren is mislukt", details: err?.message });
+    console.error("Back-up genereren is mislukt", err);
+    res.status(500).json({ error: "Back-up genereren is mislukt" });
   }
 });
 
@@ -1233,7 +1276,8 @@ app.get("/api/cron/backup", async (req, res) => {
     res.json({ success: true, filename, removedOld: stored.removedOld });
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
-    res.status(500).json({ error: "Back-up mislukt", details: err?.message });
+    console.error("Back-up mislukt", err);
+    res.status(500).json({ error: "Back-up mislukt" });
   }
 });
 
@@ -1303,7 +1347,8 @@ app.get("/api/cron/error-digest", async (req, res) => {
     res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
   } catch (err: any) {
     console.error("[error-digest] mislukt:", err?.message || err);
-    res.status(500).json({ error: "Digest mislukt", details: err?.message });
+    console.error("Digest mislukt", err);
+    res.status(500).json({ error: "Digest mislukt" });
   }
 });
 
@@ -1350,7 +1395,8 @@ app.post("/api/restore", authenticate, requireRole("admin"), async (req: Authent
           `Restore halverwege gefaald. Wél teruggezet: ${Object.entries(appliedSoFar).map(([k, v]) => `${k} (${v})`).join(", ") || "niets"}. Fout: ${err?.message || "onbekend"}.`);
       } catch { /* logging mag de foutrespons niet blokkeren */ }
     }
-    res.status(500).json({ error: "Herstellen is mislukt", details: err?.message, appliedSoFar });
+    console.error("Herstellen is mislukt", err);
+    res.status(500).json({ error: "Herstellen is mislukt", appliedSoFar });
   }
 });
 
@@ -1402,7 +1448,8 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving diversions data:", errorMessage);
-    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
+    console.error("Opslaan is mislukt.", errorMessage);
+    res.status(500).json({ error: "Opslaan is mislukt." });
   }
 });
 
@@ -1444,7 +1491,8 @@ app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), a
     res.json({ publicUrl: publicData.publicUrl, storagePath, filename, sizeBytes: buffer.length });
   } catch (err: any) {
     console.error("Diversion PDF upload error:", err);
-    res.status(500).json({ error: "Kon PDF niet uploaden.", details: err.message });
+    console.error("Kon PDF niet uploaden.", err);
+    res.status(500).json({ error: "Kon PDF niet uploaden." });
   }
 });
 
@@ -1511,7 +1559,8 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving services data:", errorMessage);
-    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
+    console.error("Opslaan is mislukt.", errorMessage);
+    res.status(500).json({ error: "Opslaan is mislukt." });
   }
 });
 
@@ -1562,7 +1611,8 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: "Updates opslaan is mislukt.", details: err.message });
+    console.error("Updates opslaan is mislukt.", err);
+    res.status(500).json({ error: "Updates opslaan is mislukt." });
   }
 });
 
@@ -1774,7 +1824,8 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
 
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: "Dienstruil opslaan is mislukt.", details: err.message });
+    console.error("Dienstruil opslaan is mislukt.", err);
+    res.status(500).json({ error: "Dienstruil opslaan is mislukt." });
   }
 });
 
@@ -1860,7 +1911,8 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
 
     res.json({ success: true, swap: updated });
   } catch (err: any) {
-    res.status(500).json({ error: "Beslissing opslaan is mislukt", details: err.message });
+    console.error("Beslissing opslaan is mislukt", err);
+    res.status(500).json({ error: "Beslissing opslaan is mislukt" });
   }
 });
 
@@ -2030,7 +2082,8 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
 
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: "Verlofaanvraag opslaan is mislukt.", details: err.message });
+    console.error("Verlofaanvraag opslaan is mislukt.", err);
+    res.status(500).json({ error: "Verlofaanvraag opslaan is mislukt." });
   }
 });
 
@@ -2099,7 +2152,8 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
 
     res.json({ success: true, leave: updated });
   } catch (err: any) {
-    res.status(500).json({ error: "Beslissing opslaan is mislukt", details: err.message });
+    console.error("Beslissing opslaan is mislukt", err);
+    res.status(500).json({ error: "Beslissing opslaan is mislukt" });
   }
 });
 
@@ -2170,8 +2224,8 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
             <h1 style="margin: 0; font-size: 24px;">DRINGENDE UPDATE</h1>
           </div>
           <div style="padding: 30px;">
-            <h2 style="color: #1e293b; margin-top: 0;">${update.title}</h2>
-            <p style="color: #475569; line-height: 1.6;">${update.content}</p>
+            <h2 style="color: #1e293b; margin-top: 0;">${escapeHtml(update.title)}</h2>
+            <p style="color: #475569; line-height: 1.6;">${escapeHtml(update.content)}</p>
             <div style="margin-top: 30px; text-align: center;">
               <a href="${process.env.APP_URL || '#'}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Open VHB Portaal</a>
             </div>
@@ -2186,7 +2240,8 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
     res.json({ success: true, message: "Emails succesvol verzonden" });
   } catch (error: any) {
     console.error("Error sending email:", error);
-    res.status(500).json({ error: "Fout bij verzenden email", details: error.message });
+    console.error("Fout bij verzenden email", error);
+    res.status(500).json({ error: "Fout bij verzenden email" });
   }
 });
 
@@ -2215,7 +2270,8 @@ app.get("/api/ritblaadje", authenticate, async (_req, res) => {
     return res.json(ritblaadjeRowToPublic(data, publicData.publicUrl));
   } catch (err: any) {
     console.error("Ritblaadje fetch error:", err);
-    res.status(500).json({ error: "Kon ritblaadje niet ophalen.", details: err.message });
+    console.error("Kon ritblaadje niet ophalen.", err);
+    res.status(500).json({ error: "Kon ritblaadje niet ophalen." });
   }
 });
 
@@ -2286,7 +2342,8 @@ app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Auth
     res.json(ritblaadjeRowToPublic(row, publicData.publicUrl));
   } catch (err: any) {
     console.error("Ritblaadje upload error:", err);
-    res.status(500).json({ error: "Kon ritblaadje niet uploaden.", details: err.message });
+    console.error("Kon ritblaadje niet uploaden.", err);
+    res.status(500).json({ error: "Kon ritblaadje niet uploaden." });
   }
 });
 
@@ -2313,12 +2370,9 @@ app.delete("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Au
     res.json({ success: true });
   } catch (err: any) {
     console.error("Ritblaadje delete error:", err);
-    res.status(500).json({ error: "Kon ritblaadje niet verwijderen.", details: err.message });
+    console.error("Kon ritblaadje niet verwijderen.", err);
+    res.status(500).json({ error: "Kon ritblaadje niet verwijderen." });
   }
-});
-
-app.get("/api/test", (req, res) => {
-  res.send("VHB Portaal API is active");
 });
 
 app.all("/api/*", (req, res) => {
@@ -2326,14 +2380,11 @@ app.all("/api/*", (req, res) => {
   res.status(404).json({ error: `Route ${req.method} ${req.url} not found on server` });
 });
 
-// Global error handler
+// Global error handler — details/stack alleen in de server-logs, nooit
+// naar de client (info-disclosure).
 app.use((err: any, req: any, res: any, next: any) => {
   console.error("GLOBAL ERROR:", err);
-  res.status(500).json({ 
-    error: "Internal Server Error", 
-    details: err.message || String(err),
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
-  });
+  res.status(500).json({ error: "Er ging iets mis op de server." });
 });
 
 // Vite middleware for development

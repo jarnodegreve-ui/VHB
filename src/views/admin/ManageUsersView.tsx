@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { History, Info, Pause, Play, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { formatDateTimeHuman } from '../../lib/format';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
@@ -360,7 +361,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     <div className="mt-1"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
                   </Td>
                   <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>
-                  <Td className="tabular-nums">{u.lastLogin ? u.lastLogin : <span className="italic text-slate-400">Nooit</span>}</Td>
+                  <Td className="tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="italic text-slate-400">Nooit</span>}</Td>
                   <Td className="text-center"><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-400')}>{u.activeSessions || 0}</span></Td>
                   <Td className="text-right">
                     <div className="flex items-center justify-end gap-1.5 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
@@ -391,7 +392,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="p-3 bg-slate-50 rounded-2xl"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-[13px] font-semibold text-slate-700 tabular-nums">{u.lastLogin || 'Nooit'}</p></div>
+                <div className="p-3 bg-slate-50 rounded-2xl"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-[13px] font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></div>
                 <div className="p-3 bg-slate-50 rounded-2xl"><MicroLabel>Sessies</MicroLabel><p className="mt-1 text-[13px] font-semibold text-slate-700 tabular-nums">{u.activeSessions || 0}</p></div>
               </div>
               <div className="flex gap-2 pt-1">
@@ -474,7 +475,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-[11px] text-slate-400">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <button type="button" onClick={() => setEditingUser({ ...editingUser, showInContacts: editingUser.showInContacts === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.showInContacts !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-white rounded-full transition-all', editingUser.showInContacts !== false ? 'left-7' : 'left-1')} /></button>
               </div>
-              <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin || 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
+              <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
               <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
             </form>
           </>
