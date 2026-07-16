@@ -369,9 +369,11 @@ export default function App() {
     if (tone === 'error') reportHandledError(message);
     const id = ++toastIdRef.current;
     setToasts((current) => [...current, { id, message, tone }]);
+    // Fout-toasts bevatten vaak instructies ("probeer opnieuw") — die moeten
+    // lang genoeg blijven staan om rustig te lezen. Succes/info mag snel weg.
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, 4200);
+    }, tone === 'error' ? 10000 : 4200);
   };
 
   useEffect(() => {
@@ -716,8 +718,11 @@ export default function App() {
     }
   };
 
-  const saveSwaps = async (newSwaps: SwapRequest[]) => {
-    if (!guardCollectionLoaded('swaps', 'De dienstruilen zijn')) return;
+  const saveSwaps = async (newSwaps: SwapRequest[]): Promise<boolean> => {
+    if (!guardCollectionLoaded('swaps', 'De dienstruilen zijn')) return false;
+    // Nieuw verzoek vs. wijziging: andere boodschap, zodat de aanvrager weet
+    // dat de collega eerst moet accepteren (anders lijkt de ruil al rond).
+    const isNewRequest = newSwaps.length > swaps.length;
     try {
       const response = await apiFetch('/api/swaps', {
         method: 'POST',
@@ -728,14 +733,16 @@ export default function App() {
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
-        showToast('Dienstruil bijgewerkt.', 'success');
-      } else {
-        const err = await response.json().catch(() => ({} as any));
-        showToast(err.error || 'Opslaan van dienstruilen is mislukt.', 'error');
+        showToast(isNewRequest ? 'Ruilverzoek verstuurd — je collega moet eerst accepteren.' : 'Dienstruil bijgewerkt.', 'success');
+        return true;
       }
+      const err = await response.json().catch(() => ({} as any));
+      showToast(err.error || 'Opslaan van dienstruilen is mislukt.', 'error');
+      return false;
     } catch (error) {
       console.error('Error saving swaps:', error);
       showToast('Opslaan van dienstruilen is mislukt.', 'error');
+      return false;
     }
   };
 
@@ -893,9 +900,14 @@ export default function App() {
   // Zelfde definitie als de cockpit: 'accepted' wacht óók op de planner
   // (validatie), dus telt mee als open werkvoorraad.
   const pendingSwapsCount = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted').length;
+  // Voor chauffeurs: ruilen die op míjn antwoord wachten (badge op het
+  // nav-item + dot op de "Meer"-tab, anders mist de collega het verzoek).
+  const targetedSwapsCount = currentUser && currentUser.role === 'chauffeur'
+    ? swaps.filter((s) => s.status === 'pending' && s.targetDriverId === currentUser.id).length
+    : 0;
 
-  const saveLeave = async (newLeave: LeaveRequest[]) => {
-    if (!guardCollectionLoaded('leave', 'De verlofaanvragen zijn')) return;
+  const saveLeave = async (newLeave: LeaveRequest[]): Promise<boolean> => {
+    if (!guardCollectionLoaded('leave', 'De verlofaanvragen zijn')) return false;
     try {
       const response = await apiFetch('/api/leave', {
         method: 'POST',
@@ -908,13 +920,15 @@ export default function App() {
         }
         const isNewRequest = newLeave.some((r) => !leaveRequests.some((p) => p.id === r.id));
         showToast(isNewRequest ? 'Aanvraag ingediend — de planner beoordeelt ze.' : 'Verlofaanvraag bijgewerkt.', 'success');
-      } else {
-        const err = await response.json().catch(() => ({} as any));
-        showToast(err.details || err.error || 'Opslaan van verlofaanvragen is mislukt.', 'error');
+        return true;
       }
+      const err = await response.json().catch(() => ({} as any));
+      showToast(err.details || err.error || 'Opslaan van verlofaanvragen is mislukt.', 'error');
+      return false;
     } catch (error) {
       console.error('Error saving leave:', error);
       showToast('Opslaan van verlofaanvragen is mislukt.', 'error');
+      return false;
     }
   };
 
@@ -1486,7 +1500,7 @@ export default function App() {
             label="Dienstruil"
             active={currentView === 'ruil-verzoeken'}
             onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }}
-            badge={isPlanner ? pendingSwapsCount : undefined}
+            badge={isPlanner ? pendingSwapsCount : (targetedSwapsCount || undefined)}
           />
           <NavItem
             icon={<Users size={18} />}
@@ -1677,11 +1691,11 @@ export default function App() {
                   <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} />
                 )
               )}
-              {resolvedCurrentView === 'omleidingen' && <DiversionsView diversions={diversions} />}
+              {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} />)}
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
-              {resolvedCurrentView === 'updates' && <UpdatesView updates={updates} />}
+              {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
               {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {resolvedCurrentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
                 await Promise.all([
@@ -1724,13 +1738,13 @@ export default function App() {
                   <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'ruil-verzoeken' && <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} onDecide={decideSwap} />}
+              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} onDecide={decideSwap} />)}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <CoverageView />}
               {resolvedCurrentView === 'rusttijden' && <ComplianceView shifts={shifts} users={users} />}
               {resolvedCurrentView === 'rapportage' && <ReportsView shifts={shifts} leaveRequests={leaveRequests} users={users} />}
               {resolvedCurrentView === 'verlof-kalender' && <VerlofKalenderView users={users} leaveRequests={leaveRequests} />}
-              {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (
+              {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView
                     user={currentUser}
@@ -1743,7 +1757,7 @@ export default function App() {
                     shifts={shifts}
                   />
                 </Suspense>
-              )}
+              ))}
               {resolvedCurrentView === 'beheer-debug' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
@@ -1760,6 +1774,7 @@ export default function App() {
         onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
         unseenLeaveCount={unseenLeaveDecisionCount}
         onMore={() => setIsSidebarOpen(true)}
+        moreDot={targetedSwapsCount > 0}
         hidden={isSidebarOpen}
       />
 

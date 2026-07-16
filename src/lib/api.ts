@@ -32,7 +32,7 @@ export async function apiFetch<T = unknown>(url: string, init: RequestInit = {})
     } catch {
       // negeer parse-fouten — gebruik standaard message
     }
-    throw new Error(detail || `Request failed (${response.status})`);
+    throw new Error(detail || `Er ging iets mis (code ${response.status}). Probeer het opnieuw.`);
   }
 
   // Voor 204 en lege body
