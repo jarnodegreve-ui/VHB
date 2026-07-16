@@ -6,6 +6,8 @@ interface SendEmailOptions {
   text: string;
   html: string;
   context?: string; // for logging only
+  /** Bijlagen (bv. de wekelijkse backup-JSON) — 1-op-1 doorgegeven aan nodemailer. */
+  attachments?: Array<{ filename: string; content: string | Buffer }>;
 }
 
 interface SendEmailResult {
@@ -54,6 +56,7 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
       subject: opts.subject,
       text: opts.text,
       html: opts.html,
+      attachments: opts.attachments,
     });
     return { ok: true, mocked: false };
   } catch (err) {
