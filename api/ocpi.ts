@@ -2,6 +2,7 @@ import type express from "express";
 import { randomBytes } from "node:crypto";
 import { db } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
+import { logCronHeartbeat } from "./storage.js";
 import type { AuthenticatedRequest } from "./types.js";
 
 /**
@@ -599,7 +600,12 @@ export const mountOcpiRoutes = (app: express.Express) => {
     try {
       const summary = await runOcpiSync(parts);
       if (summary.errors.length) console.warn(`[cron-ocpi:${which}] ${summary.errors.length} fout(en):`, summary.errors.join(" | "));
-      else console.log(`[cron-ocpi:${which}] ok`, summary);
+      else {
+        console.log(`[cron-ocpi:${which}] ok`, summary);
+        // Heartbeat gethrotteld (max 1/uur): deze cron draait elke 2-5 min
+        // en zou anders het activiteitenlog vol schrijven.
+        await logCronHeartbeat("ocpi-sync", `Sync ok (${which}).`, 60);
+      }
       res.json({ success: summary.errors.length === 0, ...summary });
     } catch (err: any) {
       console.error(`[cron-ocpi:${which}] mislukt:`, err?.message ?? err);

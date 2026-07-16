@@ -47,7 +47,7 @@ const requireDb = () => {
 // (de transactionele replace-SQL is nog niet gedraaid). ENKEL dan vallen we
 // terug op het JS-pad. Bij een échte fout NIET terugvallen: de transactie is
 // dan al teruggerold (tabel intact) en delete+insert zou alsnog kunnen wissen.
-const isMissingDbFunction = (error: any): boolean =>
+export const isMissingDbFunction = (error: any): boolean =>
   error?.code === "PGRST202" ||
   /could not find the function|function .*does not exist|schema cache/i.test(String(error?.message ?? ""));
 
@@ -1480,4 +1480,56 @@ export const restoreFromBackup = async (collections: RestorableCollections): Pro
     if (err && typeof err === 'object') err.appliedSoFar = summary;
     throw err;
   }
+};
+
+// --- Cron-heartbeats -------------------------------------------------------
+// Crons falen stil (Vercel-logs die niemand leest): elke geslaagde run
+// schrijft een heartbeat in activity_log (category 'system'); de health-
+// endpoint markeert heartbeats die ouder zijn dan 2× het interval. Voor
+// hoogfrequente crons (OCPI, elke 2-5 min) throttelen we naar max. 1
+// heartbeat per uur zodat het log niet volloopt.
+export const logCronHeartbeat = async (name: string, details: string, minIntervalMin = 0) => {
+  try {
+    const client = requireDb();
+    const action = `Cron geslaagd: ${name}`;
+    if (minIntervalMin > 0) {
+      const { data } = await client
+        .from("activity_log")
+        .select("created_at")
+        .eq("action", action)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const last = data?.created_at ? Date.parse(String(data.created_at)) : 0;
+      if (last && Date.now() - last < minIntervalMin * 60 * 1000) return;
+    }
+    await saveActivityLogEntry({
+      id: `${Date.now()}-cron-${name}`,
+      createdAt: new Date().toISOString(),
+      actorName: "Systeem (cron)",
+      actorRole: "admin",
+      category: "system",
+      action,
+      details,
+    });
+  } catch (err) {
+    // Heartbeat mag een cron nooit laten falen.
+    console.error(`Heartbeat voor cron '${name}' kon niet geschreven worden:`, err);
+  }
+};
+
+export const getCronHeartbeats = async (names: string[]): Promise<Record<string, string | null>> => {
+  const client = requireDb();
+  const out: Record<string, string | null> = {};
+  for (const name of names) {
+    const { data } = await client
+      .from("activity_log")
+      .select("created_at")
+      .eq("action", `Cron geslaagd: ${name}`)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    out[name] = data?.created_at ? String(data.created_at) : null;
+  }
+  return out;
 };

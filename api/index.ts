@@ -77,6 +77,9 @@ import {
   summarizeTokens,
   summarizeUpdateChanges,
   summarizeUserChanges,
+  isMissingDbFunction,
+  logCronHeartbeat,
+  getCronHeartbeats,
 } from "./storage.js";
 
 dotenv.config();
@@ -152,6 +155,75 @@ app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, 
     time: new Date().toISOString(),
   });
 });
+
+// Schema-drift-detectie: migraties draait Jarno handmatig in de SQL Editor —
+// deze route verifieert ná een deploy dat elke kolom/RPC waar de code op
+// rekent ook écht bestaat (de sessie brak hier al 2× bijna op). Per tabel een
+// select met expliciete kolomnamen (PostgREST valideert die), per RPC een
+// probe-call. Toegang: admin-token of CRON_SECRET (voor een post-deploy curl).
+app.get("/api/health/schema", async (req, res) => {
+  const secret = process.env.CRON_SECRET;
+  const viaCronSecret = !!secret && req.headers.authorization === `Bearer ${secret}`;
+  if (!viaCronSecret) {
+    // Geen cron-secret → normale admin-auth vereisen.
+    return authenticate(req as AuthenticatedRequest, res, () => {
+      const role = (req as AuthenticatedRequest).appUser?.role;
+      if (role !== "admin") return res.status(403).json({ error: "Alleen voor admins." });
+      void runSchemaCheck(res);
+    });
+  }
+  void runSchemaCheck(res);
+});
+
+const runSchemaCheck = async (res: express.Response) => {
+  if (!db) return res.status(503).json({ ok: false, error: "Database niet geconfigureerd." });
+  const missing: string[] = [];
+
+  // Kolommen die de mappers in api/helpers.ts / api/storage.ts schrijven of
+  // lezen. Let op de bewuste casing-verschillen per tabel (users lowercase,
+  // planning/services quoted camelCase, planning_codes snake_case).
+  const TABLE_PROBES: Array<{ table: string; columns: string }> = [
+    { table: "users", columns: "id,name,role,employeeid,lastlogin,activesessions,isactive,phone,email,verlofbudget,showincontacts,section" },
+    { table: "planning", columns: "id,date,startTime,endTime,line,busNumber,loopnr,driverId" },
+    { table: "planning_matrix_rows", columns: "id,source_date,day_type,assignments,raw_row,created_at" },
+    { table: "planning_codes", columns: "code,category,description,counts_as_shift,is_paid_absence,is_day_off" },
+    { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3" },
+    { table: "diversions", columns: "id,line,title,description,startdate,enddate,severity,pdfurl,mapcoordinates" },
+    { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code" },
+    { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },
+    { table: "activity_log", columns: "id,created_at,actor_name,actor_role,category,action,details" },
+  ];
+  for (const probe of TABLE_PROBES) {
+    const { error } = await db.from(probe.table).select(probe.columns).limit(0);
+    if (error) missing.push(`${probe.table}: ${error.message}`);
+  }
+
+  // RPC's: een probe met null-args. Bestaat de functie, dan weigert ze de
+  // null-input met een eigen exception (≠ ontbreekt); PGRST202 = ontbreekt.
+  const RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
+    { name: "replace_planning", args: { rows: null } },
+    { name: "replace_planning_matrix_rows", args: { rows: null } },
+    { name: "replace_planning_and_matrix", args: { matrix_rows: null, shifts: null } },
+    { name: "bump_active_sessions", args: { uid: "__schema_probe__", delta: 0 } },
+  ];
+  for (const probe of RPC_PROBES) {
+    const { error } = await db.rpc(probe.name, probe.args);
+    if (error && isMissingDbFunction(error)) missing.push(`rpc ${probe.name}: ontbreekt (migratie niet gedraaid?)`);
+  }
+
+  // Cron-heartbeats: stale = ouder dan 2× het verwachte interval.
+  const now = Date.now();
+  const beats = await getCronHeartbeats(["backup", "error-digest", "ocpi-sync"]);
+  const CRON_MAX_AGE_H: Record<string, number> = { backup: 48, "error-digest": 48, "ocpi-sync": 2 };
+  const crons = Object.fromEntries(
+    Object.entries(beats).map(([name, last]) => {
+      const ageH = last ? (now - Date.parse(last)) / 36e5 : null;
+      return [name, { last, stale: ageH === null ? true : ageH > (CRON_MAX_AGE_H[name] ?? 48) }];
+    }),
+  );
+
+  res.json({ ok: missing.length === 0, missing, crons, time: new Date().toISOString() });
+};
 
 app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
   res.json(req.appUser);
@@ -1309,6 +1381,7 @@ app.get("/api/cron/backup", async (req, res) => {
     const filename = `vhb-backup-${payload.exportedAt.slice(0, 10)}.json`;
     const stored = await storeBackup(filename, JSON.stringify(payload));
     console.log(`[cron-backup] ${filename} opgeslagen, ${stored.removedOld} oude back-up(s) opgeruimd.`);
+    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd).`);
     res.json({ success: true, filename, removedOld: stored.removedOld });
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
@@ -1342,6 +1415,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
 
     const errors = await getClientErrorsSince(sinceIso);
     if (errors.length < minCount) {
+      await logCronHeartbeat("error-digest", `Geen foutenpiek (${errors.length} fouten in ${intervalMin} min).`);
       return res.json({ success: true, count: errors.length, alerted: false });
     }
 
@@ -1380,6 +1454,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
+    await logCronHeartbeat("error-digest", `${errors.length} fouten gemeld aan ${recipients.length} ontvanger(s).`);
     res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
   } catch (err: any) {
     console.error("[error-digest] mislukt:", err?.message || err);
