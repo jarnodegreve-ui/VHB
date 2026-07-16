@@ -126,7 +126,10 @@ export type ActivityCategory =
   | 'updates'
   | 'auth'
   | 'leave'
-  | 'swaps';
+  | 'swaps'
+  // Systeem-acties (bv. backup-restore) — bestond al server-side (api/types.ts)
+  // maar ontbrak hier, waardoor restore-events een lege badge kregen.
+  | 'system';
 
 export type ActivityEntityType =
   | 'user'

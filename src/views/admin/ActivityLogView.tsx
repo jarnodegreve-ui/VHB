@@ -16,6 +16,7 @@ const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof
   auth: 'slate',
   leave: 'amber',
   swaps: 'blue',
+  system: 'red',
 };
 
 function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
@@ -66,6 +67,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
     auth: 'Authenticatie',
     leave: 'Verlof',
     swaps: 'Dienstruilen',
+    system: 'Systeem',
   };
   const [activeCategory, setActiveCategory] = useState<'all' | ActivityLogEntry['category']>('all');
   const [dateWindow, setDateWindow] = useState<'all' | 'today' | '7d' | '30d'>('7d');
