@@ -120,7 +120,6 @@ export function PlannerDashboardWidgets({
   const gapDays = knownDays.filter((d) => d.missing.length > 0);
 
   const criticalDiversions = diversions.filter((d) => d.severity === 'high').length;
-  const urgentUpdates = updates.filter((u) => u.isUrgent).length;
 
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');
@@ -364,29 +363,11 @@ export function PlannerDashboardWidgets({
           </div>
         </OpsPanel>
 
-        {/* Rechterflank: systeemstatus + live activiteit. flex-kolom zodat het
-            onderste paneel meerekt tot de hoogte van de linkerkolom. */}
+        {/* Rechterflank: live activiteit. Het vroegere "Systeemstatus"-paneel
+            is bewust weg: import-status en dekking staan al in de status-strip
+            bovenaan, en "Portaal Online"/"Realtime Actief" waren hardcoded
+            (decoratie) — tegen het eigen niets-is-decoratief-principe in. */}
         <div className="flex flex-col gap-4">
-          <OpsPanel icon={<Activity size={15} />} title="Systeemstatus">
-            <div className="space-y-0.5">
-              <StatusRow label="Portaal" value="Online" tone="emerald" pulse />
-              <StatusRow label="Realtime synchronisatie" value="Actief" tone="emerald" />
-              <StatusRow
-                label="Planning-import"
-                value={lastImport ? (importIssueCount > 0 ? 'Aandachtspunten' : 'In orde') : 'Geen import'}
-                tone={lastImport ? (importIssueCount > 0 ? 'amber' : 'emerald') : 'slate'}
-              />
-              <StatusRow
-                label="Dekking 7 dagen"
-                value={!coverageKnown ? 'Onbekend' : openWeek === 0 ? 'Volledig' : `${openWeek} open`}
-                tone={!coverageKnown ? 'slate' : openWeek === 0 ? 'emerald' : 'red'}
-              />
-              {urgentUpdates > 0 && (
-                <StatusRow label="Dringende meldingen" value={`${urgentUpdates} actief`} tone="amber" />
-              )}
-            </div>
-          </OpsPanel>
-
           {isAdmin && activityLog.length > 0 ? (
             <OpsPanel
               className="flex-1"
@@ -594,40 +575,6 @@ function OpsRow({
   );
 }
 
-const STATUS_DOTS = {
-  emerald: 'bg-emerald-500',
-  amber: 'bg-amber-500',
-  red: 'bg-red-500',
-  slate: 'bg-slate-300',
-} as const;
-
-/** Statusregel (label links, status met dot rechts). */
-function StatusRow({
-  label,
-  value,
-  tone,
-  pulse = false,
-}: {
-  label: string;
-  value: string;
-  tone: keyof typeof STATUS_DOTS;
-  pulse?: boolean;
-}) {
-  return (
-    <div className="flex items-center justify-between rounded-lg px-1.5 py-2">
-      <span className="text-[12.5px] font-medium text-slate-500">{label}</span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="relative flex h-1.5 w-1.5">
-          {pulse && (
-            <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-60', STATUS_DOTS[tone])} />
-          )}
-          <span className={cn('relative inline-flex h-1.5 w-1.5 rounded-full', STATUS_DOTS[tone])} />
-        </span>
-        <span className="text-[12.5px] font-semibold text-slate-800 tabular-nums">{value}</span>
-      </span>
-    </div>
-  );
-}
 
 const FEED_ICONS: Partial<Record<ActivityLogEntry['category'], ReactNode>> = {
   users: <Users size={13} />,

@@ -33,6 +33,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     run: () => void;
   } | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // Historiek standaard gecapt op 5 — de volledige lijst groeide onbegrensd.
+  const [showAllHistory, setShowAllHistory] = useState(false);
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
@@ -457,14 +459,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         key={req.id}
                         className={cn(
                           'group flex items-center gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 transition-all hover:bg-white hover:ring-slate-300/80 hover:shadow-sm',
-                          isSelected && 'ring-2 ring-emerald-400/50',
+                          isSelected && 'ring-2 ring-oker-400/50',
                         )}
                       >
                         <input
                           type="checkbox"
                           checked={isSelected}
                           onChange={() => togglePendingSelection(req.id)}
-                          className="w-4 h-4 rounded border-slate-300 text-emerald-500 focus:ring-emerald-400 cursor-pointer shrink-0"
+                          className="w-4 h-4 rounded border-slate-300 text-oker-500 focus:ring-oker-400 cursor-pointer shrink-0"
                           aria-label={`Selecteer ${requester?.name}`}
                         />
                         <button
@@ -501,7 +503,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           })()}
 
           <MyLeaveSection
-            title="Mijn Openstaande Aanvragen"
+            title="Mijn openstaande aanvragen"
             count={myPending.length}
             emptyText="Geen openstaande aanvragen."
             requests={myPending}
@@ -519,12 +521,21 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           />
 
           <MyLeaveSection
-            title="Mijn Historiek"
+            title="Mijn historiek"
             count={myHistory.length}
             emptyText="Nog geen afgehandelde aanvragen."
-            requests={myHistory}
+            requests={showAllHistory ? myHistory : myHistory.slice(0, 5)}
             isNew={isNewlyDecided}
           />
+          {myHistory.length > 5 && (
+            <button
+              type="button"
+              onClick={() => setShowAllHistory((v) => !v)}
+              className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11"
+            >
+              {showAllHistory ? 'Toon minder' : `Toon alles (${myHistory.length})`}
+            </button>
+          )}
         </div>
       </div>
 

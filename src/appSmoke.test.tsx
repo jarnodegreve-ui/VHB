@@ -103,8 +103,10 @@ describe('app smoke test', () => {
     render(<App />);
 
     // Operations Center verschijnt zodra profiel + data geladen zijn.
+    // ('Systeemstatus' is bewust verwijderd in de design-review — de snelle
+    // acties zijn het stabiele altijd-zichtbare ankerpunt.)
     expect(await screen.findByText('Aandacht vereist', undefined, { timeout: 5000 })).toBeTruthy();
-    expect(await screen.findByText('Systeemstatus', undefined, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText('Planning importeren', undefined, { timeout: 5000 })).toBeTruthy();
 
     // Alle boot-fetches zijn daadwerkelijk uitgevoerd...
     for (const endpoint of ['/api/me', '/api/planning', '/api/services', '/api/diversions', '/api/updates', '/api/swaps', '/api/leave']) {

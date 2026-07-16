@@ -295,19 +295,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         eyebrow="Planningbeheer"
         title="Beheer Roosters"
         description="Importeer matrixplanning, bouw de actieve planning opnieuw op en controleer recente imports op problemen voordat je iets overschrijft."
-        actions={canAdminOverride ? (
-          <Button
-            variant="success"
-            size="lg"
-            className="w-full sm:w-auto"
-            onClick={() => setConfirmSyncOpen(true)}
-            disabled={isSyncing}
-            title="Synchroniseer lokale JSON data naar Supabase"
-            icon={<RotateCcw size={16} className={isSyncing ? "animate-spin" : ""} />}
-          >
-            {isSyncing ? 'Synchroniseren...' : 'Sync naar DB'}
-          </Button>
-        ) : null}
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">
         <div className="surface-card rounded-3xl p-6 md:p-8">

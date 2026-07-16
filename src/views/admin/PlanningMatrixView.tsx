@@ -3,7 +3,7 @@ import { AlertTriangle, Calendar, Clock, Download, FileText, Users } from 'lucid
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { KIND_BADGE_TONE } from '../../lib/planningKind';
-import { EmptyState } from '../../components/ui';
+import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { StatCard } from '../../components/StatCard';
 import { normalizePlanningToken, resolvePlanningAssignment } from '../../lib/planning';
@@ -226,6 +226,10 @@ export function PlanningMatrixView({
 
     return (
     <div className="space-y-6">
+      <PageHeader
+        title="Planning-overzicht"
+        description="Controleer de geïmporteerde matrix en los onbekende codes of niet-gematchte chauffeurs op."
+      />
       <div className="grid gap-4 md:grid-cols-3">
         <StatCard
           icon={<Clock className="text-emerald-600" />}
@@ -286,22 +290,6 @@ export function PlanningMatrixView({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
-          {derived.globalUnknownCodes.length > 0 ? derived.globalUnknownCodes.map((code) => (
-            <button
-              key={code}
-              onClick={() => setHighlightedCode(code)}
-              className={cn(
-                'ios-pressable rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
-                highlightedCode === code ? 'border-red-300 bg-red-100 text-red-800' : 'border-red-100 bg-red-50 text-red-700 hover:bg-red-100'
-              )}
-            >
-              {code}
-            </button>
-          )) : (
-            <Badge tone="emerald">Geen onbekende codes</Badge>
-          )}
-        </div>
 
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
           <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
