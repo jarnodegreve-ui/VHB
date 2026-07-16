@@ -217,7 +217,7 @@ export function PlannerDashboardWidgets({
           <OpsStat
             className="md:col-span-2 xl:col-span-1"
             icon={<AlertTriangle size={16} />}
-            tone={openToday > 0 ? 'rose' : 'emerald'}
+            tone={openToday > 0 ? 'red' : 'emerald'}
             label="Open diensten"
             value={openToday}
             sub={openWeek > 0 ? `${openWeek} in komende 7 dagen` : 'komende 7 dagen volledig'}
@@ -237,7 +237,7 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<MapPin size={16} />}
-          tone={criticalDiversions > 0 ? 'oker' : 'slate'}
+          tone={criticalDiversions > 0 ? 'amber' : 'slate'}
           label="Omleidingen"
           value={diversions.length}
           sub={criticalDiversions > 0 ? `${criticalDiversions} met hoge impact` : 'geen hoge impact'}
@@ -246,7 +246,7 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="md:col-span-3 xl:col-span-1"
           icon={<Inbox size={16} />}
-          tone={openTasks > 0 ? 'oker' : 'emerald'}
+          tone={openTasks > 0 ? 'amber' : 'emerald'}
           label="Open taken"
           value={openTasks}
           sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
@@ -255,7 +255,7 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="max-md:col-span-2 md:col-span-3 xl:col-span-1"
           icon={<CalendarClock size={16} />}
-          tone={importIssueCount > 0 ? 'rose' : planningStale ? 'oker' : 'slate'}
+          tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
           label="Laatste import"
           text={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
           sub={
@@ -283,7 +283,7 @@ export function PlannerDashboardWidgets({
           <div className="space-y-1.5">
             {planningStale && (
               <OpsRow
-                tone="oker"
+                tone="amber"
                 icon={<CalendarClock size={15} />}
                 primary={`Planning al ${daysSinceImport} dagen niet bijgewerkt`}
                 secondary="Upload je laatste Excel zodat de planning actueel blijft."
@@ -292,7 +292,7 @@ export function PlannerDashboardWidgets({
             )}
             {importIssueCount > 0 && lastImport && (
               <OpsRow
-                tone="rose"
+                tone="red"
                 icon={<AlertTriangle size={15} />}
                 primary="Laatste import heeft aandachtspunten"
                 secondary={[
@@ -305,7 +305,7 @@ export function PlannerDashboardWidgets({
             {diversions.filter((d) => d.severity === 'high').slice(0, 2).map((d) => (
               <Fragment key={d.id}>
               <OpsRow
-                tone="oker"
+                tone="amber"
                 icon={<MapPin size={15} />}
                 primary={`Omleiding met hoge impact · ${d.title}`}
                 secondary={lineLabel(d.line)}
@@ -316,7 +316,7 @@ export function PlannerDashboardWidgets({
             {gapDays.slice(0, 3).map((d) => (
               <Fragment key={d.date}>
               <OpsRow
-                tone="rose"
+                tone="red"
                 icon={<AlertTriangle size={15} />}
                 primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'} — ${formatDay(d.date)}`}
                 secondary={`Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`}
@@ -327,7 +327,7 @@ export function PlannerDashboardWidgets({
             {pendingLeave.slice(0, 4).map((req) => (
               <Fragment key={req.id}>
               <OpsRow
-                tone="oker"
+                tone="amber"
                 icon={<CalendarDays size={15} />}
                 primary={`Verlofaanvraag · ${userNameById(req.userId)}`}
                 secondary={`${req.startDate}${req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
@@ -379,7 +379,7 @@ export function PlannerDashboardWidgets({
               <StatusRow
                 label="Dekking 7 dagen"
                 value={!coverageKnown ? 'Onbekend' : openWeek === 0 ? 'Volledig' : `${openWeek} open`}
-                tone={!coverageKnown ? 'slate' : openWeek === 0 ? 'emerald' : 'rose'}
+                tone={!coverageKnown ? 'slate' : openWeek === 0 ? 'emerald' : 'red'}
               />
               {urgentUpdates > 0 && (
                 <StatusRow label="Dringende meldingen" value={`${urgentUpdates} actief`} tone="amber" />
@@ -415,7 +415,7 @@ export function PlannerDashboardWidgets({
                   {updates.slice(0, 3).map((u) => (
                     <Fragment key={u.id}>
                     <OpsRow
-                      tone={u.isUrgent ? 'rose' : 'slate'}
+                      tone={u.isUrgent ? 'red' : 'slate'}
                       icon={<Bell size={15} />}
                       primary={u.title}
                       secondary={u.category}
@@ -445,7 +445,8 @@ export function PlannerDashboardWidgets({
 
 const STAT_TONES = {
   emerald: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400',
-  rose: 'bg-rose-500/12 text-rose-600 dark:text-rose-400',
+  red: 'bg-red-500/12 text-red-600 dark:text-red-400',
+  amber: 'bg-amber-500/12 text-amber-600 dark:text-amber-400',
   oker: 'bg-oker-500/15 text-oker-600 dark:text-oker-400',
   blue: 'bg-blue-500/12 text-blue-600 dark:text-blue-400',
   slate: 'bg-slate-500/12 text-slate-600 dark:text-slate-300',
@@ -596,7 +597,7 @@ function OpsRow({
 const STATUS_DOTS = {
   emerald: 'bg-emerald-500',
   amber: 'bg-amber-500',
-  rose: 'bg-rose-500',
+  red: 'bg-red-500',
   slate: 'bg-slate-300',
 } as const;
 

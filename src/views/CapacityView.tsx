@@ -6,6 +6,7 @@ import { Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
+import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
 import type { User } from '../types';
 
 const MONTH_NAMES = [
@@ -14,31 +15,6 @@ const MONTH_NAMES = [
 ];
 const WEEKDAY_LETTERS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 const WEEKDAY_SHORT = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
-
-const KIND_CLS: Record<CellKind, string> = {
-  service: 'bg-oker-50 text-oker-700',
-  leave: 'bg-amber-100 text-amber-700',
-  absence: 'bg-slate-100 text-slate-600',
-  training: 'bg-blue-50 text-blue-700',
-  unknown: 'bg-red-50 text-red-600',
-};
-
-const KIND_LABEL: Record<CellKind, string> = {
-  service: 'Dienst',
-  leave: 'Verlof',
-  absence: 'Afwezig',
-  training: 'Opleiding',
-  unknown: 'Onbekende code',
-};
-
-// Excel-look: platte tekstkleur i.p.v. gekleurde pillen.
-const KIND_TEXT: Record<CellKind, string> = {
-  service: 'text-slate-900 font-semibold',
-  leave: 'text-amber-700 font-semibold',
-  absence: 'text-slate-500',
-  training: 'text-blue-700 font-semibold',
-  unknown: 'text-red-600 font-semibold',
-};
 
 /**
  * Maandplanning — read-only weergave van de planning-matrix (chauffeur ×
