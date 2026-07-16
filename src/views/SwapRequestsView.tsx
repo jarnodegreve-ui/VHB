@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeftRight, ChevronRight, History, X, Check } from 'lucide-react';
-import type { Shift, SwapRequest, User } from '../types';
+import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
@@ -13,7 +13,7 @@ import { canRespondToSwap } from '../lib/authorization';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
-export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean> }) {
+export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean> }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via de nette ConfirmationModal i.p.v. kale window.confirm
@@ -37,9 +37,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
   // Stap 1 toont eerst de komende ~2 weken; bij een volle 8-wekenplanning
   // stonden er anders 30-40 kaarten in één modal.
   const [showAllShifts, setShowAllShifts] = useState(false);
-  // Eigen rooster over dezelfde 8 weken: nodig om tegenprestatie-opties op
-  // dagen waarop de aanvrager zélf al rijdt te blokkeren (conflict).
-  const [ownDutyByDate, setOwnDutyByDate] = useState<Record<string, string>>({});
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
   // Beoordeling in een side panel: alle ruil-context + beslis-acties
   // zonder paginawissel (zelfde patroon als LeaveManagementView).
@@ -88,20 +85,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
       .then((res) => {
         if (cancelled) return;
         const opts: ReturnOption[] = [];
-        const own: Record<string, string> = {};
         for (const day of res.days) {
           const dienst = day.lines?.[selectedTargetDriver];
           if (dienst) opts.push({ date: day.date, code: dienst, isFree: false });
           else if (day.free?.includes(selectedTargetDriver)) opts.push({ date: day.date, code: 'vrij', isFree: true });
-          // Eigen dienst op die dag (voor de conflict-check in stap 3).
-          const ownDuty = day.lines?.[user.id];
-          if (ownDuty) own[day.date] = ownDuty;
         }
         opts.sort((a, b) => a.date.localeCompare(b.date));
         setReturnOptions(opts);
-        setOwnDutyByDate(own);
       })
-      .catch(() => { if (!cancelled) { setReturnOptions([]); setOwnDutyByDate({}); } })
+      .catch(() => { if (!cancelled) setReturnOptions([]); })
       .finally(() => { if (!cancelled) setReturnLoading(false); });
     return () => { cancelled = true; };
   }, [selectedTargetDriver, user.id]);
@@ -130,7 +122,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
   };
   const eligibleTargetDrivers = useMemo(() => {
     const base = users
-      .filter((u) => u.id !== user.id && u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
+      // Alleen chauffeurs: planner/admin staan niet in de planning-matrix en
+      // toonden daardoor altijd "bezet" → doodlopend pad in stap 3.
+      .filter((u) => u.id !== user.id && u.isActive !== false && u.role === 'chauffeur' && u.name.toLowerCase() !== 'beheerder')
       .sort((a, b) => a.name.localeCompare(b.name));
     if (!freeForDate) return base;
     // Vrije collega's eerst (matching), daarna de rest. Beide blijven kiesbaar
@@ -648,12 +642,24 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                 {wizardStep === 3 && (() => {
                   const target = users.find((u) => u.id === selectedTargetDriver);
                   const offered = shifts.find((s) => s.id === selectedShift);
-                  // Conflict-check: dagen waarop je zélf al rijdt kan je niet
-                  // overnemen — behalve de dag van je aangeboden dienst (die
-                  // geef je net weg, dus dan ben je vrij).
+                  // Conflict-check op shift-niveau (niet dag-niveau): alleen de
+                  // aangeboden shift zelf telt niet mee — een tweede eigen
+                  // segment op dezelfde dag blijft een conflict. Ook eigen
+                  // goedgekeurd verlof blokkeert een tegenprestatie.
+                  const ownConflictOn = (date: string): string | undefined => {
+                    const otherOwnShift = shifts.find(
+                      (s) => s.driverId === user.id && s.date === date && s.id !== selectedShift,
+                    );
+                    if (otherOwnShift) return `dienst ${String(otherOwnShift.line || '?').trim()}`;
+                    const ownLeave = leaveRequests.find(
+                      (l) => l.userId === user.id && l.status === 'approved' && l.startDate <= date && date <= l.endDate,
+                    );
+                    if (ownLeave) return 'verlof';
+                    return undefined;
+                  };
                   const enriched = (returnOptions ?? []).map((o) => ({
                     ...o,
-                    ownDuty: o.date === selectedShiftDate ? undefined : ownDutyByDate[o.date],
+                    ownDuty: ownConflictOn(o.date),
                   }));
                   const pickable = enriched.filter((o) => !o.ownDuty);
                   const conflicted = enriched.filter((o) => !!o.ownDuty);
@@ -698,12 +704,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                           )}
                           {showAllReturns && conflicted.length > 0 && (
                             <div className="space-y-2">
-                              <MicroLabel className="text-slate-400">Niet mogelijk — jij rijdt die dag al</MicroLabel>
+                              <MicroLabel className="text-slate-400">Niet mogelijk — jij bent die dag al ingepland</MicroLabel>
                               {conflicted.map((o) => (
                                 <div key={`${o.date}|${o.code}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 opacity-60">
                                   <span className="min-w-0">
                                     <span className="block text-sm font-semibold text-slate-500 capitalize">{formatDateHuman(o.date)}</span>
-                                    <span className="block text-xs font-medium text-slate-400">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`} — jij rijdt al dienst {o.ownDuty}</span>
+                                    <span className="block text-xs font-medium text-slate-400">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`} — {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
                                   </span>
                                 </div>
                               ))}

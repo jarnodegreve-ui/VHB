@@ -84,6 +84,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   // Na het (her)laden van een maand op de juiste pagina landen.
   useEffect(() => {
+    // pendingEdge pas consumeren als de JUISTE maand geladen is — het effect
+    // draaide eerder direct na setViewMonth tegen de oude pagina's, waardoor
+    // "Vandaag"/maandwissels op het verkeerde 2-weken-venster landden.
+    if (pendingEdge && (loading || data?.month !== monthParam)) return;
     if (pages.length === 0) { setPageIndex(0); return; }
     if (pendingEdge === 'last') { setPageIndex(pages.length - 1); setPendingEdge(null); }
     else if (pendingEdge === 'first') { setPageIndex(0); setPendingEdge(null); }
@@ -94,7 +98,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     } else {
       setPageIndex((p) => Math.min(p, pages.length - 1));
     }
-  }, [pages, pendingEdge, todayIso]);
+  }, [pages, pendingEdge, todayIso, loading, data?.month, monthParam]);
 
   const goPrevWindow = () => {
     if (pageIndex > 0) { setPageIndex(pageIndex - 1); return; }

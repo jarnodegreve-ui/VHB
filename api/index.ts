@@ -170,10 +170,16 @@ app.get("/api/health/schema", async (req, res) => {
     return authenticate(req as AuthenticatedRequest, res, () => {
       const role = (req as AuthenticatedRequest).appUser?.role;
       if (role !== "admin") return res.status(403).json({ error: "Alleen voor admins." });
-      void runSchemaCheck(res);
+      runSchemaCheck(res).catch((err) => {
+        console.error("Schema-check mislukt:", err);
+        if (!res.headersSent) res.status(500).json({ ok: false, error: "Schema-check mislukt." });
+      });
     });
   }
-  void runSchemaCheck(res);
+  runSchemaCheck(res).catch((err) => {
+    console.error("Schema-check mislukt:", err);
+    if (!res.headersSent) res.status(500).json({ ok: false, error: "Schema-check mislukt." });
+  });
 });
 
 const runSchemaCheck = async (res: express.Response) => {
@@ -1826,6 +1832,20 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // wijziging van een ander (geen vals 403, geen clobber).
     let recordsToWrite: any[] = newData;
 
+    // Exclusiviteit per dienst geldt ook voor planner/admin-aanvragen —
+    // de check zat eerst alleen in de chauffeur-tak.
+    if (req.appUser?.role !== "chauffeur") {
+      for (const next of newData) {
+        if (previousById.has(String(next.id))) continue;
+        // Alleen echte nieuwe aanvragen ('pending'); andere creatie-statussen
+        // worden verderop al met een strengere 403 geweigerd.
+        if (String(next.status) !== "pending") continue;
+        if (previousSwaps.some((s) => String(s.shiftId) === String(next.shiftId) && OPEN_SWAP_STATES.has(String(s.status)))) {
+          return res.status(409).json({ error: "Voor deze dienst loopt al een ruilverzoek. Trek dat eerst in of wacht de beslissing af." });
+        }
+      }
+    }
+
     if (req.appUser?.role === "chauffeur") {
       const selfId = String(req.appUser.id);
       const writes: any[] = [];
@@ -1992,6 +2012,9 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
+    // Verse revisie zodat een direct volgende save van dezelfde sessie geen
+    // vals 409 krijgt ("gewijzigd door iemand anders" = je eigen save).
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
     res.json({ success: true });
   } catch (err: any) {
     console.error("Dienstruil opslaan is mislukt.", err);
@@ -2263,6 +2286,8 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
+    // Verse revisie (zie /api/swaps).
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getLeaveData()));
     res.json({ success: true });
   } catch (err: any) {
     console.error("Verlofaanvraag opslaan is mislukt.", err);
