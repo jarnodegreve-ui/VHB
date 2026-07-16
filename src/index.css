@@ -948,6 +948,25 @@ html.dark {
 .dark .hover\:bg-red-50\/70:hover { background-color: rgba(239, 68, 68, 0.16); }
 .dark .hover\:bg-green-50:hover { background-color: rgba(34, 197, 94, 0.18); }
 
+/* Design-review 2026-07: overrides voor de nieuwe componenten (Maandplanning-
+   sectiekoppen, dienstruil-wizard, welkomstkaart, coverage-kandidaten). */
+.dark .bg-slate-100\/80,
+.dark .bg-slate-100\/90 { background-color: rgba(38, 40, 43, 0.60); }
+.dark .bg-oker-50\/50 { background-color: rgba(232, 163, 61, 0.08); }
+.dark .bg-oker-100\/60,
+.dark .bg-oker-100\/70 { background-color: rgba(232, 163, 61, 0.16); }
+.dark .ring-oker-200 { --tw-ring-color: rgba(232, 163, 61, 0.38); }
+.dark .border-oker-300 { border-color: rgba(232, 163, 61, 0.45); }
+.dark .text-blue-700 { color: rgb(147, 197, 253); }
+.dark .text-emerald-600 { color: rgb(110, 231, 183); }
+.dark .text-red-600 { color: rgb(252, 165, 165); }
+.dark .text-amber-800 { color: rgb(253, 186, 116); }
+.dark .hover\:bg-white:hover { background-color: rgba(38, 40, 43, 0.85); }
+.dark .hover\:bg-oker-100\/70:hover { background-color: rgba(232, 163, 61, 0.14); }
+.dark .group:hover .group-hover\:bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
+.dark .bg-emerald-50\/70 { background-color: rgba(16, 185, 129, 0.10); }
+.dark .ring-emerald-100 { --tw-ring-color: rgba(16, 185, 129, 0.25); }
+
 /* Login panel soft cream gradient stays light — users expect a familiar
    brand landing on the login screen. If you want it dark, wire a different
    style override for .min-h-screen inside LoginView. */
