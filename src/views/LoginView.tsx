@@ -173,12 +173,12 @@ export function LoginView({
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center mb-10"
         >
-          {/* Gestapelde portaal-lockup (VHB Schakel) — de aanbevolen variant
-              voor login en smallere schermen uit het merk-pakket. */}
+          {/* Zelfde compacte lockup als de sidebar (zonder naamregel) —
+              op verzoek ook op het loginscherm, klein gehouden. */}
           <img
-            src="/vhb-logo-stacked.svg"
-            alt="VHB — Van Hoorebeke & Zoon"
-            className="h-14 sm:h-16 w-auto select-none"
+            src="/vhb-logo-sidebar.svg"
+            alt="VHB Portaal — Van Hoorebeke & Zoon"
+            className="h-10 sm:h-12 w-auto select-none"
             draggable={false}
           />
         </motion.div>
