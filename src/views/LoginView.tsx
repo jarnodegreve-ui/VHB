@@ -178,7 +178,7 @@ export function LoginView({
           <img
             src="/vhb-logo-sidebar.svg"
             alt="VHB Portaal — Van Hoorebeke & Zoon"
-            className="h-10 sm:h-12 w-auto select-none"
+            className="h-12 sm:h-14 w-auto select-none"
             draggable={false}
           />
         </motion.div>
