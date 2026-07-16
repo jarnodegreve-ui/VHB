@@ -707,6 +707,7 @@ export default function App() {
   const fetchSwaps = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/swaps', {}, accessToken);
+      captureRevision('swaps', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setSwaps(data);
@@ -726,10 +727,17 @@ export default function App() {
     try {
       const response = await apiFetch('/api/swaps', {
         method: 'POST',
+        headers: revisionHeader('swaps'),
         body: JSON.stringify(newSwaps),
       });
+      if (response.status === 409) {
+        showToast('De dienstruilen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchSwaps();
+        return false;
+      }
       if (response.ok) {
         setSwaps(newSwaps);
+        captureRevision('swaps', response);
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
@@ -749,6 +757,7 @@ export default function App() {
   const fetchLeave = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/leave', {}, accessToken);
+      captureRevision('leave', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setLeaveRequests(data);
@@ -911,10 +920,17 @@ export default function App() {
     try {
       const response = await apiFetch('/api/leave', {
         method: 'POST',
+        headers: revisionHeader('leave'),
         body: JSON.stringify(newLeave),
       });
+      if (response.status === 409) {
+        showToast('De verlofaanvragen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchLeave();
+        return false;
+      }
       if (response.ok) {
         setLeaveRequests(newLeave);
+        captureRevision('leave', response);
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
@@ -950,6 +966,7 @@ export default function App() {
       });
       const data = await response.json().catch(() => ({} as any));
       if (response.ok) {
+        captureRevision(kind, response);
         applyLocal(data?.leave ?? data?.swap ?? { status });
         if (currentUser?.role === 'admin') void fetchActivityLog();
         return true;
@@ -1039,6 +1056,7 @@ export default function App() {
   const fetchUsers = async (accessToken = session?.access_token) => {
     try {
       const response = await apiFetch('/api/users', {}, accessToken);
+      captureRevision('users', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setUsers(data);
@@ -1056,8 +1074,14 @@ export default function App() {
       beginLoading();
       const response = await apiFetch('/api/users', {
         method: 'POST',
+        headers: revisionHeader('users'),
         body: JSON.stringify(newUsers),
       });
+      if (response.status === 409) {
+        showToast('De gebruikerslijst is intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchUsers();
+        return false;
+      }
       if (response.ok) {
         await fetchUsers();
         if (currentUser?.role === 'admin') {
@@ -1103,6 +1127,9 @@ export default function App() {
       const qs = params.toString();
       const url = qs ? `/api/planning?${qs}` : '/api/planning';
       const response = await apiFetch(url, {}, accessToken);
+      // Revisie alleen bij een ongefilterde fetch (de server zet 'm ook
+      // alleen dan) — een subset-revisie zou valse conflicten geven.
+      if (!qs) captureRevision('planning', response);
       const data = await response.json();
       // Een lege lijst is een geldig resultaat (chauffeur zonder diensten, of
       // planning gewist) → die moet ook écht leeg tonen. Vroeger hield
@@ -1125,10 +1152,17 @@ export default function App() {
       beginLoading();
       const response = await apiFetch('/api/planning', {
         method: 'POST',
+        headers: revisionHeader('planning'),
         body: JSON.stringify(newShifts),
       });
+      if (response.status === 409) {
+        showToast('De planning is intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
+        await fetchPlanning();
+        return false;
+      }
       if (response.ok) {
         setShifts(newShifts);
+        captureRevision('planning', response);
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
