@@ -347,6 +347,21 @@ export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => 
     .map((name, offset) => ({ index: offset + 2, name }))
     .filter((column) => !PLANNING_MATRIX_NON_DRIVER_HEADERS.has(column.name.toLowerCase()));
 
+  // Dubbele chauffeur-kolommen: assignments[naam] is laatste-wint, dus de
+  // codes van de eerste kolom zouden geruisloos verdwijnen. Hard weigeren
+  // met de namen erbij, zodat de planner het in de Excel kan rechtzetten.
+  const seenHeaders = new Map<string, string>();
+  const duplicateHeaders = new Set<string>();
+  for (const column of driverColumns) {
+    const key = column.name.trim().toLowerCase();
+    if (!key) continue;
+    if (seenHeaders.has(key)) duplicateHeaders.add(column.name.trim());
+    else seenHeaders.set(key, column.name.trim());
+  }
+  if (duplicateHeaders.size > 0) {
+    throw new Error(`Dubbele chauffeur-kolommen in de praktijk-tab: ${Array.from(duplicateHeaders).join(", ")}. Hernoem of verwijder de dubbele kolom en importeer opnieuw.`);
+  }
+
   // Voor diagnostiek bij faal: bewaar wat we wél zagen in kolom A.
   const seenColumnA: Array<{ row: number; type: string; raw: any; display?: string }> = [];
 
@@ -409,6 +424,19 @@ export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => 
       .join(" | ");
     const detail = sample ? ` Kolom A zag: ${sample}` : ' Kolom A was volledig leeg.';
     throw new Error(`Geen rijen met datum gevonden in praktijk-tab.${detail}`);
+  }
+
+  // Dubbele datumrijen: de maandplanning toont dan enkel de laatste rij
+  // terwijl de planning-opbouw beide verwerkt (dubbele shift-ids → de hele
+  // import faalt pas ná het parsen). Hard weigeren met de datums erbij.
+  const seenDates = new Set<string>();
+  const duplicateDates = new Set<string>();
+  for (const row of rows) {
+    if (seenDates.has(row.source_date)) duplicateDates.add(row.source_date);
+    else seenDates.add(row.source_date);
+  }
+  if (duplicateDates.size > 0) {
+    throw new Error(`Dubbele datumrijen in de praktijk-tab: ${Array.from(duplicateDates).sort().join(", ")}. Elke datum hoort één rij te hebben — verwijder de dubbele rij en importeer opnieuw.`);
   }
 
   return rows;

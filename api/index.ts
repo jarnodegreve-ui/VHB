@@ -51,6 +51,7 @@ import {
   storeBackup,
   restoreFromBackup,
   replacePlanningData,
+  replacePlanningAndMatrix,
   saveDiversionsData,
   saveLeaveData,
   savePlanningCodesData,
@@ -819,8 +820,10 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       });
     }
 
-    await savePlanningMatrixRows(rows);
-    await replacePlanningData(generatedPlanning.shifts);
+    // Atomair: matrix + planning in één transactie (geen skew als één van
+    // beide zou falen). Valt server-side terug op het oude pad zolang de
+    // RPC-migratie nog niet gedraaid is.
+    await replacePlanningAndMatrix(rows, generatedPlanning.shifts);
     await savePlanningMatrixHistoryEntry({
       id: `${Date.now()}`,
       createdAt: new Date().toISOString(),
@@ -932,6 +935,20 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
 app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", "admin"), async (_req, res) => {
   try {
     const generatedPlanning = await buildPlanningFromMatrix();
+    // Zelfde vangrails als /import: zonder deze guard liet een naamswijziging
+    // in gebruikersbeheer ("unmatched driver") hier stilletjes alle diensten
+    // van die chauffeur uit de planning vallen bij het heropbouwen.
+    if (
+      generatedPlanning.summary.unknownCodes.length > 0 ||
+      generatedPlanning.summary.unmatchedDrivers.length > 0
+    ) {
+      return res.status(400).json({
+        error: "Opnieuw opbouwen geblokkeerd: er zijn onbekende codes of niet-gematchte chauffeurs. Los deze eerst op (planningscodes/gebruikersnamen) en probeer opnieuw.",
+        unknownCodes: generatedPlanning.summary.unknownCodes,
+        unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+        blocked: true,
+      });
+    }
     await replacePlanningData(generatedPlanning.shifts);
     await logActivity(
       _req,
