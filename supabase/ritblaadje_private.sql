@@ -10,10 +10,14 @@
 -- publiek staat, dus eerst deployen en daarna deze migratie draaien kan.
 -- Idempotent: meermaals draaien is onschadelijk.
 
+begin;
+
 update storage.buckets
 set public = false
 where id = 'ritblaadjes'
   and public = true;
+
+commit;
 
 -- Er bestaan geen aparte storage.objects-policies voor deze bucket (lezen
 -- gebeurde via de public-vlag, schrijven via service role) — er valt dus
