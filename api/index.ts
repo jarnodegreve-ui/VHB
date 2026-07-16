@@ -251,6 +251,11 @@ app.get("/api/planning", authenticate, async (req, res) => {
       ? req.query.month
       : undefined;
     const data = await getPlanningData({ driverId, monthIso });
+    // Revisie alleen over de volledige collectie (ongefilterd) — een revisie
+    // over een subset zou bij het opslaan altijd een vals conflict geven.
+    if (!driverId && !monthIso) {
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
+    }
     res.json(data);
   } catch (err) {
     console.error("Error reading planning data:", err);
@@ -359,6 +364,13 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
         await logActivity(req, "planning", "Planning gewist", "De volledige actieve planning is gewist.");
         return res.json({ success: true, count: 0 });
       }
+      // Optimistic-concurrency + wipe-detectie: een stale volledige-array-save
+      // (bv. planner B saved terwijl A net een maand importeerde) verwijderde
+      // anders stilletjes alles wat B nog niet gezien had.
+      const previousPlanning = await getPlanningData();
+      if (revisionConflict(req, previousPlanning)) return revisionConflictResponse(res, "De planning");
+      const shiftsRemoved = detectMassDelete(previousPlanning, newData);
+      if (shiftsRemoved !== null) return massDeleteResponse(res, shiftsRemoved, previousPlanning.length, "diensten");
       await savePlanningData(newData);
       await logActivity(
         req,
@@ -366,6 +378,7 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
         "Planning opgeslagen",
         `${newData.length} planningregels handmatig opgeslagen. Voorbeeld: ${summarizeTokens(newData.map((shift: any) => `dienst ${shift.line || shift.id}`))}.`,
       );
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getPlanningData()));
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
@@ -1099,6 +1112,9 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
 app.get("/api/users", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const users = await getUsersData();
+    // Revisie over de volledige serverstaat (niet de role-scoped weergave):
+    // opaque token, hoeft enkel consistent te zijn met de POST-vergelijking.
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(users));
     res.json(users.map((user) => toRoleScopedUser(user, req.appUser!.role, req.appUser!.id)));
   } catch (err) {
     console.error("Error reading users data:", err);
@@ -1111,6 +1127,9 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
     const newData = req.body;
     if (Array.isArray(newData)) {
       const previousUsers = await getUsersData();
+      // Revisie-check: twee admin-sessies die tegelijk bewerken overschreven
+      // elkaar anders stil — en saveUsersData doet onomkeerbare Auth-deletes.
+      if (revisionConflict(req, previousUsers)) return revisionConflictResponse(res, "De gebruikerslijst");
       const usersRemoved = detectMassDelete(previousUsers, newData);
       if (usersRemoved !== null) return massDeleteResponse(res, usersRemoved, previousUsers.length, "gebruikers");
       await saveUsersData(newData);
@@ -1136,6 +1155,7 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
         await logActivity(req, "users", "Gebruiker verwijderd", `${u.name} (${u.role}).`, { type: "user", id: u.id });
       }
 
+      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUsersData()));
       res.json({ success: true, count: newData.length });
     } else {
       res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
@@ -1629,6 +1649,9 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       );
       return res.json(scoped);
     }
+    // Revisie enkel voor planner/admin (volledige weergave) — de POST-check
+    // geldt ook alleen voor hen (chauffeur-payloads worden delta-gereconstrueerd).
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Dienstruilen laden is mislukt." });
@@ -1643,6 +1666,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     }
 
     const previousSwaps = await getSwapsData();
+    // Planner/admin schrijven de hele payload ("ontbreekt = verwijderen"):
+    // zonder revisie-check verwijderde een stale save stilletjes een verse
+    // aanvraag die intussen binnenkwam. Chauffeur-payloads worden hieronder
+    // delta-gereconstrueerd en hebben de check niet nodig.
+    if (req.appUser?.role !== "chauffeur") {
+      if (revisionConflict(req, previousSwaps)) return revisionConflictResponse(res, "De dienstruilen");
+      const swapsRemoved = detectMassDelete(previousSwaps, newData);
+      if (swapsRemoved !== null) return massDeleteResponse(res, swapsRemoved, previousSwaps.length, "dienstruilen");
+    }
     const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
     const newById = new Map(newData.map((s: any) => [String(s.id), s]));
     const swapIdsToDelete: string[] = [];
@@ -1909,6 +1941,9 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       url: "/",
     });
 
+    // Verse collectie-revisie meegeven zodat een volgende array-save van
+    // dezelfde client geen vals 409 krijgt na deze delta-wijziging.
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
     res.json({ success: true, swap: updated });
   } catch (err: any) {
     console.error("Beslissing opslaan is mislukt", err);
@@ -1925,6 +1960,8 @@ app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       const selfId = String(req.appUser.id);
       return res.json(data.filter((l) => String(l.userId) === selfId));
     }
+    // Revisie enkel voor planner/admin (volledige weergave), zie /api/swaps.
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     res.json(data);
   } catch (err) {
     res.status(500).json({ error: "Verlofaanvragen laden is mislukt." });
@@ -1940,6 +1977,14 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     }
 
     const previousLeave = await getLeaveData();
+    // Planner/admin-payload is gezaghebbend ("ontbreekt = verwijderen"):
+    // revisie-check + wipe-detectie zodat een stale save geen verse aanvraag
+    // stilletjes verwijdert. Chauffeur-payloads worden delta-gereconstrueerd.
+    if (req.appUser?.role !== "chauffeur") {
+      if (revisionConflict(req, previousLeave)) return revisionConflictResponse(res, "De verlofaanvragen");
+      const leaveRemoved = detectMassDelete(previousLeave, newData);
+      if (leaveRemoved !== null) return massDeleteResponse(res, leaveRemoved, previousLeave.length, "verlofaanvragen");
+    }
     const previousById = new Map(previousLeave.map((r) => [r.id, r]));
     const users = await getUsersData();
     const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
@@ -2150,6 +2195,8 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
       });
     }
 
+    // Verse collectie-revisie (zie /api/swaps PATCH).
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getLeaveData()));
     res.json({ success: true, leave: updated });
   } catch (err: any) {
     console.error("Beslissing opslaan is mislukt", err);
