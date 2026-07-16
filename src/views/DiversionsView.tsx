@@ -2,6 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import type { Diversion } from '../types';
+import { formatDateHuman } from '../lib/format';
 import { cn, openPdfInNewTab } from '../lib/ui';
 import { PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
@@ -147,12 +148,12 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                         <div className="flex flex-wrap items-center gap-4 md:gap-6">
                           <div className="flex items-center gap-2 text-xs font-medium text-slate-500 tabular-nums">
                             <Calendar size={14} className="text-oker-400" />
-                            <span>Start: {div.startDate}</span>
+                            <span>Start: {formatDateHuman(div.startDate)}</span>
                           </div>
                           {div.endDate && (
                             <div className="flex items-center gap-2 text-xs font-medium text-slate-500 tabular-nums">
                               <Calendar size={14} className="text-oker-400" />
-                              <span>Eind: {div.endDate}</span>
+                              <span>Eind: {formatDateHuman(div.endDate)}</span>
                             </div>
                           )}
                         </div>
@@ -171,7 +172,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                             <a
                               href={div.pdfUrl}
                               download
-                              className="ios-pressable inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20 transition-all"
+                              className="ios-pressable inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold bg-emerald-700 text-white hover:bg-emerald-800 shadow-lg shadow-emerald-700/20 transition-all"
                             >
                               <Download size={16} />
                               Download PDF

@@ -461,12 +461,10 @@ function SubmitButton({ loading, children }: { loading: boolean; children: React
     <button
       type="submit"
       disabled={loading}
-      className="group w-full inline-flex items-center justify-center gap-2 py-3.5 mt-2 rounded-xl text-[15px] font-bold text-white transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-      style={{
-        background: 'linear-gradient(180deg, #E8A33D 0%, #C9851F 100%)',
-        boxShadow:
-          'inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 1px 2px rgba(162, 105, 26, 0.25), 0 6px 16px rgba(232, 163, 61, 0.24)',
-      }}
+      // btn-primary = VHB Amber met VHB Black-tekst (huisstijl: nooit wit op
+      // amber — contrast 2,2:1). De eigen inline gradient met text-white
+      // overtrad precies die regel, op het meest bekeken scherm.
+      className="btn-primary group w-full inline-flex items-center justify-center gap-2 py-3.5 mt-2 rounded-xl text-[15px] font-bold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
     >
       <span>{loading ? 'Even geduld…' : children}</span>
       {!loading && (

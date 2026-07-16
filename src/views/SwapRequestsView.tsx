@@ -8,6 +8,7 @@ import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../c
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
+import { formatDateHuman } from '../lib/format';
 import { canRespondToSwap } from '../lib/authorization';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
@@ -255,7 +256,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                 <div key={swap.id} className="surface-card p-5 rounded-2xl flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <MicroLabel>Dienst {getServiceNumber(shift)}</MicroLabel>
-                    <p className="font-bold tracking-tight text-slate-800 mt-1 tabular-nums">{shift?.date}</p>
+                    <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(shift?.date)}</p>
                     <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
                     {target && (
                       <p className="text-xs font-medium text-slate-500 mt-2">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
@@ -289,7 +290,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <MicroLabel>Dienst {getServiceNumber(shift)}</MicroLabel>
-                      <p className="font-bold tracking-tight text-slate-800 mt-1 tabular-nums">{shift?.date}</p>
+                      <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(shift?.date)}</p>
                       <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
                       {returnLabel(swap) && (
@@ -385,7 +386,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                           </Td>
                           <Td>
                             <span className="font-semibold text-oker-700">Dienst {getServiceNumber(shift)}</span>
-                            <span className="text-slate-500 tabular-nums"> — {shift?.date} ({shift?.startTime} - {shift?.endTime})</span>
+                            <span className="text-slate-500 tabular-nums"> — {formatDateHuman(shift?.date)} ({shift?.startTime} - {shift?.endTime})</span>
                             {returnLabel(swap) && (
                               <span className="block text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
@@ -445,7 +446,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
                           <MicroLabel className="text-oker-700 mt-1">Dienst {getServiceNumber(shift)}</MicroLabel>
-                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{shift?.date} · {shift?.startTime} - {shift?.endTime}</p>
+                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(shift?.date)} · {shift?.startTime} - {shift?.endTime}</p>
                           {returnLabel(swap) && (
                             <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
@@ -536,7 +537,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                         {matchLoading
                           ? 'Beschikbaarheid laden…'
                           : freeCount !== null
-                            ? `${freeCount} vrij op ${selectedShiftDate}`
+                            ? `${freeCount} vrij op ${formatDateHuman(selectedShiftDate)}`
                             : ''}
                       </span>
                     )}
@@ -624,7 +625,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
         open={!!reviewSwap}
         onClose={() => setReviewSwap(null)}
         title={reviewSwap ? (users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend') : 'Dienstruil'}
-        subtitle={reviewSwap ? `Aangevraagd op ${reviewSwap.createdAt.split('T')[0]}` : undefined}
+        subtitle={reviewSwap ? `Aangevraagd op ${formatDateHuman(reviewSwap.createdAt)}` : undefined}
         icon={
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
             <ArrowLeftRight size={17} />

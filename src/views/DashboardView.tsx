@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid, Eye } from 'lucide-react';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
+import { formatDateHuman } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Sparkline } from '../components/Sparkline';
@@ -453,8 +454,8 @@ export function DashboardView({
             <div className="surface-muted rounded-xl p-4">
               <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
               <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
-                {openDiversion.startDate}
-                {openDiversion.endDate ? ` → ${openDiversion.endDate}` : ' → einde onbekend'}
+                {formatDateHuman(openDiversion.startDate)}
+                {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
               </p>
             </div>
             <div>
