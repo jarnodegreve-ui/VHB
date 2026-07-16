@@ -63,26 +63,28 @@ import { ContactsView } from './views/ContactsView';
 import { ServicesView } from './views/ServicesView';
 import { DashboardView } from './views/DashboardView';
 import { PlannerDashboardWidgets } from './views/PlannerDashboardWidgets';
-import { useParallaxScroll } from './lib/interactive';
 import { useRealtimeSync } from './lib/realtime';
 import { DiversionsView } from './views/DiversionsView';
 import { ScheduleView } from './views/ScheduleView';
 import { UpdatesView } from './views/UpdatesView';
 import { SwapRequestsView } from './views/SwapRequestsView';
-import { ActivityLogView } from './views/admin/ActivityLogView';
-import { OcpiDashboardView } from './views/admin/OcpiDashboardView';
-import { ManageSchedulesView } from './views/admin/ManageSchedulesView';
-import { PlanningMatrixView } from './views/admin/PlanningMatrixView';
-import { PlanningCodesView } from './views/admin/PlanningCodesView';
-import { ManageDiversionsView } from './views/admin/ManageDiversionsView';
-import { ManageServicesView } from './views/admin/ManageServicesView';
-import { VerlofKalenderView } from './views/admin/VerlofKalenderView';
 import { RitblaadjesView } from './views/RitblaadjesView';
 import { CapacityView } from './views/CapacityView';
-import { CoverageView } from './views/CoverageView';
-import { ComplianceView } from './views/admin/ComplianceView';
-import { ReportsView } from './views/admin/ReportsView';
 import { analyzeCompliance } from './lib/compliance';
+// Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
+// géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
+// die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
+const LazyActivityLogView = lazy(() => import('./views/admin/ActivityLogView').then((module) => ({ default: module.ActivityLogView })));
+const LazyOcpiDashboardView = lazy(() => import('./views/admin/OcpiDashboardView').then((module) => ({ default: module.OcpiDashboardView })));
+const LazyManageSchedulesView = lazy(() => import('./views/admin/ManageSchedulesView').then((module) => ({ default: module.ManageSchedulesView })));
+const LazyPlanningMatrixView = lazy(() => import('./views/admin/PlanningMatrixView').then((module) => ({ default: module.PlanningMatrixView })));
+const LazyPlanningCodesView = lazy(() => import('./views/admin/PlanningCodesView').then((module) => ({ default: module.PlanningCodesView })));
+const LazyManageDiversionsView = lazy(() => import('./views/admin/ManageDiversionsView').then((module) => ({ default: module.ManageDiversionsView })));
+const LazyManageServicesView = lazy(() => import('./views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
+const LazyVerlofKalenderView = lazy(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
+const LazyCoverageView = lazy(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
+const LazyComplianceView = lazy(() => import('./views/admin/ComplianceView').then((module) => ({ default: module.ComplianceView })));
+const LazyReportsView = lazy(() => import('./views/admin/ReportsView').then((module) => ({ default: module.ReportsView })));
 const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazy(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -246,9 +248,6 @@ export default function App() {
     isPasswordRecoveryRef.current = v;
     setIsPasswordRecovery(v);
   };
-
-  // Parallax-scroll: schrijft --scroll-y CSS-var voor de fixed bg-blobs
-  useParallaxScroll();
 
   // Body-scroll lock wanneer de mobiele sidebar open is — anders kan iOS
   // Safari de aside-inhoud "rubber-banden" of de hoofdpagina laten meebewegen.
@@ -601,7 +600,9 @@ export default function App() {
         fetchPlanning(accessToken, planningFilter),
         fetchUsers(accessToken),
         fetchDiversions(accessToken),
-        fetchServices(accessToken),
+        // Dienstoverzicht is planner/admin-only (view + beheer) — chauffeurs
+        // hebben de services-collectie nergens nodig, dus niet ophalen.
+        ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchServices(accessToken)] : []),
         fetchUpdates(accessToken),
         fetchSwaps(accessToken),
         fetchLeave(accessToken),
@@ -1647,10 +1648,10 @@ export default function App() {
           onScroll={(e) => {
             const top = e.currentTarget.scrollTop ?? 0;
             const next = top > 8;
+            // Parallax is bewust weg (Windows-perf): de vorige versie schreef
+            // hier elke scroll-frame een CSS-var op <html> → document-brede
+            // style-invalidatie + hersamplen van de blurred achtergrondlaag.
             setIsScrolled((current) => (current === next ? current : next));
-            // Parallax-laag: het window scrolt nooit (interne container),
-            // dus de --scroll-y-var moet hiér gezet worden.
-            document.documentElement.style.setProperty('--scroll-y', `${top}px`);
           }}
         >
           {/* Sticky topbar — full-width werkbalk met haarlijn-onderrand */}
@@ -1731,28 +1732,34 @@ export default function App() {
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
               {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
-              {resolvedCurrentView === 'beheer-roosters' && <ManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
-                await Promise.all([
-                  fetchPlanningMatrix(),
-                  fetchPlanning(),
-                  fetchPlanningMatrixHistory(),
-                  refreshCoverageGaps(),
-                  ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
-                ]);
-              }} />}
-              {resolvedCurrentView === 'planning-matrix' && (
-                <PlanningMatrixView
-                  rows={planningMatrixRows}
-                  services={services}
-                  planningCodes={planningCodes}
-                  users={users}
-                  canOpenUserManagement={isAdmin}
-                  onOpenPlanningCodes={() => setCurrentView('planning-codes')}
-                  onOpenServiceOverview={() => setCurrentView('beheer-dienstoverzicht')}
-                  onOpenUserManagement={() => setCurrentView('gebruikers')}
-                />
+              {resolvedCurrentView === 'beheer-roosters' && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
+                    await Promise.all([
+                      fetchPlanningMatrix(),
+                      fetchPlanning(),
+                      fetchPlanningMatrixHistory(),
+                      refreshCoverageGaps(),
+                      ...(currentUser?.role === 'admin' ? [fetchActivityLog()] : []),
+                    ]);
+                  }} />
+                </Suspense>
               )}
-              {resolvedCurrentView === 'planning-codes' && <PlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} />}
+              {resolvedCurrentView === 'planning-matrix' && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyPlanningMatrixView
+                    rows={planningMatrixRows}
+                    services={services}
+                    planningCodes={planningCodes}
+                    users={users}
+                    canOpenUserManagement={isAdmin}
+                    onOpenPlanningCodes={() => setCurrentView('planning-codes')}
+                    onOpenServiceOverview={() => setCurrentView('beheer-dienstoverzicht')}
+                    onOpenUserManagement={() => setCurrentView('gebruikers')}
+                  />
+                </Suspense>
+              )}
+              {resolvedCurrentView === 'planning-codes' && <Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense>}
               {resolvedCurrentView === 'beheer-updates' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
@@ -1763,10 +1770,10 @@ export default function App() {
                   <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'activiteit' && <ActivityLogView entries={activityLog} logins={loginActivity} />}
-              {resolvedCurrentView === 'ocpi-monitoring' && <OcpiDashboardView />}
-              {resolvedCurrentView === 'beheer-omleidingen' && <ManageDiversionsView diversions={diversions} onSave={saveDiversions} />}
-              {resolvedCurrentView === 'beheer-dienstoverzicht' && <ManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} />}
+              {resolvedCurrentView === 'activiteit' && <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>}
+              {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
+              {resolvedCurrentView === 'beheer-omleidingen' && <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} /></Suspense>}
+              {resolvedCurrentView === 'beheer-dienstoverzicht' && <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>}
               {resolvedCurrentView === 'beheer-contactlijst' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
@@ -1774,10 +1781,10 @@ export default function App() {
               )}
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} onSave={saveSwaps} onDecide={decideSwap} />)}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
-              {resolvedCurrentView === 'dekking' && <CoverageView />}
-              {resolvedCurrentView === 'rusttijden' && <ComplianceView shifts={shifts} users={users} />}
-              {resolvedCurrentView === 'rapportage' && <ReportsView shifts={shifts} leaveRequests={leaveRequests} users={users} />}
-              {resolvedCurrentView === 'verlof-kalender' && <VerlofKalenderView users={users} leaveRequests={leaveRequests} />}
+              {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
+              {resolvedCurrentView === 'rusttijden' && <Suspense fallback={<ViewLoader />}><LazyComplianceView shifts={shifts} users={users} /></Suspense>}
+              {resolvedCurrentView === 'rapportage' && <Suspense fallback={<ViewLoader />}><LazyReportsView shifts={shifts} leaveRequests={leaveRequests} users={users} /></Suspense>}
+              {resolvedCurrentView === 'verlof-kalender' && <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView
