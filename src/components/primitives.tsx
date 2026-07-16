@@ -18,15 +18,15 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: 'btn-primary',
   secondary: 'control-button-soft text-slate-700 hover:text-slate-900',
   ghost: 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/70',
-  success: 'bg-emerald-500 text-white hover:bg-emerald-600 shadow-lg shadow-emerald-500/20',
+  success: 'bg-emerald-700 text-white hover:bg-emerald-800 shadow-lg shadow-emerald-700/20',
   danger: 'bg-white/90 border border-red-200 text-red-600 hover:bg-red-50',
   dangerSolid: 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
   sm: 'gap-1.5 rounded-lg px-3 py-2 text-xs',
-  md: 'gap-2 rounded-xl px-4 py-2.5 text-[13px]',
-  lg: 'gap-2 rounded-xl px-5 py-3 text-sm',
+  md: 'gap-2 rounded-xl px-4 py-2.5 text-[13px] min-h-11',
+  lg: 'gap-2 rounded-xl px-5 py-3 text-sm min-h-12',
 };
 
 export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLButtonElement> & {

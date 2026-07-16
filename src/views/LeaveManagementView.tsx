@@ -11,6 +11,7 @@ import { verlofBalans, daysBetween } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
+import { formatDateHuman } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 
 const LEAVE_TYPE_LABELS: Record<string, string> = {
@@ -298,7 +299,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         description="Beheer verlofaanvragen en bekijk de bezetting."
         actions={(
           <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
-            <Plus size={20} /> Verlof Aanvragen
+            <Plus size={20} /> Verlof aanvragen
           </button>
         )}
       />
@@ -509,7 +510,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           />
 
           <MyLeaveSection
-            title="Mijn Geplande Verloven"
+            title="Mijn geplande verloven"
             count={myUpcoming.length}
             emptyText="Geen goedgekeurd verlof gepland."
             requests={myUpcoming}
@@ -532,7 +533,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         {showRequestModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof Aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
+              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
                   <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
@@ -605,7 +606,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50">
                   Periode wissen
                 </button>
-                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type Verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
+                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
                 <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
 
                 {/* Live impact-preview: budget + shift-conflicten */}
@@ -668,7 +669,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         open={!!reviewLeave}
         onClose={() => setReviewLeave(null)}
         title={reviewLeave ? (users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend') : 'Verlofaanvraag'}
-        subtitle={reviewLeave ? `Aangevraagd op ${reviewLeave.createdAt.split('T')[0]}` : undefined}
+        subtitle={reviewLeave ? `Aangevraagd op ${formatDateHuman(reviewLeave.createdAt)}` : undefined}
         icon={
           <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
             <UserIcon size={17} />
@@ -833,7 +834,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                 </div>
               </div>
               <p className="font-bold text-slate-800 text-sm mb-0.5">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
-              <p className="text-[11px] font-medium text-slate-400 tabular-nums">Aangevraagd op {req.createdAt.split('T')[0]}</p>
+              <p className="text-[11px] font-medium text-slate-400">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
               {req.comment && <p className="text-xs text-slate-500 italic mt-2.5">"{req.comment}"</p>}
               {onCancel && req.status === 'approved' && (
                 <Button variant="danger" size="sm" full className="mt-3.5" onClick={() => onCancel(req.id)}>
