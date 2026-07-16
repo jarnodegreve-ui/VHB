@@ -1,8 +1,39 @@
 import type express from "express";
+import { createHash, timingSafeEqual } from "node:crypto";
 import { supabase } from "./db.js";
 import { normalizeEmail } from "./helpers.js";
 import { getUsersCached } from "./userCache.js";
 import type { AppUser, AuthenticatedRequest, Role } from "./types.js";
+
+/**
+ * Timing-veilige CRON_SECRET-controle. Beide kanten worden eerst gehasht
+ * zodat noch de lengte noch de inhoud van het secret via de vergelijkingsduur
+ * kan lekken.
+ */
+export const isCronAuthorized = (req: express.Request): boolean => {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) return false;
+  const expected = createHash("sha256").update(`Bearer ${secret}`).digest();
+  const provided = createHash("sha256").update(String(req.headers.authorization ?? "")).digest();
+  return timingSafeEqual(expected, provided);
+};
+
+/**
+ * Best-effort gebruikersresolutie voor routes die zonder sessie bereikbaar
+ * blijven (bv. foutrapportage vanaf het loginscherm): geeft de app-gebruiker
+ * terug bij een geldig token, anders null — nooit een fout.
+ */
+export const resolveOptionalUser = async (req: express.Request): Promise<AppUser | null> => {
+  const token = getBearerToken(req);
+  if (!token || !supabase) return null;
+  try {
+    const { data, error } = await supabase.auth.getUser(token);
+    if (error || !data.user) return null;
+    return await findUserByEmail(data.user.email);
+  } catch {
+    return null;
+  }
+};
 
 export const getBearerToken = (req: express.Request) => {
   const header = req.headers.authorization;
