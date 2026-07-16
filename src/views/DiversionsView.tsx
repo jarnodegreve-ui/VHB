@@ -55,7 +55,8 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
   return (
     <PageShell>
       <PageHeader
-        title="Actuele Omleidingen"
+        title="Omleidingen"
+        description="Actuele hinder en omleidingen op het netwerk."
         actions={(
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
             <div className="relative group">
@@ -172,7 +173,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                             <a
                               href={div.pdfUrl}
                               download
-                              className="ios-pressable inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold bg-emerald-700 text-white hover:bg-emerald-800 shadow-lg shadow-emerald-700/20 transition-all"
+                              className="ios-pressable control-button-soft inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-all"
                             >
                               <Download size={16} />
                               Download PDF

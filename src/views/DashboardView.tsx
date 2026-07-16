@@ -248,17 +248,9 @@ export function DashboardView({
           {greeting}, <span className="text-oker-600">{firstName}</span>
         </h1>
         <p className="text-[13px] font-normal text-slate-500 mt-0.5">
-          {isChauffeur ? (
-            todaysShift ? (
-              <>Je rijdt vandaag <span className="font-semibold text-slate-700">dienst {getServiceNumber(todaysShift)}</span> · {todaysShift.startTime}–{todaysShift.endTime}</>
-            ) : nextShift ? (
-              <>Vrije dag · volgende dienst {nextShift.startDateTime.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} om {nextShift.startTime}</>
-            ) : (
-              <>Vrije dag · geen diensten gepland</>
-            )
-          ) : (
-            <>{now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} · {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}</>
-          )}
+          {/* Bewust neutraal: dienst-/vrije-dag-info staat al groot in de
+              hero-tegels — dezelfde boodschap 2× maakte het scherm drukker. */}
+          {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} · {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
         </p>
       </div>
 
@@ -397,7 +389,7 @@ export function DashboardView({
             return (
               <div className="space-y-2">
                 {planningShifts.map((shift) => (
-                  <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-2xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
+                  <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
@@ -421,7 +413,7 @@ export function DashboardView({
           })()}
         </PremiumPanel>
 
-        <PremiumPanel icon={<AlertTriangle size={16} />} iconBg="bg-oker-500" title="Omleidingen" subtitle={`${diversions.length} actief`} accent="oker">
+        <PremiumPanel icon={<AlertTriangle size={16} />} iconBg="bg-oker-500" title="Omleidingen" accent="oker">
           {newestDiversions.length > 0 ? (
             <div className="space-y-2">
               {newestDiversions.map((div) => (

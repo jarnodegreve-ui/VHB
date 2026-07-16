@@ -31,7 +31,8 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
   return (
     <PageShell width="6xl">
       <PageHeader
-        title="Updates & Nieuws"
+        title="Updates & nieuws"
+        description="Berichten en mededelingen van de planning."
         actions={(
           <div className="glass-segmented flex p-1 rounded-xl">
             {(['all', 'algemeen', 'veiligheid', 'technisch'] as const).map(cat => (
