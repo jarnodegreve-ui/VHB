@@ -535,7 +535,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
       <AnimatePresence>
         {showOfferModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden">
               <div className="px-6 py-5 md:px-8 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {wizardStep > 1 && (
@@ -621,7 +621,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                             })}
                         </div>
                         {freeForDate && !showBusyColleagues && eligibleTargetDrivers.some((u) => !freeForDate.has(u.id)) && (
-                          <button type="button" onClick={() => setShowBusyColleagues(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-2">
+                          <button type="button" onClick={() => setShowBusyColleagues(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11">
                             Toon ook bezette collega's ({eligibleTargetDrivers.filter((u) => !freeForDate.has(u.id)).length})
                           </button>
                         )}
@@ -682,7 +682,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                             })}
                           </div>
                           {!showAllReturns && (pickable.length > 8 || conflicted.length > 0) && (
-                            <button type="button" onClick={() => setShowAllReturns(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-2">
+                            <button type="button" onClick={() => setShowAllReturns(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11">
                               Meer tonen{pickable.length > 8 ? ` (${pickable.length - 8} extra)` : ''}
                             </button>
                           )}
@@ -703,9 +703,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                       )}
                       <div className="space-y-2 pt-1">
                         <MicroLabel className="ml-1">Info voor je collega (optioneel)</MicroLabel>
+                        {/* onFocus: houd het veld boven het iOS-toetsenbord —
+                            zonder scroll verdween de verstuurknop erachter. */}
                         <textarea
                           value={reason}
                           onChange={(e) => setReason(e.target.value)}
+                          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
                           className="control-input w-full px-4 py-3 rounded-2xl font-medium text-sm outline-none h-14 resize-none"
                           placeholder="Waarom wil je ruilen?"
                         />

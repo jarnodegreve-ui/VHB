@@ -245,6 +245,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           <style>{`
             .mp-weekend { background-color: rgba(241,245,249,0.85); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100,116,139,0.09) 3px, rgba(100,116,139,0.09) 4px); }
             .dark .mp-weekend { background-color: rgba(255,255,255,0.03); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.05) 3px, rgba(255,255,255,0.05) 4px); }
+            /* Sticky cellen moeten OPAAK zijn: de generieke dark-overrides van
+               bg-white/bg-slate-100/bg-oker-50 zijn alpha-kleuren, waardoor de
+               scrollende cellen in dark mode door de vaste naamkolom/koprij
+               heen schemerden. */
+            .dark th.mp-sticky { background-color: rgb(30, 31, 34) !important; }
+            .dark td.mp-sticky { background-color: rgb(23, 24, 26) !important; }
+            .dark td.mp-sticky-own { background-color: rgb(41, 35, 25) !important; }
           `}</style>
           {/* Desktop: Excel-achtig maandgrid (chauffeur × dag) — dunne gridlijnen,
               platte dienstnummers, gearceerde weekend-kolommen. */}
@@ -253,7 +260,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className="sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
+                    <th className="mp-sticky sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
@@ -294,6 +301,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       <tr className={cn('group border-b border-slate-200', rowBg)}>
                         <td
                           className={cn(
+                            isOwn ? 'mp-sticky-own' : 'mp-sticky',
                             'sticky left-0 z-10 px-4 py-2 text-sm font-semibold min-w-[180px] truncate border-r-2 border-slate-300 transition-colors',
                             rowBg,
                             'group-hover:bg-oker-50',
@@ -381,7 +389,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             key={iso}
                             type="button"
                             onClick={() => setSelected({ driverName: drv.name, iso, cell })}
-                            className="w-full flex items-center gap-3 rounded-xl px-2 py-1.5 text-left active:bg-black/[0.04] transition-colors"
+                            className="w-full flex items-center gap-3 rounded-xl px-2 py-2.5 min-h-11 text-left active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
                           >
                             <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
                             <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
