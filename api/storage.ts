@@ -201,6 +201,34 @@ export const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
   if (insertError) throw insertError;
 };
 
+/**
+ * Atomische import: matrix + afgeleide planning in ÉÉN transactie vervangen
+ * (RPC replace_planning_and_matrix). Voorheen waren dit twee losse replaces:
+ * faalde de tweede, dan toonde de Maandplanning (matrix) een andere maand dan
+ * de roosters (planning) — skew. Een lege shifts-set is toegestaan (import
+ * met enkel verlof-/afwezigheidscodes): de planning volgt de matrix en wordt
+ * dan bewust mee geleegd.
+ *
+ * Fallback zolang de RPC niet bestaat (migratie nog niet gedraaid): het oude
+ * sequentiële pad — mét de oude beperking dat een lege shifts-set geweigerd
+ * wordt, omdat het niet-atomische pad een wipe niet veilig kan garanderen.
+ */
+export const replacePlanningAndMatrix = async (rows: PlanningMatrixRow[], shifts: ShiftRecord[]) => {
+  const client = requireDb();
+  if (!Array.isArray(rows) || rows.length === 0) {
+    throw new Error("Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.");
+  }
+  const { error: rpcError } = await client.rpc('replace_planning_and_matrix', {
+    matrix_rows: rows,
+    shifts: Array.isArray(shifts) ? shifts : [],
+  });
+  if (!rpcError) return;
+  if (!isMissingDbFunction(rpcError)) throw rpcError;
+  console.warn('replace_planning_and_matrix ontbreekt (migratie niet gedraaid?) — val terug op het niet-atomische pad.');
+  await savePlanningMatrixRows(rows);
+  await replacePlanningData(shifts);
+};
+
 // --- Planning codes ---
 
 export const getPlanningCodesData = async (): Promise<PlanningCodeRecord[]> => {
@@ -706,10 +734,26 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
       .filter(Boolean)
       .sort()
       .join(" ");
+  // Botsings-detectie: twee verschillende gebruikers die op dezelfde
+  // naam-sleutel uitkomen (zelfde naam, of "Jan Karel" vs "Karel Jan" via de
+  // gesorteerde token). Voorheen was dit laatste-wint → alle diensten van
+  // beide kolommen belandden stil bij één van de twee. Ambigue sleutels
+  // matchen nu bewust NIET meer en verschijnen als unmatched in de preview.
   const usersByName = new Map<string, AppUser>();
+  const ambiguousNameKeys = new Set<string>();
+  const addNameKey = (key: string, u: AppUser) => {
+    if (!key) return;
+    const existing = usersByName.get(key);
+    if (existing && String(existing.id) !== String(u.id)) {
+      ambiguousNameKeys.add(key);
+      usersByName.delete(key);
+      return;
+    }
+    if (!ambiguousNameKeys.has(key)) usersByName.set(key, u);
+  };
   for (const u of users) {
-    usersByName.set(toLookupToken(u.name), u);
-    usersByName.set(sortedNameToken(u.name), u);
+    addNameKey(toLookupToken(u.name), u);
+    addNameKey(sortedNameToken(u.name), u);
   }
   const servicesByNumber = new Map(
     (services as ServiceRecord[]).map((service): [string, ServiceRecord] => [toLookupToken(service.serviceNumber), service]),
@@ -758,9 +802,13 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
 
   for (const row of rows) {
     for (const [driverName, rawCode] of Object.entries(row.assignments || {}) as Array<[string, string]>) {
-      const driver =
-        usersByName.get(toLookupToken(driverName)) ||
-        usersByName.get(sortedNameToken(driverName));
+      const nameKey = toLookupToken(driverName);
+      const sortedKey = sortedNameToken(driverName);
+      if (ambiguousNameKeys.has(nameKey) || ambiguousNameKeys.has(sortedKey)) {
+        unmatchedDrivers.add(`${driverName} (ambigu: meerdere gebruikers met deze naam — maak de namen uniek in gebruikersbeheer)`);
+        continue;
+      }
+      const driver = usersByName.get(nameKey) || usersByName.get(sortedKey);
       if (!driver) {
         unmatchedDrivers.add(driverName);
         continue;
