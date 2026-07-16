@@ -24,7 +24,7 @@ import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole } from "./middleware.js";
 import { rateLimitMiddleware } from "./rateLimit.js";
-import { mountOcpiRoutes } from "./ocpi.js";
+import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken } from "./helpers.js";
 import {
@@ -1329,9 +1329,32 @@ const buildBackupPayload = async () => {
     getCoverageExpectations(),
     getActivityLog(),
   ]);
+  // Auth-accounts (id+e-mail): een restore van een verwijderde gebruiker
+  // maakt anders een account met random wachtwoord aan zonder dat je weet
+  // welk e-mailadres erbij hoorde. Best-effort — Auth-uitval mag de backup
+  // niet blokkeren.
+  let authUsers: Array<{ id: string; email: string | null }> = [];
+  try {
+    if (supabaseAdmin) {
+      const { data: authPage } = await supabaseAdmin.auth.admin.listUsers({ page: 1, perPage: 1000 });
+      authUsers = ((authPage?.users ?? []) as Array<{ id: string; email?: string }>).map((u) => ({ id: u.id, email: u.email ?? null }));
+    }
+  } catch (err) {
+    console.error("[backup] auth-export mislukt (backup gaat door):", err);
+  }
+
+  // OCPI-registratie (Token C + endpoints): zonder deze rij moet de hele
+  // ChargEye-handshake opnieuw na een restore.
+  let ocpiRegistration: unknown = null;
+  try {
+    ocpiRegistration = await getOcpiRegistration();
+  } catch (err) {
+    console.error("[backup] ocpi_registration-export mislukt (backup gaat door):", err);
+  }
+
   return {
     exportedAt: new Date().toISOString(),
-    version: 1,
+    version: 2,
     collections: {
       users,
       planning,
@@ -1345,6 +1368,10 @@ const buildBackupPayload = async () => {
       coverageExpectations,
       activityLog,
     },
+    // Referentie-exports (niet door /api/restore teruggeschreven; handmatig
+    // te gebruiken bij disaster-recovery).
+    authUsers,
+    ocpiRegistration,
   };
 };
 
@@ -1368,10 +1395,34 @@ app.get("/api/cron/backup", async (req, res) => {
   try {
     const payload = await buildBackupPayload();
     const filename = `vhb-backup-${payload.exportedAt.slice(0, 10)}.json`;
-    const stored = await storeBackup(filename, JSON.stringify(payload));
+    const json = JSON.stringify(payload);
+    const stored = await storeBackup(filename, json);
     console.log(`[cron-backup] ${filename} opgeslagen, ${stored.removedOld} oude back-up(s) opgeruimd.`);
-    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd).`);
-    res.json({ success: true, filename, removedOld: stored.removedOld });
+
+    // Wekelijkse off-site kopie (zondag): de bucket-back-ups wonen in
+    // hetzélfde Supabase-project — bij projectverlies zijn ze mee weg. Een
+    // mail-bijlage naar ALERT_EMAIL/admins is de goedkoopste externe kopie.
+    let mailedOffsite = false;
+    if (new Date().getUTCDay() === 0) {
+      const explicit = (process.env.ALERT_EMAIL || "").split(",").map((e) => e.trim()).filter(Boolean);
+      const recipients = explicit.length > 0
+        ? explicit
+        : (await getUsersData()).filter((u) => u.role === "admin" && u.isActive !== false && u.email).map((u) => u.email as string);
+      if (recipients.length > 0) {
+        const result = await sendEmail({
+          to: recipients,
+          context: "weekly-backup",
+          subject: `VHB Portaal — wekelijkse back-up ${payload.exportedAt.slice(0, 10)}`,
+          text: "In bijlage de wekelijkse off-site kopie van de portaal-back-up. Bewaar deze mail (of de bijlage) buiten Supabase/Vercel.",
+          html: "<p>In bijlage de wekelijkse off-site kopie van de portaal-back-up. Bewaar deze mail (of de bijlage) buiten Supabase/Vercel.</p>",
+          attachments: [{ filename, content: json }],
+        });
+        mailedOffsite = result.ok && !result.mocked;
+      }
+    }
+
+    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}).`);
+    res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite });
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
     console.error("Back-up mislukt", err);
