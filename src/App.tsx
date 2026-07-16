@@ -1468,19 +1468,19 @@ export default function App() {
             className="rounded-xl py-1 px-2 transition-all active:scale-[0.98] hover:opacity-80"
             title="Naar dashboard"
           >
-            {/* VHB Schakel portaal-lockup (740×160): breder dan het oude logo,
-                dus h-11 om binnen de sidebar te blijven. Reverse-variant in
-                dark mode. */}
+            {/* Sidebar-variant van de VHB Schakel-lockup: zónder de kleine
+                "Van Hoorebeke & Zoon"-regel — die was op deze maat onleesbaar.
+                De volledige naam staat op login en laadschermen. */}
             <img
-              src="/vhb-logo.svg"
-              alt="VHB — Van Hoorebeke & Zoon"
-              className="h-11 w-auto mx-auto select-none block dark:hidden"
+              src="/vhb-logo-sidebar.svg"
+              alt="VHB Portaal — Van Hoorebeke & Zoon"
+              className="h-12 w-auto mx-auto select-none block dark:hidden"
               draggable={false}
             />
             <img
-              src="/vhb-logo-wit.svg"
-              alt="VHB — Van Hoorebeke & Zoon"
-              className="h-11 w-auto mx-auto select-none hidden dark:block"
+              src="/vhb-logo-sidebar-wit.svg"
+              alt="VHB Portaal — Van Hoorebeke & Zoon"
+              className="h-12 w-auto mx-auto select-none hidden dark:block"
               draggable={false}
             />
           </button>
