@@ -45,7 +45,7 @@ export function BottomNav({
     { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
     { view: 'rooster', label: 'Rooster', icon: <Calendar size={20} /> },
     { view: 'omleidingen', label: 'Omleidingen', icon: <MapPin size={20} /> },
-    { view: 'ritblaadjes', label: 'Ritblaadjes', icon: <FileText size={20} /> },
+    { view: 'ritblaadjes', label: 'Ritbladen', icon: <FileText size={20} /> },
     // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount),
     // dus die hoort hier — op 'Updates' was hij misleidend. Updates blijven op
     // het dashboard zichtbaar.

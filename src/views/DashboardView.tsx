@@ -455,7 +455,7 @@ export function DashboardView({
               <div className="grid grid-cols-2 gap-2.5">
                 <QuickLink icon={<Calendar size={16} />} label="Mijn Rooster" onClick={() => onNavigate('rooster')} />
                 <QuickLink icon={<Users size={16} />} label="Maandplanning" onClick={() => onNavigate('bezetting')} />
-                <QuickLink icon={<FileText size={16} />} label="Ritblaadjes" onClick={() => onNavigate('ritblaadjes')} />
+                <QuickLink icon={<FileText size={16} />} label="Ritbladen" onClick={() => onNavigate('ritblaadjes')} />
                 <QuickLink icon={<RefreshCw size={16} />} label="Dienstruil" onClick={() => onNavigate('ruil-verzoeken')} />
               </div>
             </PremiumPanel>

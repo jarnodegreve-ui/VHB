@@ -2417,7 +2417,7 @@ app.get("/api/ritblaadje", authenticate, async (_req, res) => {
   } catch (err: any) {
     console.error("Ritblaadje fetch error:", err);
     console.error("Kon ritblaadje niet ophalen.", err);
-    res.status(500).json({ error: "Kon ritblaadje niet ophalen." });
+    res.status(500).json({ error: "Kon ritblad niet ophalen." });
   }
 });
 
@@ -2489,7 +2489,7 @@ app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Auth
   } catch (err: any) {
     console.error("Ritblaadje upload error:", err);
     console.error("Kon ritblaadje niet uploaden.", err);
-    res.status(500).json({ error: "Kon ritblaadje niet uploaden." });
+    res.status(500).json({ error: "Kon ritblad niet uploaden." });
   }
 });
 
@@ -2517,7 +2517,7 @@ app.delete("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Au
   } catch (err: any) {
     console.error("Ritblaadje delete error:", err);
     console.error("Kon ritblaadje niet verwijderen.", err);
-    res.status(500).json({ error: "Kon ritblaadje niet verwijderen." });
+    res.status(500).json({ error: "Kon ritblad niet verwijderen." });
   }
 });
 
