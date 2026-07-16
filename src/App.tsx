@@ -1468,18 +1468,19 @@ export default function App() {
             className="rounded-xl py-1 px-2 transition-all active:scale-[0.98] hover:opacity-80"
             title="Naar dashboard"
           >
-            {/* Officieel VHB-logo (huisstijl): zwartetekst op licht,
-                wittekst in dark mode. Strak bijgesneden SVG, ratio ~2.15. */}
+            {/* VHB Schakel portaal-lockup (740×160): breder dan het oude logo,
+                dus h-11 om binnen de sidebar te blijven. Reverse-variant in
+                dark mode. */}
             <img
               src="/vhb-logo.svg"
               alt="VHB — Van Hoorebeke & Zoon"
-              className="h-16 w-auto mx-auto select-none block dark:hidden"
+              className="h-11 w-auto mx-auto select-none block dark:hidden"
               draggable={false}
             />
             <img
               src="/vhb-logo-wit.svg"
               alt="VHB — Van Hoorebeke & Zoon"
-              className="h-16 w-auto mx-auto select-none hidden dark:block"
+              className="h-11 w-auto mx-auto select-none hidden dark:block"
               draggable={false}
             />
           </button>
