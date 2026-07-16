@@ -1723,7 +1723,7 @@ export default function App() {
                     isInitialLoad={isInitialLoad}
                   />
                 ) : (
-                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} />
+                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} onChangePassword={() => setShowChangePassword(true)} />
                 )
               )}
               {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} />)}
