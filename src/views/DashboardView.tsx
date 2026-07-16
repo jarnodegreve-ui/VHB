@@ -737,7 +737,7 @@ function PremiumPanel({
     : 'bg-slate-500/12 text-slate-600 dark:text-slate-300';
   return (
     <div
-      className="glow-top rounded-3xl p-5 relative overflow-hidden"
+      className="glow-top rounded-3xl p-5 relative overflow-hidden h-full"
       style={{
         background: 'var(--tile-bg)',
         border: 'var(--tile-border)',
