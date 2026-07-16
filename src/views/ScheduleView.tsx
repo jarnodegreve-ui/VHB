@@ -1,9 +1,8 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
-import { PageHeader, PageShell } from '../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
-import { BrandEmptyState } from '../components/BrandEmptyState';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
@@ -191,7 +190,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
           ))}
         </div>
       ) : upcoming.length === 0 && past.length === 0 ? (
-        <BrandEmptyState
+        <EmptyState
           title="Nog geen diensten gepland"
           message="Zodra de planner een nieuwe matrix uploadt, vind je hier al je komende ritten."
         />
