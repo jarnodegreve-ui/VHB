@@ -2,19 +2,16 @@ import { Fragment, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Calendar, Clock, Download, FileText, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, notify } from '../../lib/ui';
+import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { StatCard } from '../../components/StatCard';
 import { normalizePlanningToken, resolvePlanningAssignment } from '../../lib/planning';
 
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
-const ASSIGNMENT_KIND_TONES: Record<'service' | 'leave' | 'absence' | 'training' | 'unknown', 'blue' | 'oker' | 'amber' | 'emerald' | 'red' | 'slate'> = {
-  service: 'blue',
-  leave: 'oker',
-  absence: 'amber',
-  training: 'emerald',
-  unknown: 'red',
-};
+// Gedeelde kleurentaal met de Maandplanning (src/lib/planningKind.ts) —
+// voorheen hadden beide views een tegenstrijdige legende.
+const ASSIGNMENT_KIND_TONES = KIND_BADGE_TONE;
 
 export function PlanningMatrixView({
   rows,

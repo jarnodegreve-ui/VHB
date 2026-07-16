@@ -347,7 +347,7 @@ export function DashboardView({
 
           <StatTile
             icon={<AlertTriangle size={18} />}
-            color="rose"
+            color="red"
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
@@ -369,7 +369,7 @@ export function DashboardView({
           />
           <StatTile
             icon={<AlertTriangle size={18} />}
-            color="rose"
+            color="red"
             label="Omleidingen"
             value={diversions.length}
             subValue="Actief in netwerk"
@@ -571,11 +571,11 @@ const TILE_PALETTE = {
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
-  rose: {
+  red: {
     bg: NEUTRAL_BG,
     shadow: NEUTRAL_SHADOW,
     border: NEUTRAL_BORDER,
-    iconBg: 'bg-rose-500/12 text-rose-600 dark:text-rose-400',
+    iconBg: 'bg-red-500/12 text-red-600 dark:text-red-400',
     text: 'text-slate-900',
     sub: 'text-slate-500',
   },
@@ -662,8 +662,8 @@ export function StatTile({
     sparklineColor ||
     (color === 'oker'
       ? '#C9851F'
-      : color === 'rose'
-      ? '#e11d48'
+      : color === 'red'
+      ? '#dc2626'
       : color === 'emerald'
       ? '#059669'
       : color === 'blue'

@@ -20,8 +20,8 @@ const shiftCategory = (startTime: string): 'ochtend' | 'middag' | 'avond' => {
 };
 
 const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' | 'slate' }> = {
-  ochtend: { label: 'Vroeg', tone: 'amber' },
-  middag: { label: 'Middag', tone: 'emerald' },
+  ochtend: { label: 'Vroeg', tone: 'slate' },
+  middag: { label: 'Middag', tone: 'slate' },
   avond: { label: 'Laat', tone: 'slate' },
 };
 
