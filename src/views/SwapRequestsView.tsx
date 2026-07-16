@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeftRight, ChevronRight, History, X, Check } from 'lucide-react';
 import type { Shift, SwapRequest, User } from '../types';
-import { PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
@@ -12,8 +12,18 @@ import { canRespondToSwap } from '../lib/authorization';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
-export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean> }) {
+export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean> }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Bevestigingen via de nette ConfirmationModal i.p.v. kale window.confirm
+  // (browser-popup met "vhb-five.vercel.app meldt…" schrikt chauffeurs af).
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    variant: 'danger' | 'warning';
+    run: () => void;
+  } | null>(null);
   const [selectedShift, setSelectedShift] = useState<string>('');
   const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
   const [reason, setReason] = useState('');
@@ -124,8 +134,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
     return true;
   });
 
-  const handleOfferShift = (e: React.FormEvent) => {
+  const handleOfferShift = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!selectedShift || !selectedTargetDriver || !returnPick) return;
 
     const sep = returnPick.indexOf('|');
@@ -144,7 +155,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
       returnCode,
     };
 
-    onSave([...swaps, newSwap]);
+    // Pas sluiten/wissen ná een geslaagde save — bij een fout blijft de
+    // ingevulde aanvraag staan zodat de chauffeur niet opnieuw moet beginnen.
+    setIsSubmitting(true);
+    const ok = await Promise.resolve(onSave([...swaps, newSwap])).finally(() => setIsSubmitting(false));
+    if (ok === false) return;
     setShowOfferModal(false);
     setSelectedShift('');
     setSelectedTargetDriver('');
@@ -176,23 +191,43 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
   // rechtstreeks goedkeuren, zónder bevestiging van de collega. Alleen admin
   // (de server dwingt dit ook af). Bewust met waarschuwing.
   const handleAdminForceApprove = (swapId: string) => {
-    if (!window.confirm('De collega heeft deze ruil nog niet bevestigd. Wil je hem als admin tóch rechtstreeks goedkeuren?')) return;
-    handleStatusUpdate(swapId, 'approved');
+    setConfirmAction({
+      title: 'Direct goedkeuren',
+      message: 'De collega heeft deze ruil nog niet bevestigd. Wil je hem als admin tóch rechtstreeks goedkeuren?',
+      confirmText: 'Toch goedkeuren',
+      variant: 'warning',
+      run: () => handleStatusUpdate(swapId, 'approved'),
+    });
   };
 
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
   const handleAccept = (swapId: string) => {
-    if (!window.confirm('Deze dienstruil accepteren? De planner beoordeelt ze daarna.')) return;
-    handleStatusUpdate(swapId, 'accepted');
+    setConfirmAction({
+      title: 'Dienstruil accepteren',
+      message: 'Deze dienstruil accepteren? De planner beoordeelt ze daarna nog (rij- en rusttijden).',
+      confirmText: 'Accepteren',
+      variant: 'warning',
+      run: () => handleStatusUpdate(swapId, 'accepted'),
+    });
   };
   const handleDecline = (swapId: string) => {
-    if (!window.confirm('Deze dienstruil weigeren?')) return;
-    handleStatusUpdate(swapId, 'rejected');
+    setConfirmAction({
+      title: 'Dienstruil weigeren',
+      message: 'Deze dienstruil weigeren? Je collega ziet dat je niet kan.',
+      confirmText: 'Weigeren',
+      variant: 'danger',
+      run: () => handleStatusUpdate(swapId, 'rejected'),
+    });
   };
 
   const handleCancel = (swapId: string) => {
-    if (!window.confirm('Deze goedgekeurde dienstruil annuleren?')) return;
-    handleStatusUpdate(swapId, 'cancelled');
+    setConfirmAction({
+      title: 'Dienstruil annuleren',
+      message: 'Deze goedgekeurde dienstruil annuleren? De oorspronkelijke planning geldt dan weer.',
+      confirmText: 'Annuleren',
+      variant: 'danger',
+      run: () => handleStatusUpdate(swapId, 'cancelled'),
+    });
   };
 
   return (
@@ -234,7 +269,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
               );
             })
           ) : (
-            <p className="text-slate-400 font-medium italic p-4">Geen actieve verzoeken.</p>
+            <EmptyState
+              icon={<ArrowLeftRight size={28} />}
+              title="Nog geen ruilverzoeken"
+              message='Wil je een dienst wisselen met een collega? Klik op "Dienstruil aanvragen" — je collega en de planner keuren daarna goed.'
+            />
           )}
         </div>
 
@@ -278,10 +317,24 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
               );
             })
           ) : (
-            <p className="text-slate-400 font-medium italic p-4">Geen openstaande wissels.</p>
+            <EmptyState
+              icon={<ArrowLeftRight size={28} />}
+              title="Geen openstaande wissels"
+              message="Stelt een collega jou een ruil voor, dan verschijnt die hier en krijg je een melding."
+            />
           )}
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => { confirmAction?.run(); setConfirmAction(null); }}
+        title={confirmAction?.title ?? ''}
+        message={confirmAction?.message ?? ''}
+        confirmText={confirmAction?.confirmText ?? 'Bevestigen'}
+        variant={confirmAction?.variant ?? 'warning'}
+      />
 
       {isPlanner && (() => {
         const actionableSwaps = swaps.filter(s => {
@@ -552,10 +605,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                 </div>
                 <button
                   type="submit"
-                  disabled={!selectedShift || !selectedTargetDriver || !returnPick}
+                  disabled={!selectedShift || !selectedTargetDriver || !returnPick || isSubmitting}
                   className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
                 >
-                  Dienstruil indienen
+                  {isSubmitting ? 'Versturen…' : 'Dienstruil indienen'}
                 </button>
               </form>
             </motion.div>

@@ -247,7 +247,7 @@ app.get("/api/planning", authenticate, async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error("Error reading planning data:", err);
-    res.status(500).json({ error: "Failed to read data" });
+    res.status(500).json({ error: "Gegevens laden is mislukt." });
   }
 });
 
@@ -355,12 +355,12 @@ app.post("/api/planning", authenticate, requireRole("planner", "admin"), async (
       );
       res.json({ success: true, count: newData.length });
     } else {
-      res.status(400).json({ error: "Invalid data format. Expected an array." });
+      res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving planning data:", errorMessage);
-    res.status(500).json({ error: "Failed to save data", details: errorMessage });
+    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
   }
 });
 
@@ -646,7 +646,7 @@ app.get("/api/planning-matrix", authenticate, requireRole("planner", "admin"), a
     const rows = await getPlanningMatrixRows();
     res.json(rows);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to read planning matrix", details: err.message });
+    res.status(500).json({ error: "Planning-overzicht laden is mislukt.", details: err.message });
   }
 });
 
@@ -655,7 +655,7 @@ app.get("/api/planning-matrix/history", authenticate, requireRole("planner", "ad
     const history = await getPlanningMatrixHistory();
     res.json(history);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to read planning matrix history", details: err.message });
+    res.status(500).json({ error: "Import-geschiedenis laden is mislukt.", details: err.message });
   }
 });
 
@@ -664,7 +664,7 @@ app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) =
     const activity = await getActivityLog();
     res.json(activity);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to read activity log", details: err.message });
+    res.status(500).json({ error: "Activiteit laden is mislukt.", details: err.message });
   }
 });
 
@@ -679,7 +679,7 @@ app.get("/api/activity/logins", authenticate, requireRole("admin"), async (req, 
     const logins = await getLoginActivity(sinceIso);
     res.json({ days, logins });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to read login activity", details: err.message });
+    res.status(500).json({ error: "Aanmeldingen laden is mislukt.", details: err.message });
   }
 });
 
@@ -699,7 +699,7 @@ app.get(
       const history = await getEntityHistory(entityType as any, entityId);
       res.json(history);
     } catch (err: any) {
-      res.status(500).json({ error: "Failed to read entity history", details: err.message });
+      res.status(500).json({ error: "Geschiedenis laden is mislukt.", details: err.message });
     }
 });
 
@@ -815,7 +815,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       endDate,
     });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to import planning matrix", details: err.message });
+    res.status(500).json({ error: "Planning importeren is mislukt.", details: err.message });
   }
 });
 
@@ -876,7 +876,7 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       perDriver: generatedPlanning.summary.perDriver,
     });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to preview planning matrix", details: err.message });
+    res.status(500).json({ error: "Import-voorbeeld maken is mislukt.", details: err.message });
   }
 });
 
@@ -892,7 +892,7 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
     );
     res.json({ success: true, ...generatedPlanning.summary });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to sync planning from matrix", details: err.message });
+    res.status(500).json({ error: "Planning opnieuw opbouwen is mislukt.", details: err.message });
   }
 });
 
@@ -955,7 +955,7 @@ app.get("/api/planning-codes", authenticate, requireRole("planner", "admin"), as
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(codes));
     res.json(codes);
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to read planning codes", details: err.message });
+    res.status(500).json({ error: "Planningscodes laden is mislukt.", details: err.message });
   }
 });
 
@@ -1019,7 +1019,7 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
   try {
     const codes = req.body;
     if (!Array.isArray(codes)) {
-      return res.status(400).json({ error: "Invalid data format. Expected an array." });
+      return res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
 
     const previousCodes = await getPlanningCodesData();
@@ -1052,7 +1052,7 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getPlanningCodesData()));
     res.json({ success: true, count: codes.length });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to save planning codes", details: err.message });
+    res.status(500).json({ error: "Planningscodes opslaan is mislukt.", details: err.message });
   }
 });
 
@@ -1062,7 +1062,7 @@ app.get("/api/users", authenticate, async (req: AuthenticatedRequest, res) => {
     res.json(users.map((user) => toRoleScopedUser(user, req.appUser!.role, req.appUser!.id)));
   } catch (err) {
     console.error("Error reading users data:", err);
-    res.status(500).json({ error: "Failed to read data" });
+    res.status(500).json({ error: "Gegevens laden is mislukt." });
   }
 });
 
@@ -1098,12 +1098,12 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
 
       res.json({ success: true, count: newData.length });
     } else {
-      res.status(400).json({ error: "Invalid data format. Expected an array." });
+      res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving users data:", errorMessage);
-    res.status(500).json({ error: "Failed to save data", details: errorMessage });
+    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
   }
 });
 
@@ -1361,7 +1361,7 @@ app.get("/api/diversions", authenticate, async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error("Error reading diversions data:", err);
-    res.status(500).json({ error: "Failed to read data" });
+    res.status(500).json({ error: "Gegevens laden is mislukt." });
   }
 });
 
@@ -1397,12 +1397,12 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.json({ success: true, count: newData.length });
     } else {
-      res.status(400).json({ error: "Invalid data format. Expected an array." });
+      res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving diversions data:", errorMessage);
-    res.status(500).json({ error: "Failed to save data", details: errorMessage });
+    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
   }
 });
 
@@ -1455,7 +1455,7 @@ app.get("/api/services", authenticate, async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error("Error reading services data:", err);
-    res.status(500).json({ error: "Failed to read data" });
+    res.status(500).json({ error: "Gegevens laden is mislukt." });
   }
 });
 
@@ -1506,12 +1506,12 @@ app.post("/api/services", authenticate, requireRole("planner", "admin"), async (
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getServicesData()));
       res.json({ success: true, count: newData.length });
     } else {
-      res.status(400).json({ error: "Invalid data format. Expected an array." });
+      res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
   } catch (err: any) {
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving services data:", errorMessage);
-    res.status(500).json({ error: "Failed to save data", details: errorMessage });
+    res.status(500).json({ error: "Opslaan is mislukt.", details: errorMessage });
   }
 });
 
@@ -1521,7 +1521,7 @@ app.get("/api/updates", authenticate, async (req, res) => {
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: "Failed to read updates" });
+    res.status(500).json({ error: "Updates laden is mislukt." });
   }
 });
 
@@ -1531,7 +1531,7 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
     // Zonder deze guard normaliseerde saveUpdatesData een niet-array naar []
     // en wiste vervolgens ALLE updates — met een vrolijke success-response.
     if (!Array.isArray(newData)) {
-      return res.status(400).json({ error: "Invalid data format. Expected an array." });
+      return res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
     const previousUpdates = await getUpdatesData();
     if (revisionConflict(req, previousUpdates)) return revisionConflictResponse(res, "De updates");
@@ -1562,7 +1562,7 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to save updates", details: err.message });
+    res.status(500).json({ error: "Updates opslaan is mislukt.", details: err.message });
   }
 });
 
@@ -1581,7 +1581,7 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     }
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: "Failed to read swaps" });
+    res.status(500).json({ error: "Dienstruilen laden is mislukt." });
   }
 });
 
@@ -1589,7 +1589,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
     if (!Array.isArray(newData)) {
-      return res.status(400).json({ error: "Invalid data format. Expected an array." });
+      return res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
 
     const previousSwaps = await getSwapsData();
@@ -1774,7 +1774,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
 
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to save swaps", details: err.message });
+    res.status(500).json({ error: "Dienstruil opslaan is mislukt.", details: err.message });
   }
 });
 
@@ -1875,7 +1875,7 @@ app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     }
     res.json(data);
   } catch (err) {
-    res.status(500).json({ error: "Failed to read leave" });
+    res.status(500).json({ error: "Verlofaanvragen laden is mislukt." });
   }
 });
 
@@ -1883,7 +1883,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
     if (!Array.isArray(newData)) {
-      res.status(400).json({ error: "Invalid data format. Expected an array." });
+      res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
       return;
     }
 
@@ -2030,7 +2030,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
 
     res.json({ success: true });
   } catch (err: any) {
-    res.status(500).json({ error: "Failed to save leave", details: err.message });
+    res.status(500).json({ error: "Verlofaanvraag opslaan is mislukt.", details: err.message });
   }
 });
 

@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify } from '../lib/ui';
-import { PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
 import { verlofBalans, daysBetween } from '../lib/leaveBalance';
@@ -19,8 +19,18 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
 };
 const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
+  // (browser-popup met "vhb-five.vercel.app meldt…" schrikt chauffeurs af).
+  const [confirmAction, setConfirmAction] = useState<{
+    title: string;
+    message: string;
+    confirmText: string;
+    variant: 'danger' | 'warning';
+    run: () => void;
+  } | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
   const [viewMonth, setViewMonth] = useState(() => {
@@ -53,8 +63,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     .filter((r) => r.status === 'rejected' || r.status === 'cancelled' || (r.status === 'approved' && r.endDate < today))
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
-  const handleRequestLeave = (e: React.FormEvent) => {
+  const handleRequestLeave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!formData.startDate || !formData.endDate) {
       return;
     }
@@ -62,7 +73,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       notify('Je kan geen verlof aanvragen in het verleden.', 'error');
       return;
     }
-    onSave([...leaveRequests, { id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]);
+    // Pas sluiten/wissen ná een geslaagde save — bij een fout blijft de
+    // aanvraag ingevuld staan zodat de chauffeur niet opnieuw moet beginnen.
+    setIsSubmitting(true);
+    const ok = await Promise.resolve(
+      onSave([...leaveRequests, { id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]),
+    ).finally(() => setIsSubmitting(false));
+    if (ok === false) return;
     setShowRequestModal(false);
     setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
   };
@@ -184,26 +201,36 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
   const handleBulkReject = () => {
     if (selectedPendingIds.size === 0) return;
-    if (!window.confirm(`${selectedPendingIds.size} aanvragen weigeren? Dit kan niet ongedaan gemaakt worden.`)) return;
-    bulkDecide('rejected');
-    setSelectedPendingIds(new Set());
+    setConfirmAction({
+      title: 'Aanvragen weigeren',
+      message: `${selectedPendingIds.size} aanvragen weigeren? Dit kan niet ongedaan gemaakt worden.`,
+      confirmText: 'Weigeren',
+      variant: 'danger',
+      run: () => { bulkDecide('rejected'); setSelectedPendingIds(new Set()); },
+    });
   };
 
   const handleCancel = (requestId: string) => {
     const target = leaveRequests.find((r) => r.id === requestId);
     if (!target) return;
     const cancelledByOther = target.userId !== user.id;
-    const message = cancelledByOther
-      ? 'Deze goedgekeurde verlofaanvraag annuleren? De aanvrager ziet dit terug onder zijn historiek.'
-      : 'Eigen verlofaanvraag annuleren?';
-    if (!window.confirm(message)) return;
-    if (onDecide) {
-      void onDecide(requestId, 'cancelled');
-      return;
-    }
-    const update: Partial<LeaveRequest> = { status: 'cancelled' };
-    if (cancelledByOther) update.decidedAt = new Date().toISOString();
-    onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, ...update } : r)));
+    setConfirmAction({
+      title: 'Verlof annuleren',
+      message: cancelledByOther
+        ? 'Deze goedgekeurde verlofaanvraag annuleren? De aanvrager ziet dit terug onder zijn historiek.'
+        : 'Eigen verlofaanvraag annuleren?',
+      confirmText: 'Annuleren',
+      variant: 'danger',
+      run: () => {
+        if (onDecide) {
+          void onDecide(requestId, 'cancelled');
+          return;
+        }
+        const update: Partial<LeaveRequest> = { status: 'cancelled' };
+        if (cancelledByOther) update.decidedAt = new Date().toISOString();
+        void onSave(leaveRequests.map((r) => (r.id === requestId ? { ...r, ...update } : r)));
+      },
+    });
   };
 
   // Eigen nog-niet-besliste aanvraag intrekken (vergissing rechtzetten).
@@ -213,9 +240,18 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const handleWithdraw = (requestId: string) => {
     const target = leaveRequests.find((r) => r.id === requestId);
     if (!target || target.status !== 'pending') return;
-    if (!window.confirm('Deze openstaande aanvraag intrekken? Ze wordt volledig verwijderd.')) return;
-    onSave(leaveRequests.filter((r) => r.id !== requestId));
-    notify('Aanvraag ingetrokken.', 'success');
+    setConfirmAction({
+      title: 'Aanvraag intrekken',
+      message: 'Deze openstaande aanvraag intrekken? Ze wordt volledig verwijderd.',
+      confirmText: 'Intrekken',
+      variant: 'danger',
+      run: () => {
+        void (async () => {
+          const ok = await Promise.resolve(onSave(leaveRequests.filter((r) => r.id !== requestId)));
+          if (ok !== false) notify('Aanvraag ingetrokken.', 'success');
+        })();
+      },
+    });
   };
 
   const initialLastSeen = useRef(lastSeenDecisionAt ?? null).current;
@@ -617,7 +653,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </div>
                 )}
 
-                <button type="submit" disabled={!formData.startDate || !formData.endDate} className="btn-primary ios-pressable w-full py-4">Aanvraag Indienen</button>
+                <button type="submit" disabled={!formData.startDate || !formData.endDate || isSubmitting} className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed">{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</button>
               </form>
             </motion.div>
           </div>
@@ -754,6 +790,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         entityType="leave"
         entityId={historyLeave?.id ?? ''}
         title={historyLeave ? `${users.find((u) => u.id === historyLeave.userId)?.name || 'Onbekend'} — ${historyLeave.startDate} t/m ${historyLeave.endDate}` : undefined}
+      />
+
+      <ConfirmationModal
+        isOpen={!!confirmAction}
+        onClose={() => setConfirmAction(null)}
+        onConfirm={() => { confirmAction?.run(); setConfirmAction(null); }}
+        title={confirmAction?.title ?? ''}
+        message={confirmAction?.message ?? ''}
+        confirmText={confirmAction?.confirmText ?? 'Bevestigen'}
+        variant={confirmAction?.variant ?? 'warning'}
       />
     </PageShell>
   );

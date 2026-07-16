@@ -25,6 +25,7 @@ export function BottomNav({
   onSelect,
   unseenLeaveCount = 0,
   onMore,
+  moreDot = false,
   hidden = false,
 }: {
   currentView: View;
@@ -33,6 +34,9 @@ export function BottomNav({
   /** Opent het "Meer"-menu (de volledige sidebar-sheet) op de telefoon,
    *  zodat de bottom-nav het enige nav-systeem is (geen aparte hamburger). */
   onMore?: () => void;
+  /** Attentie-dot op de "Meer"-tab: er wacht iets in een view achter het
+   *  menu (bv. een aan jou gerichte dienstruil). */
+  moreDot?: boolean;
   /** Verberg de balk wanneer er bv. een sidebar/sheet open is, zodat
    *  hij niet onder de overlay door piept. */
   hidden?: boolean;
@@ -104,6 +108,9 @@ export function BottomNav({
             >
               <span className="relative z-10"><Menu size={20} /></span>
               <span className="relative z-10 text-[9px] font-semibold tracking-tight leading-tight truncate max-w-full px-1">Meer</span>
+              {moreDot && (
+                <span className="absolute top-1 right-3 z-10 h-2 w-2 rounded-full bg-oker-500" aria-label="Nieuwe melding in het menu" />
+              )}
             </button>
           </li>
         )}
