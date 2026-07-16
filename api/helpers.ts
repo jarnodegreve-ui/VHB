@@ -29,7 +29,7 @@ export const toPublicUser = (user: any): AppUser => ({
   section: (user.section ?? undefined) || undefined,
 });
 
-export const toRoleScopedUser = (user: AppUser, role: Role): AppUser => {
+export const toRoleScopedUser = (user: AppUser, role: Role, viewerId?: string): AppUser => {
   if (role === "admin") {
     return user;
   }
@@ -42,13 +42,18 @@ export const toRoleScopedUser = (user: AppUser, role: Role): AppUser => {
     };
   }
 
+  // Chauffeurs: contactgegevens van collega's die zich uit de contactlijst
+  // hebben laten halen (showInContacts=false) NIET meesturen — het filteren
+  // gebeurde eerst enkel client-side, waardoor phone/email alsnog in de
+  // API-respons zaten. Eigen gegevens blijven altijd zichtbaar.
+  const hideContact = user.showInContacts === false && String(user.id) !== String(viewerId ?? "");
   return {
     id: user.id,
     name: user.name,
     role: user.role,
     employeeId: "",
-    phone: user.phone,
-    email: user.email,
+    phone: hideContact ? undefined : user.phone,
+    email: hideContact ? undefined : user.email,
     showInContacts: user.showInContacts,
     section: user.section,
   };

@@ -1059,7 +1059,7 @@ app.post("/api/planning-codes", authenticate, requireRole("planner", "admin"), a
 app.get("/api/users", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const users = await getUsersData();
-    res.json(users.map((user) => toRoleScopedUser(user, req.appUser!.role)));
+    res.json(users.map((user) => toRoleScopedUser(user, req.appUser!.role, req.appUser!.id)));
   } catch (err) {
     console.error("Error reading users data:", err);
     res.status(500).json({ error: "Failed to read data" });
