@@ -18,7 +18,7 @@
 // onder asset-URLs bevatten (cache-first = blijvend kapot); bump ruimt op.
 // v8: logo-SVG's gewijzigd (tagline 'SINDS 1922' verwijderd) — bump zodat
 // cache-first de nieuwe logo's serveert i.p.v. de oude gecachte.
-const CACHE_NAME = 'vhb-portaal-v9';
+const CACHE_NAME = 'vhb-portaal-v10';
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
