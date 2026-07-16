@@ -56,7 +56,9 @@ export function BottomNav({
     <nav
       className={cn(
         'md:hidden fixed bottom-3 left-3 right-3 z-40 rounded-2xl px-2 py-2 transition-all duration-300',
-        'bg-white/90 border border-slate-200/80 backdrop-blur-xl shadow-[0_8px_28px_rgba(13,13,15,0.12)]',
+        // Near-opaque zonder backdrop-blur: een fixed balk met blur hersampelt
+        // de scrollende content elke frame (jank op oudere toestellen).
+        'bg-white/95 border border-slate-200/80 shadow-[0_8px_28px_rgba(13,13,15,0.12)]',
         hidden && 'pointer-events-none opacity-0 translate-y-4',
       )}
       aria-hidden={hidden || undefined}

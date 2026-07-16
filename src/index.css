@@ -178,9 +178,9 @@ html.dark {
    * een fijne slate-rand en twee zachte schaduwlagen. Blur alleen waar
    * content er echt onderdoor schuift (topbar, modals). */
   .panel {
-    background: rgba(255, 255, 255, 0.94);
-    backdrop-filter: blur(12px) saturate(140%);
-    -webkit-backdrop-filter: blur(12px) saturate(140%);
+    /* Geen backdrop-filter meer: near-opaque volstaat visueel en een
+     * blur-laag hersampelt zijn achtergrond bij elke frame (Windows-jank). */
+    background: rgba(255, 255, 255, 0.97);
     border: 1px solid rgba(228, 230, 232, 0.85);
     box-shadow:
       0 1px 2px rgba(13, 13, 15, 0.04),
@@ -349,9 +349,10 @@ html.dark {
     background:
       radial-gradient(ellipse 700px 500px at 15% 18%, rgba(154, 161, 169, 0.07) 0%, transparent 55%),
       radial-gradient(ellipse 600px 400px at 85% 70%, rgba(154, 161, 169, 0.04) 0%, transparent 55%);
-    transform: translate3d(0, calc(var(--scroll-y, 0px) * 0.18), 0);
-    will-change: transform;
-    filter: blur(1px);
+    /* Statisch (geen parallax/blur meer): de bewegende, geblurde full-screen
+     * laag was de grootste scroll-kost op Windows — elke frame een transform
+     * op een blur-laag + hersamplen door de chrome erboven. De zachte
+     * radial-gradients zelf blijven; het verschil is stilstand, geen look. */
   }
 
   /* Brand bus sway — voor empty state mascotte. Levendiger nu: dubbele
@@ -632,11 +633,10 @@ html.dark {
 }
 
 .dark .parallax-bg {
-  /* Pure oker-vignet, geen indigo of pink meer. */
+  /* Pure oker-vignet, geen indigo of pink meer. Statisch, zonder filter. */
   background:
     radial-gradient(ellipse 700px 500px at 15% 18%, rgba(232, 163, 61, 0.10) 0%, transparent 55%),
     radial-gradient(ellipse 600px 400px at 85% 70%, rgba(201, 133, 31, 0.07) 0%, transparent 55%);
-  filter: blur(1px) saturate(120%);
 }
 
 .dark body {
@@ -1037,18 +1037,10 @@ html.dark {
 }
 
 /* === Mobile perf: lichtere backdrop-filter ===
-   Op desktop willen we de volle iOS-glass-look met blur 30–44px.
-   Op mid-range Android (Snapdragon 600-serie) is dat GPU-belastend:
-   met 6+ kaarten in beeld zakt FPS naar 30. We halveren de blur op
-   mobile, behoud van de glass-look maar veel minder filter-werk.
-   Saturate verlagen we ook iets — anders ziet de lichtere blur er
-   te flets uit. */
+   Alleen nog voor de (kortstondige) modal-overlay. .panel en .topbar zijn
+   bewust near-opaque ZONDER backdrop-filter (Windows/Android-scroll-perf) —
+   deze mobile-override voegde de blur er stiekem weer aan toe. */
 @media (max-width: 767px) {
-  .panel,
-  .topbar {
-    backdrop-filter: blur(10px) saturate(140%);
-    -webkit-backdrop-filter: blur(10px) saturate(140%);
-  }
   .glass-modal {
     backdrop-filter: blur(14px) saturate(150%);
     -webkit-backdrop-filter: blur(14px) saturate(150%);
