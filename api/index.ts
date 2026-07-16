@@ -4,7 +4,6 @@ import fs from "fs";
 import path from "path";
 import crypto from "node:crypto";
 import dotenv from "dotenv";
-import nodemailer from "nodemailer";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { computeDayGap, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
@@ -2242,71 +2241,39 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
 
   console.log(`Attempting to send urgent email for: ${update.title} to ${emails.length} recipients`);
 
-  // SMTP Configuration from environment variables
-  const smtpConfig = {
-    host: process.env.SMTP_HOST || 'smtp.example.com',
-    port: parseInt(process.env.SMTP_PORT || '587'),
-    secure: process.env.SMTP_SECURE === 'true',
-    auth: {
-      user: process.env.SMTP_USER,
-      pass: process.env.SMTP_PASS,
-    },
-  };
-
-  const hasSmtp = process.env.SMTP_USER && process.env.SMTP_PASS;
-
-  if (!hasSmtp) {
-    console.warn("SMTP credentials missing. Logging email content instead of sending.");
-    console.log("--- URGENT EMAIL CONTENT ---");
-    console.log("To:", emails.join(", "));
-    console.log("Subject: DRINGENDE UPDATE: " + update.title);
-    console.log("Body:", update.content);
-    console.log("----------------------------");
-    return res.json({ 
-      success: true, 
-      message: "Email gelogd (geen SMTP geconfigureerd)", 
-      mocked: true,
-      content: {
-        to: emails,
-        subject: "DRINGENDE UPDATE: " + update.title,
-        body: update.content
-      }
-    });
-  }
-
-  try {
-    const transporter = nodemailer.createTransport(smtpConfig);
-    
-    await transporter.sendMail({
-      from: `"VHB Portaal" <${process.env.SMTP_FROM || smtpConfig.auth.user}>`,
-      to: emails.join(", "),
-      subject: `DRINGENDE UPDATE: ${update.title}`,
-      text: `${update.content}\n\nBekijk de volledige update in het VHB Portaal.`,
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
-          <div style="background-color: #f59e0b; color: white; padding: 20px; text-align: center;">
-            <h1 style="margin: 0; font-size: 24px;">DRINGENDE UPDATE</h1>
-          </div>
-          <div style="padding: 30px;">
-            <h2 style="color: #1e293b; margin-top: 0;">${escapeHtml(update.title)}</h2>
-            <p style="color: #475569; line-height: 1.6;">${escapeHtml(update.content)}</p>
-            <div style="margin-top: 30px; text-align: center;">
-              <a href="${process.env.APP_URL || '#'}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Open VHB Portaal</a>
-            </div>
-          </div>
-          <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
-            Dit is een automatisch bericht van het VHB Portaal.
+  // Via de gedeelde sendEmail-helper (api/email.ts): één SMTP-configuratie
+  // en één mock-pad i.p.v. een eigen transporter per route.
+  const result = await sendEmail({
+    to: emails,
+    context: "urgent-update",
+    subject: `DRINGENDE UPDATE: ${update.title}`,
+    text: `${update.content}\n\nBekijk de volledige update in het VHB Portaal.`,
+    html: `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+        <div style="background-color: #f59e0b; color: white; padding: 20px; text-align: center;">
+          <h1 style="margin: 0; font-size: 24px;">DRINGENDE UPDATE</h1>
+        </div>
+        <div style="padding: 30px;">
+          <h2 style="color: #1e293b; margin-top: 0;">${escapeHtml(update.title)}</h2>
+          <p style="color: #475569; line-height: 1.6;">${escapeHtml(update.content)}</p>
+          <div style="margin-top: 30px; text-align: center;">
+            <a href="${process.env.APP_URL || '#'}" style="background-color: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold;">Open VHB Portaal</a>
           </div>
         </div>
-      `,
-    });
+        <div style="background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #94a3b8;">
+          Dit is een automatisch bericht van het VHB Portaal.
+        </div>
+      </div>
+    `,
+  });
 
-    res.json({ success: true, message: "Emails succesvol verzonden" });
-  } catch (error: any) {
-    console.error("Error sending email:", error);
-    console.error("Fout bij verzenden email", error);
-    res.status(500).json({ error: "Fout bij verzenden email" });
+  if (result.mocked) {
+    return res.json({ success: true, message: "Email gelogd (geen SMTP geconfigureerd)", mocked: true });
   }
+  if (!result.ok) {
+    return res.status(500).json({ error: "Fout bij verzenden email" });
+  }
+  res.json({ success: true, message: "Emails succesvol verzonden" });
 });
 
 // --- Ritblaadjes ---
