@@ -28,6 +28,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
   const [selectedShift, setSelectedShift] = useState<string>('');
   const [selectedTargetDriver, setSelectedTargetDriver] = useState<string>('');
   const [reason, setReason] = useState('');
+  // Wizard i.p.v. 3 afhankelijke dropdowns: één vraag per stap, tikbare
+  // kaarten, en een samenvatting vóór het indienen (UX-review: dit was de
+  // moeilijkste flow — keuze-overload met tot 56 opties in één select).
+  const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
+  const [showBusyColleagues, setShowBusyColleagues] = useState(false);
+  const [showAllReturns, setShowAllReturns] = useState(false);
+  // Eigen rooster over dezelfde 8 weken: nodig om tegenprestatie-opties op
+  // dagen waarop de aanvrager zélf al rijdt te blokkeren (conflict).
+  const [ownDutyByDate, setOwnDutyByDate] = useState<Record<string, string>>({});
   const [historySwap, setHistorySwap] = useState<SwapRequest | null>(null);
   // Beoordeling in een side panel: alle ruil-context + beslis-acties
   // zonder paginawissel (zelfde patroon als LeaveManagementView).
@@ -76,27 +85,40 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
       .then((res) => {
         if (cancelled) return;
         const opts: ReturnOption[] = [];
+        const own: Record<string, string> = {};
         for (const day of res.days) {
           const dienst = day.lines?.[selectedTargetDriver];
           if (dienst) opts.push({ date: day.date, code: dienst, isFree: false });
           else if (day.free?.includes(selectedTargetDriver)) opts.push({ date: day.date, code: 'vrij', isFree: true });
+          // Eigen dienst op die dag (voor de conflict-check in stap 3).
+          const ownDuty = day.lines?.[user.id];
+          if (ownDuty) own[day.date] = ownDuty;
         }
         opts.sort((a, b) => a.date.localeCompare(b.date));
         setReturnOptions(opts);
+        setOwnDutyByDate(own);
       })
-      .catch(() => { if (!cancelled) setReturnOptions([]); })
+      .catch(() => { if (!cancelled) { setReturnOptions([]); setOwnDutyByDate({}); } })
       .finally(() => { if (!cancelled) setReturnLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedTargetDriver]);
+  }, [selectedTargetDriver, user.id]);
 
   const isPlanner = user.role === 'planner' || user.role === 'admin';
   const isAdmin = user.role === 'admin';
-  const myShifts = shifts.filter(s => s.driverId === user.id);
+  const todayIso = isoDate(new Date());
+  // Alleen kómende eigen diensten, chronologisch — verleden diensten ruilen
+  // heeft geen zin en vulde de keuzelijst nodeloos.
+  const myShifts = shifts
+    .filter(s => s.driverId === user.id && s.date >= todayIso)
+    .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime).localeCompare(String(b.startTime)));
   const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
   const fmtShort = (iso: string) => {
     try { return new Date(`${iso}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: '2-digit' }); }
     catch { return iso; }
   };
+  // Tikbare wizard-kaart (stap 1/2/3): geselecteerd = oker-accent.
+  const cnCard = (selected: boolean) =>
+    `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-slate-200 bg-white hover:bg-slate-50'}`;
   // "krijgt: dienst 4101 (vr 10/07)" of "krijgt: vrij (vr 10/07)"
   const returnLabel = (swap: SwapRequest) => {
     if (!swap.returnCode || !swap.returnDate) return null;
@@ -237,7 +259,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
         title="Dienstruil"
         actions={(
           <button
-            onClick={() => setShowOfferModal(true)}
+            onClick={() => {
+              // Verse wizard bij elk openen — geen halve vorige aanvraag.
+              setWizardStep(1);
+              setSelectedShift('');
+              setSelectedTargetDriver('');
+              setReturnPick('');
+              setReason('');
+              setShowBusyColleagues(false);
+              setShowAllReturns(false);
+              setShowOfferModal(true);
+            }}
             className="btn-primary ios-pressable px-6 py-3 text-sm"
           >
             Dienstruil aanvragen
@@ -504,113 +536,196 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
         {showOfferModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
-              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0">
-                <h4 className="text-xl font-bold tracking-tight">Dienstruil aanvragen</h4>
-                <button onClick={() => setShowOfferModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button>
+              <div className="px-6 py-5 md:px-8 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  {wizardStep > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setWizardStep((s) => (s === 3 ? 2 : 1))}
+                      aria-label="Vorige stap"
+                      className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                    >
+                      <ChevronRight size={18} className="rotate-180" />
+                    </button>
+                  )}
+                  <div className="min-w-0">
+                    <h4 className="text-lg font-bold tracking-tight truncate">
+                      {wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Wat neem jij in ruil?'}
+                    </h4>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Stap {wizardStep} van 3</p>
+                  </div>
+                </div>
+                <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl shrink-0"><X size={22} /></button>
               </div>
-              <form onSubmit={handleOfferShift} className="p-8 space-y-6 overflow-y-auto flex-1">
-                {myShifts.length === 0 && (
-                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-                    Je hebt geen diensten op je naam staan om aan te bieden. {isPlanner ? 'Je kan in de Debug-pagina een fictieve test-dienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
-                  </div>
+              <form onSubmit={handleOfferShift} className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
+                {/* ── Stap 1: kies je eigen (komende) dienst ── */}
+                {wizardStep === 1 && (
+                  myShifts.length === 0 ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
+                      Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Je kan in de Debug-pagina een fictieve test-dienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {myShifts.map((s) => (
+                        <button
+                          key={s.id}
+                          type="button"
+                          onClick={() => { setSelectedShift(s.id); setSelectedTargetDriver(''); setReturnPick(''); setWizardStep(2); }}
+                          className={cnCard(selectedShift === s.id)}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(s.date)}</span>
+                            <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {getServiceNumber(s)} · {s.startTime} – {s.endTime}</span>
+                          </span>
+                          <ChevronRight size={16} className="shrink-0 text-slate-300" />
+                        </button>
+                      ))}
+                    </div>
+                  )
                 )}
-                <div className="space-y-2">
-                  <MicroLabel className="ml-1">Selecteer Dienst</MicroLabel>
-                  <select
-                    value={selectedShift}
-                    onChange={(e) => setSelectedShift(e.target.value)}
-                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                    required
-                    disabled={myShifts.length === 0}
-                  >
-                    <option value="">Kies een dienst...</option>
-                    {myShifts.map(s => (
-                      <option key={s.id} value={s.id}>Dienst {getServiceNumber(s)} — {s.date} ({s.startTime} - {s.endTime})</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between ml-1">
-                    <MicroLabel>Aan welke collega?</MicroLabel>
-                    {selectedShiftDate && (
-                      <span className="text-[10px] font-medium text-slate-400">
-                        {matchLoading
-                          ? 'Beschikbaarheid laden…'
-                          : freeCount !== null
-                            ? `${freeCount} vrij op ${formatDateHuman(selectedShiftDate)}`
-                            : ''}
-                      </span>
+
+                {/* ── Stap 2: kies de collega (vrije eerst) ── */}
+                {wizardStep === 2 && (
+                  <>
+                    <p className="text-xs font-medium text-slate-500">
+                      Jouw dienst: <span className="font-bold text-slate-800">Dienst {getServiceNumber(shifts.find((s) => s.id === selectedShift))}</span>
+                      {selectedShiftDate && <span className="capitalize"> · {formatDateHuman(selectedShiftDate)}</span>}
+                    </p>
+                    {matchLoading ? (
+                      <p className="text-sm font-medium text-slate-400 py-6 text-center">Beschikbaarheid laden…</p>
+                    ) : (
+                      <>
+                        <div className="space-y-2">
+                          {eligibleTargetDrivers
+                            .filter((u) => showBusyColleagues || !freeForDate || freeForDate.has(u.id))
+                            .map((u) => {
+                              const free = freeForDate?.has(u.id);
+                              return (
+                                <button
+                                  key={u.id}
+                                  type="button"
+                                  onClick={() => { setSelectedTargetDriver(u.id); setReturnPick(''); setShowAllReturns(false); setWizardStep(3); }}
+                                  className={cnCard(selectedTargetDriver === u.id)}
+                                >
+                                  <span className="text-sm font-bold text-slate-800 truncate">{u.name}</span>
+                                  <span className="shrink-0 inline-flex items-center gap-2">
+                                    {freeForDate && (
+                                      free
+                                        ? <Badge tone="emerald" dot>vrij</Badge>
+                                        : <Badge tone="slate">bezet</Badge>
+                                    )}
+                                    <ChevronRight size={16} className="text-slate-300" />
+                                  </span>
+                                </button>
+                              );
+                            })}
+                        </div>
+                        {freeForDate && !showBusyColleagues && eligibleTargetDrivers.some((u) => !freeForDate.has(u.id)) && (
+                          <button type="button" onClick={() => setShowBusyColleagues(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-2">
+                            Toon ook bezette collega's ({eligibleTargetDrivers.filter((u) => !freeForDate.has(u.id)).length})
+                          </button>
+                        )}
+                        {freeForDate && freeCount === 0 && !showBusyColleagues && (
+                          <p className="text-xs font-medium text-slate-400 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
+                        )}
+                        <p className="text-[10px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}.</p>
+                      </>
                     )}
-                  </div>
-                  <select
-                    value={selectedTargetDriver}
-                    onChange={(e) => setSelectedTargetDriver(e.target.value)}
-                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                    required
-                    disabled={eligibleTargetDrivers.length === 0}
-                  >
-                    <option value="">Kies een collega...</option>
-                    {eligibleTargetDrivers.map((u) => {
-                      const free = freeForDate?.has(u.id);
-                      return (
-                        <option key={u.id} value={u.id}>
-                          {u.name}{free ? ' · vrij' : freeForDate ? ' · bezet' : ''}
-                        </option>
-                      );
-                    })}
-                  </select>
-                  {freeForDate && (
-                    <p className="text-[10px] font-medium text-slate-400 ml-1">
-                      "Vrij" = geen dienst en geen verlof op die dag. Bezette collega's blijven kiesbaar.
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <MicroLabel className="ml-1">Wat neem jij in ruil?</MicroLabel>
-                  <select
-                    value={returnPick}
-                    onChange={(e) => setReturnPick(e.target.value)}
-                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none disabled:opacity-50 disabled:cursor-not-allowed"
-                    required
-                    disabled={!selectedTargetDriver || returnLoading || !returnOptions || returnOptions.length === 0}
-                  >
-                    <option value="">
-                      {!selectedTargetDriver
-                        ? 'Kies eerst een collega…'
-                        : returnLoading
-                          ? 'Diensten laden…'
-                          : returnOptions && returnOptions.length === 0
-                            ? 'Geen diensten/vrije dagen gevonden'
-                            : 'Kies een dienst of vrije dag…'}
-                    </option>
-                    {(returnOptions ?? []).map((o) => (
-                      <option key={`${o.date}|${o.code}`} value={`${o.date}|${o.code}`}>
-                        {fmtShort(o.date)} · {o.isFree ? 'vrij' : `dienst ${o.code}`}
-                      </option>
-                    ))}
-                  </select>
-                  {selectedTargetDriver && (
-                    <p className="text-[10px] font-medium text-slate-400 ml-1">
-                      Jij neemt deze dienst/vrije dag over; de collega neemt jouw aangeboden dienst. (komende 8 weken)
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <MicroLabel className="ml-1">Info (optioneel)</MicroLabel>
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    className="control-input w-full px-4 py-3 rounded-2xl font-bold text-sm outline-none h-14 resize-none"
-                    placeholder="Waarom wil je ruilen?"
-                  />
-                </div>
-                <button
-                  type="submit"
-                  disabled={!selectedShift || !selectedTargetDriver || !returnPick || isSubmitting}
-                  className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {isSubmitting ? 'Versturen…' : 'Dienstruil indienen'}
-                </button>
+                  </>
+                )}
+
+                {/* ── Stap 3: tegenprestatie + samenvatting + indienen ── */}
+                {wizardStep === 3 && (() => {
+                  const target = users.find((u) => u.id === selectedTargetDriver);
+                  const offered = shifts.find((s) => s.id === selectedShift);
+                  // Conflict-check: dagen waarop je zélf al rijdt kan je niet
+                  // overnemen — behalve de dag van je aangeboden dienst (die
+                  // geef je net weg, dus dan ben je vrij).
+                  const enriched = (returnOptions ?? []).map((o) => ({
+                    ...o,
+                    ownDuty: o.date === selectedShiftDate ? undefined : ownDutyByDate[o.date],
+                  }));
+                  const pickable = enriched.filter((o) => !o.ownDuty);
+                  const conflicted = enriched.filter((o) => !!o.ownDuty);
+                  const visiblePickable = showAllReturns ? pickable : pickable.slice(0, 8);
+                  const pick = returnPick ? { date: returnPick.slice(0, returnPick.indexOf('|')), code: returnPick.slice(returnPick.indexOf('|') + 1) } : null;
+                  return (
+                    <>
+                      <p className="text-xs font-medium text-slate-500">
+                        Jij geeft <span className="font-bold text-slate-800">dienst {getServiceNumber(offered)}</span>
+                        {selectedShiftDate && <span> ({fmtShort(selectedShiftDate)})</span>} aan <span className="font-bold text-slate-800">{target?.name ?? '—'}</span>. Wat neem je van {target?.name?.split(' ')[0] ?? 'de collega'} over?
+                      </p>
+                      {returnLoading ? (
+                        <p className="text-sm font-medium text-slate-400 py-6 text-center">Diensten laden…</p>
+                      ) : pickable.length === 0 && conflicted.length === 0 ? (
+                        <p className="text-sm font-medium text-slate-400 py-4 text-center">Geen diensten of vrije dagen van {target?.name ?? 'deze collega'} gevonden in de komende 8 weken.</p>
+                      ) : (
+                        <>
+                          <div className="space-y-2">
+                            {visiblePickable.map((o) => {
+                              const val = `${o.date}|${o.code}`;
+                              const selected = returnPick === val;
+                              return (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => setReturnPick(selected ? '' : val)}
+                                  className={cnCard(selected)}
+                                >
+                                  <span className="min-w-0">
+                                    <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(o.date)}</span>
+                                    <span className="block text-xs font-medium text-slate-500">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`}</span>
+                                  </span>
+                                  {selected ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          {!showAllReturns && (pickable.length > 8 || conflicted.length > 0) && (
+                            <button type="button" onClick={() => setShowAllReturns(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-2">
+                              Meer tonen{pickable.length > 8 ? ` (${pickable.length - 8} extra)` : ''}
+                            </button>
+                          )}
+                          {showAllReturns && conflicted.length > 0 && (
+                            <div className="space-y-2">
+                              <MicroLabel className="text-slate-400">Niet mogelijk — jij rijdt die dag al</MicroLabel>
+                              {conflicted.map((o) => (
+                                <div key={`${o.date}|${o.code}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 opacity-60">
+                                  <span className="min-w-0">
+                                    <span className="block text-sm font-semibold text-slate-500 capitalize">{formatDateHuman(o.date)}</span>
+                                    <span className="block text-xs font-medium text-slate-400">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`} — jij rijdt al dienst {o.ownDuty}</span>
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                      <div className="space-y-2 pt-1">
+                        <MicroLabel className="ml-1">Info voor je collega (optioneel)</MicroLabel>
+                        <textarea
+                          value={reason}
+                          onChange={(e) => setReason(e.target.value)}
+                          className="control-input w-full px-4 py-3 rounded-2xl font-medium text-sm outline-none h-14 resize-none"
+                          placeholder="Waarom wil je ruilen?"
+                        />
+                      </div>
+                      {pick && (
+                        <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
+                          Jij geeft <strong>dienst {getServiceNumber(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
+                        </div>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={!selectedShift || !selectedTargetDriver || !returnPick || isSubmitting}
+                        className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        {isSubmitting ? 'Versturen…' : 'Ruilverzoek versturen'}
+                      </button>
+                      <p className="text-[10px] font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
+                    </>
+                  );
+                })()}
               </form>
             </motion.div>
           </div>
