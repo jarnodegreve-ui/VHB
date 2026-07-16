@@ -111,7 +111,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         // ongeldige cache — negeer
       }
       if (!recovered) {
-        notify('Kon ritblaadje niet laden: ' + error.message, 'error');
+        notify('Kon ritblad niet laden: ' + error.message, 'error');
         setCurrent(null);
       }
     } finally {
@@ -167,7 +167,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         localStorage.setItem(SYNCED_AT_KEY, now);
         localStorage.setItem(META_CACHE_KEY, JSON.stringify(updated));
       } catch { /* localStorage geblokkeerd */ }
-      notify('Ritblaadje succesvol bijgewerkt.', 'success');
+      notify('Ritblad succesvol bijgewerkt.', 'success');
     } catch (error: any) {
       notify('Upload mislukt: ' + error.message, 'error');
     } finally {
@@ -190,7 +190,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         localStorage.removeItem(META_CACHE_KEY);
         localStorage.removeItem(SYNCED_AT_KEY);
       } catch { /* localStorage geblokkeerd */ }
-      notify('Ritblaadje verwijderd.', 'success');
+      notify('Ritblad verwijderd.', 'success');
     } catch (error: any) {
       notify('Verwijderen mislukt: ' + error.message, 'error');
     }
@@ -199,7 +199,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   return (
     <PageShell width="5xl">
       <PageHeader
-        title="Ritblaadjes"
+        title="Ritbladen"
         description="De actuele rit-informatie voor alle chauffeurs. Admins vervangen de PDF wanneer de dienstregeling wijzigt."
         actions={canEdit ? (
           <>
@@ -227,14 +227,14 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         <div className="surface-card p-8 rounded-3xl flex items-center justify-center min-h-[200px]">
           <div className="flex items-center gap-3 text-slate-500">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
-            <span className="text-sm font-medium">Ritblaadje laden...</span>
+            <span className="text-sm font-medium">Ritblad laden...</span>
           </div>
         </div>
       ) : !current ? (
         <EmptyState
           icon={<FileText size={28} />}
-          title="Nog geen ritblaadje beschikbaar"
-          message={canEdit ? 'Upload een PDF om te delen met alle chauffeurs.' : 'Zodra er een nieuw ritblaadje is, verschijnt het hier.'}
+          title="Nog geen ritblad beschikbaar"
+          message={canEdit ? 'Upload een PDF om te delen met alle chauffeurs.' : 'Zodra er een nieuw ritblad is, verschijnt het hier.'}
         />
       ) : (
         <div className="space-y-6">
@@ -246,7 +246,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <MicroLabel>Huidige ritblaadjes</MicroLabel>
+                    <MicroLabel>Huidige ritbladen</MicroLabel>
                     {fromCache && <Badge tone="amber" dot>Offline</Badge>}
                   </div>
                   <h4 className="mt-1 text-lg font-semibold text-slate-900 tracking-tight break-all">{current.filename}</h4>
@@ -277,8 +277,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                     variant="danger"
                     icon={<Trash2 size={16} />}
                     onClick={() => setConfirmDeleteOpen(true)}
-                    title="Verwijder ritblaadje"
-                    aria-label="Verwijder ritblaadje"
+                    title="Verwijder ritblad"
+                    aria-label="Verwijder ritblad"
                   >
                     <span className="hidden sm:inline">Verwijderen</span>
                   </Button>
@@ -290,7 +290,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
           <div className="surface-card rounded-3xl overflow-hidden">
             <iframe
               src={current.url}
-              title="Ritblaadje voorbeeld"
+              title="Ritblad-voorbeeld"
               className="w-full h-[70vh] min-h-[480px] bg-white"
             />
           </div>
@@ -305,8 +305,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         isOpen={confirmDeleteOpen}
         onClose={() => setConfirmDeleteOpen(false)}
         onConfirm={handleDelete}
-        title="Ritblaadje verwijderen"
-        message="Weet je zeker dat je het huidige ritblaadje wilt verwijderen? Chauffeurs zien daarna geen bestand meer tot een nieuwe PDF is geüpload."
+        title="Ritblad verwijderen"
+        message="Weet je zeker dat je het huidige ritblad wilt verwijderen? Chauffeurs zien daarna geen bestand meer tot een nieuwe PDF is geüpload."
       />
     </PageShell>
   );

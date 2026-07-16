@@ -112,9 +112,9 @@ export function CommandPalette({
       },
       {
         id: 'goto-ritblaadjes',
-        label: 'Ritblaadjes',
+        label: 'Ritbladen',
         icon: <FileText size={16} />,
-        keywords: 'rit blaadjes pdf',
+        keywords: 'rit bladen blaadjes ritblaadjes pdf',
         action: () => onNavigate('ritblaadjes'),
       },
       // === Planner/admin only ===
