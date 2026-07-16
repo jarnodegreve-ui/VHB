@@ -33,6 +33,7 @@ export function DashboardView({
   canPreview = false,
   previewActive = false,
   onTogglePreview,
+  onChangePassword,
 }: {
   user: User;
   shifts: Shift[];
@@ -45,8 +46,28 @@ export function DashboardView({
   canPreview?: boolean;
   previewActive?: boolean;
   onTogglePreview?: () => void;
+  /** Opent de wachtwoord-wijzigen-modal (voor de eenmalige welkomstkaart). */
+  onChangePassword?: () => void;
 }) {
   const [now, setNow] = useState(new Date());
+  // Eenmalige welkomstkaart bij de allereerste keer op het dashboard: nieuwe
+  // chauffeurs krijgen een tijdelijk wachtwoord van de beheerder en hadden
+  // verder geen enkele uitleg. Weggeklikt = weggeklikt (localStorage).
+  const [showWelcome, setShowWelcome] = useState<boolean>(() => {
+    try {
+      return !window.localStorage.getItem(`vhb-welkom-gezien-${user.id}`);
+    } catch {
+      return false;
+    }
+  });
+  const dismissWelcome = () => {
+    setShowWelcome(false);
+    try {
+      window.localStorage.setItem(`vhb-welkom-gezien-${user.id}`, new Date().toISOString());
+    } catch {
+      // localStorage geblokkeerd — kaart komt dan gewoon nog eens terug.
+    }
+  };
   // Detailvenster voor een omleiding — opent als side panel, geen paginawissel.
   const [openDiversion, setOpenDiversion] = useState<Diversion | null>(null);
 
@@ -189,6 +210,36 @@ export function DashboardView({
           >
             <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${previewActive ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
           </button>
+        </div>
+      )}
+      {/* === Eenmalige welkomstkaart (eerste bezoek) === */}
+      {showWelcome && (
+        <div className="rounded-2xl border border-oker-200/70 bg-oker-50 p-5 space-y-3">
+          <div>
+            <h2 className="text-base font-bold tracking-tight text-slate-900">Welkom bij het VHB Portaal 👋</h2>
+            <p className="mt-1 text-sm font-medium text-slate-600 leading-relaxed">
+              Hier vind je je <strong>rooster</strong>, vraag je <strong>verlof</strong> aan, stel je een <strong>dienstruil</strong> voor aan een collega en lees je <strong>omleidingen en updates</strong>. Op je telefoon staan de belangrijkste knoppen onderaan.
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2">
+            {onChangePassword && (
+              <button
+                type="button"
+                onClick={() => { dismissWelcome(); onChangePassword(); }}
+                className="btn-primary ios-pressable px-4 py-2.5 text-sm min-h-11"
+              >
+                Kies eerst je eigen wachtwoord
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={dismissWelcome}
+              className="ios-pressable rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 min-h-11"
+            >
+              Aan de slag
+            </button>
+          </div>
+          <p className="text-[11px] font-medium text-slate-400">Kreeg je een tijdelijk wachtwoord van de planning? Kies dan nu meteen een eigen wachtwoord.</p>
         </div>
       )}
       {/* === Gepersonaliseerde begroeting === */}
