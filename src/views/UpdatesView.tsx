@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { ChevronRight, Clock, Info } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
-import { PageHeader, PageShell } from '../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge } from '../components/primitives';
 
 const CATEGORY_TONES: Record<string, 'amber' | 'blue' | 'slate'> = {
@@ -101,9 +101,12 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
           );
           })
         ) : (
-          <div className="lg:col-span-2 surface-card p-10 rounded-3xl text-center">
-            <Info size={48} className="mx-auto text-slate-200 mb-4" />
-            <p className="text-sm font-medium text-slate-400">Geen updates gevonden in deze categorie.</p>
+          <div className="lg:col-span-2">
+            <EmptyState
+              icon={<Info size={28} />}
+              title="Geen updates"
+              message="Geen updates gevonden in deze categorie."
+            />
           </div>
         )}
       </div>

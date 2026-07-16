@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, Info, Pause, Play, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
+import { History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { formatDateTimeHuman } from '../../lib/format';
@@ -31,6 +31,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [credentialsModal, setCredentialsModal] = useState<{ title: string; email: string; password: string } | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false);
+  // ⋯-overflowmenu per rij: zes losse knoppen naast elkaar was te druk
+  // (design-review); Bewerken blijft direct, de rest zit in het menu.
+  const [menuUserId, setMenuUserId] = useState<string | null>(null);
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
@@ -364,13 +367,43 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <Td className="tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="italic text-slate-400">Nooit</span>}</Td>
                   <Td className="text-center"><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-400')}>{u.activeSessions || 0}</span></Td>
                   <Td className="text-right">
-                    <div className="flex items-center justify-end gap-1.5 opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="sm" className="px-2" onClick={() => setViewingHistoryUser(u)} aria-label="Verlof- en dienstruil-historiek" title="Verlof- en dienstruil-historiek" icon={<Info size={16} />} />
-                      <Button variant="ghost" size="sm" className="px-2" onClick={() => setViewingChangeLogUser(u)} aria-label="Wijzigingsgeschiedenis (rol, naam, etc.)" title="Wijzigingsgeschiedenis (rol, naam, etc.)" icon={<History size={16} />} />
-                      <Button variant="ghost" size="sm" className="px-2" onClick={() => setConfirmResetUser(u)} aria-label="Stel nieuw tijdelijk wachtwoord in" title="Stel nieuw tijdelijk wachtwoord in" icon={<RotateCcw size={16} />} />
+                    <div className="relative flex items-center justify-end gap-1.5">
                       <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                      <Button variant="ghost" size="sm" className="px-2" onClick={() => quickToggleActive(u)} disabled={u.isActive !== false && isProtectedAdmin(u)} aria-label={u.isActive !== false ? 'Pauzeer gebruiker' : 'Activeer gebruiker'} title={u.isActive !== false ? 'Pauzeer gebruiker' : 'Activeer gebruiker'} icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />} />
-                      <Button variant="danger" size="sm" className="px-2" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} aria-label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} icon={<Trash2 size={16} />} />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="px-2"
+                        onClick={() => setMenuUserId(menuUserId === u.id ? null : u.id)}
+                        aria-label="Meer acties"
+                        aria-expanded={menuUserId === u.id}
+                        title="Meer acties"
+                        icon={<MoreHorizontal size={16} />}
+                      />
+                      {menuUserId === u.id && (
+                        <>
+                          {/* Klik-buiten sluit het menu. */}
+                          <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
+                          <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl text-left dark:border-white/10 dark:bg-[rgb(30,31,34)]">
+                            <RowMenuItem icon={<Info size={15} />} label="Verlof- & dienstruil-historiek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
+                            <RowMenuItem icon={<History size={15} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
+                            <RowMenuItem icon={<RotateCcw size={15} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
+                            <RowMenuItem
+                              icon={u.isActive !== false ? <Pause size={15} /> : <Play size={15} />}
+                              label={u.isActive !== false ? 'Pauzeer gebruiker' : 'Activeer gebruiker'}
+                              disabled={u.isActive !== false && isProtectedAdmin(u)}
+                              onClick={() => { setMenuUserId(null); void quickToggleActive(u); }}
+                            />
+                            <div className="my-1 border-t border-slate-100 dark:border-white/10" />
+                            <RowMenuItem
+                              icon={<Trash2 size={15} />}
+                              label="Verwijder gebruiker"
+                              tone="danger"
+                              disabled={isProtectedAdmin(u)}
+                              onClick={() => { setMenuUserId(null); setConfirmDeleteId(u.id); }}
+                            />
+                          </div>
+                        </>
+                      )}
                     </div>
                   </Td>
                 </tr>
@@ -521,5 +554,32 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         title={viewingChangeLogUser ? `${viewingChangeLogUser.name} (${viewingChangeLogUser.role})` : undefined}
       />
     </PageShell>
+  );
+}
+
+/** Menu-item voor het ⋯-overflowmenu per gebruikersrij. */
+function RowMenuItem({ icon, label, onClick, disabled = false, tone = 'default' }: {
+  icon: React.ReactNode;
+  label: string;
+  onClick: () => void;
+  disabled?: boolean;
+  tone?: 'default' | 'danger';
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={cn(
+        'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition-colors min-h-11',
+        tone === 'danger'
+          ? 'text-red-600 hover:bg-red-50'
+          : 'text-slate-700 hover:bg-slate-100/70 dark:text-slate-200 dark:hover:bg-white/5',
+        disabled && 'opacity-40 cursor-not-allowed hover:bg-transparent',
+      )}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="truncate">{label}</span>
+    </button>
   );
 }

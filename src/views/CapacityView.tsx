@@ -225,6 +225,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                bg-white/bg-slate-100/bg-oker-50 zijn alpha-kleuren, waardoor de
                scrollende cellen in dark mode door de vaste naamkolom/koprij
                heen schemerden. */
+            /* Alleen de arcering (geen eigen achtergrond) — voor cellen die al
+               een band-/vandaag-tint hebben, zoals de sectiekop-rij. */
+            .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100,116,139,0.09) 3px, rgba(100,116,139,0.09) 4px); }
+            .dark .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.05) 3px, rgba(255,255,255,0.05) 4px); }
             .dark th.mp-sticky { background-color: rgb(30, 31, 34) !important; }
             .dark td.mp-sticky { background-color: rgb(23, 24, 26) !important; }
             .dark td.mp-sticky-own { background-color: rgb(41, 35, 25) !important; }
@@ -266,12 +270,30 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     return (
                       <Fragment key={drv.id}>
                       {showHeader && (
-                        <tr className="bg-slate-100/90">
-                          <td colSpan={visibleDates.length + 1} className="p-0 border-y border-slate-300">
-                            <div className="sticky left-0 inline-flex items-center px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                        <tr>
+                          {/* Label alleen in de vaste eerste cel; de dag-cellen
+                              van de band behouden weekend-arcering en de
+                              vandaag-markering, zodat die verticale gidsen
+                              niet per sectie onderbroken worden. */}
+                          <td className="mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2 bg-slate-100/90">
+                            <div className="inline-flex items-center px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
                               {section}
                             </div>
                           </td>
+                          {visibleDates.map((iso) => {
+                            const h = dayHeader(iso);
+                            const today = iso === todayIso;
+                            return (
+                              <td
+                                key={iso}
+                                className={cn(
+                                  'p-0 border-y border-slate-300 bg-slate-100/80',
+                                  h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
+                                  today ? 'bg-oker-100/60' : h.weekend ? 'mp-hatch' : '',
+                                )}
+                              />
+                            );
+                          })}
                         </tr>
                       )}
                       <tr className={cn('group border-b border-slate-200', rowBg)}>
@@ -300,7 +322,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               className={cn(
                                 'p-0 text-center',
                                 h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
-                                today ? 'bg-oker-50/50' : h.weekend ? 'mp-weekend' : '',
+                                // oker-100/60 i.p.v. 50/50: blijft ook zichtbaar
+                                // in je eigen rij (die zelf al bg-oker-50 heeft).
+                                today ? 'bg-oker-100/60' : h.weekend ? 'mp-weekend' : '',
                               )}
                             >
                               {cell ? (

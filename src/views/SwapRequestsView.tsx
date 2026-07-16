@@ -34,6 +34,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
   const [wizardStep, setWizardStep] = useState<1 | 2 | 3>(1);
   const [showBusyColleagues, setShowBusyColleagues] = useState(false);
   const [showAllReturns, setShowAllReturns] = useState(false);
+  // Stap 1 toont eerst de komende ~2 weken; bij een volle 8-wekenplanning
+  // stonden er anders 30-40 kaarten in één modal.
+  const [showAllShifts, setShowAllShifts] = useState(false);
   // Eigen rooster over dezelfde 8 weken: nodig om tegenprestatie-opties op
   // dagen waarop de aanvrager zélf al rijdt te blokkeren (conflict).
   const [ownDutyByDate, setOwnDutyByDate] = useState<Record<string, string>>({});
@@ -269,6 +272,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
               setReason('');
               setShowBusyColleagues(false);
               setShowAllReturns(false);
+              setShowAllShifts(false);
               setShowOfferModal(true);
             }}
             className="btn-primary ios-pressable px-6 py-3 text-sm"
@@ -567,7 +571,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                     </div>
                   ) : (
                     <div className="space-y-2">
-                      {myShifts.map((s) => (
+                      {(showAllShifts ? myShifts : myShifts.slice(0, 8)).map((s) => (
                         <button
                           key={s.id}
                           type="button"
@@ -581,6 +585,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, onSave, onDecide 
                           <ChevronRight size={16} className="shrink-0 text-slate-300" />
                         </button>
                       ))}
+                      {!showAllShifts && myShifts.length > 8 && (
+                        <button type="button" onClick={() => setShowAllShifts(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11">
+                          Meer tonen ({myShifts.length - 8} extra)
+                        </button>
+                      )}
                     </div>
                   )
                 )}
