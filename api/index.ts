@@ -2243,13 +2243,14 @@ app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
 // Ziekmelding: aparte, directe flow (géén goedkeuring — de chauffeur ís al
 // ziek). Maakt een reeds-goedgekeurd 'ziekte'-verlofrecord zodat de dag
 // meteen als onbeschikbaar telt in Maandplanning/Dekking, en waarschuwt de
-// planning via push + mail. Chauffeur meldt voor zichzelf; planner/admin mag
-// namens een chauffeur melden (bv. telefonische ziekmelding).
-app.post("/api/leave/sick-report", authenticate, async (req: AuthenticatedRequest, res) => {
+// planning via push + mail. BEWUST alleen planner/admin: ziekmelding komt
+// telefonisch bij de planning binnen, die registreert het — een chauffeur
+// mag zichzelf niet ziek (in)plannen.
+app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
-    const isStaff = req.appUser?.role === "planner" || req.appUser?.role === "admin";
     const selfId = String(req.appUser?.id ?? "");
-    const forUserId = isStaff && req.body?.userId ? String(req.body.userId) : selfId;
+    const forUserId = String(req.body?.userId ?? "");
+    if (!forUserId) return res.status(400).json({ error: "Kies de chauffeur die ziek is." });
 
     const isoDay = (v: unknown): string | null => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
     const todayLocal = new Date().toLocaleDateString("en-CA"); // yyyy-mm-dd, lokale dag
@@ -2277,9 +2278,10 @@ app.post("/api/leave/sick-report", authenticate, async (req: AuthenticatedReques
     await saveLeaveData([...previousLeave, record]);
 
     const period = startDate === endDate ? startDate : `${startDate} t/m ${endDate}`;
-    await logActivity(req, "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period}${isStaff && forUserId !== selfId ? ` (door ${req.appUser?.name})` : ""}.`, { type: "leave", id: record.id });
+    await logActivity(req, "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period} (door ${req.appUser?.name}).`, { type: "leave", id: record.id });
 
-    // Planning waarschuwen (push + mail), behalve wie de melding zelf deed.
+    // De rest van de planning waarschuwen (push + mail), behalve wie het zelf
+    // registreerde.
     const beslissers = users.filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== selfId);
     await sendPushToUsers(beslissers.map((u) => String(u.id)), {
       title: "Ziekmelding",

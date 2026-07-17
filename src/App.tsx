@@ -954,7 +954,7 @@ export default function App() {
 
   /** Ziekmelding: aparte, directe flow (geen goedkeuring). POST → verse
    *  verloflijst ophalen zodat de ziekte-dag meteen zichtbaar is. */
-  const reportSick = async (payload: { startDate?: string; endDate?: string; comment?: string } = {}): Promise<boolean> => {
+  const reportSick = async (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }): Promise<boolean> => {
     try {
       const response = await apiFetch('/api/leave/sick-report', {
         method: 'POST',

@@ -293,22 +293,27 @@ describe('PII-scoping voor chauffeurs', () => {
     expect(res.json).toHaveLength(3);
   });
 
-  it('ziekmelding maakt direct goedgekeurd ziekte-verlof en verwittigt de planning', async () => {
-    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-a', body: { startDate: '2026-09-01' } });
+  it('een chauffeur kan zichzelf NIET ziek melden (403 — enkel planner/admin)', async () => {
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-a', body: { userId: '3', startDate: '2026-09-01' } });
+    expect(res.status).toBe(403);
+    expect(mem.leave.some((l: any) => l.type === 'ziekte')).toBe(false);
+  });
+
+  it('een planner registreert een ziekmelding: direct goedgekeurd ziekte-verlof + push/mail', async () => {
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-02', endDate: '2026-09-03' } });
     expect(res.status).toBe(200);
-    expect(res.json.leave).toMatchObject({ userId: '3', type: 'ziekte', status: 'approved', startDate: '2026-09-01', endDate: '2026-09-01' });
+    expect(res.json.leave).toMatchObject({ userId: '4', type: 'ziekte', status: 'approved', startDate: '2026-09-02', endDate: '2026-09-03' });
     const stored = mem.leave.find((l: any) => l.type === 'ziekte');
     expect(stored?.status).toBe('approved');
-    // Planners/admins krijgen push + mail (behalve de melder zelf).
+    // De rest van de planning krijgt push + mail (behalve de melder = planner, id 2).
     const sickPush = mem.pushesSent.find((p) => p.payload.title === 'Ziekmelding');
-    expect(sickPush?.userIds.sort()).toEqual(['1', '2']);
+    expect(sickPush?.userIds).toEqual(['1']);
     expect(mem.emailsSent.some((m) => (m.context ?? '').startsWith('sick:'))).toBe(true);
   });
 
-  it('een planner kan namens een chauffeur ziek melden', async () => {
-    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-02', endDate: '2026-09-03' } });
-    expect(res.status).toBe(200);
-    expect(res.json.leave).toMatchObject({ userId: '4', type: 'ziekte', endDate: '2026-09-03' });
+  it('ziekmelding zonder chauffeur wordt geweigerd (400)', async () => {
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { startDate: '2026-09-02' } });
+    expect(res.status).toBe(400);
   });
 
   it('GET /api/swaps geeft een chauffeur alleen ruilen waar die bij betrokken is', async () => {
