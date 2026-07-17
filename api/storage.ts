@@ -1232,6 +1232,38 @@ export const getClientErrorsSince = async (sinceIso: string, limit = 1000) => {
   }
 };
 
+/**
+ * Retentie-opruiming (draait in de nachtcron, ná het maken van de back-up
+ * zodat de back-up van die nacht de volledige historiek nog bevat):
+ * client_errors ouder dan `errorDays` en activity_log ouder dan `logDays`
+ * verwijderen. Best-effort per tabel — een ontbrekende tabel of fout mag de
+ * back-upcron nooit laten falen.
+ */
+export const pruneOldRecords = async (opts: { errorDays: number; logDays: number }) => {
+  const summary = { clientErrors: 0, activityLog: 0 };
+  if (!db) return summary;
+  const cutoff = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
+  try {
+    const { count, error } = await db
+      .from("client_errors")
+      .delete({ count: "exact" })
+      .lt("created_at", cutoff(opts.errorDays));
+    if (!error) summary.clientErrors = count ?? 0;
+  } catch {
+    // tabel ontbreekt of delete faalt — bewust stil
+  }
+  try {
+    const { count, error } = await db
+      .from("activity_log")
+      .delete({ count: "exact" })
+      .lt("created_at", cutoff(opts.logDays));
+    if (!error) summary.activityLog = count ?? 0;
+  } catch {
+    // idem
+  }
+  return summary;
+};
+
 // --- Updates ---
 
 export const getUpdatesData = async () => {
