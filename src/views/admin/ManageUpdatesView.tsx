@@ -135,11 +135,11 @@ export function ManageUpdatesView({
 
   return (
     <PageShell>
-      <PageHeader eyebrow="Beheer" title="Beheer Updates" />
+      <PageHeader eyebrow="Beheer" title="Beheer updates" />
       <div className="surface-card p-5 md:p-6 rounded-3xl">
         <h3 className="text-lg font-bold mb-6 flex items-center gap-3 tracking-tight">
-          <Bell size={24} className="text-emerald-500" />
-          {editingId ? 'Update Bewerken' : 'Nieuwe Update Publiceren'}
+          <Bell size={24} className="text-oker-500" />
+          {editingId ? 'Update bewerken' : 'Nieuwe update publiceren'}
         </h3>
         <form onSubmit={handlePublish} className="space-y-6">
           <Input label="Titel" type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
@@ -150,7 +150,7 @@ export function ManageUpdatesView({
                 <input
                   type="checkbox"
                   id="isUrgent"
-                  className="w-5 h-5 rounded border-red-300 text-red-600 focus:ring-red-500"
+                  className="w-5 h-5 rounded border-red-300 dark:border-red-500/60 text-red-600 focus:ring-red-500"
                   checked={updateForm.isUrgent}
                   onChange={(e) => setUpdateForm({ ...updateForm, isUrgent: e.target.checked })}
                 />
@@ -163,7 +163,7 @@ export function ManageUpdatesView({
                 <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
                   <AlertTriangle size={16} /> Dringende verzending admin-only
                 </p>
-                <p className="mt-2 text-sm font-medium text-red-700/80">
+                <p className="mt-2 text-sm font-medium text-red-700/80 dark:text-red-300/80">
                   Planners kunnen updates publiceren, maar geen dringende e-mails uitsturen naar alle gebruikers.
                 </p>
               </div>
@@ -173,7 +173,7 @@ export function ManageUpdatesView({
           <div>
             <MicroLabel className="mb-3">Inhoud van het bericht</MicroLabel>
             <textarea
-              className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
+              className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
               placeholder="Schrijf hier het bericht voor de chauffeurs..."
               value={updateForm.content}
               onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
@@ -196,7 +196,7 @@ export function ManageUpdatesView({
       <div className="surface-card p-5 md:p-6 rounded-3xl">
         <div className="flex items-center justify-between gap-4">
           <div>
-            <h3 className="text-lg font-bold tracking-tight">Bestaande Updates</h3>
+            <h3 className="text-lg font-bold tracking-tight">Bestaande updates</h3>
             <p className="mt-1 text-sm font-medium text-slate-500">
               Beheer gepubliceerde berichten en verwijder updates die niet meer zichtbaar mogen zijn.
             </p>

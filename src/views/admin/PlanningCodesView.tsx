@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Bus, Calendar, FileText, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
-import type { PlanningCode, User } from '../../types';
+import type { PlanningCode } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -112,7 +112,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         <StatCard icon={<Bus className="text-slate-600" />} label="Diensten" value={summary.service.toString()} subValue="Codes met shiftstatus" />
         <StatCard icon={<Calendar className="text-emerald-600" />} label="Verlof" value={summary.leave.toString()} subValue="Afwezigheidsperiodes" />
         <StatCard icon={<AlertTriangle className="text-amber-600" />} label="Afwezigheid" value={summary.absence.toString()} subValue="Geen inzetbare dienst" />
-        <StatCard icon={<Info className="text-sky-600" />} label="Onbekend" value={summary.unknown.toString()} subValue="Nog te verfijnen" />
+        <StatCard icon={<Info className="text-amber-500" />} label="Onbekend" value={summary.unknown.toString()} subValue="Nog te verfijnen" />
       </div>
 
       <section className="surface-card rounded-3xl p-6">
@@ -340,5 +340,4 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
   );
 }
 
-type UserDraft = User & { password?: string };
 

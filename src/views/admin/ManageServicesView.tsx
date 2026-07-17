@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Clock, Download, History, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
-import type { Service, View } from '../../types';
+import type { Service } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -216,7 +216,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     <PageShell>
       <PageHeader
         eyebrow="Beheer"
-        title="Beheer Dienstoverzicht"
+        title="Beheer dienstoverzicht"
         description="Voeg diensten toe, bewerk of verwijder ze."
         actions={(
           <div className="flex flex-wrap items-center gap-3">
@@ -301,7 +301,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
                       <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
-                      {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
+                      {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
                     </div>
                   </Td>
                 </tr>
@@ -319,7 +319,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
                   <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
-                  {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
+                  {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
                 </div>
               </div>
 
@@ -369,7 +369,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg">
         <div className="p-6 md:p-8 border-b border-white/70 flex items-center justify-between">
-          <h4 className="text-lg font-bold tracking-tight">{editingId ? 'Dienst Bewerken' : 'Nieuwe Dienst'}</h4>
+          <h4 className="text-lg font-bold tracking-tight">{editingId ? 'Dienst bewerken' : 'Nieuwe dienst'}</h4>
           <Button variant="ghost" size="sm" className="px-2" icon={<X size={20} />} onClick={() => setShowModal(false)} aria-label="Sluiten" />
         </div>
         <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-5">
@@ -438,7 +438,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             </div>
           </div>
           <Button type="submit" variant="primary" size="lg" full className="mt-4">
-            {editingId ? 'Dienst Bijwerken' : 'Dienst Toevoegen'}
+            {editingId ? 'Dienst bijwerken' : 'Dienst toevoegen'}
           </Button>
         </form>
       </Modal>

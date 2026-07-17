@@ -61,7 +61,6 @@ import {
   bumpActiveSessions,
   getShiftById,
   savePlanningMatrixHistoryEntry,
-  savePlanningMatrixRows,
   saveServicesData,
   saveSwapsData,
   saveUpdatesData,

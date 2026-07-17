@@ -51,13 +51,3 @@ export const addDays = (d: Date, n: number): Date => {
   out.setDate(out.getDate() + n);
   return out;
 };
-
-/** Maandag van de week waarin `d` valt (week begint maandag). */
-export const mondayOf = (d: Date): Date => {
-  const out = new Date(d);
-  const jsDay = out.getDay(); // 0=zo .. 6=za
-  const diff = jsDay === 0 ? -6 : 1 - jsDay;
-  out.setDate(out.getDate() + diff);
-  out.setHours(0, 0, 0, 0);
-  return out;
-};
