@@ -1,9 +1,9 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Download, Printer, Clock, CalendarDays, ShieldAlert, Users as UsersIcon } from 'lucide-react';
+import { Download, Printer, Clock, CalendarDays, Users as UsersIcon } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { buildDriverReport, periodLabel, MONTH_LABELS, type ReportPeriod } from '../../lib/reporting';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, TableShell, Th, Td } from '../../components/primitives';
+import { Button, MicroLabel, TableShell, Th, Td } from '../../components/primitives';
 import { notify } from '../../lib/ui';
 
 export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[]; leaveRequests: LeaveRequest[]; users: User[] }) {
@@ -22,7 +22,6 @@ export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[];
     workedMinutes: rows.reduce((s, r) => s + r.workedMinutes, 0),
     shifts: rows.reduce((s, r) => s + r.shiftsCount, 0),
     betaaldGebruikt: rows.reduce((s, r) => s + r.betaaldGebruikt, 0),
-    violations: rows.reduce((s, r) => s + r.violations, 0),
   }), [rows]);
 
   const years = useMemo(() => {
@@ -45,8 +44,6 @@ export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[];
         'Betaald verlof gebruikt': r.betaaldGebruikt,
         'Betaald verlof resterend': r.betaaldResterend,
         'Klein verlet': r.kleinVerlet,
-        Overtredingen: r.violations,
-        Waarschuwingen: r.warnings,
       }));
       const ws = XLSX.utils.json_to_sheet(sheetData);
       const wb = XLSX.utils.book_new();
@@ -90,7 +87,6 @@ export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[];
         <StatTile icon={<UsersIcon size={16} />} label="Chauffeurs" value={String(totals.drivers)} />
         <StatTile icon={<CalendarDays size={16} />} label="Diensten" value={String(totals.shifts)} />
         <StatTile icon={<Clock size={16} />} label="Gewerkte uren" value={totalHoursLabel} />
-        <StatTile icon={<ShieldAlert size={16} />} label="Rusttijd-overtredingen" value={String(totals.violations)} tone={totals.violations > 0 ? 'red' : 'emerald'} />
       </div>
 
       <div className="surface-card rounded-3xl overflow-hidden">
@@ -109,7 +105,6 @@ export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[];
                 <Th className="text-right">Verlof gebruikt</Th>
                 <Th className="text-right">Verlof resterend</Th>
                 <Th className="text-right">Klein verlet</Th>
-                <Th className="text-right">Rusttijd</Th>
               </tr>
             </thead>
             <tbody>
@@ -124,15 +119,6 @@ export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[];
                   <Td className="text-right tabular-nums">{r.betaaldGebruikt}<span className="text-slate-400">/{r.betaaldBudget}</span></Td>
                   <Td className="text-right tabular-nums">{r.betaaldResterend}</Td>
                   <Td className="text-right tabular-nums">{r.kleinVerlet}</Td>
-                  <Td className="text-right">
-                    {r.violations > 0 ? (
-                      <Badge tone="red" dot>{r.violations}</Badge>
-                    ) : r.warnings > 0 ? (
-                      <Badge tone="amber" dot>{r.warnings}</Badge>
-                    ) : (
-                      <span className="text-slate-300">—</span>
-                    )}
-                  </Td>
                 </tr>
               ))}
             </tbody>

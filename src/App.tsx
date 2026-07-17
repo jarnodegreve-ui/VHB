@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, useState, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -37,7 +37,6 @@ import {
   KeyRound,
   Moon,
   Sun,
-  ShieldCheck,
   BarChart3,
   BellRing,
   BellOff,
@@ -73,7 +72,6 @@ import { SwapRequestsView } from './views/SwapRequestsView';
 import { RitblaadjesView } from './views/RitblaadjesView';
 import { DocumentsView } from './views/DocumentsView';
 import { CapacityView } from './views/CapacityView';
-import { analyzeCompliance } from './lib/compliance';
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
 // géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
@@ -86,7 +84,6 @@ const LazyManageDiversionsView = lazyWithRetry(() => import('./views/admin/Manag
 const LazyManageServicesView = lazyWithRetry(() => import('./views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
 const LazyVerlofKalenderView = lazyWithRetry(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
 const LazyCoverageView = lazyWithRetry(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
-const LazyComplianceView = lazyWithRetry(() => import('./views/admin/ComplianceView').then((module) => ({ default: module.ComplianceView })));
 const LazyReportsView = lazyWithRetry(() => import('./views/admin/ReportsView').then((module) => ({ default: module.ReportsView })));
 const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
@@ -108,7 +105,6 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
-    'rusttijden',
     'rapportage',
     'verlof',
     'verlof-beheer',
@@ -131,7 +127,6 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
-    'rusttijden',
     'rapportage',
     'verlof',
     'verlof-beheer',
@@ -902,10 +897,6 @@ export default function App() {
 
   // Rusttijd-overtredingen in de geladen planning (sidebar-badge) — alleen
   // relevant voor planner/admin; chauffeurs hebben enkel hun eigen shifts.
-  const complianceViolations = useMemo(
-    () => (currentUser && currentUser.role !== 'chauffeur' ? analyzeCompliance(shifts).violations : 0),
-    [shifts, currentUser?.role],
-  );
 
   // Wachtende beslissingen voor planner/admin (sidebar badges op
   // Verlofbeheer en Dienstruil-tab).
@@ -1594,11 +1585,10 @@ export default function App() {
                 <NavItem icon={<FileText size={18} />} label="Planning Overzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
                 <NavItem icon={<Settings size={18} />} label="Planningscodes" active={currentView === 'planning-codes'} onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} />
               </NavSection>
-              <NavSection title="Diensten" count={5} active={['dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'rusttijden', 'rapportage'].includes(currentView)}>
+              <NavSection title="Diensten" count={4} active={['dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'rapportage'].includes(currentView)}>
                 <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
                 <NavItem icon={<Bus size={18} />} label="Beheer Dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
                 <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
-                <NavItem icon={<ShieldCheck size={18} />} label="Rij- & rusttijden" active={currentView === 'rusttijden'} onClick={() => { setCurrentView('rusttijden'); setIsSidebarOpen(false); }} badge={complianceViolations} />
                 <NavItem icon={<BarChart3 size={18} />} label="Rapportage" active={currentView === 'rapportage'} onClick={() => { setCurrentView('rapportage'); setIsSidebarOpen(false); }} />
               </NavSection>
               <NavSection title="Verlof" count={2} active={['verlof-beheer', 'verlof-kalender'].includes(currentView)}>
@@ -1819,7 +1809,6 @@ export default function App() {
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} />)}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
-              {resolvedCurrentView === 'rusttijden' && <Suspense fallback={<ViewLoader />}><LazyComplianceView shifts={shifts} users={users} /></Suspense>}
               {resolvedCurrentView === 'rapportage' && <Suspense fallback={<ViewLoader />}><LazyReportsView shifts={shifts} leaveRequests={leaveRequests} users={users} /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (isInitialLoad ? <ViewLoader /> : (
