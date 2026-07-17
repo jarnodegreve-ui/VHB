@@ -208,6 +208,18 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             if (rawRole.includes('admin') || rawRole.includes('beheer')) role = 'admin';
             else if (rawRole.includes('plan') || rawRole.includes('dispo')) role = 'planner';
 
+            // Sectie (Maandplanning): kolom 'Sectie'/'Afdeling'/'Ploeg' —
+            // genormaliseerd naar de vier vaste secties; een onbekende waarde
+            // wordt genegeerd zodat een typfout nooit een rare sectie aanmaakt.
+            const rawSection = findValue(['sectie', 'section', 'afdeling', 'ploeg'])?.toString().trim().toLowerCase();
+            let section: string | undefined;
+            if (rawSection) {
+              if (rawSection.includes('regul')) section = 'Reguliere';
+              else if (rawSection.includes('nacht')) section = 'Nacht';
+              else if (rawSection.includes('flex')) section = 'Flexi';
+              else if (rawSection.includes('school')) section = 'Schoolvervoer';
+            }
+
             // 2) Naam: aparte voornaam/achternaam-kolommen worden samengevoegd;
             //    een gecombineerde 'Naam'-kolom heeft voorrang.
             const voornaam = findValue(['voornaam', 'firstname', 'first name'])?.toString().trim();
@@ -227,6 +239,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               password,
               phone,
               email,
+              section,
               isActive: true,
             };
           })
@@ -242,7 +255,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         importedUsers.forEach((impUser) => {
           const existingIdx = newUsersList.findIndex((u) => u.name.toLowerCase() === impUser.name.toLowerCase());
           if (existingIdx !== -1) {
-            newUsersList[existingIdx] = { ...newUsersList[existingIdx], phone: impUser.phone || newUsersList[existingIdx].phone, email: impUser.email || newUsersList[existingIdx].email, role: impUser.role || newUsersList[existingIdx].role, employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId, password: impUser.password || newUsersList[existingIdx].password };
+            newUsersList[existingIdx] = { ...newUsersList[existingIdx], phone: impUser.phone || newUsersList[existingIdx].phone, email: impUser.email || newUsersList[existingIdx].email, role: impUser.role || newUsersList[existingIdx].role, employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId, password: impUser.password || newUsersList[existingIdx].password, section: impUser.section || newUsersList[existingIdx].section };
             updatedCount++;
           } else {
             newUsersList.push(impUser);
