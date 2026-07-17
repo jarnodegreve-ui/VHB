@@ -142,7 +142,6 @@ export interface DiversionRecord {
   description: string;
   startDate: string;
   endDate?: string;
-  severity: "low" | "medium" | "high";
   pdfUrl?: string;
   mapCoordinates?: string;
 }

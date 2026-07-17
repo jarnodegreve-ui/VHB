@@ -25,7 +25,6 @@ export interface Diversion {
   description: string;
   startDate: string;
   endDate?: string;
-  severity: 'low' | 'medium' | 'high';
   pdfUrl?: string;
   mapCoordinates?: string;
 }

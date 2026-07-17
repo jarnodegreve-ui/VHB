@@ -3,16 +3,10 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-
-const SEVERITY_BADGE: Record<string, { tone: 'red' | 'amber' | 'slate'; label: string }> = {
-  high: { tone: 'red', label: 'Hoog' },
-  medium: { tone: 'amber', label: 'Medium' },
-  low: { tone: 'slate', label: 'Laag' },
-};
 
 export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
   const [showModal, setShowModal] = useState(false);
@@ -25,7 +19,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     title: '',
     description: '',
     startDate: new Date().toISOString().split('T')[0],
-    severity: 'medium',
   });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -73,7 +66,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       title: '',
       description: '',
       startDate: new Date().toISOString().split('T')[0],
-      severity: 'medium',
     });
     setPdfFile(null);
     setShowModal(true);
@@ -87,7 +79,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       description: div.description,
       startDate: div.startDate,
       endDate: div.endDate,
-      severity: div.severity,
     });
     setPdfFile(null);
     setShowModal(true);
@@ -139,7 +130,6 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         description: formData.description || '',
         startDate: formData.startDate || '',
         endDate: formData.endDate,
-        severity: formData.severity as any || 'medium',
         pdfUrl: uploadedPdfUrl || undefined,
       };
       onSave([...diversions, diversionToAdd]);
@@ -174,22 +164,16 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
       <div className="grid grid-cols-1 gap-4">
         {diversions.map(div => {
-          const sev = SEVERITY_BADGE[div.severity] ?? SEVERITY_BADGE.medium;
           return (
           <div key={div.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group">
             <div className="flex items-start gap-5">
-              <div className={cn(
-                "w-14 h-14 rounded-2xl flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110",
-                div.severity === 'high' ? "bg-red-50 text-red-700 border border-red-100" :
-                div.severity === 'medium' ? "bg-amber-50 text-amber-700 border border-amber-100" : "bg-slate-50 text-slate-500 border border-slate-100"
-              )}>
+              <div className="w-14 h-14 rounded-2xl border border-oker-100 bg-oker-50 text-oker-600 flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110">
                 <MapPin size={28} />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h4 className="font-bold text-slate-800 text-lg tracking-tight leading-tight">{div.title}</h4>
                   <Badge tone="slate">Lijn {div.line}</Badge>
-                  <Badge tone={sev.tone}>{sev.label}</Badge>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium tabular-nums">
                   <Calendar size={12} className="text-oker-400" />
@@ -262,30 +246,16 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 <Button variant="ghost" size="sm" icon={<X size={20} />} aria-label="Sluiten" onClick={() => setShowModal(false)} />
               </div>
               <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <MicroLabel className="ml-1">Lijn(en)</MicroLabel>
-                    <input 
-                      type="text" 
-                      required
-                      value={formData.line}
-                      onChange={(e) => setFormData({...formData, line: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
-                      placeholder="bijv. 1, 2 of Alle"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <MicroLabel className="ml-1">Ernst</MicroLabel>
-                    <select 
-                      value={formData.severity}
-                      onChange={(e) => setFormData({...formData, severity: e.target.value as any})}
-                      className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-bold text-sm bg-white/60"
-                    >
-                      <option value="low">Laag (Informatief)</option>
-                      <option value="medium">Medium (Vertraging)</option>
-                      <option value="high">Hoog (Blokkade)</option>
-                    </select>
-                  </div>
+                <div className="space-y-2">
+                  <MicroLabel className="ml-1">Lijn(en)</MicroLabel>
+                  <input
+                    type="text"
+                    required
+                    value={formData.line}
+                    onChange={(e) => setFormData({...formData, line: e.target.value})}
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    placeholder="bijv. 1, 2 of Alle"
+                  />
                 </div>
 
                 <div className="space-y-2">
