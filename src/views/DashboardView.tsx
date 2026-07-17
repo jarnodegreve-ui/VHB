@@ -423,7 +423,7 @@ export function DashboardView({
                   onClick={() => setOpenDiversion(div)}
                   className="group flex w-full items-start gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 text-left hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all"
                 >
-                  <span className={`mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 ${div.severity === 'high' ? 'bg-red-500' : div.severity === 'medium' ? 'bg-amber-500' : 'bg-slate-400'}`} />
+                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full shrink-0 bg-oker-500" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-slate-900 truncate">{div.title}</p>
@@ -470,26 +470,6 @@ export function DashboardView({
         {openDiversion && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
-                  openDiversion.severity === 'high'
-                    ? 'border-red-100 bg-red-50 text-red-700'
-                    : openDiversion.severity === 'medium'
-                    ? 'border-amber-100 bg-amber-50 text-amber-700'
-                    : 'border-slate-200 bg-slate-50 text-slate-600'
-                }`}
-              >
-                <span
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    openDiversion.severity === 'high'
-                      ? 'bg-red-500'
-                      : openDiversion.severity === 'medium'
-                      ? 'bg-amber-500'
-                      : 'bg-slate-400'
-                  }`}
-                />
-                {openDiversion.severity === 'high' ? 'Hoge impact' : openDiversion.severity === 'medium' ? 'Matige impact' : 'Lage impact'}
-              </span>
               <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
                 {lineLabel(openDiversion.line)}
               </span>

@@ -1633,7 +1633,7 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
 
       // Per-omleiding audit entries
       const divDiff = diffDiversionChanges(previousDiversions, newData);
-      const fmtDiv = (d: any) => `${d.title} (lijn ${d.line}, ${d.severity}) — ${d.startDate}${d.endDate ? ` t/m ${d.endDate}` : ''}.`;
+      const fmtDiv = (d: any) => `${d.title} (lijn ${d.line}) — ${d.startDate}${d.endDate ? ` t/m ${d.endDate}` : ''}.`;
       for (const d of divDiff.added) {
         await logActivity(req, "diversions", "Omleiding toegevoegd", fmtDiv(d), { type: "diversion", id: d.id });
       }

@@ -11,9 +11,9 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
-export function DiversionMap({ coordinates, severity }: { coordinates: [number, number][]; severity: 'low' | 'medium' | 'high' }) {
-  // Semantische ernst-schaal (los van de merkkleur oker): high=rood, medium=amber, low=slate.
-  const color = severity === 'high' ? '#ef4444' : severity === 'medium' ? '#f59e0b' : '#94a3b8';
+export function DiversionMap({ coordinates }: { coordinates: [number, number][] }) {
+  // Eén neutrale merkkleur (oker) voor de omleiding-markering.
+  const color = '#E8A33D';
 
   return (
     <MapContainer

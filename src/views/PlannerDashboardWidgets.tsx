@@ -119,7 +119,7 @@ export function PlannerDashboardWidgets({
   const openWeek = knownDays.reduce((n, d) => n + d.missing.length, 0);
   const gapDays = knownDays.filter((d) => d.missing.length > 0);
 
-  const criticalDiversions = diversions.filter((d) => d.severity === 'high').length;
+  const activeDiversions = diversions.length;
 
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');
@@ -139,15 +139,14 @@ export function PlannerDashboardWidgets({
 
   // Eén bron van waarheid voor statuspil, teller én empty-state: alles wat
   // als rij in 'Aandacht vereist' verschijnt telt mee — niets anders.
+  // (Omleidingen tellen bewust niet mee: een omleiding is informatief, geen
+  // openstaande taak.)
   const attentionCount =
-    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + criticalDiversions + gapDays.length + openTasks;
+    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks;
   const needsAttention = attentionCount > 0;
   const userNameById = (id: string) =>
     users.find((u) => String(u.id) === String(id))?.name || 'Onbekend';
 
-  // "Lijn 5 & 8" vs "5": prefix alleen wanneer 't nog niet in de data zit.
-  const lineLabel = (line: string) =>
-    line.trim().toLowerCase().startsWith('lijn') ? line.trim() : `Lijn ${line.trim()}`;
 
   const formatDay = (iso: string) => {
     const label = new Date(`${iso}T00:00:00`).toLocaleDateString('nl-BE', {
@@ -236,10 +235,10 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<MapPin size={16} />}
-          tone={criticalDiversions > 0 ? 'amber' : 'slate'}
+          tone="slate"
           label="Omleidingen"
-          value={diversions.length}
-          sub={criticalDiversions > 0 ? `${criticalDiversions} met hoge impact` : 'geen hoge impact'}
+          value={activeDiversions}
+          sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
           onClick={() => onNavigate('omleidingen')}
         />
         <OpsStat
@@ -301,17 +300,6 @@ export function PlannerDashboardWidgets({
                 onClick={() => onNavigate('beheer-roosters')}
               />
             )}
-            {diversions.filter((d) => d.severity === 'high').slice(0, 2).map((d) => (
-              <Fragment key={d.id}>
-              <OpsRow
-                tone="amber"
-                icon={<MapPin size={15} />}
-                primary={`Omleiding met hoge impact · ${d.title}`}
-                secondary={lineLabel(d.line)}
-                onClick={() => onNavigate('omleidingen')}
-              />
-              </Fragment>
-            ))}
             {gapDays.slice(0, 3).map((d) => (
               <Fragment key={d.date}>
               <OpsRow

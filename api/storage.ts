@@ -565,7 +565,6 @@ export const diffDiversionChanges = (previousDiversions: any[], nextDiversions: 
       previous.description !== item.description ||
       previous.startDate !== item.startDate ||
       previous.endDate !== item.endDate ||
-      previous.severity !== item.severity ||
       previous.line !== item.line ||
       previous.pdfUrl !== item.pdfUrl
     );
@@ -665,8 +664,7 @@ export const summarizeDiversionChanges = (previousDiversions: any[], nextDiversi
         previous.title !== item.title ||
         previous.description !== item.description ||
         previous.startDate !== item.startDate ||
-        previous.endDate !== item.endDate ||
-        previous.severity !== item.severity
+        previous.endDate !== item.endDate
       );
     })
     .map((item) => item.title);

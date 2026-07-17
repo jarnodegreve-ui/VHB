@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import type { Diversion } from '../types';
 import { formatDateHuman } from '../lib/format';
-import { cn, openPdfInNewTab } from '../lib/ui';
+import { openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 
@@ -108,11 +108,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
               className="p-5 md:p-6 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-start justify-between gap-4"
             >
               <div className="flex gap-4 md:gap-5">
-                <div className={cn(
-                  "w-12 h-12 md:w-14 md:h-14 rounded-2xl border flex items-center justify-center shrink-0",
-                  div.severity === 'high' ? "bg-red-50 text-red-700 border-red-100" :
-                  div.severity === 'medium' ? "bg-amber-50 text-amber-700 border-amber-100" : "bg-slate-50 text-slate-500 border-slate-200"
-                )}>
+                <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl border border-oker-100 bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">
                   <MapPin size={24} />
                 </div>
                 <div className="min-w-0">
@@ -200,10 +196,7 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
                                   </div>
                                 }
                               >
-                                <DiversionMap
-                                  coordinates={coords}
-                                  severity={div.severity}
-                                />
+                                <DiversionMap coordinates={coords} />
                               </Suspense>
                             </div>
                           </div>
