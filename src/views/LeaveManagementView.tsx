@@ -17,10 +17,11 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   betaald_verlof: 'Betaald verlof',
   klein_verlet: 'Klein verlet',
+  ziekte: 'Ziekte',
 };
 const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onSickReport, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onSickReport?: (payload?: { startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
@@ -300,9 +301,25 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         title="Verlof"
         description="Beheer verlofaanvragen en bekijk de bezetting."
         actions={(
-          <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
-            <Plus size={20} /> Verlof aanvragen
-          </button>
+          <div className="flex items-center gap-2">
+            {!isPlanner && onSickReport && (
+              <button
+                onClick={() => setConfirmAction({
+                  title: 'Jezelf ziek melden?',
+                  message: 'Je meldt jezelf ziek voor vandaag. De planning wordt meteen verwittigd en je dienst van vandaag komt als onbeschikbaar in de planning te staan. Meerdere dagen? Bel dan de planning.',
+                  confirmText: 'Ziek melden',
+                  variant: 'warning',
+                  run: () => { void onSickReport(); },
+                })}
+                className="ios-pressable inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-4 text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              >
+                <AlertTriangle size={18} /> Ziek melden
+              </button>
+            )}
+            <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
+              <Plus size={20} /> Verlof aanvragen
+            </button>
+          </div>
         )}
       />
 

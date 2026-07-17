@@ -2240,6 +2240,71 @@ app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// Ziekmelding: aparte, directe flow (géén goedkeuring — de chauffeur ís al
+// ziek). Maakt een reeds-goedgekeurd 'ziekte'-verlofrecord zodat de dag
+// meteen als onbeschikbaar telt in Maandplanning/Dekking, en waarschuwt de
+// planning via push + mail. Chauffeur meldt voor zichzelf; planner/admin mag
+// namens een chauffeur melden (bv. telefonische ziekmelding).
+app.post("/api/leave/sick-report", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const isStaff = req.appUser?.role === "planner" || req.appUser?.role === "admin";
+    const selfId = String(req.appUser?.id ?? "");
+    const forUserId = isStaff && req.body?.userId ? String(req.body.userId) : selfId;
+
+    const isoDay = (v: unknown): string | null => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const todayLocal = new Date().toLocaleDateString("en-CA"); // yyyy-mm-dd, lokale dag
+    const startDate = isoDay(req.body?.startDate) ?? todayLocal;
+    const endDate = isoDay(req.body?.endDate) ?? startDate;
+    if (endDate < startDate) return res.status(400).json({ error: "Einddatum ligt vóór de startdatum." });
+    const comment = String(req.body?.comment ?? "").slice(0, 1000);
+
+    const users = await getUsersData();
+    const target = users.find((u) => String(u.id) === forUserId);
+    if (!target) return res.status(400).json({ error: "Onbekende gebruiker." });
+
+    const record = {
+      id: crypto.randomUUID(),
+      userId: forUserId,
+      startDate,
+      endDate,
+      type: "ziekte" as const,
+      status: "approved" as const,
+      comment,
+      createdAt: new Date().toISOString(),
+      decidedAt: new Date().toISOString(),
+    };
+    const previousLeave = await getLeaveData();
+    await saveLeaveData([...previousLeave, record]);
+
+    const period = startDate === endDate ? startDate : `${startDate} t/m ${endDate}`;
+    await logActivity(req, "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period}${isStaff && forUserId !== selfId ? ` (door ${req.appUser?.name})` : ""}.`, { type: "leave", id: record.id });
+
+    // Planning waarschuwen (push + mail), behalve wie de melding zelf deed.
+    const beslissers = users.filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== selfId);
+    await sendPushToUsers(beslissers.map((u) => String(u.id)), {
+      title: "Ziekmelding",
+      body: `${target.name} is ziek gemeld voor ${period}.`,
+      url: "/",
+    });
+    const recipients = beslissers.filter((u) => u.email).map((u) => u.email as string);
+    if (recipients.length > 0) {
+      await sendEmail({
+        to: recipients,
+        context: `sick:${forUserId}`,
+        subject: `Ziekmelding — ${target.name} (${period})`,
+        text: `${target.name} is ziek gemeld voor ${period}.${comment ? `\n\nToelichting: ${comment}` : ""}\n\nDe dienst(en) staan nu als onbeschikbaar in de Maandplanning en Dekking.`,
+        html: `<p><strong>${escapeHtml(target.name)}</strong> is ziek gemeld voor <strong>${escapeHtml(period)}</strong>.</p>${comment ? `<p>Toelichting: ${escapeHtml(comment)}</p>` : ""}<p>De dienst(en) staan nu als onbeschikbaar in de Maandplanning en Dekking.</p>`,
+      });
+    }
+
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getLeaveData()));
+    res.json({ success: true, leave: record });
+  } catch (err) {
+    console.error("Ziekmelding mislukt:", err);
+    res.status(500).json({ error: "Ziekmelding is mislukt." });
+  }
+});
+
 app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -2264,6 +2329,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     const leaveTypeLabels: Record<string, string> = {
       betaald_verlof: "Betaald verlof",
       klein_verlet: "Klein verlet",
+      ziekte: "Ziekte",
     };
     const formatLeaveType = (t: string) => leaveTypeLabels[t] ?? t;
 

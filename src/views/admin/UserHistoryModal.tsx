@@ -8,6 +8,7 @@ import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   betaald_verlof: 'Betaald verlof',
   klein_verlet: 'Klein verlet',
+  ziekte: 'Ziekte',
 };
 const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
