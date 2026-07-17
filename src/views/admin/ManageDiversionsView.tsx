@@ -159,12 +159,12 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     <PageShell>
       <PageHeader
         eyebrow="Beheer"
-        title="Beheer Omleidingen"
+        title="Beheer omleidingen"
       />
 
       <div className="surface-card p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h4 className="text-lg font-bold text-slate-800 tracking-tight">Nieuwe Omleiding</h4>
+          <h4 className="text-lg font-bold text-slate-800 tracking-tight">Nieuwe omleiding</h4>
           <p className="text-xs text-slate-500 font-medium mt-1">Voeg een omleiding toe voor de chauffeurs.</p>
         </div>
         <Button variant="primary" size="lg" icon={<Plus size={16} />} className="w-full sm:w-auto" onClick={handleOpenAdd}>
@@ -201,7 +201,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
             <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-50">
               <div className="flex items-center gap-2">
                 {div.pdfUrl && (
-                  <div className="w-9 h-9 flex items-center justify-center text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl" title="PDF Beschikbaar">
+                  <div className="w-9 h-9 flex items-center justify-center text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl" title="PDF beschikbaar">
                     <FileText size={18} />
                   </div>
                 )}
@@ -256,7 +256,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
             >
               <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
                 <div>
-                  <h4 className="text-xl font-bold tracking-tight">{editingId ? 'Omleiding Bewerken' : 'Nieuwe Omleiding'}</h4>
+                  <h4 className="text-xl font-bold tracking-tight">{editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}</h4>
                   <p className="text-sm text-slate-500 font-medium">Vul de details in en upload eventueel een PDF.</p>
                 </div>
                 <Button variant="ghost" size="sm" icon={<X size={20} />} aria-label="Sluiten" onClick={() => setShowModal(false)} />
@@ -376,7 +376,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         isOpen={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
         onConfirm={handleDelete}
-        title="Omleiding Verwijderen"
+        title="Omleiding verwijderen"
         message="Weet je zeker dat je deze omleiding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
       />
 

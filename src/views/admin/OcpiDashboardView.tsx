@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { Zap, MapPin, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
-import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { getSupabaseAuthHeaders } from '../../lib/ui';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
@@ -80,7 +80,7 @@ export function OcpiDashboardView() {
           {/* KPI-tegels */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={<MapPin size={20} className="text-oker-600" />} label="Locaties" value={String(data.totals.locations)} subValue={`${data.totals.evses} laadpunten`} />
-            <StatCard icon={<BatteryCharging size={20} className="text-blue-600" />} label="Actieve sessies" value={String(data.totals.activeSessions)} subValue="op dit moment" />
+            <StatCard icon={<BatteryCharging size={20} className="text-blue-600 dark:text-blue-400" />} label="Actieve sessies" value={String(data.totals.activeSessions)} subValue="op dit moment" />
             <StatCard icon={<Zap size={20} className="text-emerald-600" />} label="kWh (30 dagen)" value={String(data.totals.kwh30d)} subValue={`${data.totals.cdrs30d} sessies`} />
             <StatCard icon={<Gauge size={20} className="text-slate-600" />} label="Connectoren" value={String(data.totals.connectors)} subValue="totaal aangesloten" />
           </div>

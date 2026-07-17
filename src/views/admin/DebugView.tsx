@@ -374,7 +374,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-violet-500 text-white rounded-2xl shadow-lg shadow-violet-500/20">
+          <div className="p-3 bg-oker-500 text-slate-950 rounded-2xl shadow-lg shadow-oker-500/20">
             <FlaskConical size={24} />
           </div>
           <div className="flex-1">
