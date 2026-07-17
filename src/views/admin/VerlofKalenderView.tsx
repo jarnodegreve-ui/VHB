@@ -14,11 +14,15 @@ const MONTH_NAMES = [
 const LEAVE_TYPE_LABELS: Record<string, string> = {
   betaald_verlof: 'Betaald verlof',
   klein_verlet: 'Klein verlet',
+  ziekte: 'Ziekte',
 };
 
 const cellColor = (status: LeaveRequest['status'] | undefined, type?: string) => {
   if (!status) return 'bg-transparent';
-  if (status === 'approved') return type === 'klein_verlet' ? 'bg-blue-400' : 'bg-emerald-500';
+  if (status === 'approved') {
+    if (type === 'ziekte') return 'bg-rose-500';
+    return type === 'klein_verlet' ? 'bg-blue-400' : 'bg-emerald-500';
+  }
   if (status === 'pending') return 'bg-amber-400';
   if (status === 'rejected') return 'bg-red-300';
   if (status === 'cancelled') return 'bg-slate-300';
@@ -262,6 +266,10 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
         <div className="flex items-center gap-2">
           <div className="w-4 h-3 rounded-sm bg-blue-400" />
           <span className="font-medium text-slate-600">Klein verlet goedgekeurd</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-3 rounded-sm bg-rose-500" />
+          <span className="font-medium text-slate-600">Ziekte</span>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-4 h-3 rounded-sm bg-amber-400" />

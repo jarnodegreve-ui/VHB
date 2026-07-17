@@ -41,7 +41,7 @@ export interface LeaveRecord {
   userId: string;
   startDate: string;
   endDate: string;
-  type: "betaald_verlof" | "klein_verlet";
+  type: "betaald_verlof" | "klein_verlet" | "ziekte";
   status: "pending" | "approved" | "rejected" | "cancelled";
   comment?: string;
   createdAt: string;

@@ -952,6 +952,29 @@ export default function App() {
     }
   };
 
+  /** Ziekmelding: aparte, directe flow (geen goedkeuring). POST → verse
+   *  verloflijst ophalen zodat de ziekte-dag meteen zichtbaar is. */
+  const reportSick = async (payload: { startDate?: string; endDate?: string; comment?: string } = {}): Promise<boolean> => {
+    try {
+      const response = await apiFetch('/api/leave/sick-report', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+      if (response.ok) {
+        await fetchLeave();
+        showToast('Ziekmelding doorgegeven — de planning is verwittigd.', 'success');
+        return true;
+      }
+      const err = await response.json().catch(() => ({} as any));
+      showToast(err.error || 'Ziekmelding is mislukt.', 'error');
+      return false;
+    } catch (error) {
+      console.error('Error reporting sick:', error);
+      showToast('Ziekmelding is mislukt.', 'error');
+      return false;
+    }
+  };
+
   /** Delta-beslissing op één record (PATCH) met optimistic-concurrency:
    *  bij een 409/404 is een collega ons voor geweest — verse lijst ophalen
    *  i.p.v. stilletjes overschrijven. Geldt voor verlof én dienstruil. */
@@ -1806,6 +1829,7 @@ export default function App() {
                     leaveRequests={leaveRequests}
                     users={users}
                     onSave={saveLeave}
+                    onSickReport={reportSick}
                     onDecide={currentUser.role !== 'chauffeur' ? decideLeave : undefined}
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
