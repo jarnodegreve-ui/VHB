@@ -18,6 +18,7 @@ import {
 
 
   FileText,
+  FolderOpen,
 
   Plus,
   Settings,
@@ -70,6 +71,7 @@ import { ScheduleView } from './views/ScheduleView';
 import { UpdatesView } from './views/UpdatesView';
 import { SwapRequestsView } from './views/SwapRequestsView';
 import { RitblaadjesView } from './views/RitblaadjesView';
+import { DocumentsView } from './views/DocumentsView';
 import { CapacityView } from './views/CapacityView';
 import { analyzeCompliance } from './lib/compliance';
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
@@ -94,7 +96,7 @@ const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMo
 
 
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
-  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'],
+  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'],
   planner: [
     'dashboard',
     'rooster',
@@ -1378,6 +1380,7 @@ export default function App() {
     rooster: { title: 'Mijn Rooster', subtitle: 'Je komende diensten en export naar agenda.' },
     dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
     ritblaadjes: { title: 'Ritbladen', subtitle: 'Actuele rit-informatie als PDF voor alle chauffeurs.' },
+    documenten: { title: 'Mijn documenten', subtitle: 'Attesten, reglement en andere documenten die de planning voor jou klaarzet.' },
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
@@ -1520,6 +1523,14 @@ export default function App() {
             active={currentView === 'ritblaadjes'}
             onClick={() => { setCurrentView('ritblaadjes'); setIsSidebarOpen(false); }}
           />
+          {!isPlanner && (
+            <NavItem
+              icon={<FolderOpen size={18} />}
+              label="Mijn documenten"
+              active={currentView === 'documenten'}
+              onClick={() => { setCurrentView('documenten'); setIsSidebarOpen(false); }}
+            />
+          )}
           <NavItem
             icon={<Phone size={18} />}
             label="Contactlijst"
@@ -1732,6 +1743,7 @@ export default function App() {
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
+              {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} />}
               {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
               {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {resolvedCurrentView === 'beheer-roosters' && (

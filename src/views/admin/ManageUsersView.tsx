@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
+import { FolderOpen, History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { formatDateTimeHuman } from '../../lib/format';
@@ -7,6 +7,7 @@ import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState,
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
+import { UserDocumentsModal } from './UserDocumentsModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 export type UserDraft = User & { password?: string };
@@ -20,6 +21,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
   const [viewingHistoryUser, setViewingHistoryUser] = useState<User | null>(null);
   const [viewingChangeLogUser, setViewingChangeLogUser] = useState<User | null>(null);
+  const [documentsUser, setDocumentsUser] = useState<User | null>(null);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -398,6 +400,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                           <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
                           <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-white p-1.5 shadow-xl text-left dark:border-white/10 dark:bg-[rgb(30,31,34)]">
                             <RowMenuItem icon={<Info size={15} />} label="Verlof- & dienstruil-historiek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
+                            <RowMenuItem icon={<FolderOpen size={15} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
                             <RowMenuItem icon={<History size={15} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
                             <RowMenuItem icon={<RotateCcw size={15} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
                             <RowMenuItem
@@ -444,6 +447,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setEditingUser(u)}>Bewerken</Button>
                 <Button variant="ghost" className="px-3" onClick={() => setViewingHistoryUser(u)} aria-label="Verlof- en dienstruil-historiek" title="Verlof- en dienstruil-historiek" icon={<Info size={18} />} />
+                <Button variant="ghost" className="px-3" onClick={() => setDocumentsUser(u)} aria-label="Documenten beheren" title="Documenten beheren" icon={<FolderOpen size={18} />} />
                 <Button variant="ghost" className="px-3" onClick={() => setViewingChangeLogUser(u)} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" icon={<History size={18} />} />
                 <Button variant="danger" className="px-3" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} aria-label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} icon={<Trash2 size={18} />} />
                 <Button variant="ghost" className="px-3" onClick={() => setConfirmResetUser(u)} aria-label="Stel nieuw tijdelijk wachtwoord in" title="Stel nieuw tijdelijk wachtwoord in" icon={<RotateCcw size={18} />} />
@@ -558,6 +562,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         users={users}
         onClose={() => setViewingHistoryUser(null)}
       />
+
+      {documentsUser && <UserDocumentsModal user={documentsUser} onClose={() => setDocumentsUser(null)} />}
 
       <EntityHistoryModal
         open={!!viewingChangeLogUser}

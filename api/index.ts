@@ -50,6 +50,11 @@ import {
   getClientErrorsSince,
   storeBackup,
   pruneOldRecords,
+  listUserDocuments,
+  getUserDocument,
+  insertUserDocument,
+  deleteUserDocument,
+  DOCUMENTS_BUCKET,
   restoreFromBackup,
   replacePlanningData,
   replacePlanningAndMatrix,
@@ -2665,6 +2670,102 @@ app.delete("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Au
     console.error("Ritblaadje delete error:", err);
     console.error("Kon ritblaadje niet verwijderen.", err);
     res.status(500).json({ error: "Kon ritblad niet verwijderen." });
+  }
+});
+
+// --- Documenten per gebruiker (attesten, reglement, loonbrieven) ---
+// Zelfde beveiligingspatroon als de ritbladen: privé bucket, ondertekende
+// URL's uit de API. Chauffeurs zien alleen hun eigen documenten.
+const DOCUMENT_URL_TTL_SEC = 60 * 60 * 24 * 7; // 7 dagen
+
+app.get("/api/documents", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!db) return res.status(500).json({ error: "Supabase is niet geconfigureerd." });
+    const role = req.appUser?.role;
+    const isStaff = role === "admin" || role === "planner";
+    const requestedUserId = typeof req.query.userId === "string" && req.query.userId ? req.query.userId : undefined;
+    // Chauffeur: altijd de eigen lijst, wat er ook in de query staat.
+    const scopeUserId = isStaff ? requestedUserId : String(req.appUser?.id ?? "");
+    const docs = await listUserDocuments(scopeUserId);
+    const withUrls = await Promise.all(
+      docs.map(async (d) => {
+        try {
+          const { data: signed } = await db.storage.from(DOCUMENTS_BUCKET).createSignedUrl(d.storagePath, DOCUMENT_URL_TTL_SEC);
+          return { ...d, url: signed?.signedUrl ?? null };
+        } catch {
+          return { ...d, url: null };
+        }
+      }),
+    );
+    res.json(withUrls);
+  } catch (err) {
+    console.error("Documenten laden mislukt:", err);
+    res.status(500).json({ error: "Documenten laden is mislukt." });
+  }
+});
+
+app.post("/api/documents", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
+    const userId = String(req.body?.userId || "").trim();
+    const filename = String(req.body?.filename || "").trim();
+    const category = String(req.body?.category || "").trim() || null;
+    const dataUrl = String(req.body?.dataUrl || "");
+    if (!userId) return res.status(400).json({ error: "userId is verplicht." });
+    const users = await getUsersData();
+    const targetUser = users.find((u) => String(u.id) === userId);
+    if (!targetUser) return res.status(400).json({ error: "Onbekende gebruiker." });
+    if (!filename || !/\.(pdf|png|jpe?g)$/i.test(filename)) {
+      return res.status(400).json({ error: "Geef een PDF- of afbeeldingsbestand (.pdf/.png/.jpg)." });
+    }
+    const base64Match = dataUrl.match(/^data:(application\/pdf|image\/png|image\/jpeg);base64,(.+)$/);
+    if (!base64Match) return res.status(400).json({ error: "Bestand is geen geldige data-URL (PDF/PNG/JPG)." });
+    const buffer = Buffer.from(base64Match[2], "base64");
+    if (buffer.length === 0) return res.status(400).json({ error: "Bestand is leeg." });
+
+    // Onvoorspelbaar pad per upload (zelfde reden als het ritblad): een oud
+    // gelekt URL blijft niet werken voor nieuwe bestanden.
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-100);
+    const storagePath = `${userId}/${crypto.randomUUID()}-${safeName}`;
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from(DOCUMENTS_BUCKET)
+      .upload(storagePath, buffer, { contentType: base64Match[1], upsert: false });
+    if (uploadError) throw uploadError;
+
+    const doc = await insertUserDocument({
+      userId,
+      filename,
+      storagePath,
+      category,
+      sizeBytes: buffer.length,
+      uploadedBy: req.appUser?.name ?? null,
+    });
+    await logActivity(req, "users", "Document toegevoegd", `${filename} voor ${targetUser.name}${category ? ` (${category})` : ""}.`, { type: "user", id: userId });
+    await sendPushToUsers([userId], {
+      title: "Nieuw document",
+      body: `Er staat een nieuw document voor je klaar: ${filename}.`,
+      url: "/",
+    });
+    res.json({ success: true, document: doc });
+  } catch (err) {
+    console.error("Document uploaden mislukt:", err);
+    res.status(500).json({ error: "Document uploaden is mislukt." });
+  }
+});
+
+app.delete("/api/documents/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
+    const doc = await getUserDocument(String(req.params.id));
+    if (!doc) return res.status(404).json({ error: "Document niet gevonden." });
+    const { error: removeError } = await supabaseAdmin.storage.from(DOCUMENTS_BUCKET).remove([doc.storagePath]);
+    if (removeError) console.warn("Document-bestand kon niet worden verwijderd:", removeError);
+    await deleteUserDocument(doc.id);
+    await logActivity(req, "users", "Document verwijderd", `${doc.filename}.`, { type: "user", id: doc.userId });
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Document verwijderen mislukt:", err);
+    res.status(500).json({ error: "Document verwijderen is mislukt." });
   }
 });
 
