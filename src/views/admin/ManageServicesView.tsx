@@ -7,6 +7,12 @@ import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
+// Een deel telt alleen als het een geldige begin- én eindtijd (HH:MM) heeft.
+// Zo tonen we voor 1- of 2-delige diensten geen '--'-placeholder in de lege
+// deel-kolommen (zelfde logica als de leesweergave ServicesView).
+const hasValidTime = (start?: string, end?: string) =>
+  !!start && !!end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end);
+
 export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[], opts?: { bulkReplace?: boolean }) => void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -292,10 +298,10 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                     {s.startTime} - {s.endTime}
                   </Td>
                   <Td className="tabular-nums">
-                    {s.startTime2 ? `${s.startTime2} - ${s.endTime2}` : '-'}
+                    {hasValidTime(s.startTime2, s.endTime2) ? `${s.startTime2} - ${s.endTime2}` : ''}
                   </Td>
                   <Td className="tabular-nums">
-                    {s.startTime3 ? `${s.startTime3} - ${s.endTime3}` : '-'}
+                    {hasValidTime(s.startTime3, s.endTime3) ? `${s.startTime3} - ${s.endTime3}` : ''}
                   </Td>
                   <Td className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -332,7 +338,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   </div>
                 </div>
 
-                {s.startTime2 && (
+                {hasValidTime(s.startTime2, s.endTime2) && (
                   <div className="flex flex-col gap-1">
                     <MicroLabel>Deel 2</MicroLabel>
                     <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
@@ -342,7 +348,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   </div>
                 )}
 
-                {s.startTime3 && (
+                {hasValidTime(s.startTime3, s.endTime3) && (
                   <div className="flex flex-col gap-1">
                     <MicroLabel>Deel 3</MicroLabel>
                     <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
