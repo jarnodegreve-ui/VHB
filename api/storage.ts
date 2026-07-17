@@ -889,7 +889,10 @@ export const getUsersData = async (): Promise<AppUser[]> => {
   return rows.map(toPublicUser);
 };
 
-export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
+export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ createdAccounts: Array<{ email: string; name: string }> }> => {
+  // Nieuw aangemaakte Auth-accounts (e-mail + naam) gaan terug naar de route,
+  // die er een welkomstmail met wachtwoord-instel-link voor verstuurt.
+  const createdAccounts: Array<{ email: string; name: string }> = [];
   const client = requireDb();
   if (!supabaseAdmin) {
     throw new Error("SUPABASE_SERVICE_ROLE_KEY ontbreekt. Gebruikersbeheer vereist een service role key.");
@@ -971,6 +974,7 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
       if (data.user?.email) {
         authUsersByEmail.set(normalizeEmail(data.user.email) as string, data.user);
       }
+      createdAccounts.push({ email: currentEmail, name: sanitizedUser.name });
       continue;
     }
 
@@ -996,6 +1000,7 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]) => {
     }
   }
   // (DB-delete + DB-upsert zijn hierboven al uitgevoerd, vóór de Auth-mutaties.)
+  return { createdAccounts };
 };
 
 /** Gericht sessie-metadata bijwerken — alléén de eigen rij.

@@ -31,7 +31,7 @@ const getSmtpConfig = () => ({
 
 export const isSmtpConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
-const portalUrl = () => process.env.APP_URL || "https://vhb.vercel.app";
+const portalUrl = () => process.env.APP_URL || "https://vhbportaal.com";
 
 /**
  * Generic email sender. Falls back to console-logging when SMTP credentials
@@ -152,5 +152,60 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
     text,
     html,
     context: `leave:${ctx.action}:${ctx.to}`,
+  });
+};
+
+// --- Welkomstmail voor nieuwe accounts ---
+
+/**
+ * Welkomstmail voor een net aangemaakt Auth-account. Met `actionLink` (een
+ * Supabase-recovery-link) kan de nieuwe gebruiker direct een eigen wachtwoord
+ * instellen; zonder link (bv. als de service-role-key ontbrak) verwijst de
+ * mail naar "Wachtwoord vergeten" op het loginscherm — zelfde resultaat.
+ */
+export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null }) => {
+  const url = portalUrl();
+  const setPassword = ctx.actionLink
+    ? { text: `Stel je wachtwoord in via deze link: ${ctx.actionLink}`, html: `<a href="${ctx.actionLink}" style="background-color: #E8A33D; color: #0D0D0F; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Wachtwoord instellen</a>` }
+    : { text: `Stel je wachtwoord in via "Wachtwoord vergeten" op het loginscherm: ${url}`, html: `<p style="color: #475569; line-height: 1.6;">Stel je wachtwoord in via <strong>"Wachtwoord vergeten"</strong> op het <a href="${url}">loginscherm</a>.</p>` };
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background-color: #0D0D0F; color: white; padding: 22px 30px; text-align: center;">
+        <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: #E8A33D;">WELKOM</p>
+        <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">VHB Portaal</h1>
+      </div>
+      <div style="padding: 30px;">
+        <p style="color: #1e293b; font-size: 16px; margin-top: 0;">Hallo ${ctx.name},</p>
+        <p style="color: #475569; line-height: 1.6;">
+          Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster,
+          verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres.
+        </p>
+        <div style="margin-top: 26px; text-align: center;">${setPassword.html}</div>
+        <p style="margin-top: 26px; color: #94a3b8; font-size: 12px; line-height: 1.6;">
+          Tip: open ${url} op je telefoon en kies "Zet op beginscherm" — dan werkt het portaal als app.
+        </p>
+      </div>
+      <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">
+        Automatisch bericht van het VHB Portaal — niet beantwoorden.
+      </div>
+    </div>
+  `;
+
+  const text = [
+    `Hallo ${ctx.name},`,
+    "",
+    "Er is een account voor je aangemaakt op het VHB Portaal. Je logt in met dit e-mailadres.",
+    setPassword.text,
+    "",
+    `Portaal: ${url}`,
+  ].join("\n");
+
+  return sendEmail({
+    to: [ctx.to],
+    subject: "Welkom op het VHB Portaal — stel je wachtwoord in",
+    text,
+    html,
+    context: `welcome:${ctx.to}`,
   });
 };

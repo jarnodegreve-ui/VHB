@@ -92,6 +92,10 @@ vi.mock('../api/email.js', async (importOriginal) => ({
     mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });
     return { ok: true, mocked: true };
   }),
+  sendWelcomeEmail: vi.fn(async (ctx: any) => {
+    mem.emailsSent.push({ to: [ctx.to], subject: 'Welkom op het VHB Portaal — stel je wachtwoord in', context: `welcome:${ctx.to}` });
+    return { ok: true, mocked: true };
+  }),
 }));
 
 vi.mock('../api/storage.js', async (importOriginal) => {
@@ -105,7 +109,16 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   return {
     ...orig,
     getUsersData: async () => mem.users,
-    saveUsersData: async (data: any[]) => { mem.users = data; },
+    saveUsersData: async (data: any[]) => {
+      // Zelfde contract als de echte functie: nieuwe e-mailadressen = nieuw
+      // Auth-account → welkomstmail-kandidaat.
+      const beforeEmails = new Set(mem.users.map((u: any) => String(u.email || '').toLowerCase()).filter(Boolean));
+      const createdAccounts = data
+        .filter((u: any) => u.email && !beforeEmails.has(String(u.email).toLowerCase()))
+        .map((u: any) => ({ email: u.email, name: u.name }));
+      mem.users = data;
+      return { createdAccounts };
+    },
     getLeaveData: async () => mem.leave,
     saveLeaveData: async (data: any[], idsToDelete: string[] = []) => {
       mem.leave = replaceById(mem.leave, data, idsToDelete);
@@ -433,6 +446,18 @@ describe('bulk-wipe-vangrail (PR #71)', () => {
     const res = await api('POST', '/api/users', { token: 'tok-admin', body: mem.users.slice(0, 1) });
     expect(res.status).toBe(409);
     expect(mem.users).toHaveLength(5);
+  });
+
+  it('stuurt een welkomstmail naar een nieuw account (en niet naar bestaande)', async () => {
+    const res = await api('POST', '/api/users', {
+      token: 'tok-admin',
+      body: [...mem.users, { id: 'n1', name: 'Nieuwe Chauffeur', email: 'nieuw@vhb.be', role: 'chauffeur', isActive: true }],
+    });
+    expect(res.status).toBe(200);
+    expect(res.json?.welcomed).toBe(1);
+    const welcome = mem.emailsSent.filter((m) => (m.context ?? '').startsWith('welcome:'));
+    expect(welcome).toHaveLength(1);
+    expect(welcome[0].to).toEqual(['nieuw@vhb.be']);
   });
 
   it('weigert non-array payloads (400)', async () => {

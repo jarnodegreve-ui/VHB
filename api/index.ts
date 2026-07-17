@@ -18,7 +18,7 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 // interne sleutels (bv. een vroegere __vakantieperiodes__) de dag-type-lijst niet.
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
-import { sendLeaveDecisionEmail, sendEmail, type LeaveDecisionAction } from "./email.js";
+import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
@@ -1219,7 +1219,7 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       if (revisionConflict(req, previousUsers)) return revisionConflictResponse(res, "De gebruikerslijst");
       const usersRemoved = detectMassDelete(previousUsers, newData);
       if (usersRemoved !== null) return massDeleteResponse(res, usersRemoved, previousUsers.length, "gebruikers");
-      await saveUsersData(newData);
+      const { createdAccounts } = (await saveUsersData(newData)) ?? { createdAccounts: [] };
       // Auth-cache verversen: rol/isActive/e-mail-wijzigingen moeten meteen
       // doorwerken, niet pas na de TTL.
       invalidateUsersCache();
@@ -1242,8 +1242,29 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
         await logActivity(req, "users", "Gebruiker verwijderd", `${u.name} (${u.role}).`, { type: "user", id: u.id });
       }
 
+      // Welkomstmail voor élk nieuw aangemaakt Auth-account: met een
+      // recovery-link stelt de nieuwe collega direct een eigen wachtwoord in
+      // (i.p.v. een doorgefluisterd Excel-wachtwoord). Best-effort — een
+      // mailfout mag de save niet laten falen.
+      for (const account of createdAccounts ?? []) {
+        try {
+          let actionLink: string | null = null;
+          if (supabaseAdmin) {
+            const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
+              type: "recovery",
+              email: account.email,
+              options: { redirectTo: process.env.APP_URL || "https://vhbportaal.com" },
+            });
+            if (!linkError) actionLink = linkData?.properties?.action_link ?? null;
+          }
+          await sendWelcomeEmail({ to: account.email, name: account.name, actionLink });
+        } catch (err) {
+          console.error(`[welcome-mail] versturen naar ${account.email} mislukt:`, err);
+        }
+      }
+
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUsersData()));
-      res.json({ success: true, count: newData.length });
+      res.json({ success: true, count: newData.length, welcomed: (createdAccounts ?? []).length });
     } else {
       res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
