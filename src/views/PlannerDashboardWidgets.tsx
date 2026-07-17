@@ -165,7 +165,7 @@ export function PlannerDashboardWidgets({
             {greeting}, <span className="text-oker-600">{firstName}</span>
           </h1>
           <p className="mt-0.5 text-[13px] font-normal text-slate-500">
-            Dit is de actuele status van de operatie ·{' '}
+            Actuele status op{' '}
             {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
