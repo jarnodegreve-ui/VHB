@@ -2022,6 +2022,19 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
               : `Dienstruil van ${userName(next.requesterId)}: ${prev.status} → ${next.status}.`,
             url: "/",
           });
+          // Geaccepteerd = er wacht een validatie op de planner — die kreeg
+          // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
+          // actor zelf, als die toevallig planner/admin is).
+          if (next.status === "accepted") {
+            const beslissers = usersForLog
+              .filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== actorId)
+              .map((u) => String(u.id));
+            await sendPushToUsers(beslissers, {
+              title: "Dienstruil wacht op validatie",
+              body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)} — rij- en rusttijden checken.`,
+              url: "/",
+            });
+          }
         }
       }
     }
@@ -2115,6 +2128,17 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
         : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
       url: "/",
     });
+    // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route).
+    if (status === "accepted") {
+      const beslissers = usersForLog
+        .filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== selfId)
+        .map((u) => String(u.id));
+      await sendPushToUsers(beslissers, {
+        title: "Dienstruil wacht op validatie",
+        body: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))} — rij- en rusttijden checken.`,
+        url: "/",
+      });
+    }
 
     // Verse collectie-revisie meegeven zodat een volgende array-save van
     // dezelfde client geen vals 409 krijgt na deze delta-wijziging.

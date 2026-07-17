@@ -585,6 +585,14 @@ describe('push-notificaties', () => {
     expect(ruilPush).toBeTruthy();
     expect(ruilPush!.userIds).toEqual(['4']);
   });
+
+  it('pusht de beslissers (planner/admin) wanneer een collega de ruil accepteert', async () => {
+    const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted' } });
+    expect(res.status).toBe(200);
+    const validatiePush = mem.pushesSent.find((p) => p.payload.title === 'Dienstruil wacht op validatie');
+    expect(validatiePush).toBeTruthy();
+    expect(validatiePush!.userIds.sort()).toEqual(['1', '2']);
+  });
 });
 
 describe('restore vanuit back-up', () => {
