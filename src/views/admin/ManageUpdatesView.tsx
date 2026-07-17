@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { AlertTriangle, Bell, CalendarDays, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { notify } from '../../lib/ui';
@@ -67,6 +67,10 @@ export function ManageUpdatesView({
   const [isPublishing, setIsPublishing] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  // Het bewerk-formulier staat bovenaan, de updatelijst eronder. Zonder
+  // scrollen lijkt 'Bewerk' (onderaan) niks te doen — het formulier vult
+  // zich buiten beeld. Deze ref brengt het formulier in beeld.
+  const formRef = useRef<HTMLDivElement>(null);
   const [historyUpdate, setHistoryUpdate] = useState<Update | null>(null);
 
   const handlePublish = async (e: React.FormEvent) => {
@@ -111,6 +115,8 @@ export function ManageUpdatesView({
       content: update.content,
       isUrgent: Boolean(update.isUrgent),
     });
+    // Naar het formulier scrollen zodat de bewerking zichtbaar is.
+    requestAnimationFrame(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
   };
 
   const handleCancelEdit = () => {
@@ -136,7 +142,7 @@ export function ManageUpdatesView({
   return (
     <PageShell>
       <PageHeader eyebrow="Beheer" title="Beheer updates" />
-      <div className="surface-card p-5 md:p-6 rounded-3xl">
+      <div ref={formRef} className="surface-card p-5 md:p-6 rounded-3xl scroll-mt-4">
         <h3 className="text-lg font-bold mb-6 flex items-center gap-3 tracking-tight">
           <Bell size={24} className="text-oker-500" />
           {editingId ? 'Update bewerken' : 'Nieuwe update publiceren'}
