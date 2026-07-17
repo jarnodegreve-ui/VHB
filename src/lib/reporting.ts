@@ -1,6 +1,5 @@
 import type { LeaveRequest, Shift, User } from '../types';
 import { verlofBalans } from './leaveBalance';
-import { analyzeCompliance } from './compliance';
 
 /**
  * Management-rapportage: aggregeert de bestaande planning-, verlof- en
@@ -22,8 +21,6 @@ export type DriverReportRow = {
   betaaldResterend: number;
   betaaldBudget: number;
   kleinVerlet: number;
-  violations: number;
-  warnings: number;
 };
 
 const parseTimeToMinutes = (time: string): number | null => {
@@ -71,23 +68,6 @@ export function buildDriverReport(
 
   const periodShifts = shifts.filter((s) => inPeriod(s.date, period));
 
-  // Rusttijd-analyse op een verbreed venster (±8 dagen rond de periode) zodat
-  // week-/rusttijd-overtredingen over de periodegrens niet gemist worden;
-  // daarna houden we alleen findings binnen de periode zelf (consistent met
-  // ComplianceView). De diensten/uren-telling blijft op periodShifts.
-  const pad = (n: number) => String(n).padStart(2, '0');
-  const shiftIso = (iso: string, days: number) =>
-    new Date(Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10)) + days))
-      .toISOString().slice(0, 10);
-  const startIso = period.month === null ? `${period.year}-01-01` : `${period.year}-${pad(period.month)}-01`;
-  const endIso = period.month === null
-    ? `${period.year}-12-31`
-    : `${period.year}-${pad(period.month)}-${pad(new Date(Date.UTC(period.year, period.month, 0)).getUTCDate())}`;
-  const widenStart = shiftIso(startIso, -8);
-  const widenEnd = shiftIso(endIso, 8);
-  const widenedShifts = shifts.filter((s) => s.date >= widenStart && s.date <= widenEnd);
-  const compliance = analyzeCompliance(widenedShifts);
-
   const shiftsByDriver = new Map<string, Shift[]>();
   for (const s of periodShifts) {
     const list = shiftsByDriver.get(String(s.driverId)) ?? [];
@@ -99,7 +79,6 @@ export function buildDriverReport(
     const driverShifts = shiftsByDriver.get(String(driver.id)) ?? [];
     const workedMinutes = driverShifts.reduce((sum, s) => sum + shiftDurationMinutes(s), 0);
     const balance = verlofBalans(leave, driver.id, period.year, driver.verlofBudget);
-    const findings = compliance.perDriver.get(String(driver.id)) ?? [];
     return {
       driverId: String(driver.id),
       name: driver.name,
@@ -111,8 +90,6 @@ export function buildDriverReport(
       betaaldResterend: balance.betaaldResterend,
       betaaldBudget: balance.betaaldBudget,
       kleinVerlet: balance.kleinVerletDagen,
-      violations: findings.filter((f) => f.severity === 'violation').length,
-      warnings: findings.filter((f) => f.severity === 'warning').length,
     };
   });
 

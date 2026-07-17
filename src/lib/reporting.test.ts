@@ -76,16 +76,6 @@ describe('buildDriverReport', () => {
     expect(rows[0].betaaldBudget).toBe(30);
     expect(rows[0].betaaldResterend).toBe(25); // 30 - 5
   });
-
-  it('telt rusttijd-overtredingen binnen de periode', () => {
-    // 22:00→06:30 dan volgende dag 08:00 = 1,5u rust → overtreding
-    const reeks = [
-      shift('2026-06-10', '22:00', '06:30', '1'),
-      shift('2026-06-11', '08:00', '16:00', '1'),
-    ];
-    const rows = buildDriverReport(reeks, [], [user('1', 'Bea')], { year: 2026, month: 6 });
-    expect(rows[0].violations).toBeGreaterThanOrEqual(1);
-  });
 });
 
 describe('periodLabel', () => {
