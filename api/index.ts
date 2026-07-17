@@ -1685,6 +1685,53 @@ app.get("/api/services", authenticate, async (req, res) => {
   }
 });
 
+// --- Rostering-brug: solver-input als één JSON ---
+// Read-only export voor de CP-SAT-roostersolver (vhb-planner): actieve
+// chauffeurs met sectie/anciënniteit, dienstdefinities, goedgekeurd verlof
+// (onbeschikbaarheid) en de huidige toewijzingen binnen [from, to].
+// Auth: planner/admin-token, of Bearer CRON_SECRET zodat de solver headless
+// kan ophalen zonder gebruikersaccount.
+app.get("/api/rostering-export", async (req, res) => {
+  const handle = async () => {
+    try {
+      const iso = (d: Date) => d.toISOString().slice(0, 10);
+      const today = new Date();
+      const validDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
+      const from = validDate(req.query.from) ? req.query.from : iso(today);
+      const to = validDate(req.query.to) ? req.query.to : iso(new Date(today.getTime() + 8 * 7 * 86_400_000));
+      if (to < from) return res.status(400).json({ error: "'to' ligt vóór 'from'." });
+
+      const [users, services, leave, planning] = await Promise.all([
+        getUsersData(),
+        getServicesData(),
+        getLeaveData(),
+        getPlanningData(),
+      ]);
+      res.json({
+        generatedAt: new Date().toISOString(),
+        range: { from, to },
+        drivers: users
+          .filter((u) => u.role === "chauffeur" && u.isActive !== false)
+          .map((u) => ({ id: u.id, name: u.name, employeeId: u.employeeId ?? null, section: u.section ?? null, startDate: u.startDate ?? null })),
+        services,
+        approvedLeave: leave
+          .filter((l) => l.status === "approved" && l.startDate <= to && l.endDate >= from)
+          .map((l) => ({ userId: l.userId, startDate: l.startDate, endDate: l.endDate, type: l.type })),
+        shifts: planning.filter((s: any) => s.date >= from && s.date <= to),
+      });
+    } catch (err) {
+      console.error("Rostering-export mislukt:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Rostering-export mislukt." });
+    }
+  };
+  if (isCronAuthorized(req)) return handle();
+  return authenticate(req as AuthenticatedRequest, res, () => {
+    const role = (req as AuthenticatedRequest).appUser?.role;
+    if (role !== "admin" && role !== "planner") return res.status(403).json({ error: "Alleen voor planners/admins." });
+    void handle();
+  });
+});
+
 app.post("/api/services", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;

@@ -954,3 +954,29 @@ describe('OCPI-dashboard — autorisatie', () => {
     expect((await api('GET', '/api/ocpi/dashboard', { token: 'tok-a' })).status).toBe(403);
   });
 });
+
+describe('rostering-export (solver-brug)', () => {
+  it('weigert zonder auth (401) en voor chauffeurs (403)', async () => {
+    expect((await api('GET', '/api/rostering-export')).status).toBe(401);
+    expect((await api('GET', '/api/rostering-export', { token: 'tok-a' })).status).toBe(403);
+  });
+
+  it('geeft de planner solver-input: actieve chauffeurs, diensten, goedgekeurd verlof en shifts in het venster', async () => {
+    const res = await api('GET', '/api/rostering-export?from=2026-07-01&to=2026-12-31', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.range).toEqual({ from: '2026-07-01', to: '2026-12-31' });
+    // Alleen chauffeurs (3 en 4), niet admin/planner.
+    expect(res.json.drivers.map((d: any) => d.id).sort()).toEqual(['3', '4']);
+    expect(res.json.services).toHaveLength(6);
+    // Alleen goedgekeurd verlof binnen het venster (l-a2), geen pending.
+    expect(res.json.approvedLeave).toHaveLength(1);
+    expect(res.json.approvedLeave[0]).toMatchObject({ userId: '3', startDate: '2026-08-10' });
+    expect(res.json.shifts).toHaveLength(3);
+  });
+
+  it('is ook bereikbaar met het cron-secret (headless solver)', async () => {
+    const res = await api('GET', '/api/rostering-export?from=2026-07-01&to=2026-07-31', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(res.json.shifts).toHaveLength(3);
+  });
+});
