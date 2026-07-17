@@ -21,7 +21,9 @@
 // cache-first de nieuwe logo's serveert i.p.v. de oude gecachte.
 // v11: ritblad-PDF krijgt query-loze cache-key (signed URLs) — bump ruimt de
 // oude per-URL-entries op.
-const CACHE_NAME = 'vhb-portaal-v11';
+// v12: nieuw app-icoon (VHB-inline op carbon) — app-icoon-PNG's/SVG gewijzigd
+// onder dezelfde bestandsnamen, bump zodat cache-first het nieuwe icoon serveert.
+const CACHE_NAME = 'vhb-portaal-v12';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const RITBLAADJE_API = '/api/ritblaadje';
