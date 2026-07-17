@@ -245,7 +245,7 @@ export function PlannerDashboardWidgets({
           className="md:col-span-3 xl:col-span-1"
           icon={<Inbox size={16} />}
           tone={openTasks > 0 ? 'amber' : 'emerald'}
-          label="Open taken"
+          label="Aanvragen"
           value={openTasks}
           sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof-beheer')}
