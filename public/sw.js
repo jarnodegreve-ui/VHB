@@ -23,7 +23,10 @@
 // oude per-URL-entries op.
 // v12: nieuw app-icoon (VHB-inline op carbon) — app-icoon-PNG's/SVG gewijzigd
 // onder dezelfde bestandsnamen, bump zodat cache-first het nieuwe icoon serveert.
-const CACHE_NAME = 'vhb-portaal-v12';
+// v13: favicon = app-icoon, én afgeronde hoeken op de tab-/app-iconen
+// (vhb-icoon.svg/192/512, vhb-favicon.svg/-64.png, favicon.ico). apple-touch
+// + maskable blijven vol (iOS/Android ronden die zelf). Bump = asset-wissel.
+const CACHE_NAME = 'vhb-portaal-v13';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const RITBLAADJE_API = '/api/ritblaadje';

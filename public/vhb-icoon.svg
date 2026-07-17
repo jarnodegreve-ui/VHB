@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
   <title id="title">VHB Inline app-icoon</title>
-  <desc id="desc">Het volledige VHB Schakel-monogram horizontaal op een Carbon apptegel.</desc>
-  <rect width="1024" height="1024" fill="#0D0D0F"/>
+  <desc id="desc">Het volledige VHB Schakel-monogram horizontaal op een afgeronde Carbon apptegel.</desc>
+  <rect width="1024" height="1024" rx="224" ry="224" fill="#0D0D0F"/>
   <g transform="translate(93 386) scale(1.58)">
     <path d="M0 0H43L112 122L185 0H228L130 160H102L0 0Z" fill="#E8A33D"/>
     <path d="M234 0H270L252 62H342L360 0H396L350 160H314L332 96H242L224 160H188L234 0Z" fill="#FFF9F0"/>
