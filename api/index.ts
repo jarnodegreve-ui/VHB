@@ -49,6 +49,7 @@ import {
   getClientErrors,
   getClientErrorsSince,
   storeBackup,
+  pruneOldRecords,
   restoreFromBackup,
   replacePlanningData,
   replacePlanningAndMatrix,
@@ -1436,8 +1437,18 @@ app.get("/api/cron/backup", async (req, res) => {
       }
     }
 
-    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}).`);
-    res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite });
+    // Retentie ná de back-up: de zojuist gemaakte back-up bevat de volledige
+    // historiek nog, daarna mag oud grut weg (fouten 30 d, auditlog 1 jaar —
+    // instelbaar via env). Best-effort: mag de back-up-respons niet breken.
+    const errorDays = Number(process.env.RETENTION_ERROR_DAYS) > 0 ? Number(process.env.RETENTION_ERROR_DAYS) : 30;
+    const logDays = Number(process.env.RETENTION_LOG_DAYS) > 0 ? Number(process.env.RETENTION_LOG_DAYS) : 365;
+    const pruned = await pruneOldRecords({ errorDays, logDays });
+    if (pruned.clientErrors > 0 || pruned.activityLog > 0) {
+      console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d) en ${pruned.activityLog} log-regels (>${logDays}d) opgeruimd.`);
+    }
+
+    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${pruned.clientErrors || pruned.activityLog ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels weg` : ""}).`);
+    res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned });
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
     console.error("Back-up mislukt", err);
