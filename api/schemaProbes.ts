@@ -24,6 +24,10 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code" },
   { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },
   { table: "activity_log", columns: "id,created_at,actor_name,actor_role,category,action,details" },
+  // user_documents hoort bij de documenten-module (supabase/user_documents.sql)
+  // — staat hier alvast zodat de schema-check meldt zolang die migratie nog
+  // niet gedraaid is.
+  { table: "user_documents", columns: "id,user_id,filename,storage_path,category,size_bytes,uploaded_at,uploaded_by" },
 ];
 
 export const probeColumns = (table: string): string[] => {

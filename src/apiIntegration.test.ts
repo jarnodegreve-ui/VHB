@@ -45,6 +45,7 @@ const mem = vi.hoisted(() => ({
   storedBackups: [] as Array<{ filename: string; size: number }>,
   pushSubscriptions: [] as any[],
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
+  documents: [] as any[],
 }));
 
 vi.mock('../api/db.js', () => {
@@ -147,6 +148,11 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async () => [],
     getCoverageExpectations: async () => ({}),
+    listUserDocuments: async (userId?: string) =>
+      userId ? mem.documents.filter((d: any) => String(d.userId) === String(userId)) : mem.documents,
+    getUserDocument: async (id: string) => mem.documents.find((d: any) => String(d.id) === String(id)) ?? null,
+    insertUserDocument: async (doc: any) => { const rec = { id: `doc-${mem.documents.length + 1}`, uploadedAt: '2026-07-01T00:00:00Z', ...doc }; mem.documents.push(rec); return rec; },
+    deleteUserDocument: async (id: string) => { mem.documents = mem.documents.filter((d: any) => String(d.id) !== String(id)); },
     logClientError: async (entry: any) => { mem.clientErrors.push(entry); },
     getClientErrors: async () => mem.clientErrors,
     getClientErrorsSince: async (sinceIso: string) =>
@@ -1003,5 +1009,29 @@ describe('rostering-export (solver-brug)', () => {
     const res = await api('GET', '/api/rostering-export?from=2026-07-01&to=2026-07-31', { headers: { Authorization: 'Bearer test-cron-secret' } });
     expect(res.status).toBe(200);
     expect(res.json.shifts).toHaveLength(3);
+  });
+});
+
+describe('documenten per gebruiker', () => {
+  it('een chauffeur ziet alleen zijn eigen documenten, ook met een vreemde userId in de query', async () => {
+    mem.documents = [
+      { id: 'd1', userId: '3', filename: 'attest.pdf', storagePath: '3/x', uploadedAt: '2026-07-01T00:00:00Z' },
+      { id: 'd2', userId: '4', filename: 'loonbrief.pdf', storagePath: '4/y', uploadedAt: '2026-07-01T00:00:00Z' },
+    ];
+    const res = await api('GET', '/api/documents?userId=4', { token: 'tok-a' }); // tok-a = user 3
+    expect(res.status).toBe(200);
+    expect(res.json.map((d: any) => d.id)).toEqual(['d1']);
+  });
+
+  it('een planner kan de documenten van een specifieke gebruiker opvragen', async () => {
+    mem.documents = [{ id: 'd2', userId: '4', filename: 'loonbrief.pdf', storagePath: '4/y', uploadedAt: '2026-07-01T00:00:00Z' }];
+    const res = await api('GET', '/api/documents?userId=4', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.map((d: any) => d.id)).toEqual(['d2']);
+  });
+
+  it('uploaden en verwijderen zijn niet toegankelijk voor chauffeurs (403)', async () => {
+    expect((await api('POST', '/api/documents', { token: 'tok-a', body: { userId: '3', filename: 'x.pdf', dataUrl: 'data:application/pdf;base64,QQ==' } })).status).toBe(403);
+    expect((await api('DELETE', '/api/documents/d1', { token: 'tok-a' })).status).toBe(403);
   });
 });

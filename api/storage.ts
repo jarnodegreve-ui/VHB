@@ -1164,6 +1164,73 @@ export const storeBackup = async (filename: string, body: string): Promise<{ rem
   return { removedOld };
 };
 
+// --- Documenten per gebruiker (attesten, reglement, loonbrieven) ---
+
+export const DOCUMENTS_BUCKET = "user-documents";
+
+export type UserDocumentRecord = {
+  id: string;
+  userId: string;
+  filename: string;
+  storagePath: string;
+  category?: string | null;
+  sizeBytes?: number | null;
+  uploadedAt: string;
+  uploadedBy?: string | null;
+};
+
+const mapUserDocumentRow = (row: any): UserDocumentRecord => ({
+  id: String(row.id),
+  userId: String(row.user_id),
+  filename: row.filename,
+  storagePath: row.storage_path,
+  category: row.category ?? null,
+  sizeBytes: row.size_bytes ?? null,
+  uploadedAt: row.uploaded_at,
+  uploadedBy: row.uploaded_by ?? null,
+});
+
+/** Alle documenten, of alleen die van één gebruiker. Nieuwste eerst. */
+export const listUserDocuments = async (userId?: string): Promise<UserDocumentRecord[]> => {
+  const client = requireDb();
+  let query = client.from("user_documents").select("*").order("uploaded_at", { ascending: false }).limit(500);
+  if (userId) query = query.eq("user_id", userId);
+  const { data, error } = await query;
+  if (error) throw error;
+  return (data ?? []).map(mapUserDocumentRow);
+};
+
+export const getUserDocument = async (id: string): Promise<UserDocumentRecord | null> => {
+  const client = requireDb();
+  const { data, error } = await client.from("user_documents").select("*").eq("id", id).maybeSingle();
+  if (error) throw error;
+  return data ? mapUserDocumentRow(data) : null;
+};
+
+export const insertUserDocument = async (doc: Omit<UserDocumentRecord, "id" | "uploadedAt">): Promise<UserDocumentRecord> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from("user_documents")
+    .insert({
+      user_id: doc.userId,
+      filename: doc.filename,
+      storage_path: doc.storagePath,
+      category: doc.category ?? null,
+      size_bytes: doc.sizeBytes ?? null,
+      uploaded_by: doc.uploadedBy ?? null,
+    })
+    .select("*")
+    .single();
+  if (error) throw error;
+  return mapUserDocumentRow(data);
+};
+
+export const deleteUserDocument = async (id: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.from("user_documents").delete().eq("id", id);
+  if (error) throw error;
+};
+
 // --- Client errors ---
 
 export type ClientErrorEntry = {
