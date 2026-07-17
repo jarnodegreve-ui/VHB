@@ -151,7 +151,7 @@ export function SlideOver({
                 type="button"
                 onClick={onClose}
                 aria-label="Sluiten"
-                className="-m-1 shrink-0 rounded-lg p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                className="-m-2 shrink-0 rounded-lg p-3.5 sm:-m-1 sm:p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-4 w-4" />
               </button>

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, lazy, useState, useEffect, useMemo, useRef } from 'react';
+import { Suspense, useState, useEffect, useMemo, useRef } from 'react';
 import { 
   LayoutDashboard, 
   MapPin, 
@@ -47,6 +47,7 @@ import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { cn } from './lib/ui';
+import { lazyWithRetry } from './lib/lazyRetry';
 import { reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
@@ -74,22 +75,22 @@ import { analyzeCompliance } from './lib/compliance';
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
 // géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
-const LazyActivityLogView = lazy(() => import('./views/admin/ActivityLogView').then((module) => ({ default: module.ActivityLogView })));
-const LazyOcpiDashboardView = lazy(() => import('./views/admin/OcpiDashboardView').then((module) => ({ default: module.OcpiDashboardView })));
-const LazyManageSchedulesView = lazy(() => import('./views/admin/ManageSchedulesView').then((module) => ({ default: module.ManageSchedulesView })));
-const LazyPlanningMatrixView = lazy(() => import('./views/admin/PlanningMatrixView').then((module) => ({ default: module.PlanningMatrixView })));
-const LazyPlanningCodesView = lazy(() => import('./views/admin/PlanningCodesView').then((module) => ({ default: module.PlanningCodesView })));
-const LazyManageDiversionsView = lazy(() => import('./views/admin/ManageDiversionsView').then((module) => ({ default: module.ManageDiversionsView })));
-const LazyManageServicesView = lazy(() => import('./views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
-const LazyVerlofKalenderView = lazy(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
-const LazyCoverageView = lazy(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
-const LazyComplianceView = lazy(() => import('./views/admin/ComplianceView').then((module) => ({ default: module.ComplianceView })));
-const LazyReportsView = lazy(() => import('./views/admin/ReportsView').then((module) => ({ default: module.ReportsView })));
-const LazyDebugView = lazy(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
-const LazyManageUpdatesView = lazy(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
-const LazyManageUsersView = lazy(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
-const LazyLeaveManagementView = lazy(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
-const LazyPrintMonthlyScheduleView = lazy(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
+const LazyActivityLogView = lazyWithRetry(() => import('./views/admin/ActivityLogView').then((module) => ({ default: module.ActivityLogView })));
+const LazyOcpiDashboardView = lazyWithRetry(() => import('./views/admin/OcpiDashboardView').then((module) => ({ default: module.OcpiDashboardView })));
+const LazyManageSchedulesView = lazyWithRetry(() => import('./views/admin/ManageSchedulesView').then((module) => ({ default: module.ManageSchedulesView })));
+const LazyPlanningMatrixView = lazyWithRetry(() => import('./views/admin/PlanningMatrixView').then((module) => ({ default: module.PlanningMatrixView })));
+const LazyPlanningCodesView = lazyWithRetry(() => import('./views/admin/PlanningCodesView').then((module) => ({ default: module.PlanningCodesView })));
+const LazyManageDiversionsView = lazyWithRetry(() => import('./views/admin/ManageDiversionsView').then((module) => ({ default: module.ManageDiversionsView })));
+const LazyManageServicesView = lazyWithRetry(() => import('./views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
+const LazyVerlofKalenderView = lazyWithRetry(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
+const LazyCoverageView = lazyWithRetry(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
+const LazyComplianceView = lazyWithRetry(() => import('./views/admin/ComplianceView').then((module) => ({ default: module.ComplianceView })));
+const LazyReportsView = lazyWithRetry(() => import('./views/admin/ReportsView').then((module) => ({ default: module.ReportsView })));
+const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
+const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
+const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
+const LazyLeaveManagementView = lazyWithRetry(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
+const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 
 
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {

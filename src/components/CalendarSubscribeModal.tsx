@@ -60,7 +60,7 @@ export function CalendarSubscribeModal({
               <p className="text-xs font-medium text-slate-500">Je diensten in je eigen agenda — automatisch bijgewerkt.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+          <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:w-8 sm:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -100,7 +100,7 @@ export function CalendarSubscribeModal({
                   readOnly
                   value={links.url}
                   onFocus={(e) => e.currentTarget.select()}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-medium text-slate-600 select-all"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-base sm:text-xs font-medium text-slate-600 select-all"
                 />
                 <button
                   type="button"
