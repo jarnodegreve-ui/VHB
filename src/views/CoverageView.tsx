@@ -386,7 +386,7 @@ export function CoverageView() {
           {totalMissing > 0 ? (
             <span className="inline-flex items-center gap-1.5 font-semibold text-red-600 tabular-nums"><AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand</span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn gedekt</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn ingevuld</span>
           )}
         </div>
         <label className="flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer select-none">
