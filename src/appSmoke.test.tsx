@@ -105,7 +105,7 @@ describe('app smoke test', () => {
     // Operations Center verschijnt zodra profiel + data geladen zijn.
     // ('Systeemstatus' is bewust verwijderd in de design-review — de snelle
     // acties zijn het stabiele altijd-zichtbare ankerpunt.)
-    expect(await screen.findByText('Aandacht vereist', undefined, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText('Open taken', undefined, { timeout: 5000 })).toBeTruthy();
     expect(await screen.findByText('Planning importeren', undefined, { timeout: 5000 })).toBeTruthy();
 
     // Alle boot-fetches zijn daadwerkelijk uitgevoerd...

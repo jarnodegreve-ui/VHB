@@ -138,7 +138,7 @@ export function PlannerDashboardWidgets({
   const planningStale = daysSinceImport !== null && daysSinceImport > STALE_PLANNING_DAYS;
 
   // Eén bron van waarheid voor statuspil, teller én empty-state: alles wat
-  // als rij in 'Aandacht vereist' verschijnt telt mee — niets anders.
+  // als rij in 'Open taken' verschijnt telt mee — niets anders.
   // (Omleidingen tellen bewust niet mee: een omleiding is informatief, geen
   // openstaande taak.)
   const attentionCount =
@@ -191,7 +191,7 @@ export function PlannerDashboardWidgets({
             'text-[11px] font-semibold',
             needsAttention ? 'text-amber-700' : 'text-emerald-700',
           )}>
-            {needsAttention ? 'Aandacht vereist' : 'Operationeel'}
+            {needsAttention ? 'Open taken' : 'Operationeel'}
           </span>
         </div>
       </div>
@@ -245,7 +245,7 @@ export function PlannerDashboardWidgets({
           className="md:col-span-3 xl:col-span-1"
           icon={<Inbox size={16} />}
           tone={openTasks > 0 ? 'amber' : 'emerald'}
-          label="Open taken"
+          label="Aanvragen"
           value={openTasks}
           sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof-beheer')}
@@ -271,11 +271,11 @@ export function PlannerDashboardWidgets({
           Geen items-start meer: beide kolommen rekken tot dezelfde hoogte,
           zodat er geen leeg gat onder de kortste kolom valt. */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-        {/* Aandacht vereist — gecombineerde werkvoorraad */}
+        {/* Open taken — gecombineerde werkvoorraad */}
         <OpsPanel
           className="lg:col-span-2"
           icon={<Inbox size={15} />}
-          title="Aandacht vereist"
+          title="Open taken"
           aside={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item' : 'items'}` : undefined}
         >
           <div className="space-y-1.5">
@@ -528,7 +528,7 @@ function OpsPanel({
   );
 }
 
-/** Werkvoorraad-rij in 'Aandacht vereist'. */
+/** Werkvoorraad-rij in 'Open taken'. */
 function OpsRow({
   tone,
   icon,
