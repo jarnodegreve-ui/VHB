@@ -19,6 +19,10 @@ export type IcsEvent = {
   endTime: string;
   summary: string;
   description?: string;
+  /** Hele-dag-gebeurtenis (bv. verlof/ziekte): start/endTime tellen niet,
+   *  de gebeurtenis loopt van `date` t/m `endDate` (inclusief). */
+  allDay?: boolean;
+  endDate?: string;
 };
 
 /** RFC5545-escaping voor TEXT-waarden (SUMMARY/DESCRIPTION). */
@@ -67,16 +71,18 @@ function toMinutes(hhmm: string): number {
 }
 
 export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
-  // Nachtdienst: eind <= start → einddatum is de volgende dag.
-  const endDate = toMinutes(ev.endTime) <= toMinutes(ev.startTime) ? addOneDay(ev.date) : ev.date;
-  const lines = [
-    'BEGIN:VEVENT',
-    `UID:${ev.uid}`,
-    `DTSTAMP:${dtstamp}`,
-    `DTSTART:${toFloatingDateTime(ev.date, ev.startTime)}`,
-    `DTEND:${toFloatingDateTime(endDate, ev.endTime)}`,
-    `SUMMARY:${escapeIcsText(ev.summary)}`,
-  ];
+  const lines = ['BEGIN:VEVENT', `UID:${ev.uid}`, `DTSTAMP:${dtstamp}`];
+  if (ev.allDay) {
+    // Hele-dag: DATE-waarden zonder tijd. DTEND is exclusief (dag ná de laatste).
+    const start = ev.date.replace(/-/g, '');
+    const endExclusive = addOneDay(ev.endDate || ev.date).replace(/-/g, '');
+    lines.push(`DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${endExclusive}`);
+  } else {
+    // Nachtdienst: eind <= start → einddatum is de volgende dag.
+    const endDate = toMinutes(ev.endTime) <= toMinutes(ev.startTime) ? addOneDay(ev.date) : ev.date;
+    lines.push(`DTSTART:${toFloatingDateTime(ev.date, ev.startTime)}`, `DTEND:${toFloatingDateTime(endDate, ev.endTime)}`);
+  }
+  lines.push(`SUMMARY:${escapeIcsText(ev.summary)}`);
   if (ev.description) lines.push(`DESCRIPTION:${escapeIcsText(ev.description)}`);
   lines.push('END:VEVENT');
   return lines;

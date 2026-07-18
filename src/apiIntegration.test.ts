@@ -502,6 +502,16 @@ describe('bulk-wipe-vangrail (PR #71)', () => {
     const res = await api('POST', '/api/updates', { token: 'tok-planner', body: { hack: true } });
     expect(res.status).toBe(400);
   });
+
+  it('pusht een nieuwe update naar de actieve chauffeurs', async () => {
+    const nieuw = { id: 'u-new', date: '2026-07-01', title: 'Zomeruniformen', category: 'algemeen', content: '...', isUrgent: false };
+    const res = await api('POST', '/api/updates', { token: 'tok-planner', body: [nieuw, ...mem.updates] });
+    expect(res.status).toBe(200);
+    const push = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe update');
+    expect(push).toBeTruthy();
+    expect(push!.userIds.sort()).toEqual(['3', '4']); // de twee chauffeurs
+    expect(push!.payload.body).toBe('Zomeruniformen');
+  });
 });
 
 describe('client-foutmonitoring', () => {

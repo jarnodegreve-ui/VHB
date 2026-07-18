@@ -389,9 +389,10 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
     if (!userId || !verifyCalendarToken(userId, token)) {
       return res.status(404).send("Not found");
     }
-    const [shifts, users] = await Promise.all([
+    const [shifts, users, leave] = await Promise.all([
       getPlanningData({ driverId: userId }),
       getUsersData(),
+      getLeaveData(),
     ]);
     const user = users.find((u: any) => String(u.id) === userId);
     // Gedeactiveerde/verwijderde medewerkers verliezen hun feed (de token
@@ -409,6 +410,22 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
         .filter(Boolean)
         .join(" · ") || undefined,
     }));
+    // Goedgekeurd verlof/ziekte als hele-dag-gebeurtenissen — zo is de agenda
+    // compleet (dienst + afwezigheid) i.p.v. alleen de diensten.
+    const leaveLabel: Record<string, string> = { betaald_verlof: "Verlof", klein_verlet: "Klein verlet", ziekte: "Ziek" };
+    for (const l of leave as any[]) {
+      if (String(l.userId) !== userId || l.status !== "approved") continue;
+      events.push({
+        uid: `vhb-leave-${l.id}@vhb-portaal`,
+        date: String(l.startDate),
+        endDate: String(l.endDate || l.startDate),
+        startTime: "00:00",
+        endTime: "00:00",
+        allDay: true,
+        summary: leaveLabel[l.type] ?? "Afwezig",
+        description: l.comment ? String(l.comment) : undefined,
+      });
+    }
     const dtstamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
     const calName = user?.name ? `VHB Diensten — ${user.name}` : "VHB Diensten";
     const ics = buildCalendar(events, { calName, dtstamp });
@@ -1880,6 +1897,20 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
     }
     for (const u of updDiff.removed) {
       await logActivity(req, "updates", "Update verwijderd", fmtUpd(u), { type: "update", id: u.id });
+    }
+
+    // Nieuwe update → push naar alle actieve chauffeurs. Urgente updates mailen
+    // al (aparte flow); een push zorgt dat óók gewone updates niet onopgemerkt
+    // blijven tot iemand de app toevallig opent.
+    if (updDiff.added.length > 0) {
+      const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
+      for (const u of updDiff.added) {
+        await sendPushToUsers(chauffeurIds, {
+          title: u.isUrgent ? "Belangrijke update" : "Nieuwe update",
+          body: u.title,
+          url: "/",
+        });
+      }
     }
 
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
