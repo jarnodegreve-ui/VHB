@@ -102,11 +102,13 @@ describe('app smoke test', () => {
     const { default: App } = await import('./App');
     render(<App />);
 
-    // Operations Center verschijnt zodra profiel + data geladen zijn.
-    // ('Systeemstatus' is bewust verwijderd in de design-review — de snelle
-    // acties zijn het stabiele altijd-zichtbare ankerpunt.)
-    expect(await screen.findByText('Open taken', undefined, { timeout: 5000 })).toBeTruthy();
+    // Operations Center verschijnt zodra profiel + data geladen zijn. Anker op
+    // 'Planning importeren' (unieke snelactie, altijd zichtbaar). 'Open taken'
+    // kan meerdere keren voorkomen (statuspil + werkvoorraad-kop), dus daar
+    // findAllByText met een lengte-check i.p.v. findByText — anders faalt de
+    // test op een label-duplicaat i.p.v. op een echte regressie.
     expect(await screen.findByText('Planning importeren', undefined, { timeout: 5000 })).toBeTruthy();
+    expect((await screen.findAllByText('Open taken', undefined, { timeout: 5000 })).length).toBeGreaterThanOrEqual(1);
 
     // Alle boot-fetches zijn daadwerkelijk uitgevoerd...
     for (const endpoint of ['/api/me', '/api/planning', '/api/services', '/api/diversions', '/api/updates', '/api/swaps', '/api/leave']) {

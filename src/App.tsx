@@ -175,6 +175,7 @@ export default function App() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
   const [unseenDocuments, setUnseenDocuments] = useState(0);
+  const [autoOpenSick, setAutoOpenSick] = useState(false);
   const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
@@ -1771,6 +1772,7 @@ export default function App() {
                     activityLog={activityLog}
                     coverageDays={coverageDays}
                     onNavigate={(view) => setCurrentView(view)}
+                    onQuickSickReport={() => { setCurrentView('verlof-beheer'); setAutoOpenSick(true); }}
                     isInitialLoad={isInitialLoad}
                   />
                 ) : (
@@ -1844,6 +1846,8 @@ export default function App() {
                     users={users}
                     onSave={saveLeave}
                     onSickReport={reportSick}
+                    autoOpenSick={autoOpenSick}
+                    onSickModalConsumed={() => setAutoOpenSick(false)}
                     onDecide={currentUser.role !== 'chauffeur' ? decideLeave : undefined}
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
