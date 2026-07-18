@@ -174,6 +174,7 @@ export default function App() {
   const [swaps, setSwaps] = useState<SwapRequest[]>([]);
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
+  const [unseenDocuments, setUnseenDocuments] = useState(0);
   const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
@@ -609,6 +610,7 @@ export default function App() {
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [fetchPlanningMatrixHistory(accessToken)] : []),
         ...(appUser.role === 'planner' || appUser.role === 'admin' ? [refreshCoverageGaps()] : []),
         ...(appUser.role === 'admin' ? [fetchActivityLog(accessToken)] : []),
+        ...(appUser.role === 'chauffeur' ? [fetchUnseenDocuments(appUser.id, accessToken)] : []),
       ]);
     } catch (error) {
       console.error('Error loading app data:', error);
@@ -766,6 +768,28 @@ export default function App() {
       console.error('Error fetching leave:', error);
       showToast('Kon de verlofaanvragen niet laden.', 'error');
     }
+  };
+
+  // 'Nieuw'-badge op Mijn documenten: telt de eigen documenten die nieuwer zijn
+  // dan het moment waarop de chauffeur de documentenweergave het laatst opende.
+  const fetchUnseenDocuments = async (userId: string, accessToken = session?.access_token) => {
+    try {
+      const response = await apiFetch('/api/documents', {}, accessToken);
+      const data = await response.json();
+      if (!Array.isArray(data)) return;
+      let lastSeen: string | null = null;
+      try { lastSeen = localStorage.getItem(`planx-documents-lastseen-${userId}`); } catch { /* privacy-modus */ }
+      const unseen = lastSeen ? data.filter((d: any) => String(d.uploadedAt) > lastSeen).length : data.length;
+      setUnseenDocuments(unseen);
+    } catch (error) {
+      console.error('Error fetching documents badge:', error);
+    }
+  };
+
+  const markDocumentsSeen = () => {
+    setUnseenDocuments(0);
+    if (!currentUser) return;
+    try { localStorage.setItem(`planx-documents-lastseen-${currentUser.id}`, new Date().toISOString()); } catch { /* privacy-modus */ }
   };
 
   const fetchPlanningMatrix = async (accessToken = session?.access_token) => {
@@ -1542,7 +1566,8 @@ export default function App() {
               icon={<FolderOpen size={18} />}
               label="Mijn documenten"
               active={currentView === 'documenten'}
-              onClick={() => { setCurrentView('documenten'); setIsSidebarOpen(false); }}
+              badge={unseenDocuments}
+              onClick={() => { setCurrentView('documenten'); setIsSidebarOpen(false); markDocumentsSeen(); }}
             />
           )}
           <NavItem
@@ -1756,7 +1781,7 @@ export default function App() {
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
-              {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} />}
+              {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
               {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
               {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
               {resolvedCurrentView === 'beheer-roosters' && (

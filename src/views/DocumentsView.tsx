@@ -21,11 +21,13 @@ const prettySize = (bytes: number | null) =>
   bytes == null ? '' : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 /** Eigen documenten voor de chauffeur (attesten, reglement, loonbrieven). */
-export function DocumentsView({ currentUser }: { currentUser: User }) {
+export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSeen?: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // De view openen = documenten gezien: badge/lastseen bijwerken.
+    onSeen?.();
     let cancelled = false;
     (async () => {
       try {
@@ -40,6 +42,7 @@ export function DocumentsView({ currentUser }: { currentUser: User }) {
       }
     })();
     return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser.id]);
 
   return (
