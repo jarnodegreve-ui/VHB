@@ -53,6 +53,14 @@ describe('ics — events', () => {
     expect(v).toContain('DTEND:20260704T021500');
   });
 
+  it('buildVevent: hele-dag (verlof) → DATE-waarden, DTEND exclusief', () => {
+    const v = buildVevent({ ...base, allDay: true, date: '2026-07-03', endDate: '2026-07-05', summary: 'Verlof' }, DTSTAMP).join('\n');
+    expect(v).toContain('DTSTART;VALUE=DATE:20260703');
+    expect(v).toContain('DTEND;VALUE=DATE:20260706'); // t/m 05 → exclusief 06
+    expect(v).not.toContain('T051100');
+    expect(v).toContain('SUMMARY:Verlof');
+  });
+
   it('buildCalendar: geldige VCALENDAR-omhulling + CRLF', () => {
     const ics = buildCalendar([base], { calName: 'VHB Diensten', dtstamp: DTSTAMP });
     expect(ics.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true);
