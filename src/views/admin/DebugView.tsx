@@ -4,6 +4,7 @@ import type { Service, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { BUILD_INFO, getServiceWorkerVersion } from '../../lib/appVersion';
 import { OcpiCard } from './OcpiCard';
 
 const COLLECTION_LABELS: Record<string, string> = {
@@ -28,6 +29,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   const [isTesting, setIsTesting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [clientErrors, setClientErrors] = useState<Array<{ id: string | number; createdAt: string; message: string; source?: string; url?: string; userId?: string }> | null>(null);
+  const [swVersion, setSwVersion] = useState<string | null>(null);
 
   // Restore-flow: bestand inlezen → preview tonen → bevestigen → toepassen.
   const restoreInputRef = useRef<HTMLInputElement>(null);
@@ -215,6 +217,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   useEffect(() => {
     checkHealth();
     fetchClientErrors();
+    getServiceWorkerVersion().then(setSwVersion);
   }, []);
 
   return (
@@ -246,6 +249,43 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           {testResult}
         </div>
       )}
+
+      <div className="surface-card p-6 rounded-3xl">
+        <MicroLabel className="mb-4">Versie</MicroLabel>
+        <div className="space-y-3">
+          <div className="flex justify-between items-center gap-4">
+            <span className="text-sm font-medium text-slate-600">App-versie:</span>
+            <span className="text-sm font-semibold text-slate-800 tabular-nums">v{BUILD_INFO.version}</span>
+          </div>
+          <div className="flex justify-between items-center gap-4">
+            <span className="text-sm font-medium text-slate-600">Build (commit):</span>
+            {BUILD_INFO.sha ? (
+              <a
+                href={`https://github.com/jarnodegreve-ui/VHB/commit/${BUILD_INFO.sha}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-mono text-oker-600 hover:text-oker-700 tabular-nums"
+              >
+                {BUILD_INFO.sha}
+              </a>
+            ) : (
+              <span className="text-xs font-mono text-slate-400">lokaal</span>
+            )}
+          </div>
+          <div className="flex justify-between items-center gap-4">
+            <span className="text-sm font-medium text-slate-600">Gebouwd op:</span>
+            <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(BUILD_INFO.builtAt).toLocaleString('nl-BE')}</span>
+          </div>
+          <div className="flex justify-between items-center gap-4">
+            <span className="text-sm font-medium text-slate-600">Service worker:</span>
+            {swVersion ? (
+              <Badge tone="emerald" dot>{swVersion}</Badge>
+            ) : (
+              <span className="text-xs font-mono text-slate-400">niet actief</span>
+            )}
+          </div>
+        </div>
+      </div>
 
       {healthData && (
         <div className="space-y-6">

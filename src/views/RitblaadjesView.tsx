@@ -4,6 +4,7 @@ import type { User } from '../types';
 import { getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Skeleton } from '../components/Skeleton';
 
 type RitblaadjeMeta = {
   filename: string;
@@ -224,11 +225,15 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       />
 
       {isLoading ? (
-        <div className="surface-card p-8 rounded-3xl flex items-center justify-center min-h-[200px]">
-          <div className="flex items-center gap-3 text-slate-500">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
-            <span className="text-sm font-medium">Ritblad laden...</span>
+        <div className="surface-card p-5 md:p-6 rounded-3xl space-y-4">
+          <div className="flex items-center gap-3">
+            <Skeleton rounded="xl" className="w-10 h-10 shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-3.5 w-2/5" />
+              <Skeleton className="h-2.5 w-1/4" />
+            </div>
           </div>
+          <Skeleton rounded="2xl" className="w-full h-[320px]" />
         </div>
       ) : !current ? (
         <EmptyState

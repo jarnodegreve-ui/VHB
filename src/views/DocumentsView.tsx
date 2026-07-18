@@ -4,6 +4,7 @@ import type { User } from '../types';
 import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, MicroLabel } from '../components/primitives';
+import { SkeletonRow } from '../components/Skeleton';
 import { formatDateHuman } from '../lib/format';
 
 export type UserDocument = {
@@ -50,7 +51,11 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
       <PageHeader title="Mijn documenten" description="Attesten, reglement en andere documenten die de planning voor jou klaarzet." />
 
       {loading ? (
-        <div className="surface-card rounded-3xl p-8 text-sm font-medium text-slate-500">Laden…</div>
+        <div className="surface-card rounded-3xl divide-y divide-slate-100 dark:divide-slate-100 overflow-hidden">
+          <SkeletonRow className="px-5 py-4" />
+          <SkeletonRow className="px-5 py-4" />
+          <SkeletonRow className="px-5 py-4" />
+        </div>
       ) : docs.length === 0 ? (
         <EmptyState icon={<FileText size={22} />} title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
       ) : (
