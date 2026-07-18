@@ -28,7 +28,9 @@
 // + maskable blijven vol (iOS/Android ronden die zelf). Bump = asset-wissel.
 // v14: theme-color/manifest naar carbon (#0D0D0F) — manifest.json gewijzigd
 // (cache-first), bump zodat de nieuwe PWA-chrome geserveerd wordt.
-const CACHE_NAME = 'vhb-portaal-v14';
+// v15: message-handler GET_VERSION toegevoegd (versie-indicator in Systeem-
+// status); bump zodat clients de nieuwe SW oppikken.
+const CACHE_NAME = 'vhb-portaal-v15';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const RITBLAADJE_API = '/api/ritblaadje';
@@ -47,6 +49,14 @@ self.addEventListener('activate', (event) => {
     ),
   );
   self.clients.claim();
+});
+
+// Versie-indicator: de app vraagt via een MessageChannel naar de actieve
+// cache-naam, zodat Systeem-status toont of de PWA nog op een oude SW draait.
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'GET_VERSION' && event.ports && event.ports[0]) {
+    event.ports[0].postMessage({ version: CACHE_NAME });
+  }
 });
 
 self.addEventListener('fetch', (event) => {
