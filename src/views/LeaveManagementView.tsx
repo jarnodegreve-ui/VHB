@@ -21,7 +21,7 @@ const LEAVE_TYPE_LABELS: Record<string, string> = {
 };
 const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, onSickReport, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onSickReport, autoOpenSick, onSickModalConsumed, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>; autoOpenSick?: boolean; onSickModalConsumed?: () => void; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
@@ -100,6 +100,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
     setSickForm({ userId: '', startDate: today, endDate: today, comment: '' });
     setShowSickModal(true);
   };
+
+  // Vanuit de dashboard-snelactie "Ziek melden": modal direct openen.
+  useEffect(() => {
+    if (autoOpenSick && onSickReport) {
+      openSickModal();
+      onSickModalConsumed?.();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoOpenSick]);
 
   const handleSickSubmit = async (e: React.FormEvent) => {
     e.preventDefault();

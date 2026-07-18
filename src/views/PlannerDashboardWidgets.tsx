@@ -54,6 +54,7 @@ export function PlannerDashboardWidgets({
   activityLog,
   coverageDays,
   onNavigate,
+  onQuickSickReport,
   isInitialLoad = false,
 }: {
   currentUser: User;
@@ -68,6 +69,7 @@ export function PlannerDashboardWidgets({
   /** null = dekking (nog) niet geladen — toon 'onbekend' i.p.v. vals-groen. */
   coverageDays: DayGap[] | null;
   onNavigate: (view: View) => void;
+  onQuickSickReport?: () => void;
   isInitialLoad?: boolean;
 }) {
   // Klok voor de header (60s-tick is ruim voldoende voor een dagdeel-groet).
@@ -147,6 +149,12 @@ export function PlannerDashboardWidgets({
   const userNameById = (id: string) =>
     users.find((u) => String(u.id) === String(id))?.name || 'Onbekend';
 
+  // Wie is er vandaag afwezig (goedgekeurd verlof/ziekte dat vandaag dekt)?
+  const ABSENCE_LABEL: Record<string, string> = { betaald_verlof: 'Verlof', klein_verlet: 'Klein verlet', ziekte: 'Ziek' };
+  const todayAbsent = leaveRequests
+    .filter((l) => l.status === 'approved' && l.startDate <= today && today <= l.endDate)
+    .map((l) => ({ id: l.id, name: userNameById(l.userId), label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' }))
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   const formatDay = (iso: string) => {
     const label = new Date(`${iso}T00:00:00`).toLocaleDateString('nl-BE', {
@@ -356,6 +364,28 @@ export function PlannerDashboardWidgets({
             bovenaan, en "Portaal Online"/"Realtime Actief" waren hardcoded
             (decoratie) — tegen het eigen niets-is-decoratief-principe in. */}
         <div className="flex flex-col gap-4">
+          {/* Vandaag afwezig — wie is er ziek/met verlof, in één oogopslag. */}
+          <OpsPanel
+            icon={<CalendarClock size={15} />}
+            title="Vandaag afwezig"
+            aside={todayAbsent.length > 0 ? `${todayAbsent.length}` : undefined}
+            onSeeAll={() => onNavigate('verlof-kalender')}
+            seeAllLabel="Kalender"
+          >
+            {todayAbsent.length === 0 ? (
+              <p className="px-1 py-2 text-[13px] font-medium text-slate-500">Iedereen inzetbaar vandaag.</p>
+            ) : (
+              <div className="space-y-1">
+                {todayAbsent.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3 py-2">
+                    <span className="text-[13px] font-semibold text-slate-800 truncate">{a.name}</span>
+                    <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-slate-100 text-slate-600')}>{a.label}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </OpsPanel>
+
           {isAdmin && activityLog.length > 0 ? (
             <OpsPanel
               className="flex-1"
@@ -404,6 +434,7 @@ export function PlannerDashboardWidgets({
         <QuickAction icon={<Upload size={16} />} label="Planning importeren" sub="Matrix uploaden" onClick={() => onNavigate('beheer-roosters')} />
         <QuickAction icon={<MapPin size={16} />} label="Omleiding toevoegen" sub="Hinder registreren" onClick={() => onNavigate('beheer-omleidingen')} />
         <QuickAction icon={<CalendarDays size={16} />} label="Verlofbeheer" sub="Aanvragen beoordelen" onClick={() => onNavigate('verlof-beheer')} />
+        {onQuickSickReport && <QuickAction icon={<AlertTriangle size={16} />} label="Ziek melden" sub="Chauffeur afwezig" onClick={onQuickSickReport} />}
         <QuickAction icon={<Bell size={16} />} label="Update publiceren" sub="Chauffeurs informeren" onClick={() => onNavigate('beheer-updates')} />
       </div>
     </section>
