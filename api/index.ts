@@ -43,8 +43,10 @@ import {
   getServicesData,
   getSwapsData,
   getUpdatesData,
+  getUpdateReadCounts,
   getUsersData,
   logActivity,
+  markUpdatesRead,
   logClientError,
   getClientErrors,
   getClientErrorsSince,
@@ -1918,6 +1920,32 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
   } catch (err: any) {
     console.error("Updates opslaan is mislukt.", err);
     res.status(500).json({ error: "Updates opslaan is mislukt." });
+  }
+});
+
+// Chauffeur bevestigt gelezen: de Updates-weergave meldt de zichtbare updates
+// bij het openen. Idempotent — al-gelezen combinaties zijn een no-op.
+app.post("/api/updates/read", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const ids = Array.isArray(req.body?.updateIds) ? req.body.updateIds.map((id: unknown) => String(id)) : [];
+    if (ids.length === 0) return res.json({ success: true });
+    await markUpdatesRead(String(req.appUser!.id), ids);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Leesbevestiging opslaan is mislukt.", err);
+    res.status(500).json({ error: "Leesbevestiging opslaan is mislukt." });
+  }
+});
+
+// Planner-teller: hoeveel (van de actieve) chauffeurs elke update gelezen heeft.
+app.get("/api/updates/read-counts", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const [counts, users] = await Promise.all([getUpdateReadCounts(), getUsersData()]);
+    const totalChauffeurs = users.filter((u) => u.role === "chauffeur" && u.isActive !== false).length;
+    res.json({ counts, totalChauffeurs });
+  } catch (err: any) {
+    console.error("Leestellers laden is mislukt.", err);
+    res.status(500).json({ error: "Leestellers laden is mislukt." });
   }
 });
 

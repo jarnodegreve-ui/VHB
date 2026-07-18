@@ -1428,6 +1428,40 @@ export const saveUpdatesData = async (data: any) => {
   }
 };
 
+// --- Leesbevestigingen op updates ---
+// Server-only tabel (RLS aan, geen policies) met snake_case-kolommen — zie
+// supabase/update_reads.sql. Eén rij per (update, gebruiker).
+
+/** Markeert de gegeven updates als gelezen door één gebruiker (idempotent upsert). */
+export const markUpdatesRead = async (userId: string, updateIds: string[]) => {
+  const client = requireDb();
+  const uid = String(userId);
+  const rows = Array.from(new Set(updateIds.map((id) => String(id))))
+    .filter(Boolean)
+    .map((updateId) => ({ update_id: updateId, user_id: uid }));
+  if (rows.length === 0) return;
+  // ignoreDuplicates: al-gelezen combinaties overschrijven read_at niet (de
+  // eerste-gelezen-tijd blijft staan) en botsen niet op de primary key.
+  const { error } = await client
+    .from('update_reads')
+    .upsert(rows, { onConflict: 'update_id,user_id', ignoreDuplicates: true });
+  if (error) throw error;
+};
+
+/** Aantal unieke lezers per update-id (voor de planner-teller). */
+export const getUpdateReadCounts = async (): Promise<Record<string, number>> => {
+  const client = requireDb();
+  const rows = await paginatedFetch((from, to) =>
+    client.from('update_reads').select('update_id').range(from, to),
+  );
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    const id = String((row as any).update_id);
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  return counts;
+};
+
 // --- Swaps ---
 
 export const getSwapsData = async () => {
