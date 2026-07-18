@@ -52,6 +52,8 @@ import {
   pruneOldRecords,
   listUserDocuments,
   getUserDocument,
+  getRitblaadjeMeta,
+  deleteAllDocumentsForUser,
   insertUserDocument,
   deleteUserDocument,
   DOCUMENTS_BUCKET,
@@ -1246,6 +1248,12 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       }
       for (const u of userDiff.removed) {
         await logActivity(req, "users", "Gebruiker verwijderd", `${u.name} (${u.role}).`, { type: "user", id: u.id });
+        // Wees-documenten opruimen: verwijder de bijhorende storage-bestanden +
+        // metadata-rijen zodat er niets van de ex-medewerker achterblijft.
+        const removedDocs = await deleteAllDocumentsForUser(String(u.id));
+        if (removedDocs > 0) {
+          await logActivity(req, "users", "Documenten opgeruimd", `${removedDocs} document(en) van ${u.name} verwijderd.`, { type: "user", id: u.id });
+        }
       }
 
       // Welkomstmail voor élk nieuw aangemaakt Auth-account: met een
@@ -1395,6 +1403,18 @@ const buildBackupPayload = async () => {
     console.error("[backup] ocpi_registration-export mislukt (backup gaat door):", err);
   }
 
+  // Documenten- + ritblad-metadata: de bestanden zelf staan in Storage-buckets
+  // (niet in deze JSON), maar zonder deze rijen weet je na projectverlies niet
+  // meer wélk document bij wie hoorde. Referentie-export (net als authUsers).
+  let userDocuments: unknown[] = [];
+  let ritblaadje: unknown = null;
+  try {
+    userDocuments = await listUserDocuments();
+    ritblaadje = await getRitblaadjeMeta();
+  } catch (err) {
+    console.error("[backup] documenten/ritblad-export mislukt (backup gaat door):", err);
+  }
+
   return {
     exportedAt: new Date().toISOString(),
     version: 2,
@@ -1412,9 +1432,12 @@ const buildBackupPayload = async () => {
       activityLog,
     },
     // Referentie-exports (niet door /api/restore teruggeschreven; handmatig
-    // te gebruiken bij disaster-recovery).
+    // te gebruiken bij disaster-recovery). userDocuments/ritblaadje = metadata;
+    // de bijhorende bestanden wonen in de Storage-buckets.
     authUsers,
     ocpiRegistration,
+    userDocuments,
+    ritblaadje,
   };
 };
 

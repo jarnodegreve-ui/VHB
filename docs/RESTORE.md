@@ -25,6 +25,11 @@ het moment waarop je het onder stress nodig hebt.
 - `ocpiRegistration`: Token C + endpoints van de ChargEye-koppeling
   (referentie; na een totaalverlies de handshake opnieuw draaien of deze rij
   handmatig terugzetten in `ocpi_registration`).
+- `userDocuments` + `ritblaadje`: metadata van de per-chauffeur-documenten en
+  het ritblad (filename, categorie, `storage_path`, wie/wanneer). De bestánden
+  zelf staan in de Storage-buckets `user-documents`/`ritblaadjes` (niet in deze
+  JSON). Referentie: hiermee weet je na projectverlies wélk document bij wie
+  hoorde en kun je de rijen + bucket-inhoud handmatig terugkoppelen.
 
 ## Herstellen
 
