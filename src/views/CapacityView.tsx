@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { weekRangeLabel } from '../lib/week';
 import { PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
@@ -124,7 +125,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     catch { return iso; }
   };
   const windowLabel = visibleDates.length > 0
-    ? `${formatDayMonth(visibleDates[0])} – ${formatDayMonth(visibleDates[visibleDates.length - 1])} ${year}`
+    ? `${weekRangeLabel(visibleDates)} · ${formatDayMonth(visibleDates[0])} – ${formatDayMonth(visibleDates[visibleDates.length - 1])} ${year}`
     : `${MONTH_NAMES[monthIndex]} ${year}`;
 
   const dayHeader = (iso: string) => {

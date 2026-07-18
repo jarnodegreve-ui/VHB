@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Shift, User } from '../types';
 import { getSupabaseAuthHeaders } from '../lib/ui';
+import { isoWeekNumber } from '../lib/week';
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -8,17 +9,6 @@ const MONTH_NAMES = [
 ];
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
-
-// ISO weeknummer (Europees: ma=1, week 1 bevat 4 januari).
-const isoWeekNumber = (d: Date) => {
-  const target = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
-  const dayNr = (target.getUTCDay() + 6) % 7;
-  target.setUTCDate(target.getUTCDate() - dayNr + 3);
-  const firstThursday = new Date(Date.UTC(target.getUTCFullYear(), 0, 4));
-  const firstDayNr = (firstThursday.getUTCDay() + 6) % 7;
-  firstThursday.setUTCDate(firstThursday.getUTCDate() - firstDayNr + 3);
-  return 1 + Math.round((target.getTime() - firstThursday.getTime()) / (7 * 24 * 60 * 60 * 1000));
-};
 
 // Categoriseer dienst op basis van starttijd voor visuele groepering.
 // Ochtend: voor 09:00 — Middag: 09:00–14:59 — Avond: 15:00+
