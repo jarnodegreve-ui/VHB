@@ -36,6 +36,8 @@ import {
   Activity,
   KeyRound,
   Moon,
+  ShieldAlert,
+  Smartphone,
   Sun,
   BarChart3,
   BellRing,
@@ -53,6 +55,7 @@ import { reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
 import { addDays, isoDate } from './lib/availability';
+import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
@@ -90,6 +93,7 @@ const LazyReportsView = lazyWithRetry(() => import('./views/admin/ReportsView').
 const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
+const LazyDevicesView = lazyWithRetry(() => import('./views/admin/DevicesView').then((module) => ({ default: module.DevicesView })));
 const LazyLeaveManagementView = lazyWithRetry(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 
@@ -141,6 +145,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-dienstoverzicht',
     'beheer-contactlijst',
     'gebruikers',
+    'toestellen',
     'activiteit',
     'ocpi-monitoring',
     'beheer-debug',
@@ -308,12 +313,14 @@ export default function App() {
   // (feature uit) — de knop verschijnt dan niet.
   const [pushPublicKey, setPushPublicKey] = useState<string | null>(null);
   const [pushEnabled, setPushEnabled] = useState(false);
+  // Toestel-whitelist: 'pending'/'revoked' → geblokkeerd-scherm i.p.v. de app.
+  const [deviceBlocked, setDeviceBlocked] = useState<'pending' | 'revoked' | null>(null);
 
   useEffect(() => {
     if (!currentUser || !session?.access_token || !isPushSupported()) return;
     let cancelled = false;
     (async () => {
-      const key = await fetchPushPublicKey({ Authorization: `Bearer ${session.access_token}` });
+      const key = await fetchPushPublicKey({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
       if (cancelled) return;
       setPushPublicKey(key);
       if (key) {
@@ -328,7 +335,7 @@ export default function App() {
 
   const togglePush = async () => {
     if (!pushPublicKey || !session?.access_token) return;
-    const headers = { Authorization: `Bearer ${session.access_token}` };
+    const headers = { Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() };
     if (pushEnabled) {
       await unsubscribeFromPush(headers);
       setPushEnabled(false);
@@ -460,6 +467,7 @@ export default function App() {
         // handleLogout), de lokale unsubscribe werkt sowieso.
         if (isPushSupported()) void unsubscribeFromPush({}).catch(() => {});
         setPushEnabled(false);
+        setDeviceBlocked(null);
         initializedUserIdRef.current = null;
         loadedCollectionsRef.current.clear();
         setUsers([]);
@@ -555,6 +563,9 @@ export default function App() {
     if (accessToken) {
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
+    for (const [key, value] of Object.entries(deviceHeaders())) {
+      if (!headers.has(key)) headers.set(key, value);
+    }
 
     const response = await fetch(url, { ...init, headers });
     // 401 = sessie ongeldig/verlopen → forceer relogin. 403 alleen forceren bij
@@ -569,6 +580,12 @@ export default function App() {
       if (/gedeactiveerd/i.test(body?.error || '')) {
         void forceSignOut('Je account is gedeactiveerd. Neem contact op met de planning.');
         throw new Error('Je account is gedeactiveerd.');
+      }
+      // Toestel-whitelist: het toestel is (intussen) niet meer goedgekeurd →
+      // toon het geblokkeerd-scherm i.p.v. losse fout-toasts per call.
+      if (body?.code === 'device_pending' || body?.code === 'device_unknown' || body?.code === 'device_revoked') {
+        setDeviceBlocked(body.code === 'device_revoked' ? 'revoked' : 'pending');
+        throw new Error(body?.error || 'Dit toestel heeft geen toegang.');
       }
       throw new Error(body?.error || 'Je hebt geen toegang tot deze actie.');
     }
@@ -629,11 +646,38 @@ export default function App() {
     currentUser && session?.access_token ? loadAppData(currentUser, session.access_token) : Promise.resolve();
   const { pull: ptrPull, refreshing: ptrRefreshing } = usePullToRefresh(scrollContainerRef, refreshAll);
 
+  /** Meldt dit toestel aan bij de server (toestel-whitelist). Faalt stil:
+   *  bij een netwerk-/serverfout laten we de app gewoon door — de server-gate
+   *  in de API blijft sowieso de autoriteit. */
+  const registerThisDevice = async (accessToken: string): Promise<'approved' | 'pending' | 'revoked' | null> => {
+    try {
+      const res = await fetch('/api/devices/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}`, ...deviceHeaders() },
+        body: JSON.stringify({ name: deriveDeviceName() }),
+      });
+      if (!res.ok) return null;
+      const data = await res.json().catch(() => null);
+      return data?.status === 'approved' || data?.status === 'pending' || data?.status === 'revoked' ? data.status : null;
+    } catch {
+      return null;
+    }
+  };
+
   const initializeAuthenticatedApp = async (accessToken: string, authUserId?: string) => {
     // Progressieve boot: alleen het profiel (één snelle call) blokkeert de
     // eerste render; alle overige data streamt op de achtergrond binnen.
     if (authUserId && initializedUserIdRef.current === authUserId) return;
     try {
+      // Toestel-whitelist vóór al het andere: op een niet-goedgekeurd toestel
+      // zou elke volgende call toch 403 geven — toon meteen het wachtscherm.
+      const deviceStatus = await registerThisDevice(accessToken);
+      if (deviceStatus === 'pending' || deviceStatus === 'revoked') {
+        setDeviceBlocked(deviceStatus);
+        setIsInitialLoad(false);
+        return; // dedup-vlag bewust niet zetten → "Opnieuw controleren" kan her-initialiseren
+      }
+      setDeviceBlocked(null);
       const appUser = await fetchCurrentUser(accessToken);
       // Pas NA een geslaagd profiel de dedup-vlag zetten — anders blijft de
       // gebruiker bij een transiente /api/me-fout vasthangen op 'Profiel
@@ -1331,12 +1375,13 @@ export default function App() {
       // krijgen, en de DB-koppeling endpoint→user moet weg.
       try {
         if (session?.access_token && isPushSupported()) {
-          await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}` });
+          await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
         }
       } catch {
         // best-effort — nooit het uitloggen blokkeren
       }
       setPushEnabled(false);
+      setDeviceBlocked(null);
       await supabase?.auth.signOut();
       setSession(null);
       setCurrentUser(null);
@@ -1385,6 +1430,60 @@ export default function App() {
     );
   }
 
+  // Toestel-whitelist: ingelogd, maar dit toestel is (nog) niet goedgekeurd.
+  if (deviceBlocked && session) {
+    const revoked = deviceBlocked === 'revoked';
+    return (
+      <div className="login-bg-light min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
+        <img src="/vhb-logo.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-12 w-auto select-none" draggable={false} />
+        <div className="max-w-sm">
+          <div className={cn(
+            'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center',
+            revoked ? 'bg-red-50 text-red-500' : 'bg-oker-50 text-oker-600',
+          )}>
+            {revoked ? <ShieldAlert size={26} /> : <Smartphone size={26} />}
+          </div>
+          <h1 className="mt-4 text-xl font-black text-slate-900 tracking-tight">
+            {revoked ? 'Dit toestel is geblokkeerd' : 'Toestel wacht op goedkeuring'}
+          </h1>
+          <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+            {revoked
+              ? 'De toegang voor dit toestel is ingetrokken. Neem contact op met de planning als dit niet klopt.'
+              : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen — zodra het toestel is goedgekeurd kun je verder.'}
+          </p>
+          {!revoked && (
+            <button
+              type="button"
+              onClick={async () => {
+                if (!session?.access_token) return;
+                const status = await registerThisDevice(session.access_token);
+                if (status === 'approved' || status === null) {
+                  setDeviceBlocked(null);
+                  initializedUserIdRef.current = null;
+                  void initializeAuthenticatedApp(session.access_token, session.user?.id);
+                } else {
+                  setDeviceBlocked(status);
+                  showToast('Nog niet goedgekeurd — vraag de planning om dit toestel goed te keuren.', 'info');
+                }
+              }}
+              className="btn-primary ios-pressable mt-5 px-5 py-3 text-xs uppercase tracking-[0.08em]"
+            >
+              Opnieuw controleren
+            </button>
+          )}
+          <div className="mt-4">
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+            >
+              Afmelden
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!currentUser) {
     // Wél een sessie maar (nog) geen profiel: toon een laadscherm met
@@ -1442,6 +1541,7 @@ export default function App() {
     activiteit: { title: 'Activiteit', subtitle: 'Recente beheeracties en wijzigingen in het portaal.' },
     'beheer-updates': { title: 'Beheer Updates', subtitle: 'Publiceer, controleer en verwijder updates en dringende meldingen.' },
     gebruikers: { title: 'Gebruikers', subtitle: 'Beheer accounts, rollen en toegangsrechten.' },
+    toestellen: { title: 'Toestellen', subtitle: 'Keur toestellen goed of blokkeer ze — logins werken alleen op goedgekeurde toestellen.' },
     'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
     'beheer-dienstoverzicht': { title: 'Beheer Dienstoverzicht', subtitle: 'Onderhoud het dienstschema en importeer uit Excel.' },
     'beheer-contactlijst': { title: 'Beheer Contactlijst', subtitle: 'Werk medewerkers, rollen en gegevens bij.' },
@@ -1637,8 +1737,9 @@ export default function App() {
           )}
 
           {isAdmin && (
-            <NavSection title="Systeem" count={4} active={['gebruikers', 'activiteit', 'ocpi-monitoring', 'beheer-debug'].includes(currentView)}>
+            <NavSection title="Systeem" count={5} active={['gebruikers', 'toestellen', 'activiteit', 'ocpi-monitoring', 'beheer-debug'].includes(currentView)}>
               <NavItem icon={<Users size={18} />} label="Gebruikers" active={currentView === 'gebruikers'} onClick={() => { setCurrentView('gebruikers'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Smartphone size={18} />} label="Toestellen" active={currentView === 'toestellen'} onClick={() => { setCurrentView('toestellen'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Activity size={18} />} label="Activiteit" active={currentView === 'activiteit'} onClick={() => { setCurrentView('activiteit'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Zap size={18} />} label="Laadpalen (OCPI)" active={currentView === 'ocpi-monitoring'} onClick={() => { setCurrentView('ocpi-monitoring'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Activity size={18} />} label="Systeem Status" active={currentView === 'beheer-debug'} onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} />
@@ -1847,6 +1948,11 @@ export default function App() {
               {resolvedCurrentView === 'gebruikers' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
+                </Suspense>
+              )}
+              {resolvedCurrentView === 'toestellen' && (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyDevicesView users={users} currentUserId={currentUser!.id} />
                 </Suspense>
               )}
               {resolvedCurrentView === 'activiteit' && <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>}

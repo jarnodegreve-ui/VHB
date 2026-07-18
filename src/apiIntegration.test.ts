@@ -47,6 +47,7 @@ const mem = vi.hoisted(() => ({
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
   documents: [] as any[],
   ritblaadje: null as any,
+  devices: [] as any[],
 }));
 
 vi.mock('../api/db.js', () => {
@@ -155,6 +156,38 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     insertUserDocument: async (doc: any) => { const rec = { id: `doc-${mem.documents.length + 1}`, uploadedAt: '2026-07-01T00:00:00Z', ...doc }; mem.documents.push(rec); return rec; },
     deleteUserDocument: async (id: string) => { mem.documents = mem.documents.filter((d: any) => String(d.id) !== String(id)); },
     getRitblaadjeMeta: async () => mem.ritblaadje ?? null,
+    // Toestel-whitelist: zelfde contract als de echte helpers, tegen mem.devices.
+    getDevice: async (userId: string, deviceToken: string) =>
+      mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken) ?? null,
+    userHasDevices: async (userId: string) =>
+      mem.devices.some((d: any) => String(d.userId) === String(userId)),
+    registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean) => {
+      const existing = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
+      if (existing) {
+        existing.lastSeenAt = '2026-07-18T12:00:00Z';
+        return { device: existing, created: false };
+      }
+      const device = {
+        userId: String(userId), deviceToken, name,
+        status: autoApprove ? 'approved' : 'pending',
+        createdAt: '2026-07-18T12:00:00Z', lastSeenAt: '2026-07-18T12:00:00Z',
+        approvedAt: autoApprove ? '2026-07-18T12:00:00Z' : null, approvedBy: autoApprove ? 'auto' : null,
+      };
+      mem.devices.push(device);
+      return { device, created: true };
+    },
+    listAllDevices: async () => mem.devices,
+    setDeviceStatus: async (userId: string, deviceToken: string, status: string) => {
+      const device = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
+      if (device) device.status = status;
+    },
+    renameDevice: async (userId: string, deviceToken: string, name: string) => {
+      const device = mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken);
+      if (device) device.name = name;
+    },
+    deleteDevice: async (userId: string, deviceToken: string) => {
+      mem.devices = mem.devices.filter((d: any) => !(String(d.userId) === String(userId) && d.deviceToken === deviceToken));
+    },
     deleteAllDocumentsForUser: async (userId: string) => {
       const n = mem.documents.filter((d: any) => String(d.userId) === String(userId)).length;
       mem.documents = mem.documents.filter((d: any) => String(d.userId) !== String(userId));
@@ -202,13 +235,17 @@ afterAll(async () => {
 const api = async (
   method: string,
   path: string,
-  opts: { token?: string; body?: unknown; headers?: Record<string, string> } = {},
+  // device: toestel-token voor de whitelist-gate. Default 'dev-ok' (in
+  // beforeEach goedgekeurd voor beide chauffeurs) zodat bestaande tests
+  // ongemoeid blijven; expliciet null = header weglaten.
+  opts: { token?: string; body?: unknown; headers?: Record<string, string>; device?: string | null } = {},
 ) => {
   const res = await fetch(`${baseUrl}${path}`, {
     method,
     headers: {
       ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
       ...(opts.token ? { Authorization: `Bearer ${opts.token}` } : {}),
+      ...(opts.device === null ? {} : { 'X-Device-Token': opts.device ?? 'dev-ok' }),
       ...(opts.headers ?? {}),
     },
     body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
@@ -264,6 +301,12 @@ beforeEach(() => {
   mem.pushesSent = [];
   mem.documents = [];
   mem.ritblaadje = null;
+  // Beide chauffeurs hebben één goedgekeurd toestel ('dev-ok' — de default
+  // van de api()-helper), zodat de whitelist-gate bestaande tests niet raakt.
+  mem.devices = [
+    { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
+    { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
+  ];
 });
 
 describe('authenticatie & rollen', () => {
@@ -1104,5 +1147,84 @@ describe('documenten per gebruiker', () => {
   it('document rondsturen naar alle chauffeurs is niet toegankelijk voor chauffeurs (403)', async () => {
     const res = await api('POST', '/api/documents/broadcast', { token: 'tok-a', body: { filename: 'reglement.pdf', dataUrl: 'data:application/pdf;base64,QQ==' } });
     expect(res.status).toBe(403);
+  });
+});
+
+describe('toestel-whitelist', () => {
+  it('blokkeert een chauffeur zonder toestel-header (403 device_unknown)', async () => {
+    const res = await api('GET', '/api/updates', { token: 'tok-a', device: null });
+    expect(res.status).toBe(403);
+    expect(res.json?.code).toBe('device_unknown');
+  });
+
+  it('blokkeert een chauffeur met een onbekend toestel-token (403 device_unknown)', async () => {
+    const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-vreemd' });
+    expect(res.status).toBe(403);
+    expect(res.json?.code).toBe('device_unknown');
+  });
+
+  it('blokkeert een pending en een geblokkeerd toestel met de juiste code', async () => {
+    mem.devices.push(
+      { userId: '3', deviceToken: 'dev-pending', name: 'x', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null },
+      { userId: '3', deviceToken: 'dev-revoked', name: 'x', status: 'revoked', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null },
+    );
+    const pending = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-pending' });
+    expect(pending.status).toBe(403);
+    expect(pending.json?.code).toBe('device_pending');
+    const revoked = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-revoked' });
+    expect(revoked.status).toBe(403);
+    expect(revoked.json?.code).toBe('device_revoked');
+  });
+
+  it('raakt planner en admin niet — ook zonder toestel-header', async () => {
+    expect((await api('GET', '/api/updates', { token: 'tok-admin', device: null })).status).toBe(200);
+    expect((await api('GET', '/api/updates', { token: 'tok-planner', device: null })).status).toBe(200);
+  });
+
+  it('eerste toestel van een chauffeur wordt automatisch goedgekeurd, het tweede wacht (+ push naar admin)', async () => {
+    mem.devices = []; // schone lei: chauffeur zonder toestellen
+    const eerste = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-1', body: { name: 'iPhone · app' } });
+    expect(eerste.status).toBe(200);
+    expect(eerste.json?.status).toBe('approved');
+
+    const tweede = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-2', body: { name: 'Tweede toestel' } });
+    expect(tweede.status).toBe(200);
+    expect(tweede.json?.status).toBe('pending');
+    // Admin (id '1') krijgt een push over het wachtende toestel.
+    expect(mem.pushesSent.some((p) => p.userIds.includes('1') && /goedkeuring/i.test(p.payload?.title ?? ''))).toBe(true);
+  });
+
+  it('de register-route blijft bereikbaar vanaf een pending toestel (exempt in de gate)', async () => {
+    mem.devices = [
+      { userId: '3', deviceToken: 'dev-p', name: 'x', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null },
+    ];
+    const res = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-p', body: { name: 'x' } });
+    expect(res.status).toBe(200);
+    expect(res.json?.status).toBe('pending'); // her-registratie promoveert NIET
+  });
+
+  it('na goedkeuring door de admin werkt het toestel', async () => {
+    mem.devices.push({ userId: '3', deviceToken: 'dev-nieuw', name: 'x', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null });
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-nieuw' })).status).toBe(403);
+    const approve = await api('POST', '/api/devices/approve', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-nieuw' } });
+    expect(approve.status).toBe(200);
+    expect((await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-nieuw' })).status).toBe(200);
+  });
+
+  it('toestellenlijst en beheer-acties zijn admin-only', async () => {
+    expect((await api('GET', '/api/devices', { token: 'tok-planner' })).status).toBe(403);
+    expect((await api('GET', '/api/devices', { token: 'tok-a' })).status).toBe(403);
+    expect((await api('GET', '/api/devices', { token: 'tok-admin' })).status).toBe(200);
+  });
+
+  it('de admin kan het toestel waarop die nu werkt niet blokkeren of schrappen (lockout-guard)', async () => {
+    mem.devices.push({ userId: '1', deviceToken: 'dev-admin', name: 'Mac', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    const revoke = await api('POST', '/api/devices/revoke', { token: 'tok-admin', device: 'dev-admin', body: { userId: '1', deviceToken: 'dev-admin' } });
+    expect(revoke.status).toBe(400);
+    const del = await api('POST', '/api/devices/delete', { token: 'tok-admin', device: 'dev-admin', body: { userId: '1', deviceToken: 'dev-admin' } });
+    expect(del.status).toBe(400);
+    // Een ánder toestel blokkeren mag wel.
+    mem.devices.push({ userId: '3', deviceToken: 'dev-x', name: 'x', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
+    expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', device: 'dev-admin', body: { userId: '3', deviceToken: 'dev-x' } })).status).toBe(200);
   });
 });

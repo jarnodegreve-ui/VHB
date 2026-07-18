@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
+import { deviceHeaders } from './device';
 import { supabase } from './supabase';
 
 export function cn(...inputs: ClassValue[]) {
@@ -16,6 +17,7 @@ export async function getSupabaseAuthHeaders() {
   return {
     'Content-Type': 'application/json',
     ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+    ...deviceHeaders(),
   };
 }
 

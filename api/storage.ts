@@ -1462,6 +1462,154 @@ export const getUpdateReadCounts = async (): Promise<Record<string, number>> => 
   return counts;
 };
 
+// --- Toestel-whitelist (user_devices) ---
+// Server-only tabel (RLS aan, geen policies, snake_case) — zie
+// supabase/user_devices.sql. Eerste toestel van een chauffeur = auto-approved,
+// elk volgend toestel = pending tot de admin goedkeurt. Planner/admin-
+// toestellen zijn altijd approved (alleen zichtbaarheid, nooit uitsluiting).
+
+export type DeviceStatus = 'approved' | 'pending' | 'revoked';
+
+export type UserDevice = {
+  userId: string;
+  deviceToken: string;
+  name: string;
+  status: DeviceStatus;
+  createdAt: string;
+  lastSeenAt: string;
+  approvedAt: string | null;
+  approvedBy: string | null;
+};
+
+const toPublicDevice = (row: any): UserDevice => ({
+  userId: String(row.user_id),
+  deviceToken: String(row.device_token),
+  name: String(row.name ?? 'Onbekend toestel'),
+  status: row.status as DeviceStatus,
+  createdAt: String(row.created_at),
+  lastSeenAt: String(row.last_seen_at),
+  approvedAt: row.approved_at ? String(row.approved_at) : null,
+  approvedBy: row.approved_by ? String(row.approved_by) : null,
+});
+
+export const getDevice = async (userId: string, deviceToken: string): Promise<UserDevice | null> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from('user_devices')
+    .select('*')
+    .eq('user_id', String(userId))
+    .eq('device_token', String(deviceToken))
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toPublicDevice(data) : null;
+};
+
+/**
+ * Registreert een toestel (of raakt een bestaand toestel aan). Geeft de rij
+ * terug + of hij nieuw was. `autoApprove` bepaalt de status van een níeuw
+ * toestel; een bestaand toestel behoudt zijn status (een revoked toestel
+ * kan zichzelf dus niet her-registreren naar pending/approved).
+ */
+export const registerDevice = async (
+  userId: string,
+  deviceToken: string,
+  name: string,
+  autoApprove: boolean,
+): Promise<{ device: UserDevice; created: boolean }> => {
+  const client = requireDb();
+  const existing = await getDevice(userId, deviceToken);
+  if (existing) {
+    const { error } = await client
+      .from('user_devices')
+      .update({ last_seen_at: new Date().toISOString() })
+      .eq('user_id', String(userId))
+      .eq('device_token', String(deviceToken));
+    if (error) throw error;
+    return { device: existing, created: false };
+  }
+  const row = {
+    user_id: String(userId),
+    device_token: String(deviceToken),
+    name: name || 'Onbekend toestel',
+    status: (autoApprove ? 'approved' : 'pending') as DeviceStatus,
+    approved_at: autoApprove ? new Date().toISOString() : null,
+    approved_by: autoApprove ? 'auto' : null,
+  };
+  // Race (dubbele boot-call): bij een PK-conflict is de rij er al — negeren
+  // en de bestaande status teruggeven i.p.v. een 500.
+  const { error } = await client.from('user_devices').insert(row);
+  if (error) {
+    if ((error as any).code === '23505') {
+      const raced = await getDevice(userId, deviceToken);
+      if (raced) return { device: raced, created: false };
+    }
+    throw error;
+  }
+  const device = await getDevice(userId, deviceToken);
+  if (!device) throw new Error('Toestel-registratie niet teruggevonden.');
+  return { device, created: true };
+};
+
+/** Heeft deze gebruiker al één of meer toestellen? (bepaalt auto-approve) */
+export const userHasDevices = async (userId: string): Promise<boolean> => {
+  const client = requireDb();
+  const { count, error } = await client
+    .from('user_devices')
+    .select('device_token', { count: 'exact', head: true })
+    .eq('user_id', String(userId));
+  if (error) throw error;
+  return (count ?? 0) > 0;
+};
+
+export const listAllDevices = async (): Promise<UserDevice[]> => {
+  const client = requireDb();
+  const rows = await paginatedFetch((from, to) =>
+    client.from('user_devices').select('*').order('created_at', { ascending: false }).range(from, to),
+  );
+  return rows.map(toPublicDevice);
+};
+
+export const setDeviceStatus = async (
+  userId: string,
+  deviceToken: string,
+  status: DeviceStatus,
+  actorId: string,
+): Promise<void> => {
+  const client = requireDb();
+  const patch: Record<string, unknown> = { status };
+  if (status === 'approved') {
+    patch.approved_at = new Date().toISOString();
+    patch.approved_by = String(actorId);
+  }
+  const { error } = await client
+    .from('user_devices')
+    .update(patch)
+    .eq('user_id', String(userId))
+    .eq('device_token', String(deviceToken));
+  if (error) throw error;
+};
+
+export const renameDevice = async (userId: string, deviceToken: string, name: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('user_devices')
+    .update({ name: name || 'Onbekend toestel' })
+    .eq('user_id', String(userId))
+    .eq('device_token', String(deviceToken));
+  if (error) throw error;
+};
+
+/** Verwijdert een toestel-registratie volledig (schrappen uit de lijst). */
+export const deleteDevice = async (userId: string, deviceToken: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('user_devices')
+    .delete()
+    .eq('user_id', String(userId))
+    .eq('device_token', String(deviceToken));
+  if (error) throw error;
+};
+
 // --- Swaps ---
 
 export const getSwapsData = async () => {

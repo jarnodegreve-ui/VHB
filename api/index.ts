@@ -22,7 +22,7 @@ import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, type LeaveDecision
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
-import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser, DEVICE_TOKEN_HEADER } from "./middleware.js";
 import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { invalidateUsersCache } from "./userCache.js";
@@ -45,8 +45,14 @@ import {
   getUpdatesData,
   getUpdateReadCounts,
   getUsersData,
+  listAllDevices,
   logActivity,
   markUpdatesRead,
+  registerDevice,
+  renameDevice,
+  deleteDevice,
+  setDeviceStatus,
+  userHasDevices,
   logClientError,
   getClientErrors,
   getClientErrorsSince,
@@ -1339,6 +1345,129 @@ app.post("/api/push/unsubscribe", authenticate, async (req: AuthenticatedRequest
   // Alleen je eigen abonnement mag je afmelden (geen IDOR op andermans endpoint).
   await deletePushSubscriptionForUser(endpoint, String(req.appUser!.id));
   res.json({ success: true });
+});
+
+// --- Toestel-whitelist ---
+// Zie middleware.ts (gate) + supabase/user_devices.sql. Registratie is voor
+// iedereen bereikbaar (exempt in de gate); beheer is admin-only.
+
+app.post("/api/devices/register", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const deviceToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+    if (!deviceToken || deviceToken.length > 100) {
+      return res.status(400).json({ error: "Geen geldig toestel-token meegestuurd." });
+    }
+    const appUser = req.appUser!;
+    const name = String(req.body?.name ?? "").slice(0, 80).trim() || "Onbekend toestel";
+    // Chauffeur: eerste toestel automatisch vertrouwd, daarna goedkeuring.
+    // Planner/admin: altijd goedgekeurd (alleen zichtbaarheid — nooit lockout).
+    const autoApprove = appUser.role !== "chauffeur" ? true : !(await userHasDevices(String(appUser.id)));
+    const { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove);
+    if (created) {
+      await logActivity(
+        req,
+        "system",
+        device.status === "approved" ? "Toestel geregistreerd" : "Toestel wacht op goedkeuring",
+        `${appUser.name}: ${device.name} (${device.status}).`,
+      );
+      if (device.status === "pending") {
+        const adminIds = (await getUsersData())
+          .filter((u) => u.role === "admin" && u.isActive !== false)
+          .map((u) => String(u.id));
+        await sendPushToUsers(adminIds, {
+          title: "Nieuw toestel wacht op goedkeuring",
+          body: `${appUser.name} — ${device.name}`,
+          url: "/",
+        });
+      }
+    }
+    res.json({ status: device.status });
+  } catch (err: any) {
+    console.error("Toestel-registratie is mislukt.", err);
+    res.status(500).json({ error: "Toestel-registratie is mislukt." });
+  }
+});
+
+app.get("/api/devices", authenticate, requireRole("admin"), async (_req, res) => {
+  try {
+    res.json(await listAllDevices());
+  } catch (err: any) {
+    console.error("Toestellen laden is mislukt.", err);
+    res.status(500).json({ error: "Toestellen laden is mislukt." });
+  }
+});
+
+app.post("/api/devices/approve", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = String(req.body?.userId ?? "");
+    const deviceToken = String(req.body?.deviceToken ?? "");
+    if (!userId || !deviceToken) return res.status(400).json({ error: "userId en deviceToken zijn verplicht." });
+    await setDeviceStatus(userId, deviceToken, "approved", String(req.appUser!.id));
+    const owner = (await getUsersData()).find((u) => String(u.id) === userId);
+    await logActivity(req, "system", "Toestel goedgekeurd", `${owner?.name ?? userId}.`);
+    await sendPushToUsers([userId], {
+      title: "Toestel goedgekeurd",
+      body: "Dit toestel heeft nu toegang tot het VHB Portaal.",
+      url: "/",
+    });
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Toestel goedkeuren is mislukt.", err);
+    res.status(500).json({ error: "Toestel goedkeuren is mislukt." });
+  }
+});
+
+app.post("/api/devices/revoke", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = String(req.body?.userId ?? "");
+    const deviceToken = String(req.body?.deviceToken ?? "");
+    if (!userId || !deviceToken) return res.status(400).json({ error: "userId en deviceToken zijn verplicht." });
+    // Niet het toestel blokkeren waarop je zelf nu werkt (lockout-guard).
+    const ownToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+    if (userId === String(req.appUser!.id) && deviceToken === ownToken) {
+      return res.status(400).json({ error: "Je kunt het toestel waarop je nu werkt niet blokkeren." });
+    }
+    await setDeviceStatus(userId, deviceToken, "revoked", String(req.appUser!.id));
+    const owner = (await getUsersData()).find((u) => String(u.id) === userId);
+    await logActivity(req, "system", "Toestel geblokkeerd", `${owner?.name ?? userId}.`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Toestel blokkeren is mislukt.", err);
+    res.status(500).json({ error: "Toestel blokkeren is mislukt." });
+  }
+});
+
+app.post("/api/devices/delete", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = String(req.body?.userId ?? "");
+    const deviceToken = String(req.body?.deviceToken ?? "");
+    if (!userId || !deviceToken) return res.status(400).json({ error: "userId en deviceToken zijn verplicht." });
+    const ownToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+    if (userId === String(req.appUser!.id) && deviceToken === ownToken) {
+      return res.status(400).json({ error: "Je kunt het toestel waarop je nu werkt niet schrappen." });
+    }
+    await deleteDevice(userId, deviceToken);
+    const owner = (await getUsersData()).find((u) => String(u.id) === userId);
+    await logActivity(req, "system", "Toestel geschrapt", `${owner?.name ?? userId}.`);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Toestel schrappen is mislukt.", err);
+    res.status(500).json({ error: "Toestel schrappen is mislukt." });
+  }
+});
+
+app.post("/api/devices/rename", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = String(req.body?.userId ?? "");
+    const deviceToken = String(req.body?.deviceToken ?? "");
+    const name = String(req.body?.name ?? "").slice(0, 80).trim();
+    if (!userId || !deviceToken || !name) return res.status(400).json({ error: "userId, deviceToken en name zijn verplicht." });
+    await renameDevice(userId, deviceToken, name);
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Toestel hernoemen is mislukt.", err);
+    res.status(500).json({ error: "Toestel hernoemen is mislukt." });
+  }
 });
 
 // --- Client-foutmonitoring ---

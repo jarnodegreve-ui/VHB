@@ -1,3 +1,4 @@
+import { deviceHeaders } from './device';
 import { supabase } from './supabase';
 
 /**
@@ -21,6 +22,9 @@ export async function apiFetch<T = unknown>(url: string, init: RequestInit = {})
     if (accessToken && !headers.has('Authorization')) {
       headers.set('Authorization', `Bearer ${accessToken}`);
     }
+  }
+  for (const [key, value] of Object.entries(deviceHeaders())) {
+    if (!headers.has(key)) headers.set(key, value);
   }
 
   const response = await fetch(url, { ...init, headers });
