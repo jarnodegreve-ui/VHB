@@ -159,14 +159,14 @@ export function LoginView({
   };
 
   return (
-    <div className="min-h-screen relative overflow-hidden login-bg-light">
+    <div className="min-h-screen relative overflow-hidden login-bg-dark">
       {/* Centrale wordmark + form-card, vertikaal gecentreerd. */}
       <main
         className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
         style={{ perspective: '1200px' }}
       >
-        {/* Officieel VHB-logo boven het card. Login is altijd licht, dus
-            altijd de volkleur-variant (donkere tekst + oker bus). */}
+        {/* Officieel VHB-logo boven het card. Login is donker (carbon), dus
+            de reverse-variant (witte tekst + oker bus). */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -176,7 +176,7 @@ export function LoginView({
           {/* Zelfde compacte lockup als de sidebar (zonder naamregel) —
               op verzoek ook op het loginscherm, klein gehouden. */}
           <img
-            src="/vhb-logo-sidebar.svg"
+            src="/vhb-logo-sidebar-wit.svg"
             alt="VHB Portaal — Van Hoorebeke & Zoon"
             className="h-12 sm:h-14 w-auto select-none"
             draggable={false}
@@ -195,7 +195,7 @@ export function LoginView({
             ref={cardRef}
             onPointerMove={handleCardMove}
             onPointerLeave={handleCardLeave}
-            className="panel ios-soft-panel relative w-full rounded-3xl p-7 sm:p-9"
+            className="panel-login-dark relative w-full rounded-3xl p-7 sm:p-9"
           >
             <AnimatePresence mode="wait">
                 <motion.div
@@ -206,10 +206,10 @@ export function LoginView({
                   transition={{ duration: 0.22 }}
                   className="mb-7 text-center"
                 >
-                  <h2 className="text-2xl font-bold text-slate-900 tracking-[-0.02em] leading-tight">
+                  <h2 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
                     {headerCopy.title}
                   </h2>
-                  <p className="mt-2 text-sm text-slate-500 font-normal">{headerCopy.description}</p>
+                  <p className="mt-2 text-sm text-slate-300 font-normal">{headerCopy.description}</p>
                 </motion.div>
               </AnimatePresence>
 
@@ -253,7 +253,7 @@ export function LoginView({
                       setMode('login');
                       resetFeedback();
                     }}
-                    className="w-full text-center text-xs font-bold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-700 transition-colors pt-2"
+                    className="w-full text-center text-xs font-bold uppercase tracking-[0.08em] text-slate-400 hover:text-white transition-colors pt-2"
                   >
                     ← Terug naar inloggen
                   </button>
@@ -304,7 +304,7 @@ export function LoginView({
               )}
 
             {/* Trust badge */}
-            <div className="mt-7 pt-5 border-t border-slate-200/70 flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-400">
+            <div className="mt-7 pt-5 border-t border-white/10 flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-400">
               <ShieldCheck size={11} className="text-emerald-500" />
               Beveiligd via Supabase Auth
             </div>
@@ -369,7 +369,7 @@ function FieldInput({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1 min-h-[14px]">
-        <label className="block text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">{label}</label>
+        <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-[0.08em]">{label}</label>
         <div className="flex items-center gap-3">
           <AnimatePresence>
             {showCapsWarning && (
@@ -409,7 +409,7 @@ function FieldInput({
           required={required}
           minLength={minLength}
           autoComplete={autoComplete}
-          className={`control-input w-full pl-11 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all no-focus-ring ${
+          className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium text-white outline-none transition-all no-focus-ring ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}
         />
@@ -419,7 +419,7 @@ function FieldInput({
             onClick={() => setRevealed((r) => !r)}
             aria-label={revealed ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
             tabIndex={-1}
-            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-slate-700 rounded-lg transition-colors z-10"
+            className="absolute right-3 top-1/2 -translate-y-1/2 p-1.5 text-slate-400 hover:text-white rounded-lg transition-colors z-10"
           >
             {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
           </button>

@@ -26,7 +26,9 @@
 // v13: favicon = app-icoon, én afgeronde hoeken op de tab-/app-iconen
 // (vhb-icoon.svg/192/512, vhb-favicon.svg/-64.png, favicon.ico). apple-touch
 // + maskable blijven vol (iOS/Android ronden die zelf). Bump = asset-wissel.
-const CACHE_NAME = 'vhb-portaal-v13';
+// v14: theme-color/manifest naar carbon (#0D0D0F) — manifest.json gewijzigd
+// (cache-first), bump zodat de nieuwe PWA-chrome geserveerd wordt.
+const CACHE_NAME = 'vhb-portaal-v14';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const RITBLAADJE_API = '/api/ritblaadje';
