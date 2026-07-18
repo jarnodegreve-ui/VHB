@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import * as Sentry from '@sentry/react';
 import App from './App.tsx';
 import './index.css';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { initMonitoring } from './lib/monitoring';
 
 initMonitoring();
@@ -29,8 +29,8 @@ function CrashFallback() {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <Sentry.ErrorBoundary fallback={<CrashFallback />}>
+    <ErrorBoundary fallback={<CrashFallback />}>
       <App />
-    </Sentry.ErrorBoundary>
+    </ErrorBoundary>
   </StrictMode>,
 );

@@ -1,18 +1,12 @@
-import * as Sentry from '@sentry/react';
-
 /**
- * Foutmonitoring in twee lagen:
- *
- * 1. Eigen rapportage naar `POST /api/client-errors` — werkt altijd, zonder
- *    externe accounts. Komt terecht in de Vercel-functielogs en (optioneel,
- *    als de tabel bestaat) in de `client_errors`-tabel in Supabase.
- * 2. Sentry — volledig optioneel: zonder `VITE_SENTRY_DSN` env-var doet dit
- *    niets (geen netwerk, geen ruis). Setup: project op sentry.io, DSN als
- *    env-var in Vercel (Production + Preview).
+ * Foutmonitoring via eigen rapportage naar `POST /api/client-errors` — werkt
+ * altijd, zonder externe accounts. Komt terecht in de Vercel-functielogs en
+ * (optioneel, als de tabel bestaat) in de `client_errors`-tabel in Supabase.
  *
  * Belangrijk: óók afgehandelde fouten (catch → fout-toast) worden gemeld via
- * `reportHandledError`. De stack-overflow-bug van juni 2026 zat volledig
- * binnen try/catch en was daardoor onzichtbaar voor window.onerror.
+ * `reportHandledError`, en render-crashes via `reportBoundaryError` (vanuit de
+ * ErrorBoundary). De stack-overflow-bug van juni 2026 zat volledig binnen
+ * try/catch en was daardoor onzichtbaar voor window.onerror.
  */
 
 const MAX_REPORTS_PER_SESSION = 20;
@@ -28,7 +22,7 @@ export function setMonitoringUser(userId: string | null) {
 type ClientErrorReport = {
   message: string;
   stack?: string;
-  source: 'window.onerror' | 'unhandledrejection' | 'error-toast';
+  source: 'window.onerror' | 'unhandledrejection' | 'error-toast' | 'react-boundary';
 };
 
 function send(report: ClientErrorReport) {
@@ -66,6 +60,11 @@ export function reportHandledError(message: string) {
   send({ message, source: 'error-toast' });
 }
 
+/** Render-crash opgevangen door de ErrorBoundary. */
+export function reportBoundaryError(error: Error, componentStack?: string) {
+  send({ message: error.message || 'Render-crash', stack: componentStack ?? error.stack, source: 'react-boundary' });
+}
+
 export function initMonitoring() {
   window.addEventListener('error', (event) => {
     send({
@@ -82,15 +81,5 @@ export function initMonitoring() {
       stack: reason instanceof Error ? reason.stack : undefined,
       source: 'unhandledrejection',
     });
-  });
-
-  const dsn = import.meta.env.VITE_SENTRY_DSN;
-  if (!dsn) return;
-
-  Sentry.init({
-    dsn,
-    environment: import.meta.env.MODE,
-    tracesSampleRate: 0,
-    sendDefaultPii: false,
   });
 }
