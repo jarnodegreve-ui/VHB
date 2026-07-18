@@ -40,6 +40,7 @@ import {
   BarChart3,
   BellRing,
   BellOff,
+  RefreshCw,
   Zap
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
@@ -52,6 +53,7 @@ import { reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
 import { addDays, isoDate } from './lib/availability';
+import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
@@ -203,6 +205,7 @@ export default function App() {
   // Overlay-logica: meerdere fetches kunnen parallel lopen — een boolean
   // zette de overlay uit zodra de éérste klaar was. Teller fixt dat.
   const loadingCountRef = useRef(0);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   const beginLoading = () => {
     loadingCountRef.current += 1;
     setIsLoading(true);
@@ -620,6 +623,11 @@ export default function App() {
       setIsInitialLoad(false);
     }
   };
+
+  // Pull-to-refresh (PWA): sleep omlaag bovenaan → alle data opnieuw ophalen.
+  const refreshAll = () =>
+    currentUser && session?.access_token ? loadAppData(currentUser, session.access_token) : Promise.resolve();
+  const { pull: ptrPull, refreshing: ptrRefreshing } = usePullToRefresh(scrollContainerRef, refreshAll);
 
   const initializeAuthenticatedApp = async (accessToken: string, authUserId?: string) => {
     // Progressieve boot: alleen het profiel (één snelle call) blokkeert de
@@ -1695,8 +1703,25 @@ export default function App() {
         {/* Scroll container met sticky-header — header zit BINNEN de scroll
             zodat content er onderdoor schuift en de panel-blur natuurlijk
             werkt (echte iOS-vibe i.p.v. harde rand). */}
+        {/* Pull-to-refresh-indicator (PWA): verschijnt terwijl je omlaag sleept. */}
+        {(ptrPull > 0 || ptrRefreshing) && (
+          <div
+            className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center"
+            style={{ transform: `translateY(${Math.max(0, (ptrRefreshing ? 44 : ptrPull) - 20)}px)` }}
+          >
+            <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-slate-200/70">
+              <RefreshCw
+                size={18}
+                className={cn('text-oker-500', ptrRefreshing && 'animate-spin')}
+                style={ptrRefreshing ? undefined : { transform: `rotate(${ptrPull * 2.2}deg)` }}
+              />
+            </div>
+          </div>
+        )}
         <div
+          ref={scrollContainerRef}
           className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
+          style={ptrPull > 0 && !ptrRefreshing ? { transform: `translateY(${ptrPull}px)`, transition: 'none' } : { transition: 'transform 0.2s' }}
           onScroll={(e) => {
             const top = e.currentTarget.scrollTop ?? 0;
             const next = top > 8;
