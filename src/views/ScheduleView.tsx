@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
+import { isoWeekOf } from '../lib/week';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
@@ -260,7 +261,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                   <Td className="px-6 py-4">
                     <div className="space-y-1">
                       <p className={cn('font-semibold tabular-nums', isToday ? 'text-oker-700' : 'text-slate-800')}>
-                        {formatShiftDate(g.date)}
+                        {formatShiftDate(g.date)} <span className="font-medium text-slate-400">· wk {isoWeekOf(g.date)}</span>
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
                         {isToday && <Badge tone="oker">Vandaag</Badge>}
@@ -322,7 +323,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <MicroLabel className={cn(isToday && 'text-oker-600')}>
-                    {isToday ? 'Vandaag' : formatShortDate(g.date).split(' ')[0]}
+                    {isToday ? 'Vandaag' : formatShortDate(g.date).split(' ')[0]} · wk {isoWeekOf(g.date)}
                   </MicroLabel>
                   <p className="text-sm font-semibold text-slate-900 mt-0.5 tabular-nums">
                     {formatShortDate(g.date).split(' ').slice(1).join(' ')}
