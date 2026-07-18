@@ -2844,6 +2844,51 @@ app.post("/api/documents", authenticate, requireRole("planner", "admin"), async 
   }
 });
 
+// Eén document naar álle actieve chauffeurs (bv. nieuw reglement). Elke
+// chauffeur krijgt een eigen kopie (eigen storage-pad + rij) zodat de
+// wees-opruiming bij verwijderen per gebruiker klopt. Push naar allemaal.
+app.post("/api/documents/broadcast", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    if (!supabaseAdmin) return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
+    const filename = String(req.body?.filename || "").trim();
+    const category = String(req.body?.category || "").trim() || null;
+    const dataUrl = String(req.body?.dataUrl || "");
+    if (!filename || !/\.(pdf|png|jpe?g)$/i.test(filename)) {
+      return res.status(400).json({ error: "Geef een PDF- of afbeeldingsbestand (.pdf/.png/.jpg)." });
+    }
+    const base64Match = dataUrl.match(/^data:(application\/pdf|image\/png|image\/jpeg);base64,(.+)$/);
+    if (!base64Match) return res.status(400).json({ error: "Bestand is geen geldige data-URL (PDF/PNG/JPG)." });
+    const buffer = Buffer.from(base64Match[2], "base64");
+    if (buffer.length === 0) return res.status(400).json({ error: "Bestand is leeg." });
+
+    const chauffeurs = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false);
+    if (chauffeurs.length === 0) return res.status(400).json({ error: "Geen actieve chauffeurs gevonden." });
+
+    const safeName = filename.replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-100);
+    let done = 0;
+    for (const u of chauffeurs) {
+      const storagePath = `${u.id}/${crypto.randomUUID()}-${safeName}`;
+      const { error: uploadError } = await supabaseAdmin.storage
+        .from(DOCUMENTS_BUCKET)
+        .upload(storagePath, buffer, { contentType: base64Match[1], upsert: false });
+      if (uploadError) { console.error(`[broadcast] upload voor ${u.id} mislukt:`, uploadError.message); continue; }
+      await insertUserDocument({ userId: String(u.id), filename, storagePath, category, sizeBytes: buffer.length, uploadedBy: req.appUser?.name ?? null });
+      done++;
+    }
+
+    await logActivity(req, "users", "Document rondgestuurd", `${filename}${category ? ` (${category})` : ""} naar ${done} chauffeur(s).`);
+    await sendPushToUsers(chauffeurs.map((u) => String(u.id)), {
+      title: "Nieuw document",
+      body: `Er staat een nieuw document voor je klaar: ${filename}.`,
+      url: "/",
+    });
+    res.json({ success: true, count: done });
+  } catch (err) {
+    console.error("Document rondsturen mislukt:", err);
+    res.status(500).json({ error: "Document rondsturen is mislukt." });
+  }
+});
+
 app.delete("/api/documents/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
     if (!supabaseAdmin) return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });

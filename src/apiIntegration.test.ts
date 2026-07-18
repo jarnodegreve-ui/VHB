@@ -1090,4 +1090,9 @@ describe('documenten per gebruiker', () => {
     expect((await api('POST', '/api/documents', { token: 'tok-a', body: { userId: '3', filename: 'x.pdf', dataUrl: 'data:application/pdf;base64,QQ==' } })).status).toBe(403);
     expect((await api('DELETE', '/api/documents/d1', { token: 'tok-a' })).status).toBe(403);
   });
+
+  it('document rondsturen naar alle chauffeurs is niet toegankelijk voor chauffeurs (403)', async () => {
+    const res = await api('POST', '/api/documents/broadcast', { token: 'tok-a', body: { filename: 'reglement.pdf', dataUrl: 'data:application/pdf;base64,QQ==' } });
+    expect(res.status).toBe(403);
+  });
 });

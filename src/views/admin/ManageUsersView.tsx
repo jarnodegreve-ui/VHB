@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { FolderOpen, History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Trash2, Upload, Users } from 'lucide-react';
+import { FolderOpen, History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { formatDateTimeHuman } from '../../lib/format';
@@ -8,6 +8,7 @@ import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
+import { BroadcastDocumentModal } from './BroadcastDocumentModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 export type UserDraft = User & { password?: string };
@@ -22,6 +23,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [viewingHistoryUser, setViewingHistoryUser] = useState<User | null>(null);
   const [viewingChangeLogUser, setViewingChangeLogUser] = useState<User | null>(null);
   const [documentsUser, setDocumentsUser] = useState<User | null>(null);
+  const [showBroadcast, setShowBroadcast] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -307,6 +309,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               {isImporting ? 'Bezig...' : 'Excel Upload'}
               <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
             </label>
+            <Button variant="secondary" icon={<Send size={16} />} onClick={() => setShowBroadcast(true)}>
+              Document naar iedereen
+            </Button>
             <Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>
               Gebruiker Toevoegen
             </Button>
@@ -564,6 +569,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       />
 
       {documentsUser && <UserDocumentsModal user={documentsUser} onClose={() => setDocumentsUser(null)} />}
+      {showBroadcast && <BroadcastDocumentModal onClose={() => setShowBroadcast(false)} />}
 
       <EntityHistoryModal
         open={!!viewingChangeLogUser}
