@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ChevronRight, Clock, Info } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
+import { markUpdatesRead } from '../lib/updateReads';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge } from '../components/primitives';
 
@@ -20,6 +21,20 @@ const CATEGORY_ACCENTS: Record<string, string> = {
 export function UpdatesView({ updates }: { updates: Update[] }) {
   const [filter, setFilter] = useState<'all' | 'algemeen' | 'veiligheid' | 'technisch'>('all');
   const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);
+
+  // Openen van de Updates-weergave = gelezen. Markeer elke nog niet gemelde
+  // update (los van het actieve filter) zodat de planner 'X/Y gelezen' ziet.
+  // Faalt stil; bij een fout blijft de id ongemarkeerd zodat het later opnieuw
+  // geprobeerd wordt.
+  const markedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const fresh = updates.map((u) => u.id).filter((id) => !markedRef.current.has(id));
+    if (fresh.length === 0) return;
+    fresh.forEach((id) => markedRef.current.add(id));
+    markUpdatesRead(fresh).catch(() => {
+      fresh.forEach((id) => markedRef.current.delete(id));
+    });
+  }, [updates]);
 
   const filteredUpdates = updates.filter(u => filter === 'all' || u.category === filter);
   const toggleExpanded = (id: string) => {

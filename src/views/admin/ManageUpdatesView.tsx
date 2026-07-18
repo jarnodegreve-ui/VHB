@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
-import { AlertTriangle, Bell, CalendarDays, History, Pencil, Trash2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { AlertTriangle, Bell, CalendarDays, Eye, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { notify } from '../../lib/ui';
+import { fetchUpdateReadCounts } from '../../lib/updateReads';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -72,6 +73,22 @@ export function ManageUpdatesView({
   // zich buiten beeld. Deze ref brengt het formulier in beeld.
   const formRef = useRef<HTMLDivElement>(null);
   const [historyUpdate, setHistoryUpdate] = useState<Update | null>(null);
+
+  // Leesbevestigingen: hoeveel chauffeurs elke urgente update gelezen hebben.
+  // Best-effort — faalt het laden, dan tonen we simpelweg geen teller.
+  const [readCounts, setReadCounts] = useState<Record<string, number>>({});
+  const [totalChauffeurs, setTotalChauffeurs] = useState(0);
+  useEffect(() => {
+    let alive = true;
+    fetchUpdateReadCounts()
+      .then((data) => {
+        if (!alive) return;
+        setReadCounts(data.counts);
+        setTotalChauffeurs(data.totalChauffeurs);
+      })
+      .catch(() => {/* stil: geen teller tonen */});
+    return () => { alive = false; };
+  }, []);
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -221,6 +238,15 @@ export function ManageUpdatesView({
                     ) : (
                       <Badge tone={CATEGORY_BADGE_TONE[update.category] ?? 'slate'} className="capitalize">{update.category}</Badge>
                     )}
+                    {update.isUrgent && totalChauffeurs > 0 ? (
+                      <span
+                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums dark:bg-slate-800 dark:text-slate-400"
+                        title="Aantal chauffeurs dat deze update geopend heeft"
+                      >
+                        <Eye size={12} />
+                        {readCounts[update.id] ?? 0}/{totalChauffeurs} gelezen
+                      </span>
+                    ) : null}
                     <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 tabular-nums">
                       <CalendarDays size={13} />
                       {update.date}
