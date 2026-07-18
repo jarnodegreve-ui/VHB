@@ -955,9 +955,9 @@ html.dark {
     linear-gradient(180deg, #fafbfc 0%, #F2F3F4 100%);
 }
 
-/* === Dark login redesign — bewaard maar niet langer gebruikt ===
-   Mocht je later een dark login willen, swap .login-bg-light voor
-   .login-bg-dark in LoginView en update tekst-classes terug naar wit. */
+/* === Dark login (carbon) — gebruikt door LoginView ===
+   Past bij het carbon app-/tab-icoon en de carbon theme-color. De lichte
+   variant (.login-bg-light) blijft bewaard mocht je ooit terug willen. */
 
 .login-bg-dark {
   background:
