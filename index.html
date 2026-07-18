@@ -21,6 +21,12 @@
     <link rel="icon" type="image/png" sizes="512x512" href="/vhb-icoon-512.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180.png" />
 
+    <!-- Zelf-gehoste fonts vooraf laden (latin-subset, meest gebruikt) zodat
+         de tekst snel in de juiste font staat. crossorigin is verplicht voor
+         font-preloads, ook same-origin. -->
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin.woff2" crossorigin />
+    <link rel="preload" as="font" type="font/woff2" href="/fonts/manrope-latin.woff2" crossorigin />
+
     <!-- Service worker registratie: cache app shell voor offline gebruik. -->
     <script>
       if ('serviceWorker' in navigator) {
