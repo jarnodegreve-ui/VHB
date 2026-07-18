@@ -1229,6 +1229,40 @@ export const deleteUserDocument = async (id: string): Promise<void> => {
   if (error) throw error;
 };
 
+/** Metadata van het huidige ritblad (id='current') — voor de back-up. */
+export const getRitblaadjeMeta = async (): Promise<unknown | null> => {
+  if (!db) return null;
+  try {
+    const { data, error } = await db.from("ritblaadje").select("*").eq("id", "current").maybeSingle();
+    if (error) return null;
+    return data ?? null;
+  } catch {
+    return null;
+  }
+};
+
+/** Ruimt alle documenten van één gebruiker op: eerst de storage-bestanden,
+ *  dan de metadata-rijen. Wordt aangeroepen bij het verwijderen van een
+ *  gebruiker zodat er geen wees-bestanden/rijen achterblijven. Best-effort. */
+export const deleteAllDocumentsForUser = async (userId: string): Promise<number> => {
+  if (!db) return 0;
+  try {
+    const { data, error } = await db.from("user_documents").select("id,storage_path").eq("user_id", userId);
+    if (error || !data || data.length === 0) return 0;
+    const paths = data.map((d: any) => d.storage_path).filter(Boolean);
+    if (supabaseAdmin && paths.length > 0) {
+      const { error: rmErr } = await supabaseAdmin.storage.from(DOCUMENTS_BUCKET).remove(paths);
+      if (rmErr) console.warn(`[documenten] storage-opruiming voor ${userId} deels mislukt:`, rmErr.message);
+    }
+    const { error: delErr } = await db.from("user_documents").delete().eq("user_id", userId);
+    if (delErr) throw delErr;
+    return data.length;
+  } catch (err) {
+    console.error(`[documenten] opruimen voor verwijderde gebruiker ${userId} mislukt:`, err);
+    return 0;
+  }
+};
+
 // --- Client errors ---
 
 export type ClientErrorEntry = {

@@ -46,6 +46,7 @@ const mem = vi.hoisted(() => ({
   pushSubscriptions: [] as any[],
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
   documents: [] as any[],
+  ritblaadje: null as any,
 }));
 
 vi.mock('../api/db.js', () => {
@@ -153,6 +154,12 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getUserDocument: async (id: string) => mem.documents.find((d: any) => String(d.id) === String(id)) ?? null,
     insertUserDocument: async (doc: any) => { const rec = { id: `doc-${mem.documents.length + 1}`, uploadedAt: '2026-07-01T00:00:00Z', ...doc }; mem.documents.push(rec); return rec; },
     deleteUserDocument: async (id: string) => { mem.documents = mem.documents.filter((d: any) => String(d.id) !== String(id)); },
+    getRitblaadjeMeta: async () => mem.ritblaadje ?? null,
+    deleteAllDocumentsForUser: async (userId: string) => {
+      const n = mem.documents.filter((d: any) => String(d.userId) === String(userId)).length;
+      mem.documents = mem.documents.filter((d: any) => String(d.userId) !== String(userId));
+      return n;
+    },
     logClientError: async (entry: any) => { mem.clientErrors.push(entry); },
     getClientErrors: async () => mem.clientErrors,
     getClientErrorsSince: async (sinceIso: string) =>
@@ -255,6 +262,8 @@ beforeEach(() => {
   mem.storedBackups = [];
   mem.pushSubscriptions = [];
   mem.pushesSent = [];
+  mem.documents = [];
+  mem.ritblaadje = null;
 });
 
 describe('authenticatie & rollen', () => {
@@ -725,6 +734,30 @@ describe('back-up export', () => {
     expect(Array.isArray(c.diversions)).toBe(true);
     expect(Array.isArray(c.planningCodes)).toBe(true);
     expect(Array.isArray(c.activityLog)).toBe(true);
+  });
+
+  it('back-up bevat documenten- en ritblad-metadata als referentie-export', async () => {
+    mem.documents = [{ id: 'd1', userId: '3', filename: 'attest.pdf', storagePath: '3/x', uploadedAt: '2026-07-01T00:00:00Z' }];
+    mem.ritblaadje = { id: 'current', filename: 'ritblad.pdf', storage_path: 'r/y' };
+    const res = await api('GET', '/api/backup', { token: 'tok-admin' });
+    expect(res.status).toBe(200);
+    expect(res.json.userDocuments).toHaveLength(1);
+    expect(res.json.userDocuments[0].filename).toBe('attest.pdf');
+    expect(res.json.ritblaadje?.filename).toBe('ritblad.pdf');
+  });
+});
+
+describe('wees-documenten opruimen', () => {
+  it('verwijdert de documenten van een gebruiker die uit gebruikersbeheer wordt geschrapt', async () => {
+    mem.documents = [
+      { id: 'd1', userId: '3', filename: 'a.pdf', storagePath: '3/a', uploadedAt: '2026-07-01T00:00:00Z' },
+      { id: 'd2', userId: '4', filename: 'b.pdf', storagePath: '4/b', uploadedAt: '2026-07-01T00:00:00Z' },
+    ];
+    // Chauffeur 3 (a@vhb.be) uit de lijst halen — de rest blijft (geen bulk-wipe).
+    const zonderDrie = mem.users.filter((u: any) => u.id !== '3');
+    const res = await api('POST', '/api/users', { token: 'tok-admin', body: zonderDrie });
+    expect(res.status).toBe(200);
+    expect(mem.documents.map((d: any) => d.id)).toEqual(['d2']);
   });
 });
 
