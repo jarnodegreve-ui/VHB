@@ -22,8 +22,6 @@ const ensureConfigured = () => {
   return true;
 };
 
-export const isPushConfigured = () => ensureConfigured();
-
 export const getVapidPublicKey = () => (ensureConfigured() ? process.env.VAPID_PUBLIC_KEY ?? null : null);
 
 export type PushSubscriptionRecord = {

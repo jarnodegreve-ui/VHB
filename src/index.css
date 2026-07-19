@@ -537,22 +537,6 @@ html.dark {
     transition-duration: 140ms;
   }
 
-  /* Container for the inner shine pseudo-element. We do NOT force position
-     here — that would override Tailwind's `fixed`/`absolute` utilities at
-     equal specificity. Each consumer sets its own positioning. */
-  .ios-soft-panel {
-    overflow: hidden;
-  }
-
-  .ios-soft-panel::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    background: linear-gradient(180deg, rgba(255,255,255,0.1), transparent 24%);
-    opacity: 0.7;
-  }
-
   .btn-primary {
     background: linear-gradient(180deg, var(--color-oker-400) 0%, var(--color-oker-500) 100%);
     /* VHB Black op amber — wit op #E8A33D haalt maar 2,2:1 contrast,
@@ -667,20 +651,6 @@ html.dark {
     0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-/* iOS soft-panel ::after legt een wit hoogtepunt (0.24 → 0.08) over
-   ELK panel, bedoeld voor het glass-effect op licht. Op near-black
-   dark geeft dat een opvallende zilveren lijn boven/onder de header.
-   In dark mode bijna helemaal uit. */
-.dark .ios-soft-panel::after {
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.04),
-    transparent 30%,
-    transparent 70%,
-    rgba(255, 255, 255, 0.015)
-  );
-  opacity: 0.5;
-}
 
 
 .dark .panel-dark {

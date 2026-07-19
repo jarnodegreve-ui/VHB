@@ -254,7 +254,7 @@ export const countAdmins = (users: Array<Pick<AppUser, "role" | "isActive">>) =>
 
 export const randomPassword = () => Math.random().toString(36).slice(-10) + "A1!";
 
-export const PLANNING_MATRIX_MONTHS: Record<string, string> = {
+const PLANNING_MATRIX_MONTHS: Record<string, string> = {
   jan: "01",
   feb: "02",
   mrt: "03",

@@ -5,6 +5,7 @@ import { PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { fetchAvailability } from '../lib/availability';
+import { formatShortDay } from '../lib/format';
 import {
   fetchCoverageConfig,
   fetchCoverageGaps,
@@ -209,11 +210,7 @@ export function CoverageView() {
     }
   };
 
-  const dayLabel = (iso: string) => {
-    const d = new Date(`${iso}T00:00:00`);
-    try { return d.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' }); }
-    catch { return iso; }
-  };
+  const dayLabel = formatShortDay; // gedeelde compacte dag-vorm (datum-consolidatie)
 
   const totalMissing = useMemo(() => gaps.reduce((sum, d) => sum + d.missing.length, 0), [gaps]);
   const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);

@@ -8,7 +8,7 @@ import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../c
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
-import { formatDateHuman } from '../lib/format';
+import { formatDateHuman, formatShortDay } from '../lib/format';
 import { canRespondToSwap } from '../lib/authorization';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
@@ -107,10 +107,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     .filter(s => s.driverId === user.id && s.date >= todayIso)
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime).localeCompare(String(b.startTime)));
   const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
-  const fmtShort = (iso: string) => {
-    try { return new Date(`${iso}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: '2-digit' }); }
-    catch { return iso; }
-  };
+  // Gedeelde compacte dag-vorm ('vr 18 jul') — gelijk aan Dekking, i.p.v. de
+  // eigen 'vr 18/07'-variant (datum-consolidatie).
+  const fmtShort = formatShortDay;
   // Tikbare wizard-kaart (stap 1/2/3): geselecteerd = oker-accent.
   const cnCard = (selected: boolean) =>
     `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-slate-200 bg-white hover:bg-slate-50'}`;

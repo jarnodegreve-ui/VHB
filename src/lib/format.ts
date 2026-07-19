@@ -45,3 +45,17 @@ export function formatDateHuman(iso: string | undefined | null): string {
     return String(iso);
   }
 }
+
+/** Compact dag-label 'vr 18 jul' (weekdag + dag + korte maand) uit een
+ *  'YYYY-MM-DD'-string. Eén gedeelde vorm zodat lijsten die datums naast
+ *  elkaar tonen (dienstruil, dekking) er niet uit elkaar lopen. */
+export function formatShortDay(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  try {
+    return d.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch {
+    return String(iso);
+  }
+}

@@ -46,13 +46,13 @@ export const resolveOptionalUser = async (req: express.Request): Promise<AppUser
   }
 };
 
-export const getBearerToken = (req: express.Request) => {
+const getBearerToken = (req: express.Request) => {
   const header = req.headers.authorization;
   if (!header?.startsWith("Bearer ")) return null;
   return header.slice("Bearer ".length);
 };
 
-export const findUserByEmail = async (email?: string | null): Promise<AppUser | null> => {
+const findUserByEmail = async (email?: string | null): Promise<AppUser | null> => {
   const normalizedEmail = normalizeEmail(email);
   if (!normalizedEmail) return null;
 
