@@ -3,6 +3,13 @@
  * krijgt één blijvend willekeurig token in localStorage; de server koppelt
  * dat aan de gebruiker en bepaalt approved/pending/revoked. Zie
  * supabase/user_devices.sql + api/middleware.ts.
+ *
+ * LET OP (iOS): Safari en de op het beginscherm geïnstalleerde PWA hebben elk
+ * hun eigen localStorage-container, dus dat zijn twee aparte "toestellen" (elk
+ * eigen token → elk eigen goedkeuring). Wie eerst in Safari inlogt en daarna
+ * installeert, moet de app-versie apart laten goedkeuren. De geïnstalleerde
+ * PWA is vrij van ITP-storage-eviction; een gewone Safari-tab kan het token na
+ * ~7 dagen niet-gebruiken kwijtraken (dan opnieuw pending).
  */
 
 const STORAGE_KEY = 'vhb-device-token';

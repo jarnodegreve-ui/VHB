@@ -80,7 +80,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 href={`tel:${u.phone.replace(/\s/g, '')}`}
                 aria-label={`Bel ${u.name}`}
                 title={`Bel ${u.name}`}
-                className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:border-emerald-500 hover:text-white transition-colors"
+                className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:border-emerald-500 hover:text-slate-950 transition-colors"
               >
                 <Phone size={18} />
               </a>
@@ -128,7 +128,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 <div className="mt-4 flex flex-col sm:flex-row gap-2">
                   <a
                     href={`tel:${selected.phone.replace(/\s/g, '')}`}
-                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 text-white px-4 py-3 text-sm font-semibold hover:bg-emerald-600 transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 text-slate-950 px-4 py-3 text-sm font-semibold hover:bg-emerald-600 transition-colors"
                   >
                     <Phone size={16} /> Bellen
                   </a>

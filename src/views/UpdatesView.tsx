@@ -105,7 +105,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                   <button
                     type="button"
                     onClick={() => toggleExpanded(update.id)}
-                    className="ios-pressable flex items-center gap-1.5 text-xs font-semibold text-oker-600 hover:text-oker-700 transition-colors"
+                    className="ios-pressable flex items-center gap-1.5 py-2.5 -my-2.5 text-xs font-semibold text-oker-600 hover:text-oker-700 transition-colors"
                   >
                     {isExpanded ? 'Toon minder' : 'Lees meer'}
                     <ChevronRight size={14} className={cn("transition-transform", isExpanded && "rotate-90")} />
