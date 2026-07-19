@@ -55,7 +55,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 key={cat}
                 onClick={() => setFilter(cat)}
                 className={cn(
-                  "px-4 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all",
+                  "px-4 py-2 min-h-10 rounded-lg text-xs font-semibold capitalize transition-all",
                   filter === cat ? "glass-chip text-oker-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >

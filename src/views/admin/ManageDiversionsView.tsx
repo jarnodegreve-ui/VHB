@@ -253,7 +253,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     required
                     value={formData.line}
                     onChange={(e) => setFormData({...formData, line: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     placeholder="bijv. 1, 2 of Alle"
                   />
                 </div>
@@ -265,7 +265,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     required
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     placeholder="bijv. Wegwerkzaamheden N70"
                   />
                 </div>
@@ -277,7 +277,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     rows={3}
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm resize-none"
+                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm resize-none"
                     placeholder="Beschrijf de omleiding..."
                   />
                 </div>
@@ -290,7 +290,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                       required
                       value={formData.startDate}
                       onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     />
                   </div>
                   <div className="space-y-2">
@@ -299,7 +299,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                       type="date" 
                       value={formData.endDate || ''}
                       onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-sm"
+                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     />
                   </div>
                 </div>

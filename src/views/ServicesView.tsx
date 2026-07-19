@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, Download, Search } from 'lucide-react';
 import type { Service } from '../types';
-import { cn } from '../lib/ui';
+import { cn, downloadBlob } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 
@@ -61,14 +61,7 @@ export function ServicesView({ services }: { services: Service[] }) {
     ].join('\n');
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`);
-    link.style.visibility = 'hidden';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    void downloadBlob(`dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`, blob);
   };
 
   return (
@@ -82,7 +75,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               <button
                 onClick={() => toggleSort('number')}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-2",
+                  "px-3 py-2 min-h-10 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2",
                   sortBy === 'number' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >
@@ -92,7 +85,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               <button
                 onClick={() => toggleSort('time')}
                 className={cn(
-                  "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-2",
+                  "px-3 py-2 min-h-10 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-2",
                   sortBy === 'time' ? "glass-chip text-oker-600 shadow-sm" : "text-slate-500 hover:text-slate-700"
                 )}
               >

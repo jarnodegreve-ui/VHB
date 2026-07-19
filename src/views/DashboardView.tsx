@@ -3,6 +3,7 @@ import { motion } from 'motion/react';
 import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid, Eye } from 'lucide-react';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
+import { openPdfInNewTab } from '../lib/ui';
 import { formatDateHuman } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { verlofBalans } from '../lib/leaveBalance';
@@ -488,15 +489,14 @@ export function DashboardView({
               </p>
             </div>
             {openDiversion.pdfUrl && (
-              <a
-                href={openDiversion.pdfUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="control-button-soft inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all"
+              <button
+                type="button"
+                onClick={() => openPdfInNewTab(openDiversion.pdfUrl)}
+                className="control-button-soft ios-pressable inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all"
               >
                 <FileText size={15} />
                 Bijlage openen (PDF)
-              </a>
+              </button>
             )}
           </div>
         )}

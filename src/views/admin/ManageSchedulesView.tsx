@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Activity, AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 
@@ -633,7 +633,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             disabled={!printDriverId || !printMonth}
             onClick={() => {
               const url = `${window.location.origin}${window.location.pathname}?print-driver=${encodeURIComponent(printDriverId)}&print-month=${encodeURIComponent(printMonth)}`;
-              window.open(url, '_blank', 'noopener,noreferrer');
+              // openPdfInNewTab i.p.v. rauwe window.open: in iOS-standalone geeft
+              // window.open geregeld null → dan navigeren we in hetzelfde venster.
+              openPdfInNewTab(url);
             }}
           >
             Open print-weergave

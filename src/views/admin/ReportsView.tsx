@@ -4,7 +4,7 @@ import type { LeaveRequest, Shift, User } from '../../types';
 import { buildDriverReport, periodLabel, MONTH_LABELS, type ReportPeriod } from '../../lib/reporting';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel, TableShell, Th, Td } from '../../components/primitives';
-import { notify } from '../../lib/ui';
+import { downloadBlob, notify } from '../../lib/ui';
 
 export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[]; leaveRequests: LeaveRequest[]; users: User[] }) {
   // Standaard: lopend jaar, alle maanden. new Date() i.p.v. een vaste datum
@@ -48,7 +48,11 @@ export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[];
       const ws = XLSX.utils.json_to_sheet(sheetData);
       const wb = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(wb, ws, 'Rapport');
-      XLSX.writeFile(wb, `vhb-rapport-${periodLabel(period).replace(/\s/g, '-')}.xlsx`);
+      // Via een Blob + downloadBlob i.p.v. XLSX.writeFile: die laatste is in een
+      // iOS-standalone-PWA wisselvallig; downloadBlob probeert eerst het deelblad.
+      const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+      const blob = new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      void downloadBlob(`vhb-rapport-${periodLabel(period).replace(/\s/g, '-')}.xlsx`, blob);
     } catch {
       notify('Export naar Excel is mislukt.', 'error');
     }

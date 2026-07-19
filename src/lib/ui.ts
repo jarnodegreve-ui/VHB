@@ -57,3 +57,41 @@ export function openPdfInNewTab(pdfUrl: string | undefined | null) {
     notify('PDF kon niet worden geopend.', 'error');
   }
 }
+
+/**
+ * Download een Blob als bestand. In een geïnstalleerde PWA op iOS is het
+ * a.download-patroon wisselvallig (soms geen zichtbare feedback); daar proberen
+ * we eerst het deelblad (navigator.share met een File → bewaren in Bestanden),
+ * met de klassieke download als fallback + een bevestigings-toast. Roep aan
+ * vanuit een click-handler (user-gesture) zodat het deelblad mag openen.
+ */
+export async function downloadBlob(filename: string, blob: Blob) {
+  const standalone =
+    (typeof window !== 'undefined' && window.matchMedia?.('(display-mode: standalone)')?.matches) ||
+    (typeof navigator !== 'undefined' && (navigator as { standalone?: boolean }).standalone === true);
+  const shareNav = navigator as Navigator & {
+    canShare?: (data: unknown) => boolean;
+    share?: (data: unknown) => Promise<void>;
+  };
+  if (standalone && typeof File !== 'undefined' && shareNav.share && shareNav.canShare) {
+    const file = new File([blob], filename, { type: blob.type || 'application/octet-stream' });
+    if (shareNav.canShare({ files: [file] })) {
+      try {
+        await shareNav.share({ files: [file], title: filename });
+        return;
+      } catch (err) {
+        if ((err as { name?: string })?.name === 'AbortError') return; // gebruiker annuleerde
+        // anders: val terug op de klassieke download hieronder
+      }
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  notify(`"${filename}" gedownload.`, 'success');
+}

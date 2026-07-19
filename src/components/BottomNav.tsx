@@ -55,7 +55,9 @@ export function BottomNav({
   return (
     <nav
       className={cn(
-        'md:hidden fixed bottom-3 left-3 right-3 z-40 rounded-2xl px-2 py-2 transition-all duration-300',
+        // left/right respecteren de safe-area (landscape/notch) — iOS negeert
+        // de portrait-lock uit het manifest, dus landscape kán voorkomen.
+        'md:hidden fixed bottom-3 left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] z-40 rounded-2xl px-2 py-2 transition-all duration-300',
         // Near-opaque zonder backdrop-blur: een fixed balk met blur hersampelt
         // de scrollende content elke frame (jank op oudere toestellen).
         'bg-white/95 border border-slate-200/80 shadow-[0_8px_28px_rgba(13,13,15,0.12)]',

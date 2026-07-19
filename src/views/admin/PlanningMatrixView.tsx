@@ -1,7 +1,7 @@
 import { Fragment, useDeferredValue, useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Calendar, Clock, Download, FileText, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
-import { cn, notify } from '../../lib/ui';
+import { cn, downloadBlob, notify } from '../../lib/ui';
 import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -221,14 +221,7 @@ export function PlanningMatrixView({
     ];
 
     const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = 'planning-matrix-problemen.csv';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    void downloadBlob('planning-matrix-problemen.csv', blob);
   };
 
     return (

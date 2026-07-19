@@ -30,9 +30,13 @@
 // (cache-first), bump zodat de nieuwe PWA-chrome geserveerd wordt.
 // v15: message-handler GET_VERSION toegevoegd (versie-indicator in Systeem-
 // status); bump zodat clients de nieuwe SW oppikken.
-const CACHE_NAME = 'vhb-portaal-v15';
+// v16: /api/me stale-while-revalidate (koude offline start bleef hangen op
+// 'Profiel laden…'), ritblad-PDF met cors-mode (geen opaque-fout meer cachen),
+// notificationclick herlaadt een al-open portaal niet meer.
+const CACHE_NAME = 'vhb-portaal-v16';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
+const ME_API = '/api/me';
 const RITBLAADJE_API = '/api/ritblaadje';
 const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
@@ -75,9 +79,12 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(cacheKey).then((cached) => {
-          const network = fetch(req)
+          // Met cors-mode i.p.v. de opaque originele request: zo is de status
+          // leesbaar en cachen we alléén een echte 200. Een verlopen signed
+          // URL (Supabase-400) is óók opaque en overschreef anders de goede PDF.
+          const network = fetch(url.href, { mode: 'cors' })
             .then((res) => {
-              if (res && (res.ok || res.type === 'opaque')) cache.put(cacheKey, res.clone());
+              if (res && res.ok) cache.put(cacheKey, res.clone());
               return res;
             })
             .catch(() => cached);
@@ -95,7 +102,7 @@ self.addEventListener('fetch', (event) => {
   // === Ritblaadje-metadata + rooster — stale-while-revalidate ===
   // Keyed op de volledige URL (incl. query), dus /api/planning?driverId=…&
   // month=… cachet per gebruiker/maand apart.
-  if (url.pathname === RITBLAADJE_API || url.pathname === PLANNING_API) {
+  if (url.pathname === RITBLAADJE_API || url.pathname === PLANNING_API || url.pathname === ME_API) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(req).then((cached) => {
@@ -193,7 +200,15 @@ self.addEventListener('notificationclick', (event) => {
       // Bestaand tabblad focussen als het portaal al open staat.
       for (const win of wins) {
         if ('focus' in win) {
-          win.navigate?.(url);
+          // Alleen navigeren bij een écht ander pad — anders herlaadt een tik
+          // op de melding het al-open portaal (open formulierinvoer weg).
+          try {
+            const target = new URL(url, self.location.origin);
+            const current = new URL(win.url);
+            if (target.pathname !== current.pathname || target.search !== current.search) {
+              win.navigate?.(url);
+            }
+          } catch (_) { /* URL-parse faalt → gewoon focussen */ }
           return win.focus();
         }
       }
