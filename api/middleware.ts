@@ -24,6 +24,23 @@ export type DeviceGateVerdict = {
   body?: { error: string; code: string };
 };
 
+/**
+ * Herkent de fout "de user_devices-tabel bestaat nog niet" (migratie niet
+ * gedraaid). Alléén dan mag de gate fail-open; elke andere DB-fout is
+ * fail-closed. Postgres: 42P01 (undefined_table); PostgREST: PGRST205
+ * (schema-cache kent de tabel niet).
+ */
+export const isMissingTableError = (err: unknown): boolean => {
+  const code = String((err as { code?: unknown })?.code ?? "");
+  const msg = String((err as { message?: unknown })?.message ?? "").toLowerCase();
+  return (
+    code === "42P01" ||
+    code === "PGRST205" ||
+    /relation .* does not exist/.test(msg) ||
+    /could not find the table/.test(msg)
+  );
+};
+
 /** Pure beslissingsfunctie (los getest in apiIntegration.test.ts). */
 export const evaluateDeviceGate = (
   role: Role,
@@ -128,19 +145,36 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   // (registratie/sessie-boekhouding). De DB-lookup gebeurt pas hier, zodat
   // planner/admin-verkeer er geen query aan overhoudt.
   if (appUser.role === "chauffeur" && !DEVICE_GATE_EXEMPT.has(req.path)) {
+    // Een geldig token is een 36-teken UUID. Alles langer dan 100 tekens is
+    // onzin (en zou de PostgREST-URL kunnen opblazen → een geforceerde DB-fout
+    // waarmee de gate anders te omzeilen was): behandel als onbekend toestel,
+    // zónder DB-lookup.
+    const rawToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
+    const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
+
+    let device: { status: string } | null = null;
     try {
-      const deviceToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
-      const device = deviceToken ? await getDevice(String(appUser.id), deviceToken) : null;
-      const verdict = evaluateDeviceGate(appUser.role, req.path, device);
-      if (!verdict.allow) {
-        return res.status(verdict.status ?? 403).json(verdict.body ?? { error: "Dit toestel heeft geen toegang.", code: "device_unknown" });
-      }
+      device = deviceToken ? await getDevice(String(appUser.id), deviceToken) : null;
     } catch (err) {
-      // Bewust fail-open: als de user_devices-tabel nog niet bestaat (migratie
-      // niet gedraaid) of de DB hapert, mag dat niet de hele chauffeurs-app
-      // platleggen — de gewone auth hierboven staat er dan nog. Zichtbaar in
-      // de functielogs zodat het niet stil blijft.
-      console.error("Toestel-controle overgeslagen (fail-open):", err);
+      // Fail-OPEN uitsluitend wanneer de user_devices-tabel nog niet bestaat
+      // (migratie niet gedraaid) — dan mag de whitelist de app niet platleggen.
+      // Elke andere DB-fout = fail-CLOSED (503), anders is de gate met een
+      // geforceerde fout te omzeilen. Chauffeur-only, dus planners/admins
+      // blijven sowieso werken.
+      if (isMissingTableError(err)) {
+        console.error("Toestel-tabel ontbreekt — gate tijdelijk overgeslagen:", err);
+        req.accessToken = accessToken;
+        req.authUser = data.user;
+        req.appUser = appUser;
+        return next();
+      }
+      console.error("Toestel-controle DB-fout (fail-closed):", err);
+      return res.status(503).json({ error: "Toestel-controle is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "device_check_failed" });
+    }
+
+    const verdict = evaluateDeviceGate(appUser.role, req.path, device);
+    if (!verdict.allow) {
+      return res.status(verdict.status ?? 403).json(verdict.body ?? { error: "Dit toestel heeft geen toegang.", code: "device_unknown" });
     }
   }
 

@@ -1351,6 +1351,15 @@ app.post("/api/push/unsubscribe", authenticate, async (req: AuthenticatedRequest
 // Zie middleware.ts (gate) + supabase/user_devices.sql. Registratie is voor
 // iedereen bereikbaar (exempt in de gate); beheer is admin-only.
 
+// Toestelnaam is chauffeur-invoer en belandt in een admin-pushmelding: strip
+// controltekens (incl. regeleinden), collabeer witruimte, cap op 80 tekens.
+const sanitizeDeviceName = (raw: unknown): string =>
+  String(raw ?? "")
+    .replace(/[\u0000-\u001F\u007F]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80) || "Onbekend toestel";
+
 app.post("/api/devices/register", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const deviceToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
@@ -1358,11 +1367,24 @@ app.post("/api/devices/register", authenticate, async (req: AuthenticatedRequest
       return res.status(400).json({ error: "Geen geldig toestel-token meegestuurd." });
     }
     const appUser = req.appUser!;
-    const name = String(req.body?.name ?? "").slice(0, 80).trim() || "Onbekend toestel";
+    // Chauffeur-invoer: geen regeleinden/controltekens in een naam die straks in
+    // een admin-pushmelding belandt (anti-injectie), gecapt op 80 tekens.
+    const name = sanitizeDeviceName(req.body?.name);
     // Chauffeur: eerste toestel automatisch vertrouwd, daarna goedkeuring.
     // Planner/admin: altijd goedgekeurd (alleen zichtbaarheid — nooit lockout).
     const autoApprove = appUser.role !== "chauffeur" ? true : !(await userHasDevices(String(appUser.id)));
-    const { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove);
+    let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove);
+    // Race-vangst: twee toestellen die ~tegelijk als "eerste" registreren zien
+    // allebei userHasDevices=false → allebei auto-approved. Zodra er ná de
+    // insert méér dan één toestel op dit account staat terwijl wij zojuist
+    // auto-approveden, deze naar de veilige kant (pending) terugzetten.
+    if (created && autoApprove && appUser.role === "chauffeur") {
+      const mine = (await listAllDevices()).filter((d) => d.userId === String(appUser.id));
+      if (mine.length > 1) {
+        await setDeviceStatus(String(appUser.id), device.deviceToken, "pending", "auto");
+        device = { ...device, status: "pending" };
+      }
+    }
     if (created) {
       await logActivity(
         req,
@@ -1446,6 +1468,17 @@ app.post("/api/devices/delete", authenticate, requireRole("admin"), async (req: 
     if (userId === String(req.appUser!.id) && deviceToken === ownToken) {
       return res.status(400).json({ error: "Je kunt het toestel waarop je nu werkt niet schrappen." });
     }
+    // Het laatste toestel schrappen zou de auto-approve heropenen (een volgende
+    // registratie is dan weer "eerste toestel"). Bij een verloren/gestolen
+    // toestel hoort Blokkeren; wil je de gebruiker helemaal buiten, deactiveer
+    // dan het account. Dus: laatste toestel niet schrappen.
+    const userDeviceCount = (await listAllDevices()).filter((d) => d.userId === userId).length;
+    if (userDeviceCount <= 1) {
+      return res.status(400).json({
+        error: "Je kunt het laatste toestel van een gebruiker niet schrappen — blokkeer het, of deactiveer het account.",
+        code: "last_device",
+      });
+    }
     await deleteDevice(userId, deviceToken);
     const owner = (await getUsersData()).find((u) => String(u.id) === userId);
     await logActivity(req, "system", "Toestel geschrapt", `${owner?.name ?? userId}.`);
@@ -1460,8 +1493,8 @@ app.post("/api/devices/rename", authenticate, requireRole("admin"), async (req: 
   try {
     const userId = String(req.body?.userId ?? "");
     const deviceToken = String(req.body?.deviceToken ?? "");
-    const name = String(req.body?.name ?? "").slice(0, 80).trim();
-    if (!userId || !deviceToken || !name) return res.status(400).json({ error: "userId, deviceToken en name zijn verplicht." });
+    const name = sanitizeDeviceName(req.body?.name);
+    if (!userId || !deviceToken || !req.body?.name) return res.status(400).json({ error: "userId, deviceToken en name zijn verplicht." });
     await renameDevice(userId, deviceToken, name);
     res.json({ success: true });
   } catch (err: any) {
