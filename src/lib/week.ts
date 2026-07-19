@@ -19,6 +19,10 @@ export const isoWeekOf = (iso: string): number => isoWeekNumber(new Date(`${iso}
 /** Label voor een reeks datums: 'wk 29' of 'wk 29–30' bij een spanning. */
 export const weekRangeLabel = (isoDates: string[]): string => {
   if (isoDates.length === 0) return '';
-  const weeks = [...new Set(isoDates.map(isoWeekOf))].sort((a, b) => a - b);
-  return weeks.length === 1 ? `wk ${weeks[0]}` : `wk ${weeks[0]}–${weeks[weeks.length - 1]}`;
+  // In DÁTUM-volgorde nemen, niet op weeknummer sorteren: rond de jaargrens is
+  // week 53 → week 1 chronologisch, numeriek zou dat 'wk 1–53' maken.
+  const sorted = [...isoDates].sort();
+  const first = isoWeekOf(sorted[0]);
+  const last = isoWeekOf(sorted[sorted.length - 1]);
+  return first === last ? `wk ${first}` : `wk ${first}–${last}`;
 };

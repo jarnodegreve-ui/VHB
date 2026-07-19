@@ -2089,6 +2089,10 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
 // bij het openen. Idempotent — al-gelezen combinaties zijn een no-op.
 app.post("/api/updates/read", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
+    // De teller telt alléén chauffeurs (zij zijn de doelgroep). Een planner/
+    // admin die de Updates-weergave opent mag de cijfers niet flatteren, dus
+    // registreren we hun reads niet.
+    if (req.appUser!.role !== "chauffeur") return res.json({ success: true });
     const ids = Array.isArray(req.body?.updateIds) ? req.body.updateIds.map((id: unknown) => String(id)) : [];
     if (ids.length === 0) return res.json({ success: true });
     await markUpdatesRead(String(req.appUser!.id), ids);
@@ -2102,9 +2106,15 @@ app.post("/api/updates/read", authenticate, async (req: AuthenticatedRequest, re
 // Planner-teller: hoeveel (van de actieve) chauffeurs elke update gelezen heeft.
 app.get("/api/updates/read-counts", authenticate, requireRole("planner", "admin"), async (_req, res) => {
   try {
-    const [counts, users] = await Promise.all([getUpdateReadCounts(), getUsersData()]);
-    const totalChauffeurs = users.filter((u) => u.role === "chauffeur" && u.isActive !== false).length;
-    res.json({ counts, totalChauffeurs });
+    const users = await getUsersData();
+    // Alleen actieve chauffeurs tellen mee — zowel in de noemer als, via de
+    // id-set, in de teller (defensief tegen oude reads van wie intussen geen
+    // actieve chauffeur meer is, zodat je nooit "8/6 gelezen" ziet).
+    const chauffeurIds = new Set(
+      users.filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id)),
+    );
+    const counts = await getUpdateReadCounts(chauffeurIds);
+    res.json({ counts, totalChauffeurs: chauffeurIds.size });
   } catch (err: any) {
     console.error("Leestellers laden is mislukt.", err);
     res.status(500).json({ error: "Leestellers laden is mislukt." });

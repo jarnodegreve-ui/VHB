@@ -1448,14 +1448,22 @@ export const markUpdatesRead = async (userId: string, updateIds: string[]) => {
   if (error) throw error;
 };
 
-/** Aantal unieke lezers per update-id (voor de planner-teller). */
-export const getUpdateReadCounts = async (): Promise<Record<string, number>> => {
+/**
+ * Aantal unieke lezers per update-id (voor de planner-teller). Met
+ * `allowedUserIds` tellen alleen reads van die gebruikers mee — de route geeft
+ * hier de actieve-chauffeurs-set door zodat planner/admin-reads of reads van
+ * inmiddels-inactieve gebruikers de teller niet flatteren.
+ */
+export const getUpdateReadCounts = async (
+  allowedUserIds?: Set<string>,
+): Promise<Record<string, number>> => {
   const client = requireDb();
   const rows = await paginatedFetch((from, to) =>
-    client.from('update_reads').select('update_id').range(from, to),
+    client.from('update_reads').select('update_id, user_id').range(from, to),
   );
   const counts: Record<string, number> = {};
   for (const row of rows) {
+    if (allowedUserIds && !allowedUserIds.has(String((row as any).user_id))) continue;
     const id = String((row as any).update_id);
     counts[id] = (counts[id] ?? 0) + 1;
   }
