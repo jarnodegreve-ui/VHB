@@ -211,6 +211,7 @@ export default function App() {
   // zette de overlay uit zodra de éérste klaar was. Teller fixt dat.
   const loadingCountRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const ptrIndicatorRef = useRef<HTMLDivElement>(null);
   const beginLoading = () => {
     loadingCountRef.current += 1;
     setIsLoading(true);
@@ -642,9 +643,11 @@ export default function App() {
   };
 
   // Pull-to-refresh (PWA): sleep omlaag bovenaan → alle data opnieuw ophalen.
+  // `enabled` op !!currentUser zodat de hook (her)bindt zodra de scroll-
+  // container gemonteerd is (bij de koude start bestaat die nog niet).
   const refreshAll = () =>
     currentUser && session?.access_token ? loadAppData(currentUser, session.access_token) : Promise.resolve();
-  const { pull: ptrPull, refreshing: ptrRefreshing } = usePullToRefresh(scrollContainerRef, refreshAll);
+  const { refreshing: ptrRefreshing } = usePullToRefresh(scrollContainerRef, ptrIndicatorRef, refreshAll, !!currentUser);
 
   /** Meldt dit toestel aan bij de server (toestel-whitelist). Faalt stil:
    *  bij een netwerk-/serverfout laten we de app gewoon door — de server-gate
@@ -1804,25 +1807,20 @@ export default function App() {
         {/* Scroll container met sticky-header — header zit BINNEN de scroll
             zodat content er onderdoor schuift en de panel-blur natuurlijk
             werkt (echte iOS-vibe i.p.v. harde rand). */}
-        {/* Pull-to-refresh-indicator (PWA): verschijnt terwijl je omlaag sleept. */}
-        {(ptrPull > 0 || ptrRefreshing) && (
-          <div
-            className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center"
-            style={{ transform: `translateY(${Math.max(0, (ptrRefreshing ? 44 : ptrPull) - 20)}px)` }}
-          >
-            <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-slate-200/70">
-              <RefreshCw
-                size={18}
-                className={cn('text-oker-500', ptrRefreshing && 'animate-spin')}
-                style={ptrRefreshing ? undefined : { transform: `rotate(${ptrPull * 2.2}deg)` }}
-              />
-            </div>
+        {/* Pull-to-refresh-indicator: altijd in de DOM (de hook stuurt opacity/
+            transform rechtstreeks aan via ptrIndicatorRef); animate-spin volgt
+            de refreshing-state. */}
+        <div
+          ref={ptrIndicatorRef}
+          className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center opacity-0"
+        >
+          <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-slate-200/70">
+            <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500', ptrRefreshing && 'animate-spin')} />
           </div>
-        )}
+        </div>
         <div
           ref={scrollContainerRef}
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden px-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
-          style={ptrPull > 0 && !ptrRefreshing ? { transform: `translateY(${ptrPull}px)`, transition: 'none' } : { transition: 'transform 0.2s' }}
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-4 md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
           onScroll={(e) => {
             const top = e.currentTarget.scrollTop ?? 0;
             const next = top > 8;
