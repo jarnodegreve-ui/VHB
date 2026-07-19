@@ -259,7 +259,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         importedUsers.forEach((impUser) => {
           const existingIdx = newUsersList.findIndex((u) => u.name.toLowerCase() === impUser.name.toLowerCase());
           if (existingIdx !== -1) {
-            newUsersList[existingIdx] = { ...newUsersList[existingIdx], phone: impUser.phone || newUsersList[existingIdx].phone, email: impUser.email || newUsersList[existingIdx].email, role: impUser.role || newUsersList[existingIdx].role, employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId, password: impUser.password || newUsersList[existingIdx].password, section: impUser.section || newUsersList[existingIdx].section };
+            // BEWUST géén password op bestaande gebruikers: een her-import van
+            // het personeels-Excel (met de oude tijdelijke wachtwoorden in een
+            // kolom) zou anders ieders wachtwoord resetten en wie z'n eigen
+            // wachtwoord instelde buitensluiten. Wachtwoord wijzigen loopt via
+            // de reset-knop, niet via de import.
+            newUsersList[existingIdx] = { ...newUsersList[existingIdx], phone: impUser.phone || newUsersList[existingIdx].phone, email: impUser.email || newUsersList[existingIdx].email, role: impUser.role || newUsersList[existingIdx].role, employeeId: impUser.employeeId || newUsersList[existingIdx].employeeId, section: impUser.section || newUsersList[existingIdx].section };
             updatedCount++;
           } else {
             newUsersList.push(impUser);

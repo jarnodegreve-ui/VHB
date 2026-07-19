@@ -411,24 +411,28 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
     expect(res.status).toBe(403);
   });
 
-  it('laat intrekken van eigen pending toe, maar niet van eigen approved', async () => {
+  it('laat intrekken van eigen pending toe; een weggelaten eigen approved wordt genegeerd (blijft staan)', async () => {
     const zonderPending = mem.leave.filter((l) => l.userId === '3' && l.id !== 'l-a1');
     const ok = await api('POST', '/api/leave', { token: 'tok-a', body: zonderPending });
     expect(ok.status).toBe(200);
     expect(mem.leave.find((l) => l.id === 'l-a1')).toBeFalsy();
 
+    // Eigen approved weglaten is géén intrekking (stale sessie): genegeerd,
+    // niet verwijderd — en geen storende 403 op de rest van de save.
     const zonderApproved = mem.leave.filter((l) => l.userId === '3' && l.id !== 'l-a2');
-    const fail = await api('POST', '/api/leave', { token: 'tok-a', body: zonderApproved });
-    expect(fail.status).toBe(403);
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: zonderApproved });
+    expect(res.status).toBe(200);
     expect(mem.leave.find((l) => l.id === 'l-a2')).toBeTruthy();
   });
 
-  it('weigert dat een chauffeur een bestaande aanvraag inhoudelijk wijzigt (403)', async () => {
+  it('negeert een inhoudelijke wijziging van een bestaande aanvraag door een chauffeur (blijft ongewijzigd, geen clobber)', async () => {
     const own = mem.leave.filter((l) => l.userId === '3').map((l) =>
       l.id === 'l-a1' ? { ...l, endDate: '2026-07-10' } : l,
     );
     const res = await api('POST', '/api/leave', { token: 'tok-a', body: own });
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    // Echo van een bestaand record wordt niet weggeschreven → origineel behouden.
+    expect(mem.leave.find((l) => l.id === 'l-a1')?.endDate).toBe('2026-07-03');
   });
 
   it('laat de planner een aanvraag goedkeuren en verwijderingen doorvoeren', async () => {
@@ -482,6 +486,35 @@ describe('dienstruil: autorisatieregels', () => {
     const sjoemel = scoped.map((s) => (s.id === 's-1' ? { ...s, status: 'accepted', returnCode: '99' } : s));
     const res = await api('POST', '/api/swaps', { token: 'tok-b', body: sjoemel });
     expect(res.status).toBe(403);
+  });
+
+  it('weigert een overgang uit een afgehandelde status — rejected → approved via POST (409)', async () => {
+    mem.swaps = [{ id: 's-r', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'rejected', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
+    const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s) => ({ ...s, status: 'approved' })) });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s) => s.id === 's-r')?.status).toBe('rejected');
+  });
+
+  it('weigert een overgang uit een afgehandelde status — rejected → approved via PATCH (409)', async () => {
+    mem.swaps = [{ id: 's-r', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'rejected', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
+    const res = await api('PATCH', '/api/swaps/s-r', { token: 'tok-admin', body: { status: 'approved' } });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s) => s.id === 's-r')?.status).toBe('rejected');
+  });
+});
+
+describe('urgente-update-mail: ontvangers server-side', () => {
+  it('negeert client-opgegeven adressen en stuurt alleen naar interne gebruikers', async () => {
+    mem.emailsSent = [];
+    const res = await api('POST', '/api/send-urgent-update-email', {
+      token: 'tok-planner',
+      body: { update: { title: 'Test', content: 'x' }, recipients: [{ id: '999', email: 'attacker@evil.example' }] },
+    });
+    expect(res.status).toBe(200);
+    const sent = mem.emailsSent.find((e) => e.context === 'urgent-update');
+    expect(sent).toBeTruthy();
+    expect(sent!.to).not.toContain('attacker@evil.example');
+    expect((sent!.to as string[]).every((addr) => addr.endsWith('@vhb.be'))).toBe(true);
   });
 });
 
