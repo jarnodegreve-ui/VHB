@@ -5,6 +5,7 @@ import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { BUILD_INFO, getServiceWorkerVersion } from '../../lib/appVersion';
+import { isoDate } from '../../lib/availability';
 import { OcpiCard } from './OcpiCard';
 
 const COLLECTION_LABELS: Record<string, string> = {
@@ -189,7 +190,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     const sample = services[0];
     const tomorrow = new Date();
     tomorrow.setDate(tomorrow.getDate() + 1);
-    const dateStr = tomorrow.toISOString().split('T')[0];
+    const dateStr = isoDate(tomorrow); // lokale datum (niet UTC)
     const newShift: Shift = {
       id: `${TEST_SHIFT_ID_PREFIX}${Date.now()}`,
       date: dateStr,

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { Shift, User } from '../types';
 import { getSupabaseAuthHeaders } from '../lib/ui';
 import { isoWeekNumber } from '../lib/week';
+import { shiftCategory } from '../lib/shiftTime';
 
 const MONTH_NAMES = [
   'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
@@ -9,15 +10,6 @@ const MONTH_NAMES = [
 ];
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
-
-// Categoriseer dienst op basis van starttijd voor visuele groepering.
-// Ochtend: voor 09:00 — Middag: 09:00–14:59 — Avond: 15:00+
-const shiftCategory = (startTime: string): 'ochtend' | 'middag' | 'avond' => {
-  const h = parseInt(startTime.split(':')[0] || '0', 10);
-  if (h < 9) return 'ochtend';
-  if (h < 15) return 'middag';
-  return 'avond';
-};
 
 const CATEGORY_LABEL: Record<string, string> = {
   ochtend: 'Vroeg',

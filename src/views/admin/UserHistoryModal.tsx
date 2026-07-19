@@ -2,6 +2,7 @@ import { Calendar, Clock, RotateCcw, X } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { cn } from '../../lib/ui';
+import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
 
@@ -59,7 +60,7 @@ export function UserHistoryModal({
 }) {
   if (!user) return null;
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = isoDate(new Date()); // lokale datum (niet UTC → geen dag-verschuiving 's nachts)
   const currentYear = new Date().getFullYear();
   const yearStart = `${currentYear}-01-01`;
   const yearEnd = `${currentYear}-12-31`;

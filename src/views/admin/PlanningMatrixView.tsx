@@ -6,7 +6,7 @@ import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { StatCard } from '../../components/StatCard';
-import { normalizePlanningToken, resolvePlanningAssignment } from '../../lib/planning';
+import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken } from '../../lib/planning';
 
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
 // Gedeelde kleurentaal met de Maandplanning (src/lib/planningKind.ts) —
@@ -69,11 +69,17 @@ export function PlanningMatrixView({
     const derived = useMemo(() => {
       const serviceCodeLookup = new Set(services.map((service) => normalizePlanningToken(service.serviceNumber)));
       const planningCodeLookup = new Set(planningCodes.map((code) => normalizePlanningToken(code.code)));
-      const knownDriverLookup = new Set(
-        users
-          .map((user) => normalizePlanningToken(user.name))
-          .filter((value) => value.length > 0)
-      );
+      // Zowel de directe token als de volgorde-onafhankelijke sleutel, exact
+      // zoals de server (idByNameKey) — anders telt een omgekeerde naamvolgorde
+      // of accentverschil hier onterecht als "niet-gematchte chauffeur".
+      const knownDriverLookup = new Set<string>();
+      for (const user of users) {
+        const token = normalizePlanningToken(user.name);
+        if (token.length > 0) {
+          knownDriverLookup.add(token);
+          knownDriverLookup.add(sortedNameToken(user.name));
+        }
+      }
 
     const globalUnknownCodeSet = new Set<string>();
     const globalUnmatchedDriverSet = new Set<string>();
@@ -95,7 +101,8 @@ export function PlanningMatrixView({
       for (const [driver, code] of assignmentsEntries) {
         const normalizedCode = normalizePlanningToken(code);
         const normalizedDriver = normalizePlanningToken(driver);
-        const hasKnownDriver = normalizedDriver.length > 0 && knownDriverLookup.has(normalizedDriver);
+        const hasKnownDriver = normalizedDriver.length > 0 &&
+          (knownDriverLookup.has(normalizedDriver) || knownDriverLookup.has(sortedNameToken(driver)));
         const isKnownService = normalizedCode.length > 0 && serviceCodeLookup.has(normalizedCode);
         const isKnownPlanningCode = normalizedCode.length > 0 && planningCodeLookup.has(normalizedCode);
 
