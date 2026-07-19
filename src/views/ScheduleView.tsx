@@ -282,7 +282,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
             <div
               key={g.key}
               className={cn(
-                'surface-card rounded-2xl p-4',
+                'surface-card rounded-3xl p-4',
                 isToday && 'ring-2 ring-oker-300',
                 g.hasConflict && 'ring-2 ring-red-300 bg-red-50/30',
               )}

@@ -437,10 +437,10 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-50/80 border border-red-200/70"
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-red-500/15 border border-red-500/25"
         >
-          <AlertTriangle size={14} className="text-red-500 shrink-0" />
-          <p className="text-red-700 text-sm font-semibold">{error}</p>
+          <AlertTriangle size={14} className="text-red-300 shrink-0" />
+          <p className="text-red-200 text-sm font-semibold">{error}</p>
         </motion.div>
       )}
       {info && (
@@ -448,10 +448,10 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
           initial={{ opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -6 }}
-          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-50/80 border border-emerald-200/70"
+          className="flex items-center gap-2 px-4 py-3 rounded-2xl bg-emerald-500/15 border border-emerald-500/25"
         >
-          <CheckCircle size={14} className="text-emerald-600 shrink-0" />
-          <p className="text-emerald-700 text-sm font-semibold">{info}</p>
+          <CheckCircle size={14} className="text-emerald-300 shrink-0" />
+          <p className="text-emerald-200 text-sm font-semibold">{info}</p>
         </motion.div>
       )}
     </AnimatePresence>

@@ -967,6 +967,26 @@ html.dark {
 .dark .bg-emerald-50\/70 { background-color: rgba(16, 185, 129, 0.10); }
 .dark .ring-emerald-100 { --tw-ring-color: rgba(16, 185, 129, 0.25); }
 
+/* Ontbrekende .dark-overrides voor opacity-suffix-varianten (controle-ronde):
+   zonder deze bleven de import-/feedbackpanelen en weekend-/hovertinten
+   fel-licht in dark mode (o.a. ManageSchedules, PlanningMatrix, LeaveManagement,
+   VerlofKalender). */
+.dark .bg-red-50\/80 { background-color: rgba(239, 68, 68, 0.14); }
+.dark .bg-red-50\/70 { background-color: rgba(239, 68, 68, 0.12); }
+.dark .bg-amber-50\/70 { background-color: rgba(249, 115, 22, 0.14); }
+.dark .bg-emerald-50\/60 { background-color: rgba(16, 185, 129, 0.10); }
+.dark .bg-oker-50\/70 { background-color: rgba(232, 163, 61, 0.09); }
+.dark .bg-oker-50\/40 { background-color: rgba(232, 163, 61, 0.06); }
+.dark .bg-slate-100\/50 { background-color: rgba(38, 40, 43, 0.32); }
+.dark .bg-slate-50\/40 { background-color: rgba(23, 24, 26, 0.24); }
+.dark .hover\:bg-slate-100\/80:hover { background-color: rgba(79, 87, 95, 0.52); }
+.dark .text-red-700\/80 { color: rgb(252, 165, 165); }
+.dark .text-red-900 { color: rgb(252, 165, 165); }
+.dark .text-amber-900 { color: rgb(253, 186, 116); }
+.dark .text-amber-600 { color: rgb(253, 186, 116); }
+.dark .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.30); }
+.dark .border-red-200\/70 { border-color: rgba(239, 68, 68, 0.30); }
+
 /* Login panel soft cream gradient stays light — users expect a familiar
    brand landing on the login screen. If you want it dark, wire a different
    style override for .min-h-screen inside LoginView. */
