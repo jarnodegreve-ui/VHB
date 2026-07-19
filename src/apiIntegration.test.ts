@@ -157,8 +157,12 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     deleteUserDocument: async (id: string) => { mem.documents = mem.documents.filter((d: any) => String(d.id) !== String(id)); },
     getRitblaadjeMeta: async () => mem.ritblaadje ?? null,
     // Toestel-whitelist: zelfde contract als de echte helpers, tegen mem.devices.
-    getDevice: async (userId: string, deviceToken: string) =>
-      mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken) ?? null,
+    getDevice: async (userId: string, deviceToken: string) => {
+      // Speciale tokens simuleren DB-fouten voor de fail-open/closed-tests.
+      if (deviceToken === 'dev-missingtable') throw { code: '42P01', message: 'relation "user_devices" does not exist' };
+      if (deviceToken === 'dev-dberror') throw { code: '08006', message: 'connection failure' };
+      return mem.devices.find((d: any) => String(d.userId) === String(userId) && d.deviceToken === deviceToken) ?? null;
+    },
     userHasDevices: async (userId: string) =>
       mem.devices.some((d: any) => String(d.userId) === String(userId)),
     registerDevice: async (userId: string, deviceToken: string, name: string, autoApprove: boolean) => {
@@ -1215,6 +1219,43 @@ describe('toestel-whitelist', () => {
     expect((await api('GET', '/api/devices', { token: 'tok-planner' })).status).toBe(403);
     expect((await api('GET', '/api/devices', { token: 'tok-a' })).status).toBe(403);
     expect((await api('GET', '/api/devices', { token: 'tok-admin' })).status).toBe(200);
+  });
+
+  it('een overlang toestel-token wordt behandeld als onbekend toestel (403, geen 500/fail-open)', async () => {
+    const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'x'.repeat(500) });
+    expect(res.status).toBe(403);
+    expect(res.json?.code).toBe('device_unknown');
+  });
+
+  it('fail-CLOSED bij een echte DB-fout in de gate (503)', async () => {
+    const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-dberror' });
+    expect(res.status).toBe(503);
+    expect(res.json?.code).toBe('device_check_failed');
+  });
+
+  it('fail-OPEN alleen wanneer de user_devices-tabel ontbreekt (migratie niet gedraaid)', async () => {
+    const res = await api('GET', '/api/updates', { token: 'tok-a', device: 'dev-missingtable' });
+    expect(res.status).toBe(200);
+  });
+
+  it('het laatste toestel van een gebruiker kan niet geschrapt worden (heropent auto-approve)', async () => {
+    mem.devices = [
+      { userId: '3', deviceToken: 'dev-enige', name: 'x', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' },
+    ];
+    const res = await api('POST', '/api/devices/delete', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-enige' } });
+    expect(res.status).toBe(400);
+    expect(res.json?.code).toBe('last_device');
+    // Met een tweede toestel erbij mag schrappen wél.
+    mem.devices.push({ userId: '3', deviceToken: 'dev-tweede', name: 'y', status: 'pending', createdAt: '', lastSeenAt: '', approvedAt: null, approvedBy: null });
+    expect((await api('POST', '/api/devices/delete', { token: 'tok-admin', body: { userId: '3', deviceToken: 'dev-tweede' } })).status).toBe(200);
+  });
+
+  it('een toestelnaam met regeleinden wordt gesaniteerd (anti-injectie in de admin-push)', async () => {
+    mem.devices = [];
+    await api('POST', '/api/devices/register', { token: 'tok-a', device: 'dev-naam', body: { name: 'iPhone\n\nGoedkeuren aub!!!' } });
+    const stored = mem.devices.find((d: any) => d.deviceToken === 'dev-naam');
+    expect(stored?.name).toBe('iPhone Goedkeuren aub!!!');
+    expect(stored?.name).not.toContain('\n');
   });
 
   it('de admin kan het toestel waarop die nu werkt niet blokkeren of schrappen (lockout-guard)', async () => {
