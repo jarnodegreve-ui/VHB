@@ -1705,11 +1705,22 @@ export const saveCoverageExpectations = async (map: Record<string, string[]>) =>
     day_type: String(day_type),
     service_numbers: Array.isArray(service_numbers) ? service_numbers.map((s) => String(s)) : [],
   }));
-  const { error: deleteError } = await client.from('coverage_expectations').delete().neq('day_type', '__never_match__');
-  if (deleteError) throw deleteError;
-  if (rows.length === 0) return;
-  const { error: insertError } = await client.from('coverage_expectations').insert(rows);
-  if (insertError) throw insertError;
+  // Upsert-dan-delete (day_type is primary key): eerst de nieuwe waarden
+  // wegschrijven, dán pas de dag-types die niet meer voorkomen verwijderen.
+  // De oude delete-dan-insert liet bij een insert-fout de HELE dekkings-
+  // configuratie (dag-types + uitzonderingen) verdwijnen.
+  if (rows.length > 0) {
+    const { error: upsertError } = await client.from('coverage_expectations').upsert(rows);
+    if (upsertError) throw upsertError;
+  }
+  const keep = new Set(rows.map((r) => r.day_type));
+  const { data: existing, error: selectError } = await client.from('coverage_expectations').select('day_type');
+  if (selectError) throw selectError;
+  const toDelete = (existing ?? []).map((r: any) => String(r.day_type)).filter((dt) => !keep.has(dt));
+  if (toDelete.length > 0) {
+    const { error: deleteError } = await client.from('coverage_expectations').delete().in('day_type', toDelete);
+    if (deleteError) throw deleteError;
+  }
 };
 
 // --- Restore vanuit een back-up-bestand ---

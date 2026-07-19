@@ -2143,6 +2143,9 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   }
 });
 
+// Afgehandelde ruil-statussen: hieruit is geen overgang meer toegestaan.
+const TERMINAL_SWAP_STATES = new Set(["rejected", "cancelled", "completed"]);
+
 app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -2301,8 +2304,10 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
 
     // Exclusiviteit bij goedkeuren: een dienst kan niet via twee ruilen
     // tegelijk goedgekeurd raken. Blokkeer een approve-overgang als er al een
-    // ándere goedgekeurde ruil voor dezelfde shift bestaat.
-    for (const next of newData) {
+    // ándere goedgekeurde ruil voor dezelfde shift bestaat. Over recordsToWrite
+    // (niet newData): een stale echo die niet weggeschreven wordt mag geen
+    // vals 409 op een ongerelateerde nieuwe aanvraag veroorzaken.
+    for (const next of recordsToWrite) {
       const prev = previousById.get(String(next.id));
       const becomesApproved = next.status === "approved" && (!prev || prev.status !== "approved");
       if (becomesApproved && previousSwaps.some((s) => String(s.id) !== String(next.id) && String(s.shiftId) === String(next.shiftId) && String(s.status) === "approved")) {
@@ -2310,12 +2315,23 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
+    // State-machine: een afgehandelde ruil (geweigerd/geannuleerd/voltooid) kan
+    // niet meer van status veranderen — ook niet door een planner via een
+    // directe API-call (rejected → approved was zo mogelijk).
+    for (const next of recordsToWrite) {
+      const prev = previousById.get(String(next.id));
+      if (prev && String(next.status) !== String(prev.status) && TERMINAL_SWAP_STATES.has(String(prev.status))) {
+        return res.status(409).json({ error: "Deze dienstruil is al afgehandeld en kan niet meer van status veranderen." });
+      }
+    }
+
     await saveSwapsData(recordsToWrite, swapIdsToDelete);
 
-    // Activity log: detecteer state-overgangen en nieuwe aanvragen.
+    // Activity log: detecteer state-overgangen en nieuwe aanvragen. Over
+    // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
     const usersForLog = await getUsersData();
     const userName = (id: string) => usersForLog.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
-    for (const next of newData) {
+    for (const next of recordsToWrite) {
       const prev = previousById.get(String(next.id));
       if (!prev) {
         await logActivity(req, "swaps", "Dienstruil aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor ruil.`, { type: "swap", id: next.id });
@@ -2417,6 +2433,13 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       if (role !== "admin" && current.status === "pending" && status === "approved") {
         return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
       }
+    }
+
+    // State-machine: uit een afgehandelde status (geweigerd/geannuleerd/
+    // voltooid) is geen overgang meer toegestaan (rejected → approved was zo
+    // mogelijk).
+    if (status !== current.status && TERMINAL_SWAP_STATES.has(String(current.status))) {
+      return res.status(409).json({ error: "Deze dienstruil is al afgehandeld en kan niet meer van status veranderen." });
     }
 
     // Exclusiviteit: een dienst kan niet via twee ruilen tegelijk goedgekeurd
@@ -2594,6 +2617,13 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     // planner/admin.
     const payloadLeaveIds = new Set(newData.map((r: any) => String(r.id)));
     const leaveIdsToDelete: string[] = [];
+    // Wat er werkelijk weggeschreven wordt. Planner/admin schrijven de hele
+    // payload (vertrouwde rol); voor een chauffeur bouwen we — net als bij
+    // /api/swaps — enkel de records op die hij/zij legitiem toevoegt, en
+    // droppen we echo's van bestaande records. Zo geeft een stale echo geen
+    // vals 403 en overschrijft hij nooit een gelijktijdige planner-beslissing
+    // (TOCTOU-clobber).
+    let recordsToWrite: any[] = newData;
 
     if (req.appUser?.role === "chauffeur") {
       const newById = new Map(newData.map((r: any) => [String(r.id), r]));
@@ -2606,45 +2636,39 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           // niet als 'intrekking' gelden — anders krijgt elke chauffeur
           // 403 zodra een collega ook maar één verlofrecord heeft.
           if (String(prev.userId) !== selfId) continue;
-          if (prev.status !== "pending") {
-            return res.status(403).json({ error: "Niet toegestaan: je kan alleen je eigen openstaande verlofaanvraag intrekken." });
-          }
-          leaveIdsToDelete.push(String(id));
+          // Alleen eigen pending-aanvragen die de chauffeur weglaat = intrekking.
+          // Een weggelaten al-besliste eigen aanvraag (bv. stale sessie)
+          // negeren we bewust i.p.v. 403 — beslissen doet de chauffeur toch niet.
+          if (prev.status === "pending") leaveIdsToDelete.push(String(id));
         }
       }
 
+      const chauffeurWrites: any[] = [];
       for (const next of newData) {
-        const prev = previousById.get(String(next.id));
-        if (!prev) {
-          if (String(next.userId) !== selfId) {
-            return res.status(403).json({ error: "Niet toegestaan: je kan alleen voor jezelf verlof aanvragen." });
-          }
-          if (next.status !== "pending") {
-            return res.status(403).json({ error: "Niet toegestaan: nieuwe verlofaanvragen starten als 'pending'." });
-          }
-          if (next.decidedAt) {
-            return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
-          }
-        } else {
-          const fields = ["userId", "startDate", "endDate", "type", "status", "comment", "createdAt", "decidedAt"] as const;
-          for (const f of fields) {
-            if (String((next as any)[f] ?? "") !== String((prev as any)[f] ?? "")) {
-              return res.status(403).json({ error: "Niet toegestaan: bestaande verlofaanvragen kunnen alleen door planner/admin worden aangepast." });
-            }
-          }
+        // Echo van een bestaand record wordt NOOIT (her)geschreven: chauffeurs
+        // mochten bestaande aanvragen sowieso niet bewerken. Enkel écht nieuwe.
+        if (previousById.has(String(next.id))) continue;
+        if (String(next.userId) !== selfId) {
+          return res.status(403).json({ error: "Niet toegestaan: je kan alleen voor jezelf verlof aanvragen." });
         }
+        if (next.status !== "pending") {
+          return res.status(403).json({ error: "Niet toegestaan: nieuwe verlofaanvragen starten als 'pending'." });
+        }
+        if (next.decidedAt) {
+          return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
+        }
+        chauffeurWrites.push(next);
       }
-    }
-
-    // Planner/admin: alles wat uit de (volledige) payload is weggelaten is
-    // een bewuste verwijdering door een vertrouwde rol.
-    if (req.appUser?.role !== "chauffeur") {
+      recordsToWrite = chauffeurWrites;
+    } else {
+      // Planner/admin: alles wat uit de (volledige) payload is weggelaten is
+      // een bewuste verwijdering door een vertrouwde rol.
       for (const [id] of previousById) {
         if (!payloadLeaveIds.has(String(id))) leaveIdsToDelete.push(String(id));
       }
     }
 
-    await saveLeaveData(newData, leaveIdsToDelete);
+    await saveLeaveData(recordsToWrite, leaveIdsToDelete);
 
     if (leaveIdsToDelete.length > 0) {
       await logActivity(
@@ -2655,7 +2679,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       );
     }
 
-    for (const next of newData) {
+    for (const next of recordsToWrite) {
       const prev = previousById.get(next.id);
       const period = formatPeriod(next.startDate, next.endDate);
       const typeLabel = formatLeaveType(next.type);
@@ -2801,17 +2825,22 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
 });
 
 app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "admin"), async (req, res) => {
-  const { update, recipients } = req.body;
-  
-  if (!update || !recipients || !Array.isArray(recipients)) {
-    return res.status(400).json({ error: "Missing update or recipients" });
+  const { update } = req.body;
+
+  if (!update || !update.title) {
+    return res.status(400).json({ error: "Missing update" });
   }
 
-  const emails = recipients.map((u: any) => u.email).filter(Boolean);
+  // Ontvangers ALTIJD server-side bepalen (nooit uit de request-body): alle
+  // actieve gebruikers met een e-mailadres. Anders kon een planner/admin de
+  // bedrijfs-SMTP als relay naar willekeurige externe adressen gebruiken.
+  const allUsers = await getUsersData();
+  const recipients = allUsers.filter((u) => u.isActive !== false && u.email);
+  const emails = recipients.map((u) => u.email).filter(Boolean) as string[];
 
   // Push naar álle ontvangers (ook wie geen e-mail heeft) — best-effort.
   await sendPushToUsers(
-    recipients.map((u: any) => String(u?.id ?? "")).filter(Boolean),
+    recipients.map((u) => String(u.id)).filter(Boolean),
     { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: "/" },
   );
 
