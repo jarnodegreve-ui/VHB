@@ -6,7 +6,7 @@ import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
-import { cn } from '../lib/ui';
+import { cn, downloadBlob } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { shiftCategory } from '../lib/shiftTime';
@@ -125,12 +125,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
 
     const fullCalendar = buildCalendar(events, { calName: `VHB Rooster ${user.name}`, dtstamp });
     const blob = new Blob([fullCalendar], { type: 'text/calendar;charset=utf-8' });
-    const link = document.createElement('a');
-    link.href = window.URL.createObjectURL(blob);
-    link.setAttribute('download', `VHB_Rooster_${user.name.replace(/\s+/g, '_')}.ics`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    void downloadBlob(`VHB_Rooster_${user.name.replace(/\s+/g, '_')}.ics`, blob);
   };
 
   return (

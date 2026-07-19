@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Download, FileText, Trash2, Upload } from 'lucide-react';
 import type { User } from '../types';
-import { getSupabaseAuthHeaders, notify } from '../lib/ui';
+import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Skeleton } from '../components/Skeleton';
@@ -267,16 +267,19 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                {/* Anchor i.p.v. Button-primitief: native download-attribuut moet blijven werken.
-                    Klassen spiegelen Button variant="secondary" size="md". */}
-                <a
-                  href={current.url}
-                  download={current.filename}
+                {/* openPdfInNewTab i.p.v. een download-anchor: het download-
+                    attribuut wordt op een cross-origin signed URL genegeerd,
+                    waardoor de PWA in standalone wegnavigeert. Openen in een
+                    (nieuw) tabblad laat de gebruiker daar bewaren, met
+                    same-window-fallback in standalone. */}
+                <button
+                  type="button"
+                  onClick={() => openPdfInNewTab(current.url)}
                   className="control-button-soft ios-pressable inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 hover:text-slate-900 transition-all"
                 >
                   <Download size={16} />
-                  Download
-                </a>
+                  Openen
+                </button>
                 {canDelete && (
                   <Button
                     variant="danger"

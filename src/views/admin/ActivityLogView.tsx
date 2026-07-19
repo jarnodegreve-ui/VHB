@@ -1,7 +1,7 @@
 import { Fragment, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { Activity, Calendar, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
-import { cn } from '../../lib/ui';
+import { cn, downloadBlob } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -126,15 +126,8 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
       .join('\n');
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
     const dateSuffix = new Date().toISOString().slice(0, 10);
-    link.href = url;
-    link.download = `vhb-activiteit-${dateWindow}-${dateSuffix}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    void downloadBlob(`vhb-activiteit-${dateWindow}-${dateSuffix}.csv`, blob);
   };
 
   return (
@@ -206,7 +199,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Zoek op actie, details of actor..."
-                className="w-full bg-transparent text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent text-base md:text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
               />
             </label>
             <div className="flex flex-wrap gap-2">
