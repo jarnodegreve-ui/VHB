@@ -495,6 +495,23 @@ export default function App() {
     return () => window.removeEventListener('vhb-toast', handler as EventListener);
   }, []);
 
+  // Auth-events uit de stand-alone apiFetch (src/lib/api.ts) — die heeft geen
+  // toegang tot deze React-state, dus een verlopen sessie/geblokkeerd toestel
+  // in bv. DevicesView of EntityHistoryModal loopt via window-events hierheen.
+  useEffect(() => {
+    const onExpired = () => { void forceSignOut('Je sessie is verlopen. Log opnieuw in.'); };
+    const onDeviceBlocked = (event: Event) => {
+      const code = (event as CustomEvent<{ code?: string }>).detail?.code;
+      setDeviceBlocked(code === 'device_revoked' ? 'revoked' : 'pending');
+    };
+    window.addEventListener('vhb-auth-expired', onExpired);
+    window.addEventListener('vhb-device-blocked', onDeviceBlocked as EventListener);
+    return () => {
+      window.removeEventListener('vhb-auth-expired', onExpired);
+      window.removeEventListener('vhb-device-blocked', onDeviceBlocked as EventListener);
+    };
+  }, []);
+
   useEffect(() => {
     if (currentView === 'activiteit' && currentUser?.role === 'admin') {
       fetchActivityLog();

@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Activity, AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
+import { isoDate } from '../../lib/availability';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 
@@ -657,7 +658,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           // All-chauffeurs-overzicht (ScheduleView is strikt per-chauffeur en
           // toonde met een synthetische admin altijd leeg). Toont de actieve
           // planning vanaf vandaag, gegroepeerd per dag.
-          const today = new Date().toLocaleDateString('en-CA');
+          const today = isoDate(new Date());
           const nameById = new Map(users.map((u) => [String(u.id), u.name]));
           const upcoming = shifts
             .filter((s) => s.date && s.date >= today)

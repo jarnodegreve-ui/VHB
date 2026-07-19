@@ -1038,7 +1038,7 @@ export const bumpActiveSessions = async (userId: string, delta: number) => {
 
 export const DIVERSIONS_BUCKET = "diversions";
 
-export const removeDiversionPdfs = async (diversionIds: string[]) => {
+const removeDiversionPdfs = async (diversionIds: string[]) => {
   if (!supabaseAdmin || diversionIds.length === 0) return;
   const paths = diversionIds.map((id) => `${id}.pdf`);
   const { error } = await supabaseAdmin.storage.from(DIVERSIONS_BUCKET).remove(paths);
@@ -1741,11 +1741,6 @@ export type RestorableCollections = {
 /** De collecties die een restore overschrijft. De audit-log
  *  (activityLog) en de import-historiek blijven bewust ongemoeid: dat is
  *  geschiedenis, geen state — anders zou de restore z'n eigen spoor wissen. */
-export const RESTORABLE_KEYS: Array<keyof RestorableCollections> = [
-  'users', 'planning', 'services', 'diversions', 'updates',
-  'leave', 'swaps', 'planningCodes', 'planningMatrixRows', 'coverageExpectations',
-];
-
 /**
  * Zet alle operationele collecties terug naar de inhoud van een back-up.
  * Volgorde bewust: eerst users (de min-1-admin-vangrail mag niet door een

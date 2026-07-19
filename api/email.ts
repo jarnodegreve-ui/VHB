@@ -29,7 +29,7 @@ const getSmtpConfig = () => ({
   },
 });
 
-export const isSmtpConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+const isSmtpConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
 const portalUrl = () => process.env.APP_URL || "https://vhbportaal.com";
 

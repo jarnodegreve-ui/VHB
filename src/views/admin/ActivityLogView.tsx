@@ -2,6 +2,7 @@ import { Fragment, useMemo, useState, type ComponentProps, type ReactNode } from
 import { Activity, Calendar, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
+import { isoDate } from '../../lib/availability';
 import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -42,7 +43,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   const dailyActive = useMemo(() => {
     const byDay = new Map<string, Set<string>>();
     for (const e of logins) {
-      const day = new Date(e.createdAt).toLocaleDateString('en-CA'); // yyyy-mm-dd, lokaal
+      const day = isoDate(new Date(e.createdAt)); // yyyy-mm-dd, lokaal
       const key = String(e.entityId || e.actorName);
       const set = byDay.get(day) ?? new Set<string>();
       set.add(key);

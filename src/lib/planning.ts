@@ -31,7 +31,7 @@ export const sortedNameToken = (name: string) =>
 // een gelijknamige-maar-andere getServiceSegments (api/storage.ts) die HH:MM
 // valideert en {startTime,endTime,segment}-objecten geeft — bewust los, dus
 // hier een eigen naam om de divergente duplicaat niet te verwarren.
-export const getServiceSegmentLabels = (service: Service) => (
+const getServiceSegmentLabels = (service: Service) => (
   [
     service.startTime && service.endTime ? `${service.startTime} - ${service.endTime}` : '',
     service.startTime2 && service.endTime2 ? `${service.startTime2} - ${service.endTime2}` : '',
