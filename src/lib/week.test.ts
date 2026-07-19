@@ -19,4 +19,11 @@ describe('week — ISO-weeknummers', () => {
     expect(weekRangeLabel(['2026-07-13', '2026-07-26'])).toBe('wk 29–30');
     expect(weekRangeLabel([])).toBe('');
   });
+
+  it('weekRangeLabel: over de jaargrens chronologisch (wk 53–1, niet wk 1–53)', () => {
+    // 28 dec 2026 (ma) = ISO-wk 53, 4 jan 2027 (ma) = ISO-wk 1
+    expect(weekRangeLabel(['2026-12-28', '2027-01-04'])).toBe('wk 53–1');
+    // ongesorteerde input levert nog steeds chronologisch op
+    expect(weekRangeLabel(['2027-01-04', '2026-12-28'])).toBe('wk 53–1');
+  });
 });
