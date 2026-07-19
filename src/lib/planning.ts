@@ -9,7 +9,23 @@ export type ResolvedPlanningAssignment = {
   segments: string[];
 };
 
-export const normalizePlanningToken = (value: unknown) => String(value ?? '').trim().toLowerCase();
+// Zelfde normalisatie als de server (api/helpers.ts toLookupToken): accenten
+// én interpunctie weg. Zo matcht het Planning-overzicht exact dezelfde namen/
+// codes als de matrix-import — de oude trim().toLowerCase() gaf vals-positieve
+// "niet-gematchte chauffeur" bij accent-/koppelteken-verschillen.
+export const normalizePlanningToken = (value: unknown) =>
+  String(value ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** Volgorde-onafhankelijke naam-sleutel ("Jan Janssen" == "Janssen Jan") —
+ *  zoals sortedNameToken op de server, zodat een omgekeerde naamvolgorde in de
+ *  matrix niet als onbekende chauffeur telt. */
+export const sortedNameToken = (name: string) =>
+  normalizePlanningToken(name).split(/\s+/).filter(Boolean).sort().join(' ');
 
 // Let op: client-variant die 'HH:MM - HH:MM'-labels teruggeeft. De server heeft
 // een gelijknamige-maar-andere getServiceSegments (api/storage.ts) die HH:MM

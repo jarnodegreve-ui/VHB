@@ -9,15 +9,8 @@ import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
-
-// Categoriseer per starttijd voor visuele kleurcode — zelfde logica als
-// de maandprint.
-const shiftCategory = (startTime: string): 'ochtend' | 'middag' | 'avond' => {
-  const h = parseInt(startTime.split(':')[0] || '0', 10);
-  if (h < 9) return 'ochtend';
-  if (h < 15) return 'middag';
-  return 'avond';
-};
+import { shiftCategory } from '../lib/shiftTime';
+import { buildCalendar, type IcsEvent } from '../lib/ics';
 
 const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' | 'slate' }> = {
   ochtend: { label: 'Vroeg', tone: 'slate' },
@@ -115,42 +108,22 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
   const past = grouped.filter((g) => g.date < today).reverse();
 
   const exportToICS = () => {
-    const calendarHeader = [
-      'BEGIN:VCALENDAR',
-      'VERSION:2.0',
-      'PRODID:-//VHB Portaal//NL',
-      'CALSCALE:GREGORIAN',
-      'METHOD:PUBLISH',
-    ].join('\r\n');
+    // Gedeelde ICS-builder (src/lib/ics.ts) i.p.v. een eigen kopie: die schrijft
+    // floating local time én zet DTEND een dag verder bij een nachtdienst
+    // (eind <= start) — de oude handmatige export zette DTEND vóór DTSTART.
+    const dtstamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+    const events: IcsEvent[] = myShifts
+      .filter((shift) => shift.startTime && shift.endTime)
+      .map((shift) => ({
+        uid: `${shift.id}@vhb-portaal.be`,
+        date: shift.date,
+        startTime: shift.startTime,
+        endTime: shift.endTime,
+        summary: `Dienst ${getServiceNumber(shift)}`,
+        description: `VHB · ${shift.startTime} - ${shift.endTime}`,
+      }));
 
-    const calendarFooter = 'END:VCALENDAR';
-
-    const events = myShifts
-      .map((shift) => {
-        const [year, month, day] = shift.date.split('-').map(Number);
-        const [startH, startM] = shift.startTime.split(':').map(Number);
-        const [endH, endM] = shift.endTime.split(':').map(Number);
-
-        const startDate = new Date(year, month - 1, day, startH, startM);
-        const endDate = new Date(year, month - 1, day, endH, endM);
-
-        const formatICSDate = (date: Date) =>
-          date.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-
-        return [
-          'BEGIN:VEVENT',
-          `UID:${shift.id}@vhb-portaal.be`,
-          `DTSTAMP:${formatICSDate(new Date())}`,
-          `DTSTART:${formatICSDate(startDate)}`,
-          `DTEND:${formatICSDate(endDate)}`,
-          `SUMMARY:Dienst ${getServiceNumber(shift)}`,
-          `DESCRIPTION:VHB · ${shift.startTime} - ${shift.endTime}`,
-          'END:VEVENT',
-        ].join('\r\n');
-      })
-      .join('\r\n');
-
-    const fullCalendar = `${calendarHeader}\r\n${events}\r\n${calendarFooter}`;
+    const fullCalendar = buildCalendar(events, { calName: `VHB Rooster ${user.name}`, dtstamp });
     const blob = new Blob([fullCalendar], { type: 'text/calendar;charset=utf-8' });
     const link = document.createElement('a');
     link.href = window.URL.createObjectURL(blob);

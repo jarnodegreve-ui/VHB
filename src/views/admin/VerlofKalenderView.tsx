@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
 import { cn } from '../../lib/ui';
+import { isoDate } from '../../lib/availability';
 import { PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 
@@ -39,7 +40,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
   const monthIndex = viewMonth.getMonth();
   const monthName = MONTH_NAMES[monthIndex];
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = isoDate(new Date()); // lokale datum (niet UTC → geen dag-verschuiving 's nachts)
 
   const goToPrev = () => setViewMonth(new Date(year, monthIndex - 1, 1));
   const goToNext = () => setViewMonth(new Date(year, monthIndex + 1, 1));
