@@ -135,7 +135,7 @@ export function ReportsView({ shifts, leaveRequests, users }: { shifts: Shift[];
 
 function StatTile({ icon, label, value, tone = 'slate' }: { icon: ReactNode; label: string; value: string; tone?: 'slate' | 'red' | 'emerald' }) {
   return (
-    <div className="surface-card rounded-2xl px-4 py-3.5">
+    <div className="surface-card rounded-3xl px-4 py-3.5">
       <div className="flex items-center gap-2 text-slate-400">{icon}<MicroLabel>{label}</MicroLabel></div>
       <p className={
         tone === 'red' ? 'mt-1.5 text-2xl font-black tabular-nums text-red-600'

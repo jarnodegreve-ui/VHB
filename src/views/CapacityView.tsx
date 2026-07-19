@@ -281,7 +281,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
                           <td className="mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2 bg-slate-100/90">
-                            <div className="inline-flex items-center px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">
+                            <div className="inline-flex items-center px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                               {section}
                             </div>
                           </td>
@@ -367,7 +367,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               return (
                 <Fragment key={drv.id}>
                 {showHeader && (
-                  <div className="bg-slate-100/80 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">{section}</div>
+                  <div className="bg-slate-100/80 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{section}</div>
                 )}
                 <div className={cn('p-4', isOwn && 'bg-oker-50')}>
                   <div className="flex items-baseline justify-between gap-2">
