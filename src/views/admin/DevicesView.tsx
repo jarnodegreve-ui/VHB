@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Pencil, ShieldAlert, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
+import { Check, Pencil, ShieldAlert, ShieldCheck, Smartphone, Trash2, X } from 'lucide-react';
 import type { User } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { getDeviceToken } from '../../lib/device';
@@ -91,7 +91,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     <div
       key={keyOf(device)}
       className={`flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between ${
-        highlight ? 'border-amber-200 bg-amber-50/60' : 'border-slate-200/80 bg-white/50'
+        highlight ? 'border-amber-200 bg-amber-50/80' : 'border-slate-200/80 bg-white/50'
       }`}
     >
       <div className="flex min-w-0 items-center gap-3">
@@ -109,9 +109,13 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                   autoFocus
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
-                  className="control-input rounded-xl px-3 py-1.5 text-sm font-semibold outline-none"
+                  onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); }}
+                  enterKeyHint="done"
+                  // text-base = 16px: onder 16px zoomt iOS bij focus in.
+                  className="control-input rounded-xl px-3 py-2 text-base font-semibold outline-none"
                 />
-                <Button type="submit" variant="secondary" size="sm" icon={<Check size={14} />} aria-label="Naam opslaan" />
+                <Button type="submit" variant="secondary" size="sm" className="min-h-11 min-w-11 justify-center" icon={<Check size={16} />} aria-label="Naam opslaan" />
+                <Button type="button" variant="ghost" size="sm" className="min-h-11 min-w-11 justify-center" icon={<X size={16} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
               </form>
             ) : (
               <>
@@ -131,7 +135,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         <Button
           variant="ghost"
           size="sm"
-          icon={<Pencil size={14} />}
+          className="min-h-11 min-w-11 justify-center"
+          icon={<Pencil size={16} />}
           aria-label="Toestel hernoemen"
           title="Hernoemen"
           onClick={() => { setRenaming(device); setRenameValue(device.name); }}
@@ -140,6 +145,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <Button
             variant="primary"
             size="sm"
+            className="min-h-11"
             icon={<ShieldCheck size={14} />}
             disabled={busyKey === keyOf(device)}
             onClick={() => void act(device, 'approve')}
@@ -151,6 +157,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <Button
             variant="secondary"
             size="sm"
+            className="min-h-11"
             icon={<ShieldAlert size={14} />}
             disabled={busyKey === keyOf(device)}
             onClick={() => void act(device, 'revoke')}
@@ -162,7 +169,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <Button
             variant="danger"
             size="sm"
-            icon={<Trash2 size={14} />}
+            className="min-h-11 min-w-11 justify-center"
+            icon={<Trash2 size={16} />}
             aria-label="Toestel schrappen"
             title="Schrappen"
             disabled={busyKey === keyOf(device)}

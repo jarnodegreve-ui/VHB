@@ -264,7 +264,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 href={`https://github.com/jarnodegreve-ui/VHB/commit/${BUILD_INFO.sha}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs font-mono text-oker-600 hover:text-oker-700 tabular-nums"
+                className="text-xs font-mono text-oker-600 hover:text-oker-700 dark:hover:text-oker-500 tabular-nums"
               >
                 {BUILD_INFO.sha}
               </a>

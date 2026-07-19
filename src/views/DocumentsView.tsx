@@ -51,7 +51,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
       <PageHeader title="Mijn documenten" description="Attesten, reglement en andere documenten die de planning voor jou klaarzet." />
 
       {loading ? (
-        <div className="surface-card rounded-3xl divide-y divide-slate-100 dark:divide-slate-100 overflow-hidden">
+        <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
@@ -59,7 +59,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
       ) : docs.length === 0 ? (
         <EmptyState icon={<FileText size={22} />} title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
       ) : (
-        <div className="surface-card rounded-3xl divide-y divide-slate-100 dark:divide-slate-100 overflow-hidden">
+        <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
           {docs.map((doc) => (
             <div key={doc.id} className="flex items-center gap-4 px-5 py-4">
               <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">

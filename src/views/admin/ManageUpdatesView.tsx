@@ -240,7 +240,7 @@ export function ManageUpdatesView({
                     )}
                     {update.isUrgent && totalChauffeurs > 0 ? (
                       <span
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums dark:bg-slate-800 dark:text-slate-400"
+                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums"
                         title="Aantal chauffeurs dat deze update geopend heeft"
                       >
                         <Eye size={12} />

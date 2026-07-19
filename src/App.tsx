@@ -1395,10 +1395,10 @@ export default function App() {
 
   if (!authReady) {
     return (
-      <div className="login-bg-light min-h-screen flex flex-col items-center justify-center gap-5">
-        <img src="/vhb-logo.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-14 w-auto select-none" draggable={false} />
-        <div className="flex items-center gap-2.5 text-slate-500">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+      <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
+        <img src="/vhb-logo-wit.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-14 w-auto select-none" draggable={false} />
+        <div className="flex items-center gap-2.5 text-slate-300">
+          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
           <span className="text-[13px] font-medium">Sessie laden…</span>
         </div>
       </div>
@@ -1437,22 +1437,22 @@ export default function App() {
   if (deviceBlocked && session) {
     const revoked = deviceBlocked === 'revoked';
     return (
-      <div className="login-bg-light min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <img src="/vhb-logo.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-12 w-auto select-none" draggable={false} />
+      <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
+        <img src="/vhb-logo-wit.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-12 w-auto select-none" draggable={false} />
         <div className="max-w-sm">
           <div className={cn(
-            'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center',
-            revoked ? 'bg-red-50 text-red-500' : 'bg-oker-50 text-oker-600',
+            'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
+            revoked ? 'bg-red-500/15 text-red-300' : 'bg-oker-500/15 text-oker-400',
           )}>
             {revoked ? <ShieldAlert size={26} /> : <Smartphone size={26} />}
           </div>
-          <h1 className="mt-4 text-xl font-black text-slate-900 tracking-tight">
+          <h1 className="mt-4 text-xl font-black text-white tracking-tight">
             {revoked ? 'Dit toestel is geblokkeerd' : 'Toestel wacht op goedkeuring'}
           </h1>
-          <p className="mt-2 text-sm font-medium leading-6 text-slate-500">
+          <p className="mt-2 text-sm font-medium leading-6 text-slate-300">
             {revoked
               ? 'De toegang voor dit toestel is ingetrokken. Neem contact op met de planning als dit niet klopt.'
-              : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen — zodra het toestel is goedgekeurd kun je verder.'}
+              : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen — zodra het toestel is goedgekeurd kun je verder. Tip: zet je de app op je beginscherm, dan kan die één keer apart goedgekeurd moeten worden.'}
           </p>
           {!revoked && (
             <button
@@ -1478,7 +1478,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleLogout}
-              className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+              className="text-xs font-semibold text-slate-400 hover:text-white transition-colors"
             >
               Afmelden
             </button>
@@ -1494,16 +1494,16 @@ export default function App() {
     // (de 8s-watchdog kon hier anders een login-flits veroorzaken).
     if (session) {
       return (
-        <div className="login-bg-light min-h-screen flex flex-col items-center justify-center gap-5">
-          <img src="/vhb-logo.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-14 w-auto select-none" draggable={false} />
-          <div className="flex items-center gap-2.5 text-slate-500">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+        <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
+          <img src="/vhb-logo-wit.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-14 w-auto select-none" draggable={false} />
+          <div className="flex items-center gap-2.5 text-slate-300">
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
             <span className="text-[13px] font-medium">Profiel laden…</span>
           </div>
           <button
             type="button"
             onClick={() => window.location.reload()}
-            className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors"
+            className="text-xs font-semibold text-slate-400 hover:text-white transition-colors"
           >
             Duurt het te lang? Vernieuw de pagina
           </button>
