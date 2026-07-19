@@ -76,8 +76,18 @@ const ipGuardLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: IP_GUARD_MA
 const clientErrorLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: ERRORS_MAX });
 
 const clientIp = (req: express.Request): string => {
+  // x-real-ip wordt door Vercel/de proxy gezet en is niet client-beïnvloedbaar
+  // — de voorkeur boven x-forwarded-for, waarvan het LINKSE token door de
+  // client te spoofen is (waarmee de anon-/foutlimiet te omzeilen was door de
+  // header te roteren). Valt die weg, neem dan het RECHTSE (proxy-toegevoegde)
+  // xff-token i.p.v. het linkse.
+  const real = req.headers["x-real-ip"];
+  if (typeof real === "string" && real.trim().length > 0) return real.trim();
   const fwd = req.headers["x-forwarded-for"];
-  if (typeof fwd === "string" && fwd.length > 0) return fwd.split(",")[0]!.trim();
+  if (typeof fwd === "string" && fwd.length > 0) {
+    const parts = fwd.split(",").map((p) => p.trim()).filter(Boolean);
+    if (parts.length > 0) return parts[parts.length - 1]!;
+  }
   return req.ip || (req.socket && req.socket.remoteAddress) || "unknown";
 };
 

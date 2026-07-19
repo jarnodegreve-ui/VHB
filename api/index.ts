@@ -3033,9 +3033,12 @@ app.get("/api/documents", authenticate, async (req: AuthenticatedRequest, res) =
   try {
     if (!db) return res.status(500).json({ error: "Supabase is niet geconfigureerd." });
     const role = req.appUser?.role;
-    const isStaff = role === "admin" || role === "planner";
+    // Documentbeheer is admin-only (loonbrieven/attesten = gevoelige PII). Een
+    // planner kon eerder via ?userId=<x> andermans documenten opvragen; alleen
+    // een admin mag een andere gebruiker uitlezen. Iedereen (incl. planner)
+    // krijgt zonder admin altijd de eigen lijst.
+    const isStaff = role === "admin";
     const requestedUserId = typeof req.query.userId === "string" && req.query.userId ? req.query.userId : undefined;
-    // Chauffeur: altijd de eigen lijst, wat er ook in de query staat.
     const scopeUserId = isStaff ? requestedUserId : String(req.appUser?.id ?? "");
     const docs = await listUserDocuments(scopeUserId);
     const withUrls = await Promise.all(
@@ -3055,7 +3058,7 @@ app.get("/api/documents", authenticate, async (req: AuthenticatedRequest, res) =
   }
 });
 
-app.post("/api/documents", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+app.post("/api/documents", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
   try {
     if (!supabaseAdmin) return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
     const userId = String(req.body?.userId || "").trim();
@@ -3107,7 +3110,7 @@ app.post("/api/documents", authenticate, requireRole("planner", "admin"), async 
 // Eén document naar álle actieve chauffeurs (bv. nieuw reglement). Elke
 // chauffeur krijgt een eigen kopie (eigen storage-pad + rij) zodat de
 // wees-opruiming bij verwijderen per gebruiker klopt. Push naar allemaal.
-app.post("/api/documents/broadcast", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+app.post("/api/documents/broadcast", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
   try {
     if (!supabaseAdmin) return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
     const filename = String(req.body?.filename || "").trim();
@@ -3149,7 +3152,7 @@ app.post("/api/documents/broadcast", authenticate, requireRole("planner", "admin
   }
 });
 
-app.delete("/api/documents/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+app.delete("/api/documents/:id", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
   try {
     if (!supabaseAdmin) return res.status(500).json({ error: "SUPABASE_SERVICE_ROLE_KEY ontbreekt." });
     const doc = await getUserDocument(String(req.params.id));
