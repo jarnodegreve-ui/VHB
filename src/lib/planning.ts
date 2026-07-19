@@ -11,7 +11,11 @@ export type ResolvedPlanningAssignment = {
 
 export const normalizePlanningToken = (value: unknown) => String(value ?? '').trim().toLowerCase();
 
-export const getServiceSegments = (service: Service) => (
+// Let op: client-variant die 'HH:MM - HH:MM'-labels teruggeeft. De server heeft
+// een gelijknamige-maar-andere getServiceSegments (api/storage.ts) die HH:MM
+// valideert en {startTime,endTime,segment}-objecten geeft — bewust los, dus
+// hier een eigen naam om de divergente duplicaat niet te verwarren.
+export const getServiceSegmentLabels = (service: Service) => (
   [
     service.startTime && service.endTime ? `${service.startTime} - ${service.endTime}` : '',
     service.startTime2 && service.endTime2 ? `${service.startTime2} - ${service.endTime2}` : '',
@@ -28,7 +32,7 @@ export const resolvePlanningAssignment = (
   const normalizedCode = normalizePlanningToken(rawCode);
   const matchedService = services.find((service) => normalizePlanningToken(service.serviceNumber) === normalizedCode);
   if (matchedService) {
-    const segments = getServiceSegments(matchedService);
+    const segments = getServiceSegmentLabels(matchedService);
     return {
       driver,
       code: rawCode,

@@ -182,7 +182,7 @@ export const getPlanningMatrixRows = async (): Promise<PlanningMatrixRow[]> => {
 // CSV- en XLSX-imports (verschillende rij-nummering), stapelden oude
 // imports zich op als "ghost rows". Dat veroorzaakte 549 extra rijen
 // over 549 ghost-datums. Nu maakt elke import schoon werk.
-export const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
+const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
   const client = requireDb();
   // Veiligheid: nooit wissen op een lege set — dat zou de volledige
   // matrixplanning wegvegen. De empty-check stond vroeger ná de delete, dus
@@ -269,7 +269,7 @@ export const savePlanningCodesData = async (codes: PlanningCodeRecord[]) => {
 
 // --- Planning matrix import history ---
 
-export const toPublicPlanningMatrixHistory = (row: PlanningMatrixImportHistoryRow | PlanningMatrixImportHistoryRecord): PlanningMatrixImportHistoryRecord => ({
+const toPublicPlanningMatrixHistory = (row: PlanningMatrixImportHistoryRow | PlanningMatrixImportHistoryRecord): PlanningMatrixImportHistoryRecord => ({
   id: row.id,
   createdAt: 'createdAt' in row ? row.createdAt : row.created_at,
   importedDays: 'importedDays' in row ? row.importedDays : row.imported_days,
@@ -311,7 +311,7 @@ export const savePlanningMatrixHistoryEntry = async (entry: PlanningMatrixImport
 
 // --- Activity log ---
 
-export const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): ActivityLogRecord => ({
+const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): ActivityLogRecord => ({
   id: row.id,
   createdAt: "createdAt" in row ? row.createdAt : row.created_at,
   actorName: "actorName" in row ? row.actorName : row.actor_name,
@@ -378,7 +378,7 @@ export const getEntityHistory = async (
   return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
 };
 
-export const saveActivityLogEntry = async (entry: ActivityLogRecord) => {
+const saveActivityLogEntry = async (entry: ActivityLogRecord) => {
   const client = requireDb();
   const row: ActivityLogRow = {
     id: entry.id,
