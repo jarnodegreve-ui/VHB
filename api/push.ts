@@ -35,6 +35,11 @@ export type PushSubscriptionRecord = {
 
 export const savePushSubscription = async (record: PushSubscriptionRecord) => {
   if (!db) throw new Error("Database niet geconfigureerd.");
+  // Expliciete handoff op een gedeeld toestel: eerst een eventuele registratie
+  // van een ánder account op ditzelfde endpoint verwijderen, dán pas de eigen
+  // registratie opslaan — zo hangt één endpoint nooit stil aan het verkeerde
+  // account (i.p.v. een blinde upsert die de user_id herwees).
+  await db.from("push_subscriptions").delete().eq("endpoint", record.endpoint).neq("user_id", record.userId);
   const { error } = await db.from("push_subscriptions").upsert(
     {
       user_id: record.userId,

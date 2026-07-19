@@ -1169,11 +1169,25 @@ describe('documenten per gebruiker', () => {
     expect(res.json.map((d: any) => d.id)).toEqual(['d1']);
   });
 
-  it('een planner kan de documenten van een specifieke gebruiker opvragen', async () => {
-    mem.documents = [{ id: 'd2', userId: '4', filename: 'loonbrief.pdf', storagePath: '4/y', uploadedAt: '2026-07-01T00:00:00Z' }];
-    const res = await api('GET', '/api/documents?userId=4', { token: 'tok-planner' });
-    expect(res.status).toBe(200);
-    expect(res.json.map((d: any) => d.id)).toEqual(['d2']);
+  it('alleen een admin kan de documenten van een andere gebruiker opvragen — een planner krijgt de eigen lijst', async () => {
+    mem.documents = [
+      { id: 'd2', userId: '4', filename: 'loonbrief.pdf', storagePath: '4/y', uploadedAt: '2026-07-01T00:00:00Z' },
+      { id: 'd-p', userId: '2', filename: 'eigen.pdf', storagePath: '2/z', uploadedAt: '2026-07-01T00:00:00Z' },
+    ];
+    // Admin (user 1) mag een andere gebruiker uitlezen.
+    const adminRes = await api('GET', '/api/documents?userId=4', { token: 'tok-admin' });
+    expect(adminRes.status).toBe(200);
+    expect(adminRes.json.map((d: any) => d.id)).toEqual(['d2']);
+    // Planner (user 2) is géén staff meer voor documenten: ?userId=4 wordt
+    // genegeerd, hij krijgt enkel zijn eigen documenten (gevoelige PII).
+    const plannerRes = await api('GET', '/api/documents?userId=4', { token: 'tok-planner' });
+    expect(plannerRes.status).toBe(200);
+    expect(plannerRes.json.map((d: any) => d.id)).toEqual(['d-p']);
+  });
+
+  it('uploaden/broadcasten is niet meer toegankelijk voor een planner (403, admin-only)', async () => {
+    expect((await api('POST', '/api/documents', { token: 'tok-planner', body: { userId: '3', filename: 'x.pdf', dataUrl: 'data:application/pdf;base64,QQ==' } })).status).toBe(403);
+    expect((await api('POST', '/api/documents/broadcast', { token: 'tok-planner', body: { filename: 'r.pdf', dataUrl: 'data:application/pdf;base64,QQ==' } })).status).toBe(403);
   });
 
   it('uploaden en verwijderen zijn niet toegankelijk voor chauffeurs (403)', async () => {

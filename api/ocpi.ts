@@ -1,5 +1,5 @@
 import type express from "express";
-import { randomBytes } from "node:crypto";
+import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { db } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized } from "./middleware.js";
 import { logCronHeartbeat } from "./storage.js";
@@ -31,6 +31,30 @@ const OUR_BUSINESS_NAME = (process.env.OCPI_BUSINESS_NAME || "VHB Portaal").trim
 // "Token <base64>". (2.1.1 gebruikte plain; we tolereren beide bij inkomende
 // checks.)
 const b64 = (s: string) => Buffer.from(s, "utf8").toString("base64");
+
+/** Timing-veilige stringvergelijking (hasht beide kanten zodat lengte/inhoud
+ *  niet via de vergelijkingsduur lekken). */
+const safeEqual = (a: string, b: string): boolean => {
+  const ha = createHash("sha256").update(String(a)).digest();
+  const hb = createHash("sha256").update(String(b)).digest();
+  return timingSafeEqual(ha, hb);
+};
+
+/** SSRF-guard voor URL's die uit een (extern) OCPI-credentials-object komen:
+ *  alleen https naar een publieke host — geen loopback/link-local/private/
+ *  metadata-adressen die de server naar zichzelf/interne diensten laten fetchen. */
+const isSafeExternalHttpsUrl = (raw: string): boolean => {
+  let u: URL;
+  try { u = new URL(raw); } catch { return false; }
+  if (u.protocol !== "https:") return false;
+  const host = u.hostname.toLowerCase();
+  if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal")) return false;
+  if (host === "0.0.0.0" || host === "169.254.169.254" || host === "::1") return false;
+  if (/^(127\.|10\.|169\.254\.|192\.168\.)/.test(host)) return false;
+  if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
+  if (/^(fe80:|fc00:|fd00:)/i.test(host)) return false;
+  return true;
+};
 const authHeader = (token: string) => `Token ${b64(token)}`;
 
 const nowIso = () => new Date().toISOString();
@@ -475,7 +499,7 @@ const ocpiAuth = async (req: express.Request, res: express.Response, next: expre
   if (!presented) return res.status(401).json(ocpiError(2001, "Ontbrekende of ongeldige Authorization-header."));
   const reg = await getOcpiRegistration();
   const valid = [TOKEN_A, reg?.our_token_b].filter(Boolean) as string[];
-  const ok = valid.some((t) => presented === b64(t) || presented === t);
+  const ok = valid.some((t) => safeEqual(presented, b64(t)) || safeEqual(presented, t));
   if (!ok) return res.status(401).json(ocpiError(2001, "Ongeldig OCPI-token."));
   next();
 };
@@ -511,12 +535,15 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const cpoRole = Array.isArray(incoming?.roles) ? incoming.roles[0] : undefined;
 
       let cpoEndpoints: Array<{ identifier: string; role?: string; url: string }> = [];
-      if (cpoToken && cpoVersionsUrl) {
+      // SSRF-guard: alleen een publieke https-URL ophalen (de url komt uit een
+      // extern credentials-object). Faalt de guard, dan slaan we het token toch
+      // op maar halen we de endpoints niet blind op.
+      if (cpoToken && cpoVersionsUrl && isSafeExternalHttpsUrl(cpoVersionsUrl)) {
         // Hun version-details ophalen met hun token om de Sender-endpoints te leren.
         try {
           const versions = await ocpiFetch(cpoVersionsUrl, cpoToken);
           const v = (versions?.data ?? []).find((x: any) => String(x.version).startsWith("2.2"));
-          if (v) {
+          if (v && typeof v.url === "string" && isSafeExternalHttpsUrl(v.url)) {
             const details = await ocpiFetch(v.url, cpoToken);
             cpoEndpoints = details?.data?.endpoints ?? [];
           }
