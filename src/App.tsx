@@ -1593,7 +1593,7 @@ export default function App() {
               <div className="flex items-center gap-4">
                 <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
                 <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Bezig</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Bezig</p>
                   <p className="text-sm font-semibold text-slate-800">Gegevens verwerken...</p>
                 </div>
               </div>
@@ -1656,7 +1656,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 min-h-0 px-3 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
-          {isPlanner && <div className="mb-1 px-3 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Algemeen</div>}
+          {isPlanner && <div className="mb-1 px-3 pt-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Algemeen</div>}
           <NavItem
             icon={<LayoutDashboard size={18} />}
             label="Dashboard"
@@ -1766,7 +1766,7 @@ export default function App() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[13px] font-semibold text-slate-800 truncate leading-tight">{currentUser.name}</p>
-              <p className="text-[10px] text-slate-500 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
+              <p className="text-[11px] text-slate-500 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
             </div>
           </div>
           <button
@@ -1864,7 +1864,7 @@ export default function App() {
                   >
                     <Search size={13} />
                     <span>Zoeken</span>
-                    <kbd className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">⌘K</kbd>
+                    <kbd className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-400">⌘K</kbd>
                   </button>
                   <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50/80 border border-emerald-100">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
@@ -1876,7 +1876,7 @@ export default function App() {
                     </div>
                     <div className="text-left">
                       <p className="text-[13px] font-semibold text-slate-800 leading-tight">{currentUser.name}</p>
-                      <p className="text-[10px] text-slate-400 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
+                      <p className="text-[11px] text-slate-400 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
                     </div>
                   </div>
                 </div>

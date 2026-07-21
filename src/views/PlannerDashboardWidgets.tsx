@@ -379,7 +379,7 @@ export function PlannerDashboardWidgets({
                 {todayAbsent.map((a) => (
                   <div key={a.id} className="flex items-center justify-between gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3 py-2">
                     <span className="text-[13px] font-semibold text-slate-800 truncate">{a.name}</span>
-                    <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-slate-100 text-slate-600')}>{a.label}</span>
+                    <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-slate-100 text-slate-600')}>{a.label}</span>
                   </div>
                 ))}
               </div>
@@ -484,7 +484,7 @@ function OpsStat({
         </span>
         {onClick && <ArrowUpRight size={13} className="text-slate-300 transition-colors group-hover:text-slate-500" />}
       </div>
-      <p className="mt-2.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+      <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
       <p className="mt-0.5 text-[24px] leading-8 font-black tabular-nums tracking-[-0.02em] text-slate-900">
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-[14px] font-semibold text-slate-400">{suffix}</span>}
@@ -542,7 +542,7 @@ function OpsPanel({
           <h3 className="text-[13.5px] font-bold tracking-tight text-slate-900">{title}</h3>
         </div>
         {aside && (
-          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{aside}</span>
+          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{aside}</span>
         )}
       </div>
       {children}

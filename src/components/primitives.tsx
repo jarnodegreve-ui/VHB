@@ -113,7 +113,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
 /** Het uppercase micro-label (sectiekopjes, veld-labels boven waarden). */
 export function MicroLabel({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <p className={cn('text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400', className)}>
+    <p className={cn('text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400', className)}>
       {children}
     </p>
   );
@@ -132,7 +132,7 @@ export function TableShell({ className, children }: { className?: string; childr
 
 export function Th({ className, children }: { className?: string; children?: ReactNode }) {
   return (
-    <th className={cn('px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 whitespace-nowrap', className)}>
+    <th className={cn('px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400 whitespace-nowrap', className)}>
       {children}
     </th>
   );

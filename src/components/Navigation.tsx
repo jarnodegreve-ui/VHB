@@ -32,7 +32,7 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
       </span>
       <span className="flex-1 leading-none truncate">{label}</span>
       {badge !== undefined && badge > 0 && (
-        <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-[10px] font-bold bg-oker-500 text-slate-950 rounded-full">
+        <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-[11px] font-bold bg-oker-500 text-slate-950 rounded-full">
           {badge}
         </span>
       )}
@@ -63,7 +63,7 @@ export function NavSection({ title, count, active = false, children }: { title: 
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        className="group flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-600 transition-colors"
+        className="group flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-600 transition-colors"
       >
         <ChevronRight size={12} className={cn('shrink-0 transition-transform duration-200', expanded && 'rotate-90')} />
         <span className="flex-1 text-left">{title}</span>

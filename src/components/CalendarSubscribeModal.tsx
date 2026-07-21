@@ -67,7 +67,7 @@ export function CalendarSubscribeModal({
 
         {/* Abonneren */}
         <div className="mt-5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Abonneren (blijft up-to-date)</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Abonneren (blijft up-to-date)</div>
 
           {loading ? (
             <div className="mt-3 flex items-center gap-3 text-slate-500">
@@ -125,7 +125,7 @@ export function CalendarSubscribeModal({
 
         {/* Eenmalig downloaden */}
         <div className="mt-5 pt-4 border-t border-slate-100">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Of eenmalig</div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Of eenmalig</div>
           <button
             type="button"
             onClick={() => { onDownload(); onClose(); }}

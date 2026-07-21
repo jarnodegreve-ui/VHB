@@ -91,11 +91,11 @@ export function BottomNav({
                   />
                 )}
                 <span className="relative z-10">{slot.icon}</span>
-                <span className="relative z-10 text-[9px] font-semibold tracking-tight leading-tight truncate max-w-full px-1">
+                <span className="relative z-10 text-[11px] font-semibold tracking-tight leading-tight truncate max-w-full px-1">
                   {slot.label}
                 </span>
                 {slot.badge !== undefined && slot.badge > 0 && (
-                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[9px] font-bold bg-oker-500 text-slate-950 rounded-full">
+                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-[11px] font-bold bg-oker-500 text-slate-950 rounded-full">
                     {slot.badge > 9 ? '9+' : slot.badge}
                   </span>
                 )}
@@ -111,7 +111,7 @@ export function BottomNav({
               className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-xl transition-colors text-slate-400 hover:text-slate-700"
             >
               <span className="relative z-10"><Menu size={20} /></span>
-              <span className="relative z-10 text-[9px] font-semibold tracking-tight leading-tight truncate max-w-full px-1">Meer</span>
+              <span className="relative z-10 text-[11px] font-semibold tracking-tight leading-tight truncate max-w-full px-1">Meer</span>
               {moreDot && (
                 <span className="absolute top-1 right-3 z-10 h-2 w-2 rounded-full bg-oker-500" aria-label="Nieuwe melding in het menu" />
               )}
