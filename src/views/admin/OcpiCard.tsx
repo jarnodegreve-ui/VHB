@@ -155,7 +155,7 @@ export function OcpiCard() {
                 {status.endpoints.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {status.endpoints.map((e) => (
-                      <span key={`${e.identifier}:${e.role}`} className="text-[10px] font-mono px-2 py-1 rounded-lg bg-slate-100 text-slate-600">
+                      <span key={`${e.identifier}:${e.role}`} className="text-[11px] font-mono px-2 py-1 rounded-lg bg-slate-100 text-slate-600">
                         {e.identifier}{e.role ? `:${e.role.toLowerCase()}` : ''}
                       </span>
                     ))}

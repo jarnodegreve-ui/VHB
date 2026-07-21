@@ -393,9 +393,9 @@ export function DashboardView({
                   <div key={shift.id} className="group flex items-center justify-between gap-3 rounded-xl bg-white/70 ring-1 ring-slate-200/60 px-3.5 py-2.5 hover:bg-white hover:ring-slate-300/80 hover:shadow-sm transition-all">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">{formatShiftDate(shift.date)}</span>
                         <span className="text-slate-300">·</span>
-                        <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-oker-700">Dienst {getServiceNumber(shift)}</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-700">Dienst {getServiceNumber(shift)}</span>
                       </div>
                       <p className="mt-0.5 text-base font-bold text-slate-900 tabular-nums tracking-tight">
                         {shift.startTime} <span className="text-slate-400 font-bold">–</span> {shift.endTime}
@@ -428,7 +428,7 @@ export function DashboardView({
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-bold text-slate-900 truncate">{div.title}</p>
-                      <span className="shrink-0 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600">{div.line}</span>
+                      <span className="shrink-0 inline-block rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold text-slate-600">{div.line}</span>
                     </div>
                     <p className="mt-0.5 text-xs font-normal text-slate-500 line-clamp-2">{div.description}</p>
                   </div>
@@ -476,14 +476,14 @@ export function DashboardView({
               </span>
             </div>
             <div className="surface-muted rounded-xl p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
               <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
                 {formatDateHuman(openDiversion.startDate)}
                 {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
               </p>
             </div>
             <div>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
               <p className="mt-2 whitespace-pre-wrap text-sm font-normal leading-relaxed text-slate-700">
                 {openDiversion.description}
               </p>
@@ -723,7 +723,7 @@ function PremiumPanel({
           </div>
           <h3 className="text-[13.5px] font-bold text-slate-900 tracking-tight">{title}</h3>
         </div>
-        {subtitle && <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{subtitle}</span>}
+        {subtitle && <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{subtitle}</span>}
       </div>
       {children}
     </div>

@@ -251,6 +251,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <input
                     type="text"
                     required
+                    aria-label="Lijn(en)"
                     value={formData.line}
                     onChange={(e) => setFormData({...formData, line: e.target.value})}
                     className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
@@ -263,6 +264,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <input 
                     type="text" 
                     required
+                    aria-label="Titel"
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
                     className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
@@ -275,6 +277,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <textarea 
                     required
                     rows={3}
+                    aria-label="Omschrijving"
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                     className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm resize-none"
@@ -288,6 +291,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     <input 
                       type="date" 
                       required
+                      aria-label="Startdatum"
                       value={formData.startDate}
                       onChange={(e) => setFormData({...formData, startDate: e.target.value})}
                       className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
@@ -297,6 +301,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     <MicroLabel className="ml-1">Einddatum (Optioneel)</MicroLabel>
                     <input 
                       type="date" 
+                      aria-label="Einddatum"
                       value={formData.endDate || ''}
                       onChange={(e) => setFormData({...formData, endDate: e.target.value})}
                       className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"

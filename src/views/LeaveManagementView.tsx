@@ -385,12 +385,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
                 )}
               </div>
               <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Voldoende</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Krap</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Voldoende</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Krap</span></div>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
-              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-[10px] font-semibold text-slate-300 uppercase tracking-[0.08em] mb-2">{d}</div>)}
+              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-[11px] font-semibold text-slate-300 uppercase tracking-[0.08em] mb-2">{d}</div>)}
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -434,7 +434,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
                         <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
                         <div>
                           <p className="font-semibold text-slate-800 text-sm">{requester?.name}</p>
-                          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.08em]">{formatLeaveType(req.type)}</p>
+                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.08em]">{formatLeaveType(req.type)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -593,7 +593,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
                       ? 'Klik op de startdatum.'
@@ -625,7 +625,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
                   </div>
                   <div className="grid grid-cols-7 gap-1">
                     {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => (
-                      <div key={d} className="text-center text-[9px] font-semibold text-slate-300 uppercase tracking-[0.08em] py-1">{d}</div>
+                      <div key={d} className="text-center text-[11px] font-semibold text-slate-300 uppercase tracking-[0.08em] py-1">{d}</div>
                     ))}
                     {calendarDays.map((day, i) => {
                       if (day === null) return <div key={`m-empty-${i}`} />;
@@ -658,14 +658,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {/* tabIndex -1: puur weergavevelden — focus zou op iOS alleen maar inzoomen */}
-                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly tabIndex={-1} value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
-                  <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly tabIndex={-1} value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly tabIndex={-1} aria-label="Startdatum" value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly tabIndex={-1} aria-label="Einddatum" value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
                 </div>
                 <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50">
                   Periode wissen
                 </button>
-                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
-                <div className="space-y-2"><label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
+                <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select aria-label="Type verlof" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-white/60"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
+                <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea aria-label="Opmerking" value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
 
                 {/* Live impact-preview: budget + shift-conflicten */}
                 {requestPreview && (
@@ -742,25 +742,25 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
               </div>
               <form onSubmit={handleSickSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
-                  <select value={sickForm.userId} onChange={(e) => setSickForm({ ...sickForm, userId: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60">
+                  <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
+                  <select aria-label="Chauffeur" value={sickForm.userId} onChange={(e) => setSickForm({ ...sickForm, userId: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60">
                     <option value="">Kies een chauffeur…</option>
                     {sickDrivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
                   </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
-                    <input type="date" value={sickForm.startDate} onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60" />
+                    <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
+                    <input type="date" aria-label="Startdatum ziekmelding" value={sickForm.startDate} onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60" />
                   </div>
                   <div className="space-y-1.5">
-                    <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
-                    <input type="date" value={sickForm.endDate} min={sickForm.startDate} onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60" />
+                    <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
+                    <input type="date" aria-label="Einddatum ziekmelding" value={sickForm.endDate} min={sickForm.startDate} onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60" />
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <label className="text-[10px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
-                  <textarea value={sickForm.comment} onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-white/60" placeholder="bv. gemeld via telefoon om 6u" />
+                  <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
+                  <textarea aria-label="Opmerking ziekmelding" value={sickForm.comment} onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-white/60" placeholder="bv. gemeld via telefoon om 6u" />
                 </div>
                 <button type="submit" disabled={!sickForm.userId || isSubmittingSick} className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed">{isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}</button>
               </form>

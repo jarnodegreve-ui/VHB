@@ -245,7 +245,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className="mp-sticky sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
+                    <th className="mp-sticky sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
@@ -258,7 +258,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-slate-50',
                           )}
                         >
-                          <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
+                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
                         </th>
                       );
@@ -281,7 +281,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
                           <td className="mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2 bg-slate-100/90">
-                            <div className="inline-flex items-center px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                            <div className="inline-flex items-center px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
                               {section}
                             </div>
                           </td>
@@ -314,7 +314,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <span className="inline-flex items-center gap-1.5">
                             {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500" aria-hidden />}
                             {drv.name}
-                            {isOwn && <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                            {isOwn && <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
                           </span>
                         </td>
                         {visibleDates.map((iso) => {
@@ -367,14 +367,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               return (
                 <Fragment key={drv.id}>
                 {showHeader && (
-                  <div className="bg-slate-100/80 px-4 py-1.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">{section}</div>
+                  <div className="bg-slate-100/80 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{section}</div>
                 )}
                 <div className={cn('p-4', isOwn && 'bg-oker-50')}>
                   <div className="flex items-baseline justify-between gap-2">
                     <div className={cn('text-sm font-semibold truncate inline-flex items-center gap-1.5', isOwn ? 'text-oker-800' : 'text-slate-800')}>
                       {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" aria-hidden />}
                       {drv.name}
-                      {isOwn && <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                      {isOwn && <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
                     </div>
                     <MicroLabel className="shrink-0 tabular-nums">{entries.length}</MicroLabel>
                   </div>
@@ -415,13 +415,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             <MicroLabel className="text-slate-500">Legende</MicroLabel>
             {codeLegend.serviceExample && (
               <div className="flex items-center gap-2">
-                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold tabular-nums', KIND_CLS.service)}>{codeLegend.serviceExample}</span>
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums', KIND_CLS.service)}>{codeLegend.serviceExample}</span>
                 <span className="font-medium text-slate-600">Dienst</span>
               </div>
             )}
             {codeLegend.entries.map((e) => (
               <div key={e.code} className="flex items-center gap-2">
-                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[10px] font-semibold', KIND_CLS[e.kind])}>{e.code}</span>
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold', KIND_CLS[e.kind])}>{e.code}</span>
                 <span className="font-medium text-slate-600">{e.meaning}</span>
               </div>
             ))}

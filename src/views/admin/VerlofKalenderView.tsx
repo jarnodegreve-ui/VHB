@@ -150,10 +150,10 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                         isToday(day) && 'bg-oker-50',
                       )}
                     >
-                      <div className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
+                      <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
                       <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                       {absenceCountPerDay[day] > 0 && (
-                        <div className="text-[9px] font-semibold text-emerald-600 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
+                        <div className="text-[11px] font-semibold text-emerald-600 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
                       )}
                     </Th>
                   </Fragment>

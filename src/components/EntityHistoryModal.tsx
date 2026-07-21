@@ -121,7 +121,7 @@ export function EntityHistoryModal({
                       <div className="rounded-2xl border border-slate-100 bg-white/60 p-3.5">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-800">{entry.action}</p>
-                          <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400 shrink-0">
+                          <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400 shrink-0">
                             <Clock size={10} className="inline -mt-0.5 mr-1" />
                             {new Date(entry.createdAt).toLocaleString('nl-BE', {
                               day: '2-digit',
@@ -132,7 +132,7 @@ export function EntityHistoryModal({
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-600 leading-relaxed">{entry.details}</p>
-                        <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-400">
+                        <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.08em] text-slate-400">
                           {entry.actorName} · {entry.actorRole}
                         </p>
                       </div>

@@ -246,7 +246,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                       <Badge tone={pill.tone}>{pill.label}</Badge>
                       <span className="text-lg font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
-                        <span className="text-[10px] font-medium text-slate-400">
+                        <span className="text-[11px] font-medium text-slate-400">
                           ({g.segments.length} blokken)
                         </span>
                       )}

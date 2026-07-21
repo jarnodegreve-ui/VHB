@@ -306,7 +306,7 @@ export function CommandPalette({
                 placeholder="Zoek scherm of actie…"
                 className="no-focus-ring flex-1 bg-transparent outline-none text-[15px] text-slate-900 placeholder:text-slate-400"
               />
-              <kbd className="hidden sm:inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+              <kbd className="hidden sm:inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-400">
                 esc
               </kbd>
             </div>
@@ -358,24 +358,24 @@ export function CommandPalette({
             {/* Footer */}
             <div className="flex items-center gap-3 border-t border-slate-200/70 px-4 py-2 text-[11px] text-slate-400">
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-400">
                   ↑
                 </kbd>
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-400">
                   ↓
                 </kbd>
                 navigeren
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-400">
                   ↵
                 </kbd>
                 openen
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-400">
                   esc
                 </kbd>
                 sluiten

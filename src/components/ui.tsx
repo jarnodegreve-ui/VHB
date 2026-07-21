@@ -66,7 +66,7 @@ export function AdminSubsectionHeader({
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
-        {eyebrow ? <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p> : null}
+        {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p> : null}
         <h3 className="mt-1.5 text-lg font-bold tracking-tight text-slate-900 md:text-xl">{title}</h3>
         {description ? <p className="mt-1 text-sm font-normal text-slate-500">{description}</p> : null}
       </div>
@@ -174,7 +174,7 @@ export function ViewLoader() {
         <div className="flex items-center gap-4">
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-400">Laden</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Laden</p>
             <p className="text-sm font-semibold text-slate-800">Scherm wordt voorbereid...</p>
           </div>
         </div>
@@ -221,11 +221,11 @@ export function CredentialsModal({
             </div>
             <div className="p-6 md:p-7 space-y-3 overflow-y-auto flex-1">
               <div className="surface-muted rounded-xl p-4">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.08em]">E-mailadres</p>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">E-mailadres</p>
                 <p className="mt-1.5 font-semibold text-slate-800 break-all">{email}</p>
               </div>
               <div className="surface-muted rounded-xl p-4">
-                <p className="text-[10px] font-semibold text-slate-500 uppercase tracking-[0.08em]">Tijdelijk wachtwoord</p>
+                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">Tijdelijk wachtwoord</p>
                 <p className="mt-1.5 font-mono font-semibold text-slate-800">{password}</p>
               </div>
               <div className="flex gap-2.5 pt-2">

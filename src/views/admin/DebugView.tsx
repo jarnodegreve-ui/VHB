@@ -322,7 +322,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                         {status === 'OK' ? 'OK' : 'Fout'}
                       </Badge>
                     </div>
-                    {status !== 'OK' && <p className="text-[10px] text-red-400 font-mono break-all bg-red-50 p-2 rounded-lg mt-1">{status}</p>}
+                    {status !== 'OK' && <p className="text-[11px] text-red-400 font-mono break-all bg-red-50 p-2 rounded-lg mt-1">{status}</p>}
                   </div>
                 ))}
               </div>
@@ -399,11 +399,11 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                   <div key={e.id} className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <Badge tone="red" dot>{e.source || 'onbekend'}</Badge>
-                      <span className="text-[10px] font-mono text-slate-400 tabular-nums shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
+                      <span className="text-[11px] font-mono text-slate-400 tabular-nums shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
                     </div>
                     <p className="mt-1.5 text-xs font-medium text-slate-700 break-words">{e.message}</p>
                     {(e.url || e.userId) && (
-                      <p className="mt-1 text-[10px] font-mono text-slate-400 break-all">{[e.url, e.userId && `gebruiker ${e.userId}`].filter(Boolean).join(' · ')}</p>
+                      <p className="mt-1 text-[11px] font-mono text-slate-400 break-all">{[e.url, e.userId && `gebruiker ${e.userId}`].filter(Boolean).join(' · ')}</p>
                     )}
                   </div>
                 ))}

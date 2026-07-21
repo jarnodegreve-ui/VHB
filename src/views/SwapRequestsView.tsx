@@ -631,7 +631,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {freeForDate && freeCount === 0 && !showBusyColleagues && (
                           <p className="text-xs font-medium text-slate-400 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
                         )}
-                        <p className="text-[10px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}.</p>
+                        <p className="text-[11px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}.</p>
                       </>
                     )}
                   </>
@@ -721,7 +721,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {/* onFocus: houd het veld boven het iOS-toetsenbord —
                             zonder scroll verdween de verstuurknop erachter. */}
                         <textarea
-                          value={reason}
+                          aria-label="Reden voor de ruil" value={reason}
                           onChange={(e) => setReason(e.target.value)}
                           onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
                           className="control-input w-full px-4 py-3 rounded-2xl font-medium text-sm outline-none h-14 resize-none"
@@ -740,7 +740,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       >
                         {isSubmitting ? 'Versturen…' : 'Ruilverzoek versturen'}
                       </button>
-                      <p className="text-[10px] font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
+                      <p className="text-[11px] font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
                     </>
                   );
                 })()}

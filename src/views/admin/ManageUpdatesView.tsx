@@ -32,7 +32,7 @@ function Input({
     <div className="space-y-2">
       <MicroLabel className="ml-1">{label}</MicroLabel>
       {type === 'select' ? (
-        <select value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all bg-white/60">
+        <select aria-label={label} value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all bg-white/60">
           {options?.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -42,6 +42,7 @@ function Input({
       ) : (
         <input
           type={type}
+          aria-label={label}
           placeholder={placeholder}
           value={value}
           onChange={onChange}

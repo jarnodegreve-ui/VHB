@@ -292,7 +292,7 @@ export function LoginView({
                           setMode('forgot');
                           resetFeedback();
                         }}
-                        className="text-[10px] font-bold uppercase tracking-[0.08em] text-oker-600 hover:text-oker-700 transition-colors"
+                        className="text-[11px] font-bold uppercase tracking-[0.08em] text-oker-600 hover:text-oker-700 transition-colors"
                       >
                         Vergeten?
                       </button>
@@ -304,7 +304,7 @@ export function LoginView({
               )}
 
             {/* Trust badge */}
-            <div className="mt-7 pt-5 border-t border-white/10 flex items-center justify-center gap-1.5 text-[10px] font-medium uppercase tracking-[0.08em] text-slate-400">
+            <div className="mt-7 pt-5 border-t border-white/10 flex items-center justify-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">
               <ShieldCheck size={11} className="text-emerald-500" />
               Beveiligd via Supabase Auth
             </div>
@@ -319,7 +319,7 @@ export function LoginView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-[10px] font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6 space-y-1"
+        className="absolute inset-x-0 bottom-0 text-[11px] font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6 space-y-1"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <div>Intern gebruik</div>
@@ -378,7 +378,7 @@ function FieldInput({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 6 }}
                 transition={{ duration: 0.18 }}
-                className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-[0.08em] text-amber-600"
+                className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.08em] text-amber-600"
                 title="Caps Lock staat aan"
               >
                 <ArrowUp size={10} strokeWidth={3} />
