@@ -13,7 +13,7 @@ import { canRespondToSwap } from '../lib/authorization';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
-export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean> }) {
+export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide, preselectShiftId = null, onPreselectConsumed }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean>, preselectShiftId?: string | null, onPreselectConsumed?: () => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via de nette ConfirmationModal i.p.v. kale window.confirm
@@ -110,6 +110,22 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // Gedeelde compacte dag-vorm ('vr 18 jul') — gelijk aan Dekking, i.p.v. de
   // eigen 'vr 18/07'-variant (datum-consolidatie).
   const fmtShort = formatShortDay;
+
+  // Ruil gestart vanuit het rooster: open de wizard meteen op stap 2 met de
+  // aangetikte dienst voorgeselecteerd (scheelt de chauffeur stap 1).
+  useEffect(() => {
+    if (!preselectShiftId) return;
+    const shift = myShifts.find((s) => s.id === preselectShiftId);
+    if (shift) {
+      setSelectedShift(shift.id);
+      setSelectedTargetDriver('');
+      setReturnPick('');
+      setWizardStep(2);
+      setShowOfferModal(true);
+    }
+    onPreselectConsumed?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectShiftId]);
   // Tikbare wizard-kaart (stap 1/2/3): geselecteerd = oker-accent.
   const cnCard = (selected: boolean) =>
     `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-slate-200 bg-white hover:bg-slate-50'}`;

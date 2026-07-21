@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -10,6 +10,7 @@ import { cn, downloadBlob } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { shiftCategory } from '../lib/shiftTime';
+import { formatSyncedTime } from '../lib/format';
 import { buildCalendar, type IcsEvent } from '../lib/ics';
 
 const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' | 'slate' }> = {
@@ -44,7 +45,7 @@ const formatShortDate = (date: string) =>
 
 const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
-export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isInitialLoad = false }: { user: User; shifts: Shift[]; users: User[]; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean }) {
+export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -148,6 +149,10 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
         }
       />
 
+      {lastSyncedAt && (
+        <p className="-mt-2 text-[11px] font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+      )}
+
       <CalendarSubscribeModal open={calendarOpen} onClose={() => setCalendarOpen(false)} onDownload={exportToICS} />
 
       {isInitialLoad ? (
@@ -167,7 +172,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
         <>
           {/* Toekomst */}
           {upcoming.length > 0 && (
-            <ShiftList shifts={upcoming} today={today} />
+            <ShiftList shifts={upcoming} today={today} onRequestSwap={onRequestSwap} />
           )}
 
           {/* Verleden — collapsed by default */}
@@ -198,7 +203,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
 
 // --- Subcomponent: gedeelde lijst voor toekomst en verleden ---
 
-function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string }) {
+function ShiftList({ shifts, today, onRequestSwap }: { shifts: GroupedShift[]; today: string; onRequestSwap?: (shiftId: string) => void }) {
   return (
     <>
       {/* Desktop tabel */}
@@ -209,6 +214,7 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
               <Th className="px-6 py-4">Datum</Th>
               <Th className="px-6 py-4">Dienst</Th>
               <Th className="px-6 py-4">Uren</Th>
+              {onRequestSwap && <Th className="px-6 py-4 text-right">Actie</Th>}
             </tr>
           </thead>
           <tbody>
@@ -264,6 +270,13 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                       ))}
                     </div>
                   </Td>
+                  {onRequestSwap && (
+                    <Td className="px-6 py-4 text-right">
+                      <Button variant="ghost" size="sm" icon={<ArrowLeftRight size={14} />} onClick={() => onRequestSwap(g.segments[0].id)}>
+                        Ruilen
+                      </Button>
+                    </Td>
+                  )}
                 </tr>
               );
             })}
@@ -322,6 +335,16 @@ function ShiftList({ shifts, today }: { shifts: GroupedShift[]; today: string })
                   </div>
                 ))}
               </div>
+
+              {onRequestSwap && !g.hasConflict && (
+                <button
+                  type="button"
+                  onClick={() => onRequestSwap(g.segments[0].id)}
+                  className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                >
+                  <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
+                </button>
+              )}
             </div>
           );
         })}

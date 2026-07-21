@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, Plus } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
@@ -255,7 +256,11 @@ export function CoverageView() {
           </div>
 
           {!config ? (
-            <p className="text-sm font-medium text-slate-400">Laden…</p>
+            <div className="space-y-2.5">
+              <Skeleton className="h-9 w-full" rounded="2xl" />
+              <Skeleton className="h-9 w-4/5" rounded="2xl" />
+              <Skeleton className="h-9 w-3/5" rounded="2xl" />
+            </div>
           ) : config.services.length === 0 ? (
             <p className="text-sm font-medium text-slate-400">Geen diensten in het dienstoverzicht om uit te kiezen.</p>
           ) : (
@@ -393,8 +398,10 @@ export function CoverageView() {
       </div>
 
       {loading ? (
-        <div className="surface-card p-8 rounded-3xl flex items-center justify-center min-h-[140px]">
-          <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i}><SkeletonTile /></div>
+          ))}
         </div>
       ) : !anyExpectations ? (
         <div className="surface-card p-8 rounded-3xl text-center">
