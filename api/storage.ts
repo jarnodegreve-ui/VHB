@@ -1738,6 +1738,45 @@ export type RestorableCollections = {
   coverageExpectations?: Record<string, string[]>;
 };
 
+/**
+ * Structurele integriteitscheck op een backup-payload — draait in de back-up-
+ * cron ná het opbouwen. GEEN echte restore naar een sandbox (dat vereist een
+ * wegwerp-DB), maar vangt wél een kapotte/onvolledige export: ontbrekende of
+ * niet-array-collecties, een lege gebruikerslijst, géén admin (dan zou een
+ * restore geweigerd worden), of niet-serialiseerbare data. Bij problemen alert
+ * de cron zodat een stille lege back-up niet pas bij een echte ramp opvalt.
+ */
+export const checkBackupIntegrity = (
+  payload: { collections?: Record<string, unknown> } & Record<string, unknown>,
+): { ok: boolean; issues: string[] } => {
+  const issues: string[] = [];
+  const c = payload?.collections;
+  if (!c || typeof c !== "object") {
+    return { ok: false, issues: ["collections ontbreekt of is geen object"] };
+  }
+  const arrayKeys = ["users", "planning", "services", "diversions", "updates", "leave", "swaps", "planningCodes", "planningMatrixRows", "activityLog"];
+  for (const k of arrayKeys) {
+    if (!Array.isArray((c as Record<string, unknown>)[k])) issues.push(`collectie '${k}' ontbreekt of is geen lijst`);
+  }
+  const cov = (c as Record<string, unknown>).coverageExpectations;
+  if (typeof cov !== "object" || cov === null || Array.isArray(cov)) {
+    issues.push("collectie 'coverageExpectations' ontbreekt of is geen object");
+  }
+  const users = Array.isArray((c as Record<string, unknown>).users) ? ((c as Record<string, unknown>).users as any[]) : [];
+  if (users.length === 0) issues.push("geen gebruikers in de back-up");
+  else if (!users.some((u) => u?.role === "admin")) issues.push("geen admin-account in de back-up (een restore zou geweigerd worden)");
+  // Serialisatie-round-trip: bewijst dat de payload parse-/schrijfbaar is.
+  try {
+    const rt = JSON.parse(JSON.stringify(payload)) as { collections?: { users?: unknown[] } };
+    if (!Array.isArray(rt?.collections?.users) || rt.collections!.users!.length !== users.length) {
+      issues.push("serialisatie-round-trip komt niet overeen");
+    }
+  } catch {
+    issues.push("payload is niet serialiseerbaar/parseerbaar");
+  }
+  return { ok: issues.length === 0, issues };
+};
+
 /** De collecties die een restore overschrijft. De audit-log
  *  (activityLog) en de import-historiek blijven bewust ongemoeid: dat is
  *  geschiedenis, geen state — anders zou de restore z'n eigen spoor wissen. */

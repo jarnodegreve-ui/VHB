@@ -57,6 +57,7 @@ import {
   getClientErrors,
   getClientErrorsSince,
   storeBackup,
+  checkBackupIntegrity,
   pruneOldRecords,
   listUserDocuments,
   getUserDocument,
@@ -1645,6 +1646,31 @@ app.get("/api/cron/backup", async (req, res) => {
     const stored = await storeBackup(filename, json);
     console.log(`[cron-backup] ${filename} opgeslagen, ${stored.removedOld} oude back-up(s) opgeruimd.`);
 
+    // Integriteitscheck: vangt een stille lege/kapotte back-up (geen admin,
+    // ontbrekende collectie, niet-serialiseerbaar) vóór het pas bij een échte
+    // restore opvalt. Bij problemen mailen naar ALERT_EMAIL/admins.
+    const integrity = checkBackupIntegrity(payload);
+    if (!integrity.ok) {
+      console.error(`[cron-backup] INTEGRITEIT: ${integrity.issues.join("; ")}`);
+      try {
+        const explicit = (process.env.ALERT_EMAIL || "").split(",").map((e) => e.trim()).filter(Boolean);
+        const alertTo = explicit.length > 0
+          ? explicit
+          : (await getUsersData()).filter((u) => u.role === "admin" && u.isActive !== false && u.email).map((u) => u.email as string);
+        if (alertTo.length > 0) {
+          await sendEmail({
+            to: alertTo,
+            context: "backup-integrity",
+            subject: `⚠️ VHB back-up-integriteit — controleer ${filename}`,
+            text: `De back-up ${filename} is opgeslagen maar faalde de integriteitscheck:\n\n- ${integrity.issues.join("\n- ")}\n\nControleer of de portaal-data compleet is.`,
+            html: `<p>De back-up <strong>${escapeHtml(filename)}</strong> is opgeslagen maar faalde de integriteitscheck:</p><ul>${integrity.issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul><p>Controleer of de portaal-data compleet is.</p>`,
+          });
+        }
+      } catch (mailErr) {
+        console.error("[cron-backup] integriteit-alert mailen mislukt:", mailErr);
+      }
+    }
+
     // Wekelijkse off-site kopie (zondag): de bucket-back-ups wonen in
     // hetzélfde Supabase-project — bij projectverlies zijn ze mee weg. Een
     // mail-bijlage naar ALERT_EMAIL/admins is de goedkoopste externe kopie.
@@ -1677,8 +1703,8 @@ app.get("/api/cron/backup", async (req, res) => {
       console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d) en ${pruned.activityLog} log-regels (>${logDays}d) opgeruimd.`);
     }
 
-    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${pruned.clientErrors || pruned.activityLog ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels weg` : ""}).`);
-    res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned });
+    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${pruned.clientErrors || pruned.activityLog ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
+    res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned, integrity });
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
     console.error("Back-up mislukt", err);

@@ -805,6 +805,25 @@ describe('back-up export', () => {
     expect(mem.storedBackups).toHaveLength(1);
     expect(mem.storedBackups[0].filename).toMatch(/^vhb-backup-\d{4}-\d{2}-\d{2}\.json$/);
     expect(mem.storedBackups[0].size).toBeGreaterThan(100);
+    // Integriteitscheck: seed heeft een admin + alle collecties → ok.
+    expect(goed.json.integrity.ok).toBe(true);
+  });
+
+  it('integriteitscheck flagt een back-up zonder admin en mailt een alert', async () => {
+    const prevAlert = process.env.ALERT_EMAIL;
+    process.env.ALERT_EMAIL = 'alerts@vhb.be';
+    try {
+      mem.users = mem.users.filter((u) => u.role !== 'admin'); // geen admin meer
+      mem.emailsSent = [];
+      const res = await api('GET', '/api/cron/backup', { headers: { Authorization: 'Bearer test-cron-secret' } });
+      expect(res.status).toBe(200); // back-up wordt wél opgeslagen
+      expect(res.json.integrity.ok).toBe(false);
+      expect(res.json.integrity.issues.some((i: string) => /admin/i.test(i))).toBe(true);
+      expect(mem.emailsSent.some((e) => e.context === 'backup-integrity')).toBe(true);
+    } finally {
+      if (prevAlert === undefined) delete process.env.ALERT_EMAIL;
+      else process.env.ALERT_EMAIL = prevAlert;
+    }
   });
 
   it('levert alle collecties in één JSON met export-metadata', async () => {
