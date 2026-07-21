@@ -2831,16 +2831,17 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
     return res.status(400).json({ error: "Missing update" });
   }
 
-  // Ontvangers ALTIJD server-side bepalen (nooit uit de request-body): alle
-  // actieve gebruikers met een e-mailadres. Anders kon een planner/admin de
-  // bedrijfs-SMTP als relay naar willekeurige externe adressen gebruiken.
+  // Ontvangers ALTIJD server-side bepalen (nooit uit de request-body): anders
+  // kon een planner/admin de bedrijfs-SMTP als relay naar willekeurige externe
+  // adressen gebruiken. De mail gaat naar wie een e-mailadres heeft; de push
+  // naar álle actieve gebruikers (ook e-mailloze chauffeurs — het is dringend).
   const allUsers = await getUsersData();
-  const recipients = allUsers.filter((u) => u.isActive !== false && u.email);
-  const emails = recipients.map((u) => u.email).filter(Boolean) as string[];
+  const activeUsers = allUsers.filter((u) => u.isActive !== false);
+  const emails = activeUsers.map((u) => u.email).filter(Boolean) as string[];
 
-  // Push naar álle ontvangers (ook wie geen e-mail heeft) — best-effort.
+  // Push naar álle actieve gebruikers (ook wie geen e-mail heeft) — best-effort.
   await sendPushToUsers(
-    recipients.map((u) => String(u.id)).filter(Boolean),
+    activeUsers.map((u) => String(u.id)).filter(Boolean),
     { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: "/" },
   );
 

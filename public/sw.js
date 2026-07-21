@@ -33,7 +33,10 @@
 // v16: /api/me stale-while-revalidate (koude offline start bleef hangen op
 // 'Profiel laden…'), ritblad-PDF met cors-mode (geen opaque-fout meer cachen),
 // notificationclick herlaadt een al-open portaal niet meer.
-const CACHE_NAME = 'vhb-portaal-v16';
+// v17: /api/me network-first-met-cache-fallback (SWR toonde op een gedeeld
+// toestel het profiel van de vorige gebruiker); ritblad-PDF valt bij een
+// cors-fout terug op no-cors zodat een koude weergave nooit breekt.
+const CACHE_NAME = 'vhb-portaal-v17';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';
@@ -87,7 +90,9 @@ self.addEventListener('fetch', (event) => {
               if (res && res.ok) cache.put(cacheKey, res.clone());
               return res;
             })
-            .catch(() => cached);
+            // Cors-fout (geen CORS-headers/redirect): gecachte PDF, of anders de
+            // originele (opaque) request zodat een koude weergave nooit breekt.
+            .catch(() => cached || fetch(req));
           // Cached eerst tonen (snel + offline), op achtergrond verversen.
           return cached || network;
         }),
@@ -99,10 +104,29 @@ self.addEventListener('fetch', (event) => {
   // Vanaf hier alleen same-origin.
   if (url.origin !== self.location.origin) return;
 
+  // === Profiel (/api/me) — network-first met cache-fallback ===
+  // Online altijd vers (anders toonde de stale-while-revalidate-cache op een
+  // gedeeld toestel het profiel van de vorige gebruiker); offline valt hij
+  // terug op het laatst gecachte profiel zodat de koude start blijft werken.
+  if (url.pathname === ME_API) {
+    event.respondWith(
+      fetch(req)
+        .then((res) => {
+          if (res && res.ok) {
+            const copy = res.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          }
+          return res;
+        })
+        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match(req)).then((c) => c || Response.error())),
+    );
+    return;
+  }
+
   // === Ritblaadje-metadata + rooster — stale-while-revalidate ===
   // Keyed op de volledige URL (incl. query), dus /api/planning?driverId=…&
   // month=… cachet per gebruiker/maand apart.
-  if (url.pathname === RITBLAADJE_API || url.pathname === PLANNING_API || url.pathname === ME_API) {
+  if (url.pathname === RITBLAADJE_API || url.pathname === PLANNING_API) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(req).then((cached) => {

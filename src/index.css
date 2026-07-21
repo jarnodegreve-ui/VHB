@@ -949,7 +949,7 @@ html.dark {
 .dark .bg-oker-50\/40 { background-color: rgba(232, 163, 61, 0.06); }
 .dark .bg-slate-100\/50 { background-color: rgba(38, 40, 43, 0.32); }
 .dark .bg-slate-50\/40 { background-color: rgba(23, 24, 26, 0.24); }
-.dark .hover\:bg-slate-100\/80:hover { background-color: rgba(79, 87, 95, 0.52); }
+.dark .hover\:bg-slate-100\/80:hover { background-color: rgba(79, 87, 95, 0.56); }
 .dark .text-red-700\/80 { color: rgb(252, 165, 165); }
 .dark .text-red-900 { color: rgb(252, 165, 165); }
 .dark .text-amber-900 { color: rgb(253, 186, 116); }
@@ -957,9 +957,9 @@ html.dark {
 .dark .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.30); }
 .dark .border-red-200\/70 { border-color: rgba(239, 68, 68, 0.30); }
 
-/* Login panel soft cream gradient stays light — users expect a familiar
-   brand landing on the login screen. If you want it dark, wire a different
-   style override for .min-h-screen inside LoginView. */
+/* De login is bewust ALTIJD carbon-donker (login-bg-dark / panel-login-dark,
+   wit logo, witte koppen), los van de app-thema-toggle — zie LoginView.tsx.
+   De pre-app-schermen (Sessie/Profiel laden, toestel-wachtscherm) volgen dat. */
 
 /* === Login redesign — light variant ===
    Witte achtergrond met subtiele oker-vignet rond het center en
