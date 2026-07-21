@@ -6,7 +6,7 @@ import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { StatCard } from '../../components/StatCard';
-import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken } from '../../lib/planning';
+import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, suggestClosestName } from '../../lib/planning';
 
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
 // Gedeelde kleurentaal met de Maandplanning (src/lib/planningKind.ts) —
@@ -331,9 +331,16 @@ export function PlanningMatrixView({
               <Badge tone="amber">{derived.globalUnmatchedDrivers.length}</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
-              {derived.globalUnmatchedDrivers.length > 0 ? derived.globalUnmatchedDrivers.map((driver) => (
-                <Fragment key={driver}><Badge tone="amber" className="bg-white/80">{driver}</Badge></Fragment>
-              )) : (
+              {derived.globalUnmatchedDrivers.length > 0 ? derived.globalUnmatchedDrivers.map((driver) => {
+                // Fuzzy-suggestie: "Duysbergh Pascal" (typo) → "≈ Duysburgh Pascal?"
+                const suggestion = suggestClosestName(driver, users.map((u) => ({ id: String(u.id), name: u.name })));
+                return (
+                  <span key={driver} className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-white/80 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                    {driver}
+                    {suggestion && <span className="font-medium text-amber-600/90">≈ {suggestion.name}?</span>}
+                  </span>
+                );
+              }) : (
                 <span className="text-sm font-medium text-amber-700">Alle chauffeurs zijn gekoppeld.</span>
               )}
             </div>

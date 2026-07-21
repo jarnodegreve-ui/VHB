@@ -862,6 +862,32 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
                 </div>
               )}
 
+              {/* Dekkingsimpact: hoeveel andere chauffeurs zijn deze periode al
+                  afwezig (goedgekeurd verlof/ziekte) — beslis met het gat in beeld. */}
+              {(() => {
+                const others = leaveRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(reviewLeave.userId));
+                const overlap = others.filter((r) => r.startDate <= reviewLeave.endDate && r.endDate >= reviewLeave.startDate);
+                const uniqueOthers = new Set(overlap.map((r) => String(r.userId))).size;
+                if (uniqueOthers === 0) return null;
+                let peak = 0;
+                const cur = new Date(`${reviewLeave.startDate}T00:00:00`);
+                const end = new Date(`${reviewLeave.endDate}T00:00:00`);
+                for (let guard = 0; cur <= end && guard < 400; guard++) {
+                  const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                  const c = overlap.filter((r) => r.startDate <= iso && r.endDate >= iso).length;
+                  if (c > peak) peak = c;
+                  cur.setDate(cur.getDate() + 1);
+                }
+                return (
+                  <div className="rounded-xl border border-slate-100 bg-slate-50 px-4 py-3">
+                    <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
+                    <p className="mt-1 text-xs font-normal text-slate-600">
+                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} afwezig in deze periode{peak > 1 ? ` — tot ${peak} tegelijk op de drukste dag` : ''}.
+                    </p>
+                  </div>
+                );
+              })()}
+
               {conflictShifts.length > 0 && (
                 <div>
                   <MicroLabel className="text-red-600">Conflict met planning</MicroLabel>

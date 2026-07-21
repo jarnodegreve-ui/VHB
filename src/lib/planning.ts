@@ -27,6 +27,53 @@ export const normalizePlanningToken = (value: unknown) =>
 export const sortedNameToken = (name: string) =>
   normalizePlanningToken(name).split(/\s+/).filter(Boolean).sort().join(' ');
 
+/** Levenshtein-afstand (voor de fuzzy naam-suggestie hieronder). */
+const levenshtein = (a: string, b: string): number => {
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
+  for (let i = 0; i < a.length; i++) {
+    const cur = [i + 1];
+    for (let j = 0; j < b.length; j++) {
+      cur[j + 1] = Math.min(
+        prev[j + 1] + 1,
+        cur[j] + 1,
+        prev[j] + (a[i] === b[j] ? 0 : 1),
+      );
+    }
+    prev = cur;
+  }
+  return prev[b.length];
+};
+
+/**
+ * Beste fuzzy-match voor een niet-herkende naam onder bekende namen — helpt de
+ * planner "Duysbergh Pascal" (typo) te herkennen als "Duysburgh Pascal". Werkt
+ * op de sortedNameToken (accent-/interpunctie-/volgorde-ongevoelig). Geeft null
+ * als niets voldoende lijkt (drempel 0.62 similariteit).
+ */
+export const suggestClosestName = (
+  name: string,
+  candidates: { id: string; name: string }[],
+): { id: string; name: string } | null => {
+  const target = sortedNameToken(name);
+  if (!target) return null;
+  let best: { id: string; name: string } | null = null;
+  let bestScore = 0;
+  for (const c of candidates) {
+    const cand = sortedNameToken(c.name);
+    if (!cand) continue;
+    const dist = levenshtein(target, cand);
+    const score = 1 - dist / Math.max(target.length, cand.length);
+    if (score > bestScore) {
+      bestScore = score;
+      best = c;
+    }
+  }
+  return bestScore >= 0.62 ? best : null;
+};
+
 // Let op: client-variant die 'HH:MM - HH:MM'-labels teruggeeft. De server heeft
 // een gelijknamige-maar-andere getServiceSegments (api/storage.ts) die HH:MM
 // valideert en {startTime,endTime,segment}-objecten geeft — bewust los, dus
