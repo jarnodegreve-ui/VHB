@@ -203,6 +203,12 @@ export default function App() {
   const loadingCountRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const ptrIndicatorRef = useRef<HTMLDivElement>(null);
+  // Tijdstip van de laatste geslaagde dataload — chauffeurs zien zo hoe vers
+  // hun rooster/omleidingen zijn (vooral offline of na een tijd weg).
+  const [lastSyncedAt, setLastSyncedAt] = useState<number | null>(null);
+  // Ruil starten vanuit het rooster: de gekozen dienst wordt in de ruil-wizard
+  // voorgeselecteerd.
+  const [swapPreselectShiftId, setSwapPreselectShiftId] = useState<string | null>(null);
   const beginLoading = () => {
     loadingCountRef.current += 1;
     setIsLoading(true);
@@ -642,6 +648,7 @@ export default function App() {
         ...(appUser.role === 'admin' ? [fetchActivityLog(accessToken)] : []),
         ...(appUser.role === 'chauffeur' ? [fetchUnseenDocuments(appUser.id, accessToken)] : []),
       ]);
+      setLastSyncedAt(Date.now());
     } catch (error) {
       console.error('Error loading app data:', error);
       showToast('Kon de gegevens niet laden. Controleer je verbinding en vernieuw.', 'error');
@@ -1911,8 +1918,8 @@ export default function App() {
                   <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} onChangePassword={() => setShowChangePassword(true)} />
                 )
               )}
-              {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} />)}
-              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} />}
+              {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
+              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
               {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
@@ -1970,7 +1977,7 @@ export default function App() {
                   <LazyManageUsersView users={users} onSave={saveUsers} title="Beheer Contactlijst" currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} />)}
+              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
               {resolvedCurrentView === 'rapportage' && <Suspense fallback={<ViewLoader />}><LazyReportsView shifts={shifts} leaveRequests={leaveRequests} users={users} /></Suspense>}

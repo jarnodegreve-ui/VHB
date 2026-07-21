@@ -3,6 +3,7 @@ import { Zap, MapPin, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
 import { getSupabaseAuthHeaders } from '../../lib/ui';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
+import { SkeletonTile } from '../../components/Skeleton';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 
 type Connector = { id: string; standard?: string; power_type?: string; max_electric_power?: number };
@@ -73,6 +74,14 @@ export function OcpiDashboardView() {
 
       {error && (
         <div className="p-4 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-100">{error}</div>
+      )}
+
+      {isLoading && !data && !error && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i}><SkeletonTile /></div>
+          ))}
+        </div>
       )}
 
       {data && (

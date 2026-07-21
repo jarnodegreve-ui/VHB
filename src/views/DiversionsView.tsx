@@ -2,7 +2,7 @@ import { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import type { Diversion } from '../types';
-import { formatDateHuman } from '../lib/format';
+import { formatDateHuman, formatSyncedTime } from '../lib/format';
 import { openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
@@ -34,7 +34,7 @@ function safeParseCoordinates(raw?: string): [number, number][] | null {
   }
 }
 
-export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
+export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions: Diversion[]; lastSyncedAt?: number | null }) {
   const [selectedDiversion, setSelectedDiversion] = useState<Diversion | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLine, setSelectedLine] = useState<string>('all');
@@ -98,6 +98,10 @@ export function DiversionsView({ diversions }: { diversions: Diversion[] }) {
           </div>
         )}
       />
+
+      {lastSyncedAt && (
+        <p className="-mt-2 text-[11px] font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+      )}
 
       <div className="space-y-4">
         {filteredDiversions.length > 0 ? (

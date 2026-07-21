@@ -46,6 +46,16 @@ export function formatDateHuman(iso: string | undefined | null): string {
   }
 }
 
+/** 'HH:MM' uit een epoch-ms — voor de 'Bijgewerkt om …'-versheidsindicatie. */
+export function formatSyncedTime(ts: number | null | undefined): string {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '';
+  }
+}
+
 /** Compact dag-label 'vr 18 jul' (weekdag + dag + korte maand) uit een
  *  'YYYY-MM-DD'-string. Eén gedeelde vorm zodat lijsten die datums naast
  *  elkaar tonen (dienstruil, dekking) er niet uit elkaar lopen. */
