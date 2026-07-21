@@ -47,9 +47,13 @@ const isSafeExternalHttpsUrl = (raw: string): boolean => {
   let u: URL;
   try { u = new URL(raw); } catch { return false; }
   if (u.protocol !== "https:") return false;
-  const host = u.hostname.toLowerCase();
+  // IPv6-brackets ([::1] → ::1) en een trailing dot (localhost. → localhost)
+  // strippen — anders zijn de checks hieronder dode code en glipt IPv6-
+  // loopback/link-local of een trailing-dot-host er alsnog doorheen.
+  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, "").replace(/\.$/, "");
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".internal")) return false;
-  if (host === "0.0.0.0" || host === "169.254.169.254" || host === "::1") return false;
+  if (host === "0.0.0.0" || host === "169.254.169.254" || host === "::1" || host === "::") return false;
+  if (host.startsWith("::ffff:")) return false; // IPv4-mapped IPv6 (bv. ::ffff:169.254.169.254)
   if (/^(127\.|10\.|169\.254\.|192\.168\.)/.test(host)) return false;
   if (/^172\.(1[6-9]|2\d|3[01])\./.test(host)) return false;
   if (/^(fe80:|fc00:|fd00:)/i.test(host)) return false;
