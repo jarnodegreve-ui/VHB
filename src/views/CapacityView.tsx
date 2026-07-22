@@ -190,7 +190,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     <PageShell width="6xl">
       <PageHeader
         title="Maandplanning"
-        description="Wie rijdt welke dienst, wie heeft verlof — zoals het overzicht in het chauffeurslokaal."
+        description="Wie rijdt welke dienst, zoals in het overzicht in het chauffeurslokaal."
         actions={(
           <div className="flex items-center gap-2">
             <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
