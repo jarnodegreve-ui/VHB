@@ -201,7 +201,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
     <PageShell width="5xl">
       <PageHeader
         title="Ritbladen"
-        description="De actuele rit-informatie voor alle chauffeurs. Admins vervangen de PDF wanneer de dienstregeling wijzigt."
+        description="De actuele ritbladen. Admins vervangen de PDF wanneer de dienstregeling wijzigt."
         actions={canEdit ? (
           <>
             <input
