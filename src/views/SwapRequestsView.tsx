@@ -269,7 +269,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     <PageShell>
       <PageHeader
         title="Dienstruil"
-        description="Ruil een dienst met een collega — die accepteert eerst, daarna keurt de planning goed."
+        description="Ruil een dienst met een collega, die accepteert eerst, daarna keurt de planning goed."
         actions={(
           <button
             onClick={() => {
