@@ -90,13 +90,13 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   const renderDevice = (device: Device, highlight = false) => (
     <div
       key={keyOf(device)}
-      className={`flex flex-col gap-3 rounded-2xl border p-4 md:flex-row md:items-center md:justify-between ${
+      className={`flex flex-col gap-2 rounded-xl border px-3 py-2 md:flex-row md:items-center md:justify-between ${
         highlight ? 'border-amber-200 bg-amber-50/80' : 'border-slate-200/80 bg-white/50'
       }`}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-slate-100 text-slate-500">
-          <Smartphone size={18} />
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+          <Smartphone size={15} />
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -125,7 +125,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
               </>
             )}
           </div>
-          <MicroLabel className="mt-1">
+          <MicroLabel className="mt-0.5">
             {highlight ? `${userName(device.userId)} · ` : ''}
             geregistreerd {formatDateHuman(device.createdAt)} · laatst gezien {formatDateHuman(device.lastSeenAt)}
           </MicroLabel>
@@ -194,7 +194,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             <h3 className="text-lg font-bold tracking-tight">Wacht op goedkeuring</h3>
             <Badge tone="amber" dot className="shrink-0 tabular-nums">{pending.length}</Badge>
           </div>
-          <div className="mt-4 space-y-3">
+          <div className="mt-4 space-y-2">
             {pending.map((d) => renderDevice(d, true))}
           </div>
         </div>
@@ -213,11 +213,11 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             />
           </div>
         ) : (
-          <div className="mt-4 space-y-6">
+          <div className="mt-4 space-y-4">
             {[...byUser.entries()].map(([userId, list]) => (
               <div key={userId}>
-                <MicroLabel className="mb-2">{userName(userId)}</MicroLabel>
-                <div className="space-y-3">{list.map((d) => renderDevice(d))}</div>
+                <MicroLabel className="mb-1.5">{userName(userId)}</MicroLabel>
+                <div className="space-y-2">{list.map((d) => renderDevice(d))}</div>
               </div>
             ))}
           </div>

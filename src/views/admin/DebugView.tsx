@@ -141,7 +141,10 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   const checkHealth = async () => {
     try {
       setIsCheckingHealth(true);
-      const response = await fetch('/api/health');
+      // Het publieke /api/health is bewust kaal (alleen status+tijd, geen
+      // info-disclosure); de config-/tabelstatussen zitten in het admin-only
+      // details-endpoint.
+      const response = await fetch('/api/health/details', { headers: await getSupabaseAuthHeaders() });
       const data = await response.json();
       setHealthData(data);
     } catch (error) {
