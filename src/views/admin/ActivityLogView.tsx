@@ -133,8 +133,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
 
   return (
     <PageShell width="5xl">
-      <div className="grid gap-4 md:grid-cols-3">
-        <StatCard icon={<Activity className="text-oker-600" />} label="Acties" value={entries.length.toString()} subValue="Laatste 100 wijzigingen" />
+      <div className="grid gap-4 md:grid-cols-2">
         <StatCard icon={<Users className="text-slate-600" />} label="Gebruikersacties" value={entries.filter((entry) => entry.category === 'users').length.toString()} subValue="Accounts en rollen" />
         <StatCard icon={<Calendar className="text-emerald-600" />} label="Planning" value={entries.filter((entry) => entry.category === 'planning' || entry.category === 'planning_codes').length.toString()} subValue="Imports, sync en codes" />
       </div>
@@ -143,23 +142,23 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         <AdminSubsectionHeader
           eyebrow="Aanwezigheid"
           title="Aanmeldingen op het portaal"
-          description="Wie kwam wanneer op het portaal, en hoeveel unieke gebruikers waren er per dag actief (laatste 30 dagen)."
+          description="Unieke gebruikers per dag en recente aanmeldingen (laatste 30 dagen)."
         />
         {logins.length === 0 ? (
-          <div className="mt-6">
+          <div className="mt-5">
             <EmptyState icon={<Users size={28} />} title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
           </div>
         ) : (
-          <div className="mt-6 grid gap-6 lg:grid-cols-2">
+          <div className="mt-5 grid gap-5 lg:grid-cols-2">
             <div>
-              <MicroLabel className="mb-3">Actieve gebruikers per dag</MicroLabel>
-              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
+              <MicroLabel className="mb-2">Actieve gebruikers per dag</MicroLabel>
+              <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
                 {dailyActive.map((d) => (
                   <div key={d.day} className="flex items-center gap-3">
-                    <span className="w-24 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
+                    <span className="w-20 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
                       {new Date(`${d.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
                     </span>
-                    <div className="flex-1 h-5 rounded-md bg-slate-100 overflow-hidden">
+                    <div className="flex-1 h-3.5 rounded-md bg-slate-100 overflow-hidden">
                       <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.count / maxDaily) * 100)}%` }} />
                     </div>
                     <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-700 tabular-nums">{d.count}</span>
@@ -168,11 +167,11 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               </div>
             </div>
             <div>
-              <MicroLabel className="mb-3">Recente aanmeldingen</MicroLabel>
-              <div className="space-y-1 max-h-72 overflow-y-auto pr-1">
+              <MicroLabel className="mb-2">Recente aanmeldingen</MicroLabel>
+              <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
                 {recentLogins.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 hover:bg-slate-50">
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{e.actorName}</span>
+                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1 hover:bg-slate-50">
+                    <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-800">{e.actorName}</span>
                     <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">
                       {new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
