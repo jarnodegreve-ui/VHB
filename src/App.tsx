@@ -1731,27 +1731,23 @@ export default function App() {
           />
 
           {isPlanner && (
-            <>
-              <NavSection title="Planning" count={3} active={['beheer-roosters', 'planning-matrix', 'planning-codes'].includes(currentView)}>
-                <NavItem icon={<Settings size={18} />} label="Beheer Roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
-                <NavItem icon={<FileText size={18} />} label="Planning Overzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
-                <NavItem icon={<Settings size={18} />} label="Planningscodes" active={currentView === 'planning-codes'} onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} />
-              </NavSection>
-              <NavSection title="Diensten" count={4} active={['dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'rapportage'].includes(currentView)}>
-                <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
-                <NavItem icon={<Bus size={18} />} label="Beheer Dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
-                <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
-                <NavItem icon={<BarChart3 size={18} />} label="Rapportage" active={currentView === 'rapportage'} onClick={() => { setCurrentView('rapportage'); setIsSidebarOpen(false); }} />
-              </NavSection>
-              <NavSection title="Verlof" count={2} active={['verlof-beheer', 'verlof-kalender'].includes(currentView)}>
-                <NavItem icon={<Calendar size={18} />} label="Verlofbeheer" active={currentView === 'verlof-beheer'} onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }} badge={pendingLeaveCount} />
-                <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
-              </NavSection>
-              <NavSection title="Publiceren" count={2} active={['beheer-updates', 'beheer-omleidingen'].includes(currentView)}>
-                <NavItem icon={<Plus size={18} />} label="Beheer Updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
-                <NavItem icon={<MapIcon size={18} />} label="Beheer Omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
-              </NavSection>
-            </>
+            <NavSection
+              title="Beheer"
+              count={11}
+              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'rapportage', 'verlof-beheer', 'verlof-kalender', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
+            >
+              <NavItem icon={<Settings size={18} />} label="Beheer Roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<FileText size={18} />} label="Planning Overzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Settings size={18} />} label="Planningscodes" active={currentView === 'planning-codes'} onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Bus size={18} />} label="Beheer Dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<BarChart3 size={18} />} label="Rapportage" active={currentView === 'rapportage'} onClick={() => { setCurrentView('rapportage'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Calendar size={18} />} label="Verlofbeheer" active={currentView === 'verlof-beheer'} onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }} badge={pendingLeaveCount} />
+              <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Plus size={18} />} label="Beheer Updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<MapIcon size={18} />} label="Beheer Omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
+            </NavSection>
           )}
 
           {isAdmin && (
