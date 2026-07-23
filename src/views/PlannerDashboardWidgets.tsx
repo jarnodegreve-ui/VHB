@@ -4,6 +4,7 @@ import {
   AlertTriangle,
   ArrowUpRight,
   Bell,
+  Bus,
   CalendarClock,
   CalendarDays,
   ChevronRight,
@@ -30,6 +31,7 @@ import type {
 import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
+import { isShiftActiveAt } from '../lib/shiftTime';
 import { CountUp } from '../components/CountUp';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { cn } from '../lib/ui';
@@ -86,8 +88,8 @@ export function PlannerDashboardWidgets({
           <Skeleton className="h-7 w-72" />
           <Skeleton className="h-3 w-56" />
         </div>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
-          <SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile />
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+          <SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <div className="lg:col-span-2 rounded-3xl p-5 surface-card">
@@ -109,6 +111,12 @@ export function PlannerDashboardWidgets({
   // === Operationele kerncijfers (alles uit echte data) ===
   const driversActiveToday = new Set(
     shifts.filter((s) => s.date === today).map((s) => String(s.driverId)),
+  ).size;
+  // Wie zit er nú effectief op de bus? Actuele tijd vs. de segmenttijden
+  // (incl. nachtdiensten van gisteren die nog lopen); de 60s-klok hierboven
+  // houdt dit cijfer live. Gesplitste diensten: pauze telt niet mee.
+  const driversDrivingNow = new Set(
+    shifts.filter((s) => isShiftActiveAt(s, now)).map((s) => String(s.driverId)),
   ).size;
   const totalDrivers = users.filter((u) => u.role === 'chauffeur').length;
 
@@ -205,18 +213,26 @@ export function PlannerDashboardWidgets({
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling van 5 tegels op elke breedte: mobiel 2+2+1(vol),
-          medium een 6-koloms grid met 3 tegels van span-2 en 2 van span-3
-          (rijen altijd vol), breed 5 naast elkaar. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-5">
+          Gat-vrije verdeling van 6 tegels op elke breedte: mobiel 2×3 (vol),
+          medium 3×2 (span-2 in een 6-koloms grid), breed 6 naast elkaar. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-6">
+        <OpsStat
+          className="md:col-span-2 xl:col-span-1"
+          icon={<Bus size={16} />}
+          tone="emerald"
+          label="Chauffeurs actief"
+          value={driversDrivingNow}
+          sub="nu aan het rijden"
+          onClick={() => onNavigate('bezetting')}
+        />
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Users size={16} />}
-          tone="emerald"
-          label="Chauffeurs actief"
+          tone="slate"
+          label="Vandaag ingepland"
           value={driversActiveToday}
           suffix={totalDrivers > 0 ? ` / ${totalDrivers}` : undefined}
-          sub="vandaag ingepland"
+          sub="chauffeurs met dienst"
           onClick={() => onNavigate('bezetting')}
         />
         {coverageKnown ? (
@@ -250,7 +266,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate('omleidingen')}
         />
         <OpsStat
-          className="md:col-span-3 xl:col-span-1"
+          className="md:col-span-2 xl:col-span-1"
           icon={<Inbox size={16} />}
           tone={openTasks > 0 ? 'amber' : 'emerald'}
           label="Aanvragen"
@@ -259,7 +275,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof-beheer')}
         />
         <OpsStat
-          className="max-md:col-span-2 md:col-span-3 xl:col-span-1"
+          className="md:col-span-2 xl:col-span-1"
           icon={<CalendarClock size={16} />}
           tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
           label="Laatste import"
