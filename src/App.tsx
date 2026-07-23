@@ -22,7 +22,6 @@ import {
   CalendarCheck,
   X,
   Map as MapIcon,
-  Search,
   Phone,
   Activity,
   KeyRound,
@@ -1567,11 +1566,13 @@ export default function App() {
     'beheer-debug': { title: 'Systeem Status', subtitle: 'Controleer koppelingen, tabellen en health checks.' },
   };
   const currentMeta = viewMeta[resolvedCurrentView] || { title: 'VHB Portaal', subtitle: 'Interne operationele omgeving.' };
+  // Volledige initialen ("Jarno De Greve" → JDG), gecapt op 4 voor extreem
+  // lange namen (avatar is maar 32px breed).
   const userInitials = currentUser.name
     .split(' ')
     .filter(Boolean)
     .map((part) => part[0])
-    .slice(0, 2)
+    .slice(0, 4)
     .join('')
     .toUpperCase() || '?';
 
@@ -1861,14 +1862,8 @@ export default function App() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    onClick={() => setIsCommandPaletteOpen(true)}
-                    className="hidden md:flex items-center gap-2 rounded-lg border border-slate-200/90 bg-white/70 pl-2.5 pr-1.5 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:border-slate-300 transition-colors"
-                  >
-                    <Search size={13} />
-                    <span>Zoeken</span>
-                    <kbd className="rounded-[5px] border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[11px] font-semibold text-slate-400">⌘K</kbd>
-                  </button>
+                  {/* Zoekknop bewust weg (Jarno: "vrij zinloos") — het
+                      command palette blijft bereikbaar via ⌘K. */}
                   <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50/80 border border-emerald-100">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
                     <p className="text-[11px] font-semibold text-emerald-700">Online</p>
