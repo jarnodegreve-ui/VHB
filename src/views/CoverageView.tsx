@@ -221,7 +221,7 @@ export function CoverageView() {
     <PageShell width="6xl">
       <PageHeader
         title="Openstaande diensten"
-        description="Diensten die nog niet ingevuld zijn — per dag, t.o.v. de verwachte diensten per dag-type."
+        description="Diensten die nog niet ingevuld zijn per dag, t.o.v. de verwachte diensten per dag-type."
         actions={(
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} />} aria-label="Vorige maand" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} />
@@ -410,7 +410,7 @@ export function CoverageView() {
         </div>
       ) : visibleDays.length === 0 ? (
         <div className="surface-card p-8 rounded-3xl text-center">
-          <p className="text-sm font-bold text-emerald-600">Geen gaten in {MONTH_NAMES[monthIndex]} {year}.</p>
+          <p className="text-sm font-bold text-emerald-600">Geen openstaande diensten in {MONTH_NAMES[monthIndex].toLowerCase()} {year}.</p>
         </div>
       ) : (
         <div className="surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
