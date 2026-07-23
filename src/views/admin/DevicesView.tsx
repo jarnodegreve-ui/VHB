@@ -185,7 +185,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     <PageShell width="5xl">
       <PageHeader
         title="Toestellen"
-        description="Chauffeurs kunnen alleen inloggen op goedgekeurde toestellen. Het eerste toestel wordt automatisch vertrouwd; elk volgend toestel wacht hier op goedkeuring."
+        description="Elk volgend toestel wacht hier op goedkeuring."
       />
 
       {pending.length > 0 && (

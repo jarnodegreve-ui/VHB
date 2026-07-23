@@ -306,7 +306,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       <PageHeader
         eyebrow="Gebruikersbeheer"
         title={title}
-        description="Beheer medewerkers, rollen en accountacties vanuit een consistente beheershell. Gebruik Excel-import alleen wanneer de brongegevens al gevalideerd zijn."
+        description="Beheer medewerkers, rollen en accountacties vanuit beheershell."
         actions={(
           <>
             <label className={cn('control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-all hover:text-slate-900', isImporting && 'cursor-not-allowed opacity-50')}>
