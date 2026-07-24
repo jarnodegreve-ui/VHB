@@ -9,7 +9,6 @@ import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageS
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
-  const [jsonInput, setJsonInput] = useState('');
   const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
@@ -94,32 +93,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       currentEndDate,
     };
   }, [matrixPreview, shifts]);
-
-  const handleImport = async () => {
-    if (!canAdminOverride) {
-      notify('JSON fallback-import is alleen beschikbaar voor admins.', 'error');
-      return;
-    }
-    try {
-      const data = JSON.parse(jsonInput);
-      if (Array.isArray(data)) {
-        // Minimale shape-check: zonder deze kon [{}] 'succesvol' importeren.
-        const invalid = data.find((s: any) => !s || !s.id || !s.date || !s.driverId);
-        if (invalid !== undefined) {
-          notify('Ongeldig formaat: elke dienst heeft minstens id, date en driverId nodig.', 'error');
-          return;
-        }
-        // Wacht op de échte save; App toont zelf de succes-/fouttoast.
-        // De oude flow toastte 'succesvol' vóór (en ongeacht) het opslaan.
-        const ok = await Promise.resolve(onSave(data));
-        if (ok !== false) setJsonInput('');
-      } else {
-        notify('Ongeldig formaat. Zorg dat het een array van diensten is.', 'error');
-      }
-    } catch (e) {
-      notify('Fout bij het parsen van JSON. Controleer de syntax.', 'error');
-    }
-  };
 
   const [isSyncing, setIsSyncing] = useState(false);
   const [isClearingPlanning, setIsClearingPlanning] = useState(false);
@@ -320,7 +293,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-oker-700">
                 <li>Upload het hele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab automatisch.</li>
                 <li>Controleer in de preview: dagen, diensten, onbekende codes, niet-gematchte chauffeurs en services zonder uren.</li>
-                <li>JSON-import blijft beschikbaar voor oudere rij-per-dienst exports.</li>
               </ol>
             </div>
           )}
@@ -417,7 +389,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             );
           })()}
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <div className="mt-6 grid gap-4">
             <div className="rounded-3xl border border-emerald-100 bg-emerald-50/70 p-5">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -452,42 +424,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               </label>
             </div>
 
-            {canAdminOverride ? (
-            <div className="rounded-3xl border border-white/70 bg-white/45 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <MicroLabel>Fallback</MicroLabel>
-                  <h4 className="mt-2 text-base font-bold tracking-tight text-slate-900">JSON Import</h4>
-                  <p className="mt-2 text-sm font-medium text-slate-500">
-                    Gebruik dit alleen als je planning al per dienst in JSON is geëxporteerd. Dit pad is bedoeld voor oudere dataflows.
-                  </p>
-                </div>
-                <Badge tone="slate">Legacy</Badge>
-              </div>
-              <textarea
-                className="control-input mt-5 min-h-[170px] w-full rounded-2xl px-4 py-3 font-mono text-sm transition-all focus:outline-none"
-                placeholder='Plak hier de JSON data uit Excel... e.g. [{"id":"1","date":"2026-03-01",...}]'
-                value={jsonInput}
-                onChange={(e) => setJsonInput(e.target.value)}
-              />
-              <Button variant="primary" full className="mt-4" onClick={handleImport}>
-                Importeer JSON Planning
-              </Button>
-            </div>
-            ) : (
-            <div className="rounded-3xl border border-white/70 bg-white/45 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <MicroLabel>Admin pad</MicroLabel>
-                  <h4 className="mt-2 text-base font-bold tracking-tight text-slate-900">Fallback en sync</h4>
-                  <p className="mt-2 text-sm font-medium text-slate-500">
-                    JSON fallback-import, handmatige planning sync en directe overschrijvingen zijn afgeschermd voor admins. Gebruik als planner de matrix-upload hierboven.
-                  </p>
-                </div>
-                <Badge tone="slate">Admin only</Badge>
-              </div>
-            </div>
-            )}
           </div>
         </div>
 
