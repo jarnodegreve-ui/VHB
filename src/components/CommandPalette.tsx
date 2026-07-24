@@ -125,7 +125,7 @@ export function CommandPalette({
         icon: <Calendar size={16} />,
         keywords: 'verlof beheer goedkeur weiger approve',
         roles: ['planner', 'admin'],
-        action: () => onNavigate('verlof-beheer'),
+        action: () => onNavigate('verlof'),
       },
       {
         id: 'goto-verlof-kalender',

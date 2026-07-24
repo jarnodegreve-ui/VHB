@@ -449,7 +449,7 @@ export function PlannerDashboardWidgets({
       <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
         <QuickAction icon={<Upload size={16} />} label="Planning importeren" sub="Matrix uploaden" onClick={() => onNavigate('beheer-roosters')} />
         <QuickAction icon={<MapPin size={16} />} label="Omleiding toevoegen" sub="Hinder registreren" onClick={() => onNavigate('beheer-omleidingen')} />
-        <QuickAction icon={<CalendarDays size={16} />} label="Verlofbeheer" sub="Aanvragen beoordelen" onClick={() => onNavigate('verlof-beheer')} />
+        <QuickAction icon={<CalendarDays size={16} />} label="Verlofbeheer" sub="Aanvragen beoordelen" onClick={() => onNavigate('verlof')} />
         {onQuickSickReport && <QuickAction icon={<AlertTriangle size={16} />} label="Ziek melden" sub="Chauffeur afwezig" onClick={onQuickSickReport} />}
         <QuickAction icon={<Bell size={16} />} label="Update publiceren" sub="Chauffeurs informeren" onClick={() => onNavigate('beheer-updates')} />
       </div>
