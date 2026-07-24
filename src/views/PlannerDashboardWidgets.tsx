@@ -97,6 +97,9 @@ export function PlannerDashboardWidgets({
           mp.drivers
             .map((drv) => ({ drv, cell: mp.cells?.[drv.id]?.[todayKey] }))
             .filter((x) => x.cell && (x.cell.kind === 'leave' || x.cell.kind === 'absence'))
+            // "Geen dienst" = een gewone vrije dag, geen afwezigheid — die
+            // hoort niet in dit paneel (Jarno).
+            .filter((x) => !/geen dienst/i.test(x.cell!.label))
             .map(({ drv, cell }) => ({
               name: drv.name,
               label: cell!.label || (cell!.kind === 'leave' ? 'Verlof' : 'Afwezig'),
