@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Bus, Calendar, FileText, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bus, Calendar, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, TableShell, Td, Th } from '../../components/primitives';
 import { StatCard } from '../../components/StatCard';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -107,8 +107,9 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         )}
       />
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <StatCard icon={<FileText className="text-oker-600" />} label="Totaal" value={draftCodes.length.toString()} subValue="Actieve mappings" />
+      {/* 4 kaarten → gat-vrij op elke breedte (mobiel 2×2, breed 4 op een
+          rij). "Totaal" staat al als teller bij de tabel. */}
+      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
         <StatCard icon={<Bus className="text-slate-600" />} label="Diensten" value={summary.service.toString()} subValue="Codes met shiftstatus" />
         <StatCard icon={<Calendar className="text-emerald-600" />} label="Verlof" value={summary.leave.toString()} subValue="Afwezigheidsperiodes" />
         <StatCard icon={<AlertTriangle className="text-amber-600" />} label="Afwezigheid" value={summary.absence.toString()} subValue="Geen inzetbare dienst" />
@@ -130,37 +131,29 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           }
         />
 
-        <div className="mt-5 grid gap-4 lg:grid-cols-[1fr_auto]">
-          <div className="rounded-2xl border border-slate-100 bg-white/50 p-4">
-            <MicroLabel>Filter</MicroLabel>
-            <div className="mt-3 glass-segmented rounded-2xl inline-flex p-1">
-              {[
-                { key: 'all', label: 'Alles' },
-                { key: 'service', label: 'Dienst' },
-                { key: 'leave', label: 'Verlof' },
-                { key: 'absence', label: 'Afwezig' },
-                { key: 'training', label: 'Opleiding' },
-                { key: 'unknown', label: 'Onbekend' },
-              ].map((option) => (
-                <button
-                  key={option.key}
-                  onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
-                  className={cn(
-                    'rounded-xl px-4 py-2 text-xs font-semibold transition-all',
-                    filter === option.key ? 'bg-white text-oker-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-                  )}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="rounded-2xl border border-slate-100 bg-white/50 p-4">
-            <MicroLabel>Interpretatie</MicroLabel>
-            <p className="mt-3 text-sm font-medium text-slate-500">
-              Dienstcodes worden doorgegeven aan de roosteropbouw. Verlof-, afwezigheids- en opleidingscodes blijven buiten de dienstgeneratie.
-            </p>
-          </div>
+        {/* Eén rustige filterbalk — de vroegere twee omkaderde dozen
+            ("Filter" + "Interpretatie") maakten dit blok onnodig druk; wat
+            de categorieën betekenen staat al in de sectiebeschrijving. */}
+        <div className="mt-5 glass-segmented rounded-2xl inline-flex flex-wrap p-1">
+          {[
+            { key: 'all', label: 'Alles' },
+            { key: 'service', label: 'Dienst' },
+            { key: 'leave', label: 'Verlof' },
+            { key: 'absence', label: 'Afwezig' },
+            { key: 'training', label: 'Opleiding' },
+            { key: 'unknown', label: 'Onbekend' },
+          ].map((option) => (
+            <button
+              key={option.key}
+              onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
+              className={cn(
+                'rounded-xl px-4 py-2 text-xs font-semibold transition-all',
+                filter === option.key ? 'bg-white text-oker-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
         </div>
 
         <TableShell className="mt-6">
@@ -170,13 +163,16 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                 <table className="w-full min-w-[980px] text-left">
                   <thead className="bg-slate-50/60">
                     <tr>
-                      <Th>Code</Th>
-                      <Th>Categorie</Th>
+                      {/* Checkbox-kolommen: header gecentreerd boven de
+                          (gecentreerde) checkbox; Acties rechts uitgelijnd
+                          zoals de knoppen eronder. */}
+                      <Th className="w-32">Code</Th>
+                      <Th className="w-44">Categorie</Th>
                       <Th>Beschrijving</Th>
-                      <Th>Dienst</Th>
-                      <Th>Betaald</Th>
-                      <Th>Vrij</Th>
-                      <Th>Acties</Th>
+                      <Th className="w-20 text-center">Dienst</Th>
+                      <Th className="w-20 text-center">Betaald</Th>
+                      <Th className="w-20 text-center">Vrij</Th>
+                      <Th className="w-24 text-right">Acties</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
