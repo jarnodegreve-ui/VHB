@@ -32,6 +32,7 @@ import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
 import { isShiftActiveAt } from '../lib/shiftTime';
+import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { CountUp } from '../components/CountUp';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { cn } from '../lib/ui';
@@ -80,6 +81,32 @@ export function PlannerDashboardWidgets({
     const timer = setInterval(() => setNow(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
+
+  // Afwezigheden uit de planning-matrix (Excel-codes bv/ziek/ta/tk…): de
+  // verlof-module kent alleen aanvragen die vía het portaal liepen, dus
+  // "Vandaag afwezig" stond onterecht op 0 wanneer het verlof alleen in de
+  // geïmporteerde matrix zat. Fout → stil terugvallen op de module-data.
+  const todayKey = isoDate(now);
+  const [matrixAbsent, setMatrixAbsent] = useState<{ name: string; label: string; isSick: boolean }[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    fetchMonthPlanning(todayKey.slice(0, 7))
+      .then((mp) => {
+        if (cancelled || !Array.isArray(mp?.drivers)) return;
+        setMatrixAbsent(
+          mp.drivers
+            .map((drv) => ({ drv, cell: mp.cells?.[drv.id]?.[todayKey] }))
+            .filter((x) => x.cell && (x.cell.kind === 'leave' || x.cell.kind === 'absence'))
+            .map(({ drv, cell }) => ({
+              name: drv.name,
+              label: cell!.label || (cell!.kind === 'leave' ? 'Verlof' : 'Afwezig'),
+              isSick: /ziek/i.test(cell!.code) || /ziek/i.test(cell!.label),
+            })),
+        );
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [todayKey]);
 
   if (isInitialLoad) {
     return (
@@ -157,12 +184,20 @@ export function PlannerDashboardWidgets({
   const userNameById = (id: string) =>
     users.find((u) => String(u.id) === String(id))?.name || 'Onbekend';
 
-  // Wie is er vandaag afwezig (goedgekeurd verlof/ziekte dat vandaag dekt)?
+  // Wie is er vandaag afwezig? Twee bronnen: goedgekeurde aanvragen uit de
+  // verlof-module + de afwezigheidscodes uit de geïmporteerde matrix
+  // (gededuped op naam — module-aanvraag wint, die heeft het rijkere label).
   const ABSENCE_LABEL: Record<string, string> = { betaald_verlof: 'Verlof', klein_verlet: 'Klein verlet', ziekte: 'Ziek' };
-  const todayAbsent = leaveRequests
+  const moduleAbsent = leaveRequests
     .filter((l) => l.status === 'approved' && l.startDate <= today && today <= l.endDate)
-    .map((l) => ({ id: l.id, name: userNameById(l.userId), label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .map((l) => ({ id: l.id, name: userNameById(l.userId), label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' }));
+  const seenNames = new Set(moduleAbsent.map((a) => a.name.trim().toLowerCase()));
+  const todayAbsent = [
+    ...moduleAbsent,
+    ...matrixAbsent
+      .filter((m) => !seenNames.has(m.name.trim().toLowerCase()))
+      .map((m, i) => ({ id: `matrix-${i}`, ...m })),
+  ].sort((a, b) => a.name.localeCompare(b.name));
 
   const formatDay = (iso: string) => {
     const label = new Date(`${iso}T00:00:00`).toLocaleDateString('nl-BE', {
