@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
+import { ArrowLeftRight, ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { PageHeader, PageShell } from '../components/ui';
@@ -56,6 +56,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const dates = data?.dates ?? [];
   const drivers = data?.drivers ?? [];
   const cells = data?.cells ?? {};
+
+  // Staat er ergens een geruilde dienst in deze maand? (voor de legende)
+  const hasSwaps = useMemo(
+    () => Object.values(cells).some((row) => Object.values(row).some((c) => c.swap)),
+    [cells],
+  );
 
   // Maandag van de week (lokaal) → sleutel om dagen per week te bucketen.
   const weekKeyOf = (iso: string) => {
@@ -336,9 +342,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                 <button
                                   type="button"
                                   onClick={() => setSelected({ driverName: drv.name, iso, cell })}
-                                  className={cn('flex h-7 w-full items-center justify-center px-1 text-[11px] tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
-                                  title={`${KIND_LABEL[cell.kind]} · ${cell.code} — klik voor details`}
+                                  className={cn('flex h-7 w-full items-center justify-center gap-0.5 px-1 text-[11px] tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
+                                  title={`${KIND_LABEL[cell.kind]} · ${cell.code}${cell.swap ? ` — geruild met ${cell.swap.with}` : ''} — klik voor details`}
                                 >
+                                  {cell.swap && <ArrowLeftRight size={10} className="shrink-0 text-blue-700" aria-hidden />}
                                   {cell.code}
                                 </button>
                               ) : (
@@ -398,6 +405,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           >
                             <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
                             <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
+                            {cell.swap && <ArrowLeftRight size={12} className="shrink-0 text-blue-700" aria-hidden />}
                             <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">{summary}</span>
                           </button>
                         );
@@ -425,6 +433,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <span className="font-medium text-slate-600">{e.meaning}</span>
               </div>
             ))}
+            {hasSwaps && (
+              <div className="flex items-center gap-2">
+                <ArrowLeftRight size={12} className="shrink-0 text-blue-700" />
+                <span className="font-medium text-slate-600">Geruilde dienst (goedgekeurd, nog niet in de geïmporteerde planning)</span>
+              </div>
+            )}
             <span className="font-medium text-slate-400">Leeg = niets gepland</span>
           </div>
         </>
@@ -447,6 +461,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <span className={cn('inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[selected.cell.kind])}>{selected.cell.code}</span>
               <span className="text-sm font-semibold text-slate-700">{selected.cell.label}</span>
             </div>
+
+            {selected.cell.swap && (
+              <p className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-blue-700">
+                <ArrowLeftRight size={12} className="shrink-0" /> Geruild met {selected.cell.swap.with}
+              </p>
+            )}
 
             {selected.cell.kind === 'service' ? (
               selected.cell.segments.length > 0 ? (

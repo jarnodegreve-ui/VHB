@@ -14,6 +14,8 @@ export type MonthCell = {
   label: string;
   /** uren-segmenten "HH:MM - HH:MM" (enkel bij diensten, anders leeg) */
   segments: string[];
+  /** aanwezig wanneer deze cel hier staat door een goedgekeurde dienstruil */
+  swap?: { with: string };
 };
 
 export type MonthPlanning = {

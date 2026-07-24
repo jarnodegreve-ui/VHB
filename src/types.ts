@@ -46,6 +46,25 @@ export interface SwapRequest {
   returnCode?: string;
 }
 
+/**
+ * Entry van GET /api/swaps/overlay — een goedgekeurde ruil die nog niet in
+ * een nieuwe matrix-import verwerkt is. Alleen voor weergave: het rooster
+ * toont de dienst bij de collega en de terugruil bij de aanvrager, de data
+ * zelf blijft onaangeroerd. Spiegel van api/_lib/swapOverlay.ts.
+ */
+export interface SwapOverlayEntry {
+  swapId: string;
+  shiftId: string;
+  date: string;
+  fromDriverId: string;
+  fromName: string;
+  toDriverId: string;
+  toName: string;
+  returnShiftId?: string;
+  returnDate?: string;
+  returnCode?: string;
+}
+
 export interface LeaveRequest {
   id: string;
   userId: string;
@@ -67,6 +86,8 @@ export interface Shift {
   busNumber: string;
   loopnr: string;
   driverId: string;
+  /** Alleen gezet door de ruil-overlay bij weergave (nooit opgeslagen): naam van de andere partij. */
+  swappedWith?: string;
 }
 
 export interface Update {

@@ -7,6 +7,7 @@ import dotenv from "dotenv";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
+import { resolveActiveSwapOverlays, applyOverlayToShifts, applyOverlayToMatrixCells, type SwapOverlayEntry } from "./_lib/swapOverlay.js";
 import { computeDayGap, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
@@ -407,13 +408,23 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
     if (!user || user.isActive === false) {
       return res.status(404).send("Not found");
     }
-    const events: IcsEvent[] = (shifts as any[]).map((s) => ({
+    // Ruil-overlay: een dienst die van of naar deze chauffeur geruild is,
+    // hoort ook in de agenda juist te staan. De per-chauffeur-fetch hierboven
+    // mist een naar hem toe geruilde dienst — dan de volledige planning
+    // overlayen en opnieuw filteren.
+    let ownShifts = shifts as any[];
+    const { overlays, allShifts } = await getActiveSwapOverlays();
+    const mine = overlays.filter((o) => o.fromDriverId === userId || o.toDriverId === userId);
+    if (mine.length > 0 && allShifts) {
+      ownShifts = applyOverlayToShifts(allShifts, mine).filter((s: any) => String(s.driverId) === userId);
+    }
+    const events: IcsEvent[] = ownShifts.map((s) => ({
       uid: `vhb-shift-${s.id}@vhb-portaal`,
       date: String(s.date),
       startTime: String(s.startTime || "00:00"),
       endTime: String(s.endTime || "00:00"),
       summary: `Dienst ${String(s.line || s.serviceNumber || "").trim()}`.trim(),
-      description: [s.busNumber && `Bus ${s.busNumber}`, s.loopnr && `Loop ${s.loopnr}`]
+      description: [s.busNumber && `Bus ${s.busNumber}`, s.loopnr && `Loop ${s.loopnr}`, s.swappedWith && `Geruild met ${s.swappedWith}`]
         .filter(Boolean)
         .join(" · ") || undefined,
     }));
@@ -651,6 +662,12 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
         cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
       }
     }
+
+    // Actieve ruilen als weergave-laag over de cellen: de dienst toont bij de
+    // collega (met ruil-markering), de terugruil bij de aanvrager. De matrix-
+    // data zelf blijft onaangeroerd; een nieuwe import wist de overlay vanzelf.
+    const { overlays } = await getActiveSwapOverlays();
+    applyOverlayToMatrixCells(cells, overlays);
 
     res.json({ month, dates, drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })), cells });
   } catch (err: any) {
@@ -1989,6 +2006,42 @@ app.get("/api/updates/read-counts", authenticate, requireRole("planner", "admin"
   } catch (err: any) {
     console.error("Leestellers laden is mislukt.", err);
     res.status(500).json({ error: "Leestellers laden is mislukt." });
+  }
+});
+
+/**
+ * Actieve ruil-overlay: goedgekeurde ruilen die ná de laatste matrix-import
+ * zijn beslist (oudere horen al in de geïmporteerde planning te zitten —
+ * zelfde venster als "Wijzigingen sinds laatste import"). Geeft bij
+ * activiteit ook de volledige planning terug die ervoor is opgehaald, zodat
+ * aanroepers geen tweede fetch nodig hebben. Puur weergave-informatie: de
+ * planningsdata zelf wordt nergens aangepast.
+ */
+const getActiveSwapOverlays = async (): Promise<{ overlays: SwapOverlayEntry[]; allShifts: any[] | null }> => {
+  const [swaps, history] = await Promise.all([getSwapsData(), getPlanningMatrixHistory()]);
+  const lastImportAt = history[0]?.createdAt || new Date(0).toISOString();
+  const candidates = swaps.filter((s: any) => s.status === "approved" && s.decidedAt && s.decidedAt > lastImportAt);
+  if (candidates.length === 0) return { overlays: [], allShifts: null };
+  const [allShifts, users] = await Promise.all([getPlanningData(), getUsersData()]);
+  return { overlays: resolveActiveSwapOverlays(candidates, allShifts as any[], users as any[], lastImportAt), allShifts: allShifts as any[] };
+};
+
+// Ruil-overlay voor de client: het rooster past deze entries alleen bij het
+// tonen toe (dienst visueel bij de collega, terugruil bij de aanvrager).
+app.get("/api/swaps/overlay", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    let { overlays } = await getActiveSwapOverlays();
+    // Zelfde privacygrens als GET /api/swaps: een chauffeur krijgt alleen de
+    // ruilen waar die zelf bij betrokken is — meer heeft het eigen rooster
+    // ook niet nodig.
+    if (req.appUser?.role === "chauffeur") {
+      const selfId = String(req.appUser.id);
+      overlays = overlays.filter((o) => o.fromDriverId === selfId || o.toDriverId === selfId);
+    }
+    res.json(overlays);
+  } catch (err) {
+    console.error("Error building swap overlay:", err);
+    res.status(500).json({ error: "Kon de ruil-overlay niet laden." });
   }
 });
 

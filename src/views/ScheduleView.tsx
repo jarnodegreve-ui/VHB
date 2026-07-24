@@ -1,6 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
-import type { LeaveRequest, Shift, User } from '../types';
+import type { LeaveRequest, Shift, SwapOverlayEntry, User } from '../types';
+import { apiFetch } from '../lib/api';
 import { isoWeekOf } from '../lib/week';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
@@ -26,6 +27,8 @@ type GroupedShift = {
   segments: Shift[];
   earliestStart: string;
   hasConflict: boolean;
+  /** Naam van de collega wanneer deze dienst hier staat door een goedgekeurde ruil. */
+  swappedWith?: string;
 };
 
 const formatShiftDate = (date: string) =>
@@ -49,12 +52,38 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
   const [showPast, setShowPast] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
+  // Actieve ruil-overlay (goedgekeurde ruilen, nog niet in een nieuwe
+  // matrix-import verwerkt). Alleen voor weergave: de gedeelde shifts-state
+  // blijft rauw, zodat beheer-saves nooit een overlaid collectie wegschrijven.
+  const [swapOverlays, setSwapOverlays] = useState<SwapOverlayEntry[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<SwapOverlayEntry[]>('/api/swaps/overlay')
+      .then((data) => { if (!cancelled) setSwapOverlays(Array.isArray(data) ? data : []); })
+      .catch(() => { /* overlay is een extraatje — het rooster werkt ook zonder */ });
+    return () => { cancelled = true; };
+  }, []);
+
   // Strict eigen diensten; voor het overzicht van alle chauffeurs gaat
-  // planner/admin naar Beheer Roosters.
-  const myShifts = useMemo(
-    () => allShifts.filter((s) => s.driverId === user.id),
-    [allShifts, user.id],
-  );
+  // planner/admin naar Beheer Roosters. De overlay verhuist een geruilde
+  // dienst visueel naar de collega en de terugruil naar de aanvrager.
+  const myShifts = useMemo(() => {
+    let shifts = allShifts;
+    if (swapOverlays.length > 0) {
+      const bySwapShift = new Map<string, SwapOverlayEntry>(swapOverlays.map((o) => [o.shiftId, o]));
+      const byReturnShift = new Map<string, SwapOverlayEntry>(
+        swapOverlays.filter((o) => o.returnShiftId).map((o) => [o.returnShiftId as string, o]),
+      );
+      shifts = allShifts.map((s) => {
+        const o = bySwapShift.get(s.id);
+        if (o) return { ...s, driverId: o.toDriverId, swappedWith: o.fromName };
+        const r = byReturnShift.get(s.id);
+        if (r) return { ...s, driverId: r.fromDriverId, swappedWith: r.toName };
+        return s;
+      });
+    }
+    return shifts.filter((s) => s.driverId === user.id);
+  }, [allShifts, swapOverlays, user.id]);
 
   // Set van shift-IDs met een verlofconflict (chauffeur staat ingepland
   // op een dag waarop hij goedgekeurd verlof heeft). Rendert als rode flag.
@@ -78,6 +107,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
           existing.earliestStart = s.startTime;
         }
         if (hasConflict) existing.hasConflict = true;
+        if (s.swappedWith) existing.swappedWith = s.swappedWith;
       } else {
         byKey.set(key, {
           key,
@@ -86,6 +116,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
           segments: [s],
           earliestStart: s.startTime,
           hasConflict,
+          swappedWith: s.swappedWith,
         });
       }
     }
@@ -244,6 +275,11 @@ function ShiftList({ shifts, today, onRequestSwap }: { shifts: GroupedShift[]; t
                             <Badge tone="red" icon={<AlertTriangle size={11} />}>Verlof-conflict</Badge>
                           </span>
                         )}
+                        {g.swappedWith && (
+                          <span title="Deze dienst staat bij jou door een goedgekeurde dienstruil.">
+                            <Badge tone="blue" icon={<ArrowLeftRight size={11} />}>Geruild met {g.swappedWith}</Badge>
+                          </span>
+                        )}
                       </div>
                     </div>
                   </Td>
@@ -315,6 +351,11 @@ function ShiftList({ shifts, today, onRequestSwap }: { shifts: GroupedShift[]; t
                         Verlof-conflict
                       </Badge>
                       <p className="text-[11px] font-medium text-red-600 mt-1">Je hebt hier verlof — bel de planner.</p>
+                    </div>
+                  )}
+                  {g.swappedWith && (
+                    <div className="mt-1">
+                      <Badge tone="blue" icon={<ArrowLeftRight size={10} />}>Geruild met {g.swappedWith}</Badge>
                     </div>
                   )}
                 </div>
