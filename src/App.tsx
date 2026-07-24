@@ -29,7 +29,6 @@ import {
   ShieldAlert,
   Smartphone,
   Sun,
-  BarChart3,
   BellRing,
   BellOff,
   RefreshCw,
@@ -79,7 +78,6 @@ const LazyManageDiversionsView = lazyWithRetry(() => import('./views/admin/Manag
 const LazyManageServicesView = lazyWithRetry(() => import('./views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
 const LazyVerlofKalenderView = lazyWithRetry(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
 const LazyCoverageView = lazyWithRetry(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
-const LazyReportsView = lazyWithRetry(() => import('./views/admin/ReportsView').then((module) => ({ default: module.ReportsView })));
 const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -101,7 +99,6 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
-    'rapportage',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -123,7 +120,6 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
-    'rapportage',
     'verlof',
     'verlof-beheer',
     'verlof-kalender',
@@ -1728,14 +1724,14 @@ export default function App() {
             label="Verlof"
             active={currentView === 'verlof'}
             onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }}
-            badge={unseenLeaveDecisionCount}
+            badge={isPlanner ? pendingLeaveCount : unseenLeaveDecisionCount}
           />
 
           {isPlanner && (
             <NavSection
               title="Beheer"
-              count={11}
-              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'rapportage', 'verlof-beheer', 'verlof-kalender', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
+              count={9}
+              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
             >
               <NavItem icon={<Settings size={18} />} label="Beheer Roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
               <NavItem icon={<FileText size={18} />} label="Planning Overzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
@@ -1743,8 +1739,6 @@ export default function App() {
               <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Bus size={18} />} label="Beheer Dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
               <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<BarChart3 size={18} />} label="Rapportage" active={currentView === 'rapportage'} onClick={() => { setCurrentView('rapportage'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Calendar size={18} />} label="Verlofbeheer" active={currentView === 'verlof-beheer'} onClick={() => { setCurrentView('verlof-beheer'); setIsSidebarOpen(false); }} badge={pendingLeaveCount} />
               <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Plus size={18} />} label="Beheer Updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
               <NavItem icon={<MapIcon size={18} />} label="Beheer Omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
@@ -1902,7 +1896,7 @@ export default function App() {
                     activityLog={activityLog}
                     coverageDays={coverageDays}
                     onNavigate={(view) => setCurrentView(view)}
-                    onQuickSickReport={() => { setCurrentView('verlof-beheer'); setAutoOpenSick(true); }}
+                    onQuickSickReport={() => { setCurrentView('verlof'); setAutoOpenSick(true); }}
                     isInitialLoad={isInitialLoad}
                   />
                 ) : (
@@ -1971,7 +1965,6 @@ export default function App() {
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
-              {resolvedCurrentView === 'rapportage' && <Suspense fallback={<ViewLoader />}><LazyReportsView shifts={shifts} leaveRequests={leaveRequests} users={users} /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>}
               {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
