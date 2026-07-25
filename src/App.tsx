@@ -696,6 +696,13 @@ export default function App() {
       // gebruiker bij een transiente /api/me-fout vasthangen op 'Profiel
       // laden…' (een volgend auth-event werd door de vlag kortgesloten).
       if (authUserId) initializedUserIdRef.current = authUserId;
+      // Aanwezigheids-ping: wie de app opent met een nog geldige sessie logt
+      // niet opnieuw in en was daardoor onzichtbaar in "Actieve gebruikers
+      // per dag". De server dedupliceert per dag. Best-effort, fire-and-forget.
+      void apiFetch('/api/auth/session', {
+        method: 'POST',
+        body: JSON.stringify({ action: 'resume' }),
+      }, accessToken).catch(() => {});
       void loadAppData(appUser, accessToken);
     } catch (error) {
       console.error('Error initializing app:', error);

@@ -31,6 +31,7 @@ import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToke
 import {
   buildPlanningFromMatrix,
   getActivityLog,
+  getLatestAuthEventAt,
   getLoginActivity,
   getCoverageExpectations,
   saveCoverageExpectations,
@@ -236,13 +237,32 @@ app.get("/api/me", authenticate, async (req: AuthenticatedRequest, res) => {
   res.json(req.appUser);
 });
 
+// Kalenderdag in Belgische tijd (server draait op UTC) — voor de per-dag-
+// dedup van het 'Actief'-event bij sessie-herstel.
+const brusselsDay = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+
 app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const action = req.body?.action;
     const currentUser = req.appUser;
 
-    if (!currentUser || (action !== "start" && action !== "end")) {
+    if (!currentUser || (action !== "start" && action !== "end" && action !== "resume")) {
       return res.status(400).json({ error: "Ongeldige sessieactie." });
+    }
+
+    // 'resume' = app geopend met een nog geldige sessie (PWA-herstel, geen
+    // nieuwe login). Zonder dit event was zo'n gebruiker onzichtbaar in
+    // "Actieve gebruikers per dag" — de grafiek telde alleen wie opnieuw
+    // moest inloggen. Max. één 'Actief'-event per gebruiker per dag; raakt
+    // de sessieteller en lastLogin niet aan.
+    if (action === "resume") {
+      const latestAuthEventAt = await getLatestAuthEventAt(String(currentUser.id));
+      const today = brusselsDay(new Date().toISOString());
+      if (!latestAuthEventAt || brusselsDay(latestAuthEventAt) !== today) {
+        await logActivity(req, "auth", "Actief", `${currentUser.name} was actief op het portaal.`, { type: "user", id: String(currentUser.id) });
+      }
+      return res.json(currentUser);
     }
 
     // Teller atomair bijwerken (RPC) i.p.v. read-modify-write op de gecachte

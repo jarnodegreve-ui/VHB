@@ -40,6 +40,9 @@ const mem = vi.hoisted(() => ({
   planning: [] as any[],
   planningCodes: [] as any[],
   activity: [] as any[],
+  // Retourwaarde van getLatestAuthEventAt — stuurt de per-dag-dedup van het
+  // 'Actief'-event bij action:'resume'.
+  lastAuthEventAt: null as string | null,
   clientErrors: [] as any[],
   emailsSent: [] as Array<{ to: string[]; subject: string; context?: string }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
@@ -145,7 +148,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       mem.activity.push({ domain, action, message });
     },
     getActivityLog: async () => mem.activity,
-    getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld'),
+    getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld' || a.action === 'Actief'),
+    getLatestAuthEventAt: async () => mem.lastAuthEventAt,
     updateUserSessionMeta: async () => {},
     bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async () => [],
@@ -298,6 +302,7 @@ beforeEach(() => {
   mem.diversions = [];
   mem.planningCodes = [];
   mem.activity = [];
+  mem.lastAuthEventAt = null;
   mem.clientErrors = [];
   mem.emailsSent = [];
   mem.storedBackups = [];
@@ -1076,6 +1081,35 @@ describe('aanmeldingen (login-activiteit)', () => {
     expect(admin.json.days).toBe(30);
     expect(Array.isArray(admin.json.logins)).toBe(true);
     expect(admin.json.logins.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("resume zonder auth-event vandaag logt een 'Actief'-event", async () => {
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    expect(res.status).toBe(200);
+    const actief = mem.activity.find((a) => a.action === 'Actief');
+    expect(actief).toBeTruthy();
+    expect(actief.domain).toBe('auth');
+  });
+
+  it('resume met al een auth-event van vandaag logt niets (dedup)', async () => {
+    mem.lastAuthEventAt = new Date().toISOString();
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    expect(res.status).toBe(200);
+    expect(mem.activity.find((a) => a.action === 'Actief')).toBeUndefined();
+  });
+
+  it("resume met laatste auth-event van gisteren logt wél een 'Actief'-event", async () => {
+    mem.lastAuthEventAt = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    expect(res.status).toBe(200);
+    expect(mem.activity.find((a) => a.action === 'Actief')).toBeTruthy();
+  });
+
+  it("'Actief'-events tellen mee in /api/activity/logins", async () => {
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'resume' } });
+    const admin = await api('GET', '/api/activity/logins', { token: 'tok-admin' });
+    expect(admin.status).toBe(200);
+    expect(admin.json.logins.some((l: any) => l.action === 'Actief')).toBe(true);
   });
 });
 

@@ -38,8 +38,10 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
 }
 
 export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLogEntry[]; logins?: ActivityLogEntry[] }) {
-  // Aanwezigheid: per dag het aantal unieke aangemelde gebruikers (distinct
-  // op user-id/naam), nieuwste dag eerst.
+  // Aanwezigheid: per dag het aantal unieke actieve gebruikers (distinct op
+  // user-id/naam), nieuwste dag eerst. `logins` bevat zowel echte
+  // aanmeldingen ('Aangemeld') als het dagelijkse sessie-herstel-event
+  // ('Actief') — beide tellen als "actief die dag".
   const dailyActive = useMemo(() => {
     const byDay = new Map<string, Set<string>>();
     for (const e of logins) {
@@ -54,8 +56,10 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
       .sort((a, b) => b.day.localeCompare(a.day));
   }, [logins]);
   const maxDaily = Math.max(1, ...dailyActive.map((d) => d.count));
+  // De lijst rechts toont alleen échte aanmeldingen — een 'Actief'-ping is
+  // geen aanmeldmoment.
   const recentLogins = useMemo(
-    () => [...logins].sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30),
+    () => logins.filter((e) => e.action === 'Aangemeld').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30),
     [logins],
   );
   const categoryLabels: Record<ActivityLogEntry['category'], string> = {
@@ -141,8 +145,8 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
       <section className="surface-card rounded-3xl p-6 md:p-8">
         <AdminSubsectionHeader
           eyebrow="Aanwezigheid"
-          title="Aanmeldingen op het portaal"
-          description="Unieke gebruikers per dag en recente aanmeldingen (laatste 30 dagen)."
+          title="Actieve gebruikers en aanmeldingen"
+          description="Wie het portaal gebruikte per dag — ook zonder opnieuw in te loggen — en recente aanmeldingen (laatste 30 dagen)."
         />
         {logins.length === 0 ? (
           <div className="mt-5">
