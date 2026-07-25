@@ -327,34 +327,54 @@ const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): ActivityL
 
 export const getActivityLog = async (): Promise<ActivityLogRecord[]> => {
   const client = requireDb();
-  // Login-events ('auth' / 'Aangemeld') worden bewust uit het auditspoor
-  // gefilterd: ze zijn hoog-volume en zouden de 100-cap vullen met logins,
-  // waardoor de echte beheeracties verdwijnen. Logins komen via
+  // Aanwezigheids-events ('auth' / 'Aangemeld' + 'Actief') worden bewust uit
+  // het auditspoor gefilterd: ze zijn hoog-volume en zouden de 100-cap vullen,
+  // waardoor de echte beheeracties verdwijnen. Ze komen via
   // getLoginActivity() in een eigen overzicht.
   const { data, error } = await client
     .from("activity_log")
     .select("*")
-    .or("category.neq.auth,action.neq.Aangemeld")
+    .or("category.neq.auth,and(action.neq.Aangemeld,action.neq.Actief)")
     .order("created_at", { ascending: false })
     .limit(100);
   if (error) throw error;
   return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
 };
 
-/** Login-events (aanmeldingen) sinds een ISO-tijdstip — voor het
- *  aanwezigheids-overzicht (wie wanneer + per-dag actieve gebruikers). */
+/** Aanwezigheids-events sinds een ISO-tijdstip — voor het overzicht "wie
+ *  wanneer + per-dag actieve gebruikers". Omvat zowel echte aanmeldingen
+ *  ('Aangemeld') als het dagelijkse sessie-herstel-event ('Actief'), zodat
+ *  ook gebruikers met een lopende PWA-sessie meetellen als actief. */
 export const getLoginActivity = async (sinceIso: string, limit = 3000): Promise<ActivityLogRecord[]> => {
   const client = requireDb();
   const { data, error } = await client
     .from("activity_log")
     .select("*")
     .eq("category", "auth")
-    .eq("action", "Aangemeld")
+    .in("action", ["Aangemeld", "Actief"])
     .gte("created_at", sinceIso)
     .order("created_at", { ascending: false })
     .limit(limit);
   if (error) return [];
   return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
+};
+
+/** Tijdstip (ISO) van het meest recente auth-event ('Aangemeld' of 'Actief')
+ *  van één gebruiker — voor de éénmaal-per-dag-dedup van het 'Actief'-event
+ *  bij sessie-herstel. null = nog geen auth-event bekend. */
+export const getLatestAuthEventAt = async (userId: string): Promise<string | null> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from("activity_log")
+    .select("created_at")
+    .eq("category", "auth")
+    .in("action", ["Aangemeld", "Actief"])
+    .eq("entity_type", "user")
+    .eq("entity_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(1);
+  if (error || !data?.length) return null;
+  return (data[0] as { created_at: string }).created_at;
 };
 
 /**
