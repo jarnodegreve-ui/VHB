@@ -92,10 +92,12 @@ export function PlannerDashboardWidgets({
   // geïmporteerde matrix zat. Fout → stil terugvallen op de module-data.
   const todayKey = isoDate(now);
   const [matrixAbsent, setMatrixAbsent] = useState<{ name: string; label: string; isSick: boolean }[]>([]);
-  // Popups bij de tegels: wie is er vandaag vrij ("Beschikbaar") en wie is
-  // er ingepland met welke dienst ("Vandaag ingepland").
+  // Popups bij de tegels: wie is er vandaag vrij ("Beschikbaar"), wie is
+  // er ingepland met welke dienst ("Vandaag ingepland") en wie rijdt er
+  // op dit moment ("Chauffeurs actief").
   const [showAvailable, setShowAvailable] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
+  const [showDriving, setShowDriving] = useState(false);
   useEffect(() => {
     let cancelled = false;
     fetchMonthPlanning(todayKey.slice(0, 7))
@@ -221,31 +223,41 @@ export function PlannerDashboardWidgets({
   const todayShifts = shifts.filter((s) => s.date === today);
   const workingTodayIds = new Set(todayShifts.map((s) => String(s.driverId)));
 
-  // Popup "Vandaag ingepland": per chauffeur de toegewezen dienst(en) met
-  // tijden. Segmenten van een gesplitste dienst zijn aparte planning-rijen →
-  // groepeer per chauffeur, dienstnummers gededuped, segmenten op starttijd.
-  // Eindtijden kunnen busvak-notatie zijn ("26:16" = 02:16) — bewust zo
-  // getoond, dat is de notatie die de planning zelf hanteert.
+  // Popups "Vandaag ingepland" + "Chauffeurs actief": per chauffeur de
+  // dienst(en) met tijden. Segmenten van een gesplitste dienst zijn aparte
+  // planning-rijen → groepeer per chauffeur, dienstnummers gededuped,
+  // segmenten op starttijd. Eindtijden kunnen busvak-notatie zijn
+  // ("26:16" = 02:16) — bewust zo getoond, dat is de notatie die de
+  // planning zelf hanteert. Gesorteerd op dienstnummer aflopend (Jarno:
+  // overzichtelijker dan op naam).
   const timeMin = (t: string) => {
     const [h, m] = String(t).split(':');
     return (Number(h) || 0) * 60 + (Number(m) || 0);
   };
-  const scheduledByDriver = [...todayShifts]
-    .sort((a, b) => timeMin(a.startTime) - timeMin(b.startTime))
-    .reduce((acc, s) => {
-      const id = String(s.driverId);
-      let entry = acc.get(id);
-      if (!entry) {
-        entry = { id, name: userNameById(id), lineSet: new Set<string>(), segs: [] as string[] };
-        acc.set(id, entry);
-      }
-      if (s.line) entry.lineSet.add(String(s.line));
-      if (s.startTime && s.endTime) entry.segs.push(`${s.startTime}–${s.endTime}`);
-      return acc;
-    }, new Map<string, { id: string; name: string; lineSet: Set<string>; segs: string[] }>());
-  const scheduledToday = [...scheduledByDriver.values()]
-    .map((d) => ({ id: d.id, name: d.name, lines: [...d.lineSet].join(' / ') || '•', times: d.segs.join(' · ') }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const lineNum = (lines: string) => Number((/\d+/.exec(lines) || ['0'])[0]);
+  const groupShiftsByDriver = (list: Shift[]) => {
+    const byDriver = [...list]
+      .sort((a, b) => timeMin(a.startTime) - timeMin(b.startTime))
+      .reduce((acc, s) => {
+        const id = String(s.driverId);
+        let entry = acc.get(id);
+        if (!entry) {
+          entry = { id, name: userNameById(id), lineSet: new Set<string>(), segs: [] as string[] };
+          acc.set(id, entry);
+        }
+        if (s.line) entry.lineSet.add(String(s.line));
+        if (s.startTime && s.endTime) entry.segs.push(`${s.startTime}–${s.endTime}`);
+        return acc;
+      }, new Map<string, { id: string; name: string; lineSet: Set<string>; segs: string[] }>());
+    return [...byDriver.values()]
+      .map((d) => ({ id: d.id, name: d.name, lines: [...d.lineSet].join(' / ') || '•', times: d.segs.join(' · ') }))
+      .sort((a, b) => lineNum(b.lines) - lineNum(a.lines) || b.lines.localeCompare(a.lines));
+  };
+  const scheduledToday = groupShiftsByDriver(todayShifts);
+  // Wie rijdt er nú? Zelfde filter als de teller op de tegel — over álle
+  // shifts, want een nachtdienst van gisteren kan nu nog bezig zijn. De
+  // tijden tonen alleen de segmenten die op dit moment lopen.
+  const drivingNow = groupShiftsByDriver(shifts.filter((s) => isShiftActiveAt(s, now)));
   const availableToday = users
     .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
     .filter((u) => !workingTodayIds.has(String(u.id)) && !absentNameKeys.has(u.name.trim().toLowerCase()))
@@ -311,7 +323,7 @@ export function PlannerDashboardWidgets({
           label="Chauffeurs actief"
           value={driversDrivingNow}
           sub="nu aan het rijden"
-          onClick={() => onNavigate('bezetting')}
+          onClick={() => setShowDriving(true)}
         />
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
@@ -585,27 +597,43 @@ export function PlannerDashboardWidgets({
         title="Vandaag ingepland"
         subtitle={`${formatDay(today)} · ${scheduledToday.length} ${scheduledToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
-        {scheduledToday.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">
-            Niemand ingepland vandaag.
-          </p>
-        ) : (
-          <ul className="space-y-0.5">
-            {scheduledToday.map((d) => (
-              <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50">
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-semibold text-slate-800">{d.name}</span>
-                  <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">{d.times}</span>
-                </span>
-                <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[12px] font-bold tabular-nums text-slate-700">
-                  {d.lines}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+        <DriverShiftRows items={scheduledToday} emptyText="Niemand ingepland vandaag." />
+      </DashboardListModal>
+
+      {/* === Popup: wie rijdt er op dit moment === */}
+      <DashboardListModal
+        open={showDriving}
+        onClose={() => setShowDriving(false)}
+        icon={<Bus size={17} />}
+        iconClassName="bg-emerald-50 text-emerald-600"
+        title="Chauffeurs actief"
+        subtitle={`nu aan het rijden · ${drivingNow.length} ${drivingNow.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
+      >
+        <DriverShiftRows items={drivingNow} emptyText="Niemand aan het rijden op dit moment." />
       </DashboardListModal>
     </section>
+  );
+}
+
+/** Rijenlijst voor de dienst-popups: naam + tijden links, dienst-chip rechts. */
+function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; times: string }[]; emptyText: string }) {
+  if (items.length === 0) {
+    return <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">{emptyText}</p>;
+  }
+  return (
+    <ul className="space-y-0.5">
+      {items.map((d) => (
+        <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50">
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-slate-800">{d.name}</span>
+            <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">{d.times}</span>
+          </span>
+          <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[12px] font-bold tabular-nums text-slate-700">
+            {d.lines}
+          </span>
+        </li>
+      ))}
+    </ul>
   );
 }
 
