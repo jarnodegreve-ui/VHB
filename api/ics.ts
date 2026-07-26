@@ -61,6 +61,22 @@ function toMinutes(hhmm: string): number {
   return (Number(h) || 0) * 60 + (Number(m) || 0);
 }
 
+/** Busvak-notatie ("26:16" = 02:16 de volgende nacht) → dag-offset + gewone
+ *  wandkloktijd. Zonder deze normalisatie zou een 26:xx-eindtijd als
+ *  'T261600' in de feed belanden — ongeldig iCalendar, agenda-apps laten
+ *  het event dan vallen of tonen het fout. */
+function normalizeDayTime(date: string, time: string): { date: string; time: string } {
+  const total = toMinutes(time);
+  if (total < 24 * 60) return { date, time };
+  const rest = total % (24 * 60);
+  let day = date;
+  for (let i = Math.floor(total / (24 * 60)); i > 0; i--) day = addOneDay(day);
+  return {
+    date: day,
+    time: `${String(Math.floor(rest / 60)).padStart(2, "0")}:${String(rest % 60).padStart(2, "0")}`,
+  };
+}
+
 export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
   const lines = ["BEGIN:VEVENT", `UID:${ev.uid}`, `DTSTAMP:${dtstamp}`];
   if (ev.allDay) {
@@ -70,8 +86,14 @@ export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
     const endExclusive = addOneDay(ev.endDate || ev.date).replace(/-/g, "");
     lines.push(`DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${endExclusive}`);
   } else {
-    const endDate = toMinutes(ev.endTime) <= toMinutes(ev.startTime) ? addOneDay(ev.date) : ev.date;
-    lines.push(`DTSTART:${toFloatingDateTime(ev.date, ev.startTime)}`, `DTEND:${toFloatingDateTime(endDate, ev.endTime)}`);
+    const start = normalizeDayTime(ev.date, ev.startTime);
+    const end = normalizeDayTime(ev.date, ev.endTime);
+    // Impliciete nachtdienst (eind <= start in gewone uren) → einddatum is
+    // de volgende dag; busvak-uren zijn hierboven al doorgeschoven.
+    const endDate = end.date === start.date && toMinutes(end.time) <= toMinutes(start.time)
+      ? addOneDay(end.date)
+      : end.date;
+    lines.push(`DTSTART:${toFloatingDateTime(start.date, start.time)}`, `DTEND:${toFloatingDateTime(endDate, end.time)}`);
   }
   lines.push(`SUMMARY:${escapeIcsText(ev.summary)}`);
   if (ev.description) lines.push(`DESCRIPTION:${escapeIcsText(ev.description)}`);
