@@ -41,5 +41,31 @@ describe('isShiftActiveAt: rijdt deze chauffeur nú, op basis van de segmenttijd
     expect(isShiftActiveAt({ date: '2026-07-22', startTime: '--', endTime: '16:00' }, at(12))).toBe(false);
     expect(isShiftActiveAt({ date: '2026-07-22', startTime: '', endTime: '' }, at(12))).toBe(false);
     expect(isShiftActiveAt({ date: '2026-07-22', startTime: '08:00', endTime: '08:00' }, at(12))).toBe(false);
+    expect(isShiftActiveAt({ date: '2026-07-22', startTime: '48:00', endTime: '50:00' }, at(12))).toBe(false);
+  });
+
+  it("busvak-notatie (eindtijd ≥ 24:00, bv. '26:16' = 02:16): actief 's avonds én na middernacht", () => {
+    // Regressie: dienst 2607 (15:41–26:16) was om 21:53 onzichtbaar op de
+    // "Chauffeurs actief"-tegel — uren > 23 werden als ongeldig afgekeurd.
+    const laat = { date: '2026-07-22', startTime: '15:41', endTime: '26:16' };
+    expect(isShiftActiveAt(laat, at(15, 40))).toBe(false);
+    expect(isShiftActiveAt(laat, at(21, 53))).toBe(true);
+    expect(isShiftActiveAt(laat, at(23, 59))).toBe(true);
+    // Na middernacht (23/07) loopt de dienst van gisteren nog tot 02:16:
+    const morgen = (h: number, m = 0) => new Date(2026, 6, 23, h, m);
+    expect(isShiftActiveAt(laat, morgen(1, 30))).toBe(true);
+    expect(isShiftActiveAt(laat, morgen(2, 16))).toBe(false); // einde exclusief
+    // Maar op de eigen ochtend (vóór de start) niet:
+    expect(isShiftActiveAt(laat, at(9, 0))).toBe(false);
+  });
+
+  it('busvak-notatie: dienst die volledig ná middernacht valt (start ≥ 24:00)', () => {
+    const nanacht = { date: '2026-07-22', startTime: '24:30', endTime: '27:00' };
+    expect(isShiftActiveAt(nanacht, at(23, 0))).toBe(false); // eigen avond: nog niet begonnen
+    const morgen = (h: number, m = 0) => new Date(2026, 6, 23, h, m);
+    expect(isShiftActiveAt(nanacht, morgen(0, 29))).toBe(false);
+    expect(isShiftActiveAt(nanacht, morgen(0, 30))).toBe(true);
+    expect(isShiftActiveAt(nanacht, morgen(2, 59))).toBe(true);
+    expect(isShiftActiveAt(nanacht, morgen(3, 0))).toBe(false);
   });
 });

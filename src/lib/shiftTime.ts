@@ -12,13 +12,16 @@ export const shiftCategory = (startTime: string): 'ochtend' | 'middag' | 'avond'
   return 'avond';
 };
 
-/** 'HH:MM' → minuten sinds middernacht, of null bij een ongeldige tijd. */
+/** 'HH:MM' → minuten sinds middernacht van de dienstdag, of null bij een
+ *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
+ *  busvak-notatie voor ná middernacht ("26:16" = 02:16 de volgende nacht).
+ *  Cap op 47:59 (GTFS-conventie) — daarboven is het geen tijd maar vuil. */
 const parseHHMM = (t: string): number | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
   if (!m) return null;
   const h = Number(m[1]);
   const min = Number(m[2]);
-  if (h > 23 || min > 59) return null;
+  if (h > 47 || min > 59) return null;
   return h * 60 + min;
 };
 
@@ -29,9 +32,11 @@ const localIso = (d: Date): string =>
 /**
  * Is dit dienstsegment op dit moment bezig? Gesplitste diensten zijn aparte
  * segmenten, dus een chauffeur met pauze tussen twee delen telt dan terecht
- * niet mee. Nachtdiensten (eindtijd ≤ starttijd) lopen over middernacht: die
- * zijn actief vanaf de start op hun eigen datum én tot de eindtijd op de dag
- * erna. Start is inclusief, einde exclusief; ongeldige tijden tellen nooit mee.
+ * niet mee. Over middernacht kan op twee manieren: expliciet via de busvak-
+ * notatie (eindtijd ≥ 24:00, bv. "26:16") of impliciet (eindtijd ≤ starttijd
+ * met gewone uren, bv. 22:00–06:00) — beide lopen door tot op de dag na de
+ * dienstdatum. Start is inclusief, einde exclusief; ongeldige tijden tellen
+ * nooit mee.
  */
 export const isShiftActiveAt = (
   shift: { date: string; startTime: string; endTime: string },
@@ -40,14 +45,19 @@ export const isShiftActiveAt = (
   const start = parseHHMM(shift.startTime);
   const end = parseHHMM(shift.endTime);
   if (start === null || end === null || start === end) return false;
+  // Alles in minuten t.o.v. middernacht van de díenstdag: een impliciete
+  // nachtdienst (einde ≤ start, gewone uren) wordt +24u genormaliseerd;
+  // busvak-uren ≥ 24 zijn al volgende-dag.
+  const endNorm = end <= start ? end + 24 * 60 : end;
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  const today = localIso(now);
-  if (end > start) {
-    return shift.date === today && nowMin >= start && nowMin < end;
+  if (shift.date === localIso(now)) {
+    return nowMin >= start && nowMin < endNorm;
   }
-  // Over middernacht: vanavond ná de start, of vanochtend vóór het einde
-  // (dan is de dienst gisteren gestart).
+  // Dienst van gisteren die na middernacht nog loopt: bekijk 'nu' als
+  // minuten voorbij gisterenmiddernacht.
   const yesterday = new Date(now);
   yesterday.setDate(yesterday.getDate() - 1);
-  return (shift.date === today && nowMin >= start) || (shift.date === localIso(yesterday) && nowMin < end);
+  if (shift.date !== localIso(yesterday)) return false;
+  const nowSinceShiftDay = nowMin + 24 * 60;
+  return nowSinceShiftDay >= start && nowSinceShiftDay < endNorm;
 };
