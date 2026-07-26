@@ -13,6 +13,7 @@ import {
   Inbox,
   KeyRound,
   MapPin,
+  Phone,
   Repeat,
   Settings,
   CheckCircle2,
@@ -578,12 +579,37 @@ export function PlannerDashboardWidgets({
           </p>
         ) : (
           <ul className="space-y-0.5">
-            {availableToday.map((u) => (
-              <li key={u.id} className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50">
-                <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-                <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{u.name}</span>
-              </li>
-            ))}
+            {availableToday.map((u) => {
+              const inner = (
+                <>
+                  <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-semibold text-slate-800">{u.name}</span>
+                    <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">
+                      {u.phone || 'geen nummer bekend'}
+                    </span>
+                  </span>
+                  {u.phone && <Phone size={15} className="shrink-0 text-emerald-600" />}
+                </>
+              );
+              return (
+                <li key={u.id}>
+                  {/* Naam + nummer als tel:-link: op iPhone opent dit meteen
+                      het belscherm met het nummer — beschikbare vervanger
+                      in één tik aan de lijn. */}
+                  {u.phone ? (
+                    <a
+                      href={`tel:${u.phone.replace(/[^\d+]/g, '')}`}
+                      className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50 active:bg-slate-100"
+                    >
+                      {inner}
+                    </a>
+                  ) : (
+                    <span className="flex items-center gap-3 rounded-xl px-3 py-2">{inner}</span>
+                  )}
+                </li>
+              );
+            })}
           </ul>
         )}
       </DashboardListModal>
