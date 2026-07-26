@@ -555,8 +555,11 @@ export function PlannerDashboardWidgets({
         </div>
       </div>
 
-      {/* === Snelle acties === */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+      {/* === Snelle acties ===
+          Op breed scherm één rij die zich gelijk verdeelt over de aanwezige
+          acties (grid-flow-col: werkt met 4 én 5 tegels — "Ziek melden" is
+          conditioneel). */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-flow-col xl:auto-cols-fr">
         <QuickAction icon={<Upload size={16} />} label="Planning importeren" sub="Matrix uploaden" onClick={() => onNavigate('beheer-roosters')} />
         <QuickAction icon={<MapPin size={16} />} label="Omleiding toevoegen" sub="Hinder registreren" onClick={() => onNavigate('beheer-omleidingen')} />
         <QuickAction icon={<CalendarDays size={16} />} label="Verlofbeheer" sub="Aanvragen beoordelen" onClick={() => onNavigate('verlof')} />
@@ -923,18 +926,18 @@ function QuickAction({
     <button
       type="button"
       onClick={onClick}
-      className="group surface-card-hover flex items-center gap-3 rounded-3xl p-4 text-left"
+      className="group surface-card-hover flex items-center gap-2.5 rounded-3xl p-3.5 text-left"
       style={{
         background: 'var(--tile-bg)',
         border: 'var(--tile-border)',
         boxShadow: 'var(--tile-shadow)',
       }}
     >
-      <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-oker-500/15 dark:text-oker-400">
+      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-oker-500/15 dark:text-oker-400">
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13.5px] font-bold tracking-tight text-slate-900">{label}</span>
+        <span className="block truncate text-[13px] font-bold tracking-tight text-slate-900">{label}</span>
         <span className="block truncate text-xs font-medium text-slate-500">{sub}</span>
       </span>
       <ArrowUpRight size={15} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />
