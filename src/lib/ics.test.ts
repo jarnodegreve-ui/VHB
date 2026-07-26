@@ -53,6 +53,21 @@ describe('ics — events', () => {
     expect(v).toContain('DTEND:20260704T021500');
   });
 
+  it("buildVevent: busvak-eindtijd ('26:16' = 02:16) → geldige tijd op de volgende dag", () => {
+    // Regressie: dienst 2607 (15:41–26:16) leverde 'DTEND:...T261600' op —
+    // ongeldig iCalendar, agenda-apps lieten het event vallen.
+    const v = buildVevent({ ...base, startTime: '15:41', endTime: '26:16' }, DTSTAMP).join('\n');
+    expect(v).toContain('DTSTART:20260703T154100');
+    expect(v).toContain('DTEND:20260704T021600');
+    expect(v).not.toContain('T2616');
+  });
+
+  it('buildVevent: dienst volledig ná middernacht (start ≥ 24:00) schuift beide door', () => {
+    const v = buildVevent({ ...base, startTime: '24:30', endTime: '27:00' }, DTSTAMP).join('\n');
+    expect(v).toContain('DTSTART:20260704T003000');
+    expect(v).toContain('DTEND:20260704T030000');
+  });
+
   it('buildVevent: hele-dag (verlof) → DATE-waarden, DTEND exclusief', () => {
     const v = buildVevent({ ...base, allDay: true, date: '2026-07-03', endDate: '2026-07-05', summary: 'Verlof' }, DTSTAMP).join('\n');
     expect(v).toContain('DTSTART;VALUE=DATE:20260703');
