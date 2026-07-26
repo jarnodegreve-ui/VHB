@@ -539,7 +539,10 @@ export const diffServiceChanges = (
       previous.startTime2 !== service.startTime2 ||
       previous.endTime2 !== service.endTime2 ||
       previous.startTime3 !== service.startTime3 ||
-      previous.endTime3 !== service.endTime3
+      previous.endTime3 !== service.endTime3 ||
+      previous.loopnr !== service.loopnr ||
+      previous.loopnr2 !== service.loopnr2 ||
+      previous.loopnr3 !== service.loopnr3
     );
   });
 
@@ -732,10 +735,14 @@ const validSegment = (start: string | undefined, end: string | undefined, segmen
 
 export const getServiceSegments = (service: ServiceRecord) => (
   [
-    validSegment(service.startTime, service.endTime, 1),
-    validSegment(service.startTime2, service.endTime2, 2),
-    validSegment(service.startTime3, service.endTime3, 3),
-  ].filter(Boolean) as Array<{ startTime: string; endTime: string; segment: number }>
+    { seg: validSegment(service.startTime, service.endTime, 1), loopnr: service.loopnr },
+    { seg: validSegment(service.startTime2, service.endTime2, 2), loopnr: service.loopnr2 },
+    { seg: validSegment(service.startTime3, service.endTime3, 3), loopnr: service.loopnr3 },
+  ]
+    .filter((x) => x.seg !== null)
+    // Loopnummer hoort bij het blok: een loop is het deel van de dienst waar
+    // bepaalde ritten onder vallen, dus het reist mee naar de planning-rij.
+    .map((x) => ({ ...(x.seg as { startTime: string; endTime: string; segment: number }), loopnr: String(x.loopnr ?? '').trim() }))
 );
 
 export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) => {
@@ -855,7 +862,7 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
             endTime: segment.endTime,
             line: matchedService.serviceNumber,
             busNumber: "",
-            loopnr: "",
+            loopnr: segment.loopnr,
             driverId: driver.id,
           });
           driverStats.shiftsGenerated += 1;

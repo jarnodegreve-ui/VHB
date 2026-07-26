@@ -87,6 +87,11 @@ export interface Service {
   endTime2?: string;
   startTime3?: string;
   endTime3?: string;
+  /** Loopnummer per tijdsblok: een loop is het deel van de dienst waar
+   *  bepaalde ritten onder vallen. Blok 1 = loopnr, blok 2 = loopnr2, enz. */
+  loopnr?: string;
+  loopnr2?: string;
+  loopnr3?: string;
 }
 
 export interface PlanningMatrixRow {

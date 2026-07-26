@@ -266,6 +266,11 @@ function ShiftList({ shifts, today, onRequestSwap }: { shifts: GroupedShift[]; t
                           <span className="tabular-nums">
                             {s.startTime} – {s.endTime}
                           </span>
+                          {s.loopnr && (
+                            <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                              loop {s.loopnr}
+                            </span>
+                          )}
                         </div>
                       ))}
                     </div>
@@ -332,6 +337,11 @@ function ShiftList({ shifts, today, onRequestSwap }: { shifts: GroupedShift[]; t
                     <span className="font-medium text-slate-700 tabular-nums">
                       {s.startTime} – {s.endTime}
                     </span>
+                    {s.loopnr && (
+                      <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                        loop {s.loopnr}
+                      </span>
+                    )}
                   </div>
                 ))}
               </div>

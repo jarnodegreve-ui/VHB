@@ -341,7 +341,7 @@ export function DashboardView({
                   <p className="mt-1 text-xs font-medium text-slate-500 tabular-nums">
                     {display.sub} ·{' '}
                     {(nextShiftParts.length > 0 ? nextShiftParts : [nextShift])
-                      .map((p) => `${p.startTime}–${p.endTime}`)
+                      .map((p) => `${p.startTime}–${p.endTime}${p.loopnr ? ` (loop ${p.loopnr})` : ''}`)
                       .join(' · ')}
                   </p>
                 </>
