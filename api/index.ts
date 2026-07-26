@@ -595,7 +595,11 @@ app.get("/api/availability", authenticate, async (req, res) => {
           const id = String(s.driverId);
           working.add(id);
           const line = String(s.line ?? "").trim() || "•";
-          lines[id] = lines[id] ? `${lines[id]}/${line}` : line;
+          // Gesplitste dienst = meerdere planning-rijen met hetzelfde nummer:
+          // dedupliceren, anders wordt het "4101/4101" (en zo als returnCode
+          // op een dienstruil opgeslagen).
+          const seen = lines[id] ? lines[id].split("/") : [];
+          if (!seen.includes(line)) lines[id] = [...seen, line].join("/");
         }
       }
       const onLeave = new Set<string>();
@@ -1732,11 +1736,36 @@ app.post("/api/restore", authenticate, requireRole("admin"), async (req: Authent
   }
 });
 
+// Bijlage-URL's zijn kortlevend ondertekend (bucket is privé, zie
+// supabase/2026-07-26_diversions_private.sql): een gedeelde link vervalt,
+// i.p.v. eeuwig te blijven werken voor ex-medewerkers. Pad is stabiel
+// `${id}.pdf`. Mislukt het ondertekenen (bucket nog publiek, bestand weg),
+// dan blijft de opgeslagen URL staan — bijlagen breken nooit door deze stap.
+const DIVERSION_URL_TTL_SEC = 60 * 60 * 12;
+const withSignedDiversionUrls = async (diversions: any[]): Promise<any[]> => {
+  if (!db) return diversions;
+  return Promise.all(
+    diversions.map(async (d) => {
+      if (!d?.pdfUrl || !d?.id) return d;
+      try {
+        const { data: signed } = await db.storage
+          .from(DIVERSIONS_BUCKET)
+          .createSignedUrl(`${d.id}.pdf`, DIVERSION_URL_TTL_SEC);
+        return signed?.signedUrl ? { ...d, pdfUrl: signed.signedUrl } : d;
+      } catch {
+        return d;
+      }
+    }),
+  );
+};
+
 app.get("/api/diversions", authenticate, async (req, res) => {
   try {
     const data = await getDiversionsData();
+    // Revisie op de rauwe data: de ondertekende URL's wisselen per request en
+    // zouden de optimistische-concurrency-hash anders elke keer veranderen.
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-    res.json(data);
+    res.json(await withSignedDiversionUrls(data));
   } catch (err) {
     console.error("Error reading diversions data:", err);
     res.status(500).json({ error: "Gegevens laden is mislukt." });
@@ -1819,8 +1848,14 @@ app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), a
       });
     if (uploadError) throw uploadError;
 
-    const { data: publicData } = supabaseAdmin.storage.from(DIVERSIONS_BUCKET).getPublicUrl(storagePath);
-    res.json({ publicUrl: publicData.publicUrl, storagePath, filename, sizeBytes: buffer.length });
+    // Ondertekende URL i.p.v. publieke: de bucket is privé. De opgeslagen
+    // pdfUrl vervalt, maar GET /api/diversions ondertekent bij élk ophalen
+    // opnieuw op basis van `${id}.pdf`, dus de bijlage blijft bereikbaar.
+    const { data: signed, error: signError } = await supabaseAdmin.storage
+      .from(DIVERSIONS_BUCKET)
+      .createSignedUrl(storagePath, DIVERSION_URL_TTL_SEC);
+    if (signError || !signed?.signedUrl) throw signError ?? new Error("Kon geen ondertekende URL maken.");
+    res.json({ publicUrl: signed.signedUrl, storagePath, filename, sizeBytes: buffer.length });
   } catch (err: any) {
     console.error("Diversion PDF upload error:", err);
     console.error("Kon PDF niet uploaden.", err);

@@ -61,3 +61,25 @@ export const isShiftActiveAt = (
   const nowSinceShiftDay = nowMin + 24 * 60;
   return nowSinceShiftDay >= start && nowSinceShiftDay < endNorm;
 };
+
+/**
+ * Is dit segment al voorbij op `now`? Zelfde tijdframe als isShiftActiveAt
+ * (minuten t.o.v. middernacht van de dienstdag, busvak-uren en middernacht
+ * inbegrepen), zodat een chauffeur alleen zijn nog te rijden delen ziet.
+ * Ongeldige tijden gelden als "niet voorbij" — liever tonen dan verbergen.
+ */
+export const hasShiftEnded = (
+  shift: { date: string; startTime: string; endTime: string },
+  now: Date,
+): boolean => {
+  const start = parseHHMM(shift.startTime);
+  const end = parseHHMM(shift.endTime);
+  if (start === null || end === null) return false;
+  const endNorm = end <= start ? end + 24 * 60 : end;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const dayDiff = Math.round(
+    (new Date(`${localIso(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
+  );
+  if (dayDiff < 0) return false; // dienstdag ligt nog in de toekomst
+  return nowMin + dayDiff * 24 * 60 >= endNorm;
+};

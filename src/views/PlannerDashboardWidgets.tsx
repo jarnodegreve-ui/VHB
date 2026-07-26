@@ -1,6 +1,4 @@
 import { Fragment, useEffect, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
 import {
   Activity,
   AlertTriangle,
@@ -40,7 +38,8 @@ import { isShiftActiveAt } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { CountUp } from '../components/CountUp';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
-import { cn } from '../lib/ui';
+import { Modal } from '../components/Modal';
+import { cn, telHref } from '../lib/ui';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -92,7 +91,16 @@ export function PlannerDashboardWidgets({
   // "Vandaag afwezig" stond onterecht op 0 wanneer het verlof alleen in de
   // geïmporteerde matrix zat. Fout → stil terugvallen op de module-data.
   const todayKey = isoDate(now);
-  const [matrixAbsent, setMatrixAbsent] = useState<{ name: string; label: string; isSick: boolean }[]>([]);
+  // `absent` voedt het paneel "Vandaag afwezig"; `busyNames` is breder — élke
+  // matrix-cel van vandaag die géén vrije dag is (opleiding, een dienst zonder
+  // bruikbare tijden, onbekende code…). Zonder dat onderscheid gold "niet in
+  // de planning én niet als afwezig gemeld" als beschikbaar, waardoor iemand
+  // in opleiding als inzetbare vervanger verscheen.
+  const [matrix, setMatrix] = useState<{
+    absent: { name: string; label: string; isSick: boolean }[];
+    busyNames: string[];
+  }>({ absent: [], busyNames: [] });
+  const matrixAbsent = matrix.absent;
   // Popups bij de tegels: wie is er vandaag vrij ("Beschikbaar"), wie is
   // er ingepland met welke dienst ("Vandaag ingepland") en wie rijdt er
   // op dit moment ("Chauffeurs actief").
@@ -104,21 +112,29 @@ export function PlannerDashboardWidgets({
     fetchMonthPlanning(todayKey.slice(0, 7))
       .then((mp) => {
         if (cancelled || !Array.isArray(mp?.drivers)) return;
-        setMatrixAbsent(
-          mp.drivers
-            .map((drv) => ({ drv, cell: mp.cells?.[drv.id]?.[todayKey] }))
-            .filter((x) => x.cell && (x.cell.kind === 'leave' || x.cell.kind === 'absence'))
-            // "Geen dienst" = een gewone vrije dag, geen afwezigheid — die
-            // hoort niet in dit paneel (Jarno).
-            .filter((x) => !/geen dienst/i.test(x.cell!.label))
+        const cells = mp.drivers
+          .map((drv) => ({ drv, cell: mp.cells?.[drv.id]?.[todayKey] }))
+          .filter((x) => !!x.cell);
+        // "Geen dienst" = een gewone vrije dag, geen afwezigheid — die
+        // hoort niet in dit paneel (Jarno) en telt wél als beschikbaar.
+        const isFreeDay = (label: string) => /geen dienst/i.test(label);
+        setMatrix({
+          absent: cells
+            .filter((x) => (x.cell!.kind === 'leave' || x.cell!.kind === 'absence') && !isFreeDay(x.cell!.label))
             .map(({ drv, cell }) => ({
               name: drv.name,
               label: cell!.label || (cell!.kind === 'leave' ? 'Verlof' : 'Afwezig'),
               isSick: /ziek/i.test(cell!.code) || /ziek/i.test(cell!.label),
             })),
-        );
+          busyNames: cells.filter((x) => !isFreeDay(x.cell!.label)).map((x) => x.drv.name),
+        });
       })
-      .catch(() => {});
+      // Bij een fout niets laten staan van een vorige dag/fetch: verouderde
+      // afwezigheden zouden anders iemand blijven wegfilteren uit
+      // "Beschikbaar" (en als afwezige blijven tonen).
+      .catch(() => {
+        if (!cancelled) setMatrix({ absent: [], busyNames: [] });
+      });
     return () => { cancelled = true; };
   }, [todayKey]);
 
@@ -159,7 +175,12 @@ export function PlannerDashboardWidgets({
   const driversDrivingNow = new Set(
     shifts.filter((s) => isShiftActiveAt(s, now)).map((s) => String(s.driverId)),
   ).size;
-  const totalDrivers = users.filter((u) => u.role === 'chauffeur').length;
+  // Noemer van "Vandaag ingepland X / N": alleen inzetbare chauffeurs, zelfde
+  // afbakening als /api/availability en de Beschikbaar-tegel — anders telt
+  // "ingepland + beschikbaar" zichtbaar niet op tot N.
+  const isRealDriver = (u: User) =>
+    u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder';
+  const totalDrivers = users.filter(isRealDriver).length;
 
   // Dekking: null = niet geladen/fout — behandel als 'onbekend', nooit
   // als 'volledig gedekt' (vals-groen is erger dan geen data).
@@ -195,6 +216,12 @@ export function PlannerDashboardWidgets({
   const attentionCount =
     (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks;
   const needsAttention = attentionCount > 0;
+  // Het paneel toont per soort een top-N (3 dekkingsdagen, 4 verlof, 4 ruil);
+  // dit is wat daarbuiten valt, zodat de teller in de kop eerlijk blijft.
+  const hiddenAttentionCount =
+    Math.max(0, gapDays.length - 3) +
+    Math.max(0, pendingLeave.length - 4) +
+    Math.max(0, pendingSwaps.length - 4);
   const userNameById = (id: string) =>
     users.find((u) => String(u.id) === String(id))?.name || 'Onbekend';
 
@@ -214,15 +241,21 @@ export function PlannerDashboardWidgets({
   ].sort((a, b) => a.name.localeCompare(b.name));
 
   // Wie is er vandaag beschikbaar (vrij en inzetbaar als vervanging)?
-  // Actieve chauffeurs zonder dienst vandaag én zonder afwezigheid — de
-  // afwezigen komen uit dezelfde twee bronnen als "Vandaag afwezig"
-  // (verlof-module + matrix-codes bv/ziek/ta/tk), dus die vallen hier
-  // automatisch buiten. "Geen dienst" in de matrix = gewone vrije dag =
-  // wél beschikbaar. Matrix-afwezigen matchen op naam (de matrix kent
-  // geen user-ids).
-  const absentNameKeys = new Set(todayAbsent.map((a) => a.name.trim().toLowerCase()));
+  // Actieve chauffeurs die vandaag géén dienst hebben, niet afwezig zijn,
+  // in de matrix geen bezette cel hebben (opleiding, dienst zonder tijden,
+  // onbekende code) én niet op dit moment nog een dienst van gisteren
+  // rijden. Matrix-namen matchen op naam (de matrix kent geen user-ids).
+  const nameKey = (n: string) => n.trim().toLowerCase();
+  const busyNameKeys = new Set([
+    ...todayAbsent.map((a) => nameKey(a.name)),
+    ...matrix.busyNames.map(nameKey),
+  ]);
   const todayShifts = shifts.filter((s) => s.date === today);
   const workingTodayIds = new Set(todayShifts.map((s) => String(s.driverId)));
+  // Ook wie nú nog op de bus zit met een dienst van gisteren is niet vrij.
+  const drivingNowIds = new Set(
+    shifts.filter((s) => isShiftActiveAt(s, now)).map((s) => String(s.driverId)),
+  );
 
   // Popups "Vandaag ingepland" + "Chauffeurs actief": per chauffeur de
   // dienst(en) met tijden. Segmenten van een gesplitste dienst zijn aparte
@@ -260,8 +293,11 @@ export function PlannerDashboardWidgets({
   // tijden tonen alleen de segmenten die op dit moment lopen.
   const drivingNow = groupShiftsByDriver(shifts.filter((s) => isShiftActiveAt(s, now)));
   const availableToday = users
-    .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
-    .filter((u) => !workingTodayIds.has(String(u.id)) && !absentNameKeys.has(u.name.trim().toLowerCase()))
+    .filter(isRealDriver)
+    .filter((u) =>
+      !workingTodayIds.has(String(u.id)) &&
+      !drivingNowIds.has(String(u.id)) &&
+      !busyNameKeys.has(nameKey(u.name)))
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const formatDay = (iso: string) => {
@@ -373,7 +409,7 @@ export function PlannerDashboardWidgets({
           label="Aanvragen"
           value={openTasks}
           sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
-          onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof-beheer')}
+          onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof')}
         />
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
@@ -453,7 +489,7 @@ export function PlannerDashboardWidgets({
                 primary={`Verlofaanvraag · ${userNameById(req.userId)}`}
                 secondary={`${req.startDate}${req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
                 meta={relTime(req.createdAt)}
-                onClick={() => onNavigate('verlof-beheer')}
+                onClick={() => onNavigate('verlof')}
               />
               </Fragment>
             ))}
@@ -471,6 +507,13 @@ export function PlannerDashboardWidgets({
               />
               </Fragment>
             ))}
+            {/* De lijst toont bewust een top-N; zonder deze regel suggereerde
+                de teller in de kop dat je alles ziet. */}
+            {hiddenAttentionCount > 0 && (
+              <p className="px-4 pt-1 text-xs font-medium text-slate-500">
+                +{hiddenAttentionCount} niet getoond — open Verlof of Dienstruil voor de volledige lijst.
+              </p>
+            )}
             {attentionCount === 0 && (
               <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
@@ -538,7 +581,6 @@ export function PlannerDashboardWidgets({
               >
                 <div className="space-y-1.5">
                   {updates.slice(0, 3).map((u) => (
-                    <Fragment key={u.id}>
                     <OpsRow
                       tone={u.isUrgent ? 'red' : 'slate'}
                       icon={<Bell size={15} />}
@@ -546,7 +588,6 @@ export function PlannerDashboardWidgets({
                       secondary={u.category}
                       onClick={() => onNavigate('updates')}
                     />
-                    </Fragment>
                   ))}
                 </div>
               </OpsPanel>
@@ -583,6 +624,9 @@ export function PlannerDashboardWidgets({
         ) : (
           <ul className="space-y-0.5">
             {availableToday.map((u) => {
+              // Naam + nummer als tel:-link: op iPhone opent dit meteen het
+              // belscherm — beschikbare vervanger in één tik aan de lijn.
+              const href = telHref(u.phone);
               const inner = (
                 <>
                   <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
@@ -592,23 +636,21 @@ export function PlannerDashboardWidgets({
                       {u.phone || 'geen nummer bekend'}
                     </span>
                   </span>
-                  {u.phone && <Phone size={15} className="shrink-0 text-emerald-600" />}
+                  {href && <Phone size={15} className="shrink-0 text-emerald-600" />}
                 </>
               );
               return (
                 <li key={u.id}>
-                  {/* Naam + nummer als tel:-link: op iPhone opent dit meteen
-                      het belscherm met het nummer — beschikbare vervanger
-                      in één tik aan de lijn. */}
-                  {u.phone ? (
+                  {href ? (
                     <a
-                      href={`tel:${u.phone.replace(/[^\d+]/g, '')}`}
-                      className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50 active:bg-slate-100"
+                      href={href}
+                      aria-label={`Bel ${u.name}`}
+                      className="ios-pressable flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-50 active:bg-slate-100"
                     >
                       {inner}
                     </a>
                   ) : (
-                    <span className="flex items-center gap-3 rounded-xl px-3 py-2">{inner}</span>
+                    <span className="flex items-center gap-3 rounded-xl px-3 py-2.5">{inner}</span>
                   )}
                 </li>
               );
@@ -644,7 +686,9 @@ export function PlannerDashboardWidgets({
   );
 }
 
-/** Rijenlijst voor de dienst-popups: naam + tijden links, dienst-chip rechts. */
+/** Rijenlijst voor de dienst-popups: naam + tijden links, dienst-chip rechts.
+ *  Bewust zónder hover-highlight: deze rijen zijn niet klikbaar, en in de
+ *  Beschikbaar-popup betekent diezelfde highlight "tik = bellen". */
 function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; times: string }[]; emptyText: string }) {
   if (items.length === 0) {
     return <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">{emptyText}</p>;
@@ -652,7 +696,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
   return (
     <ul className="space-y-0.5">
       {items.map((d) => (
-        <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2 hover:bg-slate-50">
+        <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2">
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold text-slate-800">{d.name}</span>
             <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">{d.times}</span>
@@ -666,8 +710,9 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
   );
 }
 
-/** Gedeelde popup-schil voor de dashboard-tegels (glass-modal-patroon:
- *  portal + AnimatePresence, sluiten via backdrop of X). */
+/** Popup-schil voor de dashboard-tegels. Bouwt op de gedeelde Modal (portal,
+ *  Escape-handler, safe-area-padding, geen backdrop-nasleep) — de eerdere
+ *  eigen kopie miste dat alles. */
 function DashboardListModal({
   open,
   onClose,
@@ -685,45 +730,31 @@ function DashboardListModal({
   subtitle: string;
   children: ReactNode;
 }) {
-  return createPortal(
-    <AnimatePresence>
-      {open && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
-          onClick={onClose}
-        >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.95 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.95 }}
-            className="glass-modal rounded-3xl w-full max-w-sm max-h-[80dvh] flex flex-col overflow-hidden"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconClassName)}>
-                  {icon}
-                </span>
-                <div className="min-w-0">
-                  <h4 className="text-lg font-bold tracking-tight truncate">{title}</h4>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{subtitle}</p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Sluiten"
-                className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
-              >
-                <X size={17} />
-              </button>
-            </div>
-            <div className="overflow-y-auto px-3 py-3">{children}</div>
-          </motion.div>
+  return (
+    <Modal open={open} onClose={onClose} maxWidth="sm" className="flex flex-col overflow-hidden">
+      <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconClassName)}>
+            {icon}
+          </span>
+          <div className="min-w-0">
+            <h4 className="text-lg font-bold tracking-tight truncate">{title}</h4>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{subtitle}</p>
+          </div>
         </div>
-      )}
-    </AnimatePresence>,
-    document.body,
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Sluiten"
+          className="ios-pressable shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+        >
+          <X size={17} />
+        </button>
+      </div>
+      {/* overscroll-contain: anders chained het scrollen door naar het
+          document (rubber-band / pull-to-refresh in standalone iOS). */}
+      <div className="overflow-y-auto overscroll-contain px-3 py-3">{children}</div>
+    </Modal>
   );
 }
 
@@ -933,7 +964,7 @@ function QuickAction({
         boxShadow: 'var(--tile-shadow)',
       }}
     >
-      <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white dark:bg-oker-500/15 dark:text-oker-400">
+      <span className="quick-action-icon inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl">
         {icon}
       </span>
       <span className="min-w-0 flex-1">

@@ -24,27 +24,17 @@
 --      JS-guards als vangnet.
 -- =============================================================================
 
-create or replace function public.replace_planning(rows jsonb)
-returns integer
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  inserted integer;
-begin
-  if rows is null or jsonb_typeof(rows) <> 'array' or jsonb_array_length(rows) = 0 then
-    raise exception 'Lege planning-set geweigerd: dit zou alle planning wissen.';
-  end if;
-  -- `where true` = alle rijen wissen, maar mét WHERE-clausule zodat Supabase's
-  -- veiligheidsguard ("DELETE requires a WHERE clause") niet blokkeert.
-  delete from public.planning where true;
-  insert into public.planning
-    select * from jsonb_populate_recordset(null::public.planning, rows);
-  get diagnostics inserted = row_count;
-  return inserted;
-end;
-$$;
+-- =============================================================================
+-- LET OP — replace_planning staat NIET meer in dit bestand
+-- =============================================================================
+-- De definitie hier gebruikte `insert … select * from jsonb_populate_recordset`
+-- en is vervangen door de versie met een EXPLICIETE kolomlijst in
+-- supabase/replace_planning_and_matrix.sql (dezelfde bug-klasse brak de import
+-- al 2×: ontbrekende JSON-keys werden NULL en overschreven kolom-defaults).
+-- Dit bestand opnieuw draaien zou die fix stil terugdraaien, dus de oude
+-- definitie is hier verwijderd. Draai replace_planning_and_matrix.sql voor de
+-- actuele versie.
+-- =============================================================================
 
 create or replace function public.replace_planning_matrix_rows(rows jsonb)
 returns integer

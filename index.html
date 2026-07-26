@@ -27,13 +27,38 @@
     <link rel="preload" as="font" type="font/woff2" href="/fonts/inter-latin.woff2" crossorigin />
     <link rel="preload" as="font" type="font/woff2" href="/fonts/manrope-latin.woff2" crossorigin />
 
-    <!-- Service worker registratie: cache app shell voor offline gebruik. -->
+    <!-- Service worker registratie: cache app shell voor offline gebruik.
+         updateViaCache:'none' + een update-check bij elke terugkeer naar de
+         app: een standalone PWA die uit de app-switcher wordt hervat doet
+         géén navigatie-fetch en bleef daardoor op een oude bundel hangen tot
+         de gebruiker forceer-afsloot. De sw doet skipWaiting+clients.claim,
+         dus zodra de nieuwe versie geactiveerd is herladen we één keer. -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
           navigator.serviceWorker
-            .register('/sw.js')
+            .register('/sw.js', { updateViaCache: 'none' })
+            .then((registration) => {
+              const checkForUpdate = () => {
+                if (document.visibilityState === 'visible') registration.update().catch(() => {});
+              };
+              document.addEventListener('visibilitychange', checkForUpdate);
+              window.addEventListener('focus', checkForUpdate);
+            })
             .catch((err) => console.warn('SW registratie mislukt:', err));
+
+          // Nieuwe worker heeft de controle overgenomen → één herlaad zodat
+          // de pagina bij de verse assets hoort. Alleen bij een échte
+          // vervanging: bij de allereerste installatie is er nog geen
+          // controller en zou dit een overbodige herlaad geven. De vlag
+          // voorkomt een herlaad-lus bij meerdere events.
+          var hadController = !!navigator.serviceWorker.controller;
+          var reloading = false;
+          navigator.serviceWorker.addEventListener('controllerchange', () => {
+            if (!hadController || reloading) return;
+            reloading = true;
+            window.location.reload();
+          });
         });
       }
     </script>

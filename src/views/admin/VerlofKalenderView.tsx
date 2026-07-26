@@ -5,18 +5,10 @@ import { cn } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { MONTH_NAMES, LEAVE_TYPE_LABELS } from '../../lib/format';
 
 const WEEKDAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
-const MONTH_NAMES = [
-  'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
-  'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
-];
 
-const LEAVE_TYPE_LABELS: Record<string, string> = {
-  betaald_verlof: 'Betaald verlof',
-  klein_verlet: 'Klein verlet',
-  ziekte: 'Ziekte',
-};
 
 const cellColor = (status: LeaveRequest['status'] | undefined, type?: string) => {
   if (!status) return 'bg-transparent';

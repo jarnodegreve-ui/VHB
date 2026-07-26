@@ -3,11 +3,8 @@ import type { Shift, User } from '../types';
 import { getSupabaseAuthHeaders } from '../lib/ui';
 import { isoWeekNumber } from '../lib/week';
 import { shiftCategory } from '../lib/shiftTime';
+import { MONTH_NAMES } from '../lib/format';
 
-const MONTH_NAMES = [
-  'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
-  'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
-];
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
 

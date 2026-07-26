@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import type { Diversion } from '../types';
 import { formatDateHuman, formatSyncedTime } from '../lib/format';
-import { openPdfInNewTab } from '../lib/ui';
+import { openPdfInNewTab, safeDocumentHref } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 
@@ -171,7 +171,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                               Bekijk PDF
                             </Button>
                             <a
-                              href={div.pdfUrl}
+                              href={safeDocumentHref(div.pdfUrl)}
                               download
                               className="ios-pressable control-button-soft inline-flex flex-1 items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-all"
                             >
