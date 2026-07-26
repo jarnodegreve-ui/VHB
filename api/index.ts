@@ -678,10 +678,16 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
     // detail kan tonen zonder de services/codes naar elke client te sturen.
     const serviceByNorm = new Map(services.map((s: any) => [toLookupToken(s.serviceNumber), s]));
     const codeByNorm = new Map(codes.map((c: any) => [toLookupToken(c.code), c]));
+    // Loopnummer hoort bij het blok (het deel van de dienst waaronder
+    // bepaalde ritten vallen), dus toon het meteen bij de uren.
+    const withLoop = (times: string, loopnr: unknown) => {
+      const loop = String(loopnr ?? "").trim();
+      return loop ? `${times} (loop ${loop})` : times;
+    };
     const segmentsOf = (s: any): string[] => [
-      s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : "",
-      s.startTime2 && s.endTime2 ? `${s.startTime2} - ${s.endTime2}` : "",
-      s.startTime3 && s.endTime3 ? `${s.startTime3} - ${s.endTime3}` : "",
+      s.startTime && s.endTime ? withLoop(`${s.startTime} - ${s.endTime}`, s.loopnr) : "",
+      s.startTime2 && s.endTime2 ? withLoop(`${s.startTime2} - ${s.endTime2}`, s.loopnr2) : "",
+      s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3} - ${s.endTime3}`, s.loopnr3) : "",
     ].filter(Boolean);
     const resolve = (code: string): { kind: string; label: string; segments: string[] } | null => {
       const n = toLookupToken(code);
