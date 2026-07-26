@@ -228,7 +228,7 @@ export function PlannerDashboardWidgets({
   // planning-rijen → groepeer per chauffeur, dienstnummers gededuped,
   // segmenten op starttijd. Eindtijden kunnen busvak-notatie zijn
   // ("26:16" = 02:16) — bewust zo getoond, dat is de notatie die de
-  // planning zelf hanteert. Gesorteerd op dienstnummer aflopend (Jarno:
+  // planning zelf hanteert. Gesorteerd op dienstnummer oplopend (Jarno:
   // overzichtelijker dan op naam).
   const timeMin = (t: string) => {
     const [h, m] = String(t).split(':');
@@ -251,7 +251,7 @@ export function PlannerDashboardWidgets({
       }, new Map<string, { id: string; name: string; lineSet: Set<string>; segs: string[] }>());
     return [...byDriver.values()]
       .map((d) => ({ id: d.id, name: d.name, lines: [...d.lineSet].join(' / ') || '•', times: d.segs.join(' · ') }))
-      .sort((a, b) => lineNum(b.lines) - lineNum(a.lines) || b.lines.localeCompare(a.lines));
+      .sort((a, b) => lineNum(a.lines) - lineNum(b.lines) || a.lines.localeCompare(b.lines));
   };
   const scheduledToday = groupShiftsByDriver(todayShifts);
   // Wie rijdt er nú? Zelfde filter als de teller op de tegel — over álle
