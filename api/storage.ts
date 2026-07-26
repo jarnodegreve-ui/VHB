@@ -355,7 +355,9 @@ export const getLoginActivity = async (sinceIso: string, limit = 3000): Promise<
     .gte("created_at", sinceIso)
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) return [];
+  // Fouten doorgeven i.p.v. [] — een lege lijst is niet te onderscheiden van
+  // "niemand meldde zich aan" en verstopte DB-problemen voor de admin.
+  if (error) throw error;
   return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
 };
 
@@ -1208,8 +1210,11 @@ const mapUserDocumentRow = (row: any): UserDocumentRecord => ({
   uploadedBy: row.uploaded_by ?? null,
 });
 
-/** Alle documenten, of alleen die van één gebruiker. Nieuwste eerst. */
+/** Alle documenten (userId undefined, admin-pad), of alleen die van één
+ *  gebruiker. Een LEGE string is geen "alles" maar "niets" — fail-closed
+ *  tegen een ontbrekende gebruikers-id op het aanroepende pad. */
 export const listUserDocuments = async (userId?: string): Promise<UserDocumentRecord[]> => {
+  if (userId !== undefined && !userId) return [];
   const client = requireDb();
   let query = client.from("user_documents").select("*").order("uploaded_at", { ascending: false }).limit(500);
   if (userId) query = query.eq("user_id", userId);

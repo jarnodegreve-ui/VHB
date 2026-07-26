@@ -23,6 +23,7 @@ import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser,
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
 import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
@@ -93,6 +94,7 @@ import {
   isMissingDbFunction,
   logCronHeartbeat,
   getCronHeartbeats,
+  getDevice,
 } from "./storage.js";
 
 dotenv.config();
@@ -251,6 +253,30 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: "Ongeldige sessieactie." });
     }
 
+    // Dit pad is device-gate-exempt (login/logout moet kunnen vóór goed-
+    // keuring), maar dat mag géén PII-luik zijn: op een niet-goedgekeurd
+    // toestel geen volledig profiel (telefoon/mail/verlofBudget) teruggeven
+    // en niets in het aanwezigheidslog schrijven — anders "ziet" de admin
+    // een chauffeur actief terwijl het een buitenstaander met gestolen
+    // inloggegevens is. Ontbrekende device-tabel = fail-open (zelfde regel
+    // als de middleware-gate).
+    let deviceApproved = true;
+    if (currentUser.role === "chauffeur") {
+      const rawToken = String(req.headers["x-device-token"] ?? "").trim();
+      const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
+      try {
+        const device = deviceToken ? await getDevice(String(currentUser.id), deviceToken) : null;
+        deviceApproved = device?.status === "approved";
+      } catch (err) {
+        deviceApproved = isMissingTableError(err);
+      }
+    }
+    if (!deviceApproved) {
+      // Minimaal antwoord dat de login-flow niet breekt (id+role+naam), maar
+      // zonder contactgegevens of saldi; geen teller-/log-boekhouding.
+      return res.json({ id: currentUser.id, name: currentUser.name, role: currentUser.role });
+    }
+
     // 'resume' = app geopend met een nog geldige sessie (PWA-herstel, geen
     // nieuwe login). Zonder dit event was zo'n gebruiker onzichtbaar in
     // "Actieve gebruikers per dag" — de grafiek telde alleen wie opnieuw
@@ -275,8 +301,15 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
       await updateUserSessionMeta(String(currentUser.id), { lastLogin });
       // Login-event vastleggen: lastLogin wordt overschreven, maar de
       // activiteitenlog bewaart elke aanmelding apart → historiek "wie wanneer"
-      // + basis voor het per-dag-actieve-gebruikers-overzicht.
-      await logActivity(req, "auth", "Aangemeld", `${currentUser.name} meldde zich aan.`, { type: "user", id: String(currentUser.id) });
+      // + basis voor het per-dag-actieve-gebruikers-overzicht. Dedup binnen
+      // 10 minuten: 'start' is anders onbeperkt herhaalbaar en daarmee was
+      // het aanwezigheidslog te vervuilen (controle-ronde #31); een échte
+      // her-login binnen 10 min verliest hooguit één historiekregel.
+      const latestAuthEventAt = await getLatestAuthEventAt(String(currentUser.id));
+      const tenMinAgo = Date.now() - 10 * 60 * 1000;
+      if (!latestAuthEventAt || new Date(latestAuthEventAt).getTime() < tenMinAgo) {
+        await logActivity(req, "auth", "Aangemeld", `${currentUser.name} meldde zich aan.`, { type: "user", id: String(currentUser.id) });
+      }
     }
     // Optimistische teller in de respons (exact-genoeg voor weergave; de
     // DB-waarde is gezaghebbend en nu wél race-vrij).
@@ -2932,6 +2965,9 @@ app.get("/api/documents", authenticate, async (req: AuthenticatedRequest, res) =
     const isStaff = role === "admin";
     const requestedUserId = typeof req.query.userId === "string" && req.query.userId ? req.query.userId : undefined;
     const scopeUserId = isStaff ? requestedUserId : String(req.appUser?.id ?? "");
+    // Fail-closed: een lege eigen id mag nooit "geen filter" betekenen —
+    // listUserDocuments zonder id geeft ALLE documenten terug (admin-pad).
+    if (!isStaff && !scopeUserId) return res.json([]);
     const docs = await listUserDocuments(scopeUserId);
     const withUrls = await Promise.all(
       docs.map(async (d) => {
