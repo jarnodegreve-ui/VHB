@@ -111,6 +111,8 @@ test.describe('smoke: ingelogde chauffeur', () => {
     await expect(page.getByText(/loop 4500/).first()).toBeVisible();
     // De omleiding staat in het paneel.
     await expect(page.getByText('Werken Markt')).toBeVisible();
+    // "Volgende dienst": dienstnummer groot + dag-taal, geen detailregels.
+    await expect(page.getByText(/morgen · /)).toBeVisible();
     // "Vandaag" toont álle blokken van de gesplitste dienst, elk met loop
     // (tijden en loopnummers in twee uitgelijnde kolommen).
     await expect(page.getByText('04:36–07:52')).toBeVisible();

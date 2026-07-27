@@ -101,15 +101,6 @@ export function DashboardView({
     .filter((s) => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
 
-  // Alle delen van díe dienst die nog moeten komen: een gesplitste dienst is
-  // meerdere planning-rijen met hetzelfde dienstnummer op dezelfde dag, en
-  // een deel dat al gereden is hoort niet meer op de tegel (Jarno).
-  const nextShiftParts = nextShift
-    ? myShifts
-        .filter((s) => s.date === nextShift.date && s.line === nextShift.line && !hasShiftEnded(s, now))
-        .sort((a, b) => a.startTime.localeCompare(b.startTime))
-    : [];
-
   const newestDiversions = [...diversions].reverse().slice(0, 3);
 
   // Verlofsaldo + 'deze maand' voor de extra dashboard-kaarten.
@@ -142,31 +133,17 @@ export function DashboardView({
   const lineLabel = (line: string) =>
     line.trim().toLowerCase().startsWith('lijn') ? line.trim() : `Lijn ${line.trim()}`;
 
-  // Adaptief: voor < 24u is de countdown zelf de hero (dringend, hoe
-  // lang nog tot je dienst). Voor > 24u is de DATUM bruikbaarder dan
-  // "27 dagen" — dat zegt een chauffeur weinig. Subtitle krijgt dan
-  // de dagen-info als context.
-  const getNextShiftDisplay = (target: Date) => {
-    const diff = target.getTime() - now.getTime();
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const dateStr = target.toLocaleDateString('nl-BE', {
-      weekday: 'long',
-      day: 'numeric',
-      month: 'long',
-    });
-    const capitalized = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
-    if (hours > 24) {
-      const days = Math.floor(hours / 24);
-      return {
-        hero: capitalized,
-        sub: `over ${days} ${days === 1 ? 'dag' : 'dagen'}`,
-      };
-    }
-    if (hours > 0) {
-      return { hero: `${hours}u ${minutes}m`, sub: capitalized };
-    }
-    return { hero: `${minutes} minuten`, sub: capitalized };
+  // Wanneer is de volgende dienst, in dag-taal: chauffeurs denken in
+  // "morgen/overmorgen", niet in een aftellend "17u 25m" (verzoek Jarno).
+  // Kalenderdag-verschil, dus 's avonds klopt "morgen" ook al is het < 12u.
+  const relativeDay = (dateIso: string): string => {
+    const diff = Math.round(
+      (new Date(`${dateIso}T00:00:00`).getTime() - new Date(`${today}T00:00:00`).getTime()) / 86400000,
+    );
+    if (diff <= 0) return 'vandaag';
+    if (diff === 1) return 'morgen';
+    if (diff === 2) return 'overmorgen';
+    return `over ${diff} dagen`;
   };
 
   const firstName = user.name.split(' ')[0];
@@ -209,7 +186,6 @@ export function DashboardView({
   // behandeling (amber) of alles rustig (emerald).
   const pendingLeaveMine = leaveRequests.filter((l) => l.userId === user.id && l.status === 'pending');
   const needsAttention = pendingLeaveMine.length > 0;
-  const nextParts = nextShiftParts.length > 0 ? nextShiftParts : nextShift ? [nextShift] : [];
 
   return (
     <div className="space-y-5">
@@ -300,24 +276,18 @@ export function DashboardView({
           lines={todayLines}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
+        {/* Bewust kaal (verzoek Jarno): het dienstnummer volstaat hier,
+            de blokken/uren staan in "Komende diensten" en het rooster. */}
         <OpsStat
-          className="md:col-span-2 xl:col-span-2"
           icon={<Calendar size={16} />}
           tone={nextShift ? 'oker' : 'slate'}
           label="Volgende dienst"
-          text={nextShift ? getNextShiftDisplay(nextShift.startDateTime).hero : '—'}
+          text={nextShift ? getServiceNumber(nextShift) : '—'}
           sub={
             nextShift
-              ? [getNextShiftDisplay(nextShift.startDateTime).sub, nextShift.line ? `dienst ${nextShift.line}` : null]
-                  .filter(Boolean).join(' · ')
+              ? `${relativeDay(nextShift.date)} · ${new Date(`${nextShift.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })}`
               : 'niets ingepland'
           }
-          // Zelfde kolom-opmaak als de Vandaag-tegel ernaast: tijden links,
-          // loopnummers rechts — de twee tegels lijnen zo met elkaar uit.
-          lines={nextParts.map((p) => ({
-            left: `${p.startTime}–${p.endTime}`,
-            right: p.loopnr ? `loop ${p.loopnr}` : undefined,
-          }))}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
         <OpsStat
