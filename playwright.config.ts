@@ -25,6 +25,11 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${PORT}`,
     trace: 'on-first-retry',
+    // Service worker blokkeren: die onderschept anders de GET-calls naar
+    // /api/**, waardoor page.route-mocks niet aankomen en de test op de
+    // SPA-fallback (index.html) stuit. We testen hier de app, niet de sw —
+    // het sw-gedrag zelf zit in de handmatige PWA-checklist.
+    serviceWorkers: 'block',
   },
 
   projects: [

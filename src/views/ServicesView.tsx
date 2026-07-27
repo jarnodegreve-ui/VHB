@@ -22,8 +22,13 @@ export function ServicesView({ services }: { services: Service[] }) {
   const hasValidTime = (start?: string, end?: string) =>
     !!start && !!end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end);
 
-  const filteredServices = services.filter(s =>
-    s.serviceNumber.toLowerCase().includes(searchQuery.toLowerCase())
+  // Zoekt op dienstnummer én op loopnummer: "welke dienst bevat loop 4515?"
+  // is een dagelijkse vraag sinds de loopnummers erin staan.
+  const zoek = searchQuery.trim().toLowerCase();
+  const filteredServices = services.filter((s) =>
+    !zoek ||
+    s.serviceNumber.toLowerCase().includes(zoek) ||
+    [s.loopnr, s.loopnr2, s.loopnr3].some((l) => (l || '').toLowerCase().includes(zoek))
   ).sort((a, b) => {
     let comparison = 0;
     if (sortBy === 'number') {
@@ -110,7 +115,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               </div>
               <input
                 type="text"
-                placeholder="Zoek..."
+                placeholder="Zoek op dienst- of loopnummer..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"

@@ -432,13 +432,13 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           <AdminSubsectionHeader
             eyebrow="Database"
             title="Actieve planning herschrijven"
-            description="Gebruik sync om de actuele planning opnieuw op te bouwen of wis de planning volledig wanneer een nieuwe planning later volgt."
+            description="Bouw de planning opnieuw op uit de laatst geïmporteerde matrix, of wis de planning volledig wanneer een nieuwe later volgt."
           />
           <div className="mt-5 space-y-4">
             <div className="rounded-3xl border border-white/70 bg-white/45 p-5">
               <MicroLabel>Opnieuw opbouwen</MicroLabel>
               <p className="mt-2 text-sm font-medium text-slate-500">
-                Dit pad vervangt de actieve planning met de recentste matrixopbouw. Gebruik dit als je de matrix al gecontroleerd hebt en de actuele planning wilt overschrijven.
+                Bouwt de planning opnieuw op uit de matrix die al in het portaal staat — je hoeft je Excel niet opnieuw te uploaden. Gebruik dit nadat je in het Dienstoverzicht iets wijzigde (tijden, loopnummers): die aanpassingen komen zo bij de chauffeurs terecht.
               </p>
               <Button
                 variant="success"
@@ -447,10 +447,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 className="mt-5"
                 onClick={() => setConfirmSyncOpen(true)}
                 disabled={isSyncing}
-                title="Synchroniseer lokale JSON data naar Supabase"
+                title="Bouwt de planning opnieuw op uit de laatst geïmporteerde matrix"
                 icon={<RotateCcw size={16} className={isSyncing ? "animate-spin" : ""} />}
               >
-                {isSyncing ? 'Synchroniseren...' : 'Planning Overschrijven'}
+                {isSyncing ? 'Opnieuw opbouwen...' : 'Planning opnieuw opbouwen'}
               </Button>
             </div>
 
@@ -524,7 +524,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               </div>
             );
           }) : (
-            <EmptyState
+            <EmptyState mascotte={false}
               icon={<Activity size={28} />}
               title="Nog geen importhistoriek"
               message="Na je eerste bevestigde matrix-import verschijnt hier automatisch een historiek."
@@ -600,7 +600,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             .filter((s) => s.date && s.date >= today)
             .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime || '').localeCompare(String(b.startTime || '')));
           if (upcoming.length === 0) {
-            return <EmptyState title="Geen actieve planning" message={shifts.length === 0 ? 'Er is nog geen planning geïmporteerd.' : 'Geen diensten vanaf vandaag — importeer of synchroniseer een planning.'} />;
+            return <EmptyState mascotte={false} title="Geen actieve planning" message={shifts.length === 0 ? 'Er is nog geen planning geïmporteerd.' : 'Geen diensten vanaf vandaag — importeer of synchroniseer een planning.'} />;
           }
           const byDate = new Map<string, Shift[]>();
           for (const s of upcoming) {
@@ -646,9 +646,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           isOpen={confirmSyncOpen}
           onClose={() => setConfirmSyncOpen(false)}
           onConfirm={handleSync}
-          title="Planning synchroniseren"
-          message="Deze actie schrijft de lokale planning weg naar de database en kan bestaande records met dezelfde ID overschrijven."
-          confirmText="Synchroniseren"
+          title="Planning opnieuw opbouwen"
+          message="De actieve planning wordt vervangen door een verse opbouw uit de laatst geïmporteerde matrix, met de huidige tijden en loopnummers uit het Dienstoverzicht. Handmatige wijzigingen in de planning gaan hierbij verloren."
+          confirmText="Opnieuw opbouwen"
           variant="warning"
         />
       ) : null}

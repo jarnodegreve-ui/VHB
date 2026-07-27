@@ -138,4 +138,22 @@ describe('app smoke test', () => {
     await waitFor(() => expect(screen.queryByText('Planning importeren')).toBeNull());
     expect(screen.getByRole('switch', { name: /chauffeurs-weergave/i }).getAttribute('aria-checked')).toBe('true');
   });
+
+  it('rendert het chauffeursdashboard in dezelfde ops-stijl, zonder busje', async () => {
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(await screen.findByText('Planning importeren', undefined, { timeout: 5000 })).toBeTruthy();
+    fireEvent.click(await screen.findByRole('switch', { name: /chauffeurs-weergave/i }));
+
+    // Statusstrip + panelen + snelle acties van de chauffeur.
+    expect(await screen.findByText('Volgende dienst')).toBeTruthy();
+    expect(screen.getByText('Verlofsaldo')).toBeTruthy();
+    expect(screen.getByText('Komende diensten')).toBeTruthy();
+    expect(screen.getAllByText('Mijn rooster').length).toBeGreaterThanOrEqual(1);
+    expect(screen.getByText('Ruilen met een collega')).toBeTruthy();
+    // Het rijdende busje is bewust verwijderd van dit scherm.
+    expect(document.querySelector('.bus-drive')).toBeNull();
+    expect(screen.queryByText(/mislukt/i)).toBeNull();
+  });
 });
