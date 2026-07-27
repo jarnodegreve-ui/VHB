@@ -85,7 +85,8 @@ export function DashboardView({
     .filter((s) => s.date === today)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const todayLines = todayParts.map((p) => ({
-    text: `${p.startTime}–${p.endTime}${p.loopnr ? ` · loop ${p.loopnr}` : ''}`,
+    left: `${p.startTime}–${p.endTime}`,
+    right: p.loopnr ? `loop ${p.loopnr}` : undefined,
     done: hasShiftEnded(p, now),
   }));
   // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
