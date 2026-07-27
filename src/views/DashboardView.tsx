@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid, Eye } from 'lucide-react';
+import { AlertTriangle, Calendar, Clock, MapPin, ChevronRight, ArrowUpRight, Plane, FileText, RefreshCw, Users, LayoutGrid } from 'lucide-react';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
 import { openPdfInNewTab } from '../lib/ui';
@@ -12,6 +12,7 @@ import { Sparkline } from '../components/Sparkline';
 import { BrandBus } from '../components/BrandBus';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
+import { PreviewToggle } from '../components/PreviewToggle';
 
 /**
  * Dashboard — Bento premium-stijl (E++ preview).
@@ -201,28 +202,9 @@ export function DashboardView({
 
   return (
     <div className="space-y-4">
-      {/* Admin-preview: schakel de weergave naar hoe een chauffeur het portaal ziet
-          (enkel visueel — rechten/data blijven ongewijzigd). */}
-      {canPreview && (
-        <div className="flex items-center justify-between gap-3 rounded-2xl border border-oker-200/70 bg-oker-500/10 px-4 py-2.5">
-          <div className="flex items-center gap-2 min-w-0">
-            <Eye size={15} className="shrink-0 text-oker-600" />
-            <span className="text-[12.5px] font-medium text-slate-600 truncate">
-              {previewActive ? 'Je bekijkt het portaal als een chauffeur.' : 'Bekijk het portaal als een chauffeur.'}
-            </span>
-          </div>
-          <button
-            type="button"
-            onClick={onTogglePreview}
-            role="switch"
-            aria-checked={previewActive}
-            aria-label="Chauffeurs-weergave"
-            className={`relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors ${previewActive ? 'bg-oker-500' : 'bg-slate-300'}`}
-          >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${previewActive ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-          </button>
-        </div>
-      )}
+      {/* Admin-preview: zie components/PreviewToggle (staat ook op het
+          Operations Center, zodat een admin hem kán aanzetten). */}
+      {canPreview && onTogglePreview && <PreviewToggle active={previewActive} onToggle={onTogglePreview} />}
       {/* === Eenmalige welkomstkaart (eerste bezoek) === */}
       {showWelcome && (
         <div className="rounded-2xl border border-oker-200/70 bg-oker-50 p-5 space-y-3">

@@ -1903,6 +1903,9 @@ export default function App() {
                     onNavigate={(view) => setCurrentView(view)}
                     onQuickSickReport={() => { setCurrentView('verlof'); setAutoOpenSick(true); }}
                     isInitialLoad={isInitialLoad}
+                    canPreview={isRealAdmin}
+                    previewActive={previewChauffeur}
+                    onTogglePreview={() => setPreviewChauffeur((v) => !v)}
                   />
                 ) : (
                   <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} onChangePassword={() => setShowChangePassword(true)} />

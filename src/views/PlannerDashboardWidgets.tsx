@@ -39,6 +39,7 @@ import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { CountUp } from '../components/CountUp';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
+import { PreviewToggle } from '../components/PreviewToggle';
 import { cn, telHref } from '../lib/ui';
 
 /**
@@ -63,6 +64,9 @@ export function PlannerDashboardWidgets({
   onNavigate,
   onQuickSickReport,
   isInitialLoad = false,
+  canPreview = false,
+  previewActive = false,
+  onTogglePreview,
 }: {
   currentUser: User;
   users: User[];
@@ -78,6 +82,10 @@ export function PlannerDashboardWidgets({
   onNavigate: (view: View) => void;
   onQuickSickReport?: () => void;
   isInitialLoad?: boolean;
+  /** Admin-only: toon de 'bekijk als chauffeur'-schakelaar. */
+  canPreview?: boolean;
+  previewActive?: boolean;
+  onTogglePreview?: () => void;
 }) {
   // Klok voor de header (60s-tick is ruim voldoende voor een dagdeel-groet).
   const [now, setNow] = useState(new Date());
@@ -309,6 +317,11 @@ export function PlannerDashboardWidgets({
 
   return (
     <section className="space-y-5">
+      {/* Admin-preview: zelfde schakelaar als op het chauffeursdashboard, zodat
+          een admin de chauffeurs-weergave kán aanzetten (stond eerder alleen
+          in die weergave zelf → alleen uit te zetten, nooit aan). */}
+      {canPreview && onTogglePreview && <PreviewToggle active={previewActive} onToggle={onTogglePreview} />}
+
       {/* === Operationele header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>

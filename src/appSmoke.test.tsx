@@ -7,7 +7,7 @@
  * de oneindige-recursie in beginLoading/endLoading (juni 2026) crashte elke
  * fetch en vulde het scherm met fout-toasts; precies dat faalt hier.
  */
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { describe, expect, it, vi, beforeAll } from 'vitest';
 
 vi.mock('./lib/supabase', () => {
@@ -119,5 +119,23 @@ describe('app smoke test', () => {
     // 'Kon ...' (laden) of bevatten 'mislukt' (opslaan).
     expect(screen.queryByText(/mislukt/i)).toBeNull();
     expect(screen.queryByText(/^Kon /)).toBeNull();
+  });
+
+  it('toont de admin de schakelaar "bekijk als chauffeur" op het Operations Center', async () => {
+    // Regressie: de schakelaar hing alleen in de chauffeurs-weergave zelf,
+    // waardoor een admin hem nooit kon AANzetten — alleen weer uit.
+    const { default: App } = await import('./App');
+    render(<App />);
+
+    expect(await screen.findByText('Planning importeren', undefined, { timeout: 5000 })).toBeTruthy();
+    const toggle = await screen.findByRole('switch', { name: /chauffeurs-weergave/i });
+    expect(toggle.getAttribute('aria-checked')).toBe('false');
+
+    fireEvent.click(toggle);
+
+    // Chauffeursdashboard verschijnt (Operations Center-snelactie is weg) en
+    // de schakelaar staat nu aan, zodat je ook terug kunt.
+    await waitFor(() => expect(screen.queryByText('Planning importeren')).toBeNull());
+    expect(screen.getByRole('switch', { name: /chauffeurs-weergave/i }).getAttribute('aria-checked')).toBe('true');
   });
 });
