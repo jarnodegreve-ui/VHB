@@ -63,6 +63,15 @@ async function seedSessionAndApi(page: Page) {
     if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
     if (path.endsWith('/api/planning')) {
       return json([
+        // Vandaag: gesplitste dienst — twee blokken met eigen loopnummer.
+        {
+          id: 't1', date: dayOffset(0), startTime: '04:36', endTime: '07:52',
+          line: '2101', busNumber: '', loopnr: '4500', driverId: CHAUFFEUR.id,
+        },
+        {
+          id: 't2', date: dayOffset(0), startTime: '13:39', endTime: '17:29',
+          line: '2101', busNumber: '', loopnr: '4611', driverId: CHAUFFEUR.id,
+        },
         {
           id: 's1', date: dayOffset(1), startTime: '06:12', endTime: '09:30',
           line: '4101', busNumber: '', loopnr: '4500', driverId: CHAUFFEUR.id,
@@ -102,6 +111,9 @@ test.describe('smoke: ingelogde chauffeur', () => {
     await expect(page.getByText(/loop 4500/).first()).toBeVisible();
     // De omleiding staat in het paneel.
     await expect(page.getByText('Werken Markt')).toBeVisible();
+    // "Vandaag" toont álle blokken van de gesplitste dienst, elk met loop.
+    await expect(page.getByText('04:36–07:52 · loop 4500')).toBeVisible();
+    await expect(page.getByText('13:39–17:29 · loop 4611')).toBeVisible();
 
     expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
   });

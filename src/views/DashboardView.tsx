@@ -78,6 +78,18 @@ export function DashboardView({
   // BE de UTC-dag terug, waardoor 'Vandaag' de verkeerde/geen dienst toonde.
   const today = isoDate(now);
   const todaysShift = myShifts.find((shift) => shift.date === today);
+  // Alle delen van de dienst van vandaag (een gesplitste dienst = meerdere
+  // planning-rijen), op starttijd. Al gereden delen blijven staan maar
+  // worden gedempt getoond — zo zie je in één oogopslag wat nog komt.
+  const todayParts = myShifts
+    .filter((s) => s.date === today)
+    .sort((a, b) => a.startTime.localeCompare(b.startTime));
+  const todayLines = todayParts.map((p) => ({
+    text: `${p.startTime}–${p.endTime}${p.loopnr ? ` · loop ${p.loopnr}` : ''}`,
+    done: hasShiftEnded(p, now),
+  }));
+  // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
+  const todayServices = [...new Set(todayParts.map((p) => String(p.line || '').trim()).filter(Boolean))];
 
   const nextShift = myShifts
     .map((s) => {
@@ -271,10 +283,20 @@ export function DashboardView({
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <OpsStat
           icon={<Clock size={16} />}
+          className={todayLines.length > 1 ? 'md:col-span-2 xl:col-span-2' : undefined}
           tone={todaysShift ? 'emerald' : 'slate'}
           label="Vandaag"
-          text={todaysShift ? todaysShift.startTime : 'Vrij'}
-          sub={todaysShift ? `tot ${todaysShift.endTime}` : 'geen dienst gepland'}
+          // Dienstnummer als kop, de blokken eronder: geen herhaling van
+          // dezelfde tijd in groot én klein.
+          text={todayParts.length === 0 ? 'Vrij' : todayServices.join(' / ') || todayParts[0].startTime}
+          sub={
+            todayParts.length === 0
+              ? 'geen dienst gepland'
+              : todayLines.length > 1
+                ? `${todayLines.length} delen · tot ${todayParts[todayParts.length - 1].endTime}`
+                : `tot ${todayParts[0].endTime}`
+          }
+          lines={todayLines}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
         <OpsStat

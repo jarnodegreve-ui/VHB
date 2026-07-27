@@ -30,6 +30,7 @@ export function OpsStat({
   text,
   suffix,
   sub,
+  lines,
   onClick,
   className,
 }: {
@@ -40,6 +41,9 @@ export function OpsStat({
   text?: string;
   suffix?: string;
   sub: string;
+  /** Optionele detailregels onder de subtekst (bv. de blokken van een
+   *  dienst). `done` toont een al gereden blok gedempt. */
+  lines?: Array<{ text: string; done?: boolean }>;
   onClick?: () => void;
   className?: string;
 }) {
@@ -57,6 +61,21 @@ export function OpsStat({
         {suffix && <span className="text-[14px] font-semibold text-slate-400">{suffix}</span>}
       </p>
       <p className="mt-0.5 text-[11.5px] font-medium text-slate-500 truncate">{sub}</p>
+      {lines && lines.length > 0 && (
+        <div className="mt-1.5 space-y-0.5">
+          {lines.map((l) => (
+            <p
+              key={l.text}
+              className={cn(
+                'text-[11.5px] font-medium tabular-nums',
+                l.done ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-600',
+              )}
+            >
+              {l.text}
+            </p>
+          ))}
+        </div>
+      )}
     </>
   );
   const style = {
