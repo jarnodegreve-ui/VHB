@@ -11,6 +11,7 @@ import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
+import { ServiceChip } from '../components/ServiceChip';
 
 /**
  * Chauffeursdashboard — zelfde Operations Center-taal als het planner/admin-
@@ -346,8 +347,9 @@ export function DashboardView({
                   <OpsRow
                     tone="oker"
                     icon={<Calendar size={15} />}
-                    primary={`${formatShiftDate(shift.date)} · dienst ${getServiceNumber(shift)}`}
+                    primary={formatShiftDate(shift.date)}
                     secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
+                    trailing={<ServiceChip serviceNumber={getServiceNumber(shift)} tone="oker" />}
                     onClick={() => onNavigate?.('rooster')}
                   />
                 </Fragment>

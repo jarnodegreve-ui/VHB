@@ -37,6 +37,7 @@ import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
 import { PreviewToggle } from '../components/PreviewToggle';
+import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, QuickAction, relTime } from '../components/ops';
 import { cn, telHref } from '../lib/ui';
 
@@ -712,9 +713,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
             <span className="block truncate text-sm font-semibold text-slate-800">{d.name}</span>
             <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">{d.times}</span>
           </span>
-          <span className="shrink-0 rounded-lg bg-slate-100 px-2 py-1 text-[12px] font-bold tabular-nums text-slate-700">
-            {d.lines}
-          </span>
+          <ServiceChip serviceNumber={d.lines} />
         </li>
       ))}
     </ul>

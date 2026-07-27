@@ -133,6 +133,7 @@ export function OpsRow({
   primary,
   secondary,
   meta,
+  trailing,
   onClick,
 }: {
   tone: StatTone;
@@ -140,6 +141,8 @@ export function OpsRow({
   primary: string;
   secondary?: string;
   meta?: string;
+  /** Optioneel element rechts (bv. een dienstnummer-chip). */
+  trailing?: ReactNode;
   onClick: () => void;
 }) {
   return (
@@ -155,6 +158,7 @@ export function OpsRow({
         <span className="block truncate text-[13.5px] font-semibold text-slate-800">{primary}</span>
         {secondary && <span className="mt-px block truncate text-xs font-normal text-slate-500">{secondary}</span>}
       </span>
+      {trailing}
       {meta && <span className="shrink-0 text-[11px] font-medium text-slate-400">{meta}</span>}
       <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
     </button>

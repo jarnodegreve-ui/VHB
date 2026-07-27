@@ -43,7 +43,12 @@
    (.dark op <html>) volgen i.p.v. de OS-voorkeur (prefers-color-scheme).
    Zonder dit reageerde bv. het wit/zwart-busje op de systeeminstelling
    en niet op de Donkere-modus-knop in de app. */
-@custom-variant dark (&:where(.dark, .dark *));
+/* :is() i.p.v. :where(): geeft dark:-utilities specificiteit (0,2,0), zodat
+   ze wínnen van de blanket-overrides onderaan dit bestand (die staan op
+   :where(.dark) = (0,1,0)). Zonder dat verschil verslond elke
+   `.dark .text-x`-override stil de bijbehorende `dark:`-utility — de bron
+   van vier contrastbugs uit de controle-ronde. */
+@custom-variant dark (&:is(.dark, .dark *));
 
 @theme {
   /* Officiële VHB-huisstijl typografie: Inter voor UI/body, Manrope
@@ -609,18 +614,18 @@ html.dark {
   color-scheme: dark;
 }
 
-.dark .parallax-bg {
+:where(.dark) .parallax-bg {
   /* Pure oker-vignet, geen indigo of pink meer. Statisch, zonder filter. */
   background:
     radial-gradient(ellipse 700px 500px at 15% 18%, rgba(232, 163, 61, 0.10) 0%, transparent 55%),
     radial-gradient(ellipse 600px 400px at 85% 70%, rgba(201, 133, 31, 0.07) 0%, transparent 55%);
 }
 
-.dark body {
+:where(.dark) body {
   color: #E4E6E8;
 }
 
-.dark *::-webkit-scrollbar-thumb {
+:where(.dark) *::-webkit-scrollbar-thumb {
   background-color: rgba(110, 118, 127, 0.55);
 }
 
@@ -628,7 +633,7 @@ html.dark {
  * Match de nieuwe premium-bento DNA: hogere blur, dubbele inner-rim,
  * sterkere edge-lit highlights. */
 
-.dark .panel {
+:where(.dark) .panel {
   background: rgba(21, 22, 25, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow:
@@ -636,22 +641,22 @@ html.dark {
     0 8px 24px rgba(0, 0, 0, 0.4);
 }
 
-.dark .panel-dark {
+:where(.dark) .panel-dark {
   background: rgba(16, 17, 19, 0.97);
   border-right: 1px solid rgba(255, 255, 255, 0.07);
 }
 
-.dark .topbar {
+:where(.dark) .topbar {
   background: rgba(16, 17, 19, 0.95);
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
-.dark .topbar--scrolled {
+:where(.dark) .topbar--scrolled {
   background: rgba(16, 17, 19, 0.92);
   border-bottom-color: rgba(255, 255, 255, 0.08);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
-.dark .surface-card {
+:where(.dark) .surface-card {
   background: rgba(23, 24, 26, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
@@ -659,14 +664,14 @@ html.dark {
     0 6px 20px rgba(0, 0, 0, 0.35);
 }
 
-.dark .surface-card-hover:hover {
+:where(.dark) .surface-card-hover:hover {
   border-color: rgba(255, 255, 255, 0.12);
   box-shadow:
     0 2px 4px rgba(0, 0, 0, 0.3),
     0 14px 32px rgba(0, 0, 0, 0.5);
 }
 
-.dark .surface-table {
+:where(.dark) .surface-table {
   background: rgba(23, 24, 26, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.08);
   box-shadow:
@@ -674,7 +679,7 @@ html.dark {
     0 8px 24px rgba(0, 0, 0, 0.35);
 }
 
-.dark .glass-modal {
+:where(.dark) .glass-modal {
   background: rgba(23, 24, 26, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.1);
   box-shadow:
@@ -683,7 +688,7 @@ html.dark {
 }
 
 /* Dark mode adjustments voor depth-utilities */
-.dark .glow-top::before {
+:where(.dark) .glow-top::before {
   background:
     radial-gradient(
       ellipse 90% 60% at 50% -10%,
@@ -693,273 +698,273 @@ html.dark {
     );
   opacity: 0.6;
 }
-.dark .surface-muted {
+:where(.dark) .surface-muted {
   background: rgba(23, 24, 26, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.dark .control-input {
+:where(.dark) .control-input {
   background: rgba(23, 24, 26, 0.8);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: #E4E6E8;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.dark .control-input::placeholder {
+:where(.dark) .control-input::placeholder {
   color: rgba(154, 161, 169, 0.55);
 }
 
-.dark .control-input:focus {
+:where(.dark) .control-input:focus {
   background: rgba(29, 31, 34, 0.95);
   border-color: rgba(232, 163, 61, 0.5);
   box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.16);
 }
 
-.dark .control-button-soft {
+:where(.dark) .control-button-soft {
   background: rgba(23, 24, 26, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.09);
   color: #E4E6E8;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.dark .control-button-soft:hover {
+:where(.dark) .control-button-soft:hover {
   background: rgba(38, 40, 43, 0.9);
   border-color: rgba(255, 255, 255, 0.14);
 }
 
-.dark .glass-chip {
+:where(.dark) .glass-chip {
   background: rgba(23, 24, 26, 0.85);
   border: 1px solid rgba(255, 255, 255, 0.09);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
 }
 
-.dark .glass-segmented {
+:where(.dark) .glass-segmented {
   background: rgba(17, 18, 20, 0.7);
   border: 1px solid rgba(255, 255, 255, 0.07);
   box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.3);
 }
 
-.dark .fine-divider { border-color: rgba(154, 161, 169, 0.12); }
+:where(.dark) .fine-divider { border-color: rgba(154, 161, 169, 0.12); }
 
 /* Opacity-varianten van border-slate-200 (klassen mét /NN zijn aparte
    classnamen, dus de kale override hierboven matcht ze niet). */
-.dark .border-slate-200\/60,
-.dark .border-slate-200\/70,
-.dark .border-slate-200\/80,
-.dark .border-slate-200\/90 { border-color: rgba(79, 87, 95, 0.38); }
+:where(.dark) .border-slate-200\/60,
+:where(.dark) .border-slate-200\/70,
+:where(.dark) .border-slate-200\/80,
+:where(.dark) .border-slate-200\/90 { border-color: rgba(79, 87, 95, 0.38); }
 
 /* Ring-varianten op rijen/kaarten (OpsRow, PendingRow, QuickLink, …). */
-.dark .ring-slate-200\/60,
-.dark .ring-slate-200\/70 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
-.dark .hover\:ring-slate-300\/80:hover { --tw-ring-color: rgba(110, 118, 127, 0.45); }
+:where(.dark) .ring-slate-200\/60,
+:where(.dark) .ring-slate-200\/70 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
+:where(.dark) .hover\:ring-slate-300\/80:hover { --tw-ring-color: rgba(110, 118, 127, 0.45); }
 
 /* Status-teksten op geflipte tint-chips (pill 'Operationeel', severity-
    badges): -700 is op near-black onleesbaar, flip naar lichte variant. */
-.dark .text-emerald-700 { color: rgb(110, 231, 183); }
-.dark .text-amber-700 { color: rgb(253, 186, 116); }
-.dark .text-red-700 { color: rgb(252, 165, 165); }
+:where(.dark) .text-emerald-700 { color: rgb(110, 231, 183); }
+:where(.dark) .text-amber-700 { color: rgb(253, 186, 116); }
+:where(.dark) .text-red-700 { color: rgb(252, 165, 165); }
 
 /* Group-hover die in dark anders dood zou zijn (pijltjes in OpsRow e.d.). */
-.dark .group:hover .group-hover\:text-slate-700 { color: #E4E6E8; }
+:where(.dark) .group:hover .group-hover\:text-slate-700 { color: #E4E6E8; }
 
 /* --- Tailwind utility overrides (most-used) --- */
 
 /* White backgrounds */
-.dark .bg-white { background-color: rgba(23, 24, 26, 0.85); }
-.dark .bg-white\/30 { background-color: rgba(23, 24, 26, 0.40); }
-.dark .bg-white\/35 { background-color: rgba(23, 24, 26, 0.45); }
-.dark .bg-white\/40 { background-color: rgba(23, 24, 26, 0.50); }
-.dark .bg-white\/42 { background-color: rgba(23, 24, 26, 0.52); }
-.dark .bg-white\/45 { background-color: rgba(23, 24, 26, 0.55); }
-.dark .bg-white\/50 { background-color: rgba(23, 24, 26, 0.60); }
-.dark .bg-white\/55 { background-color: rgba(23, 24, 26, 0.65); }
-.dark .bg-white\/58 { background-color: rgba(23, 24, 26, 0.68); }
-.dark .bg-white\/60 { background-color: rgba(23, 24, 26, 0.68); }
-.dark .bg-white\/62 { background-color: rgba(23, 24, 26, 0.70); }
-.dark .bg-white\/65 { background-color: rgba(23, 24, 26, 0.72); }
-.dark .bg-white\/70 { background-color: rgba(23, 24, 26, 0.74); }
-.dark .bg-white\/74 { background-color: rgba(23, 24, 26, 0.76); }
-.dark .bg-white\/75 { background-color: rgba(23, 24, 26, 0.78); }
-.dark .bg-white\/80 { background-color: rgba(23, 24, 26, 0.82); }
-.dark .bg-white\/84 { background-color: rgba(23, 24, 26, 0.85); }
-.dark .bg-white\/88 { background-color: rgba(23, 24, 26, 0.88); }
-.dark .bg-white\/90 { background-color: rgba(23, 24, 26, 0.90); }
-.dark .bg-white\/95 { background-color: rgba(23, 24, 26, 0.92); }
-.dark .hover\:bg-white\/50:hover { background-color: rgba(38, 40, 43, 0.60); }
-.dark .hover\:bg-white\/70:hover { background-color: rgba(38, 40, 43, 0.72); }
+:where(.dark) .bg-white { background-color: rgba(23, 24, 26, 0.85); }
+:where(.dark) .bg-white\/30 { background-color: rgba(23, 24, 26, 0.40); }
+:where(.dark) .bg-white\/35 { background-color: rgba(23, 24, 26, 0.45); }
+:where(.dark) .bg-white\/40 { background-color: rgba(23, 24, 26, 0.50); }
+:where(.dark) .bg-white\/42 { background-color: rgba(23, 24, 26, 0.52); }
+:where(.dark) .bg-white\/45 { background-color: rgba(23, 24, 26, 0.55); }
+:where(.dark) .bg-white\/50 { background-color: rgba(23, 24, 26, 0.60); }
+:where(.dark) .bg-white\/55 { background-color: rgba(23, 24, 26, 0.65); }
+:where(.dark) .bg-white\/58 { background-color: rgba(23, 24, 26, 0.68); }
+:where(.dark) .bg-white\/60 { background-color: rgba(23, 24, 26, 0.68); }
+:where(.dark) .bg-white\/62 { background-color: rgba(23, 24, 26, 0.70); }
+:where(.dark) .bg-white\/65 { background-color: rgba(23, 24, 26, 0.72); }
+:where(.dark) .bg-white\/70 { background-color: rgba(23, 24, 26, 0.74); }
+:where(.dark) .bg-white\/74 { background-color: rgba(23, 24, 26, 0.76); }
+:where(.dark) .bg-white\/75 { background-color: rgba(23, 24, 26, 0.78); }
+:where(.dark) .bg-white\/80 { background-color: rgba(23, 24, 26, 0.82); }
+:where(.dark) .bg-white\/84 { background-color: rgba(23, 24, 26, 0.85); }
+:where(.dark) .bg-white\/88 { background-color: rgba(23, 24, 26, 0.88); }
+:where(.dark) .bg-white\/90 { background-color: rgba(23, 24, 26, 0.90); }
+:where(.dark) .bg-white\/95 { background-color: rgba(23, 24, 26, 0.92); }
+:where(.dark) .hover\:bg-white\/50:hover { background-color: rgba(38, 40, 43, 0.60); }
+:where(.dark) .hover\:bg-white\/70:hover { background-color: rgba(38, 40, 43, 0.72); }
 
 /* Slate surfaces */
-.dark .bg-slate-50 { background-color: rgba(23, 24, 26, 0.60); }
-.dark .bg-slate-50\/50 { background-color: rgba(23, 24, 26, 0.30); }
-.dark .bg-slate-50\/55 { background-color: rgba(23, 24, 26, 0.32); }
-.dark .bg-slate-50\/60 { background-color: rgba(23, 24, 26, 0.36); }
-.dark .bg-slate-50\/80 { background-color: rgba(23, 24, 26, 0.50); }
-.dark .bg-slate-50\/90 { background-color: rgba(23, 24, 26, 0.55); }
-.dark .bg-slate-100 { background-color: rgba(38, 40, 43, 0.60); }
-.dark .bg-slate-100\/60 { background-color: rgba(38, 40, 43, 0.38); }
-.dark .bg-slate-100\/70 { background-color: rgba(38, 40, 43, 0.45); }
-.dark .hover\:bg-slate-50:hover { background-color: rgba(38, 40, 43, 0.40); }
-.dark .hover\:bg-slate-50\/40:hover { background-color: rgba(38, 40, 43, 0.22); }
-.dark .hover\:bg-slate-50\/50:hover { background-color: rgba(38, 40, 43, 0.26); }
-.dark .hover\:bg-slate-50\/60:hover { background-color: rgba(38, 40, 43, 0.30); }
-.dark .hover\:bg-slate-50\/70:hover { background-color: rgba(38, 40, 43, 0.34); }
-.dark .hover\:bg-slate-100:hover { background-color: rgba(38, 40, 43, 0.55); }
-.dark .hover\:bg-slate-100\/60:hover { background-color: rgba(79, 87, 95, 0.48); }
-.dark .hover\:bg-slate-100\/70:hover { background-color: rgba(79, 87, 95, 0.52); }
-.dark .hover\:bg-slate-200:hover { background-color: rgba(79, 87, 95, 0.55); }
-.dark .bg-slate-200 { background-color: rgba(79, 87, 95, 0.45); }
+:where(.dark) .bg-slate-50 { background-color: rgba(23, 24, 26, 0.60); }
+:where(.dark) .bg-slate-50\/50 { background-color: rgba(23, 24, 26, 0.30); }
+:where(.dark) .bg-slate-50\/55 { background-color: rgba(23, 24, 26, 0.32); }
+:where(.dark) .bg-slate-50\/60 { background-color: rgba(23, 24, 26, 0.36); }
+:where(.dark) .bg-slate-50\/80 { background-color: rgba(23, 24, 26, 0.50); }
+:where(.dark) .bg-slate-50\/90 { background-color: rgba(23, 24, 26, 0.55); }
+:where(.dark) .bg-slate-100 { background-color: rgba(38, 40, 43, 0.60); }
+:where(.dark) .bg-slate-100\/60 { background-color: rgba(38, 40, 43, 0.38); }
+:where(.dark) .bg-slate-100\/70 { background-color: rgba(38, 40, 43, 0.45); }
+:where(.dark) .hover\:bg-slate-50:hover { background-color: rgba(38, 40, 43, 0.40); }
+:where(.dark) .hover\:bg-slate-50\/40:hover { background-color: rgba(38, 40, 43, 0.22); }
+:where(.dark) .hover\:bg-slate-50\/50:hover { background-color: rgba(38, 40, 43, 0.26); }
+:where(.dark) .hover\:bg-slate-50\/60:hover { background-color: rgba(38, 40, 43, 0.30); }
+:where(.dark) .hover\:bg-slate-50\/70:hover { background-color: rgba(38, 40, 43, 0.34); }
+:where(.dark) .hover\:bg-slate-100:hover { background-color: rgba(38, 40, 43, 0.55); }
+:where(.dark) .hover\:bg-slate-100\/60:hover { background-color: rgba(79, 87, 95, 0.48); }
+:where(.dark) .hover\:bg-slate-100\/70:hover { background-color: rgba(79, 87, 95, 0.52); }
+:where(.dark) .hover\:bg-slate-200:hover { background-color: rgba(79, 87, 95, 0.55); }
+:where(.dark) .bg-slate-200 { background-color: rgba(79, 87, 95, 0.45); }
 
 /* Deep-dark backgrounds (sign-in buttons, countdown hero) */
-.dark .bg-slate-900 { background-color: rgb(13, 13, 15); }
-.dark .bg-slate-900\/20 { background-color: rgba(0, 0, 0, 0.40); }
-.dark .bg-slate-900\/40 { background-color: rgba(0, 0, 0, 0.55); }
-.dark .bg-slate-900\/60 { background-color: rgba(0, 0, 0, 0.70); }
-.dark .hover\:bg-slate-800:hover { background-color: rgb(28, 32, 37); }
+:where(.dark) .bg-slate-900 { background-color: rgb(13, 13, 15); }
+:where(.dark) .bg-slate-900\/20 { background-color: rgba(0, 0, 0, 0.40); }
+:where(.dark) .bg-slate-900\/40 { background-color: rgba(0, 0, 0, 0.55); }
+:where(.dark) .bg-slate-900\/60 { background-color: rgba(0, 0, 0, 0.70); }
+:where(.dark) .hover\:bg-slate-800:hover { background-color: rgb(28, 32, 37); }
 
 /* Text colors */
-.dark .text-slate-900 { color: #F2F3F4; }
-.dark .text-slate-800 { color: #E4E6E8; }
-.dark .text-slate-700 { color: #CDD1D5; }
-.dark .text-slate-600 { color: #9AA1A9; }
-.dark .text-slate-500 { color: #9AA1A9; }
-.dark .text-slate-400 { color: #6E767F; }
-.dark .text-slate-300 { color: #4F575F; }
-.dark .text-slate-200 { color: #2C3137; }
-.dark .hover\:text-slate-500:hover { color: #CDD1D5; }
-.dark .hover\:text-slate-600:hover { color: #CDD1D5; }
-.dark .hover\:text-slate-700:hover { color: #E4E6E8; }
-.dark .hover\:text-slate-800:hover { color: #F2F3F4; }
-.dark .group-focus-within\:text-oker-500 { color: rgb(236, 183, 95); }
+:where(.dark) .text-slate-900 { color: #F2F3F4; }
+:where(.dark) .text-slate-800 { color: #E4E6E8; }
+:where(.dark) .text-slate-700 { color: #CDD1D5; }
+:where(.dark) .text-slate-600 { color: #9AA1A9; }
+:where(.dark) .text-slate-500 { color: #9AA1A9; }
+:where(.dark) .text-slate-400 { color: #6E767F; }
+:where(.dark) .text-slate-300 { color: #4F575F; }
+:where(.dark) .text-slate-200 { color: #2C3137; }
+:where(.dark) .hover\:text-slate-500:hover { color: #CDD1D5; }
+:where(.dark) .hover\:text-slate-600:hover { color: #CDD1D5; }
+:where(.dark) .hover\:text-slate-700:hover { color: #E4E6E8; }
+:where(.dark) .hover\:text-slate-800:hover { color: #F2F3F4; }
+:where(.dark) .group-focus-within\:text-oker-500 { color: rgb(236, 183, 95); }
 /* Met .group:hover-scope: zonder die scope stond élk element met deze class
    in donkere modus permanent op hover-helderheid (chevrons, inactieve
    nav-items) en gaf hover geen feedback meer. */
-.dark .group:hover .group-hover\:text-slate-600 { color: #CDD1D5; }
+:where(.dark) .group:hover .group-hover\:text-slate-600 { color: #CDD1D5; }
 
 /* Borders */
-.dark .border-slate-50 { border-color: rgba(79, 87, 95, 0.20); }
-.dark .border-slate-100 { border-color: rgba(79, 87, 95, 0.28); }
-.dark .border-slate-200 { border-color: rgba(79, 87, 95, 0.38); }
-.dark .border-slate-300 { border-color: rgba(110, 118, 127, 0.45); }
-.dark .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.20); }
-.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.28); }
-.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.38); }
-.dark .border-white\/60 { border-color: rgba(154, 161, 169, 0.18); }
-.dark .border-white\/70 { border-color: rgba(154, 161, 169, 0.20); }
-.dark .border-white\/75 { border-color: rgba(154, 161, 169, 0.22); }
-.dark .border-white\/80 { border-color: rgba(154, 161, 169, 0.22); }
-.dark .border-white\/88 { border-color: rgba(154, 161, 169, 0.25); }
-.dark .border-white\/92 { border-color: rgba(154, 161, 169, 0.26); }
-.dark .hover\:border-slate-200:hover { border-color: rgba(79, 87, 95, 0.42); }
-.dark .hover\:border-white\/80:hover { border-color: rgba(154, 161, 169, 0.26); }
+:where(.dark) .border-slate-50 { border-color: rgba(79, 87, 95, 0.20); }
+:where(.dark) .border-slate-100 { border-color: rgba(79, 87, 95, 0.28); }
+:where(.dark) .border-slate-200 { border-color: rgba(79, 87, 95, 0.38); }
+:where(.dark) .border-slate-300 { border-color: rgba(110, 118, 127, 0.45); }
+:where(.dark) .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.20); }
+:where(.dark) .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.28); }
+:where(.dark) .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.38); }
+:where(.dark) .border-white\/60 { border-color: rgba(154, 161, 169, 0.18); }
+:where(.dark) .border-white\/70 { border-color: rgba(154, 161, 169, 0.20); }
+:where(.dark) .border-white\/75 { border-color: rgba(154, 161, 169, 0.22); }
+:where(.dark) .border-white\/80 { border-color: rgba(154, 161, 169, 0.22); }
+:where(.dark) .border-white\/88 { border-color: rgba(154, 161, 169, 0.25); }
+:where(.dark) .border-white\/92 { border-color: rgba(154, 161, 169, 0.26); }
+:where(.dark) .hover\:border-slate-200:hover { border-color: rgba(79, 87, 95, 0.42); }
+:where(.dark) .hover\:border-white\/80:hover { border-color: rgba(154, 161, 169, 0.26); }
 
 /* Rings */
-.dark .ring-slate-100 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
-.dark .ring-white\/60 { --tw-ring-color: rgba(255, 255, 255, 0.05); }
-.dark .ring-white\/80 { --tw-ring-color: rgba(154, 161, 169, 0.22); }
-.dark .ring-oker-100 { --tw-ring-color: rgba(232, 163, 61, 0.30); }
-.dark .ring-oker-300 { --tw-ring-color: rgba(232, 163, 61, 0.42); }
-.dark .ring-red-300 { --tw-ring-color: rgba(239, 68, 68, 0.42); }
+:where(.dark) .ring-slate-100 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
+:where(.dark) .ring-white\/60 { --tw-ring-color: rgba(255, 255, 255, 0.05); }
+:where(.dark) .ring-white\/80 { --tw-ring-color: rgba(154, 161, 169, 0.22); }
+:where(.dark) .ring-oker-100 { --tw-ring-color: rgba(232, 163, 61, 0.30); }
+:where(.dark) .ring-oker-300 { --tw-ring-color: rgba(232, 163, 61, 0.42); }
+:where(.dark) .ring-red-300 { --tw-ring-color: rgba(239, 68, 68, 0.42); }
 
 /* Oker accents */
-.dark .bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
-.dark .bg-oker-50\/80 { background-color: rgba(232, 163, 61, 0.08); }
-.dark .bg-oker-50\/30 { background-color: rgba(232, 163, 61, 0.05); }
-.dark .bg-oker-100 { background-color: rgba(232, 163, 61, 0.18); }
-.dark .bg-oker-500\/15 { background-color: rgba(232, 163, 61, 0.14); }
-.dark .bg-oker-500\/10 { background-color: rgba(232, 163, 61, 0.10); }
-.dark .border-oker-100 { border-color: rgba(232, 163, 61, 0.28); }
-.dark .border-oker-100\/60 { border-color: rgba(232, 163, 61, 0.20); }
-.dark .border-oker-200 { border-color: rgba(232, 163, 61, 0.32); }
-.dark .border-oker-200\/70 { border-color: rgba(232, 163, 61, 0.26); }
-.dark .border-oker-500\/20 { border-color: rgba(232, 163, 61, 0.28); }
-.dark .text-oker-600 { color: rgb(236, 183, 95); }
-.dark .text-oker-700 { color: rgb(236, 183, 95); }
-.dark .text-oker-800 { color: rgb(242, 220, 174); }
-.dark .text-oker-900 { color: rgb(248, 236, 212); }
-.dark .hover\:bg-oker-50\/70:hover { background-color: rgba(232, 163, 61, 0.10); }
-.dark .hover\:bg-oker-100:hover { background-color: rgba(232, 163, 61, 0.24); }
+:where(.dark) .bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
+:where(.dark) .bg-oker-50\/80 { background-color: rgba(232, 163, 61, 0.08); }
+:where(.dark) .bg-oker-50\/30 { background-color: rgba(232, 163, 61, 0.05); }
+:where(.dark) .bg-oker-100 { background-color: rgba(232, 163, 61, 0.18); }
+:where(.dark) .bg-oker-500\/15 { background-color: rgba(232, 163, 61, 0.14); }
+:where(.dark) .bg-oker-500\/10 { background-color: rgba(232, 163, 61, 0.10); }
+:where(.dark) .border-oker-100 { border-color: rgba(232, 163, 61, 0.28); }
+:where(.dark) .border-oker-100\/60 { border-color: rgba(232, 163, 61, 0.20); }
+:where(.dark) .border-oker-200 { border-color: rgba(232, 163, 61, 0.32); }
+:where(.dark) .border-oker-200\/70 { border-color: rgba(232, 163, 61, 0.26); }
+:where(.dark) .border-oker-500\/20 { border-color: rgba(232, 163, 61, 0.28); }
+:where(.dark) .text-oker-600 { color: rgb(236, 183, 95); }
+:where(.dark) .text-oker-700 { color: rgb(236, 183, 95); }
+:where(.dark) .text-oker-800 { color: rgb(242, 220, 174); }
+:where(.dark) .text-oker-900 { color: rgb(248, 236, 212); }
+:where(.dark) .hover\:bg-oker-50\/70:hover { background-color: rgba(232, 163, 61, 0.10); }
+:where(.dark) .hover\:bg-oker-100:hover { background-color: rgba(232, 163, 61, 0.24); }
 
 /* Emerald / red / amber / blue / green status tints */
-.dark .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
-.dark .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.12); }
-.dark .bg-red-50 { background-color: rgba(239, 68, 68, 0.14); }
-.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.22); }
-.dark .bg-red-50\/40 { background-color: rgba(239, 68, 68, 0.08); }
-.dark .bg-red-50\/30 { background-color: rgba(239, 68, 68, 0.06); }
-.dark .hover\:bg-red-50\/60:hover { background-color: rgba(239, 68, 68, 0.11); }
-.dark .bg-amber-50 { background-color: rgba(249, 115, 22, 0.14); }
-.dark .bg-amber-50\/80 { background-color: rgba(249, 115, 22, 0.14); }
-.dark .bg-amber-100 { background-color: rgba(249, 115, 22, 0.22); }
-.dark .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
-.dark .bg-green-50 { background-color: rgba(34, 197, 94, 0.14); }
-.dark .border-emerald-100 { border-color: rgba(16, 185, 129, 0.30); }
-.dark .border-red-100 { border-color: rgba(239, 68, 68, 0.30); }
-.dark .border-amber-100 { border-color: rgba(249, 115, 22, 0.30); }
-.dark .border-amber-200 { border-color: rgba(249, 115, 22, 0.38); }
-.dark .border-amber-200\/70 { border-color: rgba(249, 115, 22, 0.30); }
-.dark .border-blue-100 { border-color: rgba(59, 130, 246, 0.30); }
-.dark .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.18); }
-.dark .hover\:bg-red-50\/70:hover { background-color: rgba(239, 68, 68, 0.16); }
-.dark .hover\:bg-green-50:hover { background-color: rgba(34, 197, 94, 0.18); }
+:where(.dark) .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.14); }
+:where(.dark) .bg-emerald-50\/80 { background-color: rgba(16, 185, 129, 0.12); }
+:where(.dark) .bg-red-50 { background-color: rgba(239, 68, 68, 0.14); }
+:where(.dark) .bg-red-100 { background-color: rgba(239, 68, 68, 0.22); }
+:where(.dark) .bg-red-50\/40 { background-color: rgba(239, 68, 68, 0.08); }
+:where(.dark) .bg-red-50\/30 { background-color: rgba(239, 68, 68, 0.06); }
+:where(.dark) .hover\:bg-red-50\/60:hover { background-color: rgba(239, 68, 68, 0.11); }
+:where(.dark) .bg-amber-50 { background-color: rgba(249, 115, 22, 0.14); }
+:where(.dark) .bg-amber-50\/80 { background-color: rgba(249, 115, 22, 0.14); }
+:where(.dark) .bg-amber-100 { background-color: rgba(249, 115, 22, 0.22); }
+:where(.dark) .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
+:where(.dark) .bg-green-50 { background-color: rgba(34, 197, 94, 0.14); }
+:where(.dark) .border-emerald-100 { border-color: rgba(16, 185, 129, 0.30); }
+:where(.dark) .border-red-100 { border-color: rgba(239, 68, 68, 0.30); }
+:where(.dark) .border-amber-100 { border-color: rgba(249, 115, 22, 0.30); }
+:where(.dark) .border-amber-200 { border-color: rgba(249, 115, 22, 0.38); }
+:where(.dark) .border-amber-200\/70 { border-color: rgba(249, 115, 22, 0.30); }
+:where(.dark) .border-blue-100 { border-color: rgba(59, 130, 246, 0.30); }
+:where(.dark) .hover\:bg-red-50:hover { background-color: rgba(239, 68, 68, 0.18); }
+:where(.dark) .hover\:bg-red-50\/70:hover { background-color: rgba(239, 68, 68, 0.16); }
+:where(.dark) .hover\:bg-green-50:hover { background-color: rgba(34, 197, 94, 0.18); }
 
 /* Design-review 2026-07: overrides voor de nieuwe componenten (Maandplanning-
    sectiekoppen, dienstruil-wizard, welkomstkaart, coverage-kandidaten). */
-.dark .bg-slate-100\/80,
-.dark .bg-slate-100\/90 { background-color: rgba(38, 40, 43, 0.60); }
-.dark .bg-oker-50\/50 { background-color: rgba(232, 163, 61, 0.08); }
-.dark .bg-oker-100\/60,
-.dark .bg-oker-100\/70 { background-color: rgba(232, 163, 61, 0.16); }
-.dark .ring-oker-200 { --tw-ring-color: rgba(232, 163, 61, 0.38); }
-.dark .border-oker-300 { border-color: rgba(232, 163, 61, 0.45); }
-.dark .text-blue-700 { color: rgb(147, 197, 253); }
-.dark .text-emerald-600 { color: rgb(110, 231, 183); }
-.dark .text-red-600 { color: rgb(252, 165, 165); }
-.dark .text-amber-800 { color: rgb(253, 186, 116); }
-.dark .hover\:bg-white:hover { background-color: rgba(38, 40, 43, 0.85); }
-.dark .hover\:bg-oker-100\/70:hover { background-color: rgba(232, 163, 61, 0.14); }
-.dark .group:hover .group-hover\:bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
-.dark .bg-emerald-50\/70 { background-color: rgba(16, 185, 129, 0.10); }
-.dark .ring-emerald-100 { --tw-ring-color: rgba(16, 185, 129, 0.25); }
+:where(.dark) .bg-slate-100\/80,
+:where(.dark) .bg-slate-100\/90 { background-color: rgba(38, 40, 43, 0.60); }
+:where(.dark) .bg-oker-50\/50 { background-color: rgba(232, 163, 61, 0.08); }
+:where(.dark) .bg-oker-100\/60,
+:where(.dark) .bg-oker-100\/70 { background-color: rgba(232, 163, 61, 0.16); }
+:where(.dark) .ring-oker-200 { --tw-ring-color: rgba(232, 163, 61, 0.38); }
+:where(.dark) .border-oker-300 { border-color: rgba(232, 163, 61, 0.45); }
+:where(.dark) .text-blue-700 { color: rgb(147, 197, 253); }
+:where(.dark) .text-emerald-600 { color: rgb(110, 231, 183); }
+:where(.dark) .text-red-600 { color: rgb(252, 165, 165); }
+:where(.dark) .text-amber-800 { color: rgb(253, 186, 116); }
+:where(.dark) .hover\:bg-white:hover { background-color: rgba(38, 40, 43, 0.85); }
+:where(.dark) .hover\:bg-oker-100\/70:hover { background-color: rgba(232, 163, 61, 0.14); }
+:where(.dark) .group:hover .group-hover\:bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
+:where(.dark) .bg-emerald-50\/70 { background-color: rgba(16, 185, 129, 0.10); }
+:where(.dark) .ring-emerald-100 { --tw-ring-color: rgba(16, 185, 129, 0.25); }
 
 /* Ontbrekende .dark-overrides voor opacity-suffix-varianten (controle-ronde):
    zonder deze bleven de import-/feedbackpanelen en weekend-/hovertinten
    fel-licht in dark mode (o.a. ManageSchedules, PlanningMatrix, LeaveManagement,
    VerlofKalender). */
-.dark .bg-red-50\/80 { background-color: rgba(239, 68, 68, 0.14); }
-.dark .bg-red-50\/70 { background-color: rgba(239, 68, 68, 0.12); }
-.dark .bg-amber-50\/70 { background-color: rgba(249, 115, 22, 0.14); }
-.dark .bg-emerald-50\/60 { background-color: rgba(16, 185, 129, 0.10); }
-.dark .bg-oker-50\/70 { background-color: rgba(232, 163, 61, 0.09); }
-.dark .bg-oker-50\/40 { background-color: rgba(232, 163, 61, 0.06); }
-.dark .bg-slate-100\/50 { background-color: rgba(38, 40, 43, 0.32); }
-.dark .bg-slate-50\/40 { background-color: rgba(23, 24, 26, 0.24); }
-.dark .hover\:bg-slate-100\/80:hover { background-color: rgba(79, 87, 95, 0.56); }
-.dark .text-red-700\/80 { color: rgb(252, 165, 165); }
-.dark .text-red-900 { color: rgb(252, 165, 165); }
-.dark .text-amber-900 { color: rgb(253, 186, 116); }
-.dark .text-amber-600 { color: rgb(253, 186, 116); }
-.dark .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.30); }
-.dark .border-red-200\/70 { border-color: rgba(239, 68, 68, 0.30); }
+:where(.dark) .bg-red-50\/80 { background-color: rgba(239, 68, 68, 0.14); }
+:where(.dark) .bg-red-50\/70 { background-color: rgba(239, 68, 68, 0.12); }
+:where(.dark) .bg-amber-50\/70 { background-color: rgba(249, 115, 22, 0.14); }
+:where(.dark) .bg-emerald-50\/60 { background-color: rgba(16, 185, 129, 0.10); }
+:where(.dark) .bg-oker-50\/70 { background-color: rgba(232, 163, 61, 0.09); }
+:where(.dark) .bg-oker-50\/40 { background-color: rgba(232, 163, 61, 0.06); }
+:where(.dark) .bg-slate-100\/50 { background-color: rgba(38, 40, 43, 0.32); }
+:where(.dark) .bg-slate-50\/40 { background-color: rgba(23, 24, 26, 0.24); }
+:where(.dark) .hover\:bg-slate-100\/80:hover { background-color: rgba(79, 87, 95, 0.56); }
+:where(.dark) .text-red-700\/80 { color: rgb(252, 165, 165); }
+:where(.dark) .text-red-900 { color: rgb(252, 165, 165); }
+:where(.dark) .text-amber-900 { color: rgb(253, 186, 116); }
+:where(.dark) .text-amber-600 { color: rgb(253, 186, 116); }
+:where(.dark) .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.30); }
+:where(.dark) .border-red-200\/70 { border-color: rgba(239, 68, 68, 0.30); }
 
 /* Gaten uit de controle-ronde 2026-07-26: kleurvlakken/hover-states die in
    donkere modus als felle pastel bleven staan (mint-op-mint, roze chip) of
    waar de tekst juist onleesbaar werd. De :hover/:active-selectors staan
    bewust hoger in specificiteit dan de basisregels hierboven, zodat de
    bedoelde hover-tekstkleur wint. */
-.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.16); }
-.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.16); }
-.dark .ring-red-200 { --tw-ring-color: rgba(239, 68, 68, 0.35); }
-.dark .hover\:bg-red-200:hover { background-color: rgba(239, 68, 68, 0.28); }
-.dark .hover\:bg-emerald-500:hover { background-color: rgba(16, 185, 129, 0.85); }
-.dark .hover\:text-slate-950:hover { color: #0D0D0F; }
-.dark .active\:bg-slate-100:active { background-color: rgba(79, 87, 95, 0.45); }
-.dark .active\:bg-slate-50:active { background-color: rgba(79, 87, 95, 0.32); }
+:where(.dark) .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.16); }
+:where(.dark) .bg-red-100 { background-color: rgba(239, 68, 68, 0.16); }
+:where(.dark) .ring-red-200 { --tw-ring-color: rgba(239, 68, 68, 0.35); }
+:where(.dark) .hover\:bg-red-200:hover { background-color: rgba(239, 68, 68, 0.28); }
+:where(.dark) .hover\:bg-emerald-500:hover { background-color: rgba(16, 185, 129, 0.85); }
+:where(.dark) .hover\:text-slate-950:hover { color: #0D0D0F; }
+:where(.dark) .active\:bg-slate-100:active { background-color: rgba(79, 87, 95, 0.45); }
+:where(.dark) .active\:bg-slate-50:active { background-color: rgba(79, 87, 95, 0.32); }
 
 /* Icoonvierkant van de snelle acties: `dark:bg-oker-500/15` verloor het van
    de unlayered `.dark .bg-slate-900` hierboven, waardoor het vlak pikzwart
    bleef op een near-black tegel. Eigen class = geen cascade-verrassing. */
 .quick-action-icon { background-color: #0D0D0F; color: #FFFFFF; }
-.dark .quick-action-icon { background-color: rgba(232, 163, 61, 0.15); color: rgb(236, 183, 95); }
+:where(.dark) .quick-action-icon { background-color: rgba(232, 163, 61, 0.15); color: rgb(236, 183, 95); }
 
 /* Neutrale sparkline-tint: op wit donker genoeg, op de donkere tegel licht
    genoeg (≥ 3:1 voor grafische elementen). */

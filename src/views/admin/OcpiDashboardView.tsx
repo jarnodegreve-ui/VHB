@@ -133,7 +133,7 @@ export function OcpiDashboardView() {
           <div>
             <AdminSubsectionHeader title="Lopende sessies" />
             {data.activeSessions.length === 0 ? (
-              <EmptyState title="Geen lopende sessies" message="Er wordt op dit moment niet geladen (of ze zijn nog niet gesynchroniseerd)." />
+              <EmptyState mascotte={false} title="Geen lopende sessies" message="Er wordt op dit moment niet geladen (of ze zijn nog niet gesynchroniseerd)." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {data.activeSessions.map((s) => (
@@ -153,7 +153,7 @@ export function OcpiDashboardView() {
           <div>
             <AdminSubsectionHeader title="Laadpalen per locatie" />
             {data.locations.length === 0 ? (
-              <EmptyState title="Nog geen locaties" message="Klik in Systeem Status → OCPI-koppeling op 'Nu synchroniseren' om de laadpalen op te halen." />
+              <EmptyState mascotte={false} title="Nog geen locaties" message="Klik in Systeem Status → OCPI-koppeling op 'Nu synchroniseren' om de laadpalen op te halen." />
             ) : (
               <div className="space-y-4">
                 {data.locations.map((loc) => (

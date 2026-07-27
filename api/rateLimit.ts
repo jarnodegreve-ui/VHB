@@ -16,8 +16,9 @@ export type RateLimiter = {
  * niet globaal gedeeld. Het vangt daarmee vooral het meest waarschijnlijke
  * scenario af — één op hol geslagen of vastgelopen client (oneindige
  * fetch-lus) — en niet een gecoördineerde gedistribueerde overbelasting.
- * Voor écht globale limiting is een gedeelde store nodig (Upstash/Vercel KV);
- * dat is bewust níét toegevoegd om geen extra dienst/kost te introduceren.
+ * Voor écht globale limiting is een gedeelde store nodig: die is er nu
+ * optioneel (zie createSharedLimiter, Upstash Redis REST). Zonder env-vars
+ * blijft dit in-memory gedrag de fallback.
  */
 export function createRateLimiter(opts: { windowMs: number; max: number; now?: Clock }): RateLimiter {
   const { windowMs, max } = opts;
@@ -58,6 +59,56 @@ const num = (v: string | undefined, d: number) => {
   return Number.isFinite(n) && n > 0 ? n : d;
 };
 
+
+// --- Gedeelde (cross-instance) limiter via Upstash Redis REST ---
+// Zonder deze store telt elke warme serverless-instantie apart, waardoor de
+// effectieve limiet met het aantal instanties meeschaalt (controle-ronde #38).
+// Werkt met platte fetch — geen extra dependency. Niet geconfigureerd of
+// onbereikbaar? Dan valt de middleware terug op de in-memory limiter: liever
+// een ruimere limiet dan een portaal dat plat gaat door een storing bij de
+// store.
+const SHARED_URL = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "");
+const SHARED_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
+export const hasSharedStore = () => Boolean(SHARED_URL && SHARED_TOKEN);
+
+/**
+ * Fixed-window teller in Redis: INCR + (bij de eerste hit) EXPIRE.
+ * Geeft null terug wanneer de store niet geconfigureerd of onbereikbaar is,
+ * zodat de aanroeper kan terugvallen.
+ */
+export async function sharedCheck(
+  key: string,
+  windowMs: number,
+  max: number,
+): Promise<{ allowed: boolean; retryAfterSec: number } | null> {
+  if (!hasSharedStore()) return null;
+  const windowSec = Math.max(1, Math.round(windowMs / 1000));
+  // Vensters zijn deterministisch per tijdvak, zodat alle instanties dezelfde
+  // sleutel gebruiken zonder onderlinge afstemming.
+  const bucket = Math.floor(Date.now() / windowMs);
+  const redisKey = `rl:${key}:${bucket}`;
+  try {
+    const res = await fetch(`${SHARED_URL}/pipeline`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SHARED_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify([["INCR", redisKey], ["EXPIRE", redisKey, String(windowSec), "NX"]]),
+      // Een trage store mag geen request ophouden.
+      signal: AbortSignal.timeout(1500),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as Array<{ result?: unknown }>;
+    const count = Number(data?.[0]?.result);
+    if (!Number.isFinite(count)) return null;
+    const resetAt = (bucket + 1) * windowMs;
+    return {
+      allowed: count <= max,
+      retryAfterSec: Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)),
+    };
+  } catch {
+    return null; // netwerkfout/timeout → fallback
+  }
+}
+
 const WINDOW_MS = num(process.env.RATE_LIMIT_WINDOW_MS, 60_000);
 // Ruim boven normaal gebruik (boot ~11 calls, realtime-refetches, bulk-acties)
 // maar ver onder een tollende lus. Configureerbaar via env.
@@ -97,7 +148,7 @@ const clientIp = (req: express.Request): string => {
  * bedrijfsnetwerk achter één NAT-IP), anders het client-IP voor
  * niet-geauthenticeerde routes (bv. foutrapportage).
  */
-export const rateLimitMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+export const rateLimitMiddleware = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const auth = req.headers.authorization;
   let key: string;
   let limiter: RateLimiter;
@@ -111,7 +162,9 @@ export const rateLimitMiddleware = (req: express.Request, res: express.Response,
     key = `ip:${clientIp(req)}`;
     limiter = anonLimiter;
   }
-  const { allowed, retryAfterSec } = limiter.check(key);
+  const max = limiter === authedLimiter ? AUTHED_MAX : ANON_MAX;
+  // Gedeelde store eerst; null = niet geconfigureerd of storing → in-memory.
+  const { allowed, retryAfterSec } = (await sharedCheck(key, WINDOW_MS, max)) ?? limiter.check(key);
   if (!allowed) {
     res.setHeader("Retry-After", String(retryAfterSec));
     return res.status(429).json({ error: "Te veel verzoeken in korte tijd. Probeer het zo dadelijk opnieuw." });
@@ -119,7 +172,8 @@ export const rateLimitMiddleware = (req: express.Request, res: express.Response,
   // Het token wordt hier niet gevalideerd (dat doet `authenticate` later),
   // dus een verzonnen Bearer mag niet volstaan om aan elke IP-limiet te
   // ontsnappen: de ruime IP-backstop telt altijd mee.
-  const guard = ipGuardLimiter.check(`ip:${clientIp(req)}`);
+  const guardKey = `ip:${clientIp(req)}`;
+  const guard = (await sharedCheck(guardKey, WINDOW_MS, IP_GUARD_MAX)) ?? ipGuardLimiter.check(guardKey);
   if (!guard.allowed) {
     res.setHeader("Retry-After", String(guard.retryAfterSec));
     return res.status(429).json({ error: "Te veel verzoeken in korte tijd. Probeer het zo dadelijk opnieuw." });
@@ -132,8 +186,12 @@ export const rateLimitMiddleware = (req: express.Request, res: express.Response,
  * één kapotte (of kwaadwillende) client mag de client_errors-tabel en de
  * digest-mail niet vol spammen.
  */
-export const clientErrorRateLimit = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  const { allowed, retryAfterSec } = clientErrorLimiter.check(`ip:${clientIp(req)}`);
+export const clientErrorRateLimit = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+  // Juist híer telt de gedeelde store het meest: deze route is
+  // ongeauthenticeerd, dus de limiet moet over alle instanties heen gelden.
+  const errKey = `err:${clientIp(req)}`;
+  const { allowed, retryAfterSec } =
+    (await sharedCheck(errKey, WINDOW_MS, ERRORS_MAX)) ?? clientErrorLimiter.check(`ip:${clientIp(req)}`);
   if (!allowed) {
     res.setHeader("Retry-After", String(retryAfterSec));
     return res.status(429).json({ error: "Te veel foutmeldingen in korte tijd." });
