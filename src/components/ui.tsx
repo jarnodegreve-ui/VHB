@@ -150,10 +150,12 @@ export function EmptyState({
   action?: React.ReactNode;
 }) {
   return (
-    <div className="text-center py-12 surface-card rounded-3xl !border-dashed">
+    <div className="text-center py-10 surface-card rounded-3xl !border-dashed">
       {mascotte ? (
+        /* Bewust bescheiden: het busje is een accent bij de boodschap, geen
+           blikvanger (Jarno: "te aanwezig"). */
         <div className="bus-sway mx-auto mb-3 inline-block">
-          <BrandBus width={170} />
+          <BrandBus width={88} />
         </div>
       ) : (
         <div className="w-14 h-14 bg-slate-100/80 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">

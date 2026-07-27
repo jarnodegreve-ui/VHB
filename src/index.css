@@ -415,58 +415,6 @@ html.dark {
     transform-origin: center bottom;
   }
 
-  /* Bus rijdt PER TILE over de onderrand. `left` is relatief aan de
-     wrapper (volle tile-breedte): -48px start volledig links buiten de
-     tile, 100% rijdt volledig rechts de tile uit. Tile heeft
-     overflow-hidden, dus de bus verdwijnt achter de rand en komt in de
-     volgende tile (via animation-delay) weer tevoorschijn.
-     De bus is maar ~30% van de cyclus zichtbaar (rijdt over de tile),
-     daarna geparkeerd buiten beeld tot de volgende ronde — zo rijdt er
-     telkens één bus die van tile naar tile lijkt over te springen.
-     `48px` ≈ bus-breedte; pas mee aan als BrandBus-width wijzigt. */
-  @keyframes bus-cross {
-    0%   { transform: translateX(-48px); }
-    25%  { transform: translateX(100%); }
-    100% { transform: translateX(100%); }
-  }
-  /* Hobbel-effect: zachte, vloeiende deining + minieme kanteling alsof
-     de bus over een licht oneffen weg rolt. Aparte cyclus van het rijden. */
-  @keyframes bus-bump {
-    0%   { transform: translateY(0)      rotate(0deg); }
-    35%  { transform: translateY(-1.5px) rotate(0.5deg); }
-    60%  { transform: translateY(-0.3px) rotate(-0.2deg); }
-    80%  { transform: translateY(-1px)   rotate(0.3deg); }
-    100% { transform: translateY(0)      rotate(0deg); }
-  }
-  .bus-cross {
-    position: absolute;
-    bottom: 0;
-    /* Volle tile-breedte: zo is translateX(100%) == tile-breedte en rijdt
-       het busje (aan de linkerrand) netjes over de hele onderrand. We
-       animeren `transform` i.p.v. `left` zodat het GPU-composited is —
-       geen layout/paint per frame (scheelt veel op Windows). */
-    left: 0;
-    right: 0;
-    animation: bus-cross 16s linear infinite;
-    /* backwards: tijdens de positieve animation-delay alvast de 0%-staat
-       (translateX(-48px), buiten beeld) tonen i.p.v. de statische positie. */
-    animation-fill-mode: backwards;
-    will-change: transform;
-  }
-  /* Inner wrapper draagt de hobbel zodat 't onafhankelijk van het
-     horizontale rijden loopt (los transform-kanaal). inline-block houdt
-     het busje aan de linkerrand van de volle-breedte .bus-cross. */
-  .bus-cross > .bus-bump {
-    display: inline-block;
-    animation: bus-bump 1.5s ease-in-out infinite;
-    transform-origin: center bottom;
-  }
-  /* Bewuste keuze: het rijdende busje blijft óók draaien bij
-     prefers-reduced-motion (bv. Windows met "animaties uit"). Het is een
-     gewild merk-element en sinds de transform-omzetting GPU-licht, dus
-     geen perf-reden meer om 't te verbergen. De vroegere reduced-motion-
-     fallback parkeerde 5 busjes stil — die rommel is nu weg. */
-
   /* Skeleton-loader shimmer */
   @keyframes shimmer {
     0%   { background-position: -200% 0; }
