@@ -89,12 +89,16 @@ export function OpsStat({
   };
   if (onClick) {
     return (
-      <button type="button" onClick={onClick} className={cn('group surface-card-hover rounded-3xl p-4 text-left', className)} style={style}>
+      // flex-col + justify-start: Safari centreert button-inhoud verticaal
+      // zodra de knop hoger is dan zijn inhoud (grid rekt tegels tot gelijke
+      // hoogte). Zonder dit hingen icoon en kop van een kortere tegel lager
+      // dan die van de buurtegel.
+      <button type="button" onClick={onClick} className={cn('group surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', className)} style={style}>
         {inner}
       </button>
     );
   }
-  return <div className={cn('rounded-3xl p-4', className)} style={style}>{inner}</div>;
+  return <div className={cn('flex flex-col items-stretch justify-start rounded-3xl p-4', className)} style={style}>{inner}</div>;
 }
 
 /** Cockpit-paneel met titelrij en optionele 'bekijk alle'-actie. */
