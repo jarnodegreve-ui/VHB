@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, CheckCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { cn } from '../lib/ui';
+import { useKeyboardInset } from '../lib/useKeyboardInset';
 
 export function ChangePasswordModal({
   isOpen,
@@ -20,6 +21,7 @@ export function ChangePasswordModal({
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const keyboardInset = useKeyboardInset(isOpen);
   // Succes-timer opruimen: zonder cleanup sloot een heropende modal na
   // <1,8s vanzelf weer (oude timer vuurde alsnog).
   const closeTimerRef = useRef<number | null>(null);
@@ -101,7 +103,9 @@ export function ChangePasswordModal({
           className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
           style={{
             paddingTop: 'max(1rem, env(safe-area-inset-top))',
-            paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+            // iOS: zonder deze inset staan de onderste velden en de
+            // opslaan-knop achter het toetsenbord (de viewport krimpt niet).
+            paddingBottom: keyboardInset ? `${keyboardInset}px` : 'max(1rem, env(safe-area-inset-bottom))',
           }}
         >
           <motion.div

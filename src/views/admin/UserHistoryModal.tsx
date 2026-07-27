@@ -5,13 +5,8 @@ import { cn } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
+import { formatLeaveType } from '../../lib/format';
 
-const LEAVE_TYPE_LABELS: Record<string, string> = {
-  betaald_verlof: 'Betaald verlof',
-  klein_verlet: 'Klein verlet',
-  ziekte: 'Ziekte',
-};
-const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
 const LEAVE_STATUS_LABELS: Record<LeaveRequest['status'], string> = {
   pending: 'In behandeling',

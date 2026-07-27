@@ -87,6 +87,11 @@ export interface Service {
   endTime2?: string;
   startTime3?: string;
   endTime3?: string;
+  /** Loopnummer per tijdsblok: een loop is het deel van de dienst waar
+   *  bepaalde ritten onder vallen. Blok 1 = loopnr, blok 2 = loopnr2, enz. */
+  loopnr?: string;
+  loopnr2?: string;
+  loopnr3?: string;
 }
 
 export interface PlanningMatrixRow {
@@ -156,4 +161,4 @@ export interface ActivityLogEntry {
   entityId?: string | null;
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'beheer-contactlijst' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'ocpi-monitoring';
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'ocpi-monitoring';

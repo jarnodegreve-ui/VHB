@@ -2,6 +2,7 @@ import React, { useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { motion } from 'motion/react';
 import { cn } from '../lib/ui';
+import { useKeyboardInset } from '../lib/useKeyboardInset';
 
 /**
  * Portal-rendered modal with backdrop, click-outside-to-close and ESC support.
@@ -37,6 +38,10 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // iOS: het toetsenbord bedekt anders de onderkant van de modal (o.a. de
+  // opslaan-knop), want de layout-viewport krimpt niet mee.
+  const keyboardInset = useKeyboardInset(open);
+
   if (typeof document === 'undefined' || !open) return null;
 
   const widthClass = {
@@ -59,7 +64,9 @@ export function Modal({
       className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-4 bg-slate-900/40 backdrop-blur-sm"
       style={{
         paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
-        paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+        paddingBottom: keyboardInset
+          ? `${keyboardInset}px`
+          : 'max(0.5rem, env(safe-area-inset-bottom))',
       }}
     >
       <motion.div

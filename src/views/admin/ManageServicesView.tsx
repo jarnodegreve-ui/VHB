@@ -27,7 +27,10 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     startTime2: '',
     endTime2: '',
     startTime3: '',
-    endTime3: ''
+    endTime3: '',
+    loopnr: '',
+    loopnr2: '',
+    loopnr3: ''
   });
   const [isImporting, setIsImporting] = useState(false);
 
@@ -94,6 +97,13 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           const startTime3 = findValue(['start 3', 'begin 3', 'van 3', 'starttijd 3', 'start (deel 3)', 'begin_2', 'begin3']);
           const endTime3 = findValue(['eind 3', 'stop 3', 'tot 3', 'eindtijd 3', 'einde (deel 3)', 'einde_2', 'einde3']);
 
+          // Loopnummers per deel — het deel van de dienst waar bepaalde
+          // ritten onder vallen. Kolomnaam mag 'loop 1'/'loopnr 1'/'loopnummer 1'
+          // zijn (of zonder cijfer voor deel 1).
+          const loopnr = findValue(['loop 1', 'loopnr 1', 'loopnummer 1', 'loop (deel 1)', 'loop', 'loopnr', 'loopnummer']);
+          const loopnr2 = findValue(['loop 2', 'loopnr 2', 'loopnummer 2', 'loop (deel 2)', 'loop_1', 'loopnr_1']);
+          const loopnr3 = findValue(['loop 3', 'loopnr 3', 'loopnummer 3', 'loop (deel 3)', 'loop_2', 'loopnr_2']);
+
           // Fallback for simple start/end if part 1 is missing
           const finalStart = startTime || findValue(['start', 'begin', 'van']);
           const finalEnd = endTime || findValue(['eind', 'stop', 'tot']);
@@ -106,7 +116,10 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             startTime2: formatExcelTime(startTime2),
             endTime2: formatExcelTime(endTime2),
             startTime3: formatExcelTime(startTime3),
-            endTime3: formatExcelTime(endTime3)
+            endTime3: formatExcelTime(endTime3),
+            loopnr: loopnr?.toString().trim() || '',
+            loopnr2: loopnr2?.toString().trim() || '',
+            loopnr3: loopnr3?.toString().trim() || ''
           };
         }).filter(s => s.serviceNumber);
 
@@ -128,15 +141,18 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   };
 
   const downloadCSV = () => {
-    const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Start 2', 'Eind 2', 'Start 3', 'Eind 3'];
+    const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Loop 1', 'Start 2', 'Eind 2', 'Loop 2', 'Start 3', 'Eind 3', 'Loop 3'];
     const rows = services.map(s => [
       `"${s.serviceNumber}"`, 
       `"${s.startTime}"`, 
       `"${s.endTime}"`,
+      `"${s.loopnr || ''}"`,
       `"${s.startTime2 || ''}"`,
       `"${s.endTime2 || ''}"`,
+      `"${s.loopnr2 || ''}"`,
       `"${s.startTime3 || ''}"`,
-      `"${s.endTime3 || ''}"`
+      `"${s.endTime3 || ''}"`,
+      `"${s.loopnr3 || ''}"`
     ]);
     
     const csvContent = [
@@ -164,7 +180,10 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       startTime2: service.startTime2 || '',
       endTime2: service.endTime2 || '',
       startTime3: service.startTime3 || '',
-      endTime3: service.endTime3 || ''
+      endTime3: service.endTime3 || '',
+      loopnr: service.loopnr || '',
+      loopnr2: service.loopnr2 || '',
+      loopnr3: service.loopnr3 || ''
     });
     setShowModal(true);
   };
@@ -185,7 +204,10 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       startTime2: '',
       endTime2: '',
       startTime3: '',
-      endTime3: ''
+      endTime3: '',
+      loopnr: '',
+      loopnr2: '',
+      loopnr3: ''
     });
   };
 
@@ -296,12 +318,15 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   <Td className="font-semibold text-slate-800">{s.serviceNumber}</Td>
                   <Td className="tabular-nums">
                     {s.startTime} - {s.endTime}
+                    {s.loopnr && <span className="block text-[11px] font-medium text-slate-400">loop {s.loopnr}</span>}
                   </Td>
                   <Td className="tabular-nums">
                     {hasValidTime(s.startTime2, s.endTime2) ? `${s.startTime2} - ${s.endTime2}` : ''}
+                    {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 && <span className="block text-[11px] font-medium text-slate-400">loop {s.loopnr2}</span>}
                   </Td>
                   <Td className="tabular-nums">
                     {hasValidTime(s.startTime3, s.endTime3) ? `${s.startTime3} - ${s.endTime3}` : ''}
+                    {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 && <span className="block text-[11px] font-medium text-slate-400">loop {s.loopnr3}</span>}
                   </Td>
                   <Td className="text-right">
                     <div className="flex items-center justify-end gap-1">
@@ -387,7 +412,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm"
             />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <MicroLabel className="ml-1">Starttijd (Deel 1)</MicroLabel>
               <input
@@ -404,9 +429,18 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
+            <div className="space-y-2">
+              <MicroLabel className="ml-1">Loopnummer (Deel 1)</MicroLabel>
+              <input
+                type="text" inputMode="numeric" value={formData.loopnr}
+                onChange={(e) => setFormData({...formData, loopnr: e.target.value})}
+                placeholder="bv. 12"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <MicroLabel className="ml-1">Starttijd (Deel 2)</MicroLabel>
               <input
@@ -423,9 +457,18 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>
+            <div className="space-y-2">
+              <MicroLabel className="ml-1">Loopnummer (Deel 2)</MicroLabel>
+              <input
+                type="text" inputMode="numeric" value={formData.loopnr2}
+                onChange={(e) => setFormData({...formData, loopnr2: e.target.value})}
+                placeholder="bv. 12"
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+              />
+            </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
             <div className="space-y-2">
               <MicroLabel className="ml-1">Starttijd (Deel 3)</MicroLabel>
               <input
@@ -439,6 +482,15 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               <input
                 type="time" value={formData.endTime3}
                 onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
+                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+              />
+            </div>
+            <div className="space-y-2">
+              <MicroLabel className="ml-1">Loopnummer (Deel 3)</MicroLabel>
+              <input
+                type="text" inputMode="numeric" value={formData.loopnr3}
+                onChange={(e) => setFormData({...formData, loopnr3: e.target.value})}
+                placeholder="bv. 12"
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
             </div>

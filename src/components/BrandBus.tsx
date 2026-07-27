@@ -2,7 +2,7 @@
  * Bus-mascotte voor empty states — versie van het nieuwe VHB-logo
  * zonder de "Van Hoorebeke & Zoon" tekst eronder.
  *
- * Geometry is letterlijk overgenomen uit /public/vhb-logo.svg, alleen
+ * Geometry is letterlijk overgenomen uit brand/ (vhb-logo.svg), alleen
  * de text-paths zijn weggelaten. Tight viewBox rond het bus-icoon
  * zelf zodat 't scaled netjes oogt in een empty-state container.
  */

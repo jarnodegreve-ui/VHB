@@ -94,14 +94,16 @@ export function buildVevent(ev: IcsEvent, dtstamp: string): string[] {
     const endExclusive = addOneDay(ev.endDate || ev.date).replace(/-/g, '');
     lines.push(`DTSTART;VALUE=DATE:${start}`, `DTEND;VALUE=DATE:${endExclusive}`);
   } else {
+    // Alles eerst als minuten sinds middernacht van de dienstdag: zo klopt
+    // ook gemengde notatie ("24:30 – 06:00" = start busvak, einde gewoon),
+    // die anders een DTEND vóór DTSTART opleverde en het event in agenda-
+    // apps liet vallen. Eind <= start betekent altijd "volgende dag".
+    const startMin = toMinutes(ev.startTime);
+    const rawEndMin = toMinutes(ev.endTime);
+    const endMin = rawEndMin <= startMin ? rawEndMin + 24 * 60 : rawEndMin;
     const start = normalizeDayTime(ev.date, ev.startTime);
-    const end = normalizeDayTime(ev.date, ev.endTime);
-    // Impliciete nachtdienst (eind <= start in gewone uren) → einddatum is
-    // de volgende dag; busvak-uren zijn hierboven al doorgeschoven.
-    const endDate = end.date === start.date && toMinutes(end.time) <= toMinutes(start.time)
-      ? addOneDay(end.date)
-      : end.date;
-    lines.push(`DTSTART:${toFloatingDateTime(start.date, start.time)}`, `DTEND:${toFloatingDateTime(endDate, end.time)}`);
+    const end = normalizeDayTime(ev.date, `${Math.floor(endMin / 60)}:${String(endMin % 60).padStart(2, '0')}`);
+    lines.push(`DTSTART:${toFloatingDateTime(start.date, start.time)}`, `DTEND:${toFloatingDateTime(end.date, end.time)}`);
   }
   lines.push(`SUMMARY:${escapeIcsText(ev.summary)}`);
   if (ev.description) lines.push(`DESCRIPTION:${escapeIcsText(ev.description)}`);

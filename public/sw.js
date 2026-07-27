@@ -36,7 +36,7 @@
 // v17: /api/me network-first-met-cache-fallback (SWR toonde op een gedeeld
 // toestel het profiel van de vorige gebruiker); ritblad-PDF valt bij een
 // cors-fout terug op no-cors zodat een koude weergave nooit breekt.
-const CACHE_NAME = 'vhb-portaal-v17';
+const CACHE_NAME = 'vhb-portaal-v18';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';

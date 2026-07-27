@@ -1072,6 +1072,17 @@ describe('aanmeldingen (login-activiteit)', () => {
     expect(login.domain).toBe('auth');
   });
 
+  it("sessie-start logt géén tweede 'Aangemeld' binnen 10 minuten (spam-dedup)", async () => {
+    mem.lastAuthEventAt = new Date(Date.now() - 2 * 60 * 1000).toISOString();
+    const res = await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start' } });
+    expect(res.status).toBe(200);
+    expect(mem.activity.find((a) => a.action === 'Aangemeld')).toBeUndefined();
+    // Ouder dan 10 minuten → wél opnieuw loggen.
+    mem.lastAuthEventAt = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start' } });
+    expect(mem.activity.find((a) => a.action === 'Aangemeld')).toBeTruthy();
+  });
+
   it('GET /api/activity/logins: admin krijgt logins, planner 403', async () => {
     await api('POST', '/api/auth/session', { token: 'tok-a', body: { action: 'start' } });
     const planner = await api('GET', '/api/activity/logins', { token: 'tok-planner' });

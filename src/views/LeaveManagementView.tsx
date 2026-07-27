@@ -13,13 +13,8 @@ import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { formatDateHuman } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
+import { formatLeaveType } from '../lib/format';
 
-const LEAVE_TYPE_LABELS: Record<string, string> = {
-  betaald_verlof: 'Betaald verlof',
-  klein_verlet: 'Klein verlet',
-  ziekte: 'Ziekte',
-};
-const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
 export function LeaveManagementView({ user, leaveRequests, users, onSave, onSickReport, autoOpenSick, onSickModalConsumed, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>; autoOpenSick?: boolean; onSickModalConsumed?: () => void; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);

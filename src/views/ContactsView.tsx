@@ -4,7 +4,7 @@ import type { User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
-import { notify } from '../lib/ui';
+import { notify, telHref } from '../lib/ui';
 
 const roleLabel = (role: string) =>
   role === 'chauffeur' ? 'Chauffeur' : role === 'planner' ? 'Planning' : role === 'admin' ? 'Beheer' : role;
@@ -77,7 +77,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
             </button>
             {u.phone ? (
               <a
-                href={`tel:${u.phone.replace(/\s/g, '')}`}
+                href={telHref(u.phone)}
                 aria-label={`Bel ${u.name}`}
                 title={`Bel ${u.name}`}
                 className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-500 hover:border-emerald-500 hover:text-slate-950 transition-colors"
@@ -127,7 +127,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 </div>
                 <div className="mt-4 flex flex-col sm:flex-row gap-2">
                   <a
-                    href={`tel:${selected.phone.replace(/\s/g, '')}`}
+                    href={telHref(selected.phone)}
                     className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500 text-slate-950 px-4 py-3 text-sm font-semibold hover:bg-emerald-600 transition-colors"
                   >
                     <Phone size={16} /> Bellen

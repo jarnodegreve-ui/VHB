@@ -6,7 +6,7 @@ import { PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { fetchAvailability } from '../lib/availability';
-import { formatShortDay } from '../lib/format';
+import { formatShortDay, MONTH_NAMES } from '../lib/format';
 import {
   fetchCoverageConfig,
   fetchCoverageGaps,
@@ -17,10 +17,6 @@ import {
   type DayGap,
 } from '../lib/coverage';
 
-const MONTH_NAMES = [
-  'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
-  'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
-];
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
 const WEEKDAY_ORDER: { dow: number; label: string }[] = [

@@ -44,15 +44,18 @@ export function ServicesView({ services }: { services: Service[] }) {
   };
 
   const downloadCSV = () => {
-    const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Start 2', 'Eind 2', 'Start 3', 'Eind 3'];
+    const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Loop 1', 'Start 2', 'Eind 2', 'Loop 2', 'Start 3', 'Eind 3', 'Loop 3'];
     const rows = filteredServices.map(s => [
       `"${s.serviceNumber}"`,
       `"${s.startTime}"`,
       `"${s.endTime}"`,
+      `"${s.loopnr || ''}"`,
       `"${s.startTime2 || ''}"`,
       `"${s.endTime2 || ''}"`,
+      `"${s.loopnr2 || ''}"`,
       `"${s.startTime3 || ''}"`,
-      `"${s.endTime3 || ''}"`
+      `"${s.endTime3 || ''}"`,
+      `"${s.loopnr3 || ''}"`
     ]);
 
     const csvContent = [
@@ -139,6 +142,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                     <div className="flex items-center gap-2 font-medium tabular-nums">
                       <Clock size={14} className="text-oker-500" />
                       {s.startTime} - {s.endTime}
+                      <LoopChip loopnr={s.loopnr} />
                     </div>
                   </Td>
                   <Td>
@@ -146,6 +150,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                       <div className="flex items-center gap-2 font-medium tabular-nums">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime2} - {s.endTime2}
+                        <LoopChip loopnr={s.loopnr2} />
                       </div>
                     ) : null}
                   </Td>
@@ -154,6 +159,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                       <div className="flex items-center gap-2 font-medium tabular-nums">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime3} - {s.endTime3}
+                        <LoopChip loopnr={s.loopnr3} />
                       </div>
                     ) : null}
                   </Td>
@@ -191,6 +197,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                       <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
                         <Clock size={14} className="text-oker-500" />
                         {s.startTime} - {s.endTime}
+                        <LoopChip loopnr={s.loopnr} />
                       </div>
                     </div>
                     {hasValidTime(s.startTime2, s.endTime2) && (
@@ -199,6 +206,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                         <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
                           <Clock size={14} className="text-oker-500" />
                           {s.startTime2} - {s.endTime2}
+                          <LoopChip loopnr={s.loopnr2} />
                         </div>
                       </div>
                     )}
@@ -208,6 +216,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                         <div className="flex items-center gap-2 text-slate-700 font-medium text-sm tabular-nums">
                           <Clock size={14} className="text-oker-500" />
                           {s.startTime3} - {s.endTime3}
+                          <LoopChip loopnr={s.loopnr3} />
                         </div>
                       </div>
                     )}
@@ -229,5 +238,16 @@ export function ServicesView({ services }: { services: Service[] }) {
         )}
       </TableShell>
     </PageShell>
+  );
+}
+
+/** Loopnummer van een dienstdeel — het deel van de dienst waaronder bepaalde
+ *  ritten vallen. Toont niets zolang er geen nummer ingevuld is. */
+function LoopChip({ loopnr }: { loopnr?: string }) {
+  if (!loopnr?.trim()) return null;
+  return (
+    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+      loop {loopnr.trim()}
+    </span>
   );
 }

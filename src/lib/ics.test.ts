@@ -62,6 +62,14 @@ describe('ics — events', () => {
     expect(v).not.toContain('T2616');
   });
 
+  it('buildVevent: gemengde notatie (start busvak, einde gewoon) → DTEND ná DTSTART', () => {
+    // Regressie: "24:30 – 06:00" gaf eerder DTEND op de dienstdag zelf,
+    // dus vóór DTSTART → agenda-apps lieten het event vallen.
+    const v = buildVevent({ ...base, startTime: '24:30', endTime: '06:00' }, DTSTAMP).join('\n');
+    expect(v).toContain('DTSTART:20260704T003000');
+    expect(v).toContain('DTEND:20260704T060000');
+  });
+
   it('buildVevent: dienst volledig ná middernacht (start ≥ 24:00) schuift beide door', () => {
     const v = buildVevent({ ...base, startTime: '24:30', endTime: '27:00' }, DTSTAMP).join('\n');
     expect(v).toContain('DTSTART:20260704T003000');

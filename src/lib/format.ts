@@ -69,3 +69,20 @@ export function formatShortDay(iso: string | undefined | null): string {
     return String(iso);
   }
 }
+
+/** Nederlandse maandnamen (index 0 = januari). Eén bron: stond eerder 4×
+ *  woordelijk gedupliceerd in views. */
+export const MONTH_NAMES = [
+  'Januari', 'Februari', 'Maart', 'April', 'Mei', 'Juni',
+  'Juli', 'Augustus', 'September', 'Oktober', 'November', 'December',
+];
+
+/** Labels van de verloftypes uit de verlof-module (stond 3× gedupliceerd);
+ *  een nieuw type hoeft nu maar op één plek bij. */
+export const LEAVE_TYPE_LABELS: Record<string, string> = {
+  betaald_verlof: 'Betaald verlof',
+  klein_verlet: 'Klein verlet',
+  ziekte: 'Ziekte',
+};
+
+export const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;

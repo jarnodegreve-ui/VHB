@@ -6,6 +6,7 @@ import { getDaypartGreeting } from '../lib/interactive';
 import { openPdfInNewTab } from '../lib/ui';
 import { formatDateHuman } from '../lib/format';
 import { isoDate } from '../lib/availability';
+import { hasShiftEnded } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Sparkline } from '../components/Sparkline';
 import { BrandBus } from '../components/BrandBus';
@@ -91,6 +92,15 @@ export function DashboardView({
     })
     .filter((s) => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
+
+  // Alle delen van díe dienst die nog moeten komen: een gesplitste dienst is
+  // meerdere planning-rijen met hetzelfde dienstnummer op dezelfde dag, en
+  // een deel dat al gereden is hoort niet meer op de tegel (Jarno).
+  const nextShiftParts = nextShift
+    ? myShifts
+        .filter((s) => s.date === nextShift.date && s.line === nextShift.line && !hasShiftEnded(s, now))
+        .sort((a, b) => a.startTime.localeCompare(b.startTime))
+    : [];
 
   const newestDiversions = [...diversions].reverse().slice(0, 3);
   const visibleShifts = myShifts.slice(0, 3);
@@ -318,11 +328,21 @@ export function DashboardView({
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
                     Volgende dienst
                   </p>
-                  <p className="mt-1 text-[22px] font-black tracking-[-0.02em] text-slate-900 leading-tight">
-                    {display.hero}
-                  </p>
+                  <div className="mt-1 flex items-baseline gap-2">
+                    <p className="text-[22px] font-black tracking-[-0.02em] text-slate-900 leading-tight">
+                      {display.hero}
+                    </p>
+                    {nextShift.line && (
+                      <span className="shrink-0 rounded-lg bg-oker-500/15 px-2 py-0.5 text-[12px] font-bold tabular-nums text-oker-700 dark:text-oker-400">
+                        {nextShift.line}
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 text-xs font-medium text-slate-500 tabular-nums">
-                    {display.sub} · {nextShift.startTime}–{nextShift.endTime}
+                    {display.sub} ·{' '}
+                    {(nextShiftParts.length > 0 ? nextShiftParts : [nextShift])
+                      .map((p) => `${p.startTime}–${p.endTime}${p.loopnr ? ` (loop ${p.loopnr})` : ''}`)
+                      .join(' · ')}
                   </p>
                 </>
               );
@@ -630,17 +650,20 @@ export function StatTile({
 }) {
   const c = TILE_PALETTE[color];
   // Default sparkline-kleur volgt de accent-tint
+  // Via CSS-variabelen i.p.v. rauwe hex: de tinten volgen zo de tokens én de
+  // donkere modus (de vaste #4F575F haalde op een near-black tegel geen 3:1
+  // en was praktisch onzichtbaar).
   const splColor =
     sparklineColor ||
     (color === 'oker'
-      ? '#C9851F'
+      ? 'var(--color-oker-600)'
       : color === 'red'
-      ? '#dc2626'
+      ? 'var(--color-red-500)'
       : color === 'emerald'
-      ? '#059669'
+      ? 'var(--color-emerald-500)'
       : color === 'blue'
-      ? '#2563eb'
-      : '#4F575F');
+      ? 'var(--color-sky-500)'
+      : 'var(--spark-neutral)');
   const Body = (
     <>
       <div className="flex items-start justify-between mb-2.5">

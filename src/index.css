@@ -126,38 +126,43 @@
   --tile-shadow-hero:
     0 1px 2px rgba(13, 13, 15, 0.05),
     0 12px 32px rgba(13, 13, 15, 0.06);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  /* === shadcn-tokens, gemapt op de VHB-huisstijl ===
+     De init zette hier de neutral-defaults (zwart/grijs, en in dark een
+     indigo sidebar-accent). Zo zou het eerste `shadcn add`-component stil
+     buiten de huisstijl vallen. Primary = VHB Amber met VHB Black-tekst
+     (nooit wit op amber), charts = het gedempte juweelpalet. */
+  --background: #FFFFFF;
+  --foreground: #0D0D0F;
+  --card: #FFFFFF;
+  --card-foreground: #0D0D0F;
+  --popover: #FFFFFF;
+  --popover-foreground: #0D0D0F;
+  --primary: #E8A33D;
+  --primary-foreground: #0D0D0F;
+  --secondary: #F2F3F4;
+  --secondary-foreground: #2C3137;
+  --muted: #F2F3F4;
+  --muted-foreground: #6E767F;
+  --accent: #FCF7ED;
+  --accent-foreground: #A2691A;
+  --destructive: #DC2626;
+  --border: #E4E6E8;
+  --input: #E4E6E8;
+  --ring: #E8A33D;
+  --chart-1: #C9851F;
+  --chart-2: #57BB92;
+  --chart-3: #64AADE;
+  --chart-4: #DD8093;
+  --chart-5: #4F575F;
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #0D0D0F;
+  --sidebar-foreground: #E4E6E8;
+  --sidebar-primary: #E8A33D;
+  --sidebar-primary-foreground: #0D0D0F;
+  --sidebar-accent: rgba(232, 163, 61, 0.12);
+  --sidebar-accent-foreground: #ECB75F;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #E8A33D;
 }
 
 html.dark {
@@ -877,7 +882,10 @@ html.dark {
 .dark .hover\:text-slate-700:hover { color: #E4E6E8; }
 .dark .hover\:text-slate-800:hover { color: #F2F3F4; }
 .dark .group-focus-within\:text-oker-500 { color: rgb(236, 183, 95); }
-.dark .group-hover\:text-slate-600 { color: #CDD1D5; }
+/* Met .group:hover-scope: zonder die scope stond élk element met deze class
+   in donkere modus permanent op hover-helderheid (chevrons, inactieve
+   nav-items) en gaf hover geen feedback meer. */
+.dark .group:hover .group-hover\:text-slate-600 { color: #CDD1D5; }
 
 /* Borders */
 .dark .border-slate-50 { border-color: rgba(79, 87, 95, 0.20); }
@@ -984,6 +992,31 @@ html.dark {
 .dark .text-amber-600 { color: rgb(253, 186, 116); }
 .dark .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.30); }
 .dark .border-red-200\/70 { border-color: rgba(239, 68, 68, 0.30); }
+
+/* Gaten uit de controle-ronde 2026-07-26: kleurvlakken/hover-states die in
+   donkere modus als felle pastel bleven staan (mint-op-mint, roze chip) of
+   waar de tekst juist onleesbaar werd. De :hover/:active-selectors staan
+   bewust hoger in specificiteit dan de basisregels hierboven, zodat de
+   bedoelde hover-tekstkleur wint. */
+.dark .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.16); }
+.dark .bg-red-100 { background-color: rgba(239, 68, 68, 0.16); }
+.dark .ring-red-200 { --tw-ring-color: rgba(239, 68, 68, 0.35); }
+.dark .hover\:bg-red-200:hover { background-color: rgba(239, 68, 68, 0.28); }
+.dark .hover\:bg-emerald-500:hover { background-color: rgba(16, 185, 129, 0.85); }
+.dark .hover\:text-slate-950:hover { color: #0D0D0F; }
+.dark .active\:bg-slate-100:active { background-color: rgba(79, 87, 95, 0.45); }
+.dark .active\:bg-slate-50:active { background-color: rgba(79, 87, 95, 0.32); }
+
+/* Icoonvierkant van de snelle acties: `dark:bg-oker-500/15` verloor het van
+   de unlayered `.dark .bg-slate-900` hierboven, waardoor het vlak pikzwart
+   bleef op een near-black tegel. Eigen class = geen cascade-verrassing. */
+.quick-action-icon { background-color: #0D0D0F; color: #FFFFFF; }
+.dark .quick-action-icon { background-color: rgba(232, 163, 61, 0.15); color: rgb(236, 183, 95); }
+
+/* Neutrale sparkline-tint: op wit donker genoeg, op de donkere tegel licht
+   genoeg (≥ 3:1 voor grafische elementen). */
+:root { --spark-neutral: #4F575F; }
+html.dark { --spark-neutral: #9AA1A9; }
 
 /* De login is bewust ALTIJD carbon-donker (login-bg-dark / panel-login-dark,
    wit logo, witte koppen), los van de app-thema-toggle — zie LoginView.tsx.
@@ -1123,36 +1156,39 @@ html.dark {
   --color-background: var(--background);
 }
 
+/* Donkere tegenhanger van de shadcn-tokens hierboven: dezelfde carbon-tinten
+   als de rest van de dark mode (bewust géén koel-blauwe/indigo zweem) en
+   amber als accent. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: #0D0D0F;
+  --foreground: #F2F3F4;
+  --card: #17181A;
+  --card-foreground: #F2F3F4;
+  --popover: #17181A;
+  --popover-foreground: #F2F3F4;
+  --primary: #E8A33D;
+  --primary-foreground: #0D0D0F;
+  --secondary: rgba(79, 87, 95, 0.35);
+  --secondary-foreground: #E4E6E8;
+  --muted: rgba(79, 87, 95, 0.28);
+  --muted-foreground: #9AA1A9;
+  --accent: rgba(232, 163, 61, 0.14);
+  --accent-foreground: #ECB75F;
+  --destructive: #F87171;
+  --border: rgba(255, 255, 255, 0.10);
+  --input: rgba(255, 255, 255, 0.15);
+  --ring: #E8A33D;
+  --chart-1: #ECB75F;
+  --chart-2: #57BB92;
+  --chart-3: #64AADE;
+  --chart-4: #DD8093;
+  --chart-5: #9AA1A9;
+  --sidebar: #101113;
+  --sidebar-foreground: #E4E6E8;
+  --sidebar-primary: #E8A33D;
+  --sidebar-primary-foreground: #0D0D0F;
+  --sidebar-accent: rgba(232, 163, 61, 0.12);
+  --sidebar-accent-foreground: #ECB75F;
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #E8A33D;
 }

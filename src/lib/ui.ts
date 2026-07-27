@@ -30,8 +30,49 @@ export async function getSupabaseAuthHeaders() {
  * terug (geen tabbladen in standalone) — dan navigeren we in hetzelfde
  * venster; terug-swipen brengt de gebruiker weer in het portaal.
  */
+/** Alleen https/http en data:application/pdf mogen als navigatiedoel dienen.
+ *  De pdfUrl van een omleiding is planner-invoer; zonder deze check kon een
+ *  `javascript:`-URL bij de window.open-null-fallback (iOS-standalone) in de
+ *  sessie van de kijkende admin uitgevoerd worden. */
+export const isSafeDocumentUrl = (url: string): boolean => {
+  const trimmed = url.trim();
+  if (/^data:application\/pdf[;,]/i.test(trimmed)) return true;
+  try {
+    const proto = new URL(trimmed, window.location.origin).protocol;
+    return proto === 'https:' || proto === 'http:';
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * Telefoonnummer → `tel:`-href. Het veld is vrije tekst, dus notaties als
+ * "+32 (0)475 12 34 56" komen voor: de landcode-nul tussen haakjes moet weg
+ * (anders belt de telefoon een ongeldig nummer) en alleen een leidende `+`
+ * heeft betekenis. Eén gedeelde bron zodat elke bel-knop hetzelfde nummer
+ * draait. Geeft undefined bij een nummer zonder cijfers.
+ */
+export function telHref(phone: string | undefined | null): string | undefined {
+  const raw = String(phone ?? '').trim();
+  if (!raw) return undefined;
+  const plus = raw.startsWith('+');
+  // "(0)" na een landcode is een schrijfwijze, geen te kiezen cijfer.
+  const digits = raw.replace(/\(0\)/g, '').replace(/\D/g, '');
+  if (!digits) return undefined;
+  return `tel:${plus ? '+' : ''}${digits}`;
+}
+
+/** Veilige href voor een download-anchor: onveilige/lege URL's worden
+ *  onklikbaar (`undefined`) i.p.v. een navigatiedoel. */
+export const safeDocumentHref = (url: string | undefined | null): string | undefined =>
+  url && isSafeDocumentUrl(url) ? url : undefined;
+
 export function openPdfInNewTab(pdfUrl: string | undefined | null) {
   if (!pdfUrl) return;
+  if (!isSafeDocumentUrl(pdfUrl)) {
+    notify('Deze bijlage heeft een ongeldig adres en is niet geopend.', 'error');
+    return;
+  }
   if (!pdfUrl.startsWith('data:')) {
     const win = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
     if (!win) window.location.assign(pdfUrl);

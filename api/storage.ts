@@ -355,7 +355,9 @@ export const getLoginActivity = async (sinceIso: string, limit = 3000): Promise<
     .gte("created_at", sinceIso)
     .order("created_at", { ascending: false })
     .limit(limit);
-  if (error) return [];
+  // Fouten doorgeven i.p.v. [] — een lege lijst is niet te onderscheiden van
+  // "niemand meldde zich aan" en verstopte DB-problemen voor de admin.
+  if (error) throw error;
   return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
 };
 
@@ -537,7 +539,10 @@ export const diffServiceChanges = (
       previous.startTime2 !== service.startTime2 ||
       previous.endTime2 !== service.endTime2 ||
       previous.startTime3 !== service.startTime3 ||
-      previous.endTime3 !== service.endTime3
+      previous.endTime3 !== service.endTime3 ||
+      previous.loopnr !== service.loopnr ||
+      previous.loopnr2 !== service.loopnr2 ||
+      previous.loopnr3 !== service.loopnr3
     );
   });
 
@@ -730,10 +735,14 @@ const validSegment = (start: string | undefined, end: string | undefined, segmen
 
 export const getServiceSegments = (service: ServiceRecord) => (
   [
-    validSegment(service.startTime, service.endTime, 1),
-    validSegment(service.startTime2, service.endTime2, 2),
-    validSegment(service.startTime3, service.endTime3, 3),
-  ].filter(Boolean) as Array<{ startTime: string; endTime: string; segment: number }>
+    { seg: validSegment(service.startTime, service.endTime, 1), loopnr: service.loopnr },
+    { seg: validSegment(service.startTime2, service.endTime2, 2), loopnr: service.loopnr2 },
+    { seg: validSegment(service.startTime3, service.endTime3, 3), loopnr: service.loopnr3 },
+  ]
+    .filter((x) => x.seg !== null)
+    // Loopnummer hoort bij het blok: een loop is het deel van de dienst waar
+    // bepaalde ritten onder vallen, dus het reist mee naar de planning-rij.
+    .map((x) => ({ ...(x.seg as { startTime: string; endTime: string; segment: number }), loopnr: String(x.loopnr ?? '').trim() }))
 );
 
 export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) => {
@@ -853,7 +862,7 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
             endTime: segment.endTime,
             line: matchedService.serviceNumber,
             busNumber: "",
-            loopnr: "",
+            loopnr: segment.loopnr,
             driverId: driver.id,
           });
           driverStats.shiftsGenerated += 1;
@@ -1208,8 +1217,11 @@ const mapUserDocumentRow = (row: any): UserDocumentRecord => ({
   uploadedBy: row.uploaded_by ?? null,
 });
 
-/** Alle documenten, of alleen die van één gebruiker. Nieuwste eerst. */
+/** Alle documenten (userId undefined, admin-pad), of alleen die van één
+ *  gebruiker. Een LEGE string is geen "alles" maar "niets" — fail-closed
+ *  tegen een ontbrekende gebruikers-id op het aanroepende pad. */
 export const listUserDocuments = async (userId?: string): Promise<UserDocumentRecord[]> => {
+  if (userId !== undefined && !userId) return [];
   const client = requireDb();
   let query = client.from("user_documents").select("*").order("uploaded_at", { ascending: false }).limit(500);
   if (userId) query = query.eq("user_id", userId);

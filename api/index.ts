@@ -23,6 +23,7 @@ import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser,
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
 import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
@@ -93,6 +94,7 @@ import {
   isMissingDbFunction,
   logCronHeartbeat,
   getCronHeartbeats,
+  getDevice,
 } from "./storage.js";
 
 dotenv.config();
@@ -251,6 +253,30 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
       return res.status(400).json({ error: "Ongeldige sessieactie." });
     }
 
+    // Dit pad is device-gate-exempt (login/logout moet kunnen vóór goed-
+    // keuring), maar dat mag géén PII-luik zijn: op een niet-goedgekeurd
+    // toestel geen volledig profiel (telefoon/mail/verlofBudget) teruggeven
+    // en niets in het aanwezigheidslog schrijven — anders "ziet" de admin
+    // een chauffeur actief terwijl het een buitenstaander met gestolen
+    // inloggegevens is. Ontbrekende device-tabel = fail-open (zelfde regel
+    // als de middleware-gate).
+    let deviceApproved = true;
+    if (currentUser.role === "chauffeur") {
+      const rawToken = String(req.headers["x-device-token"] ?? "").trim();
+      const deviceToken = rawToken.length > 0 && rawToken.length <= 100 ? rawToken : "";
+      try {
+        const device = deviceToken ? await getDevice(String(currentUser.id), deviceToken) : null;
+        deviceApproved = device?.status === "approved";
+      } catch (err) {
+        deviceApproved = isMissingTableError(err);
+      }
+    }
+    if (!deviceApproved) {
+      // Minimaal antwoord dat de login-flow niet breekt (id+role+naam), maar
+      // zonder contactgegevens of saldi; geen teller-/log-boekhouding.
+      return res.json({ id: currentUser.id, name: currentUser.name, role: currentUser.role });
+    }
+
     // 'resume' = app geopend met een nog geldige sessie (PWA-herstel, geen
     // nieuwe login). Zonder dit event was zo'n gebruiker onzichtbaar in
     // "Actieve gebruikers per dag" — de grafiek telde alleen wie opnieuw
@@ -275,8 +301,15 @@ app.post("/api/auth/session", authenticate, async (req: AuthenticatedRequest, re
       await updateUserSessionMeta(String(currentUser.id), { lastLogin });
       // Login-event vastleggen: lastLogin wordt overschreven, maar de
       // activiteitenlog bewaart elke aanmelding apart → historiek "wie wanneer"
-      // + basis voor het per-dag-actieve-gebruikers-overzicht.
-      await logActivity(req, "auth", "Aangemeld", `${currentUser.name} meldde zich aan.`, { type: "user", id: String(currentUser.id) });
+      // + basis voor het per-dag-actieve-gebruikers-overzicht. Dedup binnen
+      // 10 minuten: 'start' is anders onbeperkt herhaalbaar en daarmee was
+      // het aanwezigheidslog te vervuilen (controle-ronde #31); een échte
+      // her-login binnen 10 min verliest hooguit één historiekregel.
+      const latestAuthEventAt = await getLatestAuthEventAt(String(currentUser.id));
+      const tenMinAgo = Date.now() - 10 * 60 * 1000;
+      if (!latestAuthEventAt || new Date(latestAuthEventAt).getTime() < tenMinAgo) {
+        await logActivity(req, "auth", "Aangemeld", `${currentUser.name} meldde zich aan.`, { type: "user", id: String(currentUser.id) });
+      }
     }
     // Optimistische teller in de respons (exact-genoeg voor weergave; de
     // DB-waarde is gezaghebbend en nu wél race-vrij).
@@ -562,7 +595,11 @@ app.get("/api/availability", authenticate, async (req, res) => {
           const id = String(s.driverId);
           working.add(id);
           const line = String(s.line ?? "").trim() || "•";
-          lines[id] = lines[id] ? `${lines[id]}/${line}` : line;
+          // Gesplitste dienst = meerdere planning-rijen met hetzelfde nummer:
+          // dedupliceren, anders wordt het "4101/4101" (en zo als returnCode
+          // op een dienstruil opgeslagen).
+          const seen = lines[id] ? lines[id].split("/") : [];
+          if (!seen.includes(line)) lines[id] = [...seen, line].join("/");
         }
       }
       const onLeave = new Set<string>();
@@ -641,10 +678,16 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
     // detail kan tonen zonder de services/codes naar elke client te sturen.
     const serviceByNorm = new Map(services.map((s: any) => [toLookupToken(s.serviceNumber), s]));
     const codeByNorm = new Map(codes.map((c: any) => [toLookupToken(c.code), c]));
+    // Loopnummer hoort bij het blok (het deel van de dienst waaronder
+    // bepaalde ritten vallen), dus toon het meteen bij de uren.
+    const withLoop = (times: string, loopnr: unknown) => {
+      const loop = String(loopnr ?? "").trim();
+      return loop ? `${times} (loop ${loop})` : times;
+    };
     const segmentsOf = (s: any): string[] => [
-      s.startTime && s.endTime ? `${s.startTime} - ${s.endTime}` : "",
-      s.startTime2 && s.endTime2 ? `${s.startTime2} - ${s.endTime2}` : "",
-      s.startTime3 && s.endTime3 ? `${s.startTime3} - ${s.endTime3}` : "",
+      s.startTime && s.endTime ? withLoop(`${s.startTime} - ${s.endTime}`, s.loopnr) : "",
+      s.startTime2 && s.endTime2 ? withLoop(`${s.startTime2} - ${s.endTime2}`, s.loopnr2) : "",
+      s.startTime3 && s.endTime3 ? withLoop(`${s.startTime3} - ${s.endTime3}`, s.loopnr3) : "",
     ].filter(Boolean);
     const resolve = (code: string): { kind: string; label: string; segments: string[] } | null => {
       const n = toLookupToken(code);
@@ -1699,11 +1742,36 @@ app.post("/api/restore", authenticate, requireRole("admin"), async (req: Authent
   }
 });
 
+// Bijlage-URL's zijn kortlevend ondertekend (bucket is privé, zie
+// supabase/2026-07-26_diversions_private.sql): een gedeelde link vervalt,
+// i.p.v. eeuwig te blijven werken voor ex-medewerkers. Pad is stabiel
+// `${id}.pdf`. Mislukt het ondertekenen (bucket nog publiek, bestand weg),
+// dan blijft de opgeslagen URL staan — bijlagen breken nooit door deze stap.
+const DIVERSION_URL_TTL_SEC = 60 * 60 * 12;
+const withSignedDiversionUrls = async (diversions: any[]): Promise<any[]> => {
+  if (!db) return diversions;
+  return Promise.all(
+    diversions.map(async (d) => {
+      if (!d?.pdfUrl || !d?.id) return d;
+      try {
+        const { data: signed } = await db.storage
+          .from(DIVERSIONS_BUCKET)
+          .createSignedUrl(`${d.id}.pdf`, DIVERSION_URL_TTL_SEC);
+        return signed?.signedUrl ? { ...d, pdfUrl: signed.signedUrl } : d;
+      } catch {
+        return d;
+      }
+    }),
+  );
+};
+
 app.get("/api/diversions", authenticate, async (req, res) => {
   try {
     const data = await getDiversionsData();
+    // Revisie op de rauwe data: de ondertekende URL's wisselen per request en
+    // zouden de optimistische-concurrency-hash anders elke keer veranderen.
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-    res.json(data);
+    res.json(await withSignedDiversionUrls(data));
   } catch (err) {
     console.error("Error reading diversions data:", err);
     res.status(500).json({ error: "Gegevens laden is mislukt." });
@@ -1786,8 +1854,14 @@ app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), a
       });
     if (uploadError) throw uploadError;
 
-    const { data: publicData } = supabaseAdmin.storage.from(DIVERSIONS_BUCKET).getPublicUrl(storagePath);
-    res.json({ publicUrl: publicData.publicUrl, storagePath, filename, sizeBytes: buffer.length });
+    // Ondertekende URL i.p.v. publieke: de bucket is privé. De opgeslagen
+    // pdfUrl vervalt, maar GET /api/diversions ondertekent bij élk ophalen
+    // opnieuw op basis van `${id}.pdf`, dus de bijlage blijft bereikbaar.
+    const { data: signed, error: signError } = await supabaseAdmin.storage
+      .from(DIVERSIONS_BUCKET)
+      .createSignedUrl(storagePath, DIVERSION_URL_TTL_SEC);
+    if (signError || !signed?.signedUrl) throw signError ?? new Error("Kon geen ondertekende URL maken.");
+    res.json({ publicUrl: signed.signedUrl, storagePath, filename, sizeBytes: buffer.length });
   } catch (err: any) {
     console.error("Diversion PDF upload error:", err);
     console.error("Kon PDF niet uploaden.", err);
@@ -2932,6 +3006,9 @@ app.get("/api/documents", authenticate, async (req: AuthenticatedRequest, res) =
     const isStaff = role === "admin";
     const requestedUserId = typeof req.query.userId === "string" && req.query.userId ? req.query.userId : undefined;
     const scopeUserId = isStaff ? requestedUserId : String(req.appUser?.id ?? "");
+    // Fail-closed: een lege eigen id mag nooit "geen filter" betekenen —
+    // listUserDocuments zonder id geeft ALLE documenten terug (admin-pad).
+    if (!isStaff && !scopeUserId) return res.json([]);
     const docs = await listUserDocuments(scopeUserId);
     const withUrls = await Promise.all(
       docs.map(async (d) => {

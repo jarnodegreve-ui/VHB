@@ -202,14 +202,6 @@ export function CommandPalette({
         action: () => onNavigate('activiteit'),
       },
       {
-        id: 'goto-beheer-contactlijst',
-        label: 'Beheer Contactlijst',
-        icon: <Users size={16} />,
-        keywords: 'beheer contact medewerkers',
-        roles: ['admin'],
-        action: () => onNavigate('beheer-contactlijst'),
-      },
-      {
         id: 'goto-beheer-debug',
         label: 'Systeem Status',
         icon: <RefreshCw size={16} />,
