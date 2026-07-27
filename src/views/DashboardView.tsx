@@ -283,6 +283,9 @@ export function DashboardView({
           tone={nextShift ? 'oker' : 'slate'}
           label="Volgende dienst"
           text={nextShift ? getServiceNumber(nextShift) : '—'}
+          // De subregel ís hier de boodschap (wanneer rijd ik?) — dus een
+          // maat groter dan de standaard tegel-subtekst.
+          subClassName="text-[14px] font-semibold text-slate-600"
           sub={
             nextShift
               ? `${relativeDay(nextShift.date)} · ${new Date(`${nextShift.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })}`
