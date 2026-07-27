@@ -111,9 +111,12 @@ test.describe('smoke: ingelogde chauffeur', () => {
     await expect(page.getByText(/loop 4500/).first()).toBeVisible();
     // De omleiding staat in het paneel.
     await expect(page.getByText('Werken Markt')).toBeVisible();
-    // "Vandaag" toont álle blokken van de gesplitste dienst, elk met loop.
-    await expect(page.getByText('04:36–07:52 · loop 4500')).toBeVisible();
-    await expect(page.getByText('13:39–17:29 · loop 4611')).toBeVisible();
+    // "Vandaag" toont álle blokken van de gesplitste dienst, elk met loop
+    // (tijden en loopnummers in twee uitgelijnde kolommen).
+    await expect(page.getByText('04:36–07:52')).toBeVisible();
+    await expect(page.getByText('loop 4500').first()).toBeVisible();
+    await expect(page.getByText('13:39–17:29')).toBeVisible();
+    await expect(page.getByText('loop 4611').first()).toBeVisible();
 
     expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
   });

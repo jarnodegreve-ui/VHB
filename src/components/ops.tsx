@@ -42,8 +42,9 @@ export function OpsStat({
   suffix?: string;
   sub: string;
   /** Optionele detailregels onder de subtekst (bv. de blokken van een
-   *  dienst). `done` toont een al gereden blok gedempt. */
-  lines?: Array<{ text: string; done?: boolean }>;
+   *  dienst): `left` (tijden) en `right` (loopnummer) staan in twee nette
+   *  kolommen onder elkaar. `done` toont een al gereden blok gedempt. */
+  lines?: Array<{ left: string; right?: string; done?: boolean }>;
   onClick?: () => void;
   className?: string;
 }) {
@@ -64,15 +65,18 @@ export function OpsStat({
       {lines && lines.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
           {lines.map((l) => (
-            <p
-              key={l.text}
+            <div
+              key={`${l.left}-${l.right ?? ''}`}
               className={cn(
-                'text-[11.5px] font-medium tabular-nums',
-                l.done ? 'text-slate-400 line-through decoration-slate-300' : 'text-slate-600',
+                'flex items-baseline justify-between gap-3 text-[11.5px] font-medium tabular-nums',
+                l.done ? 'text-slate-400' : 'text-slate-600',
               )}
             >
-              {l.text}
-            </p>
+              <span className={cn(l.done && 'line-through decoration-slate-300')}>{l.left}</span>
+              {l.right && (
+                <span className={cn('shrink-0 text-slate-500', l.done && 'text-slate-400')}>{l.right}</span>
+              )}
+            </div>
           ))}
         </div>
       )}

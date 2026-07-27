@@ -85,7 +85,8 @@ export function DashboardView({
     .filter((s) => s.date === today)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const todayLines = todayParts.map((p) => ({
-    text: `${p.startTime}–${p.endTime}${p.loopnr ? ` · loop ${p.loopnr}` : ''}`,
+    left: `${p.startTime}–${p.endTime}`,
+    right: p.loopnr ? `loop ${p.loopnr}` : undefined,
     done: hasShiftEnded(p, now),
   }));
   // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
@@ -307,12 +308,16 @@ export function DashboardView({
           text={nextShift ? getNextShiftDisplay(nextShift.startDateTime).hero : '—'}
           sub={
             nextShift
-              ? [
-                  nextShift.line ? `dienst ${nextShift.line}` : null,
-                  nextParts.map((p) => `${p.startTime}–${p.endTime}${p.loopnr ? ` (loop ${p.loopnr})` : ''}`).join(' · '),
-                ].filter(Boolean).join(' · ')
+              ? [getNextShiftDisplay(nextShift.startDateTime).sub, nextShift.line ? `dienst ${nextShift.line}` : null]
+                  .filter(Boolean).join(' · ')
               : 'niets ingepland'
           }
+          // Zelfde kolom-opmaak als de Vandaag-tegel ernaast: tijden links,
+          // loopnummers rechts — de twee tegels lijnen zo met elkaar uit.
+          lines={nextParts.map((p) => ({
+            left: `${p.startTime}–${p.endTime}`,
+            right: p.loopnr ? `loop ${p.loopnr}` : undefined,
+          }))}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
         <OpsStat
