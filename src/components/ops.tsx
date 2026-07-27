@@ -30,6 +30,7 @@ export function OpsStat({
   text,
   suffix,
   sub,
+  subClassName,
   lines,
   onClick,
   className,
@@ -41,6 +42,9 @@ export function OpsStat({
   text?: string;
   suffix?: string;
   sub: string;
+  /** Optionele extra klassen voor de subtekst — bv. iets groter wanneer de
+   *  subregel de eigenlijke boodschap draagt ("morgen · di 28 jul"). */
+  subClassName?: string;
   /** Optionele detailregels onder de subtekst (bv. de blokken van een
    *  dienst): `left` (tijden) en `right` (loopnummer) staan in twee nette
    *  kolommen onder elkaar. `done` toont een al gereden blok gedempt. */
@@ -61,7 +65,7 @@ export function OpsStat({
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-[14px] font-semibold text-slate-400">{suffix}</span>}
       </p>
-      <p className="mt-0.5 text-[11.5px] font-medium text-slate-500 truncate">{sub}</p>
+      <p className={cn('mt-0.5 text-[11.5px] font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {lines && lines.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
           {lines.map((l) => (
