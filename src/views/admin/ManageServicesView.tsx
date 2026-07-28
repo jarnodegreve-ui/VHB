@@ -305,9 +305,14 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/50">
+                {/* Zelfde indeling als het totaaloverzicht van de planning
+                    en als de chauffeurs-weergave: loop vóór de uren. */}
                 <Th>Dienst</Th>
+                <Th>Loop 1</Th>
                 <Th>Deel 1</Th>
+                <Th>Loop 2</Th>
                 <Th>Deel 2</Th>
+                <Th>Loop 3</Th>
                 <Th>Deel 3</Th>
                 <Th className="text-right">Acties</Th>
               </tr>
@@ -316,17 +321,19 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               {services.map(s => (
                 <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
                   <Td className="font-semibold text-slate-800">{s.serviceNumber}</Td>
-                  <Td className="tabular-nums">
-                    {s.startTime} - {s.endTime}
-                    {s.loopnr && <span className="block text-[11px] font-medium text-slate-400">loop {s.loopnr}</span>}
+                  <Td className="tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
+                  <Td className="tabular-nums">{s.startTime} - {s.endTime}</Td>
+                  <Td className="tabular-nums font-semibold text-slate-700">
+                    {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 ? s.loopnr2 : <span className="font-normal text-slate-300">—</span>}
                   </Td>
                   <Td className="tabular-nums">
                     {hasValidTime(s.startTime2, s.endTime2) ? `${s.startTime2} - ${s.endTime2}` : ''}
-                    {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 && <span className="block text-[11px] font-medium text-slate-400">loop {s.loopnr2}</span>}
+                  </Td>
+                  <Td className="tabular-nums font-semibold text-slate-700">
+                    {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 ? s.loopnr3 : <span className="font-normal text-slate-300">—</span>}
                   </Td>
                   <Td className="tabular-nums">
                     {hasValidTime(s.startTime3, s.endTime3) ? `${s.startTime3} - ${s.endTime3}` : ''}
-                    {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 && <span className="block text-[11px] font-medium text-slate-400">loop {s.loopnr3}</span>}
                   </Td>
                   <Td className="text-right">
                     <div className="flex items-center justify-end gap-1">
