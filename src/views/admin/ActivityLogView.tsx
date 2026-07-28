@@ -43,18 +43,21 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   // aanmeldingen ('Aangemeld') als het dagelijkse sessie-herstel-event
   // ('Actief') — beide tellen als "actief die dag".
   const dailyActive = useMemo(() => {
-    const byDay = new Map<string, Set<string>>();
+    // Per dag dedupliceren op gebruiker (entityId), maar de náám bewaren:
+    // de balk is aanklikbaar en toont dan wie er die dag actief was.
+    const byDay = new Map<string, Map<string, string>>();
     for (const e of logins) {
       const day = isoDate(new Date(e.createdAt)); // yyyy-mm-dd, lokaal
       const key = String(e.entityId || e.actorName);
-      const set = byDay.get(day) ?? new Set<string>();
-      set.add(key);
-      byDay.set(day, set);
+      const users = byDay.get(day) ?? new Map<string, string>();
+      if (!users.has(key)) users.set(key, e.actorName);
+      byDay.set(day, users);
     }
     return [...byDay.entries()]
-      .map(([day, set]) => ({ day, count: set.size }))
+      .map(([day, users]) => ({ day, count: users.size, names: [...users.values()].sort((a, b) => a.localeCompare(b, 'nl')) }))
       .sort((a, b) => b.day.localeCompare(a.day));
   }, [logins]);
+  const [openDay, setOpenDay] = useState<string | null>(null);
   const maxDaily = Math.max(1, ...dailyActive.map((d) => d.count));
   // De lijst rechts toont alleen échte aanmeldingen — een 'Actief'-ping is
   // geen aanmeldmoment.
@@ -158,14 +161,29 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               <MicroLabel className="mb-2">Actieve gebruikers per dag</MicroLabel>
               <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
                 {dailyActive.map((d) => (
-                  <div key={d.day} className="flex items-center gap-3">
-                    <span className="w-20 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
-                      {new Date(`${d.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
-                    </span>
-                    <div className="flex-1 h-3.5 rounded-md bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.count / maxDaily) * 100)}%` }} />
-                    </div>
-                    <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-700 tabular-nums">{d.count}</span>
+                  <div key={d.day}>
+                    <button
+                      type="button"
+                      onClick={() => setOpenDay((cur) => (cur === d.day ? null : d.day))}
+                      aria-expanded={openDay === d.day}
+                      title="Klik om te zien wie er actief was"
+                      className="flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left hover:bg-slate-50 transition-colors"
+                    >
+                      <span className="w-20 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
+                        {new Date(`${d.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
+                      </span>
+                      <div className="flex-1 h-3.5 rounded-md bg-slate-100 overflow-hidden">
+                        <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.count / maxDaily) * 100)}%` }} />
+                      </div>
+                      <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-700 tabular-nums">{d.count}</span>
+                    </button>
+                    {openDay === d.day && (
+                      <div className="ml-[5.75rem] mr-9 mb-1.5 mt-1 flex flex-wrap gap-1">
+                        {d.names.map((name) => (
+                          <span key={name} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{name}</span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
