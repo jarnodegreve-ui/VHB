@@ -164,10 +164,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
           ))}
         </div>
       ) : upcoming.length === 0 && past.length === 0 ? (
-        <EmptyState
-          title="Nog geen diensten gepland"
-          message="Zodra de planner een nieuwe matrix uploadt, vind je hier al je komende ritten."
-        />
+        <EmptyState title="Nog geen diensten gepland" />
       ) : (
         <>
           {/* Toekomst */}

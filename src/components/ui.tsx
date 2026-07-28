@@ -89,7 +89,7 @@ export function ConfirmationModal({
   onClose: () => void;
   onConfirm: () => void;
   title: string;
-  message: string;
+  message?: string;
   confirmText?: string;
   cancelText?: string;
   variant?: 'danger' | 'warning';
@@ -143,7 +143,7 @@ export function EmptyState({
 }: {
   icon?: React.ReactNode;
   title: string;
-  message: string;
+  message?: string;
   mascotte?: boolean;
   /** Optionele call-to-action (knop/link) onder de uitleg — lege schermen
    *  geven zo altijd een volgende stap. */
@@ -163,7 +163,7 @@ export function EmptyState({
         </div>
       )}
       <h4 className="text-base font-bold text-slate-800 tracking-tight">{title}</h4>
-      <p className="mt-1.5 text-sm font-normal text-slate-500 max-w-md mx-auto">{message}</p>
+      {message ? <p className="mt-1.5 text-sm font-normal text-slate-500 max-w-md mx-auto">{message}</p> : null}
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
     </div>
   );
