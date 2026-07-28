@@ -845,9 +845,13 @@ html.dark {
 :where(.dark) .border-slate-100 { border-color: rgba(79, 87, 95, 0.28); }
 :where(.dark) .border-slate-200 { border-color: rgba(79, 87, 95, 0.38); }
 :where(.dark) .border-slate-300 { border-color: rgba(110, 118, 127, 0.45); }
-:where(.dark) .divide-slate-50 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.20); }
-:where(.dark) .divide-slate-100 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.28); }
-:where(.dark) .divide-slate-200 > :not([hidden]) ~ :not([hidden]) { border-color: rgba(79, 87, 95, 0.38); }
+/* Tailwind v4 tekent divide-y als border-BOTTOM op :not(:last-child) — de
+   oude v3-selector (~ = alles behalve het eerste kind) miste daardoor in
+   élke lijst precies de eerste scheidingslijn, die dan fel licht bleef op
+   donker (gemeld door Jarno op de Toestellen-pagina). */
+:where(.dark) .divide-slate-50 > :not(:last-child) { border-color: rgba(79, 87, 95, 0.20); }
+:where(.dark) .divide-slate-100 > :not(:last-child) { border-color: rgba(79, 87, 95, 0.28); }
+:where(.dark) .divide-slate-200 > :not(:last-child) { border-color: rgba(79, 87, 95, 0.38); }
 :where(.dark) .border-white\/60 { border-color: rgba(154, 161, 169, 0.18); }
 :where(.dark) .border-white\/70 { border-color: rgba(154, 161, 169, 0.20); }
 :where(.dark) .border-white\/75 { border-color: rgba(154, 161, 169, 0.22); }
