@@ -36,7 +36,10 @@
 // v17: /api/me network-first-met-cache-fallback (SWR toonde op een gedeeld
 // toestel het profiel van de vorige gebruiker); ritblad-PDF valt bij een
 // cors-fout terug op no-cors zodat een koude weergave nooit breekt.
-const CACHE_NAME = 'vhb-portaal-v18';
+// v19: vhb-logo-wit.svg (oude lockup mét "Van Hoorebeke & Zoon") verwijderd —
+// de pre-app-schermen gebruiken nu hetzelfde logo als login/sidebar. Bump
+// zodat toestellen het oude bestand niet uit de cache blijven serveren.
+const CACHE_NAME = 'vhb-portaal-v19';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';
