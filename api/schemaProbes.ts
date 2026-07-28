@@ -19,7 +19,7 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "planning", columns: "id,date,startTime,endTime,line,busNumber,loopnr,driverId" },
   { table: "planning_matrix_rows", columns: "id,source_date,day_type,assignments,raw_row,created_at" },
   { table: "planning_codes", columns: "code,category,description,counts_as_shift,is_paid_absence,is_day_off" },
-  { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3" },
+  { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3,loopnr,loopnr2,loopnr3" },
   { table: "diversions", columns: "id,line,title,description,startdate,enddate,pdfurl,mapcoordinates" },
   { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code" },
   { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },

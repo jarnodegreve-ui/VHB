@@ -149,6 +149,13 @@ export const toPublicService = (s: any) => ({
   endTime2: s.endTime2 ?? s.endtime2 ?? undefined,
   startTime3: s.startTime3 ?? s.starttime3 ?? undefined,
   endTime3: s.endTime3 ?? s.endtime3 ?? undefined,
+  // Loopnummers MOETEN hier mee: deze mapper zit tussen de database en zowel
+  // de API-respons als de planning-import. Ontbraken ze, dan kwam er nooit
+  // een loopnummer op een planning-rij terecht — en wiste elk opslaan vanuit
+  // het beheerscherm ze bovendien uit de database (zie toDatabaseService).
+  loopnr: s.loopnr ?? undefined,
+  loopnr2: s.loopnr2 ?? undefined,
+  loopnr3: s.loopnr3 ?? undefined,
 });
 
 // Supabase heeft de services-tabel met *quoted camelCase* kolommen aangemaakt
@@ -164,6 +171,9 @@ export const toDatabaseService = (s: any) => ({
   endTime2: s.endTime2 ?? s.endtime2 ?? null,
   startTime3: s.startTime3 ?? s.starttime3 ?? null,
   endTime3: s.endTime3 ?? s.endtime3 ?? null,
+  loopnr: s.loopnr ?? null,
+  loopnr2: s.loopnr2 ?? null,
+  loopnr3: s.loopnr3 ?? null,
 });
 
 export const toPublicLeave = (leave: any): LeaveRecord => ({
