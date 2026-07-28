@@ -11,16 +11,8 @@
       "schedule": "0 6 * * *"
     },
     {
-      "path": "/api/cron/ocpi-sync?parts=locations",
-      "schedule": "*/5 * * * *"
-    },
-    {
-      "path": "/api/cron/ocpi-sync?parts=sessions",
-      "schedule": "*/2 * * * *"
-    },
-    {
-      "path": "/api/cron/ocpi-sync?parts=cdrs",
-      "schedule": "*/15 * * * *"
+      "path": "/api/cron/ocpi-sync?parts=all",
+      "schedule": "*/30 * * * *"
     }
   ],
   "rewrites": [
