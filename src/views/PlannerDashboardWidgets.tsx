@@ -741,7 +741,7 @@ function DashboardListModal({
   children: ReactNode;
 }) {
   return (
-    <Modal open={open} onClose={onClose} maxWidth="sm" className="flex flex-col overflow-hidden">
+    <Modal open={open} onClose={onClose} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
       <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconClassName)}>
@@ -761,9 +761,12 @@ function DashboardListModal({
           <X size={17} />
         </button>
       </div>
-      {/* overscroll-contain: anders chained het scrollen door naar het
-          document (rubber-band / pull-to-refresh in standalone iOS). */}
-      <div className="overflow-y-auto overscroll-contain px-3 py-3">{children}</div>
+      {/* flex-1 + min-h-0: zonder die twee krimpt dit vak in de flex-kolom
+          niet onder zijn inhoud (min-height:auto), dus was er niets te
+          scrollen en werd een lange lijst gewoon afgekapt (iPhone-bug van
+          Jarno). overscroll-contain: anders chained het scrollen door naar
+          het document (rubber-band / pull-to-refresh in standalone iOS). */}
+      <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-3 py-3">{children}</div>
     </Modal>
   );
 }
