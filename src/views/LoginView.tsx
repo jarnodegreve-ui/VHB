@@ -173,12 +173,11 @@ export function LoginView({
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center mb-10"
         >
-          {/* Zelfde compacte lockup als de sidebar (zonder naamregel) —
-              op verzoek ook op het loginscherm, klein gehouden. */}
+          {/* Primary-lockup mét naamregel — overal hetzelfde logo. */}
           <img
-            src="/vhb-logo-sidebar-wit.svg"
-            alt="VHB Portaal — Van Hoorebeke & Zoon"
-            className="h-12 sm:h-14 w-auto select-none"
+            src="/vhb-logo-primair-wit.svg"
+            alt="VHB — Van Hoorebeke & Zoon"
+            className="h-16 sm:h-20 w-auto select-none"
             draggable={false}
           />
         </motion.div>

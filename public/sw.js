@@ -39,7 +39,9 @@
 // v19: vhb-logo-wit.svg (oude lockup mét "Van Hoorebeke & Zoon") verwijderd —
 // de pre-app-schermen gebruiken nu hetzelfde logo als login/sidebar. Bump
 // zodat toestellen het oude bestand niet uit de cache blijven serveren.
-const CACHE_NAME = 'vhb-portaal-v19';
+// v20: overal de primary-lockup (vhb-logo-primair(-wit).svg, mét naamregel);
+// de sidebar-varianten zonder naamregel zijn verwijderd.
+const CACHE_NAME = 'vhb-portaal-v20';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';
