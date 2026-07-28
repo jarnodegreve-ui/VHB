@@ -1,11 +1,10 @@
 import { Fragment, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
-import { Activity, Calendar, Download, Search, Users, X } from 'lucide-react';
+import { Activity, Download, Search, Users, X } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
-import { StatCard } from '../../components/StatCard';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
@@ -164,11 +163,6 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
 
   return (
     <PageShell width="5xl">
-      <div className="grid gap-4 md:grid-cols-2">
-        <StatCard icon={<Users className="text-slate-600" />} label="Gebruikersacties" value={entries.filter((entry) => entry.category === 'users').length.toString()} subValue="Accounts en rollen" />
-        <StatCard icon={<Calendar className="text-emerald-600" />} label="Planning" value={entries.filter((entry) => entry.category === 'planning' || entry.category === 'planning_codes').length.toString()} subValue="Imports, sync en codes" />
-      </div>
-
       <section className="surface-card rounded-3xl p-6 md:p-8">
         <AdminSubsectionHeader
           eyebrow="Aanwezigheid"
