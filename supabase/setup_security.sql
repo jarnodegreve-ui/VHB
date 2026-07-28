@@ -116,19 +116,20 @@ with check (
   public.current_app_user_role() = 'admin'
 );
 
+-- UPDATE is admin-only. De vroegere "self or admin"-variant liet een
+-- chauffeur zijn eigen rij bewerken — inclusief `role` — en dus zichzelf
+-- tot admin promoveren via PostgREST met de publieke anon-key. De app
+-- schrijft altijd via de service-role, dus zelf-update is nergens nodig.
+-- (De oude policy wordt expliciet gedropt: permissive policies stapelen
+-- met OR, dus laten staan = het gat weer openzetten.)
 drop policy if exists "users_update_self_or_admin" on public.users;
-create policy "users_update_self_or_admin"
+drop policy if exists "users_update_admin_only" on public.users;
+create policy "users_update_admin_only"
 on public.users
 for update
 to authenticated
-using (
-  lower(email) = lower(auth.email())
-  or public.current_app_user_role() = 'admin'
-)
-with check (
-  lower(email) = lower(auth.email())
-  or public.current_app_user_role() = 'admin'
-);
+using (public.current_app_user_role() = 'admin')
+with check (public.current_app_user_role() = 'admin');
 
 drop policy if exists "users_delete_admin_only" on public.users;
 create policy "users_delete_admin_only"
@@ -243,18 +244,42 @@ for select
 to authenticated
 using (true);
 
+-- Ruilen zijn alleen leesbaar voor de betrokkenen (aanvrager of aangezochte
+-- collega) en voor planner/admin. `using (true)` gaf elke chauffeur alle
+-- ruil-toelichtingen van collega's via een rechtstreekse PostgREST-query.
 drop policy if exists "swaps_read_authenticated" on public.swaps;
-create policy "swaps_read_authenticated"
+drop policy if exists "swaps_read_involved_or_staff" on public.swaps;
+create policy "swaps_read_involved_or_staff"
 on public.swaps
 for select
 to authenticated
-using (true);
+using (
+  public.current_app_user_role() in ('planner', 'admin')
+  or exists (
+    select 1 from public.users u
+    where lower(u.email) = lower(auth.email())
+      and (
+        u.id::text = swaps.requesterid::text
+        or u.id::text = swaps.targetdriverid::text
+      )
+  )
+);
 
+-- Verlof idem: eigen records + planner/admin. Met `using (true)` kon elke
+-- chauffeur de ziekte-/verlofredenen (vrije tekst) van collega's lezen.
 drop policy if exists "leave_read_authenticated" on public.leave;
-create policy "leave_read_authenticated"
+drop policy if exists "leave_read_involved_or_staff" on public.leave;
+create policy "leave_read_involved_or_staff"
 on public.leave
 for select
 to authenticated
-using (true);
+using (
+  public.current_app_user_role() in ('planner', 'admin')
+  or exists (
+    select 1 from public.users u
+    where lower(u.email) = lower(auth.email())
+      and u.id::text = leave.userid::text
+  )
+);
 
 commit;

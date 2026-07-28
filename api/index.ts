@@ -483,7 +483,10 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
         endTime: "00:00",
         allDay: true,
         summary: leaveLabel[l.type] ?? "Afwezig",
-        description: l.comment ? String(l.comment) : undefined,
+        // Bewust ZONDER l.comment: dat is vrije tekst met de reden (ziekte,
+        // overlijden, familiale situatie). De feed-URL is stateless en niet
+        // in te trekken, en wie 'm in Google Agenda zet, laat Google die
+        // tekst periodiek ophalen en bewaren. Het type-label volstaat.
       });
     }
     const dtstamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");

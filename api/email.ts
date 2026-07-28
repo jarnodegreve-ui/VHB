@@ -54,9 +54,17 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
   try {
     const smtp = getSmtpConfig();
     const transporter = nodemailer.createTransport(smtp);
+    const fromAddress = process.env.SMTP_FROM || smtp.auth.user;
+    // BCC bij meerdere ontvangers: met alles in `To:` kreeg elke chauffeur bij
+    // een dringende update het volledige adressenbestand van het personeel in
+    // zijn mailbox (en lekte één doorgestuurde mail de hele lijst). Eén
+    // ontvanger blijft gewoon in `To:` staan — dat leest normaal in de
+    // mailclient en verklapt niets.
+    const single = recipients.length === 1;
     await transporter.sendMail({
-      from: `"VHB Portaal" <${process.env.SMTP_FROM || smtp.auth.user}>`,
-      to: recipients.join(", "),
+      from: `"VHB Portaal" <${fromAddress}>`,
+      to: single ? recipients[0] : fromAddress,
+      ...(single ? {} : { bcc: recipients }),
       subject: opts.subject,
       text: opts.text,
       html: opts.html,
