@@ -533,7 +533,7 @@ export function PlannerDashboardWidgets({
                 </span>
                 <div>
                   <p className="text-[13.5px] font-semibold text-slate-800">Alles onder controle</p>
-                  <p className="text-xs font-normal text-slate-500">Geen open taken, dekkingsgaten of import-aandachtspunten.</p>
+                  <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
                 </div>
               </div>
             )}
