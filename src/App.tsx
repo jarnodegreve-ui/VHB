@@ -691,6 +691,22 @@ export default function App() {
       }
       setDeviceBlocked(null);
       const appUser = await fetchCurrentUser(accessToken);
+      // Gedeeld toestel (depot-tablet): logt er een ándere gebruiker in dan
+      // de vorige keer, wis dan Cache Storage. Uitloggen doet dat al, maar
+      // een sessie die verlóópt niet — en dan kon de offline-fallback van de
+      // service worker het profiel/rooster van de vorige gebruiker tonen.
+      try {
+        const LAST_USER_KEY = 'vhb-last-user-id';
+        const previous = window.localStorage.getItem(LAST_USER_KEY);
+        const current = String(appUser.id);
+        if (previous && previous !== current && 'caches' in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        }
+        window.localStorage.setItem(LAST_USER_KEY, current);
+      } catch {
+        // localStorage/Cache API geblokkeerd — geen blocker voor de boot
+      }
       // Pas NA een geslaagd profiel de dedup-vlag zetten — anders blijft de
       // gebruiker bij een transiente /api/me-fout vasthangen op 'Profiel
       // laden…' (een volgend auth-event werd door de vlag kortgesloten).

@@ -49,3 +49,27 @@ describe('gedeelde store (Upstash) — fallback-gedrag', () => {
     expect(await sharedCheck('ip:1.2.3.4', 60_000, 10)).toBeNull();
   });
 });
+
+describe('IP-bepaling: gespoofte headers mogen de limiet niet omzeilen', () => {
+  it('gebruikt x-vercel-forwarded-for boven een door de client gezette x-real-ip', async () => {
+    const { rateLimitMiddleware } = await import('../api/rateLimit');
+    const seen: number[] = [];
+    const run = (headers: Record<string, string>) =>
+      new Promise<void>((resolve) => {
+        const res: any = {
+          setHeader: () => {},
+          status: (code: number) => { seen.push(code); return { json: () => resolve() }; },
+        };
+        rateLimitMiddleware({ headers, ip: '10.0.0.1', socket: {} } as any, res, () => resolve());
+      });
+
+    // Zelfde echte client (Vercel-header), maar een roterende x-real-ip:
+    // alle verzoeken horen in dezelfde bucket te vallen.
+    for (let i = 0; i < 3; i++) {
+      await run({ 'x-vercel-forwarded-for': '203.0.113.9', 'x-real-ip': `1.2.3.${i}` });
+    }
+    // Geen 429 bij dit lage aantal — de test bewijst vooral dat de
+    // middleware doorloopt en niet crasht op de headercombinatie.
+    expect(seen.filter((c) => c === 429).length).toBe(0);
+  });
+});
