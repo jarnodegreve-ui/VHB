@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, User as UserIcon, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify } from '../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../components/ui';
@@ -33,7 +33,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
   const [sickForm, setSickForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
   const [isSubmittingSick, setIsSubmittingSick] = useState(false);
   // Historiek standaard gecapt op 5 — de volledige lijst groeide onbegrensd.
-  const [showAllHistory, setShowAllHistory] = useState(false);
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
@@ -565,18 +564,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
             title="Mijn historiek"
             count={myHistory.length}
             emptyText="Nog geen afgehandelde aanvragen."
-            requests={showAllHistory ? myHistory : myHistory.slice(0, 5)}
+            requests={myHistory}
             isNew={isNewlyDecided}
           />
-          {myHistory.length > 5 && (
-            <button
-              type="button"
-              onClick={() => setShowAllHistory((v) => !v)}
-              className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11"
-            >
-              {showAllHistory ? 'Toon minder' : `Toon alles (${myHistory.length})`}
-            </button>
-          )}
         </div>
       </div>
 
@@ -942,6 +932,13 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
     rejected: 'bg-red-500',
     cancelled: 'bg-slate-400',
   };
+  // Compacte, uitklapbare rijen in een eigen scrollcontainer: de historiek
+  // groeit onbegrensd mee, dus de dichte kaarten werden onoverzichtelijk
+  // (wens Jarno). Dicht = periode + status; open = de details + acties.
+  const [openIds, setOpenIds] = useState<string[]>([]);
+  const toggle = (id: string) => setOpenIds((cur) => (
+    cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+  ));
 
   return (
     <div className="space-y-4">
@@ -949,31 +946,44 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
         <MicroLabel className="text-slate-500">{title}</MicroLabel>
         <MicroLabel>{count}</MicroLabel>
       </div>
-      <div className="space-y-3">
+      <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
         {requests.length > 0 ? requests.map((req) => {
           const fresh = isNew?.(req) ?? false;
+          const open = openIds.includes(req.id);
           return (
-            <div key={req.id} className={cn('surface-card p-5 rounded-2xl relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
+            <div key={req.id} className={cn('surface-card rounded-2xl relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
               <div className={cn('absolute top-0 left-0 w-1 h-full', statusAccents[req.status])} />
-              <div className="flex justify-between items-start mb-3 gap-3">
-                <Badge tone="slate">{formatLeaveType(req.type)}</Badge>
-                <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => toggle(req.id)}
+                aria-expanded={open}
+                className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
+              >
+                <div className="min-w-0 flex items-baseline gap-2.5">
+                  <span className="text-[13px] font-bold tracking-tight text-slate-800 whitespace-nowrap">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</span>
+                  <span className="text-[11px] font-medium text-slate-400 truncate">{formatLeaveType(req.type)}</span>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
                   {fresh && <Badge tone="oker">Nieuw</Badge>}
                   <StatusBadge status={req.status} />
+                  <ChevronDown size={15} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
                 </div>
-              </div>
-              <p className="font-bold text-slate-800 text-sm mb-0.5">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</p>
-              <p className="text-[11px] font-medium text-slate-400">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
-              {req.comment && <p className="text-xs text-slate-500 italic mt-2.5">"{req.comment}"</p>}
-              {onCancel && req.status === 'approved' && (
-                <Button variant="danger" size="sm" full className="mt-3.5" onClick={() => onCancel(req.id)}>
-                  Verlof annuleren
-                </Button>
-              )}
-              {onWithdraw && req.status === 'pending' && (
-                <Button variant="secondary" size="sm" full className="mt-3.5" onClick={() => onWithdraw(req.id)}>
-                  Aanvraag intrekken
-                </Button>
+              </button>
+              {open && (
+                <div className="px-4 pb-4 pt-0.5">
+                  <p className="text-[11px] font-medium text-slate-400">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
+                  {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
+                  {onCancel && req.status === 'approved' && (
+                    <Button variant="danger" size="sm" full className="mt-3" onClick={() => onCancel(req.id)}>
+                      Verlof annuleren
+                    </Button>
+                  )}
+                  {onWithdraw && req.status === 'pending' && (
+                    <Button variant="secondary" size="sm" full className="mt-3" onClick={() => onWithdraw(req.id)}>
+                      Aanvraag intrekken
+                    </Button>
+                  )}
+                </div>
               )}
             </div>
           );

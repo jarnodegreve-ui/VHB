@@ -7,12 +7,6 @@ import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
-const CATEGORY_BADGE_TONE: Record<string, 'amber' | 'blue' | 'slate'> = {
-  veiligheid: 'amber',
-  technisch: 'blue',
-  algemeen: 'slate',
-};
-
 function Input({
   label,
   type,
@@ -234,11 +228,7 @@ export function ManageUpdatesView({
               <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    {update.isUrgent ? (
-                      <Badge tone="red" dot>Dringend</Badge>
-                    ) : (
-                      <Badge tone={CATEGORY_BADGE_TONE[update.category] ?? 'slate'} className="capitalize">{update.category}</Badge>
-                    )}
+                    {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                     {update.isUrgent && totalChauffeurs > 0 ? (
                       <span
                         className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums"

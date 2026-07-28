@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import { ArrowLeftRight, ChevronRight, History, X, Check } from 'lucide-react';
+import { ArrowLeftRight, ChevronDown, ChevronRight, History, X, Check } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
@@ -18,6 +18,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via de nette ConfirmationModal i.p.v. kale window.confirm
   // (browser-popup met "vhb-five.vercel.app meldt…" schrikt chauffeurs af).
+  const [expandedSwapIds, setExpandedSwapIds] = useState<string[]>([]);
+  const toggleSwapExpanded = (id: string) => setExpandedSwapIds((cur) => (
+    cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+  ));
   const [confirmAction, setConfirmAction] = useState<{
     title: string;
     message: string;
@@ -295,26 +299,45 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         <div className="space-y-4">
           <MicroLabel className="text-slate-500 ml-1">Mijn Verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
-            mySwaps.map(swap => {
-              const shift = shifts.find(s => s.id === swap.shiftId);
-              const target = users.find(u => u.id === swap.targetDriverId);
-              return (
-                <div key={swap.id} className="surface-card p-5 rounded-2xl flex items-start justify-between gap-4">
-                  <div className="min-w-0">
-                    <MicroLabel>Dienst {getServiceNumber(shift)}</MicroLabel>
-                    <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(shift?.date)}</p>
-                    <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
-                    {target && (
-                      <p className="text-xs font-medium text-slate-500 mt-2">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
-                    )}
-                    {returnLabel(swap) && (
-                      <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">In ruil: {returnLabel(swap)}</p>
+            /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
+               lijst groeit onbegrensd mee met de historiek (wens Jarno). */
+            <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
+              {mySwaps.map(swap => {
+                const shift = shifts.find(s => s.id === swap.shiftId);
+                const target = users.find(u => u.id === swap.targetDriverId);
+                const open = expandedSwapIds.includes(swap.id);
+                return (
+                  <div key={swap.id} className="surface-card rounded-2xl overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() => toggleSwapExpanded(swap.id)}
+                      aria-expanded={open}
+                      className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
+                    >
+                      <div className="min-w-0 flex items-baseline gap-2.5">
+                        <span className="text-[13px] font-bold tracking-tight text-slate-800 whitespace-nowrap">Dienst {getServiceNumber(shift)}</span>
+                        <span className="text-[11px] font-medium text-slate-400 capitalize truncate">{formatDateHuman(shift?.date)}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <StatusBadge status={swap.status} />
+                        <ChevronDown size={15} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                      </div>
+                    </button>
+                    {open && (
+                      <div className="px-4 pb-4 pt-0.5">
+                        <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
+                        {target && (
+                          <p className="text-xs font-medium text-slate-500 mt-1.5">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
+                        )}
+                        {returnLabel(swap) && (
+                          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">In ruil: {returnLabel(swap)}</p>
+                        )}
+                      </div>
                     )}
                   </div>
-                  <StatusBadge status={swap.status} className="shrink-0" />
-                </div>
-              );
-            })
+                );
+              })}
+            </div>
           ) : (
             <EmptyState
               icon={<ArrowLeftRight size={28} />}

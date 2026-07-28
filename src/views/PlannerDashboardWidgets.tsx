@@ -597,7 +597,7 @@ export function PlannerDashboardWidgets({
                       tone={u.isUrgent ? 'red' : 'slate'}
                       icon={<Bell size={15} />}
                       primary={u.title}
-                      secondary={u.category}
+                      secondary={u.date}
                       onClick={() => onNavigate('updates')}
                     />
                   ))}
