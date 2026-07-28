@@ -2890,6 +2890,10 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
 // --- Ritblaadjes ---
 
 const RITBLAADJE_BUCKET = "ritblaadjes";
+// Was 30 dagen: die URL werd ook nog in localStorage bewaard, dus een
+// geblokkeerd toestel hield wekenlang toegang tot het bedrijfsritblad. De
+// client haalt de URL bij elk bezoek vers op, dus een uur is genoeg.
+const RITBLAADJE_URL_TTL_SEC = 60 * 60;
 
 const ritblaadjeRowToPublic = (row: any, publicUrl: string) => ({
   filename: row.filename as string,
@@ -2913,7 +2917,7 @@ app.get("/api/ritblaadje", authenticate, async (_req, res) => {
     // 30 dagen geldig — ruim langer dan de client de metadata cachet.
     const { data: signedData, error: signedError } = await db.storage
       .from(RITBLAADJE_BUCKET)
-      .createSignedUrl(data.storage_path, 60 * 60 * 24 * 30);
+      .createSignedUrl(data.storage_path, RITBLAADJE_URL_TTL_SEC);
     if (signedError || !signedData?.signedUrl) throw signedError ?? new Error("Kon geen ondertekende URL maken.");
     return res.json(ritblaadjeRowToPublic(data, signedData.signedUrl));
   } catch (err: any) {
@@ -2988,7 +2992,7 @@ app.post("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Auth
 
     const { data: signedData, error: signedError } = await supabaseAdmin.storage
       .from(RITBLAADJE_BUCKET)
-      .createSignedUrl(storagePath, 60 * 60 * 24 * 30);
+      .createSignedUrl(storagePath, RITBLAADJE_URL_TTL_SEC);
     if (signedError || !signedData?.signedUrl) throw signedError ?? new Error("Kon geen ondertekende URL maken.");
     res.json(ritblaadjeRowToPublic(row, signedData.signedUrl));
   } catch (err: any) {
@@ -3029,7 +3033,11 @@ app.delete("/api/ritblaadje", authenticate, requireRole("admin"), async (req: Au
 // --- Documenten per gebruiker (attesten, reglement, loonbrieven) ---
 // Zelfde beveiligingspatroon als de ritbladen: privé bucket, ondertekende
 // URL's uit de API. Chauffeurs zien alleen hun eigen documenten.
-const DOCUMENT_URL_TTL_SEC = 60 * 60 * 24 * 7; // 7 dagen
+// Kort houden: een signed URL omzeilt authenticate, de toestel-whitelist én
+// accountdeactivatie. Met 7 dagen hield een geblokkeerde/vertrokken chauffeur
+// nog een week toegang tot zijn loonbrieven zodra de link ergens stond. De
+// lijst wordt bij elk bezoek opnieuw ondertekend, dus 15 min volstaat ruim.
+const DOCUMENT_URL_TTL_SEC = 15 * 60; // 15 minuten
 
 app.get("/api/documents", authenticate, async (req: AuthenticatedRequest, res) => {
   try {

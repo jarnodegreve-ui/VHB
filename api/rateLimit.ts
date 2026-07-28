@@ -71,6 +71,24 @@ const SHARED_URL = (process.env.UPSTASH_REDIS_REST_URL || "").replace(/\/$/, "")
 const SHARED_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN || "";
 export const hasSharedStore = () => Boolean(SHARED_URL && SHARED_TOKEN);
 
+// Een geconfigureerde-maar-onbereikbare store is iets anders dan "geen store":
+// het eerste is een storing waarbij de globale limiet stil wegvalt. Log dat
+// (gethrottled, anders vult één storing de functielogs) en laat de aanroeper
+// de fallback strenger zetten.
+let lastStoreWarnAt = 0;
+let storeDownUntil = 0;
+const STORE_DOWN_GRACE_MS = 60_000;
+function warnSharedStoreDown(reason: string) {
+  storeDownUntil = Date.now() + STORE_DOWN_GRACE_MS;
+  if (Date.now() - lastStoreWarnAt < 30_000) return;
+  lastStoreWarnAt = Date.now();
+  console.error(`[ratelimit] gedeelde store onbereikbaar (${reason}) — teruggevallen op de per-instantie-limiter.`);
+}
+/** True zolang de gedeelde store recent faalde: dan gelden strengere lokale
+ *  limieten, zodat het wegvallen van de globale limiet niet de facto een
+ *  ruimere limiet oplevert. */
+export const sharedStoreDegraded = () => hasSharedStore() && Date.now() < storeDownUntil;
+
 /**
  * Fixed-window teller in Redis: INCR + (bij de eerste hit) EXPIRE.
  * Geeft null terug wanneer de store niet geconfigureerd of onbereikbaar is,
@@ -91,11 +109,17 @@ export async function sharedCheck(
     const res = await fetch(`${SHARED_URL}/pipeline`, {
       method: "POST",
       headers: { Authorization: `Bearer ${SHARED_TOKEN}`, "Content-Type": "application/json" },
-      body: JSON.stringify([["INCR", redisKey], ["EXPIRE", redisKey, String(windowSec), "NX"]]),
+      // EXPIRE zonder NX: NX vereist Redis ≥ 7 en faalde stil op oudere
+      // servers — dan kreeg de sleutel nooit een TTL en groeide de store
+      // onbegrensd. Per venster is een herhaalde EXPIRE idempotent.
+      body: JSON.stringify([["INCR", redisKey], ["EXPIRE", redisKey, String(windowSec)]]),
       // Een trage store mag geen request ophouden.
       signal: AbortSignal.timeout(1500),
     });
-    if (!res.ok) return null;
+    if (!res.ok) {
+      warnSharedStoreDown(`HTTP ${res.status}`);
+      return null;
+    }
     const data = (await res.json()) as Array<{ result?: unknown }>;
     const count = Number(data?.[0]?.result);
     if (!Number.isFinite(count)) return null;
@@ -104,7 +128,8 @@ export async function sharedCheck(
       allowed: count <= max,
       retryAfterSec: Math.max(1, Math.ceil((resetAt - Date.now()) / 1000)),
     };
-  } catch {
+  } catch (err: any) {
+    warnSharedStoreDown(String(err?.name === "TimeoutError" ? "timeout" : err?.message || err));
     return null; // netwerkfout/timeout → fallback
   }
 }
@@ -125,6 +150,12 @@ const authedLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: AUTHED_MAX }
 const anonLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: ANON_MAX });
 const ipGuardLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: IP_GUARD_MAX });
 const clientErrorLimiter = createRateLimiter({ windowMs: WINDOW_MS, max: ERRORS_MAX });
+// Degradatie-varianten: valt de gedeelde store weg, dan telt elke instantie
+// weer apart en zou de effectieve limiet met het aantal instanties
+// meeschalen. Deze strakkere buckets compenseren dat.
+const DEGRADED_FACTOR = 3;
+const anonLimiterDegraded = createRateLimiter({ windowMs: WINDOW_MS, max: Math.max(5, Math.floor(ANON_MAX / DEGRADED_FACTOR)) });
+const clientErrorLimiterDegraded = createRateLimiter({ windowMs: WINDOW_MS, max: Math.max(2, Math.floor(ERRORS_MAX / DEGRADED_FACTOR)) });
 
 const clientIp = (req: express.Request): string => {
   // x-real-ip wordt door Vercel/de proxy gezet en is niet client-beïnvloedbaar
@@ -132,6 +163,14 @@ const clientIp = (req: express.Request): string => {
   // client te spoofen is (waarmee de anon-/foutlimiet te omzeilen was door de
   // header te roteren). Valt die weg, neem dan het RECHTSE (proxy-toegevoegde)
   // xff-token i.p.v. het linkse.
+  // x-vercel-forwarded-for zet Vercel zelf en overschrijft hij altijd; die
+  // heeft dus de voorkeur boven x-real-ip (dat op een andere proxy/directe
+  // hit wél te spoofen kan zijn — en dan waren álle anon-limieten te
+  // omzeilen door de header te roteren).
+  const vercel = req.headers["x-vercel-forwarded-for"];
+  if (typeof vercel === "string" && vercel.trim().length > 0) {
+    return vercel.split(",")[0]!.trim();
+  }
   const real = req.headers["x-real-ip"];
   if (typeof real === "string" && real.trim().length > 0) return real.trim();
   const fwd = req.headers["x-forwarded-for"];
@@ -160,7 +199,7 @@ export const rateLimitMiddleware = async (req: express.Request, res: express.Res
     limiter = authedLimiter;
   } else {
     key = `ip:${clientIp(req)}`;
-    limiter = anonLimiter;
+    limiter = sharedStoreDegraded() ? anonLimiterDegraded : anonLimiter;
   }
   const max = limiter === authedLimiter ? AUTHED_MAX : ANON_MAX;
   // Gedeelde store eerst; null = niet geconfigureerd of storing → in-memory.
@@ -191,7 +230,8 @@ export const clientErrorRateLimit = async (req: express.Request, res: express.Re
   // ongeauthenticeerd, dus de limiet moet over alle instanties heen gelden.
   const errKey = `err:${clientIp(req)}`;
   const { allowed, retryAfterSec } =
-    (await sharedCheck(errKey, WINDOW_MS, ERRORS_MAX)) ?? clientErrorLimiter.check(`ip:${clientIp(req)}`);
+    (await sharedCheck(errKey, WINDOW_MS, ERRORS_MAX)) ??
+    (sharedStoreDegraded() ? clientErrorLimiterDegraded : clientErrorLimiter).check(`ip:${clientIp(req)}`);
   if (!allowed) {
     res.setHeader("Retry-After", String(retryAfterSec));
     return res.status(429).json({ error: "Te veel foutmeldingen in korte tijd." });

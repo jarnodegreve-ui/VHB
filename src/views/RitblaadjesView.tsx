@@ -18,7 +18,11 @@ type RitblaadjeMeta = {
 const MAX_PDF_MB = 20;
 
 // localStorage-keys voor offline-fallback van de ritblaadje-metadata.
-// Het ritblaadje is één gedeelde resource, dus cachen is veilig.
+// Het ritblaadje is één gedeelde resource, dus cachen is veilig — maar de
+// signed `url` gaat er BEWUST niet in: die verleent toegang buiten de
+// login/toestel-whitelist om en bleef zo op een gedeelde depot-tablet
+// achter. Offline tonen we de metadata; de download-URL komt vers van de
+// server.
 const META_CACHE_KEY = 'vhb-ritblaadje-meta';
 const SYNCED_AT_KEY = 'vhb-ritblaadje-synced';
 
@@ -91,7 +95,10 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         const now = new Date().toISOString();
         setSyncedAt(now);
         localStorage.setItem(SYNCED_AT_KEY, now);
-        if (data) localStorage.setItem(META_CACHE_KEY, JSON.stringify(data));
+        if (data) {
+          const { url: _signedUrl, ...withoutUrl } = data as Record<string, unknown>;
+          localStorage.setItem(META_CACHE_KEY, JSON.stringify(withoutUrl));
+        }
         else localStorage.removeItem(META_CACHE_KEY);
       } catch {
         // localStorage geblokkeerd — geen fallback, geen ramp
