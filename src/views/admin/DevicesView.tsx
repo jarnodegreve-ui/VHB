@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, Pencil, ShieldAlert, ShieldCheck, Smartphone, Trash2, X } from 'lucide-react';
+import { Check, ChevronDown, Pencil, ShieldAlert, ShieldCheck, Smartphone, Trash2, X } from 'lucide-react';
 import type { User } from '../../types';
 import { apiFetch } from '../../lib/api';
 import { getDeviceToken } from '../../lib/device';
@@ -77,6 +77,13 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       notify(err instanceof Error ? err.message : 'Hernoemen is mislukt.', 'error');
     }
   };
+
+  // Groepen standaard dichtgeklapt: met tientallen gebruikers is de lijst
+  // anders metershoog. Openklappen per gebruiker (wens Jarno).
+  const [openUsers, setOpenUsers] = useState<string[]>([]);
+  const toggleUser = (id: string) => setOpenUsers((cur) => (
+    cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+  ));
 
   const pending = (devices ?? []).filter((d) => d.status === 'pending');
   // Groepeer per gebruiker, in de volgorde van de gebruikerslijst (actief eerst).
@@ -181,6 +188,63 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     </div>
   );
 
+  /** Eénregel-rij voor de gegroepeerde lijst: status als stip (goedgekeurd is
+   *  de norm), alleen afwijkingen krijgen een badge, acties als icoonknoppen.
+   *  De wachtrij hierboven houdt de uitgebreide rij mét "Keur goed"-knop. */
+  const renderDeviceCompact = (device: Device) => {
+    const isRenaming = renaming && keyOf(renaming) === keyOf(device);
+    return (
+      <div key={keyOf(device)} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50 transition-colors">
+        <div className="flex min-w-0 items-center gap-2">
+          {isRenaming ? (
+            <form onSubmit={(e) => { e.preventDefault(); void submitRename(); }} className="flex items-center gap-2">
+              <input
+                autoFocus
+                value={renameValue}
+                onChange={(e) => setRenameValue(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); }}
+                enterKeyHint="done"
+                className="control-input rounded-xl px-3 py-1.5 text-base font-semibold outline-none"
+              />
+              <Button type="submit" variant="secondary" size="sm" className="h-9 w-9 justify-center" icon={<Check size={15} />} aria-label="Naam opslaan" />
+              <Button type="button" variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<X size={15} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
+            </form>
+          ) : (
+            <>
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${device.status === 'approved' ? 'bg-emerald-500' : device.status === 'pending' ? 'bg-amber-500' : 'bg-red-500'}`}
+                title={STATUS_BADGE[device.status].label}
+              />
+              <p className="truncate text-[13px] font-semibold text-slate-800">{device.name}</p>
+              {device.status === 'revoked' && <Badge tone="red">Geblokkeerd</Badge>}
+              {device.status === 'pending' && <Badge tone="amber">Wacht</Badge>}
+              {isOwnCurrent(device) && <Badge tone="blue">Dit toestel</Badge>}
+              <span className="hidden md:inline shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">gezien {formatDateHuman(device.lastSeenAt)}</span>
+            </>
+          )}
+        </div>
+        {!isRenaming && (
+          <div className="flex shrink-0 items-center gap-0.5">
+            <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<Pencil size={14} />} aria-label="Toestel hernoemen" title="Hernoemen"
+              onClick={() => { setRenaming(device); setRenameValue(device.name); }} />
+            {device.status !== 'approved' && (
+              <Button variant="ghost" size="sm" className="h-9 w-9 justify-center text-emerald-600" icon={<ShieldCheck size={15} />} aria-label="Keur goed" title="Keur goed"
+                disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'approve')} />
+            )}
+            {device.status === 'approved' && !isOwnCurrent(device) && (
+              <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<ShieldAlert size={15} />} aria-label="Blokkeer" title="Blokkeer"
+                disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'revoke')} />
+            )}
+            {!isOwnCurrent(device) && (
+              <Button variant="ghost" size="sm" className="h-9 w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Toestel schrappen" title="Schrappen"
+                disabled={busyKey === keyOf(device)} onClick={() => setConfirmDelete(device)} />
+            )}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <PageShell width="5xl">
       <PageHeader
@@ -213,13 +277,29 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             />
           </div>
         ) : (
-          <div className="mt-4 space-y-4">
-            {[...byUser.entries()].map(([userId, list]) => (
-              <div key={userId}>
-                <MicroLabel className="mb-1.5">{userName(userId)}</MicroLabel>
-                <div className="space-y-2">{list.map((d) => renderDevice(d))}</div>
-              </div>
-            ))}
+          <div className="mt-3 divide-y divide-slate-100">
+            {[...byUser.entries()].map(([userId, list]) => {
+              const open = openUsers.includes(userId);
+              const attention = list.filter((d) => d.status !== 'approved').length;
+              return (
+                <div key={userId} className="py-1">
+                  <button
+                    type="button"
+                    onClick={() => toggleUser(userId)}
+                    aria-expanded={open}
+                    className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-50 transition-colors"
+                  >
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="truncate text-[13px] font-bold tracking-tight text-slate-800">{userName(userId)}</span>
+                      <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
+                      {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
+                    </div>
+                    <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                  </button>
+                  {open && <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
