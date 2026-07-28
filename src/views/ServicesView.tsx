@@ -130,10 +130,15 @@ export function ServicesView({ services }: { services: Service[] }) {
         <div className="hidden md:block">
           <table className="w-full text-left">
             <thead className="bg-slate-50 border-b border-slate-100">
+              {/* Zelfde indeling als het totaaloverzicht van de planning:
+                  per deel eerst het loopnummer, dan de uren. */}
               <tr>
                 <Th>Dienst</Th>
+                <Th>Loop 1</Th>
                 <Th>Deel 1</Th>
+                <Th>Loop 2</Th>
                 <Th>Deel 2</Th>
+                <Th>Loop 3</Th>
                 <Th>Deel 3</Th>
               </tr>
             </thead>
@@ -143,31 +148,12 @@ export function ServicesView({ services }: { services: Service[] }) {
                   <Td>
                     <span className="font-semibold text-slate-800">{s.serviceNumber}</span>
                   </Td>
-                  <Td>
-                    <div className="flex items-center gap-2 font-medium tabular-nums">
-                      <Clock size={14} className="text-oker-500" />
-                      {s.startTime} - {s.endTime}
-                      <LoopChip loopnr={s.loopnr} />
-                    </div>
-                  </Td>
-                  <Td>
-                    {hasValidTime(s.startTime2, s.endTime2) ? (
-                      <div className="flex items-center gap-2 font-medium tabular-nums">
-                        <Clock size={14} className="text-oker-500" />
-                        {s.startTime2} - {s.endTime2}
-                        <LoopChip loopnr={s.loopnr2} />
-                      </div>
-                    ) : null}
-                  </Td>
-                  <Td>
-                    {hasValidTime(s.startTime3, s.endTime3) ? (
-                      <div className="flex items-center gap-2 font-medium tabular-nums">
-                        <Clock size={14} className="text-oker-500" />
-                        {s.startTime3} - {s.endTime3}
-                        <LoopChip loopnr={s.loopnr3} />
-                      </div>
-                    ) : null}
-                  </Td>
+                  <Td><LoopCell loopnr={s.loopnr} /></Td>
+                  <Td><TimeCell start={s.startTime} end={s.endTime} /></Td>
+                  <Td><LoopCell loopnr={hasValidTime(s.startTime2, s.endTime2) ? s.loopnr2 : undefined} /></Td>
+                  <Td>{hasValidTime(s.startTime2, s.endTime2) ? <TimeCell start={s.startTime2!} end={s.endTime2!} /> : null}</Td>
+                  <Td><LoopCell loopnr={hasValidTime(s.startTime3, s.endTime3) ? s.loopnr3 : undefined} /></Td>
+                  <Td>{hasValidTime(s.startTime3, s.endTime3) ? <TimeCell start={s.startTime3!} end={s.endTime3!} /> : null}</Td>
                 </tr>
               ))}
             </tbody>
@@ -253,6 +239,23 @@ function LoopChip({ loopnr }: { loopnr?: string }) {
   return (
     <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
       loop {loopnr.trim()}
+    </span>
+  );
+}
+
+/** Loopnummer als eigen tabelkolom (zoals in het totaaloverzicht). */
+function LoopCell({ loopnr }: { loopnr?: string }) {
+  const value = loopnr?.trim();
+  if (!value) return <span className="text-slate-300">—</span>;
+  return <span className="font-semibold tabular-nums text-slate-700">{value}</span>;
+}
+
+/** Uren van één dienstdeel. */
+function TimeCell({ start, end }: { start: string; end: string }) {
+  return (
+    <span className="inline-flex items-center gap-2 font-medium tabular-nums text-slate-700">
+      <Clock size={14} className="text-oker-500" />
+      {start} - {end}
     </span>
   );
 }
