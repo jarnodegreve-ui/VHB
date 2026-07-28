@@ -61,34 +61,27 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   const [openDay, setOpenDay] = useState<string | null>(null);
   const [showDailyModal, setShowDailyModal] = useState(false);
 
-  /** Eén dagregel (balk + aanklikbare naamchips) — gedeeld tussen de
-   *  compacte inline lijst en de volledige popup. */
+  /** Eén dagregel — gedeeld tussen de compacte inline lijst en de
+   *  alle-dagen-popup. Klik opent de namen-popup van die dag: inline chips
+   *  werden met tientallen actieve gebruikers een muur onder de balk. */
   const renderDayRow = (d: { day: string; count: number; names: string[] }) => (
-    <div key={d.day}>
-      <button
-        type="button"
-        onClick={() => setOpenDay((cur) => (cur === d.day ? null : d.day))}
-        aria-expanded={openDay === d.day}
-        title="Klik om te zien wie er actief was"
-        className="flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left hover:bg-slate-50 transition-colors"
-      >
-        <span className="w-20 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
-          {new Date(`${d.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
-        </span>
-        <div className="flex-1 h-3.5 rounded-md bg-slate-100 overflow-hidden">
-          <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.count / maxDaily) * 100)}%` }} />
-        </div>
-        <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-700 tabular-nums">{d.count}</span>
-      </button>
-      {openDay === d.day && (
-        <div className="ml-[5.75rem] mr-9 mb-1.5 mt-1 flex flex-wrap gap-1">
-          {d.names.map((name) => (
-            <span key={name} className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-600">{name}</span>
-          ))}
-        </div>
-      )}
-    </div>
+    <button
+      key={d.day}
+      type="button"
+      onClick={() => setOpenDay(d.day)}
+      title="Klik om te zien wie er actief was"
+      className="flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left hover:bg-slate-50 transition-colors"
+    >
+      <span className="w-20 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
+        {new Date(`${d.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
+      </span>
+      <div className="flex-1 h-3.5 rounded-md bg-slate-100 overflow-hidden">
+        <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.count / maxDaily) * 100)}%` }} />
+      </div>
+      <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-700 tabular-nums">{d.count}</span>
+    </button>
   );
+  const openDayData = openDay ? dailyActive.find((d) => d.day === openDay) : null;
   const maxDaily = Math.max(1, ...dailyActive.map((d) => d.count));
   // De lijst rechts toont alleen échte aanmeldingen — een 'Actief'-ping is
   // geen aanmeldmoment.
@@ -336,6 +329,39 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-1">
           {dailyActive.map(renderDayRow)}
         </div>
+      </Modal>
+
+      <Modal open={Boolean(openDayData)} onClose={() => setOpenDay(null)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
+        {openDayData && (
+          <>
+            <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+              <div className="min-w-0">
+                <h4 className="text-lg font-bold tracking-tight truncate capitalize">
+                  {new Date(`${openDayData.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                </h4>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{openDayData.count} {openDayData.count === 1 ? 'actieve gebruiker' : 'actieve gebruikers'}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setOpenDay(null)}
+                aria-label="Sluiten"
+                className="ios-pressable p-2 -m-1 text-slate-400 hover:bg-slate-50 rounded-xl"
+              >
+                <X size={20} />
+              </button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-0.5">
+              {openDayData.names.map((name) => (
+                <div key={name} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-slate-50">
+                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                    {name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
+                  </span>
+                  <span className="min-w-0 truncate text-[13px] font-semibold text-slate-800">{name}</span>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </Modal>
     </PageShell>
   );
