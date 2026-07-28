@@ -532,7 +532,7 @@ export function PlannerDashboardWidgets({
                   <CheckCircle2 size={16} />
                 </span>
                 <div>
-                  <p className="text-[13.5px] font-semibold text-slate-800">Alles onder controle</p>
+                  <p className="text-[13.5px] font-semibold text-slate-800">Alles ok</p>
                   <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
                 </div>
               </div>
@@ -597,7 +597,7 @@ export function PlannerDashboardWidgets({
                       tone={u.isUrgent ? 'red' : 'slate'}
                       icon={<Bell size={15} />}
                       primary={u.title}
-                      secondary={u.category}
+                      secondary={u.date}
                       onClick={() => onNavigate('updates')}
                     />
                   ))}

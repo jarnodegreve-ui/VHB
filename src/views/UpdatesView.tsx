@@ -6,20 +6,7 @@ import { markUpdatesRead } from '../lib/updateReads';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge } from '../components/primitives';
 
-const CATEGORY_TONES: Record<string, 'amber' | 'blue' | 'slate'> = {
-  veiligheid: 'amber',
-  technisch: 'blue',
-  algemeen: 'slate',
-};
-
-const CATEGORY_ACCENTS: Record<string, string> = {
-  veiligheid: 'bg-amber-500',
-  technisch: 'bg-blue-500',
-  algemeen: 'bg-slate-300',
-};
-
 export function UpdatesView({ updates }: { updates: Update[] }) {
-  const [filter, setFilter] = useState<'all' | 'algemeen' | 'veiligheid' | 'technisch'>('all');
   const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);
 
   // Openen van de Updates-weergave = gelezen. Markeer elke nog niet gemelde
@@ -36,7 +23,6 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
     });
   }, [updates]);
 
-  const filteredUpdates = updates.filter(u => filter === 'all' || u.category === filter);
   const toggleExpanded = (id: string) => {
     setExpandedUpdateIds((current) => (
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
@@ -48,27 +34,11 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
       <PageHeader
         title="Updates & nieuws"
         description="Berichten en mededelingen."
-        actions={(
-          <div className="glass-segmented flex p-1 rounded-xl">
-            {(['all', 'algemeen', 'veiligheid', 'technisch'] as const).map(cat => (
-              <button
-                key={cat}
-                onClick={() => setFilter(cat)}
-                className={cn(
-                  "px-4 py-2 min-h-10 rounded-lg text-xs font-semibold capitalize transition-all",
-                  filter === cat ? "glass-chip text-oker-700 shadow-sm" : "text-slate-500 hover:text-slate-700"
-                )}
-              >
-                {cat === 'all' ? 'Alles' : cat}
-              </button>
-            ))}
-          </div>
-        )}
       />
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {filteredUpdates.length > 0 ? (
-          filteredUpdates.map(update => {
+        {updates.length > 0 ? (
+          updates.map(update => {
             const isExpanded = expandedUpdateIds.includes(update.id);
             const shouldTruncate = update.content.length > 220;
             const visibleContent = shouldTruncate && !isExpanded
@@ -79,17 +49,14 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
             <div key={update.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-3xl relative overflow-hidden group duration-300">
               <div className={cn(
                 "absolute top-0 left-0 w-1 h-full",
-                update.isUrgent ? "bg-red-500" : (CATEGORY_ACCENTS[update.category] ?? "bg-slate-300")
+                update.isUrgent ? "bg-red-500" : "bg-slate-300"
               )} />
 
               <div className="flex justify-between items-center mb-4 gap-3">
+                {/* Lege wrapper wanneer niet dringend: houdt de datum rechts
+                    (justify-between) zonder categorie-badge. */}
                 <div className="flex flex-wrap gap-2">
-                  <Badge tone={CATEGORY_TONES[update.category] ?? 'slate'} className="capitalize">
-                    {update.category}
-                  </Badge>
-                  {update.isUrgent && (
-                    <Badge tone="red" dot>Dringend</Badge>
-                  )}
+                  {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 tabular-nums">
                   <Clock size={12} className="text-slate-300" />
@@ -120,7 +87,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
             <EmptyState
               icon={<Info size={28} />}
               title="Geen updates"
-              message="Geen updates gevonden in deze categorie."
+              message="Er zijn nog geen berichten geplaatst."
             />
           </div>
         )}
