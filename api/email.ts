@@ -13,6 +13,8 @@ interface SendEmailOptions {
 interface SendEmailResult {
   ok: boolean;
   mocked: boolean;
+  /** Serverfout bij een mislukte verzending (alleen aan admins tonen). */
+  error?: string;
 }
 
 const getSmtpConfig = () => ({
@@ -29,7 +31,7 @@ const getSmtpConfig = () => ({
   },
 });
 
-const isSmtpConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+export const isSmtpConfigured = () => Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
 
 const portalUrl = () => process.env.APP_URL || "https://vhbportaal.com";
 
@@ -71,9 +73,11 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
       attachments: opts.attachments,
     });
     return { ok: true, mocked: false };
-  } catch (err) {
+  } catch (err: any) {
     console.error(`Email send failed${opts.context ? ` (${opts.context})` : ""}:`, err);
-    return { ok: false, mocked: false };
+    // Detail meebrengen: de testmail-route toont dit aan admins, zodat een
+    // verkeerde poort/wachtwoord meteen te herkennen is i.p.v. "mislukt".
+    return { ok: false, mocked: false, error: String(err?.message || err) };
   }
 };
 

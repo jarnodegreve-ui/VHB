@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Activity, Bug, DownloadCloud, FlaskConical, UploadCloud } from 'lucide-react';
+import { Activity, Bug, DownloadCloud, FlaskConical, Mail, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
@@ -29,6 +29,8 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   const [testResult, setTestResult] = useState<string | null>(null);
   const [isTesting, setIsTesting] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [mailTest, setMailTest] = useState<{ ok: boolean; message: string } | null>(null);
+  const [isMailTesting, setIsMailTesting] = useState(false);
   const [clientErrors, setClientErrors] = useState<Array<{ id: string | number; createdAt: string; message: string; source?: string; url?: string; userId?: string }> | null>(null);
   const [swVersion, setSwVersion] = useState<string | null>(null);
 
@@ -135,6 +137,27 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       if (Array.isArray(data)) setClientErrors(data);
     } catch {
       // niet-kritisch: kaart toont dan 'niet beschikbaar'
+    }
+  };
+
+  // Testmail: de enige echte bevestiging dat de SMTP-gegevens kloppen —
+  // zonder verzenden lijkt alles te werken (sendEmail logt dan alleen).
+  const sendTestEmail = async () => {
+    setIsMailTesting(true);
+    setMailTest(null);
+    try {
+      const res = await fetch('/api/admin/test-email', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+      });
+      const data = await res.json().catch(() => ({}));
+      setMailTest(res.ok
+        ? { ok: true, message: data.message || 'Testmail verstuurd.' }
+        : { ok: false, message: data.error || `Verzenden mislukt (${res.status}).` });
+    } catch (err: any) {
+      setMailTest({ ok: false, message: err?.message || 'Netwerkfout bij het versturen.' });
+    } finally {
+      setIsMailTesting(false);
     }
   };
 
@@ -311,6 +334,49 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                   <span className="text-sm font-medium text-slate-600">Server Tijd:</span>
                   <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(healthData.time).toLocaleString()}</span>
                 </div>
+              </div>
+            </div>
+
+            <div className="surface-card p-6 rounded-3xl">
+              <MicroLabel className="mb-4">E-mail</MicroLabel>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-slate-600">SMTP:</span>
+                  <Badge tone={healthData.smtp?.status === 'configured' ? 'emerald' : 'red'} dot>
+                    {healthData.smtp?.status === 'configured' ? 'geconfigureerd' : 'niet geconfigureerd'}
+                  </Badge>
+                </div>
+                {healthData.smtp?.status === 'configured' ? (
+                  <>
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-sm font-medium text-slate-600">Afzender:</span>
+                      <span className="text-xs font-mono text-slate-500 truncate">{healthData.smtp.from}</span>
+                    </div>
+                    <div className="flex justify-between items-center gap-3">
+                      <span className="text-sm font-medium text-slate-600">Server:</span>
+                      <span className="text-xs font-mono text-slate-500 truncate">{healthData.smtp.host}</span>
+                    </div>
+                  </>
+                ) : (
+                  <p className="text-xs font-medium text-red-600">
+                    Zonder SMTP_USER/SMTP_PASS worden mails alleen gelogd, niet verstuurd — verlofbeslissingen en updates komen dan nergens aan.
+                  </p>
+                )}
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  full
+                  onClick={sendTestEmail}
+                  disabled={isMailTesting}
+                  icon={<Mail size={15} />}
+                >
+                  {isMailTesting ? 'Versturen...' : 'Stuur testmail naar mezelf'}
+                </Button>
+                {mailTest && (
+                  <p className={`text-xs font-medium break-words rounded-lg p-2 ${mailTest.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                    {mailTest.message}
+                  </p>
+                )}
               </div>
             </div>
 
