@@ -56,7 +56,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
     <PageShell>
       <PageHeader
         title="Omleidingen"
-        description="Actuele hinder en omleidingen."
+        description="Actuele omleidingen."
         actions={(
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
             <div className="relative group">

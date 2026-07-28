@@ -30,7 +30,9 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
       )}>
         {icon}
       </span>
-      <span className="flex-1 leading-none truncate">{label}</span>
+      {/* leading-5 i.p.v. leading-none: truncate verbergt overflow en bij
+          regelhoogte 1 werd de staart van g/j/p afgeknipt ("Planningscodes"). */}
+      <span className="flex-1 leading-5 truncate">{label}</span>
       {badge !== undefined && badge > 0 && (
         <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-[11px] font-bold bg-oker-500 text-slate-950 rounded-full">
           {badge}

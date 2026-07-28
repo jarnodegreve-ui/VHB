@@ -1541,7 +1541,7 @@ export default function App() {
   const resolvedCurrentView = allowedViews.includes(currentView) ? currentView : 'dashboard';
   const viewMeta: Record<string, { title: string; subtitle: string }> = {
     dashboard: { title: 'Dashboard', subtitle: 'Overzicht van planning, updates en operationele status.' },
-    omleidingen: { title: 'Omleidingen', subtitle: 'Actuele hinder en routewijzigingen voor chauffeurs.' },
+    omleidingen: { title: 'Omleidingen', subtitle: 'Actuele omleidingen.' },
     rooster: { title: 'Mijn Rooster', subtitle: 'Je komende diensten en export naar agenda.' },
     dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
     ritblaadjes: { title: 'Ritbladen', subtitle: 'Actuele rit-informatie als PDF voor alle chauffeurs.' },

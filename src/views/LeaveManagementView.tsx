@@ -329,7 +329,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
     <PageShell width="6xl" className="pb-20">
       <PageHeader
         title="Verlof"
-        description="Beheer verlofaanvragen en bekijk de bezetting."
+        description={isPlanner ? 'Beheer verlofaanvragen en bekijk de bezetting.' : 'Vraag verlof aan en volg je aanvragen op.'}
         actions={(
           <div className="flex items-center gap-2">
             {isPlanner && onSickReport && (
