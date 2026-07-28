@@ -18,7 +18,7 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 // interne sleutels (bv. een vroegere __vakantieperiodes__) de dag-type-lijst niet.
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
-import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, type LeaveDecisionAction } from "./email.js";
+import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, isSmtpConfigured, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
@@ -169,9 +169,42 @@ app.get("/api/health/details", authenticate, requireRole("admin"), async (_req, 
     status: "ok",
     supabase: supabaseStatus,
     tables,
+    // Zonder SMTP-gegevens logt sendEmail de mail alleen naar de console en
+    // meldt 'ok' — dan lijkt alles te werken terwijl er niets vertrekt.
+    // Daarom hier expliciet zichtbaar, mét de gebruikte afzender.
+    smtp: isSmtpConfigured()
+      ? { status: "configured", from: process.env.SMTP_FROM || process.env.SMTP_USER || "onbekend", host: process.env.SMTP_HOST || "onbekend" }
+      : { status: "not configured", from: null, host: null },
     env: process.env.NODE_ENV,
     time: new Date().toISOString(),
   });
+});
+
+// Testmail naar de ingelogde admin zelf: de enige manier om te bevestigen dat
+// de SMTP-gegevens écht kloppen. Geeft de rauwe serverfout terug (alleen aan
+// admins) zodat een verkeerd wachtwoord/poort meteen te zien is.
+app.post("/api/admin/test-email", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  const to = String(req.appUser?.email || "").trim();
+  if (!to) {
+    return res.status(400).json({ error: "Je account heeft geen e-mailadres; vul dat eerst in bij Gebruikersbeheer." });
+  }
+  if (!isSmtpConfigured()) {
+    return res.status(400).json({
+      error: "SMTP is niet geconfigureerd (SMTP_USER/SMTP_PASS ontbreken). Mails worden nu alleen gelogd, niet verstuurd.",
+      smtpConfigured: false,
+    });
+  }
+  const result = await sendEmail({
+    to: [to],
+    subject: "VHB Portaal — testmail",
+    text: `Deze testmail bevestigt dat de mailinstellingen van het portaal werken.\n\nVerstuurd op ${new Date().toLocaleString("nl-BE", { timeZone: "Europe/Brussels" })}.`,
+    html: `<p>Deze testmail bevestigt dat de mailinstellingen van het portaal werken.</p><p style="color:#64748b;font-size:12px">Verstuurd op ${new Date().toLocaleString("nl-BE", { timeZone: "Europe/Brussels" })}.</p>`,
+    context: "test-email",
+  });
+  if (!result.ok) {
+    return res.status(502).json({ error: result.error || "Verzenden mislukt — controleer host, poort, gebruiker en wachtwoord.", smtpConfigured: true });
+  }
+  res.json({ success: true, to, message: `Testmail verstuurd naar ${to}. Zie ook je spam-map.` });
 });
 
 // Schema-drift-detectie: migraties draait Jarno handmatig in de SQL Editor —
@@ -483,7 +516,10 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
         endTime: "00:00",
         allDay: true,
         summary: leaveLabel[l.type] ?? "Afwezig",
-        description: l.comment ? String(l.comment) : undefined,
+        // Bewust ZONDER l.comment: dat is vrije tekst met de reden (ziekte,
+        // overlijden, familiale situatie). De feed-URL is stateless en niet
+        // in te trekken, en wie 'm in Google Agenda zet, laat Google die
+        // tekst periodiek ophalen en bewaren. Het type-label volstaat.
       });
     }
     const dtstamp = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d{3}Z$/, "Z");
