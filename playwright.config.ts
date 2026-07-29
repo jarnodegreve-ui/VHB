@@ -3,12 +3,10 @@ import { defineConfig, devices } from '@playwright/test';
 /**
  * E2E-smoke voor het VHB-portaal — iPhone-first.
  *
- * Bewust NIET in de GitHub-CI gehaakt: een volledige browser-download + de
- * ingelogde flow vragen een testaccount/backend die we (nog) niet hebben.
- * Dit is een lokaal uitvoerbare fundering (`npm run test:e2e`) die de échte
- * gebouwde app op een iPhone-viewport boot en controleert dat het portaal
- * überhaupt rendert (geen white-screen op mobiel). Uit te breiden naar de
- * ingelogde chauffeur-flow zodra er een seed-/testaccount is.
+ * Draait lokaal (`npm run test:e2e`) én in de GitHub-CI (.github/workflows/
+ * ci.yml) — sinds de mocks (sessie in localStorage + page.route-fixtures) is
+ * er geen testaccount of backend meer nodig. Boot de échte gebouwde app op
+ * een iPhone-viewport, als chauffeur én als admin.
  *
  * Eenmalig lokaal: `npx playwright install chromium`.
  */
