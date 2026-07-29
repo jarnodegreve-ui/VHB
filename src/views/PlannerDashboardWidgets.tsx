@@ -13,7 +13,6 @@ import {
   Repeat,
   Settings,
   CheckCircle2,
-  Upload,
   UserCheck,
   Users,
   Smartphone,
@@ -643,7 +642,6 @@ export function PlannerDashboardWidgets({
           acties (grid-flow-col: werkt met 4 én 5 tegels — "Ziek melden" is
           conditioneel). */}
       <div className="grid grid-cols-2 gap-3 xl:grid-flow-col xl:auto-cols-fr">
-        <QuickAction icon={<Upload size={16} />} label="Planning importeren" sub="Matrix uploaden" onClick={() => onNavigate('beheer-roosters')} />
         <QuickAction icon={<MapPin size={16} />} label="Omleiding toevoegen" sub="Hinder registreren" onClick={() => onNavigate('beheer-omleidingen')} />
         <QuickAction icon={<CalendarDays size={16} />} label="Verlofbeheer" sub="Aanvragen beoordelen" onClick={() => onNavigate('verlof')} />
         {onQuickSickReport && <QuickAction icon={<AlertTriangle size={16} />} label="Ziek melden" sub="Chauffeur afwezig" onClick={onQuickSickReport} />}
