@@ -14,11 +14,18 @@ const CATEGORY_LABEL: Record<string, string> = {
   avond: 'Laat',
 };
 
-const minutesBetween = (start: string, end: string) => {
+export const minutesBetween = (start: string, end: string) => {
   const s = start.split(':').map(Number);
   const e = end.split(':').map(Number);
   if (s.length < 2 || e.length < 2) return 0;
-  return Math.max(0, e[0] * 60 + e[1] - s[0] * 60 - s[1]);
+  const startMin = s[0] * 60 + s[1];
+  let endMin = e[0] * 60 + e[1];
+  // Impliciete nachtdienst (eind ≤ start, bv. 22:00–06:00) = +24u — zelfde
+  // regel als buildVevent/isShiftActiveAt. Zonder dit telde de maandprint
+  // zo'n dienst als 0 uur en klopte geen enkel urenoverzicht van een
+  // nachtchauffeur (controleronde 30/07). Busvak-notatie (26:16) telde al goed.
+  if (endMin <= startMin) endMin += 1440;
+  return endMin - startMin;
 };
 
 const formatHours = (totalMinutes: number) => {

@@ -13,8 +13,9 @@ import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 const hasValidTime = (start?: string, end?: string) =>
   !!start && !!end && /^\d{1,2}:\d{2}$/.test(start) && /^\d{1,2}:\d{2}$/.test(end);
 
-export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[], opts?: { bulkReplace?: boolean }) => void, canAdminOverride: boolean }) {
+export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[], opts?: { bulkReplace?: boolean }) => Promise<boolean> | boolean | void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [historyService, setHistoryService] = useState<Service | null>(null);
@@ -188,27 +189,38 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     setShowModal(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const emptyForm = {
+    serviceNumber: '',
+    startTime: '',
+    endTime: '',
+    startTime2: '',
+    endTime2: '',
+    startTime3: '',
+    endTime3: '',
+    loopnr: '',
+    loopnr2: '',
+    loopnr3: ''
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (editingId) {
-      onSave(services.map(s => s.id === editingId ? { ...s, ...formData } : s));
-    } else {
-      onSave([...services, { id: Date.now().toString(), ...formData }]);
+    if (isSaving) return;
+    setIsSaving(true);
+    try {
+      // Pas sluiten/wissen ná een geslaagde save: bij een 409 of serverfout
+      // bleef de invoer voorheen niet bewaard — het enige formulier in de
+      // app dat fire-and-forget opsloeg (controleronde 30/07).
+      const next = editingId
+        ? services.map(s => s.id === editingId ? { ...s, ...formData } : s)
+        : [...services, { id: Date.now().toString(), ...formData }];
+      const ok = await onSave(next);
+      if (ok === false) return;
+      setShowModal(false);
+      setEditingId(null);
+      setFormData(emptyForm);
+    } finally {
+      setIsSaving(false);
     }
-    setShowModal(false);
-    setEditingId(null);
-    setFormData({ 
-      serviceNumber: '', 
-      startTime: '', 
-      endTime: '',
-      startTime2: '',
-      endTime2: '',
-      startTime3: '',
-      endTime3: '',
-      loopnr: '',
-      loopnr2: '',
-      loopnr3: ''
-    });
   };
 
   const handleDelete = (id: string) => {
@@ -221,7 +233,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
   const handleConfirmDelete = () => {
     if (!confirmDeleteId) return;
-    onSave(services.filter(s => s.id !== confirmDeleteId));
+    void onSave(services.filter(s => s.id !== confirmDeleteId));
     setConfirmDeleteId(null);
   };
 
@@ -235,7 +247,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     if (!pendingImportedServices) return;
     // Bewuste volledige vervanging (al bevestigd in de dialoog hierboven) —
     // meld dat aan de server zodat de bulk-wipe-vangrail niet blokkeert.
-    onSave(pendingImportedServices, { bulkReplace: true });
+    void onSave(pendingImportedServices, { bulkReplace: true });
     setPendingImportedServices(null);
     setPendingImportCount(0);
   };
@@ -502,7 +514,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               />
             </div>
           </div>
-          <Button type="submit" variant="primary" size="lg" full className="mt-4">
+          <Button type="submit" variant="primary" size="lg" full className="mt-4" disabled={isSaving}>
             {editingId ? 'Dienst bijwerken' : 'Dienst toevoegen'}
           </Button>
         </form>

@@ -16,7 +16,7 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType } from '../lib/format';
 
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, onSickReport, autoOpenSick, onSickModalConsumed, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>; autoOpenSick?: boolean; onSickModalConsumed?: () => void; onDecide?: (id: string, status: LeaveRequest['status']) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onSickReport, autoOpenSick, onSickModalConsumed, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>; autoOpenSick?: boolean; onSickModalConsumed?: () => void; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
@@ -186,11 +186,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
   const isDraftBoundary = (dateStr: string) =>
     showRequestModal && (dateStr === formData.startDate || dateStr === formData.endDate);
 
-  const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status']) => {
+  const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status'], seenStatus?: string) => {
     // Delta-pad (PATCH per record): conflictveilig bij twee gelijktijdige
     // beoordelaars — de tweede krijgt een melding i.p.v. een stille overschrijf.
+    // seenStatus = de status die de beslisser op het scherm zag; zonder die
+    // referentie vergeleek de server met de (al ververste) live status en
+    // was de conflictcheck feitelijk uitgeschakeld.
     if (onDecide) {
-      void onDecide(requestId, newStatus);
+      void onDecide(requestId, newStatus, seenStatus);
       return;
     }
     const decidedAt = new Date().toISOString();
@@ -203,6 +206,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
   // Beoordeling in een side panel: alle context (saldo, conflicten,
   // toelichting) + beslis-acties zonder paginawissel.
   const [reviewLeave, setReviewLeave] = useState<LeaveRequest | null>(null);
+  useEffect(() => {
+    if (!reviewLeave) return;
+    const fresh = leaveRequests.find((r) => r.id === reviewLeave.id);
+    if (!fresh) { setReviewLeave(null); return; }
+    if (fresh.status !== reviewLeave.status || fresh.decidedAt !== reviewLeave.decidedAt) {
+      setReviewLeave(fresh);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leaveRequests]);
   const togglePendingSelection = (id: string) => {
     setSelectedPendingIds((prev) => {
       const next = new Set(prev);
@@ -776,7 +788,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
               variant="danger"
               size="lg"
               className="flex-1"
-              onClick={() => { handleStatusUpdate(reviewLeave.id, 'rejected'); setReviewLeave(null); }}
+              onClick={() => { handleStatusUpdate(reviewLeave.id, 'rejected', reviewLeave.status); setReviewLeave(null); }}
             >
               Afwijzen
             </Button>
@@ -785,7 +797,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
               size="lg"
               className="flex-1"
               icon={<Check size={15} />}
-              onClick={() => { handleStatusUpdate(reviewLeave.id, 'approved'); setReviewLeave(null); }}
+              onClick={() => { handleStatusUpdate(reviewLeave.id, 'approved', reviewLeave.status); setReviewLeave(null); }}
             >
               Goedkeuren
             </Button>

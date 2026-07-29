@@ -2810,7 +2810,13 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
   try {
     const id = String(req.params.id);
     const status = String(req.body?.status ?? "");
+    // Verplicht, net als bij swaps: zonder ifStatus is er géén concurrency-
+    // guard en geldt stil last-write-wins — het gat dat deze route moest
+    // dichten (#251 beloofde dit voor beide routes; leave was vergeten).
     const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
+    if (!ifStatus) {
+      return res.status(400).json({ error: "ifStatus ontbreekt: stuur de status waarop je beslissing gebaseerd is mee." });
+    }
     const allowed = ["approved", "rejected", "cancelled"];
     if (!allowed.includes(status)) {
       return res.status(400).json({ error: "Ongeldige status." });
@@ -2821,11 +2827,17 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
     if (!current) {
       return res.status(404).json({ error: "Deze verlofaanvraag bestaat niet (meer) — mogelijk net ingetrokken." });
     }
-    if (ifStatus && String(current.status) !== ifStatus) {
+    if (String(current.status) !== ifStatus) {
       return res.status(409).json({
         error: `Deze aanvraag is intussen al '${current.status}' — de lijst is ververst.`,
         currentStatus: current.status,
       });
+    }
+    // State-machine (spiegel van TERMINAL_SWAP_STATES): een afgewezen of
+    // geannuleerde aanvraag is een eindstation. approved → cancelled blijft
+    // toegestaan ("Verlof annuleren").
+    if (status !== current.status && ["rejected", "cancelled"].includes(String(current.status))) {
+      return res.status(409).json({ error: "Deze verlofaanvraag is al afgehandeld en kan niet meer van status veranderen." });
     }
 
     const decidedAt = new Date().toISOString();

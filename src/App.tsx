@@ -1122,20 +1122,25 @@ export default function App() {
     }
   };
 
-  const decideLeave = (id: string, status: LeaveRequest['status']): Promise<boolean> => {
+  const decideLeave = (id: string, status: LeaveRequest['status'], seenStatus?: string): Promise<boolean> => {
     const current = leaveRequests.find((r) => r.id === id);
     // Record niet (meer) lokaal → onze lijst is stale; ifStatus is server-
     // side verplicht, dus eerst verversen i.p.v. een kansloze PATCH.
     if (!current) { void fetchLeave(); return Promise.resolve(false); }
-    return decideViaPatch('leave', id, status, current.status, fetchLeave, (updated) => {
+    // ifStatus = wat de beslisser ZAG (seenStatus uit de view), niet de live
+    // state: realtime kan de lijst intussen ververst hebben met de beslissing
+    // van een collega — met de live status als referentie keurt de check dan
+    // altijd goed en is de guard feitelijk uitgeschakeld (controleronde 30/07).
+    return decideViaPatch('leave', id, status, seenStatus ?? current.status, fetchLeave, (updated) => {
       setLeaveRequests((curr) => curr.map((r) => (r.id === id ? { ...r, ...updated } : r)));
     });
   };
 
-  const decideSwap = (id: string, status: SwapRequest['status']): Promise<boolean> => {
+  const decideSwap = (id: string, status: SwapRequest['status'], seenStatus?: string): Promise<boolean> => {
     const current = swaps.find((s) => s.id === id);
     if (!current) { void fetchSwaps(); return Promise.resolve(false); }
-    return decideViaPatch('swaps', id, status, current.status, fetchSwaps, (updated) => {
+    // Zelfde seenStatus-principe als decideLeave.
+    return decideViaPatch('swaps', id, status, seenStatus ?? current.status, fetchSwaps, (updated) => {
       setSwaps((curr) => curr.map((s) => (s.id === id ? { ...s, ...updated } : s)));
     });
   };
@@ -1158,8 +1163,10 @@ export default function App() {
     }
   };
 
-  const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean }) => {
-    if (!guardCollectionLoaded('services', 'Het dienstoverzicht is')) return;
+  // Promise<boolean> zodat het beheerformulier pas sluit/wist ná succes —
+  // dit was de enige mutatie-view die fire-and-forget opsloeg (controleronde).
+  const saveServices = async (newServices: Service[], opts?: { bulkReplace?: boolean }): Promise<boolean> => {
+    if (!guardCollectionLoaded('services', 'Het dienstoverzicht is')) return false;
     try {
       beginLoading();
       const response = await apiFetch('/api/services', {
@@ -1173,7 +1180,7 @@ export default function App() {
       if (response.status === 409) {
         showToast('Het dienstoverzicht is intussen door iemand anders gewijzigd — ik ververs het, probeer je wijziging opnieuw.', 'info');
         await fetchServices();
-        return;
+        return false;
       }
       if (response.ok) {
         setServices(newServices);
@@ -1182,13 +1189,15 @@ export default function App() {
           await fetchActivityLog();
         }
         showToast('Diensten succesvol opgeslagen.', 'success');
-      } else {
-        const err = await response.json().catch(() => ({} as any));
-        showToast(err.details || err.error || 'Opslaan van diensten is mislukt.', 'error');
+        return true;
       }
+      const err = await response.json().catch(() => ({} as any));
+      showToast(err.details || err.error || 'Opslaan van diensten is mislukt.', 'error');
+      return false;
     } catch (error) {
       console.error('Error saving services:', error);
       showToast('Opslaan van diensten is mislukt.', 'error');
+      return false;
     } finally {
       endLoading();
     }
