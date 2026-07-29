@@ -99,7 +99,7 @@ export function PlannerDashboardWidgets({
   // "Vandaag afwezig" stond onterecht op 0 wanneer het verlof alleen in de
   // geïmporteerde matrix zat. Fout → stil terugvallen op de module-data.
   const todayKey = isoDate(now);
-  // `absent` voedt het paneel "Vandaag afwezig"; `busyNames` is breder — élke
+  // `absent` voedt de tegel/popup "Vandaag afwezig"; `busyNames` is breder — élke
   // matrix-cel van vandaag die géén vrije dag is (opleiding, een dienst zonder
   // bruikbare tijden, onbekende code…). Zonder dat onderscheid gold "niet in
   // de planning én niet als afwezig gemeld" als beschikbaar, waardoor iemand
@@ -252,12 +252,14 @@ export function PlannerDashboardWidgets({
   const attentionCount =
     (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks;
   const needsAttention = attentionCount > 0;
-  // Het paneel toont per soort een top-N (3 dekkingsdagen, 4 verlof, 4 ruil);
-  // dit is wat daarbuiten valt, zodat de teller in de kop eerlijk blijft.
+  // Het paneel toont per soort een top-N (3 dekkingsdagen, 4 verlof, 4 ruil,
+  // 3 toestellen); dit is wat daarbuiten valt, zodat de teller in de kop
+  // eerlijk blijft.
   const hiddenAttentionCount =
     Math.max(0, gapDays.length - 3) +
     Math.max(0, pendingLeave.length - 4) +
-    Math.max(0, pendingSwaps.length - 4);
+    Math.max(0, pendingSwaps.length - 4) +
+    Math.max(0, pendingDevices.length - 3);
   const userNameById = (id: string) =>
     users.find((u) => String(u.id) === String(id))?.name || 'Onbekend';
 
@@ -274,7 +276,15 @@ export function PlannerDashboardWidgets({
     ...matrixAbsent
       .filter((m) => !seenNames.has(m.name.trim().toLowerCase()))
       .map((m, i) => ({ id: `matrix-${i}`, ...m })),
-  ].sort((a, b) => a.name.localeCompare(b.name));
+  ].sort((a, b) => {
+    // Eerst op soort afwezigheid (ziek bovenaan — daar moet de planner op
+    // reageren; daarna de overige soorten alfabetisch), binnen elke soort
+    // op naam (verzoek Jarno 30/07).
+    if (a.isSick !== b.isSick) return a.isSick ? -1 : 1;
+    const byLabel = a.label.localeCompare(b.label, 'nl');
+    if (byLabel !== 0) return byLabel;
+    return a.name.localeCompare(b.name, 'nl');
+  });
 
   // Wie is er vandaag beschikbaar (vrij en inzetbaar als vervanging)?
   // Actieve chauffeurs die vandaag géén dienst hebben, niet afwezig zijn,
@@ -390,9 +400,9 @@ export function PlannerDashboardWidgets({
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling van 7 tegels op elke breedte: mobiel 2×3 + de
-          Beschikbaar-tegel op volle breedte, medium 3×2 + volle breedte,
-          breed 7 naast elkaar. */}
+          Gat-vrije verdeling van 8 tegels op elke breedte: mobiel 2×3 + twee
+          volle-breedte-rijen ("Vandaag afwezig" en "Beschikbaar" delen op md
+          de laatste rij, xl alles naast elkaar in 8 kolommen). */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-8">
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
@@ -575,7 +585,7 @@ export function PlannerDashboardWidgets({
                 de teller in de kop dat je alles ziet. */}
             {hiddenAttentionCount > 0 && (
               <p className="px-4 pt-1 text-xs font-medium text-slate-500">
-                +{hiddenAttentionCount} niet getoond — open Verlof of Dienstruil voor de volledige lijst.
+                +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil of Toestellen voor de volledige lijst.
               </p>
             )}
             {attentionCount === 0 && (
@@ -714,7 +724,7 @@ export function PlannerDashboardWidgets({
         ) : (
           <ul className="space-y-0.5">
             {todayAbsent.map((a) => (
-              <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-50">
+              <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5">
                 <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{a.name}</span>
                 <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-slate-100 text-slate-600')}>{a.label}</span>
               </li>

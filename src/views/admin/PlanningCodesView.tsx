@@ -101,7 +101,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               Code Toevoegen
             </Button>
             <Button variant="primary" size="lg" onClick={handleSave} disabled={isSaving}>
-              {isSaving ? 'Opslaan...' : 'Opslaan'}
+              {isSaving ? 'Opslaan…' : 'Opslaan'}
             </Button>
           </>
         )}
@@ -125,7 +125,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="slate">{filteredCodes.length} zichtbaar</Badge>
               {!canAdminDelete ? (
-                <Badge tone="slate">Delete admin-only</Badge>
+                <Badge tone="slate">Verwijderen: alleen admin</Badge>
               ) : null}
             </div>
           }

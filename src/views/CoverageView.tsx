@@ -201,7 +201,7 @@ export function CoverageView() {
       await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, overrides: cleanOverrides });
       await refetchGaps();
     } catch (e: any) {
-      setError(e?.message || 'Opslaan mislukt.');
+      setError(e?.message || 'Opslaan is mislukt.');
     } finally {
       setSaving(false);
     }

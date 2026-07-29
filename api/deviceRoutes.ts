@@ -1,6 +1,6 @@
 import type express from "express";
 import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache } from "./middleware.js";
-import { isMissingTableError } from "./deviceGate.js";
+import { DEVICE_GATE_SETTING_KEY, isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
 import {
   logActivity,
@@ -122,8 +122,14 @@ export const mountDeviceRoutes = (app: express.Express) => {
 
   app.post("/api/devices/gate", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     try {
-      const enabled = Boolean(req.body?.enabled);
-      await setAppSetting("device_gate", { enabled });
+      // Expliciete boolean vereist: een misvormde body ({}, null) coërceerde
+      // naar false = schakelaar stil UIT — een beveiligingsinstelling hoort
+      // dan 400 te geven, niet fail-open te gaan.
+      if (typeof req.body?.enabled !== "boolean") {
+        return res.status(400).json({ error: "enabled (boolean) ontbreekt." });
+      }
+      const enabled = req.body.enabled;
+      await setAppSetting(DEVICE_GATE_SETTING_KEY, { enabled });
       invalidateDeviceGateCache();
       await logActivity(
         req,

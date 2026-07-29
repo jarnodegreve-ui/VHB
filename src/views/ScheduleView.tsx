@@ -132,10 +132,10 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
   return (
     <PageShell>
       <PageHeader
-        title="Mijn werkrooster"
+        title="Mijn rooster"
         description={
           upcoming.length > 0
-            ? `${upcoming.length} ${upcoming.length === 1 ? 'aankomende dienst' : 'aankomende diensten'} · klik om de blokken te zien.`
+            ? `${upcoming.length} ${upcoming.length === 1 ? 'aankomende dienst' : 'aankomende diensten'}.`
             : 'Overzicht van je komende diensten.'
         }
         actions={

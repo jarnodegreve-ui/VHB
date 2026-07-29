@@ -233,7 +233,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
               disabled={isUploading}
               onClick={() => fileInputRef.current?.click()}
             >
-              {isUploading ? 'Uploaden...' : current ? 'Vervang PDF' : 'Upload PDF'}
+              {isUploading ? 'Uploaden…' : current ? 'Vervang PDF' : 'Upload PDF'}
             </Button>
           </>
         ) : undefined}

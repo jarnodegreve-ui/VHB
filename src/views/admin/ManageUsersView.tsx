@@ -318,7 +318,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           <>
             <label className={cn('control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-all hover:text-slate-900', isImporting && 'cursor-not-allowed opacity-50')}>
               <Upload size={16} />
-              {isImporting ? 'Bezig...' : 'Excel Upload'}
+              {isImporting ? 'Bezig…' : 'Excel importeren'}
               <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
             </label>
             <Button variant="secondary" icon={<Send size={16} />} onClick={() => setShowBroadcast(true)}>
@@ -573,7 +573,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <div className="p-6 space-y-4">
               <div className="space-y-1.5"><MicroLabel>Tijdelijk wachtwoord</MicroLabel><input type="password" aria-label="Tijdelijk wachtwoord" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 6 tekens" autoFocus /></div>
               <p className="text-xs text-slate-400">De gebruiker logt daarna in met dit nieuwe wachtwoord.</p>
-              <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>Annuleren</Button><Button variant="primary" className="flex-1" onClick={handleResetPassword} disabled={isResettingPassword}>{isResettingPassword ? 'Bezig...' : 'Resetten'}</Button></div>
+              <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>Annuleren</Button><Button variant="primary" className="flex-1" onClick={handleResetPassword} disabled={isResettingPassword}>{isResettingPassword ? 'Bezig…' : 'Resetten'}</Button></div>
             </div>
           </>
         )}

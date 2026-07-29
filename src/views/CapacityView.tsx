@@ -210,7 +210,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         <div className="surface-card p-6 rounded-3xl flex items-center justify-center min-h-[200px]">
           <div className="flex items-center gap-3 text-slate-500">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
-            <span className="text-sm font-semibold">Maandplanning laden...</span>
+            <span className="text-sm font-semibold">Maandplanning laden…</span>
           </div>
         </div>
       ) : !hasData ? (

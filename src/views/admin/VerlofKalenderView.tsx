@@ -103,7 +103,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              size="sm"
+              size="sm" className="min-h-11 min-w-11 justify-center"
               onClick={goToPrev}
               aria-label="Vorige maand"
               icon={<ChevronLeft size={16} />}
@@ -111,7 +111,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
             <span className="px-3 text-base font-semibold tracking-tight capitalize min-w-[150px] text-center text-slate-800">{monthName} {year}</span>
             <Button
               variant="ghost"
-              size="sm"
+              size="sm" className="min-h-11 min-w-11 justify-center"
               onClick={goToNext}
               aria-label="Volgende maand"
               icon={<ChevronRight size={16} />}

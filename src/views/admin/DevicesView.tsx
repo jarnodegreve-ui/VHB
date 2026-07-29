@@ -104,6 +104,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       });
       setRenaming(null);
       await load();
+      notify('Toestel hernoemd.', 'success');
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Hernoemen is mislukt.', 'error');
     }

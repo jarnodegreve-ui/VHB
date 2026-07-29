@@ -200,7 +200,7 @@ export function ChangePasswordModal({
                   disabled={isSubmitting || success}
                   className={cn('btn-primary ios-pressable flex-1 px-4 py-3 text-xs uppercase tracking-[0.08em]')}
                 >
-                  {isSubmitting ? 'Opslaan...' : 'Opslaan'}
+                  {isSubmitting ? 'Opslaan…' : 'Opslaan'}
                 </button>
               </div>
             </form>
