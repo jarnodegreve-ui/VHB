@@ -98,7 +98,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         actions={(
           <>
             <Button variant="secondary" size="lg" icon={<Plus size={16} />} onClick={addCode}>
-              Code Toevoegen
+              Code toevoegen
             </Button>
             <Button variant="primary" size="lg" onClick={handleSave} disabled={isSaving}>
               {isSaving ? 'Opslaan…' : 'Opslaan'}
@@ -110,10 +110,10 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
       {/* 4 kaarten → gat-vrij op elke breedte (mobiel 2×2, breed 4 op een
           rij). "Totaal" staat al als teller bij de tabel. */}
       <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard icon={<Bus className="text-slate-600" />} label="Diensten" value={summary.service.toString()} subValue="Codes met shiftstatus" />
-        <StatCard icon={<Calendar className="text-emerald-600" />} label="Verlof" value={summary.leave.toString()} subValue="Afwezigheidsperiodes" />
-        <StatCard icon={<AlertTriangle className="text-amber-600" />} label="Afwezigheid" value={summary.absence.toString()} subValue="Geen inzetbare dienst" />
-        <StatCard icon={<Info className="text-amber-500" />} label="Onbekend" value={summary.unknown.toString()} subValue="Nog te verfijnen" />
+        <StatCard icon={<Bus className="text-slate-600" />} label="Diensten" value={summary.service.toString()} subValue="tellen als dienst" />
+        <StatCard icon={<Calendar className="text-emerald-600" />} label="Verlof" value={summary.leave.toString()} subValue="betaalde afwezigheid" />
+        <StatCard icon={<AlertTriangle className="text-amber-600" />} label="Afwezigheid" value={summary.absence.toString()} subValue="niet inzetbaar" />
+        <StatCard icon={<Info className="text-amber-500" />} label="Onbekend" value={summary.unknown.toString()} subValue="nog te verfijnen" />
       </div>
 
       <section className="surface-card rounded-3xl p-6">
@@ -160,19 +160,19 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           {filteredCodes.length > 0 ? (
             <>
               <div className="hidden xl:block">
-                <table className="w-full min-w-[980px] text-left">
+                <table className="w-full table-fixed text-left">
                   <thead className="bg-slate-50/60">
                     <tr>
                       {/* Checkbox-kolommen: header gecentreerd boven de
                           (gecentreerde) checkbox; Acties rechts uitgelijnd
                           zoals de knoppen eronder. */}
-                      <Th className="w-32">Code</Th>
-                      <Th className="w-44">Categorie</Th>
+                      <Th className="w-24">Code</Th>
+                      <Th className="w-36">Categorie</Th>
                       <Th>Beschrijving</Th>
-                      <Th className="w-20 text-center">Dienst</Th>
-                      <Th className="w-20 text-center">Betaald</Th>
-                      <Th className="w-20 text-center">Vrij</Th>
-                      <Th className="w-24 text-right">Acties</Th>
+                      <Th className="w-16 text-center">Dienst</Th>
+                      <Th className="w-16 text-center">Betaald</Th>
+                      <Th className="w-14 text-center">Vrij</Th>
+                      <Th className="w-20 text-right">Acties</Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -184,7 +184,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                             <input
                               value={code.code}
                               onChange={(event) => updateCode(index, { code: event.target.value })}
-                              className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
+                              className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
                               placeholder="bv"
                             />
                           </Td>
@@ -192,7 +192,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                             <select
                               value={code.category}
                               onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
-                              className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-medium"
+                              className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-medium"
                             >
                               <option value="service">Dienst</option>
                               <option value="absence">Afwezigheid</option>
@@ -205,7 +205,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                             <input
                               value={code.description}
                               onChange={(event) => updateCode(index, { description: event.target.value })}
-                              className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-medium"
+                              className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-medium"
                               placeholder="Beschrijving"
                             />
                           </Td>
@@ -284,7 +284,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                       <input
                         value={code.description}
                         onChange={(event) => updateCode(index, { description: event.target.value })}
-                        className="control-input w-full rounded-xl px-3 py-2.5 text-sm font-medium"
+                        className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-medium"
                         placeholder="Beschrijving"
                       />
                       <div className="grid gap-3 sm:grid-cols-3">
