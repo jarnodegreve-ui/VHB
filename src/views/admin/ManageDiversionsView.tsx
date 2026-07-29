@@ -1,14 +1,29 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
-import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { isoDate } from '../../lib/availability';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
+/** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
+ *  actief tot hij verwijderd wordt. */
+const isExpired = (d: { endDate?: string }) => Boolean(d.endDate && d.endDate < isoDate(new Date()));
+
 export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
   const [showModal, setShowModal] = useState(false);
+  // Actieve omleidingen eerst (nieuwste bovenaan), verlopen onderaan — die
+  // bleven voorheen ongemarkeerd tussen de actieve staan én meetellen.
+  const sortedDiversions = useMemo(() => {
+    return [...diversions].sort((a, b) => {
+      const ea = isExpired(a) ? 1 : 0;
+      const eb = isExpired(b) ? 1 : 0;
+      if (ea !== eb) return ea - eb;
+      return String(b.startDate || '').localeCompare(String(a.startDate || ''));
+    });
+  }, [diversions]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [historyDiversion, setHistoryDiversion] = useState<Diversion | null>(null);
@@ -162,17 +177,19 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {diversions.map(div => {
+        {sortedDiversions.map(div => {
+          const expired = isExpired(div);
           return (
-          <div key={div.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group">
+          <div key={div.id} className={cn('surface-card surface-card-hover p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group', expired && 'opacity-60')}>
             <div className="flex items-start gap-5">
-              <div className="w-14 h-14 rounded-2xl border border-oker-100 bg-oker-50 text-oker-600 flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110">
+              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-slate-100 text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-600')}>
                 <MapPin size={28} />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
                   <h4 className="font-bold text-slate-800 text-lg tracking-tight leading-tight">{div.title}</h4>
                   <Badge tone="slate">Lijn {div.line}</Badge>
+                  {expired && <Badge tone="slate">Verlopen</Badge>}
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium tabular-nums">
                   <Calendar size={12} className="text-oker-400" />

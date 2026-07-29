@@ -76,7 +76,9 @@ export interface Update {
   date: string;
   title: string;
   content: string;
-  category: 'algemeen' | 'veiligheid' | 'technisch';
+  /** Historisch veld — de UI kent geen categorieën meer (#241); bestaande
+   *  rijen behouden hun waarde, nieuwe krijgen 'algemeen'. */
+  category?: 'algemeen' | 'veiligheid' | 'technisch';
   isUrgent?: boolean;
 }
 
@@ -163,4 +165,4 @@ export interface ActivityLogEntry {
   entityId?: string | null;
 }
 
-export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'ruil-verzoeken' | 'verlof-beheer' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'ocpi-monitoring';
+export type View = 'dashboard' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'ruil-verzoeken' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'ocpi-monitoring';

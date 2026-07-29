@@ -198,7 +198,10 @@ export function PlannerDashboardWidgets({
   const openWeek = knownDays.reduce((n, d) => n + d.missing.length, 0);
   const gapDays = knownDays.filter((d) => d.missing.length > 0);
 
-  const activeDiversions = diversions.length;
+  // Verlopen omleidingen (einddatum in het verleden) tellen niet mee: de
+  // tegel zegt "actieve omleidingen" en moet dat dan ook zijn.
+  const todayIsoForDiversions = isoDate(new Date());
+  const activeDiversions = diversions.filter((d) => !d.endDate || d.endDate >= todayIsoForDiversions).length;
 
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');

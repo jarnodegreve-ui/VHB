@@ -502,7 +502,9 @@ describe('dienstruil: autorisatieregels', () => {
 
   it('weigert een overgang uit een afgehandelde status — rejected → approved via PATCH (409)', async () => {
     mem.swaps = [{ id: 's-r', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'rejected', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' }];
-    const res = await api('PATCH', '/api/swaps/s-r', { token: 'tok-admin', body: { status: 'approved' } });
+    // ifStatus is sinds de verbeterronde verplicht; de state-machine-check
+    // (afgehandeld = eindstation) vuurt daarná alsnog.
+    const res = await api('PATCH', '/api/swaps/s-r', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'rejected' } });
     expect(res.status).toBe(409);
     expect(mem.swaps.find((s) => s.id === 's-r')?.status).toBe('rejected');
   });
@@ -692,9 +694,14 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
     expect(admin.status).toBe(200);
   });
 
+  it('weigert een PATCH zonder ifStatus (400) — anders geldt stil last-write-wins', async () => {
+    const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'approved' } });
+    expect(res.status).toBe(400);
+  });
+
   it('weigert een chauffeur die niet de aangezochte collega is (403)', async () => {
     // Chauffeur A is requester van s-1, niet target — accepteren mag niet.
-    const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-a', body: { status: 'accepted' } });
+    const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-a', body: { status: 'accepted', ifStatus: 'pending' } });
     expect(res.status).toBe(403);
   });
 });
@@ -745,7 +752,7 @@ describe('push-notificaties', () => {
   });
 
   it('pusht de beslissers (planner/admin) wanneer een collega de ruil accepteert', async () => {
-    const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted' } });
+    const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
     expect(res.status).toBe(200);
     const validatiePush = mem.pushesSent.find((p) => p.payload.title === 'Dienstruil wacht op validatie');
     expect(validatiePush).toBeTruthy();

@@ -400,7 +400,7 @@ export function DashboardView({
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
           <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />
           <QuickAction icon={<FileText size={16} />} label="Ritbladen" sub="Actuele rit-info" onClick={() => onNavigate('ritblaadjes')} />
-          <QuickAction icon={<Users size={16} />} label="Maandplanning" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />
+          <QuickAction icon={<Users size={16} />} label="Maandrooster" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />
         </div>
       )}
 

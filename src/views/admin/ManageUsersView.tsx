@@ -26,6 +26,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
+  // Naam-zoekveld: met 42 accounts is scrollen traag; zoeken is de kortste weg.
+  const [userSearch, setUserSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState('');
@@ -50,6 +52,11 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       return true;
     })
     .filter((u) => roleFilter === 'all' || u.role === roleFilter)
+    .filter((u) => {
+      const q = userSearch.trim().toLowerCase();
+      if (!q) return true;
+      return [u.name, u.employeeId, u.email ?? ''].join(' ').toLowerCase().includes(q);
+    })
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
@@ -332,12 +339,22 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             description="Filter de huidige lijst per rol voordat je wijzigingen doorvoert."
             aside={<Badge tone="slate">{filteredUsers.length} zichtbaar</Badge>}
           />
-          <div className="mt-5 glass-segmented inline-flex rounded-2xl p-1">
-            {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-              <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-3.5 py-2 rounded-xl text-xs font-semibold capitalize transition-all', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
-                {role === 'all' ? 'Alles' : role}
-              </button>
-            ))}
+          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="glass-segmented inline-flex rounded-2xl p-1 self-start">
+              {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
+                <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-3.5 py-2 rounded-xl text-xs font-semibold capitalize transition-all', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+                  {role === 'all' ? 'Alles' : role}
+                </button>
+              ))}
+            </div>
+            <input
+              type="search"
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Zoek op naam, personeelsnr of e-mail…"
+              aria-label="Zoek gebruiker"
+              className="control-input w-full sm:max-w-xs rounded-2xl px-4 py-2.5 text-base sm:text-sm font-medium outline-none"
+            />
           </div>
         </div>
 

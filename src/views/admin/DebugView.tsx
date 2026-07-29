@@ -513,7 +513,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             <h4 className="text-oker-900 font-semibold text-lg mb-2">Hulp bij problemen</h4>
             <p className="text-oker-800 text-sm leading-relaxed font-medium">
               Als de tabellen hierboven "Error" of "Exception" aangeven, betekent dit dat de tabel waarschijnlijk nog niet bestaat in Supabase of dat de rechten niet goed staan.
-              Zorg ervoor dat je de tabellen <code className="bg-oker-100 px-1 rounded font-semibold">users</code>, <code className="bg-oker-100 px-1 rounded font-semibold">planning</code>, <code className="bg-oker-100 px-1 rounded font-semibold">diversions</code> en <code className="bg-oker-100 px-1 rounded font-semibold">services</code> hebt aangemaakt in je Supabase project.
+              Controleer dan in Supabase of de betreffende tabel bestaat en of de rechten goed staan — het volledige verwachte schema staat in <code className="bg-oker-100 px-1 rounded font-semibold">supabase/</code> in de repo (setup + migraties).
             </p>
           </div>
         </div>

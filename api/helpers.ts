@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { randomBytes } from "node:crypto";
 import type {
   AppUser,
   DiversionRecord,
@@ -267,7 +268,9 @@ export const ensureUniqueUserEmails = (users: IncomingUser[]) => {
 export const countAdmins = (users: Array<Pick<AppUser, "role" | "isActive">>) =>
   users.filter((user) => user.role === "admin" && user.isActive !== false).length;
 
-export const randomPassword = () => Math.random().toString(36).slice(-10) + "A1!";
+// crypto i.p.v. Math.random: dit wordt het wérkende wachtwoord van nieuw
+// aangemaakte auth-accounts zonder opgegeven wachtwoord.
+export const randomPassword = () => randomBytes(12).toString("base64url") + "A1!";
 
 const PLANNING_MATRIX_MONTHS: Record<string, string> = {
   jan: "01",
