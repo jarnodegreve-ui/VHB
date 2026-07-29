@@ -97,7 +97,7 @@ export function CommandPalette({
       },
       {
         id: 'goto-contacten',
-        label: 'Contactlijst',
+        label: 'Contacten',
         icon: <Users size={16} />,
         keywords: 'contact collega telefoon',
         action: () => onNavigate('contacten'),
