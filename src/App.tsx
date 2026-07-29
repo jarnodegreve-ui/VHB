@@ -1892,7 +1892,7 @@ export default function App() {
         </div>
         <div
           ref={scrollContainerRef}
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pb-[calc(7rem+env(safe-area-inset-bottom))] lg:pb-8"
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pb-[calc(9.5rem+env(safe-area-inset-bottom))] lg:pb-8"
           onScroll={(e) => {
             const top = e.currentTarget.scrollTop ?? 0;
             const next = top > 8;
