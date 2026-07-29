@@ -1597,10 +1597,7 @@ app.get("/api/cron/backup", async (req, res) => {
     if (!integrity.ok) {
       console.error(`[cron-backup] INTEGRITEIT: ${integrity.issues.join("; ")}`);
       try {
-        const explicit = (process.env.ALERT_EMAIL || "").split(",").map((e) => e.trim()).filter(Boolean);
-        const alertTo = explicit.length > 0
-          ? explicit
-          : (await getUsersData()).filter((u) => u.role === "admin" && u.isActive !== false && u.email).map((u) => u.email as string);
+        const alertTo = await systemMailRecipients();
         if (alertTo.length > 0) {
           await sendEmail({
             to: alertTo,
@@ -1620,10 +1617,7 @@ app.get("/api/cron/backup", async (req, res) => {
     // mail-bijlage naar ALERT_EMAIL/admins is de goedkoopste externe kopie.
     let mailedOffsite = false;
     if (new Date().getUTCDay() === 0) {
-      const explicit = (process.env.ALERT_EMAIL || "").split(",").map((e) => e.trim()).filter(Boolean);
-      const recipients = explicit.length > 0
-        ? explicit
-        : (await getUsersData()).filter((u) => u.role === "admin" && u.isActive !== false && u.email).map((u) => u.email as string);
+      const recipients = await systemMailRecipients();
       if (recipients.length > 0) {
         const result = await sendEmail({
           to: recipients,
@@ -1656,6 +1650,17 @@ app.get("/api/cron/backup", async (req, res) => {
   }
 });
 
+// Ontvangers van systeemmails (foutendigest, back-ups): ALERT_EMAIL wint;
+// anders alle actieve admins mét e-mailadres die zich niet hebben afgemeld
+// (users.wantssystemmail, beheerbaar in Gebruikersbeheer).
+const systemMailRecipients = async (): Promise<string[]> => {
+  const explicit = (process.env.ALERT_EMAIL || "").split(",").map((e) => e.trim()).filter(Boolean);
+  if (explicit.length > 0) return explicit;
+  return (await getUsersData())
+    .filter((u) => u.role === "admin" && u.isActive !== false && u.email && u.wantsSystemMail !== false)
+    .map((u) => u.email as string);
+};
+
 // Foutmelding-digest: periodiek (Vercel-cron) de client-fouten van het
 // afgelopen interval samenvatten en mailen, zodat een storing/foutenpiek niet
 // onopgemerkt blijft tot een chauffeur klaagt. DB-gebaseerd (geen per-instance
@@ -1678,22 +1683,20 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const sinceMs = Date.now() - intervalMin * 60 * 1000;
     const sinceIso = new Date(sinceMs).toISOString();
 
-    const errors = await getClientErrorsSince(sinceIso);
+    const allErrors = await getClientErrorsSince(sinceIso);
+    // "Sessie verlopen" is levenscyclus, geen fout: wie lang niet inlogde
+    // krijgt die toast gewoon. In de digest was het alleen ruis die de
+    // telling opblies (verzoek Jarno) — de rijen blijven wél in de DB en in
+    // Systeem Status zichtbaar.
+    const errors = allErrors.filter((e) => !String(e.message || "").toLowerCase().includes("sessie is verlopen"));
+    const filtered = allErrors.length - errors.length;
     if (errors.length < minCount) {
-      await logCronHeartbeat("error-digest", `Geen foutenpiek (${errors.length} fouten in ${intervalMin} min).`);
-      return res.json({ success: true, count: errors.length, alerted: false });
+      await logCronHeartbeat("error-digest", `Geen foutenpiek (${errors.length} fouten${filtered ? ` + ${filtered} sessie-verlopen genegeerd` : ""} in ${intervalMin} min).`);
+      return res.json({ success: true, count: errors.length, ignored: filtered, alerted: false });
     }
 
     // Bepaal de ontvangers.
-    const explicit = (process.env.ALERT_EMAIL || "")
-      .split(",")
-      .map((e) => e.trim())
-      .filter(Boolean);
-    const recipients = explicit.length > 0
-      ? explicit
-      : (await getUsersData())
-          .filter((u) => u.role === "admin" && u.isActive !== false && u.email)
-          .map((u) => u.email as string);
+    const recipients = await systemMailRecipients();
     if (recipients.length === 0) {
       return res.json({ success: true, count: errors.length, alerted: false, reason: "geen ontvangers" });
     }

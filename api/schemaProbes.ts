@@ -15,7 +15,7 @@
 export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // startdate hoort bij PR #122 (anciënniteit) — staat hier alvast zodat de
   // schema-check meldt wanneer de migratie add_user_start_date.sql nog moet.
-  { table: "users", columns: "id,name,role,employeeid,lastlogin,activesessions,isactive,phone,email,verlofbudget,showincontacts,section,startdate" },
+  { table: "users", columns: "id,name,role,employeeid,lastlogin,activesessions,isactive,phone,email,verlofbudget,showincontacts,section,startdate,wantssystemmail" },
   { table: "planning", columns: "id,date,startTime,endTime,line,busNumber,loopnr,driverId" },
   { table: "planning_matrix_rows", columns: "id,source_date,day_type,assignments,raw_row,created_at" },
   { table: "planning_codes", columns: "code,category,description,counts_as_shift,is_paid_absence,is_day_off" },

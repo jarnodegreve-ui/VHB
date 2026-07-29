@@ -15,6 +15,8 @@ export interface AppUser {
   email?: string;
   verlofBudget?: number;
   showInContacts?: boolean;
+  /** Admins: ontvangt systeemmails (foutendigest, back-ups). Default true. */
+  wantsSystemMail?: boolean;
   section?: string;
   startDate?: string;
 }

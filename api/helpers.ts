@@ -26,6 +26,9 @@ export const toPublicUser = (user: any): AppUser => ({
     ? (user.verlofBudget ?? user.verlofbudget)
     : undefined,
   showInContacts: (user.showInContacts ?? user.showincontacts) !== false,
+  // Alleen relevant voor admins: ontvangt deze persoon de systeemmails
+  // (foutendigest, back-ups)? Default true; opt-out per account.
+  wantsSystemMail: (user.wantsSystemMail ?? user.wantssystemmail) !== false,
   section: (user.section ?? undefined) || undefined,
   startDate: (user.startDate ?? user.startdate) || undefined,
 });
@@ -72,6 +75,7 @@ export const sanitizeIncomingUser = (user: IncomingUser): AppUser => ({
   email: normalizeEmail(user.email),
   verlofBudget: typeof user.verlofBudget === 'number' && user.verlofBudget >= 0 ? user.verlofBudget : undefined,
   showInContacts: user.showInContacts !== false,
+  wantsSystemMail: user.wantsSystemMail !== false,
   section: user.section?.trim() || undefined,
   startDate: user.startDate?.trim() || undefined,
 });
@@ -88,6 +92,7 @@ export const toDatabaseUser = (user: AppUser) => ({
   email: normalizeEmail(user.email),
   verlofbudget: typeof user.verlofBudget === 'number' && user.verlofBudget >= 0 ? user.verlofBudget : null,
   showincontacts: user.showInContacts !== false,
+  wantssystemmail: user.wantsSystemMail !== false,
   section: user.section?.trim() || null,
   startdate: user.startDate?.trim() || null,
 });

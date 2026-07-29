@@ -12,6 +12,8 @@ export interface User {
   email?: string;
   verlofBudget?: number;
   showInContacts?: boolean;
+  /** Admins: ontvangt systeemmails (foutendigest, back-ups). Default true. */
+  wantsSystemMail?: boolean;
   /** Ploeg/sectie voor de Maandplanning-groepering (Reguliere/Nacht/Flexi/Schoolvervoer). */
   section?: string;
   /** In dienst sinds (YYYY-MM-DD) — anciënniteit-sortering binnen een sectie. */

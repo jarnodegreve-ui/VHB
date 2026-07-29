@@ -536,6 +536,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-[11px] text-slate-400">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <button type="button" onClick={() => setEditingUser({ ...editingUser, showInContacts: editingUser.showInContacts === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.showInContacts !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-white rounded-full transition-all', editingUser.showInContacts !== false ? 'left-7' : 'left-1')} /></button>
               </div>
+              {editingUser.role === 'admin' && (
+                <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
+                  <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-[11px] text-slate-400">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
+                  <button type="button" onClick={() => setEditingUser({ ...editingUser, wantsSystemMail: editingUser.wantsSystemMail === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.wantsSystemMail !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-white rounded-full transition-all', editingUser.wantsSystemMail !== false ? 'left-7' : 'left-1')} /></button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
               <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
             </form>
