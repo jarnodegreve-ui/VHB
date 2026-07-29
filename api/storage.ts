@@ -740,7 +740,15 @@ export const summarizeUpdateChanges = (previousUpdates: any[], nextUpdates: any[
 
 // --- Service segment helpers + planning build from matrix ---
 
-const isValidHHMM = (v?: string) => !!v && /^\d{1,2}:\d{2}$/.test(v.trim());
+// Zelfde regels als de gedeelde client-validator (shiftTime.isValidBusvakTime):
+// uur 0–47 (busvak), minuten 0–59. De oude regex accepteerde "08:75"/"99:00",
+// die vervolgens per component anders geïnterpreteerd werden.
+const isValidHHMM = (v?: string) => {
+  if (!v) return false;
+  const m = /^(\d{1,2}):(\d{2})$/.exec(v.trim());
+  if (!m) return false;
+  return Number(m[1]) <= 47 && Number(m[2]) <= 59;
+};
 const validSegment = (start: string | undefined, end: string | undefined, segment: number) =>
   isValidHHMM(start) && isValidHHMM(end)
     ? { startTime: start as string, endTime: end as string, segment }

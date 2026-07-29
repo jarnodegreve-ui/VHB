@@ -23,6 +23,12 @@ export type RealtimeRefetchers = {
   refetchDiversions: () => void | Promise<void>;
   refetchUpdates: () => void | Promise<void>;
   refetchPlanning?: () => void | Promise<void>;
+  /** Matrix + importhistoriek: zonder deze zag collega B na een import van
+   *  collega A wél de nieuwe planning maar nog het oude Planning-overzicht. */
+  refetchMatrix?: () => void | Promise<void>;
+  /** Catch-up: alle refetchers in één keer — voor gemiste events na een
+   *  reconnect of het heropenen van de PWA. */
+  refetchAll?: () => void | Promise<void>;
 };
 
 export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers) {
@@ -30,6 +36,7 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
   // wanneer een refetcher-identity wijzigt
   const refRef = useRef(refetchers);
   refRef.current = refetchers;
+  const firstSubscribe = useRef(true);
 
   useEffect(() => {
     if (!enabled || !supabase) return;
@@ -75,11 +82,44 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
         { event: '*', schema: 'public', table: 'planning' },
         () => debounce('planning', () => refRef.current.refetchPlanning?.()),
       )
-      .subscribe();
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'planning_matrix_rows' },
+        () => debounce('matrix', () => refRef.current.refetchMatrix?.()),
+      )
+      .subscribe((status) => {
+        // Na élke (her)aansluiting één catch-up: events die tijdens een dode
+        // socket vielen (telefoon in de zak, nacht) zijn definitief gemist —
+        // zonder deze refetch keek een heropende PWA naar de staat van
+        // gisteren tot iemand handmatig ververste.
+        if (status === 'SUBSCRIBED') {
+          if (firstSubscribe.current) {
+            firstSubscribe.current = false; // de app laadt initieel al alles
+            return;
+          }
+          debounce('catch-up', () => refRef.current.refetchAll?.());
+        }
+      });
+
+    // Heropenen van de app (tab/PWA weer zichtbaar na ≥ 60s weg): zelfde
+    // catch-up. visibilitychange is betrouwbaarder dan socket-status op iOS.
+    let hiddenAt: number | null = null;
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAt = Date.now();
+        return;
+      }
+      if (hiddenAt !== null && Date.now() - hiddenAt > 60_000) {
+        debounce('catch-up', () => refRef.current.refetchAll?.());
+      }
+      hiddenAt = null;
+    };
+    document.addEventListener('visibilitychange', onVisibility);
 
     return () => {
       timers.forEach((t) => clearTimeout(t));
       timers.clear();
+      document.removeEventListener('visibilitychange', onVisibility);
       supabase!.removeChannel(channel);
     };
   }, [enabled]);

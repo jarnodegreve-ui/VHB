@@ -32,6 +32,7 @@ import type {
 import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
+import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { isShiftActiveAt } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
@@ -224,9 +225,9 @@ export function PlannerDashboardWidgets({
   const gapDays = knownDays.filter((d) => d.missing.length > 0);
 
   // Verlopen omleidingen (einddatum in het verleden) tellen niet mee: de
-  // tegel zegt "actieve omleidingen" en moet dat dan ook zijn.
-  const todayIsoForDiversions = isoDate(new Date());
-  const activeDiversions = diversions.filter((d) => !d.endDate || d.endDate >= todayIsoForDiversions).length;
+  // tegel zegt "actieve omleidingen" en moet dat dan ook zijn (gedeelde
+  // helper — chauffeursdashboard gebruikt dezelfde).
+  const activeDiversions = activeDiversionsOf(diversions).length;
 
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');

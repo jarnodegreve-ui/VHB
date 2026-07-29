@@ -1,5 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { AlertTriangle, Calendar, CalendarDays, Clock, MapPin, Plane, FileText, RefreshCw, Users } from 'lucide-react';
+import { activeDiversions } from '../lib/diversions';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
@@ -101,7 +102,10 @@ export function DashboardView({
     .filter((s) => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
 
-  const newestDiversions = [...diversions].reverse().slice(0, 3);
+  // Verlopen omleidingen horen niet in tegel/paneel: "actief" moet actief zijn
+  // (zelfde regel als het beheer-dashboard sinds #251).
+  const liveDiversions = activeDiversions(diversions);
+  const newestDiversions = [...liveDiversions].reverse().slice(0, 3);
 
   // Verlofsaldo + 'deze maand' voor de extra dashboard-kaarten.
   const balans = verlofBalans(leaveRequests, user.id, now.getFullYear(), user.verlofBudget);
@@ -312,10 +316,10 @@ export function DashboardView({
         />
         <OpsStat
           icon={<MapPin size={16} />}
-          tone={diversions.length > 0 ? 'amber' : 'slate'}
+          tone={liveDiversions.length > 0 ? 'amber' : 'slate'}
           label="Omleidingen"
-          value={diversions.length}
-          sub={diversions.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
+          value={liveDiversions.length}
+          sub={liveDiversions.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
           onClick={onNavigate ? () => onNavigate('omleidingen') : undefined}
         />
       </div>
@@ -361,7 +365,7 @@ export function DashboardView({
         <OpsPanel
           icon={<MapPin size={15} />}
           title="Omleidingen"
-          aside={diversions.length > 0 ? `${diversions.length} actief` : undefined}
+          aside={liveDiversions.length > 0 ? `${liveDiversions.length} actief` : undefined}
           onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
         >
           {newestDiversions.length === 0 ? (

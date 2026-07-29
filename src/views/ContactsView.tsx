@@ -94,7 +94,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
             <EmptyState
               icon={<Users size={28} />}
               title="Geen contacten gevonden"
-              message="Pas je zoekopdracht aan om medewerkers terug te vinden."
+              message={searchQuery ? "Pas je zoekopdracht aan om medewerkers terug te vinden." : "Zodra collega's zichtbaar staan in de contactlijst verschijnen ze hier."}
             />
           </div>
         )}

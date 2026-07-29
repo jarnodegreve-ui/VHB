@@ -289,6 +289,32 @@ export default function App() {
         refreshCoverageGaps();
       }
     },
+    refetchMatrix: () => {
+      // Alleen planner/admin gebruiken het Planning-overzicht; chauffeurs
+      // hebben deze data niet.
+      if (currentUser && currentUser.role !== 'chauffeur') {
+        void fetchPlanningMatrix();
+        void fetchPlanningMatrixHistory();
+      }
+    },
+    refetchAll: () => {
+      // Catch-up na reconnect/heropenen: stil alles verversen — gemiste
+      // realtime-events zijn definitief weg, dus opnieuw ophalen is de
+      // enige manier om zeker in sync te komen.
+      void fetchLeave();
+      void fetchSwaps();
+      void fetchDiversions(undefined, { silent: true });
+      void fetchUpdates();
+      const planningFilter = currentUser?.role === 'chauffeur'
+        ? { driverId: String(currentUser.id) }
+        : undefined;
+      void fetchPlanning(undefined, planningFilter, { silent: true });
+      if (currentUser && currentUser.role !== 'chauffeur') {
+        refreshCoverageGaps();
+        void fetchPlanningMatrix();
+        void fetchPlanningMatrixHistory();
+      }
+    },
   });
 
   // Initialize theme from localStorage. Eerste-bezoek default = LIGHT
@@ -1950,11 +1976,11 @@ export default function App() {
               )}
               {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
-              {resolvedCurrentView === 'dienstoverzicht' && <ServicesView services={services} />}
+              {resolvedCurrentView === 'dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <ServicesView services={services} />)}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
               {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
-              {resolvedCurrentView === 'contacten' && <ContactsView users={users} currentUser={currentUser!} />}
+              {resolvedCurrentView === 'contacten' && (isInitialLoad ? <ViewLoader /> : <ContactsView users={users} currentUser={currentUser!} />)}
               {resolvedCurrentView === 'beheer-roosters' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {

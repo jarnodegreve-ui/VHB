@@ -1,6 +1,7 @@
 import { lazy, Suspense, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
+import { isExpiredDiversion } from '../lib/diversions';
 import type { Diversion } from '../types';
 import { formatDateHuman, formatSyncedTime } from '../lib/format';
 import { openPdfInNewTab, safeDocumentHref } from '../lib/ui';
@@ -42,7 +43,13 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
   // Get unique line numbers for the filter
   const uniqueLines = Array.from(new Set(diversions.map(div => div.line))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
-  const filteredDiversions = diversions.filter(div => {
+  const sortedForList = [...diversions].sort((a, b) => {
+    const ea = isExpiredDiversion(a) ? 1 : 0;
+    const eb = isExpiredDiversion(b) ? 1 : 0;
+    if (ea !== eb) return ea - eb;
+    return String(b.startDate || '').localeCompare(String(a.startDate || ''));
+  });
+  const filteredDiversions = sortedForList.filter(div => {
     const matchesSearch = div.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
       div.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
       div.line.toLowerCase().includes(searchQuery.toLowerCase());
@@ -106,7 +113,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
       <div className="space-y-4">
         {filteredDiversions.length > 0 ? (
           filteredDiversions.map(div => (
-            <div key={div.id} className="surface-card surface-card-hover rounded-3xl overflow-hidden group duration-300">
+            <div key={div.id} className={`surface-card surface-card-hover rounded-3xl overflow-hidden group duration-300 ${isExpiredDiversion(div) ? 'opacity-60' : ''}`}>
             <div
               onClick={() => setSelectedDiversion(selectedDiversion?.id === div.id ? null : div)}
               className="p-5 md:p-6 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-start justify-between gap-4"
@@ -119,6 +126,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                   <div className="flex flex-wrap items-center gap-2 mb-1">
                     <h4 className="font-bold text-lg md:text-xl text-slate-800 tracking-tight">{div.title}</h4>
                     <Badge tone="slate">{div.line}</Badge>
+                    {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
                   </div>
                   <p className="text-xs font-medium text-slate-400">
                     {selectedDiversion?.id === div.id ? 'Tik om te sluiten' : 'Tik voor meer info'}

@@ -67,7 +67,7 @@ export function EntityHistoryModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="glass-modal rounded-3xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden"
+            className="glass-modal rounded-3xl w-full max-w-lg max-h-[80dvh] flex flex-col overflow-hidden"
           >
             <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
               <div className="flex items-center gap-3">
