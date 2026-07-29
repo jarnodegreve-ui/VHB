@@ -43,7 +43,9 @@
 // de sidebar-varianten zonder naamregel zijn verwijderd.
 // v21: primair-lockup herbalanceerd (monogram 14% kleiner, meer lucht boven
 // de naamregel) — zelfde bestandsnamen, dus bump om de oude uit cache te duwen.
-const CACHE_NAME = 'vhb-portaal-v21';
+// v22: shape-rendering uit de primair-logo's (WebKit rendert 'auto' strakker)
+// — zelfde bestandsnamen, dus bump om de oude uit cache te duwen.
+const CACHE_NAME = 'vhb-portaal-v22';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';
