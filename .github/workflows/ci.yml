@@ -1,32 +1,47 @@
+# CI-vangnet (2026-07-30): elke PR draait typecheck, unit-tests, build en de
+# e2e-smoke — dezelfde vier stappen die lokaal al golden, maar nu afdwingbaar.
+# Aanleiding: #252 crashte het admin-dashboard in productie terwijl alle
+# checks lokaal groen waren — ze waren alleen nooit op die wijziging gedraaid.
 name: CI
 
 on:
   pull_request:
-    branches: [main]
   push:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  typecheck-and-test:
-    name: Typecheck + Vitest
+  checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
-
+    timeout-minutes: 15
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'npm'
+          node-version: 22
+          cache: npm
 
-      - name: Install dependencies
+      - name: Dependencies
         run: npm ci
 
-      - name: TypeScript check
+      - name: Typecheck
         run: npm run lint
 
-      - name: Vitest
+      - name: Unit-tests
         run: npm test
+
+      - name: Build
+        run: npm run build
+
+      # De e2e-webServer bouwt zelf opnieuw mét VITE_SUPABASE-dummy-env
+      # (zie playwright.config.ts) — de build hierboven bewaakt alleen dat
+      # de productie-build slaagt.
+      - name: Playwright-browser
+        run: npx playwright install --with-deps chromium
+
+      - name: E2E-smoke
+        run: npm run test:e2e
