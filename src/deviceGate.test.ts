@@ -44,3 +44,20 @@ describe('isMissingTableError', () => {
     expect(isMissingTableError(new Error('timeout'))).toBe(false);
   });
 });
+
+describe('evaluateDeviceGate met de schakelaar uit (gateEnabled=false)', () => {
+  it('laat onbekende en wachtende toestellen door', () => {
+    expect(evaluateDeviceGate('chauffeur', '/api/planning', null, false).allow).toBe(true);
+    expect(evaluateDeviceGate('chauffeur', '/api/planning', { status: 'pending' }, false).allow).toBe(true);
+  });
+
+  it('houdt een GEBLOKKEERD toestel ook dan tegen — de schakelaar heropent geen gestolen telefoon', () => {
+    const verdict = evaluateDeviceGate('chauffeur', '/api/planning', { status: 'revoked' }, false);
+    expect(verdict.allow).toBe(false);
+    expect(verdict.body?.code).toBe('device_revoked');
+  });
+
+  it('default (parameter weggelaten) blijft de strenge stand', () => {
+    expect(evaluateDeviceGate('chauffeur', '/api/planning', null).allow).toBe(false);
+  });
+});

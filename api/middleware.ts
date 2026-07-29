@@ -1,9 +1,9 @@
 import type express from "express";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { supabase } from "./db.js";
-import { DEVICE_GATE_EXEMPT, evaluateDeviceGate, isMissingTableError } from "./deviceGate.js";
+import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
-import { getDevice } from "./storage.js";
+import { getAppSetting, getDevice } from "./storage.js";
 import { getUsersCached } from "./userCache.js";
 import type { AppUser, AuthenticatedRequest, Role } from "./types.js";
 
@@ -15,6 +15,27 @@ import type { AppUser, AuthenticatedRequest, Role } from "./types.js";
 // (evaluateDeviceGate) staat los in deviceGate.ts (unit-getest).
 
 export const DEVICE_TOKEN_HEADER = "x-device-token";
+
+// Schakelaar "toestel-goedkeuring vereist" (app_settings, beheerbaar in
+// Beheer → Toestellen). Kort gecacht: de waarde wordt alleen geraadpleegd
+// wanneer een toestel NIET approved is (goedgekeurde toestellen passeren
+// zonder extra query), maar ook dan willen we geen query per request.
+// Default (geen tabel/rij/fout) = true — de veilige kant.
+let gateSettingCache: { value: boolean; at: number } | null = null;
+export const isDeviceGateEnabled = async (): Promise<boolean> => {
+  if (gateSettingCache && Date.now() - gateSettingCache.at < 30_000) return gateSettingCache.value;
+  let value = true;
+  try {
+    const setting = await getAppSetting<DeviceGateSetting>(DEVICE_GATE_SETTING_KEY);
+    value = setting?.enabled !== false;
+  } catch {
+    value = true;
+  }
+  gateSettingCache = { value, at: Date.now() };
+  return value;
+};
+/** Na een wijziging via de API meteen de nieuwe waarde laten gelden. */
+export const invalidateDeviceGateCache = () => { gateSettingCache = null; };
 
 /**
  * Timing-veilige CRON_SECRET-controle. Beide kanten worden eerst gehasht
@@ -117,7 +138,10 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
       return res.status(503).json({ error: "Toestel-controle is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "device_check_failed" });
     }
 
-    const verdict = evaluateDeviceGate(appUser.role, req.path, device);
+    // Alleen wanneer het toestel niet al goedgekeurd is maakt de schakelaar
+    // het verschil — dan pas (gecacht) ophalen.
+    const gateEnabled = device?.status === "approved" ? true : await isDeviceGateEnabled();
+    const verdict = evaluateDeviceGate(appUser.role, req.path, device, gateEnabled);
     if (!verdict.allow) {
       return res.status(verdict.status ?? 403).json(verdict.body ?? { error: "Dit toestel heeft geen toegang.", code: "device_unknown" });
     }

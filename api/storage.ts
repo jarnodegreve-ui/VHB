@@ -1949,3 +1949,26 @@ export const getCronHeartbeats = async (names: string[]): Promise<Record<string,
   }
   return out;
 };
+
+// --- App-instellingen (supabase/2026-07-30_app_settings.sql) ---
+// Kleine key/value-laag; RLS zonder policies, dus alleen bereikbaar via de
+// service-role. Eerste gebruiker: de toestel-whitelist-schakelaar.
+
+export const getAppSetting = async <T = unknown>(key: string): Promise<T | null> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from('app_settings')
+    .select('value')
+    .eq('key', key)
+    .maybeSingle();
+  if (error) throw error;
+  return (data?.value ?? null) as T | null;
+};
+
+export const setAppSetting = async (key: string, value: unknown): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('app_settings')
+    .upsert({ key, value, updated_at: new Date().toISOString() });
+  if (error) throw error;
+};

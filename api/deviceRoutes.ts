@@ -1,5 +1,6 @@
 import type express from "express";
-import { authenticate, requireRole, DEVICE_TOKEN_HEADER } from "./middleware.js";
+import { authenticate, requireRole, DEVICE_TOKEN_HEADER, isDeviceGateEnabled, invalidateDeviceGateCache } from "./middleware.js";
+import { isMissingTableError } from "./deviceGate.js";
 import { sendPushToUsers } from "./push.js";
 import {
   logActivity,
@@ -10,6 +11,7 @@ import {
   setDeviceStatus,
   deleteDevice,
   renameDevice,
+  setAppSetting,
 } from "./storage.js";
 import type { AuthenticatedRequest } from "./types.js";
 
@@ -45,13 +47,27 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const name = sanitizeDeviceName(req.body?.name);
       // Chauffeur: eerste toestel automatisch vertrouwd, daarna goedkeuring.
       // Planner/admin: altijd goedgekeurd (alleen zichtbaarheid — nooit lockout).
-      const autoApprove = appUser.role !== "chauffeur" ? true : !(await userHasDevices(String(appUser.id)));
+      // Staat de schakelaar "toestel-goedkeuring" uit, dan wordt élk toestel
+      // bij aanmelden goedgekeurd — bewust toegevoegd aan de whitelist, zodat
+      // alles er al in staat wanneer de schakelaar weer aan gaat.
+      const gateEnabled = await isDeviceGateEnabled();
+      const autoApprove = appUser.role !== "chauffeur" || !gateEnabled
+        ? true
+        : !(await userHasDevices(String(appUser.id)));
       let { device, created } = await registerDevice(String(appUser.id), deviceToken, name, autoApprove);
+      // Bestond het toestel al als 'wachtend' terwijl de schakelaar uit
+      // staat: alsnog goedkeuren (zelfde belofte: elke login komt erin).
+      // Geblokkeerd blijft geblokkeerd — de schakelaar heropent geen
+      // gestolen telefoon.
+      if (!created && !gateEnabled && device.status === "pending") {
+        await setDeviceStatus(String(appUser.id), device.deviceToken, "approved", "auto (schakelaar uit)");
+        device = { ...device, status: "approved" };
+      }
       // Race-vangst: twee toestellen die ~tegelijk als "eerste" registreren zien
       // allebei userHasDevices=false → allebei auto-approved. Zodra er ná de
       // insert méér dan één toestel op dit account staat terwijl wij zojuist
       // auto-approveden, deze naar de veilige kant (pending) terugzetten.
-      if (created && autoApprove && appUser.role === "chauffeur") {
+      if (created && autoApprove && appUser.role === "chauffeur" && gateEnabled) {
         const mine = (await listAllDevices()).filter((d) => d.userId === String(appUser.id));
         if (mine.length > 1) {
           await setDeviceStatus(String(appUser.id), device.deviceToken, "pending", "auto");
@@ -89,6 +105,43 @@ export const mountDeviceRoutes = (app: express.Express) => {
     } catch (err: any) {
       console.error("Toestellen laden is mislukt.", err);
       res.status(500).json({ error: "Toestellen laden is mislukt." });
+    }
+  });
+
+  // Schakelaar "toestel-goedkeuring vereist". Aparte endpoints (niet in de
+  // lijst-respons) zodat de bestaande Device[]-shape blijft.
+  app.get("/api/devices/gate", authenticate, requireRole("admin"), async (_req, res) => {
+    try {
+      const enabled = await isDeviceGateEnabled();
+      res.json({ enabled });
+    } catch (err: any) {
+      console.error("Gate-instelling laden is mislukt.", err);
+      res.status(500).json({ error: "Instelling laden is mislukt." });
+    }
+  });
+
+  app.post("/api/devices/gate", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+    try {
+      const enabled = Boolean(req.body?.enabled);
+      await setAppSetting("device_gate", { enabled });
+      invalidateDeviceGateCache();
+      await logActivity(
+        req,
+        "system",
+        enabled ? "Toestel-goedkeuring aangezet" : "Toestel-goedkeuring uitgezet",
+        enabled
+          ? "Nieuwe toestellen wachten weer op goedkeuring."
+          : "Elk toestel wordt bij aanmelden automatisch goedgekeurd; geblokkeerde toestellen blijven geblokkeerd.",
+      );
+      res.json({ enabled });
+    } catch (err: any) {
+      // De app_settings-tabel bestaat pas na de migratie — een duidelijke
+      // melding i.p.v. een generieke 500.
+      if (isMissingTableError(err)) {
+        return res.status(503).json({ error: "De instellingen-tabel bestaat nog niet: draai supabase/2026-07-30_app_settings.sql in de SQL Editor." });
+      }
+      console.error("Gate-instelling opslaan is mislukt.", err);
+      res.status(500).json({ error: "Instelling opslaan is mislukt." });
     }
   });
 

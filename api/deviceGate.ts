@@ -9,6 +9,10 @@ import type { Role } from "./types.js";
 // sessie-boekhouding bij login/logout.
 export const DEVICE_GATE_EXEMPT = new Set(["/api/devices/register", "/api/auth/session"]);
 
+/** Sleutel + vorm van de schakelaar in app_settings. */
+export const DEVICE_GATE_SETTING_KEY = "device_gate";
+export type DeviceGateSetting = { enabled: boolean };
+
 export type DeviceGateVerdict = {
   allow: boolean;
   status?: number;
@@ -32,14 +36,27 @@ export const isMissingTableError = (err: unknown): boolean => {
   );
 };
 
-/** Pure beslissingsfunctie: mag deze (rol, pad, toestel) door de gate? */
+/** Pure beslissingsfunctie: mag deze (rol, pad, toestel) door de gate?
+ *  gateEnabled=false = de schakelaar "toestel-goedkeuring" staat uit:
+ *  onbekende/wachtende toestellen mogen dan door, maar een GEBLOKKEERD
+ *  toestel blijft geblokkeerd — de schakelaar mag een gestolen telefoon
+ *  niet heropenen. */
 export const evaluateDeviceGate = (
   role: Role,
   path: string,
   device: { status: string } | null,
+  gateEnabled = true,
 ): DeviceGateVerdict => {
   if (role !== "chauffeur") return { allow: true };
   if (DEVICE_GATE_EXEMPT.has(path)) return { allow: true };
+  if (device?.status === "revoked") {
+    return {
+      allow: false,
+      status: 403,
+      body: { error: "Dit toestel is geblokkeerd voor dit account.", code: "device_revoked" },
+    };
+  }
+  if (!gateEnabled) return { allow: true };
   if (!device) {
     return {
       allow: false,
@@ -48,13 +65,6 @@ export const evaluateDeviceGate = (
     };
   }
   if (device.status === "approved") return { allow: true };
-  if (device.status === "revoked") {
-    return {
-      allow: false,
-      status: 403,
-      body: { error: "Dit toestel is geblokkeerd voor dit account.", code: "device_revoked" },
-    };
-  }
   return {
     allow: false,
     status: 403,

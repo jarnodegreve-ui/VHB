@@ -16,6 +16,7 @@ import {
   Upload,
   UserCheck,
   Users,
+  Smartphone,
   X,
 } from 'lucide-react';
 import type {
@@ -39,7 +40,7 @@ import { Modal } from '../components/Modal';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, QuickAction, relTime } from '../components/ops';
-import { cn, telHref } from '../lib/ui';
+import { cn, getSupabaseAuthHeaders, telHref } from '../lib/ui';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -203,9 +204,31 @@ export function PlannerDashboardWidgets({
   const todayIsoForDiversions = isoDate(new Date());
   const activeDiversions = diversions.filter((d) => !d.endDate || d.endDate >= todayIsoForDiversions).length;
 
+  // Wachtende toestellen horen in de werkvoorraad: een collega zit te
+  // wachten tot hij de app in kan. Alleen voor admins (de devices-API is
+  // admin-only; planners zouden een 403 krijgen).
+  const [pendingDevices, setPendingDevices] = useState<Array<{ userId: string; name: string; createdAt: string }>>([]);
+  useEffect(() => {
+    if (currentUser.role !== 'admin') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/devices', { headers: await getSupabaseAuthHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) {
+          setPendingDevices(data.filter((d: any) => d.status === 'pending'));
+        }
+      } catch {
+        // stil: dashboard mag niet breken op een toestellen-fetch
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser.role]);
+
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');
-  const openTasks = pendingLeave.length + pendingSwaps.length;
+  const openTasks = pendingLeave.length + pendingSwaps.length + pendingDevices.length;
 
   const lastImport = matrixHistory[0] || null;
   const importIssueCount = lastImport
@@ -493,6 +516,18 @@ export function PlannerDashboardWidgets({
                 primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'} — ${formatDay(d.date)}`}
                 secondary={`Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`}
                 onClick={() => onNavigate('dekking')}
+              />
+              </Fragment>
+            ))}
+            {pendingDevices.slice(0, 3).map((d) => (
+              <Fragment key={`${d.userId}:${d.name}:${d.createdAt}`}>
+              <OpsRow
+                tone="amber"
+                icon={<Smartphone size={15} />}
+                primary={`Toestel wacht op goedkeuring · ${userNameById(d.userId)}`}
+                secondary={d.name}
+                meta={relTime(d.createdAt)}
+                onClick={() => onNavigate('toestellen')}
               />
               </Fragment>
             ))}
