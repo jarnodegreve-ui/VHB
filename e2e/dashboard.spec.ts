@@ -151,3 +151,46 @@ test.describe('smoke: ingelogde chauffeur', () => {
     await expect(page.getByText('06:12 – 09:30').locator('visible=true').first()).toBeVisible();
   });
 });
+
+/**
+ * Zelfde rooktest voor het ADMIN-dashboard (ops-cockpit). Bestond niet — en
+ * precies daardoor glipte een React-#310 (hooks na de skeleton-return) naar
+ * productie: de chauffeurstest bleef groen terwijl de admin-variant crashte.
+ */
+test.describe('smoke: ingelogde admin', () => {
+  test('ops-dashboard rendert zonder crash', async ({ page }) => {
+    const pageErrors: string[] = [];
+    page.on('pageerror', (err) => pageErrors.push(err.message));
+    const ADMIN = { ...CHAUFFEUR, id: '1', name: 'Admin E2E', role: 'admin' };
+    await page.addInitScript(
+      ([key, user]) => {
+        const inAnHour = Math.floor(Date.now() / 1000) + 3600;
+        window.localStorage.setItem(key as string, JSON.stringify({
+          access_token: 'e2e-access-token', refresh_token: 'e2e-refresh-token', token_type: 'bearer',
+          expires_in: 3600, expires_at: inAnHour,
+          user: { id: 'auth-e2e', email: (user as { email: string }).email, aud: 'authenticated' },
+        }));
+      },
+      [SESSION_KEY, ADMIN] as const,
+    );
+    await page.route('**/api/**', async (route) => {
+      const path = new URL(route.request().url()).pathname;
+      const json = (body: unknown) => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(body) });
+      if (path.endsWith('/api/me')) return json(ADMIN);
+      if (path.endsWith('/api/devices/register')) return json({ status: 'approved' });
+      if (path.endsWith('/api/devices/gate')) return json({ enabled: true });
+      if (path.endsWith('/api/devices')) return json([{ userId: '42', deviceToken: 't', name: 'iPhone', status: 'pending', createdAt: dayOffset(0), lastSeenAt: dayOffset(0) }]);
+      if (path.endsWith('/api/users')) return json([ADMIN, CHAUFFEUR]);
+      if (path.endsWith('/api/activity/logins')) return json({ logins: [] });
+      return json([]);
+    });
+
+    await page.goto('/');
+    // De cockpit is er pas ná de skeleton→data-overgang — exact het moment
+    // waarop de hooks-crash optrad.
+    await expect(page.getByText('Open taken').first()).toBeVisible({ timeout: 15_000 });
+    // Wachtend toestel verschijnt als open taak (#252).
+    await expect(page.getByText(/Toestel wacht op goedkeuring/).first()).toBeVisible();
+    expect(pageErrors).toEqual([]);
+  });
+});
