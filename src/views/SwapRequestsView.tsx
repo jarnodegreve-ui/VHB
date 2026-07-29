@@ -12,7 +12,7 @@ import { canRespondToSwap } from '../lib/authorization';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
-export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide, preselectShiftId = null, onPreselectConsumed }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status']) => Promise<boolean>, preselectShiftId?: string | null, onPreselectConsumed?: () => void }) {
+export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide, preselectShiftId = null, onPreselectConsumed }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status'], seenStatus?: string) => Promise<boolean>, preselectShiftId?: string | null, onPreselectConsumed?: () => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via de nette ConfirmationModal i.p.v. kale window.confirm
@@ -44,6 +44,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // Beoordeling in een side panel: alle ruil-context + beslis-acties
   // zonder paginawissel (zelfde patroon als LeaveManagementView).
   const [reviewSwap, setReviewSwap] = useState<SwapRequest | null>(null);
+  useEffect(() => {
+    if (!reviewSwap) return;
+    const fresh = swaps.find((s) => s.id === reviewSwap.id);
+    if (!fresh) { setReviewSwap(null); return; }
+    if (fresh.status !== reviewSwap.status || fresh.decidedAt !== reviewSwap.decidedAt) {
+      setReviewSwap(fresh);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [swaps]);
   // Dienstruil-matching: wie is vrij op de dag van de gekozen dienst?
   const [freeForDate, setFreeForDate] = useState<Set<string> | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
@@ -205,12 +214,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     setReturnPick('');
   };
 
-  const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status']) => {
+  const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status'], seenStatus?: string) => {
     // Delta-pad (PATCH per record, met conflictdetectie): twee mensen die
     // tegelijk beoordelen overschrijven elkaar niet meer — de tweede krijgt
-    // een nette melding en een verse lijst.
+    // een nette melding en een verse lijst. seenStatus = wat de beslisser
+    // zág (paneel-snapshot of het moment waarop de bevestiging opende);
+    // zonder die referentie vergeleek de server met de al ververste live
+    // status en was de conflictcheck deels uitgeschakeld.
     if (onDecide) {
-      void onDecide(swapId, newStatus);
+      void onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status);
       return;
     }
     // 'accepted' is een tussenstap (collega akkoord) — nog géén beslismoment;
@@ -229,42 +241,46 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // rechtstreeks goedkeuren, zónder bevestiging van de collega. Alleen admin
   // (de server dwingt dit ook af). Bewust met waarschuwing.
   const handleAdminForceApprove = (swapId: string) => {
+    const seen = swaps.find((s) => s.id === swapId)?.status;
     setConfirmAction({
       title: 'Direct goedkeuren',
       message: 'De collega heeft deze ruil nog niet bevestigd. Wil je hem als admin tóch rechtstreeks goedkeuren?',
       confirmText: 'Toch goedkeuren',
       variant: 'warning',
-      run: () => handleStatusUpdate(swapId, 'approved'),
+      run: () => handleStatusUpdate(swapId, 'approved', seen),
     });
   };
 
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
   const handleAccept = (swapId: string) => {
+    const seen = swaps.find((s) => s.id === swapId)?.status;
     setConfirmAction({
       title: 'Dienstruil accepteren',
       message: 'Deze dienstruil accepteren? De planner beoordeelt ze daarna nog (rij- en rusttijden).',
       confirmText: 'Accepteren',
       variant: 'warning',
-      run: () => handleStatusUpdate(swapId, 'accepted'),
+      run: () => handleStatusUpdate(swapId, 'accepted', seen),
     });
   };
   const handleDecline = (swapId: string) => {
+    const seen = swaps.find((s) => s.id === swapId)?.status;
     setConfirmAction({
       title: 'Dienstruil weigeren',
       message: 'Deze dienstruil weigeren? Je collega ziet dat je niet kan.',
       confirmText: 'Weigeren',
       variant: 'danger',
-      run: () => handleStatusUpdate(swapId, 'rejected'),
+      run: () => handleStatusUpdate(swapId, 'rejected', seen),
     });
   };
 
   const handleCancel = (swapId: string) => {
+    const seen = swaps.find((s) => s.id === swapId)?.status;
     setConfirmAction({
       title: 'Dienstruil annuleren',
       message: 'Deze goedgekeurde dienstruil annuleren? De oorspronkelijke planning geldt dan weer.',
       confirmText: 'Annuleren',
       variant: 'danger',
-      run: () => handleStatusUpdate(swapId, 'cancelled'),
+      run: () => handleStatusUpdate(swapId, 'cancelled', seen),
     });
   };
 
@@ -831,7 +847,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="danger"
                   size="lg"
                   className="flex-1"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected'); setReviewSwap(null); }}
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
                 >
                   Afwijzen
                 </Button>
@@ -840,7 +856,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   size="lg"
                   className="flex-1"
                   icon={<Check size={15} />}
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'approved'); setReviewSwap(null); }}
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'approved', reviewSwap.status); setReviewSwap(null); }}
                 >
                   Goedkeuren
                 </Button>
@@ -852,7 +868,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="danger"
                   size="lg"
                   className="flex-1"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected'); setReviewSwap(null); }}
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
                 >
                   Afwijzen
                 </Button>
@@ -872,7 +888,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 <Button
                   variant="danger"
                   size="lg"
-                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected'); setReviewSwap(null); }}
+                  onClick={() => { handleStatusUpdate(reviewSwap.id, 'rejected', reviewSwap.status); setReviewSwap(null); }}
                 >
                   Afwijzen
                 </Button>

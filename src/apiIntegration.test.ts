@@ -668,10 +668,23 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
     expect(mem.leave.find((l) => l.id === 'l-a1')?.status).toBe('approved');
   });
 
+  it('weigert een leave-PATCH zonder ifStatus (400) — spiegel van de swaps-guard', async () => {
+    const res = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved' } });
+    expect(res.status).toBe(400);
+    expect(mem.leave.find((l) => l.id === 'l-a1')?.status).toBe('pending');
+  });
+
+  it('weigert een overgang uit een afgehandelde leave-status — rejected → approved (409)', async () => {
+    mem.leave = [{ id: 'l-r', userId: '3', startDate: '2026-08-10', endDate: '2026-08-12', type: 'betaald_verlof', status: 'rejected', createdAt: '2026-07-01T08:00:00Z', decidedAt: '2026-07-02T08:00:00Z' }];
+    const res = await api('PATCH', '/api/leave/l-r', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'rejected' } });
+    expect(res.status).toBe(409);
+    expect(mem.leave.find((l) => l.id === 'l-r')?.status).toBe('rejected');
+  });
+
   it('geeft 404 voor een intussen ingetrokken aanvraag en 403 voor chauffeurs', async () => {
-    const weg = await api('PATCH', '/api/leave/bestaat-niet', { token: 'tok-planner', body: { status: 'approved' } });
+    const weg = await api('PATCH', '/api/leave/bestaat-niet', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
     expect(weg.status).toBe(404);
-    const chauffeur = await api('PATCH', '/api/leave/l-a1', { token: 'tok-a', body: { status: 'approved' } });
+    const chauffeur = await api('PATCH', '/api/leave/l-a1', { token: 'tok-a', body: { status: 'approved', ifStatus: 'pending' } });
     expect(chauffeur.status).toBe(403);
   });
 
