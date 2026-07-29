@@ -1602,7 +1602,9 @@ export default function App() {
   const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
   const resolvedCurrentView = allowedViews.includes(currentView) ? currentView : 'dashboard';
   const viewMeta: Record<string, { title: string; subtitle: string }> = {
-    dashboard: { title: 'Dashboard', subtitle: 'Overzicht van planning, updates en operationele status.' },
+    // Bewust zonder subtitle (verzoek Jarno): de begroeting + statuspill op
+    // het dashboard zelf zeggen al wat dit scherm is.
+    dashboard: { title: 'Dashboard', subtitle: '' },
     omleidingen: { title: 'Omleidingen', subtitle: 'Actuele omleidingen.' },
     rooster: { title: 'Mijn rooster', subtitle: 'Je komende diensten en export naar agenda.' },
     dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
@@ -1694,10 +1696,13 @@ export default function App() {
         style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.28, 0.64, 1)' }}
       >
         <div className="shrink-0 px-5 pt-5 pb-4 flex items-center justify-center relative text-center">
+          {/* Géén transform/transition-all op de logoknop: Safari rastert een
+              element met schaal-animatie als bitmap-laag en schaalt die —
+              dat maakte de logo-randen kartelig op retina (melding Jarno). */}
           <button
             type="button"
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
-            className="rounded-xl py-1 px-2 transition-all active:scale-[0.98] hover:opacity-80"
+            className="rounded-xl py-1 px-2 transition-opacity hover:opacity-80"
             title="Naar dashboard"
           >
             {/* Primary-lockup mét "Van Hoorebeke & Zoon" — op verzoek van
@@ -1918,7 +1923,9 @@ export default function App() {
                     <h2 className="text-[15px] font-bold tracking-tight text-slate-900 leading-tight truncate">
                       {currentMeta.title}
                     </h2>
-                    <p className="hidden md:block text-[11.5px] font-normal text-slate-500 mt-px max-w-xl truncate">{currentMeta.subtitle}</p>
+                    {currentMeta.subtitle && (
+                      <p className="hidden md:block text-[11.5px] font-normal text-slate-500 mt-px max-w-xl truncate">{currentMeta.subtitle}</p>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
