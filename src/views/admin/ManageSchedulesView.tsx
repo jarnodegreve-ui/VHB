@@ -1,11 +1,10 @@
 import React, { Fragment, useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
 import { Activity, AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
@@ -665,16 +664,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         />
       ) : null}
 
-      {createPortal(
-      <AnimatePresence>
-        {matrixPreviewOpen && matrixPreview && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
-            >
+      {/* Gedeelde Modal: ESC, backdrop-tap, safe-area en dvh (verbeterronde 29/07 #3).
+          dismissOnBackdrop uit: een half gecontroleerde import-preview mag niet
+          per ongeluk wegklikken. */}
+      <Modal open={Boolean(matrixPreviewOpen && matrixPreview)} onClose={() => setMatrixPreviewOpen(false)} maxWidth="2xl" dismissOnBackdrop={false} className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+        {matrixPreview && (
+        <>
               <div className="p-8 border-b border-white/70 shrink-0">
                 <MicroLabel className="text-oker-600">Matrix Import Preview</MicroLabel>
                 <h4 className="mt-3 text-xl font-bold tracking-tight">Controleer voor je de planning vervangt</h4>
@@ -925,12 +920,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   {isMatrixImporting ? 'Importeren...' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang Huidige Planning'}
                 </Button>
               </div>
-            </motion.div>
-          </div>
+        </>
         )}
-      </AnimatePresence>,
-        document.body,
-      )}
+      </Modal>
     </PageShell>
   );
 }

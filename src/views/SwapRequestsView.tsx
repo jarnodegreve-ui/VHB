@@ -1,9 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
 import { ArrowLeftRight, ChevronDown, ChevronRight, History, X, Check } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
+import { Modal } from '../components/Modal';
 import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
@@ -332,6 +331,26 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {returnLabel(swap) && (
                           <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">In ruil: {returnLabel(swap)}</p>
                         )}
+                        {/* Intrekken zolang de ruil nog niet door de planner is
+                            goedgekeurd — verlof kon dit al, dienstruil dwong
+                            een belletje naar de planner af. */}
+                        {(swap.status === 'pending' || swap.status === 'accepted') && (
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            full
+                            className="mt-3"
+                            onClick={() => setConfirmAction({
+                              title: 'Aanvraag intrekken',
+                              message: 'Deze ruilaanvraag intrekken? Je collega en de planner zien hem dan niet meer.',
+                              confirmText: 'Intrekken',
+                              variant: 'warning',
+                              run: () => handleStatusUpdate(swap.id, 'cancelled'),
+                            })}
+                          >
+                            Aanvraag intrekken
+                          </Button>
+                        )}
                       </div>
                     )}
                   </div>
@@ -568,11 +587,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         );
       })()}
 
-      {createPortal(
-      <AnimatePresence>
-        {showOfferModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90dvh] flex flex-col overflow-hidden">
+      {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
+          dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
+      <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
               <div className="px-6 py-5 md:px-8 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {wizardStep > 1 && (
@@ -784,12 +801,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   );
                 })()}
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
-        document.body,
-      )}
+      </Modal>
 
       {/* Beoordeling in een side panel: volledige ruil-context + dezelfde
           beslis-acties als de tabelrij, zonder paginawissel. */}

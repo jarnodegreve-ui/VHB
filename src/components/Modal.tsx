@@ -78,7 +78,7 @@ export function Modal({
         // iets minder agressieve rounded-hoeken (32px voelt overkill op
         // bijna-full-screen). Op md+: zoals voorheen.
         className={cn(
-          'glass-modal rounded-3xl md:rounded-3xl w-full overflow-y-auto max-h-[calc(100vh-1rem)] md:max-h-[90vh]',
+          'glass-modal rounded-3xl md:rounded-3xl w-full overflow-y-auto max-h-[calc(100dvh-1rem)] md:max-h-[88dvh]',
           widthClass,
           className,
         )}
