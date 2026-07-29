@@ -110,34 +110,32 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
         <p className="-mt-2 text-[11px] font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
       )}
 
-      <div className="space-y-4">
+      <div className="space-y-2">
         {filteredDiversions.length > 0 ? (
           filteredDiversions.map(div => (
-            <div key={div.id} className={`surface-card surface-card-hover rounded-3xl overflow-hidden group duration-300 ${isExpiredDiversion(div) ? 'opacity-60' : ''}`}>
+            <div key={div.id} className={`surface-card surface-card-hover rounded-2xl overflow-hidden group duration-300 ${isExpiredDiversion(div) ? 'opacity-60' : ''}`}>
+            {/* Compacte rij (verzoek Jarno): kleiner icoon, één titelregel,
+                geen "Tik voor meer info"-hulpregel — de chevron is de
+                affordance. Het uitklapdetail blijft ongewijzigd. */}
             <div
               onClick={() => setSelectedDiversion(selectedDiversion?.id === div.id ? null : div)}
-              className="p-5 md:p-6 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-start justify-between gap-4"
+              className="px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3"
             >
-              <div className="flex gap-4 md:gap-5">
-                <div className="w-12 h-12 md:w-14 md:h-14 rounded-2xl border border-oker-100 bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">
-                  <MapPin size={24} />
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl border border-oker-100 bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">
+                  <MapPin size={17} />
                 </div>
-                <div className="min-w-0">
-                  <div className="flex flex-wrap items-center gap-2 mb-1">
-                    <h4 className="font-bold text-lg md:text-xl text-slate-800 tracking-tight">{div.title}</h4>
-                    <Badge tone="slate">{div.line}</Badge>
-                    {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
-                  </div>
-                  <p className="text-xs font-medium text-slate-400">
-                    {selectedDiversion?.id === div.id ? 'Tik om te sluiten' : 'Tik voor meer info'}
-                  </p>
+                <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                  <h4 className="font-bold text-[15px] text-slate-800 tracking-tight leading-snug">{div.title}</h4>
+                  <Badge tone="slate">{div.line}</Badge>
+                  {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
                 </div>
               </div>
               <motion.div
                 animate={{ rotate: selectedDiversion?.id === div.id ? 90 : 0 }}
-                className="p-2 text-slate-300 mt-1"
+                className="p-1.5 text-slate-300 shrink-0"
               >
-                <ChevronRight size={24} />
+                <ChevronRight size={20} />
               </motion.div>
             </div>
 
