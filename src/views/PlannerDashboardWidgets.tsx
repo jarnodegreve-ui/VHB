@@ -423,27 +423,6 @@ export function PlannerDashboardWidgets({
           sub="chauffeurs met dienst"
           onClick={() => setShowScheduled(true)}
         />
-        {coverageKnown ? (
-          <OpsStat
-            className="md:col-span-2 xl:col-span-1"
-            icon={<AlertTriangle size={16} />}
-            tone={openToday > 0 ? 'red' : 'emerald'}
-            label="Open diensten"
-            value={openToday}
-            sub={openWeek > 0 ? `${openWeek} in komende 7 dagen` : 'komende 7 dagen volledig'}
-            onClick={() => onNavigate('dekking')}
-          />
-        ) : (
-          <OpsStat
-            className="md:col-span-2 xl:col-span-1"
-            icon={<AlertTriangle size={16} />}
-            tone="slate"
-            label="Open diensten"
-            text="—"
-            sub="dekking niet beschikbaar"
-            onClick={() => onNavigate('dekking')}
-          />
-        )}
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<UserCheck size={16} />}
@@ -473,6 +452,27 @@ export function PlannerDashboardWidgets({
           sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof')}
         />
+        {coverageKnown ? (
+          <OpsStat
+            className="md:col-span-2 xl:col-span-1"
+            icon={<AlertTriangle size={16} />}
+            tone={openToday > 0 ? 'red' : 'emerald'}
+            label="Open diensten"
+            value={openToday}
+            sub={openWeek > 0 ? `${openWeek} in komende 7 dagen` : 'komende 7 dagen volledig'}
+            onClick={() => onNavigate('dekking')}
+          />
+        ) : (
+          <OpsStat
+            className="md:col-span-2 xl:col-span-1"
+            icon={<AlertTriangle size={16} />}
+            tone="slate"
+            label="Open diensten"
+            text="—"
+            sub="dekking niet beschikbaar"
+            onClick={() => onNavigate('dekking')}
+          />
+        )}
         <OpsStat
           className="md:col-span-3 xl:col-span-1"
           icon={<MapPin size={16} />}
