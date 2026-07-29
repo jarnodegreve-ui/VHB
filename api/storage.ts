@@ -59,6 +59,7 @@ export const isMissingDbFunction = (error: any): boolean =>
 const PAGE_SIZE = 1000;
 const paginatedFetch = async <T = any>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  max?: number,
 ): Promise<T[]> => {
   const all: T[] = [];
   let from = 0;
@@ -68,6 +69,7 @@ const paginatedFetch = async <T = any>(
     if (error) throw error;
     const batch = (data ?? []) as T[];
     all.push(...batch);
+    if (max !== undefined && all.length >= max) return all.slice(0, max);
     if (batch.length < PAGE_SIZE) break;
     from += PAGE_SIZE;
   }
@@ -325,20 +327,31 @@ const toPublicActivityLog = (row: ActivityLogRow | ActivityLogRecord): ActivityL
     "entityId" in row ? row.entityId ?? null : (row as ActivityLogRow).entity_id ?? null,
 });
 
-export const getActivityLog = async (): Promise<ActivityLogRecord[]> => {
+export const getActivityLog = async (
+  opts?: { sinceIso?: string | null; max?: number },
+): Promise<ActivityLogRecord[]> => {
   const client = requireDb();
   // Aanwezigheids-events ('auth' / 'Aangemeld' + 'Actief') worden bewust uit
-  // het auditspoor gefilterd: ze zijn hoog-volume en zouden de 100-cap vullen,
-  // waardoor de echte beheeracties verdwijnen. Ze komen via
+  // het auditspoor gefilterd: ze zijn hoog-volume en zouden het venster
+  // vullen, waardoor de echte beheeracties verdwijnen. Ze komen via
   // getLoginActivity() in een eigen overzicht.
-  const { data, error } = await client
-    .from("activity_log")
-    .select("*")
-    .or("category.neq.auth,and(action.neq.Aangemeld,action.neq.Actief)")
-    .order("created_at", { ascending: false })
-    .limit(100);
-  if (error) throw error;
-  return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
+  //
+  // sinceIso/max i.p.v. een vaste .limit(100): de UI beloofde "30 dagen" en
+  // "Alles" terwijl de server nooit meer dan 100 rijen gaf — filters en
+  // CSV-export logen daarmee stil (en de back-up bevatte max 100 regels).
+  const sinceIso = opts?.sinceIso ?? null;
+  const max = Math.max(1, opts?.max ?? 100);
+  const rows = await paginatedFetch<ActivityLogRow>((from, to) => {
+    let q = client
+      .from("activity_log")
+      .select("*")
+      .or("category.neq.auth,and(action.neq.Aangemeld,action.neq.Actief)")
+      .order("created_at", { ascending: false })
+      .range(from, Math.min(to, max - 1));
+    if (sinceIso) q = q.gte("created_at", sinceIso);
+    return q;
+  }, max);
+  return rows.map(toPublicActivityLog);
 };
 
 /** Aanwezigheids-events sinds een ISO-tijdstip — voor het overzicht "wie

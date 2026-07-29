@@ -890,9 +890,14 @@ app.get("/api/planning-matrix/history", authenticate, requireRole("planner", "ad
   }
 });
 
-app.get("/api/activity", authenticate, requireRole("admin"), async (_req, res) => {
+app.get("/api/activity", authenticate, requireRole("admin"), async (req, res) => {
   try {
-    const activity = await getActivityLog();
+    // ?window=7d|30d|all — de UI-filters bepalen het venster server-side,
+    // zodat "30 dagen"/"Alles" en de CSV-export écht dat venster dekken.
+    const window = String(req.query.window || "7d");
+    const days = window === "30d" ? 30 : window === "all" ? null : 7;
+    const sinceIso = days ? new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString() : null;
+    const activity = await getActivityLog({ sinceIso, max: 5000 });
     res.json(activity);
   } catch (err: any) {
     console.error("Activiteit laden is mislukt.", err);
@@ -1504,7 +1509,9 @@ const buildBackupPayload = async () => {
     getPlanningCodesData(),
     getPlanningMatrixRows(),
     getCoverageExpectations(),
-    getActivityLog(),
+    // Volledig auditspoor (binnen retentie) — met de default-cap van 100
+    // bevatte de "volledige" back-up stil maar 100 logregels.
+    getActivityLog({ sinceIso: null, max: 50000 }),
   ]);
   // Auth-accounts (id+e-mail): een restore van een verwijderde gebruiker
   // maakt anders een account met random wachtwoord aan zonder dat je weet
@@ -2917,7 +2924,6 @@ app.get("/api/ritblaadje", authenticate, async (_req, res) => {
 
     // Ondertekende URL i.p.v. publieke: de bucket wordt privé gezet zodat het
     // ritblad (interne dienstinfo) niet zonder sessie op te vragen is.
-    // 30 dagen geldig — ruim langer dan de client de metadata cachet.
     const { data: signedData, error: signedError } = await db.storage
       .from(RITBLAADJE_BUCKET)
       .createSignedUrl(data.storage_path, RITBLAADJE_URL_TTL_SEC);

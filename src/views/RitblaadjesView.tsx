@@ -12,17 +12,28 @@ type RitblaadjeMeta = {
   uploadedAt: string;
   uploadedBy: string | null;
   sizeBytes: number | null;
-  url: string;
+  url?: string;
 };
 
 const MAX_PDF_MB = 20;
 
 // localStorage-keys voor offline-fallback van de ritblaadje-metadata.
 // Het ritblaadje is één gedeelde resource, dus cachen is veilig — maar de
-// signed `url` gaat er BEWUST niet in: die verleent toegang buiten de
-// login/toestel-whitelist om en bleef zo op een gedeelde depot-tablet
-// achter. Offline tonen we de metadata; de download-URL komt vers van de
-// server.
+// signed `url` gaat er BEWUST niet volledig in: die verleent toegang buiten
+// de login/toestel-whitelist om en bleef zo op een gedeelde depot-tablet
+// achter. We bewaren het QUERY-LOZE pad (origin + pathname): geen token,
+// maar exact de cache-key waaronder de service worker de PDF bewaart —
+// offline blijven de iframe en de Openen-knop zo werken.
+const cacheSafeMeta = (meta: Record<string, unknown>) => {
+  const { url, ...rest } = meta;
+  if (typeof url !== 'string' || !url) return rest;
+  try {
+    const u = new URL(url);
+    return { ...rest, url: `${u.origin}${u.pathname}` };
+  } catch {
+    return rest;
+  }
+};
 const META_CACHE_KEY = 'vhb-ritblaadje-meta';
 const SYNCED_AT_KEY = 'vhb-ritblaadje-synced';
 
@@ -95,10 +106,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         const now = new Date().toISOString();
         setSyncedAt(now);
         localStorage.setItem(SYNCED_AT_KEY, now);
-        if (data) {
-          const { url: _signedUrl, ...withoutUrl } = data as Record<string, unknown>;
-          localStorage.setItem(META_CACHE_KEY, JSON.stringify(withoutUrl));
-        }
+        if (data) localStorage.setItem(META_CACHE_KEY, JSON.stringify(cacheSafeMeta(data)));
         else localStorage.removeItem(META_CACHE_KEY);
       } catch {
         // localStorage geblokkeerd — geen fallback, geen ramp
@@ -173,7 +181,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         const now = new Date().toISOString();
         setSyncedAt(now);
         localStorage.setItem(SYNCED_AT_KEY, now);
-        localStorage.setItem(META_CACHE_KEY, JSON.stringify(updated));
+        localStorage.setItem(META_CACHE_KEY, JSON.stringify(cacheSafeMeta(updated)));
       } catch { /* localStorage geblokkeerd */ }
       notify('Ritblad succesvol bijgewerkt.', 'success');
     } catch (error: any) {
@@ -281,7 +289,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                     same-window-fallback in standalone. */}
                 <button
                   type="button"
-                  onClick={() => openPdfInNewTab(current.url)}
+                  disabled={!current.url}
+                  onClick={() => current.url && openPdfInNewTab(current.url)}
                   className="control-button-soft ios-pressable inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 hover:text-slate-900 transition-all"
                 >
                   <Download size={16} />
@@ -303,11 +312,19 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
           </div>
 
           <div className="surface-card rounded-3xl overflow-hidden">
-            <iframe
-              src={current.url}
-              title="Ritblad-voorbeeld"
-              className="w-full h-[70vh] min-h-[480px] bg-white"
-            />
+            {current.url ? (
+              <iframe
+                src={current.url}
+                title="Ritblad-voorbeeld"
+                className="w-full h-[70vh] min-h-[480px] bg-white"
+              />
+            ) : (
+              /* Oude offline-cache van vóór deze fix heeft geen url — dan
+                 liever een eerlijke melding dan een leeg wit vlak. */
+              <div className="flex h-[40vh] min-h-[280px] items-center justify-center p-8 text-center">
+                <p className="text-sm font-medium text-slate-500">Het ritblad is offline nog niet beschikbaar op dit toestel. Open het één keer met internet, daarna werkt het ook offline.</p>
+              </div>
+            )}
           </div>
 
           <p className="text-xs font-medium text-slate-400 text-center">
