@@ -9,6 +9,7 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
 import { formatDateHuman, formatShortDay } from '../lib/format';
 import { canRespondToSwap } from '../lib/authorization';
+import { notify } from '../lib/ui';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
@@ -222,7 +223,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     // zonder die referentie vergeleek de server met de al ververste live
     // status en was de conflictcheck deels uitgeschakeld.
     if (onDecide) {
-      void onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status);
+      const toastFor: Partial<Record<SwapRequest['status'], string>> = {
+        approved: 'Dienstruil goedgekeurd.',
+        rejected: 'Dienstruil geweigerd.',
+        accepted: 'Geaccepteerd — de planner beoordeelt de ruil nu.',
+        cancelled: 'Aanvraag ingetrokken.',
+      };
+      void onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status).then((ok) => {
+        if (ok && toastFor[newStatus]) notify(toastFor[newStatus]!, 'success');
+      });
       return;
     }
     // 'accepted' is een tussenstap (collega akkoord) — nog géén beslismoment;

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Clock, Download, History, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Service } from '../../types';
+import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -70,7 +71,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             const minutes = Math.floor((totalSeconds % 3600) / 60);
             return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
           }
-          return val.toString().trim();
+          return normalizeTimeString(val.toString().trim());
         };
 
         const importedServices: Service[] = jsonData.map((row: any, index) => {
@@ -210,9 +211,23 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       // Pas sluiten/wissen ná een geslaagde save: bij een 409 of serverfout
       // bleef de invoer voorheen niet bewaard — het enige formulier in de
       // app dat fire-and-forget opsloeg (controleronde 30/07).
+      // Busvak-validatie + normalisatie ("6:00" → "06:00"): het native
+      // time-veld kon geen 24:00+ aan waardoor dienst 2607 onbewerkbaar was;
+      // een tekstveld kan alles, dus de regels (uur ≤ 47, min ≤ 59) hier.
+      const timeFields = ['startTime', 'endTime', 'startTime2', 'endTime2', 'startTime3', 'endTime3'] as const;
+      const cleaned: typeof formData = { ...formData };
+      for (const f of timeFields) {
+        const raw = String(cleaned[f] ?? '').trim();
+        if (!raw) { cleaned[f] = ''; continue; }
+        if (!isValidBusvakTime(raw)) {
+          notify(`Ongeldige tijd "${raw}" — gebruik UU:MM, na middernacht als 24:00+ (bv. 26:16).`, 'error');
+          return;
+        }
+        cleaned[f] = normalizeTimeString(raw);
+      }
       const next = editingId
-        ? services.map(s => s.id === editingId ? { ...s, ...formData } : s)
-        : [...services, { id: Date.now().toString(), ...formData }];
+        ? services.map(s => s.id === editingId ? { ...s, ...cleaned } : s)
+        : [...services, { id: Date.now().toString(), ...cleaned }];
       const ok = await onSave(next);
       if (ok === false) return;
       setShowModal(false);
@@ -435,7 +450,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <div className="space-y-2">
               <MicroLabel className="ml-1">Starttijd (Deel 1)</MicroLabel>
               <input
-                type="time" required value={formData.startTime}
+                type="text" required inputMode="numeric" placeholder="04:36" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime}
                 onChange={(e) => setFormData({...formData, startTime: e.target.value})}
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
@@ -443,7 +458,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <div className="space-y-2">
               <MicroLabel className="ml-1">Eindtijd (Deel 1)</MicroLabel>
               <input
-                type="time" required value={formData.endTime}
+                type="text" required inputMode="numeric" placeholder="26:16" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime}
                 onChange={(e) => setFormData({...formData, endTime: e.target.value})}
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
@@ -463,7 +478,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <div className="space-y-2">
               <MicroLabel className="ml-1">Starttijd (Deel 2)</MicroLabel>
               <input
-                type="time" value={formData.startTime2}
+                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime2}
                 onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
@@ -471,7 +486,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <div className="space-y-2">
               <MicroLabel className="ml-1">Eindtijd (Deel 2)</MicroLabel>
               <input
-                type="time" value={formData.endTime2}
+                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime2}
                 onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
@@ -491,7 +506,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <div className="space-y-2">
               <MicroLabel className="ml-1">Starttijd (Deel 3)</MicroLabel>
               <input
-                type="time" value={formData.startTime3}
+                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime3}
                 onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />
@@ -499,7 +514,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <div className="space-y-2">
               <MicroLabel className="ml-1">Eindtijd (Deel 3)</MicroLabel>
               <input
-                type="time" value={formData.endTime3}
+                type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime3}
                 onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
                 className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
               />

@@ -16,6 +16,21 @@ export const shiftCategory = (startTime: string): 'ochtend' | 'middag' | 'avond'
  *  ongeldige tijd. Uren ≥ 24 zijn geldig: het Dienstoverzicht gebruikt de
  *  busvak-notatie voor ná middernacht ("26:16" = 02:16 de volgende nacht).
  *  Cap op 47:59 (GTFS-conventie) — daarboven is het geen tijd maar vuil. */
+/** Busvak-tijdvalidatie voor invoer/import: uur 0–47, minuten 0–59.
+ *  Eén bron van waarheid — de server-import en het beheerformulier
+ *  accepteerden elk hun eigen (lossere) variant, waardoor "08:75" een
+ *  geldige planningsrij kon worden die elke component anders las. */
+export const isValidBusvakTime = (t: string): boolean => parseHHMM(t) !== null;
+
+/** "6:00" → "06:00": niet-gepadde uren sorteren lexicografisch fout
+ *  ("14:00" < "6:00") — normaliseren op de invoergrens houdt alle
+ *  string-sorteringen elders correct. */
+export const normalizeTimeString = (t: string): string => {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(t ?? '').trim());
+  if (!m) return String(t ?? '').trim();
+  return `${m[1].padStart(2, '0')}:${m[2]}`;
+};
+
 const parseHHMM = (t: string): number | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
   if (!m) return null;

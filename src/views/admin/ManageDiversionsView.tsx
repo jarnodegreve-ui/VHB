@@ -2,7 +2,6 @@ import React, { useMemo, useState } from 'react';
 import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { isoDate } from '../../lib/availability';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
@@ -10,7 +9,7 @@ import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
-const isExpired = (d: { endDate?: string }) => Boolean(d.endDate && d.endDate < isoDate(new Date()));
+import { isExpiredDiversion as isExpired } from '../../lib/diversions';
 
 export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
   const [showModal, setShowModal] = useState(false);

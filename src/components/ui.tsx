@@ -99,7 +99,7 @@ export function ConfirmationModal({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden">
             <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0">
               <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-600' : 'bg-amber-500/15 text-amber-600')}>
                 <AlertTriangle size={22} />
@@ -211,7 +211,7 @@ export function CredentialsModal({
     <AnimatePresence>
       {isOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden">
             <div className="p-6 md:p-7 border-b border-slate-200/70 flex items-center justify-between shrink-0">
               <div>
                 <h4 className="text-lg font-bold tracking-tight">{title}</h4>

@@ -117,22 +117,32 @@ export function PrintMonthlyScheduleView({
       day.minutes = day.shifts.reduce((sum, s) => sum + minutesBetween(s.startTime, s.endTime), 0);
     }
     type WeekGroup = { weekNumber: number; days: Day[]; totalMinutes: number; totalDays: number };
-    const weekMap = new Map<number, WeekGroup>();
+    // Bucketen op de maandag-DATUM van de week, niet op het kale weeknummer:
+    // rond de jaargrens (dec: week 1 van het nieuwe jaar; jan: week 52/53 van
+    // het oude) sorteerde het nummer de weekblokken anders in verkeerde
+    // volgorde. Het nummer blijft alleen het label.
+    const mondayOf = (d: Date) => {
+      const copy = new Date(d);
+      copy.setDate(copy.getDate() - ((copy.getDay() + 6) % 7));
+      return `${copy.getFullYear()}-${String(copy.getMonth() + 1).padStart(2, '0')}-${String(copy.getDate()).padStart(2, '0')}`;
+    };
+    const weekMap = new Map<string, WeekGroup>();
     for (const day of byDate.values()) {
       const d = new Date(`${day.date}T00:00:00`);
       const week = isoWeekNumber(d);
-      let group = weekMap.get(week);
+      const key = mondayOf(d);
+      let group = weekMap.get(key);
       if (!group) {
         group = { weekNumber: week, days: [], totalMinutes: 0, totalDays: 0 };
-        weekMap.set(week, group);
+        weekMap.set(key, group);
       }
       group.days.push(day);
       group.totalMinutes += day.minutes;
       if (day.shifts.length > 0) group.totalDays += 1; // weektotaal telt enkel werkdagen
     }
     return Array.from(weekMap.values())
-      .sort((a, b) => a.weekNumber - b.weekNumber)
-      .map((w) => ({ ...w, days: w.days.sort((a, b) => a.date.localeCompare(b.date)) }));
+      .map((w) => ({ ...w, days: w.days.sort((a, b) => a.date.localeCompare(b.date)) }))
+      .sort((a, b) => a.days[0].date.localeCompare(b.days[0].date));
   }, [monthShifts, absences, yearStr, monthStr]);
 
   const totalMinutes = monthShifts.reduce((sum, s) => sum + minutesBetween(s.startTime, s.endTime), 0);

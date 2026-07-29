@@ -112,7 +112,7 @@ export function ChangePasswordModal({
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden"
+            className="glass-modal rounded-3xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden"
           >
             <div className="p-6 md:p-8 border-b border-white/70 flex items-start justify-between gap-4 shrink-0">
               <div>

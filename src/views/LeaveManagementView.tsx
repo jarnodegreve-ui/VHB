@@ -186,6 +186,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
   const isDraftBoundary = (dateStr: string) =>
     showRequestModal && (dateStr === formData.startDate || dateStr === formData.endDate);
 
+  const decisionToast = (status: LeaveRequest['status']) =>
+    status === 'approved' ? 'Verlof goedgekeurd.' : status === 'rejected' ? 'Verlof afgewezen.' : 'Verlof geannuleerd.';
+
   const handleStatusUpdate = (requestId: string, newStatus: LeaveRequest['status'], seenStatus?: string) => {
     // Delta-pad (PATCH per record): conflictveilig bij twee gelijktijdige
     // beoordelaars — de tweede krijgt een melding i.p.v. een stille overschrijf.
@@ -193,7 +196,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
     // referentie vergeleek de server met de (al ververste) live status en
     // was de conflictcheck feitelijk uitgeschakeld.
     if (onDecide) {
-      void onDecide(requestId, newStatus, seenStatus);
+      // Succes-toast bij bevestiging: een beslissing zonder enige feedback
+      // voelde als "is er iets gebeurd?" (controleronde 30/07).
+      void onDecide(requestId, newStatus, seenStatus).then((ok) => {
+        if (ok) notify(decisionToast(newStatus), 'success');
+      });
       return;
     }
     const decidedAt = new Date().toISOString();
@@ -228,9 +235,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
       .map((r) => r.id);
     if (onDecide) {
       // Sequentieel per record: elk met eigen conflictdetectie — een aanvraag
-      // die intussen al behandeld is, geeft een melding en slaat over.
+      // die intussen al behandeld is, geeft een melding en slaat over. Eén
+      // samenvattende toast na afloop i.p.v. n stiltes.
       void (async () => {
-        for (const id of ids) await onDecide(id, status);
+        let ok = 0;
+        for (const id of ids) {
+          if (await onDecide(id, status, 'pending')) ok += 1;
+        }
+        const label = status === 'approved' ? 'goedgekeurd' : 'geweigerd';
+        if (ok === ids.length) notify(`${ok} ${ok === 1 ? 'aanvraag' : 'aanvragen'} ${label}.`, 'success');
+        else notify(`${ok} van ${ids.length} ${label} — de rest was intussen al behandeld.`, 'info');
       })();
       return;
     }

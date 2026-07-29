@@ -87,7 +87,7 @@ export function CoverageView() {
     return () => { cancelled = true; };
   }, [from, to]);
 
-  const refetchGaps = () => fetchCoverageGaps(from, to).then((res) => setGaps(res.days)).catch(() => {});
+  const refetchGaps = () => fetchCoverageGaps(from, to).then((res) => setGaps(Array.isArray(res?.days) ? res.days : [])).catch(() => {});
 
   // Vrije chauffeurs ophalen voor de gekozen dag (kandidaten om het gat te vullen).
   useEffect(() => {

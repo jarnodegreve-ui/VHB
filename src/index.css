@@ -946,6 +946,19 @@ html.dark {
 :where(.dark) .text-red-700\/80 { color: rgb(252, 165, 165); }
 :where(.dark) .text-red-900 { color: rgb(252, 165, 165); }
 :where(.dark) .text-amber-900 { color: rgb(253, 186, 116); }
+/* Controleronde 30/07: -800/-900-tinten en pastel-hovers/-borders op de
+   import-schermen misten een override — donkerrood/-groen op near-black was
+   vrijwel onleesbaar, precies in de kritieke import-flow. */
+:where(.dark) .text-red-800 { color: rgb(252, 165, 165); }
+:where(.dark) .text-emerald-800 { color: rgb(110, 231, 183); }
+:where(.dark) .text-emerald-900 { color: rgb(110, 231, 183); }
+:where(.dark) .text-amber-600\/90 { color: rgba(253, 186, 116, 0.9); }
+:where(.dark) .hover\:bg-emerald-50:hover { background-color: rgba(16, 185, 129, 0.14); }
+:where(.dark) .hover\:bg-red-100:hover { background-color: rgba(239, 68, 68, 0.22); }
+:where(.dark) .hover\:bg-amber-100:hover { background-color: rgba(245, 158, 11, 0.22); }
+:where(.dark) .border-red-200 { border-color: rgba(239, 68, 68, 0.30); }
+:where(.dark) .border-red-300 { border-color: rgba(239, 68, 68, 0.40); }
+:where(.dark) .border-emerald-200 { border-color: rgba(16, 185, 129, 0.30); }
 :where(.dark) .text-amber-600 { color: rgb(253, 186, 116); }
 :where(.dark) .border-emerald-200\/80 { border-color: rgba(16, 185, 129, 0.30); }
 :where(.dark) .border-red-200\/70 { border-color: rgba(239, 68, 68, 0.30); }
