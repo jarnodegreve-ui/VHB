@@ -446,12 +446,23 @@ export function PlannerDashboardWidgets({
         )}
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
-          icon={<MapPin size={16} />}
-          tone="slate"
-          label="Omleidingen"
-          value={activeDiversions}
-          sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
-          onClick={() => onNavigate('omleidingen')}
+          icon={<UserCheck size={16} />}
+          tone="emerald"
+          label="Beschikbaar"
+          value={availableToday.length}
+          sub="vrij en inzetbaar vandaag"
+          onClick={() => setShowAvailable(true)}
+        />
+        <OpsStat
+          className="md:col-span-2 xl:col-span-1"
+          icon={<CalendarClock size={16} />}
+          tone={todayAbsent.some((a) => a.isSick) ? 'amber' : 'slate'}
+          label="Vandaag afwezig"
+          value={todayAbsent.length}
+          sub={todayAbsent.length === 0
+            ? 'iedereen inzetbaar'
+            : `${todayAbsent.filter((a) => a.isSick).length} ziek · ${todayAbsent.filter((a) => !a.isSick).length} verlof`}
+          onClick={() => setShowAbsent(true)}
         />
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
@@ -463,7 +474,16 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof')}
         />
         <OpsStat
-          className="md:col-span-2 xl:col-span-1"
+          className="md:col-span-3 xl:col-span-1"
+          icon={<MapPin size={16} />}
+          tone="slate"
+          label="Omleidingen"
+          value={activeDiversions}
+          sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
+          onClick={() => onNavigate('omleidingen')}
+        />
+        <OpsStat
+          className="md:col-span-3 xl:col-span-1"
           icon={<CalendarClock size={16} />}
           tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
           label="Laatste import"
@@ -476,26 +496,6 @@ export function PlannerDashboardWidgets({
               : 'nog geen import'
           }
           onClick={() => onNavigate('beheer-roosters')}
-        />
-        <OpsStat
-          className="col-span-2 md:col-span-2 xl:col-span-1"
-          icon={<CalendarClock size={16} />}
-          tone={todayAbsent.some((a) => a.isSick) ? 'amber' : 'slate'}
-          label="Vandaag afwezig"
-          value={todayAbsent.length}
-          sub={todayAbsent.length === 0
-            ? 'iedereen inzetbaar'
-            : `${todayAbsent.filter((a) => a.isSick).length} ziek · ${todayAbsent.filter((a) => !a.isSick).length} verlof`}
-          onClick={() => setShowAbsent(true)}
-        />
-        <OpsStat
-          className="col-span-2 md:col-span-4 xl:col-span-1"
-          icon={<UserCheck size={16} />}
-          tone="emerald"
-          label="Beschikbaar"
-          value={availableToday.length}
-          sub="vrij en inzetbaar vandaag"
-          onClick={() => setShowAvailable(true)}
         />
       </div>
 

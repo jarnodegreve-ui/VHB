@@ -1735,7 +1735,7 @@ export default function App() {
           />
           <NavItem 
             icon={<Calendar size={18} />} 
-            label="Mijn rooster" 
+            label="Rooster" 
             active={currentView === 'rooster'} 
             onClick={() => { setCurrentView('rooster'); setIsSidebarOpen(false); }} 
           />
@@ -1754,24 +1754,12 @@ export default function App() {
           {!isPlanner && (
             <NavItem
               icon={<FolderOpen size={18} />}
-              label="Mijn documenten"
+              label="Documenten"
               active={currentView === 'documenten'}
               badge={unseenDocuments}
               onClick={() => { setCurrentView('documenten'); setIsSidebarOpen(false); markDocumentsSeen(); }}
             />
           )}
-          <NavItem
-            icon={<Phone size={18} />}
-            label="Contactlijst"
-            active={currentView === 'contacten'}
-            onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }}
-          />
-          <NavItem 
-            icon={<Bell size={18} />} 
-            label="Updates" 
-            active={currentView === 'updates'} 
-            onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
-          />
           <NavItem
             icon={<RotateCcw size={18} />}
             label="Dienstruil"
@@ -1780,17 +1768,29 @@ export default function App() {
             badge={isPlanner ? pendingSwapsCount : (targetedSwapsCount || undefined)}
           />
           <NavItem
-            icon={<Users size={18} />}
-            label="Maandplanning"
-            active={currentView === 'bezetting'}
-            onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
-          />
-          <NavItem
             icon={<CalendarCheck size={18} />}
             label="Verlof"
             active={currentView === 'verlof'}
             onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }}
             badge={isPlanner ? pendingLeaveCount : unseenLeaveDecisionCount}
+          />
+          <NavItem 
+            icon={<Bell size={18} />} 
+            label="Updates" 
+            active={currentView === 'updates'} 
+            onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
+          />
+          <NavItem
+            icon={<Phone size={18} />}
+            label="Contacten"
+            active={currentView === 'contacten'}
+            onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }}
+          />
+          <NavItem
+            icon={<Users size={18} />}
+            label="Maandrooster"
+            active={currentView === 'bezetting'}
+            onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
           />
 
           {isPlanner && (
