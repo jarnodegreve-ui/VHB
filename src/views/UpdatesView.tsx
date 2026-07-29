@@ -6,6 +6,14 @@ import { markUpdatesRead } from '../lib/updateReads';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge } from '../components/primitives';
 
+/** "2026-03-04" → "4 mrt 2026"; onparseerbare waarden ongemoeid laten. */
+const formatUpdateDate = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
 export function UpdatesView({ updates }: { updates: Update[] }) {
   const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);
 
@@ -60,7 +68,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 </div>
                 <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 tabular-nums">
                   <Clock size={12} className="text-slate-300" />
-                  {update.date}
+                  {formatUpdateDate(update.date)}
                 </div>
               </div>
 

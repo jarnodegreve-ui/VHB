@@ -2063,7 +2063,9 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
 
     // Per-update audit entries
     const updDiff = diffUpdateChanges(previousUpdates, arr);
-    const fmtUpd = (u: any) => `${u.title} [${u.category}${u.isUrgent ? ', URGENT' : ''}].`;
+    // Categorieën zijn uit de UI verdwenen (#241) — niet meer in het
+    // auditspoor echoën; URGENT blijft betekenisvol.
+    const fmtUpd = (u: any) => `${u.title}${u.isUrgent ? ' [URGENT]' : ''}.`;
     for (const u of updDiff.added) {
       await logActivity(req, "updates", "Update toegevoegd", fmtUpd(u), { type: "update", id: u.id });
     }
@@ -2220,7 +2222,10 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         }
       }
 
-      // Toevoegingen + wijzigingen
+      // Toevoegingen + wijzigingen. Users éénmalig vooraf: dit stond eerst
+      // per nieuw record ín de loop (volledige gepagineerde users-fetch per
+      // ruilverzoek).
+      const allUsersForSwapChecks = await getUsersData();
       for (const next of newData) {
         const prev = previousById.get(String(next.id));
         if (!prev) {
@@ -2259,8 +2264,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (previousSwaps.some((s) => String(s.shiftId) === String(next.shiftId) && OPEN_SWAP_STATES.has(String(s.status)))) {
             return res.status(409).json({ error: "Voor deze dienst loopt al een ruilverzoek. Trek dat eerst in of wacht de beslissing af." });
           }
-          const allUsersForCheck = await getUsersData();
-          const targetUser = allUsersForCheck.find((u: any) => String(u.id) === String(next.targetDriverId));
+          const targetUser = allUsersForSwapChecks.find((u: any) => String(u.id) === String(next.targetDriverId));
           if (!targetUser || targetUser.isActive === false) {
             return res.status(400).json({ error: "De gekozen collega bestaat niet (meer) of is inactief." });
           }
@@ -2417,7 +2421,12 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
   try {
     const id = String(req.params.id);
     const status = String(req.body?.status ?? "");
+    // Verplicht: zonder ifStatus is er géén concurrency-guard en geldt stil
+    // last-write-wins — precies het gat dat deze route moest dichten.
     const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
+    if (!ifStatus) {
+      return res.status(400).json({ error: "ifStatus ontbreekt: stuur de status waarop je beslissing gebaseerd is mee." });
+    }
 
     const all = await getSwapsData();
     const current = all.find((s) => String(s.id) === id);

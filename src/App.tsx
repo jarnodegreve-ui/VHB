@@ -100,7 +100,6 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'bezetting',
     'dekking',
     'verlof',
-    'verlof-beheer',
     'verlof-kalender',
     'beheer-roosters',
     'planning-matrix',
@@ -121,7 +120,6 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'bezetting',
     'dekking',
     'verlof',
-    'verlof-beheer',
     'verlof-kalender',
     'beheer-roosters',
     'planning-matrix',
@@ -181,6 +179,15 @@ export default function App() {
   // Eerste data-fetch nog niet rond? Views kunnen dit gebruiken om
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
   const [isInitialLoad, setIsInitialLoad] = useState(true);
+  // Netwerkstatus voor de topbar-pill (was hardcoded "Online").
+  const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  useEffect(() => {
+    const on = () => setIsOnline(true);
+    const off = () => setIsOnline(false);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   // Admin-only preview: toont het portaal (nav + dashboard) zoals een chauffeur
   // het ziet. Puur visueel — rechten/data blijven admin. Reset bij herladen.
@@ -1117,14 +1124,18 @@ export default function App() {
 
   const decideLeave = (id: string, status: LeaveRequest['status']): Promise<boolean> => {
     const current = leaveRequests.find((r) => r.id === id);
-    return decideViaPatch('leave', id, status, current?.status, fetchLeave, (updated) => {
+    // Record niet (meer) lokaal → onze lijst is stale; ifStatus is server-
+    // side verplicht, dus eerst verversen i.p.v. een kansloze PATCH.
+    if (!current) { void fetchLeave(); return Promise.resolve(false); }
+    return decideViaPatch('leave', id, status, current.status, fetchLeave, (updated) => {
       setLeaveRequests((curr) => curr.map((r) => (r.id === id ? { ...r, ...updated } : r)));
     });
   };
 
   const decideSwap = (id: string, status: SwapRequest['status']): Promise<boolean> => {
     const current = swaps.find((s) => s.id === id);
-    return decideViaPatch('swaps', id, status, current?.status, fetchSwaps, (updated) => {
+    if (!current) { void fetchSwaps(); return Promise.resolve(false); }
+    return decideViaPatch('swaps', id, status, current.status, fetchSwaps, (updated) => {
       setSwaps((curr) => curr.map((s) => (s.id === id ? { ...s, ...updated } : s)));
     });
   };
@@ -1568,7 +1579,6 @@ export default function App() {
     bezetting: { title: 'Maandplanning', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
     dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
-    'verlof-beheer': { title: 'Verlofbeheer', subtitle: 'Bekijk aanvragen en beheer afwezigheden per dag.' },
     'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
     'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
     'planning-matrix': { title: 'Planning Overzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
@@ -1879,9 +1889,11 @@ export default function App() {
                 <div className="flex items-center gap-2 shrink-0">
                   {/* Zoekknop bewust weg (Jarno: "vrij zinloos") — het
                       command palette blijft bereikbaar via ⌘K. */}
-                  <div className="hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-50/80 border border-emerald-100">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
-                    <p className="text-[11px] font-semibold text-emerald-700">Online</p>
+                  {/* Gekoppeld aan navigator.onLine — een hardcoded groene pill
+                      toonde bij een uitval doodleuk "Online". */}
+                  <div className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${isOnline ? 'bg-emerald-50/80 border-emerald-100' : 'bg-red-50/80 border-red-100'}`}>
+                    <div className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
+                    <p className={`text-[11px] font-semibold ${isOnline ? 'text-emerald-700' : 'text-red-600'}`}>{isOnline ? 'Online' : 'Offline'}</p>
                   </div>
                   <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200/80">
                     <div className="w-8 h-8 bg-oker-100 rounded-lg flex items-center justify-center text-oker-700 text-[11px] font-bold">
@@ -1985,7 +1997,7 @@ export default function App() {
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>}
-              {(resolvedCurrentView === 'verlof' || resolvedCurrentView === 'verlof-beheer') && (isInitialLoad ? <ViewLoader /> : (
+              {resolvedCurrentView === 'verlof' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView
                     user={currentUser}

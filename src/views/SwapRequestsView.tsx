@@ -408,7 +408,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           ) : (
             <EmptyState
               icon={<ArrowLeftRight size={28} />}
-              title="Geen openstaande wissels"
+              title="Geen openstaande dienstruilen"
               message="Stelt een collega jou een ruil voor, dan verschijnt die hier en krijg je een melding."
             />
           )}

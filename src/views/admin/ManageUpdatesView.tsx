@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Bell, CalendarDays, Eye, History, Pencil, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bell, ChevronDown, Eye, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { notify } from '../../lib/ui';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
@@ -47,6 +47,14 @@ function Input({
   );
 }
 
+/** "2026-03-04" → "4 mrt 2026" — zelfde notatie als de chauffeurskant. */
+const formatUpdateDate = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? iso
+    : d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
+};
+
 export function ManageUpdatesView({
   updates,
   onSave,
@@ -67,6 +75,12 @@ export function ManageUpdatesView({
   // scrollen lijkt 'Bewerk' (onderaan) niks te doen — het formulier vult
   // zich buiten beeld. Deze ref brengt het formulier in beeld.
   const formRef = useRef<HTMLDivElement>(null);
+  // Compacte uitklaprijen (vast lijstpatroon): dicht = titel + status,
+  // open = volledige inhoud. Vol uitgeschreven werd dit scherm meters lang.
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+  const toggleExpanded = (id: string) => setExpandedIds((cur) => (
+    cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
+  ));
   const [historyUpdate, setHistoryUpdate] = useState<Update | null>(null);
 
   // Leesbevestigingen: hoeveel chauffeurs elke urgente update gelezen hebben.
@@ -222,62 +236,43 @@ export function ManageUpdatesView({
           <Badge tone="slate" className="shrink-0 tabular-nums">{updates.length} zichtbaar</Badge>
         </div>
 
-        <div className="mt-6 space-y-3">
-          {updates.length > 0 ? updates.map((update) => (
-            <div key={update.id} className="rounded-3xl border border-white/70 bg-white/45 p-5">
-              <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
-                    {update.isUrgent && totalChauffeurs > 0 ? (
-                      <span
-                        className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums"
-                        title="Aantal chauffeurs dat deze update geopend heeft"
-                      >
-                        <Eye size={12} />
-                        {readCounts[update.id] ?? 0}/{totalChauffeurs} gelezen
-                      </span>
-                    ) : null}
-                    <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400 tabular-nums">
-                      <CalendarDays size={13} />
-                      {update.date}
-                    </span>
-                  </div>
-                  <h4 className="mt-3 text-lg font-bold tracking-tight text-slate-900">{update.title}</h4>
-                  <p className="mt-2 whitespace-pre-wrap text-sm font-medium leading-7 text-slate-600">
-                    {update.content}
-                  </p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    icon={<History size={14} />}
-                    aria-label="Wijzigingsgeschiedenis"
-                    title="Wijzigingsgeschiedenis"
-                    onClick={() => setHistoryUpdate(update)}
-                  />
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    icon={<Pencil size={14} />}
-                    onClick={() => handleEdit(update)}
-                  >
-                    Bewerk
-                  </Button>
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={<Trash2 size={14} />}
-                    disabled={deletingId === update.id}
-                    onClick={() => setConfirmDeleteId(update.id)}
-                  >
-                    {deletingId === update.id ? 'Verwijderen...' : 'Verwijder'}
-                  </Button>
+        <div className="mt-5 max-h-[480px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
+          {updates.length > 0 ? updates.map((update) => {
+            const open = expandedIds.includes(update.id);
+            return (
+            <div key={update.id} className="surface-card rounded-2xl overflow-hidden">
+              <div className="flex items-center justify-between gap-2 p-3 pl-4">
+                <button
+                  type="button"
+                  onClick={() => toggleExpanded(update.id)}
+                  aria-expanded={open}
+                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                >
+                  <span className="min-w-0 truncate text-[13px] font-bold tracking-tight text-slate-800">{update.title}</span>
+                  {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
+                  <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">{formatUpdateDate(update.date)}</span>
+                  <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                </button>
+                <div className="flex shrink-0 items-center gap-0.5">
+                  <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<History size={14} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistoryUpdate(update)} />
+                  <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<Pencil size={14} />} aria-label="Bewerk" title="Bewerk" onClick={() => handleEdit(update)} />
+                  <Button variant="ghost" size="sm" className="h-9 w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Verwijder" title="Verwijder" disabled={deletingId === update.id} onClick={() => setConfirmDeleteId(update.id)} />
                 </div>
               </div>
+              {open && (
+                <div className="px-4 pb-4 pt-0.5">
+                  {update.isUrgent && totalChauffeurs > 0 && (
+                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
+                      <Eye size={12} />
+                      {readCounts[update.id] ?? 0}/{totalChauffeurs} gelezen
+                    </span>
+                  )}
+                  <p className="whitespace-pre-wrap text-sm font-medium leading-7 text-slate-600">{update.content}</p>
+                </div>
+              )}
             </div>
-          )) : (
+            );
+          }) : (
             <div className="rounded-3xl border border-white/70 bg-white/45 p-6 text-sm font-medium text-slate-500">
               Er zijn nog geen updates gepubliceerd.
             </div>
