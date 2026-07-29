@@ -457,7 +457,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-8 rounded-3xl">
               <div className="flex items-center justify-between mb-6">
                 <h4 className="font-bold tracking-tight text-slate-800">Afwezigheid op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
-                <button onClick={() => setSelectedDate(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                <button aria-label="Sluiten" onClick={() => setSelectedDate(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
               </div>
               <div className="space-y-3">
                 {getRequestsForDate(selectedDate).length > 0 ? getRequestsForDate(selectedDate).map((req) => {
@@ -613,7 +613,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
       <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
-              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
+              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof aanvragen</h4><button aria-label="Sluiten" onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>

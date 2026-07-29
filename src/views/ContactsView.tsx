@@ -20,7 +20,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      notify('Kopiëren lukte niet — selecteer het nummer handmatig.', 'error');
+      notify('Kopiëren is mislukt — selecteer het nummer handmatig.', 'error');
     }
   };
 

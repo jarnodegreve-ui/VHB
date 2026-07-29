@@ -396,7 +396,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <MicroLabel className="text-emerald-700">Primair</MicroLabel>
-                  <h4 className="mt-2 text-base font-bold tracking-tight text-slate-900">Excel Matrix Upload</h4>
+                  <h4 className="mt-2 text-base font-bold tracking-tight text-slate-900">Excel-matrix uploaden</h4>
                   <p className="mt-2 text-sm font-medium text-slate-600">
                     Upload je originele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
                   </p>
@@ -415,7 +415,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 )}
               >
                 <Upload size={16} />
-                {isMatrixImporting ? 'Importeren...' : 'Excel Matrix Upload'}
+                {isMatrixImporting ? 'Importeren…' : 'Excel-matrix uploaden'}
                 <input
                   type="file"
                   accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
@@ -452,7 +452,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 title="Bouwt de planning opnieuw op uit de laatst geïmporteerde matrix"
                 icon={<RotateCcw size={16} className={isSyncing ? "animate-spin" : ""} />}
               >
-                {isSyncing ? 'Opnieuw opbouwen...' : 'Planning opnieuw opbouwen'}
+                {isSyncing ? 'Opnieuw opbouwen…' : 'Planning opnieuw opbouwen'}
               </Button>
             </div>
 
@@ -470,7 +470,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 disabled={isClearingPlanning}
                 icon={<Trash2 size={16} />}
               >
-                {isClearingPlanning ? 'Wissen...' : 'Planning Wissen'}
+                {isClearingPlanning ? 'Wissen…' : 'Planning wissen'}
               </Button>
             </div>
           </div>
@@ -481,7 +481,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       <div className="surface-card p-6 md:p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Historiek"
-          title="Recente Matriximports"
+          title="Recente matriximports"
           description="Laatste importmomenten met de belangrijkste controlecijfers."
           aside={<Badge tone="slate">{history.length} logs</Badge>}
         />
@@ -538,7 +538,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       <div className="surface-card p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Export"
-          title="Print Maandrooster"
+          title="Print maandrooster"
           description="Genereer per chauffeur een maand-overzicht in print-/PDF-formaat."
         />
         <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto_auto] items-end">
@@ -588,7 +588,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       <div className="surface-card p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Controle"
-          title="Huidige Planning"
+          title="Huidige planning"
           description="Bekijk de actieve planning zoals die nu in het portaal beschikbaar is."
         />
         <div className="mt-6">
@@ -662,7 +662,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           onConfirm={handleClearPlanning}
           title="Planning wissen"
           message="Deze actie verwijdert alle actieve roosterregels uit het portaal. Gebruik dit alleen als je bewust met een lege planning wilt starten."
-          confirmText={isClearingPlanning ? "Wissen..." : "Planning Wissen"}
+          confirmText={isClearingPlanning ? "Wissen…" : "Planning wissen"}
           variant="danger"
         />
       ) : null}
@@ -693,7 +693,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     )} />
                     <div>
                       <MicroLabel className={matrixPreviewHasIssues ? "text-red-700" : "text-emerald-700"}>
-                        {matrixPreviewHasIssues ? 'Import Geblokkeerd' : 'Klaar Voor Import'}
+                        {matrixPreviewHasIssues ? 'Import geblokkeerd' : 'Klaar voor import'}
                       </MicroLabel>
                       <p className={cn(
                         "mt-2 text-sm font-medium",
@@ -920,7 +920,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   disabled={isMatrixImporting || matrixPreviewHasIssues}
                   title={matrixPreviewHasIssues ? 'Los eerst de fouten op in de Excel of in de planningscodes/chauffeurslijst.' : undefined}
                 >
-                  {isMatrixImporting ? 'Importeren...' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang Huidige Planning'}
+                  {isMatrixImporting ? 'Importeren…' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang huidige planning'}
                 </Button>
               </div>
         </>

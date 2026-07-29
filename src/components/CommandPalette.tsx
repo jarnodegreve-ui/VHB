@@ -62,7 +62,7 @@ export function CommandPalette({
       },
       {
         id: 'goto-rooster',
-        label: 'Mijn Rooster',
+        label: 'Mijn rooster',
         icon: <Calendar size={16} />,
         keywords: 'rooster mijn diensten schedule',
         action: () => onNavigate('rooster'),
@@ -137,7 +137,7 @@ export function CommandPalette({
       },
       {
         id: 'goto-beheer-roosters',
-        label: 'Beheer Roosters',
+        label: 'Beheer roosters',
         hint: 'Matrix importeren',
         icon: <Settings size={16} />,
         keywords: 'beheer roosters import matrix excel xlsx',
@@ -146,7 +146,7 @@ export function CommandPalette({
       },
       {
         id: 'goto-planning-matrix',
-        label: 'Planning Overzicht',
+        label: 'Planningsoverzicht',
         icon: <FileText size={16} />,
         keywords: 'planning matrix overzicht',
         roles: ['planner', 'admin'],
@@ -162,7 +162,7 @@ export function CommandPalette({
       },
       {
         id: 'goto-beheer-updates',
-        label: 'Beheer Updates',
+        label: 'Beheer updates',
         icon: <Plus size={16} />,
         keywords: 'updates publiceer nieuw beheer',
         roles: ['planner', 'admin'],
@@ -170,7 +170,7 @@ export function CommandPalette({
       },
       {
         id: 'goto-beheer-omleidingen',
-        label: 'Beheer Omleidingen',
+        label: 'Beheer omleidingen',
         icon: <Settings size={16} />,
         keywords: 'beheer omleidingen toevoegen',
         roles: ['planner', 'admin'],
@@ -203,7 +203,7 @@ export function CommandPalette({
       },
       {
         id: 'goto-beheer-debug',
-        label: 'Systeem Status',
+        label: 'Systeemstatus',
         icon: <RefreshCw size={16} />,
         keywords: 'debug status health check',
         roles: ['admin'],

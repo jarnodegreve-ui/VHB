@@ -493,11 +493,13 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
     if (!user || user.isActive === false) {
       return res.status(404).send("Not found");
     }
-    const events: IcsEvent[] = (shifts as any[]).map((s) => ({
+    // Rijen zonder tijden overslaan: de 00:00-fallback werd door de
+    // eind≤start-regel van buildVevent een 24-uursblok in de agenda.
+    const events: IcsEvent[] = (shifts as any[]).filter((s) => s.startTime && s.endTime).map((s) => ({
       uid: `vhb-shift-${s.id}@vhb-portaal`,
       date: String(s.date),
-      startTime: String(s.startTime || "00:00"),
-      endTime: String(s.endTime || "00:00"),
+      startTime: String(s.startTime),
+      endTime: String(s.endTime),
       summary: `Dienst ${String(s.line || s.serviceNumber || "").trim()}`.trim(),
       description: [s.busNumber && `Bus ${s.busNumber}`, s.loopnr && `Loop ${s.loopnr}`]
         .filter(Boolean)
@@ -1935,7 +1937,9 @@ app.get("/api/services", authenticate, async (req, res) => {
 app.get("/api/rostering-export", async (req, res) => {
   const handle = async () => {
     try {
-      const iso = (d: Date) => d.toISOString().slice(0, 10);
+      // brusselsDay i.p.v. toISOString: op een UTC-server is "vandaag" tussen
+    // 00:00 en 02:00 Belgische tijd anders gisteren.
+    const iso = (d: Date) => brusselsDay(d.toISOString());
       const today = new Date();
       const validDate = (v: unknown): v is string => typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v);
       const from = validDate(req.query.from) ? req.query.from : iso(today);
@@ -2244,12 +2248,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (!next.returnCode || String(next.returnCode).trim() === "" || !next.returnDate || String(next.returnDate).trim() === "") {
             return res.status(400).json({ error: "Kies wat je in ruil neemt (een dienst of een vrije dag van de collega)." });
           }
-          // Datum-shape afdwingen: de terugruil-datum wordt overal als
-          // JJJJ-MM-DD-string vergeleken (rooster, agenda-feed) — een
-          // afwijkend formaat maakt de terugruil daar stil onzichtbaar.
-          if (!/^\d{4}-\d{2}-\d{2}$/.test(String(next.returnDate))) {
-            return res.status(400).json({ error: "Ongeldige terugruil-datum: verwacht JJJJ-MM-DD." });
-          }
+
           if (next.decidedAt) {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
           }
@@ -2343,6 +2342,16 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       const prev = previousById.get(String(next.id));
       if (prev && String(next.status) !== String(prev.status) && TERMINAL_SWAP_STATES.has(String(prev.status))) {
         return res.status(409).json({ error: "Deze dienstruil is al afgehandeld en kan niet meer van status veranderen." });
+      }
+    }
+
+    // Datum-shape afdwingen op nieuwe records — rol-onafhankelijk (de check
+    // zat eerst alleen in de chauffeur-tak; de motivatie geldt voor élke rol:
+    // een kapot formaat maakt de terugruil stil onzichtbaar in rooster/feed).
+    for (const next of recordsToWrite) {
+      if (previousById.has(String(next.id))) continue;
+      if (next.returnDate && !/^\d{4}-\d{2}-\d{2}$/.test(String(next.returnDate))) {
+        return res.status(400).json({ error: "Ongeldige terugruil-datum: verwacht JJJJ-MM-DD." });
       }
     }
 

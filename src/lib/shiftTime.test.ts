@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { isShiftActiveAt } from './shiftTime';
+import { hasShiftEnded, isShiftActiveAt, isValidBusvakTime, normalizeTimeString } from './shiftTime';
 
 // Lokale datum-helper: 2026-07-22 om HH:MM (woensdag).
 const at = (h: number, m = 0) => new Date(2026, 6, 22, h, m);
@@ -67,5 +67,40 @@ describe('isShiftActiveAt: rijdt deze chauffeur nú, op basis van de segmenttijd
     expect(isShiftActiveAt(nanacht, morgen(0, 30))).toBe(true);
     expect(isShiftActiveAt(nanacht, morgen(2, 59))).toBe(true);
     expect(isShiftActiveAt(nanacht, morgen(3, 0))).toBe(false);
+  });
+});
+
+describe('hasShiftEnded — randgevallen uit de controleronde 30/07', () => {
+  it('nachtdienst pas voorbij ná de eindtijd de volgende dag', () => {
+    const shift = { date: '2026-07-29', startTime: '22:00', endTime: '06:00' };
+    expect(hasShiftEnded(shift, new Date('2026-07-30T05:00:00'))).toBe(false);
+    expect(hasShiftEnded(shift, new Date('2026-07-30T06:01:00'))).toBe(true);
+  });
+
+  it('start === eind: meteen voorbij op de dienstdag zelf (consistent met isShiftActiveAt)', () => {
+    const shift = { date: '2026-07-29', startTime: '08:00', endTime: '08:00' };
+    expect(hasShiftEnded(shift, new Date('2026-07-29T08:01:00'))).toBe(true);
+    expect(hasShiftEnded(shift, new Date('2026-07-29T07:59:00'))).toBe(false);
+  });
+
+  it('busvak-eindtijd (26:16) telt als volgende dag 02:16', () => {
+    const shift = { date: '2026-07-29', startTime: '15:41', endTime: '26:16' };
+    expect(hasShiftEnded(shift, new Date('2026-07-30T02:00:00'))).toBe(false);
+    expect(hasShiftEnded(shift, new Date('2026-07-30T02:17:00'))).toBe(true);
+  });
+});
+
+describe('isValidBusvakTime / normalizeTimeString', () => {
+  it('valideert busvak-grenzen', () => {
+    expect(isValidBusvakTime('26:16')).toBe(true);
+    expect(isValidBusvakTime('47:59')).toBe(true);
+    expect(isValidBusvakTime('48:00')).toBe(false);
+    expect(isValidBusvakTime('08:75')).toBe(false);
+    expect(isValidBusvakTime('6:00')).toBe(true);
+  });
+  it('normaliseert niet-gepadde uren', () => {
+    expect(normalizeTimeString('6:00')).toBe('06:00');
+    expect(normalizeTimeString('14:00')).toBe('14:00');
+    expect(normalizeTimeString('26:16')).toBe('26:16');
   });
 });

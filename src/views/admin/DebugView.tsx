@@ -251,14 +251,14 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     <PageShell>
       <PageHeader
         eyebrow="Systeem"
-        title="Systeem Status (Debug)"
+        title="Systeemstatus"
         actions={(
           <div className="flex items-center gap-3">
             <Button variant="primary" onClick={testWrite} disabled={isTesting}>
-              {isTesting ? 'Testen...' : 'Test Schrijven'}
+              {isTesting ? 'Testen…' : 'Test schrijven'}
             </Button>
             <Button variant="secondary" onClick={checkHealth} disabled={isCheckingHealth}>
-              {isCheckingHealth ? 'Controleren...' : 'Ververs Status'}
+              {isCheckingHealth ? 'Controleren…' : 'Status verversen'}
             </Button>
           </div>
         )}
@@ -370,7 +370,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                   disabled={isMailTesting}
                   icon={<Mail size={15} />}
                 >
-                  {isMailTesting ? 'Versturen...' : 'Stuur testmail naar mezelf'}
+                  {isMailTesting ? 'Versturen…' : 'Stuur testmail naar mezelf'}
                 </Button>
                 {mailTest && (
                   <p className={`text-xs font-medium break-words rounded-lg p-2 ${mailTest.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
@@ -418,7 +418,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
               Download alle gegevens (gebruikers, planning, diensten, omleidingen, updates, verlof, dienstruilen, planningscodes en de audit-log) als één JSON-bestand. Bewaar dit op een veilige plek — het is je herstelpad als er ooit iets misgaat. De PDF-bestanden van omleidingen zitten er niet in; die staan apart in Supabase Storage.
             </p>
             <Button variant="primary" onClick={downloadBackup} disabled={isExporting}>
-              {isExporting ? 'Exporteren...' : 'Download volledige back-up'}
+              {isExporting ? 'Exporteren…' : 'Download volledige back-up'}
             </Button>
           </div>
         </div>

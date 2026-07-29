@@ -816,7 +816,7 @@ export default function App() {
       });
       const data = await response.json().catch(() => ({} as any));
       if (response.ok && data.success) {
-        showToast(data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails succesvol verzonden naar alle chauffeurs!', 'success');
+        showToast(data.mocked ? `E-mail gelogd: ${data.message}` : 'E-mails verzonden naar alle chauffeurs.', 'success');
       } else {
         showToast(data.details || data.error || 'Verzenden van de e-mailupdate is mislukt.', 'error');
       }
@@ -1604,7 +1604,7 @@ export default function App() {
   const viewMeta: Record<string, { title: string; subtitle: string }> = {
     dashboard: { title: 'Dashboard', subtitle: 'Overzicht van planning, updates en operationele status.' },
     omleidingen: { title: 'Omleidingen', subtitle: 'Actuele omleidingen.' },
-    rooster: { title: 'Mijn Rooster', subtitle: 'Je komende diensten en export naar agenda.' },
+    rooster: { title: 'Mijn rooster', subtitle: 'Je komende diensten en export naar agenda.' },
     dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
     ritblaadjes: { title: 'Ritbladen', subtitle: 'Actuele rit-informatie als PDF voor alle chauffeurs.' },
     documenten: { title: 'Mijn documenten', subtitle: 'Attesten, reglement en andere documenten die de planning voor jou klaarzet.' },
@@ -1615,11 +1615,11 @@ export default function App() {
     dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
-    'beheer-roosters': { title: 'Beheer Roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
-    'planning-matrix': { title: 'Planning Overzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
+    'beheer-roosters': { title: 'Beheer roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
+    'planning-matrix': { title: 'Planningsoverzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
     'planning-codes': { title: 'Planningscodes', subtitle: 'Beheer de betekenis van matrixcodes zonder SQL of handmatige scripts.' },
     activiteit: { title: 'Activiteit', subtitle: 'Recente beheeracties en wijzigingen in het portaal.' },
-    'beheer-updates': { title: 'Beheer Updates', subtitle: 'Publiceer, controleer en verwijder updates en dringende meldingen.' },
+    'beheer-updates': { title: 'Beheer updates', subtitle: 'Publiceer, controleer en verwijder updates en dringende meldingen.' },
     gebruikers: { title: 'Gebruikers', subtitle: 'Beheer accounts, rollen en toegangsrechten.' },
     toestellen: { title: 'Toestellen', subtitle: 'Keur toestellen goed of blokkeer ze — logins werken alleen op goedgekeurde toestellen.' },
     'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
@@ -1735,7 +1735,7 @@ export default function App() {
           />
           <NavItem 
             icon={<Calendar size={18} />} 
-            label="Mijn Rooster" 
+            label="Mijn rooster" 
             active={currentView === 'rooster'} 
             onClick={() => { setCurrentView('rooster'); setIsSidebarOpen(false); }} 
           />
@@ -1799,15 +1799,15 @@ export default function App() {
               count={9}
               active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
             >
-              <NavItem icon={<Settings size={18} />} label="Beheer Roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<FileText size={18} />} label="Planning Overzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Settings size={18} />} label="Beheer roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<FileText size={18} />} label="Planningsoverzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Settings size={18} />} label="Planningscodes" active={currentView === 'planning-codes'} onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Bus size={18} />} label="Beheer Dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Bus size={18} />} label="Beheer dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
               <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Plus size={18} />} label="Beheer Updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<MapIcon size={18} />} label="Beheer Omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Plus size={18} />} label="Beheer updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<MapIcon size={18} />} label="Beheer omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
             </NavSection>
           )}
 
@@ -1817,7 +1817,7 @@ export default function App() {
               <NavItem icon={<Smartphone size={18} />} label="Toestellen" active={currentView === 'toestellen'} onClick={() => { setCurrentView('toestellen'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Activity size={18} />} label="Activiteit" active={currentView === 'activiteit'} onClick={() => { setCurrentView('activiteit'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Zap size={18} />} label="Laadpalen (OCPI)" active={currentView === 'ocpi-monitoring'} onClick={() => { setCurrentView('ocpi-monitoring'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Activity size={18} />} label="Systeem Status" active={currentView === 'beheer-debug'} onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Activity size={18} />} label="Systeemstatus" active={currentView === 'beheer-debug'} onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} />
             </NavSection>
           )}
         </nav>

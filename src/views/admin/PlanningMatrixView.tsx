@@ -227,7 +227,7 @@ export function PlanningMatrixView({
     return (
     <div className="space-y-6">
       <PageHeader
-        title="Planning-overzicht"
+        title="Planningsoverzicht"
         description="Controleer de geïmporteerde matrix en los onbekende codes of niet-gematchte chauffeurs op."
       />
       <div className="grid gap-4 md:grid-cols-3">

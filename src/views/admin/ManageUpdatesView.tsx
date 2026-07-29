@@ -126,7 +126,7 @@ export function ManageUpdatesView({
       }
       setUpdateForm(emptyUpdateForm);
       setEditingId(null);
-      notify(editingId ? 'Update succesvol bijgewerkt!' : 'Update succesvol gepubliceerd!', 'success');
+      notify(editingId ? 'Update bijgewerkt.' : 'Update gepubliceerd.', 'success');
     } else {
       notify('Update kon niet worden opgeslagen. Controleer de foutmelding hierboven en probeer opnieuw.', 'error');
     }
@@ -206,7 +206,7 @@ export function ManageUpdatesView({
             <MicroLabel className="mb-3">Inhoud van het bericht</MicroLabel>
             <textarea
               className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
-              placeholder="Schrijf hier het bericht voor de chauffeurs..."
+              placeholder="Schrijf hier het bericht voor de chauffeurs…"
               value={updateForm.content}
               onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
             />
@@ -214,7 +214,7 @@ export function ManageUpdatesView({
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button type="submit" variant="primary" size="lg" full disabled={isPublishing}>
-              {isPublishing ? (editingId ? 'Bijwerken...' : 'Publiceren...') : (editingId ? 'Update Bijwerken' : 'Update Publiceren')}
+              {isPublishing ? (editingId ? 'Bijwerken…' : 'Publiceren…') : (editingId ? 'Update bijwerken' : 'Update publiceren')}
             </Button>
             {editingId ? (
               <Button variant="secondary" size="lg" className="w-full sm:w-auto" onClick={handleCancelEdit}>

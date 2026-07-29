@@ -177,7 +177,7 @@ export function ViewLoader() {
           <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Laden</p>
-            <p className="text-sm font-semibold text-slate-800">Scherm wordt voorbereid...</p>
+            <p className="text-sm font-semibold text-slate-800">Scherm wordt voorbereid…</p>
           </div>
         </div>
       </div>
@@ -217,7 +217,7 @@ export function CredentialsModal({
                 <h4 className="text-lg font-bold tracking-tight">{title}</h4>
                 <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
               </div>
-              <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors">
+              <button aria-label="Sluiten" onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors">
                 <X size={18} />
               </button>
             </div>

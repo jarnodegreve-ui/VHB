@@ -147,7 +147,14 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     logActivity: async (_req: any, domain: string, action: string, message: string) => {
       mem.activity.push({ domain, action, message });
     },
-    getActivityLog: async () => mem.activity,
+    getActivityLog: async (opts?: { sinceIso?: string | null; max?: number }) => {
+    // Mock respecteert de opts — anders kan de #249-regressie ("UI beloofde
+    // 30 dagen, server gaf 100") ongemerkt terugkomen terwijl alles groen blijft.
+    let rows = mem.activity;
+    if (opts?.sinceIso) rows = rows.filter((a) => a.createdAt >= opts.sinceIso!);
+    if (opts?.max !== undefined) rows = rows.slice(0, opts.max);
+    return rows;
+  },
     getLoginActivity: async () => mem.activity.filter((a: any) => a.action === 'Aangemeld' || a.action === 'Actief'),
     getLatestAuthEventAt: async () => mem.lastAuthEventAt,
     updateUserSessionMeta: async () => {},
@@ -1398,5 +1405,35 @@ describe('toestel-whitelist', () => {
     // Een ánder toestel blokkeren mag wel.
     mem.devices.push({ userId: '3', deviceToken: 'dev-x', name: 'x', status: 'approved', createdAt: '', lastSeenAt: '', approvedAt: '', approvedBy: 'auto' });
     expect((await api('POST', '/api/devices/revoke', { token: 'tok-admin', device: 'dev-admin', body: { userId: '3', deviceToken: 'dev-x' } })).status).toBe(200);
+  });
+});
+
+describe('activiteitenlog: venster-parameter (#249)', () => {
+  it('?window=30d geeft ook regels ouder dan 7 dagen; default 7d niet', async () => {
+    const now = Date.now();
+    mem.activity = [
+      { id: 'act-oud', createdAt: new Date(now - 20 * 864e5).toISOString(), actorName: 'A', actorRole: 'admin', category: 'planning', action: 'Import', details: '' },
+      { id: 'act-nieuw', createdAt: new Date(now - 3600e3).toISOString(), actorName: 'A', actorRole: 'admin', category: 'planning', action: 'Import', details: '' },
+    ];
+    const kort = await api('GET', '/api/activity', { token: 'tok-admin' });
+    expect(kort.json.map((a: any) => a.id)).toEqual(['act-nieuw']);
+    const lang = await api('GET', '/api/activity?window=30d', { token: 'tok-admin' });
+    expect(lang.json.map((a: any) => a.id).sort()).toEqual(['act-nieuw', 'act-oud']);
+  });
+});
+
+describe('dienstruil intrekken via PATCH (#250)', () => {
+  it('de aanvrager mag een eigen open ruil intrekken (ook vanuit accepted)', async () => {
+    mem.swaps = [{ id: 's-w', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-07-01T08:00:00Z', returnDate: '2026-08-02', returnCode: 'VRIJ' }];
+    const res = await api('PATCH', '/api/swaps/s-w', { token: 'tok-a', body: { status: 'cancelled', ifStatus: 'accepted' } });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s) => s.id === 's-w')?.status).toBe('cancelled');
+  });
+
+  it('een ándere chauffeur (ook de aangezochte) mag níet intrekken (403)', async () => {
+    mem.swaps = [{ id: 's-w2', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-07-01T08:00:00Z', returnDate: '2026-08-02', returnCode: 'VRIJ' }];
+    const res = await api('PATCH', '/api/swaps/s-w2', { token: 'tok-b', body: { status: 'cancelled', ifStatus: 'pending' } });
+    expect(res.status).toBe(403);
+    expect(mem.swaps.find((s) => s.id === 's-w2')?.status).toBe('pending');
   });
 });

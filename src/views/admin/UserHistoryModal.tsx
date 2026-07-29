@@ -87,7 +87,7 @@ export function UserHistoryModal({
           <h4 className="mt-1 text-lg font-bold tracking-tight">{user.name}</h4>
           <p className="text-sm font-medium text-slate-500 capitalize">{user.role}{user.employeeId ? ` · #${user.employeeId}` : ''}</p>
         </div>
-        <button onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl shrink-0">
+        <button aria-label="Sluiten" onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl shrink-0">
           <X size={20} />
         </button>
       </div>

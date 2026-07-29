@@ -115,7 +115,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         uploadedPdfUrl = await uploadPdf(targetId, pdfFile);
       } catch (error: any) {
         // fetch/FileReader kan ook gooien (offline, leesfout) — zonder deze
-        // catch bleef de knop eeuwig op 'PDF uploaden...' hangen.
+        // catch bleef de knop eeuwig op 'PDF uploaden…' hangen.
         notify(`Upload mislukt: ${error?.message || 'netwerkfout'}.`, 'error');
         return;
       } finally {
@@ -288,7 +288,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
                     className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm resize-none"
-                    placeholder="Beschrijf de omleiding..."
+                    placeholder="Beschrijf de omleiding…"
                   />
                 </div>
 
@@ -343,7 +343,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     Annuleren
                   </Button>
                   <Button type="submit" variant="primary" size="lg" className="flex-1" disabled={isUploading}>
-                    {isUploading ? 'PDF uploaden...' : editingId ? 'Opslaan' : 'Toevoegen'}
+                    {isUploading ? 'PDF uploaden…' : editingId ? 'Opslaan' : 'Toevoegen'}
                   </Button>
                 </div>
               </form>

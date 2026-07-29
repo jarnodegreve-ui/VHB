@@ -90,7 +90,10 @@ export const hasShiftEnded = (
   const start = parseHHMM(shift.startTime);
   const end = parseHHMM(shift.endTime);
   if (start === null || end === null) return false;
-  const endNorm = end <= start ? end + 24 * 60 : end;
+  // start === eind: isShiftActiveAt behandelt zo'n rij als "nooit actief" —
+  // hier dan "meteen voorbij" op de dienstdag zelf i.p.v. de eind≤start-regel
+  // (+24u), die hem een etmaal ongedempt liet staan.
+  const endNorm = end < start ? end + 24 * 60 : end;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const dayDiff = Math.round(
     (new Date(`${localIso(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
