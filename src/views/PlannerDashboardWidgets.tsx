@@ -146,6 +146,30 @@ export function PlannerDashboardWidgets({
     return () => { cancelled = true; };
   }, [todayKey]);
 
+  // Wachtende toestellen horen in de werkvoorraad: een collega zit te
+  // wachten tot hij de app in kan. Alleen voor admins (de devices-API is
+  // admin-only; planners zouden een 403 krijgen).
+  const [pendingDevices, setPendingDevices] = useState<Array<{ userId: string; name: string; createdAt: string }>>([]);
+  useEffect(() => {
+    if (currentUser.role !== 'admin') return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/devices', { headers: await getSupabaseAuthHeaders() });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) {
+          setPendingDevices(data.filter((d: any) => d.status === 'pending'));
+        }
+      } catch {
+        // stil: dashboard mag niet breken op een toestellen-fetch
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser.role]);
+
+  // LET OP: geen hooks meer onder deze regel — de skeleton-return hieronder
+  // betekent dat álle hooks vóór dit punt moeten staan (React #310).
   if (isInitialLoad) {
     return (
       <section className="space-y-5">
@@ -203,28 +227,6 @@ export function PlannerDashboardWidgets({
   // tegel zegt "actieve omleidingen" en moet dat dan ook zijn.
   const todayIsoForDiversions = isoDate(new Date());
   const activeDiversions = diversions.filter((d) => !d.endDate || d.endDate >= todayIsoForDiversions).length;
-
-  // Wachtende toestellen horen in de werkvoorraad: een collega zit te
-  // wachten tot hij de app in kan. Alleen voor admins (de devices-API is
-  // admin-only; planners zouden een 403 krijgen).
-  const [pendingDevices, setPendingDevices] = useState<Array<{ userId: string; name: string; createdAt: string }>>([]);
-  useEffect(() => {
-    if (currentUser.role !== 'admin') return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await fetch('/api/devices', { headers: await getSupabaseAuthHeaders() });
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data)) {
-          setPendingDevices(data.filter((d: any) => d.status === 'pending'));
-        }
-      } catch {
-        // stil: dashboard mag niet breken op een toestellen-fetch
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [currentUser.role]);
 
   const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
   const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');

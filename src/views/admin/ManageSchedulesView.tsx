@@ -64,6 +64,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       });
       if (!response.ok) return;
       const data = await response.json();
+      // Shape-guard: een afwijkende respons (fout-object, oude API) mag het
+      // hele beheerscherm niet laten crashen op .approvedLeave.length.
+      if (!data || !Array.isArray(data.approvedLeave) || !Array.isArray(data.approvedSwaps)) return;
       setChangesSinceImport(data);
     } catch (err) {
       console.error('changes-since-import fetch error:', err);

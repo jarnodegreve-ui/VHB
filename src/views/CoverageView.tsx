@@ -81,7 +81,7 @@ export function CoverageView() {
     let cancelled = false;
     setLoading(true);
     fetchCoverageGaps(from, to)
-      .then((res) => { if (!cancelled) setGaps(res.days); })
+      .then((res) => { if (!cancelled) setGaps(Array.isArray(res?.days) ? res.days : []); })
       .catch((e) => { if (!cancelled) setError(e?.message || 'Kon dekking niet berekenen.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
