@@ -45,6 +45,37 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   };
   useEffect(() => { void load(); }, []);
 
+  // Schakelaar "toestel-goedkeuring vereist" (default aan; instelling leeft
+  // server-side in app_settings).
+  const [gateEnabled, setGateEnabled] = useState<boolean | null>(null);
+  const [isTogglingGate, setIsTogglingGate] = useState(false);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const data = await apiFetch<{ enabled: boolean }>('/api/devices/gate');
+        setGateEnabled(data.enabled);
+      } catch {
+        setGateEnabled(true);
+      }
+    })();
+  }, []);
+  const toggleGate = async () => {
+    if (gateEnabled === null || isTogglingGate) return;
+    const next = !gateEnabled;
+    setIsTogglingGate(true);
+    try {
+      await apiFetch('/api/devices/gate', { method: 'POST', body: JSON.stringify({ enabled: next }) });
+      setGateEnabled(next);
+      notify(next
+        ? 'Toestel-goedkeuring staat weer aan: nieuwe toestellen wachten op jouw akkoord.'
+        : 'Toestel-goedkeuring staat uit: elk toestel wordt bij aanmelden automatisch goedgekeurd.', 'success');
+    } catch (err) {
+      notify(err instanceof Error ? err.message : 'Instelling opslaan is mislukt.', 'error');
+    } finally {
+      setIsTogglingGate(false);
+    }
+  };
+
   const act = async (device: Device, action: 'approve' | 'revoke' | 'delete') => {
     setBusyKey(keyOf(device));
     try {
@@ -251,6 +282,35 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         title="Toestellen"
         description="Elk volgend toestel wacht hier op goedkeuring."
       />
+
+      <div className="surface-card rounded-3xl p-5 md:p-6">
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0">
+            <h3 className="text-lg font-bold tracking-tight">Toestel-goedkeuring</h3>
+            <p className="mt-1 text-sm font-medium text-slate-500">
+              {gateEnabled === false
+                ? 'Uit — elk toestel wordt bij aanmelden automatisch goedgekeurd en aan de lijst toegevoegd. Geblokkeerde toestellen blijven geblokkeerd.'
+                : 'Aan — elk nieuw toestel (behalve het eerste per chauffeur) wacht op jouw goedkeuring voordat het toegang krijgt.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void toggleGate()}
+            role="switch"
+            aria-checked={gateEnabled !== false}
+            aria-label="Toestel-goedkeuring vereist"
+            disabled={gateEnabled === null || isTogglingGate}
+            className={`ios-pressable relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${gateEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}
+          >
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${gateEnabled !== false ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+          </button>
+        </div>
+        {gateEnabled === false && (
+          <p className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-2.5 text-xs font-medium text-amber-800">
+            Tijdelijk bedoeld — bv. bij de uitrol naar alle chauffeurs. Zet de goedkeuring daarna weer aan; alles wat intussen aanmeldde staat dan al goedgekeurd in de lijst.
+          </p>
+        )}
+      </div>
 
       {pending.length > 0 && (
         <div className="surface-card rounded-3xl p-5 md:p-6">

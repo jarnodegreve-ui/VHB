@@ -28,6 +28,9 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // — staat hier alvast zodat de schema-check meldt zolang die migratie nog
   // niet gedraaid is.
   { table: "user_documents", columns: "id,user_id,filename,storage_path,category,size_bytes,uploaded_at,uploaded_by" },
+  // app_settings hoort bij de toestel-schakelaar (supabase/2026-07-30_app_settings.sql)
+  // — staat hier alvast zodat de schema-check meldt zolang die migratie mist.
+  { table: "app_settings", columns: "key,value,updated_at" },
 ];
 
 export const probeColumns = (table: string): string[] => {
