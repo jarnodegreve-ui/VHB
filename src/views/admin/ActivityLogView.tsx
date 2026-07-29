@@ -1,7 +1,7 @@
-import { Fragment, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
 import { Activity, Download, Search, Users, X } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
-import { cn, downloadBlob } from '../../lib/ui';
+import { cn, downloadBlob, getSupabaseAuthHeaders } from '../../lib/ui';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
@@ -104,13 +104,42 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   const [dateWindow, setDateWindow] = useState<'all' | 'today' | '7d' | '30d'>('7d');
   const [searchTerm, setSearchTerm] = useState('');
 
+  // De centrale fetch in App levert het 7-dagen-venster (genoeg voor het
+  // dashboard). Kiest de admin hier "30 dagen" of "Alles", dan halen we dat
+  // venster server-side op — voorheen filterde de UI over máx 100 rijen,
+  // waardoor de filters en de CSV-export stil onvolledig waren.
+  const [windowEntries, setWindowEntries] = useState<ActivityLogEntry[] | null>(null);
+  const [isLoadingWindow, setIsLoadingWindow] = useState(false);
+  useEffect(() => {
+    const serverWindow = dateWindow === '30d' ? '30d' : dateWindow === 'all' ? 'all' : null;
+    if (!serverWindow) {
+      setWindowEntries(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      setIsLoadingWindow(true);
+      try {
+        const res = await fetch(`/api/activity?window=${serverWindow}`, { headers: await getSupabaseAuthHeaders() });
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) setWindowEntries(data);
+      } catch {
+        // props-venster blijft staan — beter een korter venster dan niets
+      } finally {
+        if (!cancelled) setIsLoadingWindow(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [dateWindow]);
+  const sourceEntries = windowEntries ?? entries;
+
   const filteredEntries = useMemo(() => {
     const normalizedSearch = searchTerm.trim().toLowerCase();
     const now = Date.now();
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    return entries.filter((entry) => {
+    return sourceEntries.filter((entry) => {
       const categoryMatch = activeCategory === 'all' || entry.category === activeCategory;
       if (!categoryMatch) {
         return false;
@@ -137,7 +166,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         .toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [activeCategory, categoryLabels, dateWindow, entries, searchTerm]);
+  }, [activeCategory, categoryLabels, dateWindow, sourceEntries, searchTerm]);
 
   const exportFilteredActivity = () => {
     const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
@@ -232,7 +261,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               <FilterPill active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterPill>
               <FilterPill active={dateWindow === '7d'} onClick={() => setDateWindow('7d')}>7 dagen</FilterPill>
               <FilterPill active={dateWindow === '30d'} onClick={() => setDateWindow('30d')}>30 dagen</FilterPill>
-              <FilterPill active={dateWindow === 'all'} onClick={() => setDateWindow('all')}>Alles</FilterPill>
+              <FilterPill active={dateWindow === 'all'} onClick={() => setDateWindow('all')}>{isLoadingWindow && dateWindow === 'all' ? 'Alles…' : 'Alles'}</FilterPill>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 lg:max-w-[32rem] lg:justify-end">
