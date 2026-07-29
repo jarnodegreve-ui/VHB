@@ -2232,6 +2232,12 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (!next.returnCode || String(next.returnCode).trim() === "" || !next.returnDate || String(next.returnDate).trim() === "") {
             return res.status(400).json({ error: "Kies wat je in ruil neemt (een dienst of een vrije dag van de collega)." });
           }
+          // Datum-shape afdwingen: de terugruil-datum wordt overal als
+          // JJJJ-MM-DD-string vergeleken (rooster, agenda-feed) — een
+          // afwijkend formaat maakt de terugruil daar stil onzichtbaar.
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(String(next.returnDate))) {
+            return res.status(400).json({ error: "Ongeldige terugruil-datum: verwacht JJJJ-MM-DD." });
+          }
           if (next.decidedAt) {
             return res.status(403).json({ error: "Niet toegestaan: nieuwe aanvraag mag geen beslismoment hebben." });
           }
@@ -2422,11 +2428,16 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
     const selfId = String(req.appUser!.id);
     if (role === "chauffeur") {
       // Alleen de aangezochte collega mag een openstaande ruil accepteren
-      // of weigeren — zelfde regels als de array-route.
+      // of weigeren — zelfde regels als de array-route. Daarnaast mag de
+      // AANVRAGER zijn eigen ruil intrekken zolang die nog open staat
+      // (pending of accepted-maar-nog-niet-goedgekeurd): verlof kon dat al,
+      // dienstruil dwong een belletje naar de planner af.
       const isTarget = String(current.targetDriverId ?? "") === selfId && String(current.requesterId) !== selfId;
-      const validTransition = current.status === "pending" && (status === "accepted" || status === "rejected");
-      if (!isTarget || !validTransition) {
-        return res.status(403).json({ error: "Niet toegestaan: je mag een aan jou gerichte, openstaande ruil alleen accepteren of weigeren." });
+      const targetTransition = isTarget && current.status === "pending" && (status === "accepted" || status === "rejected");
+      const isRequester = String(current.requesterId) === selfId;
+      const withdrawTransition = isRequester && status === "cancelled" && (current.status === "pending" || current.status === "accepted");
+      if (!targetTransition && !withdrawTransition) {
+        return res.status(403).json({ error: "Niet toegestaan: je mag een aan jou gerichte, openstaande ruil accepteren of weigeren, of je eigen openstaande aanvraag intrekken." });
       }
     } else {
       const allowed = ["accepted", "approved", "rejected", "cancelled", "completed"];
@@ -2669,6 +2680,26 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       // een bewuste verwijdering door een vertrouwde rol.
       for (const [id] of previousById) {
         if (!payloadLeaveIds.has(String(id))) leaveIdsToDelete.push(String(id));
+      }
+    }
+
+    // Domeinvalidatie op nieuwe records (álle rollen): alle afgeleide logica
+    // (bezetting, conflictdetectie, agenda-feed) vergelijkt datums als
+    // strings — één kapotte datum maakt een aanvraag daar stil onzichtbaar
+    // terwijl hij wél goedgekeurd kan worden.
+    const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+    for (const next of recordsToWrite) {
+      if (previousById.has(String(next.id))) continue;
+      const start = String(next.startDate ?? "");
+      const end = String(next.endDate ?? "");
+      if (!ISO_DAY.test(start) || !ISO_DAY.test(end)) {
+        return res.status(400).json({ error: "Ongeldige datum in de aanvraag: verwacht JJJJ-MM-DD." });
+      }
+      if (end < start) {
+        return res.status(400).json({ error: "De einddatum ligt vóór de startdatum." });
+      }
+      if (!leaveTypeLabels[String(next.type ?? "")]) {
+        return res.status(400).json({ error: "Ongeldig verloftype." });
       }
     }
 

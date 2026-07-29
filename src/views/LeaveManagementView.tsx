@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'motion/react';
+import { motion } from 'motion/react';
 import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify } from '../lib/ui';
+import { Modal } from '../components/Modal';
 import { ConfirmationModal, PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
@@ -228,8 +228,22 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
 
   const handleBulkApprove = () => {
     if (selectedPendingIds.size === 0) return;
-    bulkDecide('approved');
-    setSelectedPendingIds(new Set());
+    // Zelfde bevestigingspatroon als bulk-weigeren — goedkeuren was de enige
+    // bulk-actie zónder bevestiging, terwijl juist dáár planningsconflicten
+    // kunnen zitten. De telling maakt dat expliciet vóór de klik.
+    const selected = leaveRequests.filter((r) => selectedPendingIds.has(r.id) && r.status === 'pending');
+    const withConflicts = selected.filter((r) =>
+      shiftsConflictingWithLeave(shifts, r).length > 0,
+    ).length;
+    setConfirmAction({
+      title: 'Aanvragen goedkeuren',
+      message: withConflicts > 0
+        ? `${selected.length} aanvragen goedkeuren? Let op: ${withConflicts} ervan ${withConflicts === 1 ? 'heeft' : 'hebben'} al ingeplande diensten in die periode.`
+        : `${selected.length} aanvragen goedkeuren?`,
+      confirmText: 'Goedkeuren',
+      variant: 'warning',
+      run: () => { bulkDecide('approved'); setSelectedPendingIds(new Set()); },
+    });
   };
 
   const handleBulkReject = () => {
@@ -570,11 +584,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
         </div>
       </div>
 
-      {createPortal(
-      <AnimatePresence>
-        {showRequestModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+      {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
+          dvh-begrenzing (verbeterronde 29/07 #3). */}
+      <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof aanvragen</h4><button onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
@@ -699,22 +711,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
 
                 <button type="submit" disabled={!formData.startDate || !formData.endDate || isSubmitting} className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed">{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</button>
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
-        document.body,
-      )}
+      </Modal>
 
       {/* Ziekmelding registreren (planner/admin) — chauffeur + periode. */}
-      {createPortal(
-      <AnimatePresence>
-        {showSickModal && (
-          <div
-            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
-            style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-          >
-            <motion.div initial={{ opacity: 0, scale: 0.95, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95, y: 20 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[90vh] flex flex-col overflow-hidden">
+      <Modal open={showSickModal} onClose={() => setShowSickModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
               <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center"><AlertTriangle size={20} /></div>
@@ -749,12 +749,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
                 </div>
                 <button type="submit" disabled={!sickForm.userId || isSubmittingSick} className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed">{isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}</button>
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
-        document.body,
-      )}
+      </Modal>
 
       {/* Beoordeling in een side panel: volledige context + beslissing
           zonder paginawissel. */}

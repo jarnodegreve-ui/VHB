@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
-import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
 import type { Diversion } from '../../types';
 import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -228,16 +227,8 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         )}
       </div>
 
-      {createPortal(
-      <AnimatePresence>
-        {showModal && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="glass-modal rounded-3xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden"
-            >
+      {/* Gedeelde Modal: ESC, backdrop-tap, safe-area en dvh (verbeterronde 29/07 #3). */}
+      <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
               <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
                 <div>
                   <h4 className="text-xl font-bold tracking-tight">{editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}</h4>
@@ -340,12 +331,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   </Button>
                 </div>
               </form>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>,
-        document.body,
-      )}
+      </Modal>
 
       <ConfirmationModal
         isOpen={!!confirmDeleteId}
