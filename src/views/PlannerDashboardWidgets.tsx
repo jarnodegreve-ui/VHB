@@ -276,7 +276,15 @@ export function PlannerDashboardWidgets({
     ...matrixAbsent
       .filter((m) => !seenNames.has(m.name.trim().toLowerCase()))
       .map((m, i) => ({ id: `matrix-${i}`, ...m })),
-  ].sort((a, b) => a.name.localeCompare(b.name));
+  ].sort((a, b) => {
+    // Eerst op soort afwezigheid (ziek bovenaan — daar moet de planner op
+    // reageren; daarna de overige soorten alfabetisch), binnen elke soort
+    // op naam (verzoek Jarno 30/07).
+    if (a.isSick !== b.isSick) return a.isSick ? -1 : 1;
+    const byLabel = a.label.localeCompare(b.label, 'nl');
+    if (byLabel !== 0) return byLabel;
+    return a.name.localeCompare(b.name, 'nl');
+  });
 
   // Wie is er vandaag beschikbaar (vrij en inzetbaar als vervanging)?
   // Actieve chauffeurs die vandaag géén dienst hebben, niet afwezig zijn,
