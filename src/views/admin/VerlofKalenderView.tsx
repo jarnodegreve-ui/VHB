@@ -2,6 +2,7 @@ import { Fragment, useState } from 'react';
 import { typedagLabel } from '../../lib/typedag';
 import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
+import { leaveSolid } from '../../lib/statusColors';
 import { cn } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { PageHeader, PageShell } from '../../components/ui';
@@ -11,17 +12,9 @@ import { MONTH_NAMES, LEAVE_TYPE_LABELS } from '../../lib/format';
 const WEEKDAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 
 
-const cellColor = (status: LeaveRequest['status'] | undefined, type?: string) => {
-  if (!status) return 'bg-transparent';
-  if (status === 'approved') {
-    if (type === 'ziekte') return 'bg-rose-500';
-    return type === 'klein_verlet' ? 'bg-blue-400' : 'bg-emerald-500';
-  }
-  if (status === 'pending') return 'bg-amber-400';
-  if (status === 'rejected') return 'bg-red-300';
-  if (status === 'cancelled') return 'bg-slate-300';
-  return 'bg-transparent';
-};
+// Kleuren uit de gedeelde statuskleurtaal (src/lib/statusColors.ts) — deze
+// view bepaalt alleen nog de vorm (vol kleurvlak).
+const cellColor = leaveSolid;
 
 export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; leaveRequests: LeaveRequest[] }) {
   const [viewMonth, setViewMonth] = useState(() => {

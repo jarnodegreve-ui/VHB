@@ -3,6 +3,7 @@ import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, Chevro
 import type { LeaveRequest, Shift, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
+import { leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
@@ -347,8 +348,7 @@ function MonthCalendar({
                   !isSelected && 'hover:bg-slate-50',
                   isSelected && 'bg-oker-500/15 ring-1 ring-oker-400',
                   !isSelected && isToday && 'ring-1 ring-oker-300',
-                  !isSelected && leave?.status === 'approved' && (leave.type === 'ziekte' ? 'bg-rose-50' : 'bg-emerald-50'),
-                  !isSelected && leave?.status === 'pending' && 'bg-amber-50',
+                  !isSelected && leave && leaveDayTint(leave.status, leave.type),
                 )}
               >
                 <span className={cn('text-xs font-semibold tabular-nums leading-none', isToday ? 'text-oker-700' : 'text-slate-700')}>
@@ -368,7 +368,7 @@ function MonthCalendar({
                   <span
                     className={cn(
                       'h-1.5 w-1.5 rounded-full',
-                      leave.status === 'pending' ? 'bg-amber-400' : leave.type === 'ziekte' ? 'bg-rose-500' : 'bg-emerald-500',
+                      leaveDot(leave.status, leave.type),
                     )}
                   />
                 ) : null}
@@ -407,7 +407,9 @@ function MonthCalendar({
                 ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
                 : selectedLeave.type === 'ziekte'
                   ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
-                  : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+                  : selectedLeave.type === 'klein_verlet'
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
+                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
             )}
           >
             {formatLeaveType(selectedLeave.type)}
