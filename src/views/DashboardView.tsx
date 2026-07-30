@@ -86,12 +86,30 @@ export function DashboardView({ notes = [],
   const todayParts = myShifts
     .filter((s) => s.date === today)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  const todayLines = todayParts.map((p) => ({
-    left: `${p.startTime}–${p.endTime}`,
-    right: p.loopnr ? `loop ${p.loopnr}` : undefined,
-    done: hasShiftEnded(p, now),
-    active: isShiftActiveAt(p, now),
-  }));
+  // Voortgang binnen een blok: zelfde impliciete-nachtdienst-regel als
+  // isShiftActiveAt (eind ≤ start = +24u).
+  const toMin = (t: string) => {
+    const [h, m] = t.split(':').map(Number);
+    return (h ?? 0) * 60 + (m ?? 0);
+  };
+  const blockProgress = (p: { startTime: string; endTime: string }): number => {
+    const start = toMin(p.startTime);
+    let end = toMin(p.endTime);
+    if (end <= start) end += 1440;
+    let nowMin = now.getHours() * 60 + now.getMinutes();
+    if (nowMin < start) nowMin += 1440;
+    return ((nowMin - start) / Math.max(1, end - start)) * 100;
+  };
+  const todayLines = todayParts.map((p) => {
+    const active = isShiftActiveAt(p, now);
+    return {
+      left: `${p.startTime}–${p.endTime}`,
+      right: p.loopnr ? `loop ${p.loopnr}` : undefined,
+      done: hasShiftEnded(p, now),
+      active,
+      progress: active ? blockProgress(p) : undefined,
+    };
+  });
   // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
   const todayServices = [...new Set(todayParts.map((p) => String(p.line || '').trim()).filter(Boolean))];
   const todayNote = notes.find((n) => n.date === today)?.note;

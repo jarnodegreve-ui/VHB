@@ -29,6 +29,10 @@ const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
   window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
+/** Maximaal zichtbaar tegelijk — een salvo meldingen bedekte anders het
+ *  halve scherm; de oudste vallen weg, de nieuwste blijven. */
+const MAX_VISIBLE = 2;
+
 export function ToastStack({
   toasts,
   onDismiss,
@@ -37,15 +41,19 @@ export function ToastStack({
   onDismiss: (id: number) => void;
 }) {
   const reduced = prefersReducedMotion();
+  const visible = toasts.slice(-MAX_VISIBLE);
 
   return (
     <div
       aria-live="polite"
-      className="fixed top-4 right-4 z-[120] w-[calc(100vw-2rem)] max-w-sm space-y-2.5"
+      // iPhone: onderaan, ruim boven de tab-bar (bottom-3 + ~64px hoogte) —
+      // rechtsboven overlapte de toast de topbar-acties. Desktop (md+):
+      // rechtsboven zoals voorheen.
+      className="fixed inset-x-4 bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] z-[120] mx-auto max-w-sm space-y-2.5 md:inset-x-auto md:bottom-auto md:right-4 md:top-4 md:mx-0 md:w-[calc(100vw-2rem)]"
       style={{ paddingTop: 'env(safe-area-inset-top)' }}
     >
       <AnimatePresence>
-        {toasts.map((toast) => {
+        {visible.map((toast) => {
           const tone = TONE_STYLES[toast.tone ?? 'info'];
           const ToneIcon = tone.icon;
 
@@ -54,11 +62,18 @@ export function ToastStack({
               key={toast.id}
               layout={!reduced}
               role="status"
+              // Wegvegen (horizontaal slepen) = sluiten — de iOS-conventie.
+              drag={reduced ? false : 'x'}
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.6}
+              onDragEnd={(_e, info) => {
+                if (Math.abs(info.offset.x) > 80 || Math.abs(info.velocity.x) > 600) onDismiss(toast.id);
+              }}
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
               transition={{ duration: 0.24, ease: EASE_OUT }}
-              className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm"
+              className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm touch-pan-y"
             >
               <div className="flex items-start gap-3">
                 <div

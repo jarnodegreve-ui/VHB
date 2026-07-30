@@ -136,3 +136,12 @@ export async function downloadBlob(filename: string, blob: Blob) {
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   notify(`"${filename}" gedownload.`, 'success');
 }
+
+/** Statusbalk-kleur van de PWA-schil laten meekleuren met het thema — een
+ *  carbon balk boven een lichte app oogde als een bug op geïnstalleerde
+ *  iPhones (design-ronde 30/07). Login zet hem altijd op carbon. */
+export function applyThemeColorMeta(dark: boolean) {
+  if (typeof document === 'undefined') return;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', dark ? '#0D0D0F' : '#F2F3F4');
+}

@@ -40,7 +40,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { cn } from './lib/ui';
+import { applyThemeColorMeta, cn } from './lib/ui';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
@@ -364,6 +364,7 @@ export default function App() {
     setTheme(initial);
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', initial === 'dark');
+      applyThemeColorMeta(initial === 'dark');
     }
   }, []);
 
@@ -421,6 +422,7 @@ export default function App() {
           // opslag geblokkeerd — thema geldt dan alleen voor deze sessie
         }
         document.documentElement.classList.toggle('dark', next === 'dark');
+        applyThemeColorMeta(next === 'dark');
       }
       return next;
     });
