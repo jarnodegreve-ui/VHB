@@ -60,7 +60,12 @@ export function OpsStat({
         </span>
         {onClick && <ArrowUpRight size={13} className="text-slate-300 transition-colors group-hover:text-slate-500" />}
       </div>
-      <p className="mt-2.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
+      {/* Vaste twee-regel-zone (leading-4 × min-h-8): labels van één en twee
+          regels ("BESCHIKBAAR" vs "CHAUFFEURS ACTIEF") duwden de cijfers
+          anders naar verschillende hoogtes — de hele strip oogde rommelig
+          (melding Jarno). Nu start elk cijfer en elke subtekst op exact
+          dezelfde lijn. */}
+      <p className="mt-2.5 text-[11px] leading-4 min-h-8 font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
       <p className="mt-0.5 text-[24px] leading-8 font-black tabular-nums tracking-[-0.02em] text-slate-900">
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-[14px] font-semibold text-slate-400">{suffix}</span>}
