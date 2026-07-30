@@ -1541,6 +1541,22 @@ export default function App() {
   const printDriverId = printParams?.get('print-driver');
   const printMonth = printParams?.get('print-month');
   if (printDriverId && printMonth && currentUser && (currentUser.role === 'planner' || currentUser.role === 'admin')) {
+    // 'alle' = bulk: één stapel met een blad per chauffeur (paginawissel in
+    // de print-CSS). Wacht op de collecties — de lijst chauffeurs en hun
+    // shifts moeten er zijn vóór de auto-print afgaat.
+    if (printDriverId === 'alle') {
+      if (isInitialLoad) {
+        return <div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
+      }
+      const bulkDrivers = users
+        .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
+        .sort((a, b) => a.name.localeCompare(b.name));
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+          <LazyPrintMonthlyScheduleView drivers={bulkDrivers} monthIso={printMonth} shifts={shifts} />
+        </Suspense>
+      );
+    }
     const driver = users.find((u) => String(u.id) === String(printDriverId)) || null;
     return (
       <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>

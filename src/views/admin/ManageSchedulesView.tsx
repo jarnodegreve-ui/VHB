@@ -550,6 +550,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none"
             >
               <option value="">Kies een chauffeur…</option>
+              <option value="alle">Alle chauffeurs (blad per chauffeur)</option>
               {users
                 .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
                 .sort((a, b) => a.name.localeCompare(b.name))
