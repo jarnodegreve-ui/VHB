@@ -58,6 +58,7 @@ import {
   checkBackupIntegrity,
   pruneOldRecords,
   listUserDocuments,
+  markUserDocumentOpened,
   getUserDocument,
   getRitblaadjeMeta,
   deleteAllDocumentsForUser,
@@ -3428,6 +3429,16 @@ app.post("/api/documents/broadcast", authenticate, requireRole("admin"), async (
     console.error("Document rondsturen mislukt:", err);
     res.status(500).json({ error: "Document rondsturen is mislukt." });
   }
+});
+
+// Leesbevestiging: de chauffeur meldt dat hij dit document opende. Alleen op
+// eigen documenten (de user_id-match zit in de update zelf) en alleen de
+// eerste keer telt; best-effort, mag het openen nooit blokkeren.
+app.post("/api/documents/:id/opened", authenticate, async (req: AuthenticatedRequest, res) => {
+  const id = String(req.params.id || "");
+  if (!id) return res.status(400).json({ error: "Document-id ontbreekt." });
+  await markUserDocumentOpened(id, String(req.appUser?.id ?? ""));
+  res.status(204).end();
 });
 
 app.delete("/api/documents/:id", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
