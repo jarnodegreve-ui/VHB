@@ -3,6 +3,7 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { applyThemeColorMeta } from '../lib/ui';
+import { BrandLogo } from '../components/BrandLogo';
 
 type Mode = 'login' | 'forgot';
 
@@ -178,12 +179,7 @@ export function LoginView({
           className="flex flex-col items-center text-center mb-10"
         >
           {/* Primary-lockup mét naamregel — overal hetzelfde logo. */}
-          <img
-            src="/vhb-logo-primair-wit.svg"
-            alt="VHB — Van Hoorebeke & Zoon"
-            className="h-16 sm:h-20 w-auto select-none"
-            draggable={false}
-          />
+          <BrandLogo tone="donker" className="h-16 sm:h-20 w-auto select-none" />
         </motion.div>
 
         {/* Form-card met tilt-parallax + roterende oker-iridescent border */}
