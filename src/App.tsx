@@ -1088,6 +1088,44 @@ export default function App() {
     ? swaps.filter((s) => s.status === 'pending' && s.targetDriverId === currentUser.id).length
     : 0;
 
+  // Badge op het app-icoon (iOS 16.4+ PWA, Chromium-desktop): wat op jou
+  // wacht, zichtbaar zonder de app te openen. Chauffeur: ruilverzoeken aan
+  // hem + ongelezen documenten; planner/admin: de open werkvoorraad.
+  const appBadgeCount = !currentUser
+    ? 0
+    : currentUser.role === 'chauffeur'
+      ? targetedSwapsCount + unseenDocuments
+      : pendingLeaveCount + pendingSwapsCount;
+  useEffect(() => {
+    const nav = navigator as any;
+    if (typeof nav?.setAppBadge !== 'function') return;
+    try {
+      if (appBadgeCount > 0) void Promise.resolve(nav.setAppBadge(appBadgeCount)).catch(() => {});
+      else void Promise.resolve(nav.clearAppBadge?.()).catch(() => {});
+    } catch { /* badging niet ondersteund — stil */ }
+  }, [appBadgeCount]);
+
+  // Stille prefetch bij idle: de lazy views die hierna waarschijnlijk geopend
+  // worden alvast ophalen, zodat de eerste navigatie instant voelt zonder de
+  // startbundel te vergroten. Bewust NIET de xlsx-views (500 kB) — die laden
+  // pas bij echt gebruik.
+  useEffect(() => {
+    if (!currentUser || isInitialLoad) return;
+    const w = window as any;
+    const cb = () => {
+      void import('./views/LeaveManagementView');
+      if (currentUser.role !== 'chauffeur') void import('./views/admin/VerlofKalenderView');
+    };
+    const idleId = typeof w.requestIdleCallback === 'function'
+      ? w.requestIdleCallback(cb, { timeout: 5000 })
+      : window.setTimeout(cb, 2500);
+    return () => {
+      if (typeof w.cancelIdleCallback === 'function') w.cancelIdleCallback(idleId);
+      else window.clearTimeout(idleId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role, isInitialLoad]);
+
   const saveLeave = async (newLeave: LeaveRequest[]): Promise<boolean> => {
     if (!guardCollectionLoaded('leave', 'De verlofaanvragen zijn')) return false;
     try {
