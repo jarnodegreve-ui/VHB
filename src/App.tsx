@@ -32,8 +32,10 @@ import {
   BellRing,
   BellOff,
   RefreshCw,
+  WifiOff,
   Zap
 } from 'lucide-react';
+import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
@@ -182,8 +184,11 @@ export default function App() {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
   // Netwerkstatus voor de topbar-pill (was hardcoded "Online").
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
+  // Via een ref (het effect heeft lege deps en zou anders een verouderde
+  // currentUser vasthouden): bij terug-online meteen stil bijverversen.
+  const onlineCatchUpRef = useRef<() => void>(() => {});
   useEffect(() => {
-    const on = () => setIsOnline(true);
+    const on = () => { setIsOnline(true); onlineCatchUpRef.current(); };
     const off = () => setIsOnline(false);
     window.addEventListener('online', on);
     window.addEventListener('offline', off);
@@ -319,6 +324,27 @@ export default function App() {
       }
     },
   });
+
+  // Terug online (offline-banner verdwijnt): zelfde catch-up als realtime —
+  // gemiste events zijn definitief weg — en daarna de sync-tijd verversen,
+  // zodat "gegevens van HH:MM" bij een volgende uitval klopt.
+  onlineCatchUpRef.current = () => {
+    if (!currentUser) return;
+    const planningFilter = currentUser.role === 'chauffeur' ? { driverId: String(currentUser.id) } : undefined;
+    void Promise.allSettled([
+      fetchMyNotes(),
+      fetchLeave(),
+      fetchSwaps(),
+      fetchDiversions(undefined, { silent: true }),
+      fetchUpdates(),
+      fetchPlanning(undefined, planningFilter, { silent: true }),
+      ...(currentUser.role !== 'chauffeur'
+        ? [refreshCoverageGaps(), fetchPlanningMatrix(), fetchPlanningMatrixHistory()]
+        : []),
+    ]).then(() => {
+      if (typeof navigator === 'undefined' || navigator.onLine) setLastSyncedAt(Date.now());
+    });
+  };
 
   // Initialize theme from localStorage. Eerste-bezoek default = LIGHT
   // (geen system-preference fallback meer — gebruikers die dark willen
@@ -1972,6 +1998,20 @@ export default function App() {
               </div>
             </header>
           </div>
+          {/* Offline-banner: de topbar-pill is desktop-only (hidden lg:flex),
+              dus op de iPhone — hét toestel — was een uitval onzichtbaar en
+              keek je zonder het te weten naar verouderde data. */}
+          {!isOnline && (
+            <div className="mx-auto w-full max-w-[1360px]">
+              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-[12.5px] font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300">
+                <WifiOff size={14} className="shrink-0" />
+                <span>
+                  Offline — wijzigingen komen niet door
+                  {lastSyncedAt ? ` · laatst bijgewerkt ${formatSyncedTime(lastSyncedAt)}` : ''}
+                </span>
+              </div>
+            </div>
+          )}
           {/* Directe view-wissel — geen AnimatePresence/motion. Een in/uit-
               animatie op de hele view (mode="wait" = exit + enter, ~0.56s op
               een grote DOM) veroorzaakte hapering bij het wisselen van pagina's

@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { BrandBus } from './BrandBus';
+import { Skeleton, SkeletonRow } from './Skeleton';
 
 export function PageShell({
   children,
@@ -170,16 +171,21 @@ export function EmptyState({
 }
 
 export function ViewLoader() {
+  // Skeleton i.p.v. spinner: de pagina-opbouw (kop + lijst) staat er al
+  // tijdens het laden — dat oogt op 4G rustiger dan een draaiend wiel in
+  // een verder leeg scherm. Zelfde shimmer-DNA als de dashboard-skeletons.
   return (
-    <div className="flex min-h-[280px] items-center justify-center">
-      <div className="rounded-2xl border border-slate-200/80 bg-white/95 px-5 py-4 shadow-lg">
-        <div className="flex items-center gap-4">
-          <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Laden</p>
-            <p className="text-sm font-semibold text-slate-800">Scherm wordt voorbereid…</p>
+    <div className="space-y-4" aria-busy="true" aria-label="Scherm wordt geladen">
+      <div className="px-1 pt-1 space-y-2">
+        <Skeleton className="h-7 w-64" />
+        <Skeleton className="h-3 w-44" />
+      </div>
+      <div className="surface-card rounded-3xl overflow-hidden">
+        {Array.from({ length: 5 }).map((_, i) => (
+          <div key={i}>
+            <SkeletonRow className="border-b border-white/40 last:border-0" />
           </div>
-        </div>
+        ))}
       </div>
     </div>
   );
