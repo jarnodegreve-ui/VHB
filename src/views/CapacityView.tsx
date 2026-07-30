@@ -2,7 +2,8 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
-import { PageHeader, PageShell } from '../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { SkeletonRow } from '../components/Skeleton';
 import { Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { typedagLabel } from '../lib/typedag';
@@ -255,17 +256,19 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       {error ? (
         <div className="surface-card p-6 rounded-3xl text-center"><p className="text-sm font-semibold text-red-500">{error}</p></div>
       ) : loading ? (
-        <div className="surface-card p-6 rounded-3xl flex items-center justify-center min-h-[200px]">
-          <div className="flex items-center gap-3 text-slate-500">
-            <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
-            <span className="text-sm font-semibold">Maandplanning laden…</span>
-          </div>
+        /* Skeleton i.p.v. spinner — zelfde shimmer als de rest van de app. */
+        <div className="surface-card rounded-3xl overflow-hidden">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i}>
+              <SkeletonRow className="border-b border-white/40 last:border-0" />
+            </div>
+          ))}
         </div>
       ) : !hasData ? (
-        <div className="surface-card p-6 rounded-3xl text-center">
-          <p className="text-sm font-semibold text-slate-500">Geen planning gevonden voor {MONTH_NAMES[monthIndex]} {year}.</p>
-          <p className="mt-1 text-xs font-medium text-slate-400">Zodra de planning voor deze maand geïmporteerd is, verschijnt ze hier.</p>
-        </div>
+        <EmptyState
+          title={`Geen planning voor ${MONTH_NAMES[monthIndex]} ${year}`}
+          message="Zodra de planning voor deze maand geïmporteerd is, verschijnt ze hier."
+        />
       ) : (
         <>
           <style>{`
