@@ -25,6 +25,7 @@ import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
+import { symbolicateTopFrame } from "./symbolicate.js";
 import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
@@ -1905,17 +1906,29 @@ app.get("/api/cron/error-digest", async (req, res) => {
       return res.json({ success: true, count: errors.length, alerted: false, reason: "geen ontvangers" });
     }
 
-    // Groepeer op bron + bericht.
-    const groups = new Map<string, { source: string; message: string; count: number; lastUrl?: string }>();
+    // Groepeer op bron + bericht. getClientErrorsSince sorteert nieuwste
+    // eerst, dus de stack bij het aanmaken van de groep is de recentste.
+    const groups = new Map<string, { source: string; message: string; count: number; lastUrl?: string; lastStack?: string }>();
     for (const e of errors) {
       const key = `${e.source || "?"}::${e.message}`;
-      const g = groups.get(key) ?? { source: e.source || "onbekend", message: e.message, count: 0, lastUrl: e.url };
+      const g = groups.get(key) ?? { source: e.source || "onbekend", message: e.message, count: 0, lastUrl: e.url, lastStack: e.stack };
       g.count += 1;
       groups.set(key, g);
     }
     const sorted = [...groups.values()].sort((a, b) => b.count - a.count);
+
+    // Geminifieerde stacks terugvertalen naar src/-posities (best-effort,
+    // alleen de top — de sourcemap-consumer wordt per bundel gecachet).
+    const originOf = new Map<(typeof sorted)[number], string>();
+    for (const g of sorted.slice(0, 8)) {
+      try {
+        const origin = await symbolicateTopFrame(g.lastStack);
+        if (origin) originOf.set(g, origin);
+      } catch { /* digest nooit laten falen op symbolicatie */ }
+    }
+
     const topLines = sorted.slice(0, 15)
-      .map((g) => `• [${g.count}×] ${g.source}: ${g.message}${g.lastUrl ? ` (${g.lastUrl})` : ""}`)
+      .map((g) => `• [${g.count}×] ${g.source}: ${g.message}${originOf.has(g) ? ` → ${originOf.get(g)}` : ""}${g.lastUrl ? ` (${g.lastUrl})` : ""}`)
       .join("\n");
     const moreLine = sorted.length > 15 ? `\n…en nog ${sorted.length - 15} andere foutsoorten.` : "";
 
@@ -1924,7 +1937,9 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const text = `In de afgelopen ${windowLabel} zijn er ${errors.length} client-fouten gemeld (${sorted.length} unieke soorten).\n\n${topLines}${moreLine}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
     // g.source/message/lastUrl zijn door de client aangeleverd — escapen,
     // anders is de digest-mail een HTML-injectiekanaal richting de admins.
-    const html = `<p>In de afgelopen <strong>${windowLabel}</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+    // De symbolicatie-uitkomst komt uit de sourcemap (indirect ook input) —
+    // dus óók escapen.
+    const html = `<p>In de afgelopen <strong>${windowLabel}</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);

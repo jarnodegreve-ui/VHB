@@ -25,6 +25,12 @@ export default defineConfig(() => {
       },
     },
     build: {
+      // Sourcemaps mee-deployen: de foutendigest vertaalt geminifieerde
+      // stack-posities terug naar src/-bestanden (api/symbolicate.ts) en
+      // DevTools tonen leesbare code. De repo is publiek — de maps lekken
+      // niets dat niet al op GitHub staat. .map-bestanden tellen niet mee
+      // in scripts/check-bundle-size.mjs (die telt alleen .js).
+      sourcemap: true,
       rollupOptions: {
         output: {
           manualChunks(id) {
