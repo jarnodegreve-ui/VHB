@@ -32,6 +32,7 @@ export function OpsStat({
   sub,
   subClassName,
   lines,
+  meter,
   onClick,
   className,
 }: {
@@ -48,7 +49,10 @@ export function OpsStat({
   /** Optionele detailregels onder de subtekst (bv. de blokken van een
    *  dienst): `left` (tijden) en `right` (loopnummer) staan in twee nette
    *  kolommen onder elkaar. `done` toont een al gereden blok gedempt. */
-  lines?: Array<{ left: string; right?: string; done?: boolean }>;
+  lines?: Array<{ left: string; right?: string; done?: boolean; active?: boolean }>;
+  /** Optionele voortgangsbalk (0–100) onder de subtekst — bv. verlofsaldo.
+   *  Kleurt emerald → amber (>80%) → red (>100 gebruikt). */
+  meter?: number;
   onClick?: () => void;
   className?: string;
 }) {
@@ -71,6 +75,14 @@ export function OpsStat({
         {suffix && <span className="text-[14px] font-semibold text-slate-400">{suffix}</span>}
       </p>
       <p className={cn('mt-0.5 text-[11.5px] font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
+      {typeof meter === 'number' && (
+        <div className="mt-2 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+          <div
+            className={cn('h-full rounded-full transition-all', meter > 100 ? 'bg-red-500' : meter > 80 ? 'bg-amber-500' : 'bg-emerald-500')}
+            style={{ width: `${Math.max(3, Math.min(100, meter))}%` }}
+          />
+        </div>
+      )}
       {lines && lines.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
           {lines.map((l) => (
@@ -81,7 +93,11 @@ export function OpsStat({
                 l.done ? 'text-slate-400' : 'text-slate-600',
               )}
             >
-              <span className={cn(l.done && 'line-through decoration-slate-300')}>{l.left}</span>
+              <span className={cn('inline-flex items-center gap-1.5', l.done && 'line-through decoration-slate-300')}>
+                {/* "Nu"-stip: het blok dat op dit moment loopt. */}
+                {l.active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500 animate-pulse" aria-label="nu bezig" />}
+                {l.left}
+              </span>
               {l.right && (
                 <span className={cn('shrink-0 text-slate-500', l.done && 'text-slate-400')}>{l.right}</span>
               )}
