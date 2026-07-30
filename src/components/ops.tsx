@@ -50,7 +50,7 @@ export function OpsStat({
   /** Optionele detailregels onder de subtekst (bv. de blokken van een
    *  dienst): `left` (tijden) en `right` (loopnummer) staan in twee nette
    *  kolommen onder elkaar. `done` toont een al gereden blok gedempt. */
-  lines?: Array<{ left: string; right?: string; done?: boolean; active?: boolean }>;
+  lines?: Array<{ left: string; right?: string; done?: boolean; active?: boolean; progress?: number }>;
   /** Optionele voortgangsbalk (0–100) onder de subtekst — bv. verlofsaldo.
    *  Kleurt emerald → amber (>80%) → red (>100 gebruikt). */
   meter?: number;
@@ -111,6 +111,25 @@ export function OpsStat({
               )}
             </div>
           ))}
+          {/* Voortgang van het lopende blok: dun oker lijntje dat meegroeit
+              met de dienst (sluit aan bij de nu-stip en het doorstrepen). */}
+          {(() => {
+            const activeLine = lines.find((l) => l.active && typeof l.progress === 'number');
+            if (!activeLine) return null;
+            const pct = Math.max(0, Math.min(100, activeLine.progress!));
+            return (
+              <div
+                className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-200/20"
+                role="progressbar"
+                aria-valuenow={Math.round(pct)}
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-label="voortgang van het lopende blok"
+              >
+                <div className="h-full rounded-full bg-oker-500 transition-[width] duration-1000" style={{ width: `${pct}%` }} />
+              </div>
+            );
+          })()}
         </div>
       )}
     </>
