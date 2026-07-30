@@ -1,6 +1,6 @@
 import { Fragment, useState } from 'react';
 import { typedagLabel } from '../../lib/typedag';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
 import { cn } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
@@ -58,6 +58,17 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
     return jsDay === 0 || jsDay === 6;
   };
   const isToday = (day: number) => dateIso(day) === todayIso;
+
+  // Nieuw tabblad met het print-jaaroverzicht van deze chauffeur, voor het
+  // jaar dat nu in beeld staat (zelfde print-modus-patroon als het
+  // maandrooster in ManageSchedulesView).
+  const openJaaroverzicht = (userId: string) => {
+    window.open(
+      `${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(userId)}&print-verlof-jaar=${year}`,
+      '_blank',
+      'noopener',
+    );
+  };
 
   // Build a lookup: userId -> day-number -> matching leave record (highest priority status)
   const leaveByUserDay = new Map<string, Map<number, LeaveRequest>>();
@@ -165,7 +176,15 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 return (
                   <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
                     <Td className="sticky left-0 z-10 bg-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
-                      {u.name}
+                      <button
+                        type="button"
+                        onClick={() => openJaaroverzicht(u.id)}
+                        title={`Verlof-jaaroverzicht ${year} openen (print)`}
+                        className="group inline-flex max-w-full items-center gap-1.5 text-left transition-colors hover:text-oker-700"
+                      >
+                        <span className="truncate">{u.name}</span>
+                        <Printer size={12} className="shrink-0 text-slate-300 transition-colors group-hover:text-oker-500" />
+                      </button>
                     </Td>
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
                       const leave = userMap?.get(day);
@@ -212,7 +231,14 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
           return (
             <div key={u.id} className="p-4">
               <div className="flex items-baseline justify-between gap-2">
-                <div className="text-sm font-semibold text-slate-800 truncate">{u.name}</div>
+                <button
+                  type="button"
+                  onClick={() => openJaaroverzicht(u.id)}
+                  className="group inline-flex min-w-0 items-center gap-1.5 text-left text-sm font-semibold text-slate-800"
+                >
+                  <span className="truncate">{u.name}</span>
+                  <Printer size={12} className="shrink-0 text-slate-300" />
+                </button>
                 {uniqueLeaves.length > 0 && (
                   <MicroLabel className="shrink-0">
                     {uniqueLeaves.length} {uniqueLeaves.length === 1 ? 'aanvraag' : 'aanvragen'}

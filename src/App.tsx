@@ -84,6 +84,7 @@ const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUser
 const LazyDevicesView = lazyWithRetry(() => import('./views/admin/DevicesView').then((module) => ({ default: module.DevicesView })));
 const LazyLeaveManagementView = lazyWithRetry(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
+const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
 
 
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
@@ -1517,6 +1518,29 @@ export default function App() {
         <LazyPrintMonthlyScheduleView driver={driver} monthIso={printMonth} shifts={shifts} />
       </Suspense>
     );
+  }
+
+  // Verlof-jaaroverzicht: planner/admin voor iedereen, een chauffeur alleen
+  // voor zichzelf (met zijn eigen currentUser en eigen verloflijst — de
+  // users-collectie is voor chauffeurs niet volledig).
+  const printVerlofDriverId = printParams?.get('print-verlof-driver');
+  const printVerlofJaar = Number(printParams?.get('print-verlof-jaar'));
+  if (printVerlofDriverId && Number.isInteger(printVerlofJaar) && printVerlofJaar > 2000 && currentUser) {
+    const isPlannerRole = currentUser.role === 'planner' || currentUser.role === 'admin';
+    const isSelf = String(currentUser.id) === String(printVerlofDriverId);
+    if (isPlannerRole || isSelf) {
+      // Pas renderen als de collecties er zijn: de view print automatisch,
+      // en dat mag niet gebeuren met een nog lege verloflijst.
+      if (isInitialLoad) {
+        return <div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
+      }
+      const driver = isSelf ? currentUser : users.find((u) => String(u.id) === String(printVerlofDriverId)) || null;
+      return (
+        <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+          <LazyPrintLeaveYearView driver={driver} year={printVerlofJaar} leaves={leaveRequests} />
+        </Suspense>
+      );
+    }
   }
 
   if (!isSupabaseConfigured || !supabase) {

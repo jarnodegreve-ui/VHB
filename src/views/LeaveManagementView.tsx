@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, User as UserIcon, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, Printer, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify } from '../lib/ui';
 import { Modal } from '../components/Modal';
@@ -492,7 +492,18 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
         </div>
 
         <div className="lg:col-span-4 space-y-8">
-          <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)} year={new Date().getFullYear()} compact />
+          <div className="space-y-2">
+            <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)} year={new Date().getFullYear()} compact />
+            {/* Nieuw tabblad: de print-modus rendert een kale pagina in
+                plaats van de app (zelfde patroon als het maandrooster). */}
+            <button
+              type="button"
+              onClick={() => window.open(`${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(user.id)}&print-verlof-jaar=${new Date().getFullYear()}`, '_blank', 'noopener')}
+              className="ios-pressable flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
+            >
+              <Printer size={14} /> Jaaroverzicht (PDF)
+            </button>
+          </div>
 
           {isPlanner && (() => {
             const plannerPending = leaveRequests.filter((r) => {
