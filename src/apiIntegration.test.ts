@@ -64,10 +64,13 @@ vi.mock('../api/db.js', () => {
     supabase: {
       auth: {
         getUser: async (token: string) => {
+          // Simulatie-tokens voor de 401-vs-503-scheiding in de middleware.
+          if (token === 'tok-storing') return { data: { user: null }, error: { message: 'fetch failed', status: 0 } };
+          if (token === 'tok-auth-500') return { data: { user: null }, error: { message: 'internal', status: 500 } };
           const email = tokenToEmail[token];
           return email
             ? { data: { user: { id: `auth-${token}`, email } }, error: null }
-            : { data: { user: null }, error: { message: 'Ongeldige sessie' } };
+            : { data: { user: null }, error: { message: 'Ongeldige sessie', status: 401 } };
         },
       },
     },
@@ -1435,5 +1438,23 @@ describe('dienstruil intrekken via PATCH (#250)', () => {
     const res = await api('PATCH', '/api/swaps/s-w2', { token: 'tok-b', body: { status: 'cancelled', ifStatus: 'pending' } });
     expect(res.status).toBe(403);
     expect(mem.swaps.find((s) => s.id === 's-w2')?.status).toBe('pending');
+  });
+});
+
+describe('auth-storing ≠ uitloggen (middleware 401 vs 503)', () => {
+  it('een onbereikbare auth-dienst geeft 503, geen 401 — de client logt anders alle toestellen tegelijk uit', async () => {
+    const res = await api('GET', '/api/planning', { token: 'tok-storing' });
+    expect(res.status).toBe(503);
+    expect(res.json?.code).toBe('auth_unavailable');
+  });
+
+  it('een 5xx uit de auth-dienst geeft eveneens 503', async () => {
+    const res = await api('GET', '/api/planning', { token: 'tok-auth-500' });
+    expect(res.status).toBe(503);
+  });
+
+  it('een écht ongeldig token blijft 401', async () => {
+    const res = await api('GET', '/api/planning', { token: 'tok-bestaat-niet' });
+    expect(res.status).toBe(401);
   });
 });

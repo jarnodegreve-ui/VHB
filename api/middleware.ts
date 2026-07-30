@@ -93,8 +93,31 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     return res.status(401).json({ error: "Niet aangemeld." });
   }
 
-  const { data, error } = await supabase.auth.getUser(accessToken);
-  if (error || !data.user) {
+  // Token-validatie met onderscheid tussen "token ongeldig" en "auth-dienst
+  // onbereikbaar". Elke fout werd eerst een 401 — en de client logt op 401
+  // geforceerd uit, dus één hik in Supabase-auth gooide álle toestellen
+  // tegelijk uit het portaal (bursts op 29-30/07: iPhone + Windows binnen
+  // elf seconden). Een storing is nu 503: de client houdt zijn sessie en
+  // probeert gewoon opnieuw.
+  let authResult: Awaited<ReturnType<typeof supabase.auth.getUser>>;
+  try {
+    authResult = await supabase.auth.getUser(accessToken);
+  } catch (err) {
+    console.error("Auth-check onbereikbaar (throw):", err);
+    return res.status(503).json({ error: "Aanmeldcontrole is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "auth_unavailable" });
+  }
+  const { data, error } = authResult;
+  if (error) {
+    const status = (error as { status?: number }).status;
+    // 4xx = het token zelf is verlopen/ongeldig → écht opnieuw aanmelden.
+    if (status && status >= 400 && status < 500) {
+      return res.status(401).json({ error: "Ongeldige sessie." });
+    }
+    // status 0 (netwerk/AuthRetryableFetchError), 5xx of onbekend = storing.
+    console.error("Auth-check-storing:", status, error.message);
+    return res.status(503).json({ error: "Aanmeldcontrole is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "auth_unavailable" });
+  }
+  if (!data.user) {
     return res.status(401).json({ error: "Ongeldige sessie." });
   }
 
