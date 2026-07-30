@@ -53,6 +53,7 @@ import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { NavItem, NavSection } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
+import { BrandLogo } from './components/BrandLogo';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
@@ -1566,7 +1567,7 @@ export default function App() {
   if (!authReady) {
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-        <img src="/vhb-logo-primair-wit.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-20 w-auto select-none" draggable={false} />
+        <BrandLogo tone="donker" className="h-20 w-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
           <span className="text-[13px] font-medium">Sessie laden…</span>
@@ -1647,7 +1648,7 @@ export default function App() {
     const revoked = deviceBlocked === 'revoked';
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <img src="/vhb-logo-primair-wit.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-16 w-auto select-none" draggable={false} />
+        <BrandLogo tone="donker" className="h-16 w-auto select-none" />
         <div className="max-w-sm">
           <div className={cn(
             'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
@@ -1704,7 +1705,7 @@ export default function App() {
     if (session) {
       return (
         <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-          <img src="/vhb-logo-primair-wit.svg" alt="VHB — Van Hoorebeke & Zoon" className="h-20 w-auto select-none" draggable={false} />
+          <BrandLogo tone="donker" className="h-20 w-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
             <span className="text-[13px] font-medium">Profiel laden…</span>
@@ -1839,18 +1840,8 @@ export default function App() {
             {/* Primary-lockup mét "Van Hoorebeke & Zoon" — op verzoek van
                 Jarno overal hetzelfde logo (was: sidebar-variant zonder
                 naamregel). h-16 houdt de naamregel leesbaar. */}
-            <img
-              src="/vhb-logo-primair.svg"
-              alt="VHB — Van Hoorebeke & Zoon"
-              className="h-16 w-auto mx-auto select-none block dark:hidden"
-              draggable={false}
-            />
-            <img
-              src="/vhb-logo-primair-wit.svg"
-              alt="VHB — Van Hoorebeke & Zoon"
-              className="h-16 w-auto mx-auto select-none hidden dark:block"
-              draggable={false}
-            />
+            <BrandLogo tone="licht" className="h-16 w-auto mx-auto select-none block dark:hidden" />
+            <BrandLogo tone="donker" className="h-16 w-auto mx-auto select-none hidden dark:block" />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
