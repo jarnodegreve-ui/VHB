@@ -1212,6 +1212,24 @@ export const storeBackup = async (filename: string, body: string): Promise<{ rem
   return { removedOld };
 };
 
+/** Laatste back-up teruglezen — voor de maandelijkse restore-proef. */
+export const getLatestBackup = async (): Promise<{ filename: string; body: string } | null> => {
+  if (!supabaseAdmin) {
+    throw new Error("Back-ups vereisen de service-role client (SUPABASE_SERVICE_ROLE_KEY).");
+  }
+  const { data: files, error } = await supabaseAdmin.storage.from(BACKUPS_BUCKET).list(undefined, { limit: 1000 });
+  if (error) throw new Error(`Back-uplijst ophalen mislukt: ${error.message}`);
+  const names = (files ?? [])
+    .map((f: any) => f.name as string)
+    .filter((n) => /^vhb-backup-\d{4}-\d{2}-\d{2}\.json$/.test(n))
+    .sort();
+  const newest = names[names.length - 1];
+  if (!newest) return null;
+  const { data, error: dlError } = await supabaseAdmin.storage.from(BACKUPS_BUCKET).download(newest);
+  if (dlError || !data) throw new Error(`Back-up downloaden mislukt: ${dlError?.message ?? "leeg"}`);
+  return { filename: newest, body: await data.text() };
+};
+
 // --- Documenten per gebruiker (attesten, reglement, loonbrieven) ---
 
 export const DOCUMENTS_BUCKET = "user-documents";

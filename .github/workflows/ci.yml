@@ -37,6 +37,9 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Bundelgrootte
+        run: node scripts/check-bundle-size.mjs
+
       # De e2e-webServer bouwt zelf opnieuw mét VITE_SUPABASE-dummy-env
       # (zie playwright.config.ts) — de build hierboven bewaakt alleen dat
       # de productie-build slaagt.

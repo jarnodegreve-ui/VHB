@@ -98,6 +98,7 @@ import {
   getPlanningNotes,
   upsertPlanningNote,
   deletePlanningNote,
+  getLatestBackup,
 } from "./storage.js";
 
 dotenv.config();
@@ -1745,6 +1746,116 @@ const systemMailRecipients = async (): Promise<string[]> => {
 // onopgemerkt blijft tot een chauffeur klaagt. DB-gebaseerd (geen per-instance
 // telprobleem). Stuurt naar ALERT_EMAIL als die env-var bestaat, anders naar
 // alle admin-accounts. Stuurt niets als er geen fouten zijn.
+// Wekelijkse cijfermail (maandagochtend): actieve gebruikers, afgehandelde
+// aanvragen en de foutentrend van de afgelopen week — voor Jarno's
+// maandagoverzicht zonder het portaal te openen. Zelfde ontvangers en
+// opt-out als de andere systeemmails.
+app.get("/api/cron/week-rapport", async (req, res) => {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({ error: "Niet toegestaan." });
+  }
+  try {
+    const sinceIso = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const [logins, leave, swaps, errors] = await Promise.all([
+      getLoginActivity(sinceIso),
+      getLeaveData(),
+      getSwapsData(),
+      getClientErrorsSince(sinceIso),
+    ]);
+    const uniekeGebruikers = new Set(logins.map((l) => String(l.entityId || l.actorName))).size;
+    const inWindow = (iso?: string) => Boolean(iso && iso >= sinceIso);
+    const verlofBeslist = leave.filter((l) => inWindow(l.decidedAt)).length;
+    const verlofNieuw = leave.filter((l) => inWindow(l.createdAt)).length;
+    const ruilBeslist = swaps.filter((sw) => inWindow(sw.decidedAt)).length;
+    const ruilNieuw = swaps.filter((sw) => inWindow(sw.createdAt)).length;
+    const openVerlof = leave.filter((l) => l.status === "pending").length;
+    const openRuil = swaps.filter((sw) => sw.status === "pending" || sw.status === "accepted").length;
+    const echteFouten = errors.filter((e) => !String(e.message || "").toLowerCase().includes("sessie is verlopen")).length;
+
+    const recipients = await systemMailRecipients();
+    if (recipients.length === 0) {
+      return res.json({ success: true, sent: false, reason: "geen ontvangers" });
+    }
+    const regels = [
+      `Actieve gebruikers: ${uniekeGebruikers}`,
+      `Verlof: ${verlofNieuw} nieuw · ${verlofBeslist} beslist · ${openVerlof} open`,
+      `Dienstruil: ${ruilNieuw} nieuw · ${ruilBeslist} beslist · ${openRuil} open`,
+      `Client-fouten: ${echteFouten} (sessie-meldingen niet meegeteld)`,
+    ];
+    await sendEmail({
+      to: recipients,
+      context: "week-rapport",
+      subject: `VHB Portaal — weekoverzicht`,
+      text: `Cijfers van de afgelopen 7 dagen:\n\n- ${regels.join("\n- ")}\n\nBekijk de details in het portaal.`,
+      html: `<p>Cijfers van de afgelopen <strong>7 dagen</strong>:</p><ul>${regels.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul><p>Bekijk de details in het portaal.</p>`,
+    });
+    await logCronHeartbeat("week-rapport", `Weekoverzicht gemaild aan ${recipients.length} ontvanger(s).`);
+    res.json({ success: true, sent: true });
+  } catch (err: any) {
+    console.error("[week-rapport] mislukt:", err?.message || err);
+    res.status(500).json({ error: "Weekrapport mislukt" });
+  }
+});
+
+// Maandelijkse restore-proef: de back-up wordt elke nacht gemaakt en op
+// integriteit gecheckt bij het MAKEN — maar of het bestand ook terug te
+// lezen en te herstellen valt, werd nooit geoefend. Deze cron leest de
+// laatste back-up terug, parseert hem en draait dezelfde integriteitscheck;
+// faalt er iets, dan gaat er direct een alarm-mail uit.
+app.get("/api/cron/restore-proef", async (req, res) => {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({ error: "Niet toegestaan." });
+  }
+  try {
+    const issues: string[] = [];
+    let filename = "";
+    try {
+      const backup = await getLatestBackup();
+      if (!backup) {
+        issues.push("geen enkel back-upbestand gevonden in de bucket");
+      } else {
+        filename = backup.filename;
+        let payload: any;
+        try {
+          payload = JSON.parse(backup.body);
+        } catch {
+          issues.push(`${backup.filename} is geen geldige JSON`);
+        }
+        if (payload) {
+          const integrity = checkBackupIntegrity(payload);
+          if (!integrity.ok) issues.push(...integrity.issues);
+          // Sanity: live niet-lege kerncollecties moeten ook in de back-up zitten.
+          const liveUsers = (await getUsersData()).length;
+          const backupUsers = Array.isArray(payload?.collections?.users) ? payload.collections.users.length : 0;
+          if (liveUsers > 0 && backupUsers === 0) issues.push("back-up bevat 0 gebruikers terwijl er live wél zijn");
+        }
+      }
+    } catch (err: any) {
+      issues.push(`teruglezen mislukt: ${err?.message || err}`);
+    }
+
+    if (issues.length > 0) {
+      const recipients = await systemMailRecipients();
+      if (recipients.length > 0) {
+        await sendEmail({
+          to: recipients,
+          context: "restore-proef",
+          subject: `⚠️ VHB restore-proef gefaald${filename ? ` — ${filename}` : ""}`,
+          text: `De maandelijkse restore-proef vond problemen:\n\n- ${issues.join("\n- ")}\n\nControleer de back-ups zo snel mogelijk — dit is je herstelpad.`,
+          html: `<p>De maandelijkse restore-proef vond problemen:</p><ul>${issues.map((i) => `<li>${escapeHtml(i)}</li>`).join("")}</ul><p>Controleer de back-ups zo snel mogelijk — dit is je herstelpad.</p>`,
+        });
+      }
+      await logCronHeartbeat("restore-proef", `GEFAALD: ${issues.join("; ")}`);
+      return res.json({ success: false, issues });
+    }
+    await logCronHeartbeat("restore-proef", `${filename} teruggelezen en integriteitscheck geslaagd.`);
+    res.json({ success: true, filename });
+  } catch (err: any) {
+    console.error("[restore-proef] mislukt:", err?.message || err);
+    res.status(500).json({ error: "Restore-proef mislukt" });
+  }
+});
+
 app.get("/api/cron/error-digest", async (req, res) => {
   if (!isCronAuthorized(req)) {
     return res.status(401).json({ error: "Niet toegestaan." });
