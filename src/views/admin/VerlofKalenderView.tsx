@@ -1,4 +1,5 @@
 import { Fragment, useState } from 'react';
+import { typedagLabel } from '../../lib/typedag';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
 import { cn } from '../../lib/ui';
@@ -136,6 +137,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
                   <Fragment key={day}>
                     <Th
+                      title={typedagLabel(dateIso(day))?.titel}
                       className={cn(
                         'px-1 py-2 text-center border-l border-slate-100',
                         isWeekend(day) && 'bg-slate-100/50',
@@ -144,6 +146,11 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                     >
                       <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
                       <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
+                      {typedagLabel(dateIso(day)) && (
+                        <div className={cn('text-[9px] font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+                          {typedagLabel(dateIso(day))!.kort}
+                        </div>
+                      )}
                       {absenceCountPerDay[day] > 0 && (
                         <div className="text-[11px] font-semibold text-emerald-600 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
                       )}
