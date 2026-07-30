@@ -24,6 +24,7 @@ import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
+import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
@@ -1695,19 +1696,30 @@ app.get("/api/cron/backup", async (req, res) => {
     // Wekelijkse off-site kopie (zondag): de bucket-back-ups wonen in
     // hetzélfde Supabase-project — bij projectverlies zijn ze mee weg. Een
     // mail-bijlage naar ALERT_EMAIL/admins is de goedkoopste externe kopie.
+    // VERSLEUTELD (30/07): de bijlage bevatte de volledige personeelsdata
+    // leesbaar in mailboxen én in het Resend-dashboard — één gehackte
+    // mailbox was een compleet datalek. Zonder BACKUP_PASSPHRASE wordt er
+    // NIET gemaild (fail-closed) — de nachtelijke bucket-kopie blijft er.
     let mailedOffsite = false;
     if (new Date().getUTCDay() === 0) {
-      const recipients = await systemMailRecipients();
-      if (recipients.length > 0) {
-        const result = await sendEmail({
-          to: recipients,
-          context: "weekly-backup",
-          subject: `VHB Portaal — wekelijkse back-up ${payload.exportedAt.slice(0, 10)}`,
-          text: "In bijlage de wekelijkse off-site kopie van de portaal-back-up. Bewaar deze mail (of de bijlage) buiten Supabase/Vercel.",
-          html: "<p>In bijlage de wekelijkse off-site kopie van de portaal-back-up. Bewaar deze mail (of de bijlage) buiten Supabase/Vercel.</p>",
-          attachments: [{ filename, content: json }],
-        });
-        mailedOffsite = result.ok && !result.mocked;
+      const passphrase = process.env.BACKUP_PASSPHRASE;
+      if (!passphrase) {
+        console.error("[cron-backup] BACKUP_PASSPHRASE ontbreekt — wekelijkse off-site mail overgeslagen (bewust: nooit onversleuteld mailen).");
+      } else {
+        const recipients = await systemMailRecipients();
+        if (recipients.length > 0) {
+          const encrypted = encryptOpensslCompatible(json, passphrase);
+          const uitleg = "Ontsleutelen (vraagt om de wachtwoordzin uit je wachtwoordmanager):\n\n  openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in " + filename + ".enc -out " + filename + "\n\nZie ook docs/RESTORE.md in de repo.";
+          const result = await sendEmail({
+            to: recipients,
+            context: "weekly-backup",
+            subject: `VHB Portaal — wekelijkse back-up ${payload.exportedAt.slice(0, 10)} (versleuteld)`,
+            text: `In bijlage de wekelijkse off-site kopie van de portaal-back-up, AES-256-versleuteld. Bewaar deze mail buiten Supabase/Vercel.\n\n${uitleg}`,
+            html: `<p>In bijlage de wekelijkse off-site kopie van de portaal-back-up, <strong>AES-256-versleuteld</strong>. Bewaar deze mail buiten Supabase/Vercel.</p><p>Ontsleutelen (vraagt om de wachtwoordzin uit je wachtwoordmanager):</p><pre>openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in ${escapeHtml(filename)}.enc -out ${escapeHtml(filename)}</pre><p>Zie ook <code>docs/RESTORE.md</code> in de repo.</p>`,
+            attachments: [{ filename: `${filename}.enc`, content: encrypted }],
+          });
+          mailedOffsite = result.ok && !result.mocked;
+        }
       }
     }
 
