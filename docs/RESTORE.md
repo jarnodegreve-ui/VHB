@@ -1,5 +1,18 @@
 # Restore-runbook — VHB Portaal
 
+## Versleutelde mail-bijlage ontsleutelen (sinds 30-07-2026)
+
+De wekelijkse off-site mail bevat een `.json.enc`-bijlage (AES-256). Ontsleutelen op een Mac:
+
+```bash
+openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000   -in vhb-backup-JJJJ-MM-DD.json.enc -out vhb-backup-JJJJ-MM-DD.json
+```
+
+OpenSSL vraagt om de wachtwoordzin: die staat in Jarno's wachtwoordmanager
+(en als `BACKUP_PASSPHRASE` in Vercel). Zonder die zin is de bijlage
+onbruikbaar — dat is precies de bedoeling. Daarna verdergaan met de gewone
+restore-stappen hieronder.
+
 Hoe je een back-up terugzet, en hoe je dat pad periodiek oefent zónder risico.
 Alles hieronder bestaat al in het portaal; dit document is de handleiding voor
 het moment waarop je het onder stress nodig hebt.
