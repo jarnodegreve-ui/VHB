@@ -130,9 +130,9 @@ export function TableShell({ className, children }: { className?: string; childr
   );
 }
 
-export function Th({ className, children }: { className?: string; children?: ReactNode }) {
+export function Th({ className, children, title }: { className?: string; children?: ReactNode; title?: string }) {
   return (
-    <th className={cn('px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400 whitespace-nowrap', className)}>
+    <th title={title} className={cn('px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400 whitespace-nowrap', className)}>
       {children}
     </th>
   );

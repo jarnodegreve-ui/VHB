@@ -5,6 +5,7 @@ import { weekRangeLabel } from '../lib/week';
 import { PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
+import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
 import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
@@ -246,9 +247,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
+                      // De Lijn-typedag: feestdag (F, oker) of schoolvakantie
+                      // (V) subtiel in de dagkop — de regeling die rijdt.
+                      const td = typedagLabel(iso);
                       return (
                         <th
                           key={iso}
+                          title={td?.titel}
                           className={cn(
                             'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-slate-300',
                             h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
@@ -257,6 +262,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         >
                           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
+                          <div className="mt-0.5 h-3 text-[9px] font-bold leading-3">
+                            {td && (
+                              <span className={td.kort === 'F' ? 'text-oker-600' : 'text-slate-400'}>{td.kort}</span>
+                            )}
+                          </div>
                         </th>
                       );
                     })}
