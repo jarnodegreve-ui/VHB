@@ -867,6 +867,7 @@ html.dark {
 :where(.dark) .ring-white\/80 { --tw-ring-color: rgba(154, 161, 169, 0.22); }
 :where(.dark) .ring-oker-100 { --tw-ring-color: rgba(232, 163, 61, 0.30); }
 :where(.dark) .ring-oker-300 { --tw-ring-color: rgba(232, 163, 61, 0.42); }
+:where(.dark) .ring-oker-400 { --tw-ring-color: rgba(232, 163, 61, 0.52); }
 :where(.dark) .ring-red-300 { --tw-ring-color: rgba(239, 68, 68, 0.42); }
 
 /* Oker accents */
@@ -900,6 +901,9 @@ html.dark {
 :where(.dark) .bg-amber-50\/80 { background-color: rgba(249, 115, 22, 0.14); }
 :where(.dark) .bg-amber-100 { background-color: rgba(249, 115, 22, 0.22); }
 :where(.dark) .bg-blue-50 { background-color: rgba(59, 130, 246, 0.14); }
+/* rose = ziekte in de statuskleurtaal; ontbrak in de tabel waardoor de
+   maandkalender-dagtint in dark onleesbaar licht bleef. */
+:where(.dark) .bg-rose-50 { background-color: rgba(244, 63, 94, 0.14); }
 :where(.dark) .bg-green-50 { background-color: rgba(34, 197, 94, 0.14); }
 :where(.dark) .border-emerald-100 { border-color: rgba(16, 185, 129, 0.30); }
 :where(.dark) .border-red-100 { border-color: rgba(239, 68, 68, 0.30); }
