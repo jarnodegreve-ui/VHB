@@ -51,6 +51,7 @@ const mem = vi.hoisted(() => ({
   documents: [] as any[],
   ritblaadje: null as any,
   devices: [] as any[],
+  planningNotes: [] as any[],
 }));
 
 vi.mock('../api/db.js', () => {
@@ -118,6 +119,9 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   return {
     ...orig,
     getUsersData: async () => mem.users,
+    getPlanningNotes: async (o: any) => mem.planningNotes.filter((n: any) => (!o.driverId || n.driverId === o.driverId) && n.date >= o.fromIso && n.date <= o.toIso),
+    upsertPlanningNote: async (driverId: string, date: string, note: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); mem.planningNotes.push({ driverId, date, note }); },
+    deletePlanningNote: async (driverId: string, date: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); },
     saveUsersData: async (data: any[]) => {
       // Zelfde contract als de echte functie: nieuwe e-mailadressen = nieuw
       // Auth-account → welkomstmail-kandidaat.
@@ -322,6 +326,7 @@ beforeEach(() => {
   mem.ritblaadje = null;
   // Beide chauffeurs hebben één goedgekeurd toestel ('dev-ok' — de default
   // van de api()-helper), zodat de whitelist-gate bestaande tests niet raakt.
+  mem.planningNotes = [];
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
     { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
@@ -1456,5 +1461,32 @@ describe('auth-storing ≠ uitloggen (middleware 401 vs 503)', () => {
   it('een écht ongeldig token blijft 401', async () => {
     const res = await api('GET', '/api/planning', { token: 'tok-bestaat-niet' });
     expect(res.status).toBe(401);
+  });
+});
+
+describe('dienstnotities (planning_notes)', () => {
+  it('planner plaatst een notitie; de chauffeur ziet alleen zijn eigen', async () => {
+    const put = await api('PUT', '/api/planning-notes', { token: 'tok-planner', body: { driverId: '3', date: '2026-08-05', note: 'Neem bus 412' } });
+    expect(put.status).toBe(200);
+    await api('PUT', '/api/planning-notes', { token: 'tok-planner', body: { driverId: '4', date: '2026-08-05', note: 'Ander bericht' } });
+    const eigen = await api('GET', '/api/planning-notes?from=2026-08-01&to=2026-08-31', { token: 'tok-a' });
+    expect(eigen.status).toBe(200);
+    expect(eigen.json).toEqual([{ driverId: '3', date: '2026-08-05', note: 'Neem bus 412' }]);
+    const alles = await api('GET', '/api/planning-notes?from=2026-08-01&to=2026-08-31', { token: 'tok-planner' });
+    expect(alles.json).toHaveLength(2);
+  });
+
+  it('chauffeurs mogen niet schrijven (403) en een lege notitie verwijdert', async () => {
+    const put = await api('PUT', '/api/planning-notes', { token: 'tok-a', body: { driverId: '3', date: '2026-08-05', note: 'x' } });
+    expect(put.status).toBe(403);
+    await api('PUT', '/api/planning-notes', { token: 'tok-planner', body: { driverId: '3', date: '2026-08-06', note: 'weg straks' } });
+    const del = await api('PUT', '/api/planning-notes', { token: 'tok-planner', body: { driverId: '3', date: '2026-08-06', note: '  ' } });
+    expect(del.status).toBe(200);
+    expect(mem.planningNotes).toHaveLength(0);
+  });
+
+  it('valideert de datum-shape (400)', async () => {
+    const res = await api('PUT', '/api/planning-notes', { token: 'tok-planner', body: { driverId: '3', date: '05/08/2026', note: 'x' } });
+    expect(res.status).toBe(400);
   });
 });

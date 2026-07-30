@@ -31,6 +31,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // app_settings hoort bij de toestel-schakelaar (supabase/2026-07-30_app_settings.sql)
   // — staat hier alvast zodat de schema-check meldt zolang die migratie mist.
   { table: "app_settings", columns: "key,value,updated_at" },
+  // planning_notes hoort bij de dienstnotities (2026-07-30_planning_notes.sql)
+  { table: "planning_notes", columns: "driver_id,date,note,updated_by,updated_at" },
 ];
 
 export const probeColumns = (table: string): string[] => {

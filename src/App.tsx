@@ -166,6 +166,7 @@ export default function App() {
   const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
   const [unseenDocuments, setUnseenDocuments] = useState(0);
   const [autoOpenSick, setAutoOpenSick] = useState(false);
+  const [myNotes, setMyNotes] = useState<Array<{ date: string; note: string }>>([]);
   const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
   const [planningMatrixHistory, setPlanningMatrixHistory] = useState<PlanningMatrixImportHistory[]>([]);
@@ -278,6 +279,7 @@ export default function App() {
     refetchSwaps: () => fetchSwaps(),
     refetchDiversions: () => fetchDiversions(undefined, { silent: true }),
     refetchUpdates: () => fetchUpdates(),
+    refetchNotes: () => fetchMyNotes(),
     refetchPlanning: () => {
       // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
       const planningFilter = currentUser?.role === 'chauffeur'
@@ -298,6 +300,7 @@ export default function App() {
       }
     },
     refetchAll: () => {
+      void fetchMyNotes();
       // Catch-up na reconnect/heropenen: stil alles verversen — gemiste
       // realtime-events zijn definitief weg, dus opnieuw ophalen is de
       // enige manier om zeker in sync te komen.
@@ -1171,6 +1174,25 @@ export default function App() {
     });
   };
 
+  // Dienstnotities van de ingelogde chauffeur (planner leest ze in het
+  // Maandrooster zelf). Venster: gisteren t/m +45 dagen.
+  const fetchMyNotes = async (accessToken = session?.access_token) => {
+    try {
+      if (currentUser?.role !== 'chauffeur') return;
+      const from = new Date(); from.setDate(from.getDate() - 1);
+      const to = new Date(); to.setDate(to.getDate() + 45);
+      const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const response = await apiFetch(`/api/planning-notes?from=${iso(from)}&to=${iso(to)}`, {}, accessToken);
+      const data = await response.json();
+      if (Array.isArray(data)) setMyNotes(data.map((n: any) => ({ date: String(n.date), note: String(n.note) })));
+    } catch { /* notities zijn nice-to-have */ }
+  };
+
+  useEffect(() => {
+    if (currentUser?.role === 'chauffeur') void fetchMyNotes();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id, currentUser?.role]);
+
   const fetchServices = async (accessToken = session?.access_token) => {
     try {
       beginLoading();
@@ -1978,11 +2000,11 @@ export default function App() {
                     onTogglePreview={() => setPreviewChauffeur((v) => !v)}
                   />
                 ) : (
-                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} onChangePassword={() => setShowChangePassword(true)} />
+                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} onChangePassword={() => setShowChangePassword(true)} />
                 )
               )}
               {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
-              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
+              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
               {resolvedCurrentView === 'dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <ServicesView services={services} />)}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}

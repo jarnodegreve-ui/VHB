@@ -23,6 +23,8 @@ export type RealtimeRefetchers = {
   refetchDiversions: () => void | Promise<void>;
   refetchUpdates: () => void | Promise<void>;
   refetchPlanning?: () => void | Promise<void>;
+  /** Dienstnotities: planner plaatst → chauffeur ziet hem direct. */
+  refetchNotes?: () => void | Promise<void>;
   /** Matrix + importhistoriek: zonder deze zag collega B na een import van
    *  collega A wél de nieuwe planning maar nog het oude Planning-overzicht. */
   refetchMatrix?: () => void | Promise<void>;

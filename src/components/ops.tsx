@@ -33,6 +33,7 @@ export function OpsStat({
   subClassName,
   lines,
   meter,
+  note,
   onClick,
   className,
 }: {
@@ -53,6 +54,8 @@ export function OpsStat({
   /** Optionele voortgangsbalk (0–100) onder de subtekst — bv. verlofsaldo.
    *  Kleurt emerald → amber (>80%) → red (>100 gebruikt). */
   meter?: number;
+  /** Notitie van de planner bij deze dag — opvallend maar gedempt (oker). */
+  note?: string;
   onClick?: () => void;
   className?: string;
 }) {
@@ -82,6 +85,11 @@ export function OpsStat({
             style={{ width: `${Math.max(3, Math.min(100, meter))}%` }}
           />
         </div>
+      )}
+      {note && (
+        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-[11.5px] font-medium leading-snug text-oker-800 dark:text-oker-300">
+          {note}
+        </p>
       )}
       {lines && lines.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
