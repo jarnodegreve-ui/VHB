@@ -28,6 +28,11 @@ jobs:
       - name: Dependencies
         run: npm ci
 
+      # Alleen productie-dependencies en alleen high/critical: een laag
+      # advisory in een dev-tool mag geen enkel ander werk blokkeren.
+      - name: Dependency-audit
+        run: npm audit --omit=dev --audit-level=high
+
       - name: Typecheck
         run: npm run lint
 

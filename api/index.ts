@@ -1728,12 +1728,14 @@ app.get("/api/cron/backup", async (req, res) => {
     // instelbaar via env). Best-effort: mag de back-up-respons niet breken.
     const errorDays = Number(process.env.RETENTION_ERROR_DAYS) > 0 ? Number(process.env.RETENTION_ERROR_DAYS) : 30;
     const logDays = Number(process.env.RETENTION_LOG_DAYS) > 0 ? Number(process.env.RETENTION_LOG_DAYS) : 365;
-    const pruned = await pruneOldRecords({ errorDays, logDays });
-    if (pruned.clientErrors > 0 || pruned.activityLog > 0) {
-      console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d) en ${pruned.activityLog} log-regels (>${logDays}d) opgeruimd.`);
+    const noteDays = Number(process.env.RETENTION_NOTE_DAYS) > 0 ? Number(process.env.RETENTION_NOTE_DAYS) : 90;
+    const pruned = await pruneOldRecords({ errorDays, logDays, noteDays });
+    const prunedTotal = pruned.clientErrors + pruned.activityLog + pruned.planningNotes + pruned.pushSubscriptions;
+    if (prunedTotal > 0) {
+      console.log(`[cron-backup] retentie: ${pruned.clientErrors} client-fouten (>${errorDays}d), ${pruned.activityLog} log-regels (>${logDays}d), ${pruned.planningNotes} dienstnotities (>${noteDays}d) en ${pruned.pushSubscriptions} verweesde push-abonnementen opgeruimd.`);
     }
 
-    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${pruned.clientErrors || pruned.activityLog ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
+    await logCronHeartbeat("backup", `${filename} opgeslagen (${stored.removedOld} oude opgeruimd${mailedOffsite ? ", off-site kopie gemaild" : ""}${prunedTotal ? `, retentie: ${pruned.clientErrors} fouten + ${pruned.activityLog} log-regels + ${pruned.planningNotes} notities + ${pruned.pushSubscriptions} push-abonnementen weg` : ""}${integrity.ok ? "" : `, ⚠️ integriteit: ${integrity.issues.join(", ")}`}).`);
     res.json({ success: true, filename, removedOld: stored.removedOld, mailedOffsite, pruned, integrity });
   } catch (err: any) {
     console.error("[cron-backup] mislukt:", err?.message || err);
