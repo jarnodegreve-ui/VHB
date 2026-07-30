@@ -1414,8 +1414,8 @@ export const getClientErrorsSince = async (sinceIso: string, limit = 1000) => {
  * verwijderen. Best-effort per tabel — een ontbrekende tabel of fout mag de
  * back-upcron nooit laten falen.
  */
-export const pruneOldRecords = async (opts: { errorDays: number; logDays: number }) => {
-  const summary = { clientErrors: 0, activityLog: 0 };
+export const pruneOldRecords = async (opts: { errorDays: number; logDays: number; noteDays: number }) => {
+  const summary = { clientErrors: 0, activityLog: 0, planningNotes: 0, pushSubscriptions: 0 };
   if (!db) return summary;
   const cutoff = (days: number) => new Date(Date.now() - days * 86_400_000).toISOString();
   try {
@@ -1433,6 +1433,38 @@ export const pruneOldRecords = async (opts: { errorDays: number; logDays: number
       .delete({ count: "exact" })
       .lt("created_at", cutoff(opts.logDays));
     if (!error) summary.activityLog = count ?? 0;
+  } catch {
+    // idem
+  }
+  try {
+    // Dienstnotities zijn operationeel ("neem bus 412") — na de rit zijn ze
+    // waardeloos; de datumkolom is een ISO-dag dus lexicografisch vergelijkbaar.
+    const { count, error } = await db
+      .from("planning_notes")
+      .delete({ count: "exact" })
+      .lt("date", cutoff(opts.noteDays).slice(0, 10));
+    if (!error) summary.planningNotes = count ?? 0;
+  } catch {
+    // idem
+  }
+  try {
+    // Push-abonnementen van verwijderde gebruikers. NIET op leeftijd prunen:
+    // een abonnement wordt alleen bij het aanzetten geregistreerd, dus een oud
+    // abonnement kan nog springlevend zijn (dode endpoints ruimt sendPushToUsers
+    // al op via 404/410).
+    const { data: userRows } = await db.from("users").select("id");
+    const userIds = new Set((userRows ?? []).map((r: any) => String(r.id)));
+    if (userIds.size > 0) {
+      const { data: subRows } = await db.from("push_subscriptions").select("endpoint, user_id");
+      const orphaned = (subRows ?? []).filter((r: any) => !userIds.has(String(r.user_id))).map((r: any) => r.endpoint);
+      if (orphaned.length > 0) {
+        const { count, error } = await db
+          .from("push_subscriptions")
+          .delete({ count: "exact" })
+          .in("endpoint", orphaned);
+        if (!error) summary.pushSubscriptions = count ?? 0;
+      }
+    }
   } catch {
     // idem
   }
