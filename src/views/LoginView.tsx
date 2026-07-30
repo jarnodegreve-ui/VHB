@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { applyThemeColorMeta } from '../lib/ui';
 
 type Mode = 'login' | 'forgot';
 
@@ -34,8 +35,11 @@ export function LoginView({
     const html = document.documentElement;
     const wasDark = html.classList.contains('dark');
     html.classList.remove('dark');
+    // Statusbalk mee in carbon zolang de login in beeld is.
+    applyThemeColorMeta(true);
     return () => {
       if (wasDark) html.classList.add('dark');
+      applyThemeColorMeta(wasDark);
     };
   }, []);
 
@@ -226,6 +230,7 @@ export function LoginView({
                     placeholder="Minstens 6 tekens"
                     required
                     minLength={6}
+                    autoFocus
                   />
                   <FeedbackBlock error={error} info={info} />
                   <SubmitButton loading={isSubmitting}>Wachtwoord opslaan</SubmitButton>
@@ -243,6 +248,7 @@ export function LoginView({
                     }}
                     placeholder="naam@bedrijf.be"
                     required
+                    autoFocus
                   />
                   <FeedbackBlock error={error} info={info} />
                   <SubmitButton loading={isSubmitting}>Verstuur reset-link</SubmitButton>
@@ -271,6 +277,7 @@ export function LoginView({
                     placeholder="naam@bedrijf.be"
                     required
                     autoComplete="email"
+                    autoFocus
                   />
                   <FieldInput
                     icon={<Lock size={16} />}
@@ -340,6 +347,7 @@ function FieldInput({
   required,
   minLength,
   autoComplete,
+  autoFocus,
   rightSlot,
 }: {
   icon: React.ReactNode;
@@ -351,6 +359,7 @@ function FieldInput({
   required?: boolean;
   minLength?: number;
   autoComplete?: string;
+  autoFocus?: boolean;
   rightSlot?: React.ReactNode;
 }) {
   const [focused, setFocused] = useState(false);
@@ -408,6 +417,7 @@ function FieldInput({
           required={required}
           minLength={minLength}
           autoComplete={autoComplete}
+          autoFocus={autoFocus}
           className={`control-input-dark w-full pl-11 py-3.5 rounded-2xl font-medium text-white outline-none transition-all no-focus-ring ${
             isPassword ? 'pr-12' : 'pr-4'
           }`}

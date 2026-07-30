@@ -469,8 +469,9 @@ html.dark {
 
   .control-input:focus {
     background: #ffffff;
-    border-color: rgba(232, 163, 61, 0.55);
-    box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.12);
+    border-color: rgba(232, 163, 61, 0.6);
+    /* Iets zichtbaarder dan voorheen (verzoek Jarno 30/07). */
+    box-shadow: 0 0 0 4px rgba(232, 163, 61, 0.18);
   }
 
   /* Ademende oker-glow ROND een gefocust input-veld (voor LoginView).
@@ -479,20 +480,23 @@ html.dark {
   .field-glow {
     animation: field-glow-breathe 2.4s ease-in-out infinite;
   }
+  /* Nooit helemaal uit en een hogere piek: op de carbon login-kaart was de
+     adem-gloed vrijwel onzichtbaar, en in licht mocht hij ook duidelijker
+     (verzoek Jarno 30/07). */
   @keyframes field-glow-breathe {
     0%, 100% {
       box-shadow:
-        0 0 0 0 rgba(232, 163, 61, 0),
-        0 0 0 0 rgba(232, 163, 61, 0);
+        0 0 0 3px rgba(232, 163, 61, 0.10),
+        0 0 14px rgba(232, 163, 61, 0.14);
     }
     50% {
       box-shadow:
-        0 0 0 6px rgba(232, 163, 61, 0.12),
-        0 0 24px rgba(232, 163, 61, 0.18);
+        0 0 0 7px rgba(232, 163, 61, 0.22),
+        0 0 34px rgba(232, 163, 61, 0.34);
     }
   }
   @media (prefers-reduced-motion: reduce) {
-    .field-glow { animation: none; box-shadow: 0 0 0 4px rgba(232, 163, 61, 0.10); }
+    .field-glow { animation: none; box-shadow: 0 0 0 5px rgba(232, 163, 61, 0.16), 0 0 18px rgba(232, 163, 61, 0.20); }
   }
 
   .control-button-soft {
@@ -716,8 +720,9 @@ html.dark {
 
 :where(.dark) .control-input:focus {
   background: rgba(29, 31, 34, 0.95);
-  border-color: rgba(232, 163, 61, 0.5);
-  box-shadow: 0 0 0 3px rgba(232, 163, 61, 0.16);
+  border-color: rgba(232, 163, 61, 0.55);
+  /* Zelfde opwaardering als licht: de focus-gloed was in dark amper te zien. */
+  box-shadow: 0 0 0 4px rgba(232, 163, 61, 0.24);
 }
 
 :where(.dark) .control-button-soft {
