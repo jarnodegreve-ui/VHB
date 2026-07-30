@@ -20,7 +20,7 @@ import { ServiceChip } from '../components/ServiceChip';
  * de ingelogde chauffeur: zijn dienst van vandaag, de volgende dienst met
  * dienstnummer/loopnummer, verlofsaldo, omleidingen en snelle acties.
  */
-export function DashboardView({
+export function DashboardView({ notes = [],
   user,
   shifts,
   diversions,
@@ -36,6 +36,7 @@ export function DashboardView({
   user: User;
   shifts: Shift[];
   diversions: Diversion[];
+  notes?: Array<{ date: string; note: string }>;
   users: User[];
   leaveRequests?: LeaveRequest[];
   isInitialLoad?: boolean;
@@ -93,6 +94,7 @@ export function DashboardView({
   }));
   // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
   const todayServices = [...new Set(todayParts.map((p) => String(p.line || '').trim()).filter(Boolean))];
+  const todayNote = notes.find((n) => n.date === today)?.note;
 
   const nextShift = myShifts
     .map((s) => {
@@ -279,6 +281,7 @@ export function DashboardView({
                 : `tot ${todayParts[0].endTime}`
           }
           lines={todayLines}
+          note={todayNote}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
         {/* Bewust kaal (verzoek Jarno): het dienstnummer volstaat hier,

@@ -95,6 +95,9 @@ import {
   logCronHeartbeat,
   getCronHeartbeats,
   getDevice,
+  getPlanningNotes,
+  upsertPlanningNote,
+  deletePlanningNote,
 } from "./storage.js";
 
 dotenv.config();
@@ -493,6 +496,16 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
     if (!user || user.isActive === false) {
       return res.status(404).send("Not found");
     }
+    // Dienstnotities meesturen in de agenda-beschrijving (best-effort:
+    // zonder tabel gewoon geen notities).
+    let noteByDate = new Map<string, string>();
+    try {
+      const dates = (shifts as any[]).map((s) => String(s.date)).sort();
+      if (dates.length > 0) {
+        const notes = await getPlanningNotes({ fromIso: dates[0], toIso: dates[dates.length - 1], driverId: userId });
+        noteByDate = new Map(notes.map((n) => [n.date, n.note]));
+      }
+    } catch { /* notities zijn nice-to-have in de feed */ }
     // Rijen zonder tijden overslaan: de 00:00-fallback werd door de
     // eind≤start-regel van buildVevent een 24-uursblok in de agenda.
     const events: IcsEvent[] = (shifts as any[]).filter((s) => s.startTime && s.endTime).map((s) => ({
@@ -501,7 +514,7 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
       startTime: String(s.startTime),
       endTime: String(s.endTime),
       summary: `Dienst ${String(s.line || s.serviceNumber || "").trim()}`.trim(),
-      description: [s.busNumber && `Bus ${s.busNumber}`, s.loopnr && `Loop ${s.loopnr}`]
+      description: [s.busNumber && `Bus ${s.busNumber}`, s.loopnr && `Loop ${s.loopnr}`, noteByDate.get(String(s.date)) && `Notitie: ${noteByDate.get(String(s.date))}`]
         .filter(Boolean)
         .join(" · ") || undefined,
     }));
@@ -869,6 +882,63 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
   } catch (err) {
     console.error("Error computing coverage gaps:", err);
     res.status(500).json({ error: "Kon dekking niet berekenen." });
+  }
+});
+
+
+// --- Dienstnotities: kort bericht van de planner bij één dienstdag ---
+const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+app.get("/api/planning-notes", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const from = String(req.query.from ?? "");
+    const to = String(req.query.to ?? "");
+    if (!ISO_DAY_RE.test(from) || !ISO_DAY_RE.test(to)) {
+      return res.status(400).json({ error: "from/to (JJJJ-MM-DD) vereist." });
+    }
+    // Chauffeurs zien alleen hun eigen notities; planner/admin alles.
+    const driverId = req.appUser!.role === "chauffeur" ? String(req.appUser!.id) : undefined;
+    const notes = await getPlanningNotes({ fromIso: from, toIso: to, driverId });
+    res.json(notes);
+  } catch (err) {
+    if (isMissingTableError(err)) return res.json([]); // migratie nog niet gedraaid
+    console.error("Notities laden is mislukt.", err);
+    res.status(500).json({ error: "Notities laden is mislukt." });
+  }
+});
+
+app.put("/api/planning-notes", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const driverId = String(req.body?.driverId ?? "").trim();
+    const date = String(req.body?.date ?? "").trim();
+    const note = String(req.body?.note ?? "").trim().slice(0, 280);
+    if (!driverId || !ISO_DAY_RE.test(date)) {
+      return res.status(400).json({ error: "driverId en date (JJJJ-MM-DD) vereist." });
+    }
+    const users = await getUsersData();
+    const driver = users.find((u) => String(u.id) === driverId);
+    if (!driver) return res.status(400).json({ error: "Onbekende chauffeur." });
+
+    if (!note) {
+      await deletePlanningNote(driverId, date);
+      await logActivity(req, "planning", "Dienstnotitie verwijderd", `${driver.name} — ${date}.`);
+      return res.json({ success: true, removed: true });
+    }
+    await upsertPlanningNote(driverId, date, note, req.appUser?.name ?? null);
+    await logActivity(req, "planning", "Dienstnotitie geplaatst", `${driver.name} — ${date}: ${note.slice(0, 80)}`);
+    // De chauffeur meteen op de hoogte — push is best-effort.
+    await sendPushToUsers([driverId], {
+      title: "Notitie bij je dienst",
+      body: `${date.split("-").reverse().join("/")}: ${note.slice(0, 120)}`,
+      url: "/",
+    });
+    res.json({ success: true });
+  } catch (err) {
+    if (isMissingTableError(err)) {
+      return res.status(503).json({ error: "De notities-tabel bestaat nog niet: draai supabase/2026-07-30_planning_notes.sql in de SQL Editor." });
+    }
+    console.error("Notitie opslaan is mislukt.", err);
+    res.status(500).json({ error: "Notitie opslaan is mislukt." });
   }
 });
 

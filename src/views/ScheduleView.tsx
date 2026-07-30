@@ -45,7 +45,7 @@ const formatShortDate = (date: string) =>
 
 const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
-export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
+export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequests = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
 
@@ -169,7 +169,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
         <>
           {/* Toekomst */}
           {upcoming.length > 0 && (
-            <ShiftList shifts={upcoming} today={today} onRequestSwap={onRequestSwap} />
+            <ShiftList shifts={upcoming} today={today} noteFor={(d) => notes.find((n) => n.date === d)?.note} onRequestSwap={onRequestSwap} />
           )}
 
           {/* Verleden — collapsed by default */}
@@ -200,7 +200,7 @@ export function ScheduleView({ user, shifts: allShifts, leaveRequests = [], isIn
 
 // --- Subcomponent: gedeelde lijst voor toekomst en verleden ---
 
-function ShiftList({ shifts, today, onRequestSwap }: { shifts: GroupedShift[]; today: string; onRequestSwap?: (shiftId: string) => void }) {
+function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedShift[]; today: string; noteFor?: (date: string) => string | undefined; onRequestSwap?: (shiftId: string) => void }) {
   return (
     <>
       {/* Desktop tabel */}
@@ -342,6 +342,12 @@ function ShiftList({ shifts, today, onRequestSwap }: { shifts: GroupedShift[]; t
                   </div>
                 ))}
               </div>
+
+              {noteFor?.(g.date) && (
+                <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800 dark:text-oker-300">
+                  {noteFor(g.date)}
+                </p>
+              )}
 
               {onRequestSwap && !g.hasConflict && (
                 <button

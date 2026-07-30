@@ -1980,3 +1980,42 @@ export const setAppSetting = async (key: string, value: unknown): Promise<void> 
     .upsert({ key, value, updated_at: new Date().toISOString() });
   if (error) throw error;
 };
+
+// --- Dienstnotities (supabase/2026-07-30_planning_notes.sql) ---
+// Eigen tabel op (driver_id, date): overleeft "Planning opnieuw opbouwen",
+// dat de planning-tabel volledig vervangt.
+
+export type PlanningNoteRow = { driver_id: string; date: string; note: string; updated_by: string | null; updated_at: string };
+
+export const getPlanningNotes = async (
+  opts: { fromIso: string; toIso: string; driverId?: string },
+): Promise<Array<{ driverId: string; date: string; note: string }>> => {
+  const client = requireDb();
+  let q = client
+    .from('planning_notes')
+    .select('driver_id,date,note')
+    .gte('date', opts.fromIso)
+    .lte('date', opts.toIso);
+  if (opts.driverId) q = q.eq('driver_id', String(opts.driverId));
+  const { data, error } = await q;
+  if (error) throw error;
+  return ((data ?? []) as PlanningNoteRow[]).map((r) => ({ driverId: String(r.driver_id), date: r.date, note: r.note }));
+};
+
+export const upsertPlanningNote = async (driverId: string, date: string, note: string, updatedBy: string | null): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('planning_notes')
+    .upsert({ driver_id: String(driverId), date, note, updated_by: updatedBy, updated_at: new Date().toISOString() });
+  if (error) throw error;
+};
+
+export const deletePlanningNote = async (driverId: string, date: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('planning_notes')
+    .delete()
+    .eq('driver_id', String(driverId))
+    .eq('date', date);
+  if (error) throw error;
+};

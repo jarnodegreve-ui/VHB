@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
-import { cn } from '../lib/ui';
+import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel } from '../components/primitives';
@@ -29,7 +29,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const [data, setData] = useState<MonthPlanning | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [selected, setSelected] = useState<{ driverName: string; iso: string; cell: MonthCell } | null>(null);
+  const [selected, setSelected] = useState<{ driverName: string; driverId: string; iso: string; cell: MonthCell } | null>(null);
+
+
   // Venster van 2 weken binnen de maand; bij de randen springen we naar de
   // vorige/volgende maand. 'pendingEdge' bepaalt waar we landen na het laden.
   const [pageIndex, setPageIndex] = useState(0);
@@ -37,6 +39,51 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
+
+  // Dienstnotities voor de zichtbare maand. Chauffeurs krijgen server-side
+  // alleen hun eigen notities; planners alles.
+  const [notes, setNotes] = useState<Map<string, string>>(new Map());
+  const noteKey = (driverId: string, iso: string) => `${driverId}:${iso}`;
+  const canEditNotes = currentUser.role !== 'chauffeur';
+  const monthFrom = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
+  const monthTo = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(new Date(year, monthIndex + 1, 0).getDate()).padStart(2, '0')}`;
+  const loadNotes = async () => {
+    try {
+      const res = await fetch(`/api/planning-notes?from=${monthFrom}&to=${monthTo}`, { headers: await getSupabaseAuthHeaders() });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (Array.isArray(data)) setNotes(new Map(data.map((n: any) => [noteKey(String(n.driverId), n.date), String(n.note)])));
+    } catch { /* notities zijn nice-to-have */ }
+  };
+  useEffect(() => { void loadNotes(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [monthFrom]);
+
+  const [noteDraft, setNoteDraft] = useState('');
+  const [isSavingNote, setIsSavingNote] = useState(false);
+  const saveNote = async () => {
+    if (!selected || isSavingNote) return;
+    setIsSavingNote(true);
+    try {
+      const res = await fetch('/api/planning-notes', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({ driverId: selected.driverId, date: selected.iso, note: noteDraft }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) { notify(body.error || 'Notitie opslaan is mislukt.', 'error'); return; }
+      setNotes((cur) => {
+        const next = new Map(cur);
+        const trimmed = noteDraft.trim();
+        if (trimmed) next.set(noteKey(selected.driverId, selected.iso), trimmed);
+        else next.delete(noteKey(selected.driverId, selected.iso));
+        return next;
+      });
+      notify(noteDraft.trim() ? 'Notitie opgeslagen — de chauffeur krijgt een melding.' : 'Notitie verwijderd.', 'success');
+      setSelected(null);
+    } finally {
+      setIsSavingNote(false);
+    }
+  };
+
   const monthParam = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
   const todayIso = isoDate(new Date());
 
@@ -342,11 +389,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               {cell ? (
                                 <button
                                   type="button"
-                                  onClick={() => setSelected({ driverName: drv.name, iso, cell })}
-                                  className={cn('flex h-7 w-full items-center justify-center px-1 text-[11px] tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
-                                  title={`${KIND_LABEL[cell.kind]} · ${cell.code} — klik voor details`}
+                                  onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
+                                  className={cn('relative flex h-7 w-full items-center justify-center px-1 text-[11px] tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
+                                  title={`${KIND_LABEL[cell.kind]} · ${cell.code}${notes.has(noteKey(String(drv.id), iso)) ? ' · notitie' : ''} — klik voor details`}
                                 >
                                   {cell.code}
+                                  {notes.has(noteKey(String(drv.id), iso)) && (
+                                    <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-oker-500" aria-label="notitie aanwezig" />
+                                  )}
                                 </button>
                               ) : (
                                 <div className="h-7" />
@@ -400,7 +450,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <button
                             key={iso}
                             type="button"
-                            onClick={() => setSelected({ driverName: drv.name, iso, cell })}
+                            onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
                             className="w-full flex items-center gap-3 rounded-xl px-2 py-2.5 min-h-11 text-left active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
                           >
                             <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
@@ -454,6 +504,30 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <span className={cn('inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[selected.cell.kind])}>{selected.cell.code}</span>
               <span className="text-sm font-semibold text-slate-700">{selected.cell.label}</span>
             </div>
+
+            {(notes.has(noteKey(selected.driverId, selected.iso)) || canEditNotes) && (
+              <div className="mt-5 space-y-2">
+                <MicroLabel>Notitie voor de chauffeur</MicroLabel>
+                {canEditNotes ? (
+                  <>
+                    <textarea
+                      value={noteDraft}
+                      onChange={(e) => setNoteDraft(e.target.value)}
+                      maxLength={280}
+                      placeholder="bv. Neem bus 412 — eerst tanken."
+                      className="control-input w-full rounded-2xl px-3.5 py-2.5 text-base sm:text-sm font-medium outline-none h-20 resize-none"
+                    />
+                    <Button variant="primary" size="sm" full disabled={isSavingNote} onClick={() => void saveNote()}>
+                      {isSavingNote ? 'Opslaan…' : noteDraft.trim() ? 'Notitie opslaan' : notes.has(noteKey(selected.driverId, selected.iso)) ? 'Notitie verwijderen' : 'Notitie opslaan'}
+                    </Button>
+                  </>
+                ) : (
+                  <p className="rounded-2xl bg-oker-50/70 px-3.5 py-2.5 text-sm font-medium text-slate-700">
+                    {notes.get(noteKey(selected.driverId, selected.iso))}
+                  </p>
+                )}
+              </div>
+            )}
 
             {selected.cell.kind === 'service' ? (
               selected.cell.segments.length > 0 ? (
