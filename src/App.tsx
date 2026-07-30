@@ -57,9 +57,7 @@ import { CommandPalette, useCommandPaletteShortcut } from './components/CommandP
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
 import { ContactsView } from './views/ContactsView';
-import { ServicesView } from './views/ServicesView';
 import { DashboardView } from './views/DashboardView';
-import { PlannerDashboardWidgets } from './views/PlannerDashboardWidgets';
 import { useRealtimeSync } from './lib/realtime';
 import { DiversionsView } from './views/DiversionsView';
 import { ScheduleView } from './views/ScheduleView';
@@ -85,6 +83,11 @@ const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUp
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
 const LazyDevicesView = lazyWithRetry(() => import('./views/admin/DevicesView').then((module) => ({ default: module.DevicesView })));
 const LazyLeaveManagementView = lazyWithRetry(() => import('./views/LeaveManagementView').then((module) => ({ default: module.LeaveManagementView })));
+// Ook lazy (planner/admin-only, maar stond eager in de hoofdbundel): de
+// ops-cockpit sleept ops/coverage/monthPlanning mee die een chauffeur nooit
+// nodig heeft; het dienstoverzicht idem.
+const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('./views/PlannerDashboardWidgets').then((module) => ({ default: module.PlannerDashboardWidgets })));
+const LazyServicesView = lazyWithRetry(() => import('./views/ServicesView').then((module) => ({ default: module.ServicesView })));
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
 
@@ -2045,7 +2048,8 @@ export default function App() {
                 isPlanner ? (
                   /* Planner/admin: Operations Center — één operationele cockpit
                      i.p.v. een dubbel dashboard. */
-                  <PlannerDashboardWidgets
+                  <Suspense fallback={<ViewLoader />}>
+                  <LazyPlannerDashboardWidgets
                     currentUser={currentUser!}
                     users={users}
                     shifts={shifts}
@@ -2063,13 +2067,14 @@ export default function App() {
                     previewActive={previewChauffeur}
                     onTogglePreview={() => setPreviewChauffeur((v) => !v)}
                   />
+                  </Suspense>
                 ) : (
                   <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} onChangePassword={() => setShowChangePassword(true)} />
                 )
               )}
               {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
               {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
-              {resolvedCurrentView === 'dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <ServicesView services={services} />)}
+              {resolvedCurrentView === 'dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense>)}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
               {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
