@@ -6,7 +6,7 @@ import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
 import { formatDateHuman } from '../lib/format';
 import { isoDate } from '../lib/availability';
-import { hasShiftEnded } from '../lib/shiftTime';
+import { hasShiftEnded, isShiftActiveAt } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
@@ -89,6 +89,7 @@ export function DashboardView({
     left: `${p.startTime}–${p.endTime}`,
     right: p.loopnr ? `loop ${p.loopnr}` : undefined,
     done: hasShiftEnded(p, now),
+    active: isShiftActiveAt(p, now),
   }));
   // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
   const todayServices = [...new Set(todayParts.map((p) => String(p.line || '').trim()).filter(Boolean))];
@@ -304,6 +305,7 @@ export function DashboardView({
           value={balans.betaaldResterend}
           suffix={` / ${balans.betaaldBudget}`}
           sub="dagen over"
+          meter={balans.betaaldBudget > 0 ? Math.round((balans.betaaldGebruikt / balans.betaaldBudget) * 100) : 0}
           onClick={onNavigate ? () => onNavigate('verlof') : undefined}
         />
         <OpsStat
