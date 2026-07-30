@@ -1243,6 +1243,8 @@ export type UserDocumentRecord = {
   sizeBytes?: number | null;
   uploadedAt: string;
   uploadedBy?: string | null;
+  /** Eerste keer geopend door de chauffeur; null = nog niet geopend. */
+  openedAt?: string | null;
 };
 
 const mapUserDocumentRow = (row: any): UserDocumentRecord => ({
@@ -1254,6 +1256,7 @@ const mapUserDocumentRow = (row: any): UserDocumentRecord => ({
   sizeBytes: row.size_bytes ?? null,
   uploadedAt: row.uploaded_at,
   uploadedBy: row.uploaded_by ?? null,
+  openedAt: row.opened_at ?? null,
 });
 
 /** Alle documenten (userId undefined, admin-pad), of alleen die van één
@@ -1292,6 +1295,24 @@ export const insertUserDocument = async (doc: Omit<UserDocumentRecord, "id" | "u
     .single();
   if (error) throw error;
   return mapUserDocumentRow(data);
+};
+
+/** Leesbevestiging: zet opened_at bij de EERSTE keer openen (daarna vast —
+ *  "wanneer zag hij het voor het eerst" is de vraag bij discussies).
+ *  Best-effort: zolang de opened_at-migratie niet gedraaid is, mag dit het
+ *  openen zelf nooit breken. */
+export const markUserDocumentOpened = async (id: string, userId: string): Promise<void> => {
+  if (!db) return;
+  try {
+    await db
+      .from("user_documents")
+      .update({ opened_at: new Date().toISOString() })
+      .eq("id", id)
+      .eq("user_id", String(userId))
+      .is("opened_at", null);
+  } catch {
+    // kolom ontbreekt of update faalt — bewust stil
+  }
 };
 
 export const deleteUserDocument = async (id: string): Promise<void> => {

@@ -16,6 +16,7 @@ export type UserDocument = {
   uploadedAt: string;
   uploadedBy: string | null;
   url: string | null;
+  openedAt?: string | null;
 };
 
 const prettySize = (bytes: number | null) =>
@@ -76,7 +77,15 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
               </div>
               <button
                 type="button"
-                onClick={() => (doc.url ? openPdfInNewTab(doc.url) : notify('Bestand is niet beschikbaar.', 'error'))}
+                onClick={() => {
+                  if (!doc.url) return notify('Bestand is niet beschikbaar.', 'error');
+                  // Leesbevestiging (fire-and-forget): de planner ziet zo dat
+                  // dit document geopend is. Mag het openen nooit vertragen.
+                  void getSupabaseAuthHeaders()
+                    .then((headers) => fetch(`/api/documents/${encodeURIComponent(doc.id)}/opened`, { method: 'POST', headers }))
+                    .catch(() => {});
+                  openPdfInNewTab(doc.url);
+                }}
                 aria-label={`Open ${doc.filename}`}
                 className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
               >

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Download, FileText, Trash2, Upload, X } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Trash2, Upload, X } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import type { User } from '../../types';
@@ -127,6 +127,15 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                     <div className="min-w-0 flex-1">
                       <p className="font-semibold text-slate-800 text-sm truncate">{doc.filename}{doc.category ? ` · ${doc.category}` : ''}</p>
                       <MicroLabel className="mt-0.5">{formatDateHuman(doc.uploadedAt)}{doc.sizeBytes != null ? ` · ${prettySize(doc.sizeBytes)}` : ''}</MicroLabel>
+                      {/* Leesbevestiging: gezet zodra de chauffeur het document
+                          voor het eerst opent. */}
+                      {doc.openedAt ? (
+                        <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                          <CheckCircle2 size={11} /> Geopend {formatDateHuman(doc.openedAt)}
+                        </p>
+                      ) : (
+                        <p className="mt-0.5 text-[11px] font-medium text-slate-400">Nog niet geopend</p>
+                      )}
                     </div>
                     <button type="button" onClick={() => doc.url && openPdfInNewTab(doc.url)} aria-label="Openen" className="ios-pressable shrink-0 w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors"><Download size={15} /></button>
                     <button type="button" onClick={() => void handleDelete(doc)} aria-label="Verwijderen" className="ios-pressable shrink-0 w-9 h-9 rounded-xl border border-slate-200 bg-white text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center transition-colors"><Trash2 size={15} /></button>

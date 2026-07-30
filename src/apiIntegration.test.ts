@@ -173,6 +173,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getUserDocument: async (id: string) => mem.documents.find((d: any) => String(d.id) === String(id)) ?? null,
     insertUserDocument: async (doc: any) => { const rec = { id: `doc-${mem.documents.length + 1}`, uploadedAt: '2026-07-01T00:00:00Z', ...doc }; mem.documents.push(rec); return rec; },
     deleteUserDocument: async (id: string) => { mem.documents = mem.documents.filter((d: any) => String(d.id) !== String(id)); },
+    markUserDocumentOpened: async (id: string, userId: string) => {
+      const doc = mem.documents.find((d: any) => String(d.id) === String(id) && String(d.userId) === String(userId));
+      if (doc && !doc.openedAt) doc.openedAt = '2026-07-30T12:00:00Z';
+    },
     getRitblaadjeMeta: async () => mem.ritblaadje ?? null,
     // Toestel-whitelist: zelfde contract als de echte helpers, tegen mem.devices.
     getDevice: async (userId: string, deviceToken: string) => {
@@ -893,6 +897,29 @@ describe('back-up export', () => {
     expect(res.json.userDocuments).toHaveLength(1);
     expect(res.json.userDocuments[0].filename).toBe('attest.pdf');
     expect(res.json.ritblaadje?.filename).toBe('ritblad.pdf');
+  });
+});
+
+describe('document-leesbevestiging', () => {
+  it('zet openedAt bij de eerste keer openen van een eigen document', async () => {
+    mem.documents = [{ id: 'd1', userId: '3', filename: 'loonbrief.pdf', storagePath: '3/l', uploadedAt: '2026-07-01T00:00:00Z', openedAt: null }];
+    const res = await api('POST', '/api/documents/d1/opened', { token: 'tok-a' });
+    expect(res.status).toBe(204);
+    expect(mem.documents[0].openedAt).toBe('2026-07-30T12:00:00Z');
+  });
+
+  it('laat andermans document onaangeroerd (user_id-match in de update)', async () => {
+    mem.documents = [{ id: 'd1', userId: '3', filename: 'loonbrief.pdf', storagePath: '3/l', uploadedAt: '2026-07-01T00:00:00Z', openedAt: null }];
+    const res = await api('POST', '/api/documents/d1/opened', { token: 'tok-b' });
+    expect(res.status).toBe(204);
+    expect(mem.documents[0].openedAt).toBeNull();
+  });
+
+  it('geeft openedAt terug in de documentenlijst', async () => {
+    mem.documents = [{ id: 'd1', userId: '3', filename: 'loonbrief.pdf', storagePath: '3/l', uploadedAt: '2026-07-01T00:00:00Z', openedAt: '2026-07-30T12:00:00Z' }];
+    const res = await api('GET', '/api/documents', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json[0].openedAt).toBe('2026-07-30T12:00:00Z');
   });
 });
 
