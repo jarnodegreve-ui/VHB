@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, Plus } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
-import { PageHeader, PageShell } from '../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { fetchAvailability } from '../lib/availability';
@@ -400,10 +400,12 @@ export function CoverageView() {
           ))}
         </div>
       ) : !anyExpectations ? (
-        <div className="surface-card p-8 rounded-3xl text-center">
-          <p className="text-sm font-bold text-slate-500">Nog geen verwachte diensten ingesteld.</p>
-          <p className="mt-1 text-xs font-medium text-slate-400">Klik op "Instellen" en kies per dag-type welke diensten horen te draaien.</p>
-        </div>
+        <EmptyState
+          mascotte={false}
+          icon={<Settings2 size={28} />}
+          title="Nog geen verwachte diensten ingesteld"
+          message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
+        />
       ) : visibleDays.length === 0 ? (
         <div className="surface-card p-8 rounded-3xl text-center">
           <p className="text-sm font-bold text-emerald-600">Geen openstaande diensten in {MONTH_NAMES[monthIndex].toLowerCase()} {year}.</p>

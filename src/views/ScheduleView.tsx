@@ -197,7 +197,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </div>
       ) : upcoming.length === 0 && past.length === 0 ? (
-        <EmptyState title="Nog geen diensten gepland" />
+        <EmptyState title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
       ) : weergave === 'maand' ? (
         <MonthCalendar
           groups={grouped}
