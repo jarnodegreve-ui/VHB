@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { isoWeekOf } from '../lib/week';
+import { typedagLabel } from '../lib/typedag';
+import { formatLeaveType } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
@@ -48,6 +50,19 @@ const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || 
 export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequests = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
+  // Lijst of maandgrid — de keuze blijft bewaard (localStorage kan in
+  // privacy-modus geblokkeerd zijn, vandaar de try/catch).
+  const [weergave, setWeergaveState] = useState<'lijst' | 'maand'>(() => {
+    try {
+      return window.localStorage.getItem('vhb-rooster-weergave') === 'maand' ? 'maand' : 'lijst';
+    } catch {
+      return 'lijst';
+    }
+  });
+  const setWeergave = (w: 'lijst' | 'maand') => {
+    setWeergaveState(w);
+    try { window.localStorage.setItem('vhb-rooster-weergave', w); } catch { /* niet erg */ }
+  };
 
   // Strict eigen diensten; voor het overzicht van alle chauffeurs gaat
   // planner/admin naar Beheer Roosters.
@@ -149,9 +164,27 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         }
       />
 
-      {lastSyncedAt && (
-        <p className="-mt-2 text-[11px] font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
-      )}
+      <div className="-mt-2 flex flex-wrap items-center justify-between gap-3">
+        {/* Weergave-wissel: lijst (default) of persoonlijk maandgrid */}
+        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
+          {(['lijst', 'maand'] as const).map((w) => (
+            <button
+              key={w}
+              type="button"
+              onClick={() => setWeergave(w)}
+              className={cn(
+                'ios-pressable rounded-[10px] px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors',
+                weergave === w ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
+              )}
+            >
+              {w}
+            </button>
+          ))}
+        </div>
+        {lastSyncedAt && (
+          <p className="text-[11px] font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+        )}
+      </div>
 
       <CalendarSubscribeModal open={calendarOpen} onClose={() => setCalendarOpen(false)} onDownload={exportToICS} />
 
@@ -165,6 +198,14 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         </div>
       ) : upcoming.length === 0 && past.length === 0 ? (
         <EmptyState title="Nog geen diensten gepland" />
+      ) : weergave === 'maand' ? (
+        <MonthCalendar
+          groups={grouped}
+          today={today}
+          leaves={leaveRequests.filter((l) => l.userId === user.id)}
+          noteFor={(d) => notes.find((n) => n.date === d)?.note}
+          onRequestSwap={onRequestSwap}
+        />
       ) : (
         <>
           {/* Toekomst */}
@@ -195,6 +236,232 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         </>
       )}
     </PageShell>
+  );
+}
+
+// --- Subcomponent: persoonlijk maandgrid (diensten + verlof + typedagen) ---
+
+const WEEKDAY_HEAD = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
+
+function MonthCalendar({
+  groups,
+  today,
+  leaves,
+  noteFor,
+  onRequestSwap,
+}: {
+  groups: GroupedShift[];
+  today: string;
+  leaves: LeaveRequest[];
+  noteFor: (date: string) => string | undefined;
+  onRequestSwap?: (shiftId: string) => void;
+}) {
+  const [viewMonth, setViewMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  const [selected, setSelected] = useState<string>(today);
+
+  const year = viewMonth.getFullYear();
+  const monthIndex = viewMonth.getMonth();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const monthName = viewMonth.toLocaleDateString('nl-BE', { month: 'long', year: 'numeric' });
+  const dateIso = (day: number) => `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  // Maandag-eerst: JS-zondag (0) wordt kolom 7.
+  const leadingBlanks = (new Date(year, monthIndex, 1).getDay() + 6) % 7;
+
+  const groupsByDate = useMemo(() => {
+    const map = new Map<string, GroupedShift[]>();
+    for (const g of groups) {
+      const list = map.get(g.date);
+      if (list) list.push(g);
+      else map.set(g.date, [g]);
+    }
+    return map;
+  }, [groups]);
+
+  // Verlof per dag; goedgekeurd wint van aangevraagd als beide de dag raken.
+  const leaveFor = (iso: string): LeaveRequest | undefined => {
+    const hits = leaves.filter(
+      (l) => (l.status === 'approved' || l.status === 'pending') && l.startDate <= iso && l.endDate >= iso,
+    );
+    return hits.find((l) => l.status === 'approved') ?? hits[0];
+  };
+
+  const selectedGroups = groupsByDate.get(selected) ?? [];
+  const selectedLeave = leaveFor(selected);
+  const selectedNote = noteFor(selected);
+  const selectedTypedag = typedagLabel(selected);
+
+  return (
+    <div className="space-y-4">
+      <div className="surface-card rounded-3xl p-4">
+        {/* Maandnavigatie */}
+        <div className="flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
+            aria-label="Vorige maand"
+            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="text-sm font-semibold capitalize text-slate-800">{monthName}</span>
+          <button
+            type="button"
+            onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
+            aria-label="Volgende maand"
+            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+
+        {/* Grid */}
+        <div className="mt-3 grid grid-cols-7 gap-1">
+          {WEEKDAY_HEAD.map((d) => (
+            <div key={d} className="py-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300">
+              {d}
+            </div>
+          ))}
+          {Array.from({ length: leadingBlanks }).map((_, i) => (
+            <div key={`blank-${i}`} />
+          ))}
+          {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
+            const iso = dateIso(day);
+            const dayGroups = groupsByDate.get(iso) ?? [];
+            const leave = leaveFor(iso);
+            const td = typedagLabel(iso);
+            const isSelected = iso === selected;
+            const isToday = iso === today;
+            const conflict = dayGroups.some((g) => g.hasConflict);
+
+            return (
+              <button
+                key={day}
+                type="button"
+                onClick={() => setSelected(iso)}
+                aria-label={`${iso}${dayGroups.length > 0 ? ', dienst' : ''}${leave ? ', verlof' : ''}`}
+                className={cn(
+                  'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
+                  !isSelected && 'hover:bg-slate-50',
+                  isSelected && 'bg-oker-500/15 ring-1 ring-oker-400',
+                  !isSelected && isToday && 'ring-1 ring-oker-300',
+                  !isSelected && leave?.status === 'approved' && (leave.type === 'ziekte' ? 'bg-rose-50' : 'bg-emerald-50'),
+                  !isSelected && leave?.status === 'pending' && 'bg-amber-50',
+                )}
+              >
+                <span className={cn('text-xs font-semibold tabular-nums leading-none', isToday ? 'text-oker-700' : 'text-slate-700')}>
+                  {day}
+                </span>
+                {td && (
+                  <span className={cn('text-[8px] font-bold leading-none', td.kort === 'F' ? 'text-oker-600' : 'text-slate-400')} title={td.titel}>
+                    {td.kort}
+                  </span>
+                )}
+                {dayGroups.length > 0 ? (
+                  <span className={cn('max-w-full truncate text-[9px] font-bold tabular-nums leading-none', conflict ? 'text-red-600' : 'text-oker-700')}>
+                    {dayGroups[0].line}
+                    {dayGroups.length > 1 && '+'}
+                  </span>
+                ) : leave ? (
+                  <span
+                    className={cn(
+                      'h-1.5 w-1.5 rounded-full',
+                      leave.status === 'pending' ? 'bg-amber-400' : leave.type === 'ziekte' ? 'bg-rose-500' : 'bg-emerald-500',
+                    )}
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Legende */}
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-[10px] font-medium text-slate-400">
+          <span className="inline-flex items-center gap-1.5"><span className="text-[10px] font-bold tabular-nums text-oker-700">2101</span> dienst</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
+          <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-[9px] font-bold text-oker-600">F</span> feestdag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-[9px] font-bold text-slate-400">V</span> schoolvakantie</span>
+        </div>
+      </div>
+
+      {/* Detail van de geselecteerde dag */}
+      <div className="surface-card rounded-3xl p-4">
+        <MicroLabel className={cn(selected === today && 'text-oker-600')}>
+          {selected === today ? 'Vandaag' : `Wk ${isoWeekOf(selected)}`}
+        </MicroLabel>
+        <p className="mt-0.5 text-sm font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
+        {selectedTypedag && (
+          <p className={cn('mt-0.5 text-[11px] font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+            {selectedTypedag.titel}
+          </p>
+        )}
+
+        {selectedLeave && (
+          <p
+            className={cn(
+              'mt-2.5 rounded-xl px-3 py-2 text-xs font-semibold',
+              selectedLeave.status === 'pending'
+                ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
+                : selectedLeave.type === 'ziekte'
+                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
+                  : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+            )}
+          >
+            {formatLeaveType(selectedLeave.type)}
+            {selectedLeave.status === 'pending' && ' — aangevraagd, wacht op de planner'}
+          </p>
+        )}
+
+        {selectedGroups.length === 0 && !selectedLeave ? (
+          <p className="mt-2.5 text-xs italic text-slate-400">Geen dienst gepland.</p>
+        ) : (
+          selectedGroups.map((g) => (
+            <div key={g.key} className="mt-3">
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold tabular-nums text-oker-700">{g.line}</span>
+                {g.hasConflict && (
+                  <Badge tone="red" icon={<AlertTriangle size={10} />}>Verlof-conflict</Badge>
+                )}
+              </div>
+              <div className="mt-1.5 space-y-1.5 pl-1">
+                {g.segments.map((s) => (
+                  <div key={s.id} className="flex items-center gap-2 text-sm">
+                    <Clock size={12} className="shrink-0 text-slate-400" />
+                    <span className="font-medium tabular-nums text-slate-700">
+                      {s.startTime} – {s.endTime}
+                    </span>
+                    {s.loopnr && (
+                      <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                        loop {s.loopnr}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))
+        )}
+
+        {selectedNote && (
+          <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800 dark:text-oker-300">
+            {selectedNote}
+          </p>
+        )}
+
+        {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict) && (
+          <button
+            type="button"
+            onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)}
+            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+          >
+            <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
