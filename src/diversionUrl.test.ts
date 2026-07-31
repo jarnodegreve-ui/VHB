@@ -41,6 +41,7 @@ describe('sanitizeDiversionPdfUrl', () => {
       startDate: '2026-08-01',
       pdfUrl: 'data:text/html;base64,PHNjcmlwdD4=',
     } as any);
-    expect(rij.pdfurl).toBeNull();
+    // Kolom is quoted camelCase in productie — de mapper schrijft pdfUrl.
+    expect(rij.pdfUrl).toBeNull();
   });
 });

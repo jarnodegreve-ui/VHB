@@ -8,9 +8,10 @@
  *   deze lijsten schrijven → een nieuwe mapper-kolom zonder probe-update (en
  *   dus zonder schema-check-dekking) faalt in CI.
  *
- * LET OP de bewuste casing-verschillen per tabel: users/diversions/swaps/leave
- * zijn unquoted→lowercase, planning/services zijn quoted camelCase (via de
- * Table Editor aangemaakt), planning_codes is snake_case.
+ * LET OP de bewuste casing-verschillen per tabel: users/swaps/leave zijn
+ * unquoted→lowercase, planning/services/diversions zijn quoted camelCase (via
+ * de Table Editor aangemaakt), planning_codes is snake_case. Diversions stond
+ * hier fout als lowercase — precies de drift die omleiding-saves brak.
  */
 export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   // startdate hoort bij PR #122 (anciënniteit) — staat hier alvast zodat de
@@ -20,7 +21,9 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "planning_matrix_rows", columns: "id,source_date,day_type,assignments,raw_row,created_at" },
   { table: "planning_codes", columns: "code,category,description,counts_as_shift,is_paid_absence,is_day_off" },
   { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3,loopnr,loopnr2,loopnr3" },
-  { table: "diversions", columns: "id,line,title,description,startdate,enddate,pdfurl,mapcoordinates" },
+  // severity bestaat live nog (nullable) maar wordt niet meer geschreven;
+  // mapCoordinates bestaat live NIET en is uit de schrijfmapper gehaald.
+  { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl" },
   // swap_type: ruil zonder tegenprestatie (supabase/swaps_swap_type.sql).
   { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code,swap_type" },
   { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },

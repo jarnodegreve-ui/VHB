@@ -231,15 +231,20 @@ export const sanitizeDiversionPdfUrl = (value?: string | null): string | null =>
   }
 };
 
+// LET OP: diversions heeft — anders dan de meeste tabellen — quoted
+// camelCase-kolommen in productie ("startDate"/"endDate"/"pdfUrl", geverifieerd
+// 2026-08-01). De mapper schreef lowercase en dat liet élke omleiding-save
+// falen met 42703. mapCoordinates wordt bewust NIET geschreven: de kolom
+// bestaat live niet en het beheer-formulier heeft er geen veld voor — het
+// veld leeft alleen als defensieve leesroute in toPublicDiversion.
 export const toDatabaseDiversion = (d: DiversionRecord) => ({
   id: String(d.id),
   line: d.line,
   title: d.title,
   description: d.description,
-  startdate: d.startDate,
-  enddate: d.endDate || null,
-  pdfurl: sanitizeDiversionPdfUrl(d.pdfUrl),
-  mapcoordinates: d.mapCoordinates || null,
+  startDate: d.startDate,
+  endDate: d.endDate || null,
+  pdfUrl: sanitizeDiversionPdfUrl(d.pdfUrl),
 });
 
 export const toPublicService = (s: any) => ({
