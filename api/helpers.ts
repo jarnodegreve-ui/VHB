@@ -135,6 +135,36 @@ export const toPublicDiversion = (d: any): DiversionRecord => ({
   mapCoordinates: d.mapCoordinates ?? d.mapcoordinates ?? undefined,
 });
 
+/** De bijlage van een omleiding hoort altijd in onze eigen (privé) Storage-bucket
+ *  te staan; op lezen wordt de URL toch vervangen door een verse signed URL uit
+ *  `${id}.pdf`. Een planner die hier een vrije URL kon opslaan, kon collega's
+ *  vanuit het portaal naar een externe pagina sturen — op iOS-standalone
+ *  navigeert de "Bekijk PDF"-fallback zelfs het PWA-venster zelf. `data:`,
+ *  `javascript:` en `blob:` worden client-side al geweigerd (isSafeDocumentUrl
+ *  in src/lib/ui.ts); dit is de server-side helft daarvan. */
+export const sanitizeDiversionPdfUrl = (value?: string | null): string | null => {
+  const raw = String(value ?? "").trim();
+  if (!raw) return null;
+  const storageHost = (() => {
+    try {
+      return new URL(process.env.SUPABASE_URL ?? "").host;
+    } catch {
+      return "";
+    }
+  })();
+  // Zonder geconfigureerde SUPABASE_URL valt er niets te vergelijken — dan
+  // liever de URL laten vallen dan een onbekende origin doorlaten.
+  if (!storageHost) return null;
+  try {
+    const url = new URL(raw);
+    if (url.protocol !== "https:") return null;
+    if (url.host !== storageHost) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+};
+
 export const toDatabaseDiversion = (d: DiversionRecord) => ({
   id: String(d.id),
   line: d.line,
@@ -142,7 +172,7 @@ export const toDatabaseDiversion = (d: DiversionRecord) => ({
   description: d.description,
   startdate: d.startDate,
   enddate: d.endDate || null,
-  pdfurl: d.pdfUrl || null,
+  pdfurl: sanitizeDiversionPdfUrl(d.pdfUrl),
   mapcoordinates: d.mapCoordinates || null,
 });
 
