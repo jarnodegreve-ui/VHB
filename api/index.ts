@@ -2527,6 +2527,21 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
+    // 'accepted' ís de instemming van de aangezochte collega — geen enkele
+    // stafrol mag hem schrijven, ook een admin niet. De regel hierboven
+    // blokkeerde alleen de sprong pending → approved; via pending → accepted
+    // → approved was instemming alsnog te vervalsen (zelfde gat als in
+    // PATCH /api/swaps/:id). Een admin keurt zonder bevestiging goed via de
+    // directe pending → approved-weg.
+    if (req.appUser?.role !== "chauffeur") {
+      for (const next of newData) {
+        const prev = previousById.get(String(next.id));
+        if (String(next.status) === "accepted" && String(prev?.status ?? "") !== "accepted") {
+          return res.status(403).json({ error: "Niet toegestaan: alleen de aangezochte collega kan een ruil accepteren." });
+        }
+      }
+    }
+
     if (req.appUser?.role !== "chauffeur") {
       for (const [id] of previousById) {
         if (!newById.has(String(id))) swapIdsToDelete.push(String(id));
@@ -2676,6 +2691,16 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
         return res.status(403).json({ error: "Niet toegestaan: je mag een aan jou gerichte, openstaande ruil accepteren of weigeren, of je eigen openstaande aanvraag intrekken." });
       }
     } else {
+      // 'accepted' ís de instemming van de aangezochte collega — alleen die
+      // collega mag hem schrijven, geen enkele stafrol. Zonder deze regel
+      // blokkeerde alleen de sprong pending → approved en kon een planner in
+      // twee stappen (pending → accepted → approved) instemming vervalsen,
+      // inclusief de push "<collega> accepteerde de ruil" naar de aanvrager.
+      // Een admin die zonder bevestiging wil goedkeuren gebruikt de bestaande
+      // directe pending → approved-weg hieronder.
+      if (status === "accepted" && current.status !== "accepted") {
+        return res.status(403).json({ error: "Niet toegestaan: alleen de aangezochte collega kan een ruil accepteren." });
+      }
       const allowed = ["accepted", "approved", "rejected", "cancelled", "completed"];
       if (!allowed.includes(status)) {
         return res.status(400).json({ error: "Ongeldige status." });

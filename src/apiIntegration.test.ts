@@ -736,6 +736,28 @@ describe('delta-endpoints (PATCH per record, anti-race)', () => {
     const res = await api('PATCH', '/api/swaps/s-1', { token: 'tok-a', body: { status: 'accepted', ifStatus: 'pending' } });
     expect(res.status).toBe(403);
   });
+
+  it('laat geen enkele stafrol "accepted" schrijven — instemming is niet te vervalsen', async () => {
+    // De force-approve-regel blokkeerde alleen pending → approved in één stap.
+    // Via pending → accepted → approved was instemming alsnog te faken, mét
+    // een push "<collega> accepteerde de ruil" naar de aanvrager als bewijs.
+    const planner = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'accepted', ifStatus: 'pending' } });
+    expect(planner.status).toBe(403);
+
+    // Ook een admin niet: die heeft de directe pending → approved-weg al.
+    const admin = await api('PATCH', '/api/swaps/s-1', { token: 'tok-admin', body: { status: 'accepted', ifStatus: 'pending' } });
+    expect(admin.status).toBe(403);
+
+    // De ruil staat dus nog steeds op pending — stap 2 kan niet volgen.
+    expect(mem.swaps.find((s) => s.id === 's-1')?.status).toBe('pending');
+  });
+
+  it('blokkeert de twee-staps-vervalsing ook op het array-pad (POST)', async () => {
+    const scoped = mem.swaps.map((s) => (s.id === 's-1' ? { ...s, status: 'accepted' } : s));
+    const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: scoped });
+    expect(res.status).toBe(403);
+    expect(mem.swaps.find((s) => s.id === 's-1')?.status).toBe('pending');
+  });
 });
 
 describe('push-notificaties', () => {
