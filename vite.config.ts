@@ -31,22 +31,37 @@ export default defineConfig(() => {
       // niets dat niet al op GitHub staat. .map-bestanden tellen niet mee
       // in scripts/check-bundle-size.mjs (die telt alleen .js).
       sourcemap: true,
+      // Enige chunk boven de standaard-500kB is xlsx (~500 kB min.) — die is
+      // al lazy (alleen geladen bij een Excel-import in Beheer) en zit vast
+      // op de SheetJS-CDN-versie. De échte bewaker is de CI-gzip-budgetcheck
+      // (scripts/check-bundle-size.mjs, 600 kB); deze limiet dempt alleen de
+      // vaste build-warning zonder nieuwe uitschieters te verstoppen.
+      chunkSizeWarningLimit: 520,
       rollupOptions: {
         output: {
           manualChunks(id) {
-            if (id.includes('node_modules')) {
-              if (id.includes('react') || id.includes('scheduler')) {
-                return 'react-vendor';
-              }
-              if (id.includes('@supabase')) {
-                return 'supabase-vendor';
-              }
-              if (id.includes('lucide-react') || id.includes('motion') || id.includes('clsx') || id.includes('tailwind-merge')) {
-                return 'ui-vendor';
-              }
-              if (id.includes('nodemailer')) {
-                return 'integrations-vendor';
-              }
+            if (!id.includes('node_modules')) return;
+            // Volgorde is betekenisvol: 'lucide-react' en 'react-leaflet'
+            // bevatten allebei de substring 'react' — de brede react-check
+            // ving ze eerst af, waardoor de complete kaart-stack (leaflet +
+            // react-leaflet) én alle lucide-iconen in react-vendor zaten en
+            // dus bij elke pagina-load meekwamen, terwijl DiversionMap juist
+            // lazy is. Kaart-stack nu apart: die laadt alleen wanneer iemand
+            // een omleiding met kaart opent.
+            if (id.includes('leaflet')) {
+              return 'map-vendor';
+            }
+            if (id.includes('lucide-react') || id.includes('motion') || id.includes('clsx') || id.includes('tailwind-merge')) {
+              return 'ui-vendor';
+            }
+            if (id.includes('react') || id.includes('scheduler')) {
+              return 'react-vendor';
+            }
+            if (id.includes('@supabase')) {
+              return 'supabase-vendor';
+            }
+            if (id.includes('nodemailer')) {
+              return 'integrations-vendor';
             }
           },
         },
