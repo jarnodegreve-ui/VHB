@@ -119,6 +119,8 @@ export const toPublicSwap = (swap: any): SwapRecord => {
     returnDate: swapType === "overname" ? undefined : (swap.returnDate ?? swap.return_date ?? undefined),
     returnCode: swapType === "overname" ? undefined : (swap.returnCode ?? swap.return_code ?? undefined),
     swapType,
+    shiftDate: swap.shiftDate ?? swap.shift_date ?? undefined,
+    shiftLine: swap.shiftLine ?? swap.shift_line ?? undefined,
   };
 };
 
@@ -136,6 +138,8 @@ export const toDatabaseSwap = (swap: SwapRecord) => {
     return_date: swapType === "overname" ? null : (swap.returnDate || null),
     return_code: swapType === "overname" ? null : (swap.returnCode || null),
     swap_type: swapType,
+    shift_date: swap.shiftDate || null,
+    shift_line: swap.shiftLine || null,
   };
 };
 

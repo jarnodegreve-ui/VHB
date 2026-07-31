@@ -41,6 +41,12 @@ export interface SwapRecord {
   returnCode?: string;
   /** 'ruil' = 1-op-1 (returnDate + returnCode gevuld), 'overname' = zonder tegenprestatie. */
   swapType?: SwapType;
+  /** Dag van de aangeboden dienst — server-side ingevuld bij het indienen.
+   *  Sleutel voor de automatische planning-doorvoer (shiftid is niet stabiel
+   *  over heropbouwen heen). */
+  shiftDate?: string;
+  /** Dienstnummer van de aangeboden dienst (planning.line) — idem. */
+  shiftLine?: string;
 }
 
 export interface LeaveRecord {

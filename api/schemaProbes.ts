@@ -22,7 +22,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "services", columns: "id,serviceNumber,startTime,endTime,startTime2,endTime2,startTime3,endTime3,loopnr,loopnr2,loopnr3" },
   { table: "diversions", columns: "id,line,title,description,startdate,enddate,pdfurl,mapcoordinates" },
   // swap_type: ruil zonder tegenprestatie (supabase/swaps_swap_type.sql).
-  { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code,swap_type" },
+  // shift_date/shift_line: planning-doorvoer (2026-08-01_swaps_shift_info.sql).
+  { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code,swap_type,shift_date,shift_line" },
   { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },
   { table: "activity_log", columns: "id,created_at,actor_name,actor_role,category,action,details" },
   // user_documents hoort bij de documenten-module (supabase/user_documents.sql)

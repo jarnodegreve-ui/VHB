@@ -57,6 +57,9 @@ export interface SwapRequest {
   returnCode?: string;
   /** Ontbreekt op oude records → 'ruil'. */
   swapType?: SwapType;
+  /** Dag + dienstnummer van de aangeboden dienst — door de server ingevuld. */
+  shiftDate?: string;
+  shiftLine?: string;
 }
 
 export interface LeaveRequest {
