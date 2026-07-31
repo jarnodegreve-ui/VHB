@@ -18,6 +18,13 @@ export type AvailabilityDay = {
   free: string[];
   /** per werkende driver-id: het dienst-/lijnnummer (bv. "4101", of "4101/4103") */
   lines: Record<string, string>;
+  /**
+   * Enkel met `takeover: true` opgevraagd: driver-ids die die dag een dienst
+   * mogen overnemen zónder tegenprestatie, met hun planningcode als waarde
+   * ('vrij' | 'bv' | 'tk' | 'ta'). De server bepaalt de regel — de UI toont ze
+   * alleen (en de server valideert opnieuw bij het indienen).
+   */
+  takeover?: Record<string, string>;
 };
 
 export type AvailabilityResponse = {
@@ -27,8 +34,13 @@ export type AvailabilityResponse = {
   days: AvailabilityDay[];
 };
 
-export function fetchAvailability(from: string, to: string): Promise<AvailabilityResponse> {
-  return apiFetch<AvailabilityResponse>(`/api/availability?from=${from}&to=${to}`);
+export function fetchAvailability(
+  from: string,
+  to: string,
+  opts: { takeover?: boolean } = {},
+): Promise<AvailabilityResponse> {
+  const takeover = opts.takeover ? '&takeover=1' : '';
+  return apiFetch<AvailabilityResponse>(`/api/availability?from=${from}&to=${to}${takeover}`);
 }
 
 /** Drivers die zowel rijden als verlof hebben op dezelfde dag = conflict. */

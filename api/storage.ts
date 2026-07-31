@@ -127,14 +127,22 @@ export const savePlanningData = async (data: any) => {
   }
 };
 
-/** Eén shift gericht opzoeken (eigendoms-checks bij dienstruil). */
-export const getShiftById = async (id: string): Promise<{ id: string; driverId: string } | null> => {
+/**
+ * Eén shift gericht opzoeken (eigendoms-checks bij dienstruil). `date` hoort
+ * erbij sinds de ruil zonder tegenprestatie: de servercheck moet weten op
+ * welke dag de aangeboden dienst valt.
+ */
+export const getShiftById = async (id: string): Promise<{ id: string; driverId: string; date: string } | null> => {
   if (!id) return null;
   const client = requireDb();
-  const { data, error } = await client.from('planning').select('id, driverId').eq('id', id).maybeSingle();
+  const { data, error } = await client.from('planning').select('id, driverId, date').eq('id', id).maybeSingle();
   if (error) throw error;
   if (!data) return null;
-  return { id: String((data as any).id), driverId: String((data as any).driverId ?? '') };
+  return {
+    id: String((data as any).id),
+    driverId: String((data as any).driverId ?? ''),
+    date: String((data as any).date ?? ''),
+  };
 };
 
 /** Volledige planning wissen — alleen voor de expliciete admin-actie. */

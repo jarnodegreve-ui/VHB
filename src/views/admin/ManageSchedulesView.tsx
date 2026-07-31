@@ -48,7 +48,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const [changesSinceImport, setChangesSinceImport] = useState<null | {
     lastImport: { createdAt: string; importedDays: number } | null;
     approvedLeave: Array<{ id: string; userName: string | null; startDate: string; endDate: string; type: string; decidedAt?: string }>;
-    approvedSwaps: Array<{ id: string; requesterName: string | null; targetName: string | null; decidedAt?: string }>;
+    approvedSwaps: Array<{ id: string; requesterName: string | null; targetName: string | null; decidedAt?: string; swapType?: string }>;
   }>(null);
   const [changesExpanded, setChangesExpanded] = useState(false);
   const [printDriverId, setPrintDriverId] = useState<string>('');
@@ -377,6 +377,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                                 <span className="font-semibold">{s.requesterName}</span>
                                 {' → '}
                                 <span className="font-semibold">{s.targetName || '?'}</span>
+                                {s.swapType === 'overname' && (
+                                  <span className="text-slate-400"> · overname (geen tegenprestatie)</span>
+                                )}
                               </span>
                             </li>
                           ))}

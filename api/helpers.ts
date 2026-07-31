@@ -9,6 +9,7 @@ import type {
   PlanningMatrixRow,
   Role,
   SwapRecord,
+  SwapType,
 } from "./types.js";
 
 export const normalizeEmail = (email?: string | null) => email?.trim().toLowerCase() || undefined;
@@ -98,31 +99,96 @@ export const toDatabaseUser = (user: AppUser) => ({
   startdate: user.startDate?.trim() || null,
 });
 
-export const toPublicSwap = (swap: any): SwapRecord => ({
-  id: String(swap.id),
-  shiftId: String(swap.shiftId ?? swap.shiftid),
-  requesterId: String(swap.requesterId ?? swap.requesterid),
-  targetDriverId: swap.targetDriverId ?? swap.targetdriverid ?? undefined,
-  status: swap.status,
-  createdAt: String(swap.createdAt ?? swap.createdat),
-  reason: swap.reason ?? undefined,
-  decidedAt: swap.decidedAt ?? swap.decidedat ?? undefined,
-  returnDate: swap.returnDate ?? swap.return_date ?? undefined,
-  returnCode: swap.returnCode ?? swap.return_code ?? undefined,
-});
+/** Onbekende/ontbrekende waarden vallen terug op de klassieke 1-op-1 ruil. */
+export const normalizeSwapType = (value: unknown): SwapType =>
+  String(value ?? "").trim().toLowerCase() === "overname" ? "overname" : "ruil";
 
-export const toDatabaseSwap = (swap: SwapRecord) => ({
-  id: String(swap.id),
-  shiftid: String(swap.shiftId),
-  requesterid: String(swap.requesterId),
-  targetdriverid: swap.targetDriverId || null,
-  status: swap.status,
-  createdat: String(swap.createdAt),
-  reason: swap.reason || null,
-  decidedat: swap.decidedAt || null,
-  return_date: swap.returnDate || null,
-  return_code: swap.returnCode || null,
-});
+export const toPublicSwap = (swap: any): SwapRecord => {
+  const swapType = normalizeSwapType(swap.swapType ?? swap.swap_type);
+  return {
+    id: String(swap.id),
+    shiftId: String(swap.shiftId ?? swap.shiftid),
+    requesterId: String(swap.requesterId ?? swap.requesterid),
+    targetDriverId: swap.targetDriverId ?? swap.targetdriverid ?? undefined,
+    status: swap.status,
+    createdAt: String(swap.createdAt ?? swap.createdat),
+    reason: swap.reason ?? undefined,
+    decidedAt: swap.decidedAt ?? swap.decidedat ?? undefined,
+    // Een overname heeft per definitie geen tegenprestatie: eventuele
+    // meegestuurde return-velden negeren we, zodat de UI ze nooit toont.
+    returnDate: swapType === "overname" ? undefined : (swap.returnDate ?? swap.return_date ?? undefined),
+    returnCode: swapType === "overname" ? undefined : (swap.returnCode ?? swap.return_code ?? undefined),
+    swapType,
+  };
+};
+
+export const toDatabaseSwap = (swap: SwapRecord) => {
+  const swapType = normalizeSwapType(swap.swapType);
+  return {
+    id: String(swap.id),
+    shiftid: String(swap.shiftId),
+    requesterid: String(swap.requesterId),
+    targetdriverid: swap.targetDriverId || null,
+    status: swap.status,
+    createdat: String(swap.createdAt),
+    reason: swap.reason || null,
+    decidedat: swap.decidedAt || null,
+    return_date: swapType === "overname" ? null : (swap.returnDate || null),
+    return_code: swapType === "overname" ? null : (swap.returnCode || null),
+    swap_type: swapType,
+  };
+};
+
+/**
+ * Ruil zonder tegenprestatie — de planningcodes waarop een collega een dienst
+ * mag overnemen zonder er iets voor terug te geven.
+ *
+ * Bewust een expliciete lijst en niet "alles wat geen dienst is": 'ziek' telt
+ * óók niet als dienst maar mag natuurlijk geen dienst toegeschoven krijgen.
+ * Wil je later 'f' (feestdag), 'kv' of 'ov' toelaten, dan is dít de enige
+ * plek — de server valideert hierop en de UI toont hem via /api/availability.
+ */
+export const TAKEOVER_CODES = ["vrij", "bv", "tk", "ta"] as const;
+
+const TAKEOVER_CODE_SET = new Set<string>(TAKEOVER_CODES);
+
+export const isTakeoverCode = (code?: string | null) =>
+  TAKEOVER_CODE_SET.has(toLookupToken(code));
+
+/**
+ * De planning-matrixcode per chauffeur-id voor één dag ('vrij', 'bv', '4101', …).
+ * Naam-matching identiek aan buildPlanningFromMatrix/month-planning: strikt
+ * genormaliseerd én volgorde-onafhankelijk ('Duysburgh Pascal' = 'Pascal
+ * Duysburgh'), anders vallen accent- en omgekeerde namen stil weg.
+ */
+export const matrixCodesForDate = (
+  rows: Array<Pick<PlanningMatrixRow, "source_date" | "assignments">>,
+  users: Array<Pick<AppUser, "id" | "name">>,
+  date: string,
+): Map<string, string> => {
+  const sortedNameToken = (name: string) =>
+    toLookupToken(name).split(/\s+/).filter(Boolean).sort().join(" ");
+  const idByName = new Map<string, string>();
+  for (const u of users) {
+    idByName.set(toLookupToken(u.name), String(u.id));
+    idByName.set(sortedNameToken(u.name), String(u.id));
+  }
+
+  const out = new Map<string, string>();
+  for (const row of rows) {
+    if (String(row.source_date ?? "") !== date) continue;
+    const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments)
+      ? row.assignments
+      : {};
+    for (const [driverName, rawCode] of Object.entries(assignments)) {
+      const id = idByName.get(toLookupToken(driverName)) ?? idByName.get(sortedNameToken(driverName));
+      const code = String(rawCode ?? "").trim();
+      if (!id || !code) continue;
+      out.set(id, code);
+    }
+  }
+  return out;
+};
 
 export const toPublicDiversion = (d: any): DiversionRecord => ({
   id: String(d.id),

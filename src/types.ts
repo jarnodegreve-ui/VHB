@@ -31,6 +31,15 @@ export interface Diversion {
   mapCoordinates?: string;
 }
 
+/**
+ * 'ruil' = klassieke 1-op-1 ruil (returnDate + returnCode gevuld).
+ * 'overname' = zonder tegenprestatie: de collega neemt de dienst over en de
+ * aanvrager geeft er niets voor terug. Kan alleen als de collega die dag
+ * vrij/bv/tk/ta staat — de server dwingt dat af (POST /api/swaps).
+ * Spiegel van SwapType in api/types.ts.
+ */
+export type SwapType = 'ruil' | 'overname';
+
 export interface SwapRequest {
   id: string;
   shiftId: string;
@@ -46,6 +55,8 @@ export interface SwapRequest {
   // returnCode = dienstnummer of 'vrij'; returnDate = de dag ervan.
   returnDate?: string;
   returnCode?: string;
+  /** Ontbreekt op oude records → 'ruil'. */
+  swapType?: SwapType;
 }
 
 export interface LeaveRequest {
