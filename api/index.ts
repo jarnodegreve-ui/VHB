@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
 import {
   buildPlanningFromMatrix,
   getActivityLog,
@@ -628,8 +628,17 @@ app.get("/api/availability", authenticate, async (req, res) => {
     }
     if (dates.length === 0) return res.json({ from, to, drivers: [], days: [] });
 
+    // Ruil zonder tegenprestatie: enkel op expliciete vraag (?takeover=1),
+    // want dit vergt de volledige planning-matrix erbij — die hoeft het
+    // bezettingsoverzicht (tot 120 dagen) niet te betalen.
+    const wantTakeover = req.query.takeover === "1" || req.query.takeover === "true";
+
     const months = Array.from(new Set(dates.map((d) => d.slice(0, 7))));
-    const [users, leave] = await Promise.all([getUsersData(), getLeaveData()]);
+    const [users, leave, matrixRows] = await Promise.all([
+      getUsersData(),
+      getLeaveData(),
+      wantTakeover ? getPlanningMatrixRows() : Promise.resolve([]),
+    ]);
     const shiftChunks = await Promise.all(months.map((m) => getPlanningData({ monthIso: m })));
     const shifts = shiftChunks.flat().filter((s: any) => s.date >= from && s.date <= to);
 
@@ -664,7 +673,20 @@ app.get("/api/availability", authenticate, async (req, res) => {
         }
       }
       const free = chauffeurs.filter((c) => !working.has(c.id) && !onLeave.has(c.id)).map((c) => c.id);
-      return { date, working: Array.from(working), leave: Array.from(onLeave), free, lines };
+      const day: Record<string, unknown> = { date, working: Array.from(working), leave: Array.from(onLeave), free, lines };
+      if (wantTakeover) {
+        // Wie mag die dag een dienst overnemen zónder tegenprestatie: staat
+        // in de planning op vrij/bv/tk/ta én rijdt zelf geen dienst. Waarde =
+        // de code, zodat de UI kan tonen wáárom ('bv' leest anders dan 'vrij').
+        // Dezelfde regel als de server-validatie in POST /api/swaps.
+        const takeover: Record<string, string> = {};
+        for (const [driverId, code] of matrixCodesForDate(matrixRows, chauffeurs, date)) {
+          if (!chauffeurIds.has(driverId) || working.has(driverId)) continue;
+          if (isTakeoverCode(code)) takeover[driverId] = code.toLowerCase();
+        }
+        day.takeover = takeover;
+      }
+      return day;
     });
 
     res.json({ from, to, drivers: chauffeurs, days });
@@ -1283,6 +1305,9 @@ app.get("/api/planning-matrix/changes-since-import", authenticate, requireRole("
         targetName: userName(s.targetDriverId),
         shiftId: s.shiftId,
         decidedAt: s.decidedAt,
+        // Bij een overname verhuist enkel de dienst van de aanvrager; er staat
+        // geen tegenprestatie tegenover die de planner ook moet inboeken.
+        swapType: normalizeSwapType(s.swapType),
       }));
 
     res.json({
@@ -2456,7 +2481,11 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           if (String(next.targetDriverId) === selfId) {
             return res.status(400).json({ error: "Je kan geen dienstruil aan jezelf aanvragen." });
           }
-          if (!next.returnCode || String(next.returnCode).trim() === "" || !next.returnDate || String(next.returnDate).trim() === "") {
+          // Bij een overname (ruil zonder tegenprestatie) is er bewust géén
+          // terugruil; de eigenlijke voorwaarde — de collega staat die dag op
+          // vrij/bv/tk/ta — wordt rol-onafhankelijk verderop gecontroleerd.
+          if (normalizeSwapType(next.swapType) === "ruil"
+            && (!next.returnCode || String(next.returnCode).trim() === "" || !next.returnDate || String(next.returnDate).trim() === "")) {
             return res.status(400).json({ error: "Kies wat je in ruil neemt (een dienst of een vrije dag van de collega)." });
           }
 
@@ -2498,7 +2527,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
                 return res.status(403).json({ error: "Niet toegestaan: je mag een aanvraag alleen accepteren of weigeren." });
               }
             }
-            writes.push(next);
+            // Het ruiltype is eveneens onveranderlijk, maar tolerant voor een
+            // oudere client uit de PWA-cache die het veld nog niet kent:
+            // ontbreekt het, dan is dat géén wijziging — en we schrijven altijd
+            // het opgeslagen type terug, zodat een overname niet stil naar een
+            // 1-op-1 ruil degradeert.
+            if (next.swapType !== undefined && normalizeSwapType(next.swapType) !== normalizeSwapType(prev.swapType)) {
+              return res.status(403).json({ error: "Niet toegestaan: je mag een aanvraag alleen accepteren of weigeren." });
+            }
+            writes.push({ ...next, swapType: normalizeSwapType(prev.swapType) });
           }
           // Anders: ongewijzigde echo of een gelijktijdig door een ander
           // gewijzigd record → bewust NIET wegschrijven (geen 403, geen
@@ -2566,21 +2603,83 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    await saveSwapsData(recordsToWrite, swapIdsToDelete);
+    // Ruil zonder tegenprestatie ('overname'): alleen toegestaan als de
+    // collega die dag géén dienst rijdt én in de planning op vrij/bv/tk/ta
+    // staat. Rol-onafhankelijk: een dienst doorschuiven naar iemand die rijdt
+    // (of ziek is) is voor elke rol onzin, niet enkel voor een chauffeur.
+    // Het type zelf is immutable (zie de accepteer-tak hierboven), dus deze
+    // check hoeft alleen op nieuwe records.
+    {
+      const newTakeovers = recordsToWrite.filter(
+        (n: any) => !previousById.has(String(n.id)) && normalizeSwapType(n.swapType) === "overname",
+      );
+      if (newTakeovers.length > 0) {
+        const [matrixRows, usersForTakeover] = await Promise.all([getPlanningMatrixRows(), getUsersData()]);
+        for (const next of newTakeovers) {
+          const targetId = String(next.targetDriverId ?? "").trim();
+          if (!targetId) {
+            return res.status(400).json({ error: "Selecteer een collega aan wie je de dienst wil doorgeven." });
+          }
+          const offeredShift = await getShiftById(String(next.shiftId ?? ""));
+          if (!offeredShift) {
+            return res.status(400).json({ error: "De aangeboden dienst bestaat niet (meer)." });
+          }
+          const date = String(offeredShift.date);
+          const code = matrixCodesForDate(matrixRows, usersForTakeover, date).get(targetId);
+          if (!isTakeoverCode(code)) {
+            const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
+            return res.status(409).json({
+              error: code
+                ? `${naam} staat op ${date} ingepland als '${code}'. Ruilen zonder tegenprestatie kan alleen als de collega die dag ${TAKEOVER_CODES.join("/")} staat.`
+                : `Voor ${naam} staat er op ${date} niets in de planning. Ruilen zonder tegenprestatie kan alleen als de collega die dag ${TAKEOVER_CODES.join("/")} staat.`,
+            });
+          }
+          // Dubbelcheck op de planning zelf: de matrix is de bron van de
+          // codes, maar een handmatig toegevoegde dienst staat er niet in.
+          const monthShifts = await getPlanningData({ monthIso: date.slice(0, 7) });
+          if (monthShifts.some((s: any) => String(s.driverId) === targetId && String(s.date) === date)) {
+            const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
+            return res.status(409).json({ error: `${naam} heeft op ${date} toch een dienst in de planning staan — ruilen zonder tegenprestatie kan dan niet.` });
+          }
+        }
+      }
+    }
+
+    // Het ruiltype ligt vast bij het indienen. Bestaande records erven dus
+    // altijd het opgeslagen type: een client die het veld niet meestuurt
+    // (oudere bundel uit de PWA-cache) mag een overname niet stil naar een
+    // 1-op-1 ruil omzetten.
+    const finalRecords = recordsToWrite.map((n: any) => {
+      const prev = previousById.get(String(n.id));
+      return { ...n, swapType: normalizeSwapType(prev ? prev.swapType : n.swapType) };
+    });
+
+    await saveSwapsData(finalRecords, swapIdsToDelete);
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen. Over
     // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
     const usersForLog = await getUsersData();
     const userName = (id: string) => usersForLog.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
-    for (const next of recordsToWrite) {
+    for (const next of finalRecords) {
       const prev = previousById.get(String(next.id));
       if (!prev) {
-        await logActivity(req, "swaps", "Dienstruil aangevraagd", `${userName(next.requesterId)} bood een dienst aan voor ruil.`, { type: "swap", id: next.id });
+        const isTakeover = normalizeSwapType(next.swapType) === "overname";
+        await logActivity(
+          req,
+          "swaps",
+          "Dienstruil aangevraagd",
+          isTakeover
+            ? `${userName(next.requesterId)} bood een dienst aan ter overname (zonder tegenprestatie).`
+            : `${userName(next.requesterId)} bood een dienst aan voor ruil.`,
+          { type: "swap", id: next.id },
+        );
         // De aangezochte collega krijgt direct een seintje.
         if (next.targetDriverId) {
           await sendPushToUsers([String(next.targetDriverId)], {
-            title: "Nieuwe dienstruil-aanvraag",
-            body: `${userName(next.requesterId)} wil een dienst met je ruilen.`,
+            title: isTakeover ? "Vraag om een dienst over te nemen" : "Nieuwe dienstruil-aanvraag",
+            body: isTakeover
+              ? `${userName(next.requesterId)} vraagt of je een dienst wil overnemen — zonder tegenprestatie.`
+              : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
             url: "/",
           });
         }

@@ -572,7 +572,7 @@ export function PlannerDashboardWidgets({
               <OpsRow
                 tone="blue"
                 icon={<Repeat size={15} />}
-                primary={`Dienstruil · ${swap.targetDriverId
+                primary={`${swap.swapType === 'overname' ? 'Overname' : 'Dienstruil'} · ${swap.targetDriverId
                   ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
                   : userNameById(swap.requesterId)}`}
                 secondary={swap.status === 'accepted' ? 'Collega akkoord — wacht op validatie' : swap.reason || 'Wacht op een collega'}

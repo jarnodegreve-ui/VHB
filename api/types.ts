@@ -25,6 +25,9 @@ export interface IncomingUser extends AppUser {
   password?: string;
 }
 
+/** Spiegel van SwapType in src/types.ts — waarden moeten 1-op-1 matchen. */
+export type SwapType = "ruil" | "overname";
+
 export interface SwapRecord {
   id: string;
   shiftId: string;
@@ -36,6 +39,8 @@ export interface SwapRecord {
   decidedAt?: string;
   returnDate?: string;
   returnCode?: string;
+  /** 'ruil' = 1-op-1 (returnDate + returnCode gevuld), 'overname' = zonder tegenprestatie. */
+  swapType?: SwapType;
 }
 
 export interface LeaveRecord {

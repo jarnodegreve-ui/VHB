@@ -38,6 +38,9 @@ const mem = vi.hoisted(() => ({
   updates: [] as any[],
   diversions: [] as any[],
   planning: [] as any[],
+  // Ruwe planning-matrix (chauffeur × datum met codes) — bron voor de
+  // 'vrij/bv/tk/ta'-check bij een ruil zonder tegenprestatie.
+  planningMatrix: [] as any[],
   planningCodes: [] as any[],
   activity: [] as any[],
   // Retourwaarde van getLatestAuthEventAt — stuurt de per-dag-dedup van het
@@ -166,7 +169,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getLatestAuthEventAt: async () => mem.lastAuthEventAt,
     updateUserSessionMeta: async () => {},
     bumpActiveSessions: async () => {},
-    getPlanningMatrixRows: async () => [],
+    getPlanningMatrixRows: async () => mem.planningMatrix,
     getCoverageExpectations: async () => ({}),
     listUserDocuments: async (userId?: string) =>
       userId ? mem.documents.filter((d: any) => String(d.userId) === String(userId)) : mem.documents,
@@ -305,6 +308,12 @@ beforeEach(() => {
     { id: 'sh-a', driverId: '3', date: '2026-07-01', code: '12' },
     { id: 'sh-b', driverId: '4', date: '2026-07-02', code: '14' },
     { id: 'sh-c', driverId: '3', date: '2026-07-08', code: '12' }, // vrije dienst van chauffeur 3 (geen open ruil)
+  ];
+  // 2026-07-08: chauffeur 3 rijdt dienst 12, chauffeur 4 staat op bv → een
+  // overname (ruil zonder tegenprestatie) naar chauffeur 4 mag die dag.
+  mem.planningMatrix = [
+    { id: 'm-1', source_date: '2026-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'bv' }, raw_row: '' },
+    { id: 'm-2', source_date: '2026-07-01', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
   ];
   mem.services = [
     { id: 'd1', serviceNumber: '10', startTime: '06:00', endTime: '14:00' },
@@ -526,6 +535,97 @@ describe('dienstruil: autorisatieregels', () => {
     const res = await api('PATCH', '/api/swaps/s-r', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'rejected' } });
     expect(res.status).toBe(409);
     expect(mem.swaps.find((s) => s.id === 's-r')?.status).toBe('rejected');
+  });
+});
+
+describe('dienstruil zonder tegenprestatie (overname)', () => {
+  // Chauffeur 3 biedt sh-c aan (2026-07-08); chauffeur 4 staat die dag op 'bv'.
+  const overname = (extra: Record<string, unknown> = {}) => ({
+    id: 's-over', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+    reason: '', createdAt: '2026-06-12T08:00:00Z', swapType: 'overname', ...extra,
+  });
+  const eigenPayload = (nieuw: unknown) => [
+    ...mem.swaps.filter((s) => s.requesterId === '3' || s.targetDriverId === '3'),
+    nieuw,
+  ];
+
+  it('staat een overname toe als de collega die dag op bv staat', async () => {
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: eigenPayload(overname()) });
+    expect(res.status).toBe(200);
+    const opgeslagen = mem.swaps.find((s) => s.id === 's-over');
+    expect(opgeslagen?.swapType).toBe('overname');
+    // Geen tegenprestatie: return-velden blijven leeg.
+    expect(opgeslagen?.returnDate ?? null).toBeNull();
+    expect(opgeslagen?.returnCode ?? null).toBeNull();
+  });
+
+  it('weigert een overname als de collega die dag een dienst rijdt (409)', async () => {
+    // sh-a valt op 2026-07-01; chauffeur 4 staat dan in de matrix op dienst 14.
+    mem.swaps = [];
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [overname({ shiftId: 'sh-a' })] });
+    expect(res.status).toBe(409);
+    expect(mem.swaps).toHaveLength(0);
+  });
+
+  it('weigert een overname als de collega ziek is (409)', async () => {
+    mem.planningMatrix = [
+      { id: 'm-1', source_date: '2026-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'ziek' }, raw_row: '' },
+    ];
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: eigenPayload(overname()) });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s) => s.id === 's-over')).toBeUndefined();
+  });
+
+  it('weigert een overname als er voor die dag niets in de planning-matrix staat (409)', async () => {
+    mem.planningMatrix = [];
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: eigenPayload(overname()) });
+    expect(res.status).toBe(409);
+  });
+
+  it('weigert een overname als de collega tóch een dienst in de planning heeft (409)', async () => {
+    // Matrix zegt 'bv', maar er staat een handmatig toegevoegde dienst.
+    mem.planning = [...mem.planning, { id: 'sh-extra', driverId: '4', date: '2026-07-08', code: '15' }];
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: eigenPayload(overname()) });
+    expect(res.status).toBe(409);
+  });
+
+  it('geldt ook voor een planner — niet enkel voor chauffeurs (409)', async () => {
+    mem.planningMatrix = [];
+    mem.swaps = [];
+    const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: [overname()] });
+    expect(res.status).toBe(409);
+  });
+
+  it('vraagt bij een gewone ruil nog steeds een tegenprestatie (400)', async () => {
+    const res = await api('POST', '/api/swaps', {
+      token: 'tok-a',
+      body: eigenPayload(overname({ id: 's-zonder', swapType: 'ruil' })),
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('behoudt het type als de collega accepteert, ook zonder swapType in de payload', async () => {
+    mem.swaps = [{
+      id: 's-over', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-12T08:00:00Z', swapType: 'overname',
+    }];
+    const { swapType: _weg, ...zonderType } = mem.swaps[0] as any;
+    const res = await api('POST', '/api/swaps', { token: 'tok-b', body: [{ ...zonderType, status: 'accepted' }] });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s) => s.id === 's-over')?.status).toBe('accepted');
+    expect(mem.swaps.find((s) => s.id === 's-over')?.swapType).toBe('overname');
+  });
+
+  it('geeft via /api/availability?takeover=1 wie er die dag mag overnemen', async () => {
+    const res = await api('GET', '/api/availability?from=2026-07-08&to=2026-07-08&takeover=1', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.days[0].takeover).toEqual({ '4': 'bv' });
+  });
+
+  it('laat de takeover-lijst weg zonder de expliciete vlag', async () => {
+    const res = await api('GET', '/api/availability?from=2026-07-08&to=2026-07-08', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.days[0].takeover).toBeUndefined();
   });
 });
 

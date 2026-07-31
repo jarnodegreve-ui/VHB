@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeftRight, ChevronDown, ChevronRight, History, X, Check } from 'lucide-react';
-import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
+import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
@@ -56,7 +56,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [swaps]);
   // Dienstruil-matching: wie is vrij op de dag van de gekozen dienst?
   const [freeForDate, setFreeForDate] = useState<Set<string> | null>(null);
+  // Ruil zonder tegenprestatie: per collega-id de planningcode ('vrij', 'bv',
+  // 'tk', 'ta') waarop hij/zij de dienst die dag mag overnemen. Komt van de
+  // server; alleen wie hierin staat, kan als overname aangeduid worden.
+  const [takeoverForDate, setTakeoverForDate] = useState<Record<string, string> | null>(null);
   const [matchLoading, setMatchLoading] = useState(false);
+  // Vorm van de aanvraag: 1-op-1 ruil (default) of overname zonder tegenprestatie.
+  const [swapType, setSwapType] = useState<SwapType>('ruil');
   // 1-op-1 ruil: wat neemt de aanvrager in ruil van de collega?
   const [returnPick, setReturnPick] = useState<string>(''); // "date|code"
   const [returnOptions, setReturnOptions] = useState<ReturnOption[] | null>(null);
@@ -67,17 +73,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   useEffect(() => {
     if (!selectedShiftDate) {
       setFreeForDate(null);
+      setTakeoverForDate(null);
       return;
     }
     let cancelled = false;
     setMatchLoading(true);
-    fetchAvailability(selectedShiftDate, selectedShiftDate)
+    fetchAvailability(selectedShiftDate, selectedShiftDate, { takeover: true })
       .then((res) => {
         if (cancelled) return;
         const day = res.days.find((d) => d.date === selectedShiftDate);
         setFreeForDate(new Set(day?.free ?? []));
+        setTakeoverForDate(day?.takeover ?? {});
       })
-      .catch(() => { if (!cancelled) setFreeForDate(null); })
+      .catch(() => { if (!cancelled) { setFreeForDate(null); setTakeoverForDate(null); } })
       .finally(() => { if (!cancelled) setMatchLoading(false); });
     return () => { cancelled = true; };
   }, [selectedShiftDate]);
@@ -133,6 +141,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       setSelectedShift(shift.id);
       setSelectedTargetDriver('');
       setReturnPick('');
+      setSwapType('ruil');
       setWizardStep(2);
       setShowOfferModal(true);
     }
@@ -142,12 +151,20 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // Tikbare wizard-kaart (stap 1/2/3): geselecteerd = oker-accent.
   const cnCard = (selected: boolean) =>
     `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-slate-200 bg-white hover:bg-slate-50'}`;
+  /** Ruil zonder tegenprestatie: de collega neemt de dienst gewoon over. */
+  const isTakeoverSwap = (swap: SwapRequest) => swap.swapType === 'overname';
   // "krijgt: dienst 4101 (vr 10/07)" of "krijgt: vrij (vr 10/07)"
   const returnLabel = (swap: SwapRequest) => {
+    if (isTakeoverSwap(swap)) return null;
     if (!swap.returnCode || !swap.returnDate) return null;
     const what = swap.returnCode.toLowerCase() === 'vrij' ? 'vrij' : `dienst ${swap.returnCode}`;
     return `${what} (${fmtShort(swap.returnDate)})`;
   };
+  // Beschikbaar op de dag van de aangeboden dienst = vrij (geen dienst, geen
+  // verlof) óf op vrij/bv/tk/ta in de planning (dan kan een overname).
+  const takeoverCodeFor = (driverId: string) => takeoverForDate?.[driverId];
+  const isAvailableOnShiftDate = (driverId: string) =>
+    !!freeForDate?.has(driverId) || !!takeoverForDate?.[driverId];
   const eligibleTargetDrivers = useMemo(() => {
     const base = users
       // Alleen chauffeurs: planner/admin staan niet in de planning-matrix en
@@ -155,16 +172,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       .filter((u) => u.id !== user.id && u.isActive !== false && u.role === 'chauffeur' && u.name.toLowerCase() !== 'beheerder')
       .sort((a, b) => a.name.localeCompare(b.name));
     if (!freeForDate) return base;
-    // Vrije collega's eerst (matching), daarna de rest. Beide blijven kiesbaar
-    // — de planner kan altijd overschrijven.
+    // Beschikbare collega's eerst (matching), daarna de rest. Beide blijven
+    // kiesbaar — de planner kan altijd overschrijven.
     return [...base].sort((a, b) => {
-      const af = freeForDate.has(a.id) ? 0 : 1;
-      const bf = freeForDate.has(b.id) ? 0 : 1;
+      const af = freeForDate.has(a.id) || takeoverForDate?.[a.id] ? 0 : 1;
+      const bf = freeForDate.has(b.id) || takeoverForDate?.[b.id] ? 0 : 1;
       return af - bf || a.name.localeCompare(b.name);
     });
-  }, [users, user.id, freeForDate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [users, user.id, freeForDate, takeoverForDate]);
   const freeCount = freeForDate
-    ? eligibleTargetDrivers.filter((u) => freeForDate.has(u.id)).length
+    ? eligibleTargetDrivers.filter((u) => isAvailableOnShiftDate(u.id)).length
     : null;
   const mySwaps = swaps.filter(s => s.requesterId === user.id);
   // Aan mij gerichte ruilverzoeken: pending (te beantwoorden) + accepted
@@ -185,7 +203,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   const handleOfferShift = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
-    if (!selectedShift || !selectedTargetDriver || !returnPick) return;
+    const isTakeover = swapType === 'overname';
+    if (!selectedShift || !selectedTargetDriver) return;
+    if (!isTakeover && !returnPick) return;
+    // Dubbele bodem naast de servercheck: nooit een overname indienen op een
+    // collega die die dag niet vrij/bv/tk/ta staat.
+    if (isTakeover && !takeoverCodeFor(selectedTargetDriver)) return;
 
     const sep = returnPick.indexOf('|');
     const returnDate = returnPick.slice(0, sep);
@@ -199,8 +222,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       status: 'pending',
       createdAt: new Date().toISOString(),
       reason,
-      returnDate,
-      returnCode,
+      swapType,
+      // Bij een overname is er bewust geen tegenprestatie.
+      ...(isTakeover ? {} : { returnDate, returnCode }),
     };
 
     // Pas sluiten/wissen ná een geslaagde save — bij een fout blijft de
@@ -213,6 +237,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     setSelectedTargetDriver('');
     setReason('');
     setReturnPick('');
+    setSwapType('ruil');
   };
 
   const handleStatusUpdate = (swapId: string, newStatus: SwapRequest['status'], seenStatus?: string) => {
@@ -262,10 +287,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
   // Collega-acties op een aan hem/haar gerichte, openstaande ruil.
   const handleAccept = (swapId: string) => {
-    const seen = swaps.find((s) => s.id === swapId)?.status;
+    const swap = swaps.find((s) => s.id === swapId);
+    const seen = swap?.status;
     setConfirmAction({
-      title: 'Dienstruil accepteren',
-      message: 'Deze dienstruil accepteren? De planner beoordeelt ze daarna nog (rij- en rusttijden).',
+      title: swap && isTakeoverSwap(swap) ? 'Dienst overnemen' : 'Dienstruil accepteren',
+      message: swap && isTakeoverSwap(swap)
+        ? 'Je neemt deze dienst over zonder er iets voor terug te krijgen. Akkoord? De planner beoordeelt ze daarna nog (rij- en rusttijden).'
+        : 'Deze dienstruil accepteren? De planner beoordeelt ze daarna nog (rij- en rusttijden).',
       confirmText: 'Accepteren',
       variant: 'warning',
       run: () => handleStatusUpdate(swapId, 'accepted', seen),
@@ -306,6 +334,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               setSelectedShift('');
               setSelectedTargetDriver('');
               setReturnPick('');
+              setSwapType('ruil');
               setReason('');
               setShowBusyColleagues(false);
               setShowAllReturns(false);
@@ -353,7 +382,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {target && (
                           <p className="text-xs font-medium text-slate-500 mt-1.5">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
                         )}
-                        {returnLabel(swap) && (
+                        {isTakeoverSwap(swap) ? (
+                          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Zonder tegenprestatie</p>
+                        ) : returnLabel(swap) && (
                           <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">In ruil: {returnLabel(swap)}</p>
                         )}
                         {/* Intrekken zolang de ruil nog niet door de planner is
@@ -406,7 +437,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(shift?.date)}</p>
                       <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
-                      {returnLabel(swap) && (
+                      {isTakeoverSwap(swap) ? (
+                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Overname — jij geeft niets terug</p>
+                      ) : returnLabel(swap) && (
                         <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Jij geeft: {returnLabel(swap)}</p>
                       )}
                     </div>
@@ -500,7 +533,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           <Td>
                             <span className="font-semibold text-oker-700">Dienst {getServiceNumber(shift)}</span>
                             <span className="text-slate-500 tabular-nums"> — {formatDateHuman(shift?.date)} ({shift?.startTime} - {shift?.endTime})</span>
-                            {returnLabel(swap) && (
+                            {isTakeoverSwap(swap) ? (
+                              <span className="block text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">→ overname, zonder tegenprestatie</span>
+                            ) : returnLabel(swap) && (
                               <span className="block text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
                           </Td>
@@ -560,7 +595,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </button>
                           <MicroLabel className="text-oker-700 mt-1">Dienst {getServiceNumber(shift)}</MicroLabel>
                           <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(shift?.date)} · {shift?.startTime} - {shift?.endTime}</p>
-                          {returnLabel(swap) && (
+                          {isTakeoverSwap(swap) ? (
+                            <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1">→ overname, zonder tegenprestatie</p>
+                          ) : returnLabel(swap) && (
                             <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
                         </div>
@@ -629,7 +666,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   )}
                   <div className="min-w-0">
                     <h4 className="text-lg font-bold tracking-tight truncate">
-                      {wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Wat neem jij in ruil?'}
+                      {wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Hoe wil je ruilen?'}
                     </h4>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Stap {wizardStep} van 3</p>
                   </div>
@@ -681,22 +718,35 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <>
                         <div className="space-y-2">
                           {eligibleTargetDrivers
-                            .filter((u) => showBusyColleagues || !freeForDate || freeForDate.has(u.id))
+                            .filter((u) => showBusyColleagues || !freeForDate || isAvailableOnShiftDate(u.id))
                             .map((u) => {
                               const free = freeForDate?.has(u.id);
+                              // Planningcode ('bv', 'tk', 'ta') leest preciezer dan
+                              // "vrij" — en zegt meteen of een overname kan.
+                              const code = takeoverCodeFor(u.id);
                               return (
                                 <button
                                   key={u.id}
                                   type="button"
-                                  onClick={() => { setSelectedTargetDriver(u.id); setReturnPick(''); setShowAllReturns(false); setWizardStep(3); }}
+                                  onClick={() => {
+                                    setSelectedTargetDriver(u.id);
+                                    setReturnPick('');
+                                    setShowAllReturns(false);
+                                    // Terug naar de standaardvorm als deze collega
+                                    // geen overname toelaat.
+                                    if (!takeoverCodeFor(u.id)) setSwapType('ruil');
+                                    setWizardStep(3);
+                                  }}
                                   className={cnCard(selectedTargetDriver === u.id)}
                                 >
                                   <span className="text-sm font-bold text-slate-800 truncate">{u.name}</span>
                                   <span className="shrink-0 inline-flex items-center gap-2">
                                     {freeForDate && (
-                                      free
-                                        ? <Badge tone="emerald" dot>vrij</Badge>
-                                        : <Badge tone="slate">bezet</Badge>
+                                      code && code !== 'vrij'
+                                        ? <Badge tone="emerald" dot>{code}</Badge>
+                                        : free || code
+                                          ? <Badge tone="emerald" dot>vrij</Badge>
+                                          : <Badge tone="slate">bezet</Badge>
                                     )}
                                     <ChevronRight size={16} className="text-slate-300" />
                                   </span>
@@ -704,15 +754,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               );
                             })}
                         </div>
-                        {freeForDate && !showBusyColleagues && eligibleTargetDrivers.some((u) => !freeForDate.has(u.id)) && (
+                        {freeForDate && !showBusyColleagues && eligibleTargetDrivers.some((u) => !isAvailableOnShiftDate(u.id)) && (
                           <button type="button" onClick={() => setShowBusyColleagues(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11">
-                            Toon ook bezette collega's ({eligibleTargetDrivers.filter((u) => !freeForDate.has(u.id)).length})
+                            Toon ook bezette collega's ({eligibleTargetDrivers.filter((u) => !isAvailableOnShiftDate(u.id)).length})
                           </button>
                         )}
                         {freeForDate && freeCount === 0 && !showBusyColleagues && (
                           <p className="text-xs font-medium text-slate-400 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
                         )}
-                        <p className="text-[11px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}.</p>
+                        <p className="text-[11px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
                       </>
                     )}
                   </>
@@ -745,13 +795,53 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   const conflicted = enriched.filter((o) => !!o.ownDuty);
                   const visiblePickable = showAllReturns ? pickable : pickable.slice(0, 8);
                   const pick = returnPick ? { date: returnPick.slice(0, returnPick.indexOf('|')), code: returnPick.slice(returnPick.indexOf('|') + 1) } : null;
+                  const voornaam = target?.name?.split(' ')[0] ?? 'de collega';
+                  // Overname kan alleen als de collega die dag vrij/bv/tk/ta
+                  // staat — de server weigert het anders alsnog.
+                  const takeoverCode = takeoverCodeFor(selectedTargetDriver);
+                  const isTakeover = swapType === 'overname';
                   return (
                     <>
                       <p className="text-xs font-medium text-slate-500">
                         Jij geeft <span className="font-bold text-slate-800">dienst {getServiceNumber(offered)}</span>
-                        {selectedShiftDate && <span> ({fmtShort(selectedShiftDate)})</span>} aan <span className="font-bold text-slate-800">{target?.name ?? '—'}</span>. Wat neem je van {target?.name?.split(' ')[0] ?? 'de collega'} over?
+                        {selectedShiftDate && <span> ({fmtShort(selectedShiftDate)})</span>} aan <span className="font-bold text-slate-800">{target?.name ?? '—'}</span>.
                       </p>
-                      {returnLoading ? (
+
+                      {/* Vorm van de aanvraag: 1-op-1 of zonder tegenprestatie. */}
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={() => setSwapType('ruil')}
+                          className={cnCard(!isTakeover)}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-bold text-slate-800">Ruilen (1-op-1)</span>
+                            <span className="block text-xs font-medium text-slate-500">Jij neemt een dienst of vrije dag van {voornaam} over</span>
+                          </span>
+                          {!isTakeover ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={!takeoverCode}
+                          onClick={() => { setSwapType('overname'); setReturnPick(''); }}
+                          className={`${cnCard(isTakeover)} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white`}
+                        >
+                          <span className="min-w-0">
+                            <span className="block text-sm font-bold text-slate-800">Zonder tegenprestatie</span>
+                            <span className="block text-xs font-medium text-slate-500">
+                              {takeoverCode
+                                ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) — jij geeft niets terug</>
+                                : <>Kan niet: {voornaam} staat op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'} niet op vrij/bv/tk/ta</>}
+                            </span>
+                          </span>
+                          {isTakeover ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                        </button>
+                      </div>
+
+                      {!isTakeover && (
+                        <p className="text-xs font-medium text-slate-500 pt-1">Wat neem je van {voornaam} over?</p>
+                      )}
+                      {isTakeover ? null : returnLoading ? (
                         <p className="text-sm font-medium text-slate-400 py-6 text-center">Diensten laden…</p>
                       ) : pickable.length === 0 && conflicted.length === 0 ? (
                         <p className="text-sm font-medium text-slate-400 py-4 text-center">Geen diensten of vrije dagen van {target?.name ?? 'deze collega'} gevonden in de komende 8 weken.</p>
@@ -809,17 +899,21 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           placeholder="Waarom wil je ruilen?"
                         />
                       </div>
-                      {pick && (
+                      {isTakeover ? (
+                        <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
+                          Jij geeft <strong>dienst {getServiceNumber(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — <strong>zonder tegenprestatie</strong>.
+                        </div>
+                      ) : pick && (
                         <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
                           Jij geeft <strong>dienst {getServiceNumber(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
                         </div>
                       )}
                       <button
                         type="submit"
-                        disabled={!selectedShift || !selectedTargetDriver || !returnPick || isSubmitting}
+                        disabled={!selectedShift || !selectedTargetDriver || (isTakeover ? !takeoverCode : !returnPick) || isSubmitting}
                         className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
-                        {isSubmitting ? 'Versturen…' : 'Ruilverzoek versturen'}
+                        {isSubmitting ? 'Versturen…' : isTakeover ? 'Vraag om over te nemen' : 'Ruilverzoek versturen'}
                       </button>
                       <p className="text-[11px] font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
                     </>
@@ -937,7 +1031,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   <span className="mx-1.5 font-medium text-slate-400">→</span>
                   {target?.name ?? 'open verzoek'}
                 </p>
-                {returnLabel(reviewSwap) && (
+                {isTakeoverSwap(reviewSwap) ? (
+                  <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">→ overname: de collega neemt de dienst over, zonder tegenprestatie.</p>
+                ) : returnLabel(reviewSwap) && (
                   <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">↔ in ruil: {returnLabel(reviewSwap)}</p>
                 )}
               </div>
