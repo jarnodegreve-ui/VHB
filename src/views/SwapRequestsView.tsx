@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeftRight, ChevronDown, ChevronRight, History, X, Check } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, X, Check } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
@@ -12,6 +12,14 @@ import { canRespondToSwap } from '../lib/authorization';
 import { notify } from '../lib/ui';
 
 type ReturnOption = { date: string; code: string; isFree: boolean };
+
+/** Vaste visuele identiteit van de overname (ruil zonder tegenprestatie) —
+ *  overal dezelfde badge i.p.v. losse blauwe tekstregels per lijst. */
+const TakeoverBadge = ({ compact = false }: { compact?: boolean }) => (
+  <Badge tone="blue" icon={<Handshake size={11} />}>
+    {compact ? 'Overname' : 'Overname — geen tegenprestatie'}
+  </Badge>
+);
 
 export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide, preselectShiftId = null, onPreselectConsumed }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status'], seenStatus?: string) => Promise<boolean>, preselectShiftId?: string | null, onPreselectConsumed?: () => void }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
@@ -63,6 +71,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   const [matchLoading, setMatchLoading] = useState(false);
   // Vorm van de aanvraag: 1-op-1 ruil (default) of overname zonder tegenprestatie.
   const [swapType, setSwapType] = useState<SwapType>('ruil');
+  // Scroll terug naar boven bij elke stapwissel: wie in stap 2 ver naar
+  // beneden scrolde, opende stap 3 anders halverwege de lijst.
+  const wizardScrollRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    wizardScrollRef.current?.scrollTo({ top: 0 });
+  }, [wizardStep]);
   // 1-op-1 ruil: wat neemt de aanvrager in ruil van de collega?
   const [returnPick, setReturnPick] = useState<string>(''); // "date|code"
   const [returnOptions, setReturnOptions] = useState<ReturnOption[] | null>(null);
@@ -383,7 +397,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           <p className="text-xs font-medium text-slate-500 mt-1.5">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
                         )}
                         {isTakeoverSwap(swap) ? (
-                          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Zonder tegenprestatie</p>
+                          <div className="mt-1.5"><TakeoverBadge /></div>
                         ) : returnLabel(swap) && (
                           <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">In ruil: {returnLabel(swap)}</p>
                         )}
@@ -438,7 +452,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
                       <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
                       {isTakeoverSwap(swap) ? (
-                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Overname — jij geeft niets terug</p>
+                        <div className="mt-1.5"><TakeoverBadge /></div>
                       ) : returnLabel(swap) && (
                         <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Jij geeft: {returnLabel(swap)}</p>
                       )}
@@ -534,7 +548,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             <span className="font-semibold text-oker-700">Dienst {getServiceNumber(shift)}</span>
                             <span className="text-slate-500 tabular-nums"> — {formatDateHuman(shift?.date)} ({shift?.startTime} - {shift?.endTime})</span>
                             {isTakeoverSwap(swap) ? (
-                              <span className="block text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">→ overname, zonder tegenprestatie</span>
+                              <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
                               <span className="block text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
@@ -596,7 +610,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           <MicroLabel className="text-oker-700 mt-1">Dienst {getServiceNumber(shift)}</MicroLabel>
                           <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(shift?.date)} · {shift?.startTime} - {shift?.endTime}</p>
                           {isTakeoverSwap(swap) ? (
-                            <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1">→ overname, zonder tegenprestatie</p>
+                            <div className="mt-1"><TakeoverBadge compact /></div>
                           ) : returnLabel(swap) && (
                             <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
@@ -673,7 +687,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 </div>
                 <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl shrink-0"><X size={22} /></button>
               </div>
-              <form onSubmit={handleOfferShift} className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
+              <form ref={wizardScrollRef} onSubmit={handleOfferShift} className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}
                 {wizardStep === 1 && (
                   myShifts.length === 0 ? (
@@ -814,9 +828,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           onClick={() => setSwapType('ruil')}
                           className={cnCard(!isTakeover)}
                         >
-                          <span className="min-w-0">
-                            <span className="block text-sm font-bold text-slate-800">Ruilen (1-op-1)</span>
-                            <span className="block text-xs font-medium text-slate-500">Jij neemt een dienst of vrije dag van {voornaam} over</span>
+                          <span className="min-w-0 flex items-start gap-2.5">
+                            <ArrowLeftRight size={15} className="mt-0.5 shrink-0 text-oker-500" />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-bold text-slate-800">Ruilen (1-op-1)</span>
+                              <span className="block text-xs font-medium text-slate-500">Jij neemt een dienst of vrije dag van {voornaam} over</span>
+                            </span>
                           </span>
                           {!isTakeover ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
                         </button>
@@ -826,12 +843,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           onClick={() => { setSwapType('overname'); setReturnPick(''); }}
                           className={`${cnCard(isTakeover)} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white`}
                         >
-                          <span className="min-w-0">
-                            <span className="block text-sm font-bold text-slate-800">Zonder tegenprestatie</span>
-                            <span className="block text-xs font-medium text-slate-500">
-                              {takeoverCode
-                                ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) — jij geeft niets terug</>
-                                : <>Kan niet: {voornaam} staat op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'} niet op vrij/bv/tk/ta</>}
+                          <span className="min-w-0 flex items-start gap-2.5">
+                            <Handshake size={15} className="mt-0.5 shrink-0 text-blue-500" />
+                            <span className="min-w-0">
+                              <span className="block text-sm font-bold text-slate-800">Zonder tegenprestatie</span>
+                              <span className="block text-xs font-medium text-slate-500">
+                                {takeoverCode
+                                  ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) — jij geeft niets terug</>
+                                  : <>Kan niet: {voornaam} staat op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'} niet op vrij/bv/tk/ta</>}
+                              </span>
                             </span>
                           </span>
                           {isTakeover ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
@@ -1022,17 +1042,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {shift?.date && (
                   <Badge tone="slate" className="tabular-nums">{shift.date} · {shift.startTime} - {shift.endTime}</Badge>
                 )}
+                {isTakeoverSwap(reviewSwap) && <TakeoverBadge compact />}
               </div>
 
               <div className="surface-muted rounded-xl p-4">
-                <MicroLabel className="text-slate-500">Ruil</MicroLabel>
+                <MicroLabel className="text-slate-500">{isTakeoverSwap(reviewSwap) ? 'Overname' : 'Ruil'}</MicroLabel>
                 <p className="mt-1.5 text-sm font-semibold text-slate-800">
                   {requester?.name ?? 'Onbekend'}
                   <span className="mx-1.5 font-medium text-slate-400">→</span>
                   {target?.name ?? 'open verzoek'}
                 </p>
                 {isTakeoverSwap(reviewSwap) ? (
-                  <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">→ overname: de collega neemt de dienst over, zonder tegenprestatie.</p>
+                  <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">De collega neemt de dienst over, zonder tegenprestatie.</p>
                 ) : returnLabel(reviewSwap) && (
                   <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">↔ in ruil: {returnLabel(reviewSwap)}</p>
                 )}

@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
-import type { LeaveRequest, Shift, User } from '../types';
+import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
 import { leaveDayTint, leaveDot } from '../lib/statusColors';
@@ -29,6 +29,8 @@ type GroupedShift = {
   segments: Shift[];
   earliestStart: string;
   hasConflict: boolean;
+  /** Eigen openstaande ruilaanvraag (pending/accepted) voor deze dienst. */
+  openSwap?: SwapRequest;
 };
 
 const formatShiftDate = (date: string) =>
@@ -48,7 +50,13 @@ const formatShortDate = (date: string) =>
 
 const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
-export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequests = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
+/** Badge-tekst voor een dienst waarvoor een eigen ruilaanvraag loopt. */
+const openSwapLabel = (swap: SwapRequest) => {
+  if (swap.status === 'accepted') return 'Collega akkoord — wacht op planner';
+  return swap.swapType === 'overname' ? 'Overname aangevraagd' : 'Ruil aangevraagd';
+};
+
+export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
   const [calendarOpen, setCalendarOpen] = useState(false);
   // Lijst of maandgrid — de keuze blijft bewaard (localStorage kan in
@@ -79,6 +87,19 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
     [myShifts, leaveRequests],
   );
 
+  // Eigen openstaande ruilaanvragen per shift-id: de chauffeur ziet zo in het
+  // rooster meteen welke dienst al "te ruil" staat (en de knop verdwijnt —
+  // de server weigert een tweede verzoek voor dezelfde dienst toch met 409).
+  const openSwapByShiftId = useMemo(() => {
+    const map = new Map<string, SwapRequest>();
+    for (const s of swaps) {
+      if (s.requesterId !== user.id) continue;
+      if (s.status !== 'pending' && s.status !== 'accepted') continue;
+      map.set(s.shiftId, s);
+    }
+    return map;
+  }, [swaps, user.id]);
+
   // Groepeer per (datum + dienstnummer) zodat multi-segment diensten
   // (bv. dienst 2304 met 3 blokken) als één kaart met meerdere
   // tijdsvensters tonen i.p.v. drie aparte cards.
@@ -87,6 +108,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
     for (const s of myShifts) {
       const key = `${s.date}__${getServiceNumber(s)}`;
       const hasConflict = conflictIds.has(s.id);
+      const openSwap = openSwapByShiftId.get(s.id);
       const existing = byKey.get(key);
       if (existing) {
         existing.segments.push(s);
@@ -94,6 +116,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           existing.earliestStart = s.startTime;
         }
         if (hasConflict) existing.hasConflict = true;
+        if (openSwap && !existing.openSwap) existing.openSwap = openSwap;
       } else {
         byKey.set(key, {
           key,
@@ -102,6 +125,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           segments: [s],
           earliestStart: s.startTime,
           hasConflict,
+          openSwap,
         });
       }
     }
@@ -115,7 +139,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
     );
     // conflictIds zit in de body: zonder deze dep blijven de verlof-conflict-
     // vlaggen stale wanneer alleen leaveRequests (en dus conflictIds) wijzigt.
-  }, [myShifts, conflictIds]);
+  }, [myShifts, conflictIds, openSwapByShiftId]);
 
   // Splits toekomst / vandaag / verleden — chauffeur wil toekomst zien.
   // isoDate = lokale tijd; toISOString() gaf in BE 's nachts de UTC-dag
@@ -422,10 +446,13 @@ function MonthCalendar({
         ) : (
           selectedGroups.map((g) => (
             <div key={g.key} className="mt-3">
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="text-base font-semibold tabular-nums text-oker-700">{g.line}</span>
                 {g.hasConflict && (
                   <Badge tone="red" icon={<AlertTriangle size={10} />}>Verlof-conflict</Badge>
+                )}
+                {g.openSwap && (
+                  <Badge tone="amber" icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
                 )}
               </div>
               <div className="mt-1.5 space-y-1.5 pl-1">
@@ -453,7 +480,7 @@ function MonthCalendar({
           </p>
         )}
 
-        {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict) && (
+        {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict || g.openSwap) && (
           <button
             type="button"
             onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)}
@@ -510,6 +537,9 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                             <Badge tone="red" icon={<AlertTriangle size={11} />}>Verlof-conflict</Badge>
                           </span>
                         )}
+                        {g.openSwap && (
+                          <Badge tone="amber" icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                        )}
                       </div>
                     </div>
                   </Td>
@@ -543,9 +573,13 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                   </Td>
                   {onRequestSwap && (
                     <Td className="px-6 py-4 text-right">
-                      <Button variant="ghost" size="sm" icon={<ArrowLeftRight size={14} />} onClick={() => onRequestSwap(g.segments[0].id)}>
-                        Ruilen
-                      </Button>
+                      {/* Loopt er al een aanvraag, dan geen tweede knop — de
+                          server weigert die toch (één open ruil per dienst). */}
+                      {!g.openSwap && (
+                        <Button variant="ghost" size="sm" icon={<ArrowLeftRight size={14} />} onClick={() => onRequestSwap(g.segments[0].id)}>
+                          Ruilen
+                        </Button>
+                      )}
                     </Td>
                   )}
                 </tr>
@@ -588,6 +622,11 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                       <p className="text-[11px] font-medium text-red-600 mt-1">Je hebt hier verlof — bel de planner.</p>
                     </div>
                   )}
+                  {g.openSwap && (
+                    <div className="mt-1">
+                      <Badge tone="amber" icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge tone={pill.tone}>{pill.label}</Badge>
@@ -618,7 +657,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                 </p>
               )}
 
-              {onRequestSwap && !g.hasConflict && (
+              {onRequestSwap && !g.hasConflict && !g.openSwap && (
                 <button
                   type="button"
                   onClick={() => onRequestSwap(g.segments[0].id)}
