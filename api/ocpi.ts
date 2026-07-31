@@ -59,6 +59,47 @@ const isSafeExternalHttpsUrl = (raw: string): boolean => {
   if (/^(fe80:|fc00:|fd00:)/i.test(host)) return false;
   return true;
 };
+
+/** Exacte host-allowlist. Het IP-blocklistje hierboven is een vangnet, geen
+ *  poort: het kent geen DNS, dus een naam als `localtest.me` (→ 127.0.0.1)
+ *  glipt er doorheen. De CPO is één bekende partij, dus we vergelijken host
+ *  (incl. poort) tegen de geconfigureerde versions-URL. Extra hosts —
+ *  bijvoorbeeld een apart CDN voor pagination — kunnen via
+ *  OCPI_ALLOWED_HOSTS (komma-gescheiden) mee. */
+const allowedOcpiHosts = (): Set<string> => {
+  const hosts = new Set<string>();
+  try {
+    const u = new URL(CPO_VERSIONS_URL);
+    if (u.protocol === "https:") hosts.add(u.host.toLowerCase());
+  } catch { /* geen/ongeldige config → allowlist blijft leeg */ }
+  for (const extra of (process.env.OCPI_ALLOWED_HOSTS || "").split(",")) {
+    const t = extra.trim().toLowerCase();
+    if (t) hosts.add(t);
+  }
+  return hosts;
+};
+
+/** Poort voor ELKE uitgaande OCPI-URL. Van de zeven uitgaande verzoeken werden
+ *  er tot nu toe twee gecontroleerd; version-details, het credentials-endpoint,
+ *  de opgeslagen sender-endpoints en de `Link: rel=next`-paginatie kwamen
+ *  ongefilterd uit de respons van de tegenpartij — mét Token A/B/C in de
+ *  header. Gooit bewust een OcpiError zodat de sync luid faalt in plaats van
+ *  stil een andere host te bellen. */
+export const assertSafeOcpiUrl = (raw: string, wat: string): string => {
+  if (!isSafeExternalHttpsUrl(raw)) {
+    throw new OcpiError(`OCPI: ${wat} geweigerd — geen veilige publieke https-URL.`);
+  }
+  const allowed = allowedOcpiHosts();
+  const host = new URL(raw).host.toLowerCase();
+  if (allowed.size === 0) {
+    throw new OcpiError(`OCPI: ${wat} geweigerd — geen toegestane hosts geconfigureerd (OCPI_CPO_VERSIONS_URL ontbreekt).`);
+  }
+  if (!allowed.has(host)) {
+    throw new OcpiError(`OCPI: ${wat} wijst naar een niet-toegestane host (${host}).`);
+  }
+  return raw;
+};
+
 const authHeader = (token: string) => `Token ${b64(token)}`;
 
 const nowIso = () => new Date().toISOString();
@@ -119,13 +160,21 @@ const ocpiFetch = async (url: string, token: string, init?: { method?: string; b
         ...(init?.body !== undefined ? { "Content-Type": "application/json" } : {}),
       },
       body: init?.body !== undefined ? JSON.stringify(init.body) : undefined,
+      // Geen redirects volgen: een 302 naar een andere host zou het token
+      // buiten de allowlist brengen. Een 3xx komt zo als gewone (niet-ok)
+      // respons terug en faalt hieronder.
+      redirect: "manual",
       signal: controller.signal,
     });
     const text = await res.text();
     let json: any = null;
     try { json = text ? JSON.parse(text) : null; } catch { /* niet-JSON */ }
     if (!res.ok) {
-      throw new OcpiError(`OCPI HTTP ${res.status} bij ${url}: ${text.slice(0, 200)}`);
+      // De respons-body NIET teruggeven aan de aanroeper: bij een SSRF-poging
+      // zou dat de eerste 200 bytes van een intern antwoord uitlekken via
+      // summary.errors. Server-side loggen volstaat.
+      console.error(`[ocpi] HTTP ${res.status} bij ${url}: ${text.slice(0, 200)}`);
+      throw new OcpiError(`OCPI HTTP ${res.status} bij ${new URL(url).host}.`);
     }
     if (json && typeof json.status_code === "number" && json.status_code !== 1000) {
       throw new OcpiError(`OCPI status ${json.status_code} (${json.status_message ?? "?"}) bij ${url}`);
@@ -153,8 +202,9 @@ export const registerWithCpo = async (): Promise<{ version: string; cpoPartyId: 
     ?? versionList.find((v) => String(v.version).startsWith("2.2"));
   if (!chosen) throw new Error(`ChargEye biedt geen OCPI 2.2.x aan (gevonden: ${versionList.map((v) => v.version).join(", ") || "geen"}).`);
 
-  // 2) Version-details ophalen → credentials-endpoint zoeken.
-  const detailsA = await ocpiFetch(chosen.url, TOKEN_A);
+  // 2) Version-details ophalen → credentials-endpoint zoeken. De URL komt uit
+  //    de versions-respons van de CPO, dus langs de allowlist.
+  const detailsA = await ocpiFetch(assertSafeOcpiUrl(chosen.url, "version-details-URL"), TOKEN_A);
   const endpointsA: Array<{ identifier: string; role?: string; url: string }> = detailsA?.data?.endpoints ?? [];
   const credEndpoint = endpointsA.find((e) => e.identifier === "credentials");
   if (!credEndpoint) throw new Error("Geen 'credentials'-endpoint in ChargEye's version-details.");
@@ -179,15 +229,32 @@ export const registerWithCpo = async (): Promise<{ version: string; cpoPartyId: 
       },
     ],
   };
-  const credResp = await ocpiFetch(credEndpoint.url, TOKEN_A, { method: "POST", body: ourCredentials });
+  // Deze POST draagt zowel Token A (header) als ons verse Token B (body) — de
+  // gevoeligste uitgaande call van de hele handshake.
+  const credResp = await ocpiFetch(
+    assertSafeOcpiUrl(credEndpoint.url, "credentials-endpoint"),
+    TOKEN_A,
+    { method: "POST", body: ourCredentials },
+  );
   const cpoCreds = credResp?.data;
   const tokenC: string | undefined = cpoCreds?.token;
   if (!tokenC) throw new Error("ChargEye gaf geen Token C terug in de credentials-respons.");
   const cpoRole = Array.isArray(cpoCreds?.roles) ? cpoCreds.roles[0] : undefined;
 
   // 4) Met Token C de definitieve endpoints ophalen (Sender: locations/sessions/cdrs).
-  const detailsC = await ocpiFetch(chosen.url, tokenC);
-  const cpoEndpoints: Array<{ identifier: string; role?: string; url: string }> = detailsC?.data?.endpoints ?? [];
+  const detailsC = await ocpiFetch(assertSafeOcpiUrl(chosen.url, "version-details-URL"), tokenC);
+  const alleEndpoints: Array<{ identifier: string; role?: string; url: string }> = detailsC?.data?.endpoints ?? [];
+  // Al bij het opslaan filteren: anders blijven onveilige URL's in
+  // ocpi_registration staan en worden ze bij élke latere sync opnieuw gebeld.
+  const cpoEndpoints = alleEndpoints.filter((e) => {
+    try {
+      assertSafeOcpiUrl(e.url, `sender-endpoint '${e.identifier}'`);
+      return true;
+    } catch (err) {
+      console.error(`[ocpi] endpoint '${e.identifier}' geweigerd:`, (err as Error).message);
+      return false;
+    }
+  });
 
   // 5) Opslaan.
   await saveOcpiRegistration({
@@ -311,19 +378,31 @@ const ocpiGetAll = async <T>(startUrl: string, token: string): Promise<T[]> => {
     const timer = setTimeout(() => controller.abort(), 30_000);
     let res: Response;
     try {
-      res = await fetch(url, { headers: { Authorization: authHeader(token), Accept: "application/json" }, signal: controller.signal });
+      res = await fetch(url, {
+        headers: { Authorization: authHeader(token), Accept: "application/json" },
+        redirect: "manual",
+        signal: controller.signal,
+      });
     } finally {
       clearTimeout(timer);
     }
     const text = await res.text();
-    if (!res.ok) throw new OcpiError(`OCPI HTTP ${res.status} bij ${url}: ${text.slice(0, 200)}`);
+    if (!res.ok) {
+      console.error(`[ocpi] HTTP ${res.status} bij ${url}: ${text.slice(0, 200)}`);
+      throw new OcpiError(`OCPI HTTP ${res.status} bij ${new URL(url).host}.`);
+    }
     let json: any = null;
     try { json = text ? JSON.parse(text) : null; } catch { /* niet-JSON */ }
     if (json && typeof json.status_code === "number" && json.status_code !== 1000) {
       throw new OcpiError(`OCPI status ${json.status_code} (${json.status_message ?? "?"}) bij ${url}`);
     }
     if (Array.isArray(json?.data)) items.push(...(json.data as T[]));
-    url = parseNextLink(res.headers.get("Link") ?? res.headers.get("link"));
+    // De volgende pagina komt uit een respons-header van de tegenpartij: exact
+    // even onbetrouwbaar als een body-veld. Zonder deze controle kon een CPO
+    // (of iemand die zijn respons kan beïnvloeden) ons met Token C naar een
+    // willekeurige host sturen, tot 500 keer per sync.
+    const next = parseNextLink(res.headers.get("Link") ?? res.headers.get("link"));
+    url = next ? assertSafeOcpiUrl(next, "pagination-URL (Link: rel=next)") : null;
   }
   return items;
 };
@@ -340,7 +419,10 @@ const requireRegistration = async (): Promise<OcpiRegistration> => {
 const resolveSenderEndpoint = (reg: OcpiRegistration, identifier: string): string | null => {
   const eps = reg.cpo_endpoints ?? [];
   const sender = eps.find((e) => e.identifier === identifier && (e.role ?? "").toUpperCase() === "SENDER");
-  return (sender ?? eps.find((e) => e.identifier === identifier))?.url ?? null;
+  const url = (sender ?? eps.find((e) => e.identifier === identifier))?.url ?? null;
+  // Ook bij gebruik controleren, niet alleen bij opslaan: rijen die vóór deze
+  // hardening zijn weggeschreven staan nog ongefilterd in ocpi_registration.
+  return url ? assertSafeOcpiUrl(url, `sender-endpoint '${identifier}'`) : null;
 };
 
 export const fetchLocations = async (): Promise<OcpiLocation[]> => {
@@ -539,19 +621,31 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const cpoRole = Array.isArray(incoming?.roles) ? incoming.roles[0] : undefined;
 
       let cpoEndpoints: Array<{ identifier: string; role?: string; url: string }> = [];
-      // SSRF-guard: alleen een publieke https-URL ophalen (de url komt uit een
-      // extern credentials-object). Faalt de guard, dan slaan we het token toch
-      // op maar halen we de endpoints niet blind op.
-      if (cpoToken && cpoVersionsUrl && isSafeExternalHttpsUrl(cpoVersionsUrl)) {
-        // Hun version-details ophalen met hun token om de Sender-endpoints te leren.
+      // SSRF-guard: alles wat we hier ophalen komt uit een extern
+      // credentials-object, dus elke URL langs de host-allowlist — óók de
+      // endpoints uit de version-details, die anders ongefilterd in
+      // ocpi_registration belandden en bij elke sync opnieuw gebeld werden.
+      // Faalt de guard, dan slaan we het token toch op maar halen we niets op.
+      if (cpoToken && cpoVersionsUrl) {
         try {
-          const versions = await ocpiFetch(cpoVersionsUrl, cpoToken);
+          const versions = await ocpiFetch(assertSafeOcpiUrl(cpoVersionsUrl, "versions-URL"), cpoToken);
           const v = (versions?.data ?? []).find((x: any) => String(x.version).startsWith("2.2"));
-          if (v && typeof v.url === "string" && isSafeExternalHttpsUrl(v.url)) {
-            const details = await ocpiFetch(v.url, cpoToken);
-            cpoEndpoints = details?.data?.endpoints ?? [];
+          if (v && typeof v.url === "string") {
+            const details = await ocpiFetch(assertSafeOcpiUrl(v.url, "version-details-URL"), cpoToken);
+            const alle: Array<{ identifier: string; role?: string; url: string }> = details?.data?.endpoints ?? [];
+            cpoEndpoints = alle.filter((e) => {
+              try {
+                assertSafeOcpiUrl(e.url, `sender-endpoint '${e.identifier}'`);
+                return true;
+              } catch (err) {
+                console.error(`[ocpi] inkomend endpoint '${e.identifier}' geweigerd:`, (err as Error).message);
+                return false;
+              }
+            });
           }
-        } catch { /* best-effort; we slaan minstens het token op */ }
+        } catch (err) {
+          console.error("[ocpi] credentials-handshake: endpoints niet opgehaald:", (err as Error).message);
+        }
       }
 
       const existing = await getOcpiRegistration();
