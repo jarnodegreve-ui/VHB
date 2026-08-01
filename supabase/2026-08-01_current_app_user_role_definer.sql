@@ -57,6 +57,22 @@ $function$;
 revoke all on function public.current_app_user_role() from public, anon;
 grant execute on function public.current_app_user_role() to authenticated, service_role;
 
+-- Hoort bij deze fix, want ze wordt erdoor veroorzaakt: users_insert/update/
+-- delete_admin_only crashten tot nu toe en waren dus een harde deny. Zouden we
+-- ze laten staan, dan gaan ze door deze migratie wérken en krijgt een admin een
+-- rechtstreeks schrijfpad naar public.users vanuit de browser (anon-key + zijn
+-- JWT). Gebruikersbeheer loopt in de app volledig via Express met de
+-- service-role, dus dat pad is nergens voor nodig — en een schrijfrecht dat
+-- niemand gebruikt is er één te veel. Beslissing Jarno, 01-08-2026.
+--
+-- De SELECT-policy (users_select_self_or_staff) blijft: die wordt wél gebruikt,
+-- o.a. door realtime. Zonder INSERT/UPDATE/DELETE-policy valt schrijven voor
+-- authenticated/anon terug op deny — hetzelfde patroon als de 15 tabellen die
+-- bewust RLS-aan-en-0-policies hebben.
+drop policy if exists users_insert_admin_only on public.users;
+drop policy if exists users_update_admin_only on public.users;
+drop policy if exists users_delete_admin_only on public.users;
+
 commit;
 
 -- === Controle na het draaien ===
@@ -102,15 +118,9 @@ commit;
 --          (select count(*) from public.users) as zichtbare_gebruikers;
 -- rollback;
 --
--- === Bewuste keuze die hierbij hoort ===
+-- 4) Op public.users blijft alleen de SELECT-policy over — verwacht: precies
+--    één rij, users_select_self_or_staff met cmd = SELECT.
 --
--- users_insert/update/delete_admin_only crashten tot nu toe en waren dus een
--- harde deny. Ná deze fix wérken ze: een admin kan public.users dan
--- rechtstreeks vanuit de browser schrijven met de anon-key + zijn JWT.
--- Gebruikersbeheer loopt in de app volledig via Express met de service-role,
--- dus dat client-pad is niet nodig. Wil je het dicht houden, dan is dit de
--- opruiming (aparte migratie, bewuste beslissing):
---
---   drop policy if exists users_insert_admin_only on public.users;
---   drop policy if exists users_update_admin_only on public.users;
---   drop policy if exists users_delete_admin_only on public.users;
+-- select policyname, cmd from pg_policies
+-- where schemaname = 'public' and tablename = 'users'
+-- order by policyname;
