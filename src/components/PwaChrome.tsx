@@ -41,8 +41,12 @@ export function OfflineBanner() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           transition={{ duration: 0.25, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed inset-x-0 z-[130] flex justify-center px-4 pointer-events-none"
-          style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+          // Op mobiel bóven de tab-bar (bottom-3 + ~64px hoogte), zelfde
+          // offset als ToastStack: op 1rem lag de pil middenin de navbalk en
+          // ving hij met pointer-events-auto de tikken op de tabs — precies
+          // wanneer je offline bent en wil navigeren. Vanaf md is er geen
+          // tab-bar, dus daar mag hij gewoon onderaan.
+          className="fixed inset-x-0 z-[130] flex justify-center px-4 pointer-events-none bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] md:bottom-[max(1rem,env(safe-area-inset-bottom))]"
           role="status"
           aria-live="polite"
         >
@@ -119,8 +123,9 @@ export function InstallPrompt() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 24 }}
           transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-          className="fixed inset-x-0 z-[125] flex justify-center px-4 pointer-events-none"
-          style={{ bottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+          // Zelfde reden als de offline-pil hierboven: op 1rem overlapte deze
+          // kaart de tab-knoppen bijna volledig.
+          className="fixed inset-x-0 z-[125] flex justify-center px-4 pointer-events-none bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.75rem)] md:bottom-[max(1rem,env(safe-area-inset-bottom))]"
         >
           <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-white/70 bg-white/95 px-4 py-3 shadow-2xl backdrop-blur-sm max-w-sm">
             <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500 text-slate-950">

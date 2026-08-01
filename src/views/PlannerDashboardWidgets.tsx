@@ -62,7 +62,7 @@ export function PlannerDashboardWidgets({
   activityLog,
   coverageDays,
   onNavigate,
-  onQuickSickReport,
+  onSickReport,
   isInitialLoad = false,
   canPreview = false,
   previewActive = false,
@@ -80,7 +80,9 @@ export function PlannerDashboardWidgets({
   /** null = dekking (nog) niet geladen — toon 'onbekend' i.p.v. vals-groen. */
   coverageDays: DayGap[] | null;
   onNavigate: (view: View) => void;
-  onQuickSickReport?: () => void;
+  /** Ziekmelding registreren — woont hier i.p.v. in de verlofview, zie de
+   *  toelichting bij LeaveManagementView. */
+  onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>;
   isInitialLoad?: boolean;
   /** Admin-only: toon de 'bekijk als chauffeur'-schakelaar. */
   canPreview?: boolean;
@@ -168,6 +170,14 @@ export function PlannerDashboardWidgets({
     })();
     return () => { cancelled = true; };
   }, [currentUser.role]);
+
+  // Ziekmelding registreren (planner/admin). Komt telefonisch binnen, dus de
+  // planner moet hem vanuit de cockpit kunnen invoeren zonder van scherm te
+  // wisselen. De server maakt er een direct goedgekeurd 'ziekte'-verlof van.
+  const [showSickModal, setShowSickModal] = useState(false);
+  const [sickForm, setSickForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
+  const [isSubmittingSick, setIsSubmittingSick] = useState(false);
+  const [sickError, setSickError] = useState('');
 
   // LET OP: geen hooks meer onder deze regel — de skeleton-return hieronder
   // betekent dat álle hooks vóór dit punt moeten staan (React #310).
@@ -655,7 +665,18 @@ export function PlannerDashboardWidgets({
       <div className="grid grid-cols-2 gap-3 xl:grid-flow-col xl:auto-cols-fr">
         <QuickAction icon={<MapPin size={16} />} label="Omleiding toevoegen" sub="Hinder registreren" onClick={() => onNavigate('beheer-omleidingen')} />
         <QuickAction icon={<CalendarDays size={16} />} label="Verlofbeheer" sub="Aanvragen beoordelen" onClick={() => onNavigate('verlof')} />
-        {onQuickSickReport && <QuickAction icon={<AlertTriangle size={16} />} label="Ziek melden" sub="Chauffeur afwezig" onClick={onQuickSickReport} />}
+        {onSickReport && (
+          <QuickAction
+            icon={<AlertTriangle size={16} />}
+            label="Ziek melden"
+            sub="Chauffeur afwezig"
+            onClick={() => {
+              setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
+              setSickError('');
+              setShowSickModal(true);
+            }}
+          />
+        )}
         <QuickAction icon={<Bell size={16} />} label="Update publiceren" sub="Chauffeurs informeren" onClick={() => onNavigate('beheer-updates')} />
       </div>
 
@@ -763,6 +784,113 @@ export function PlannerDashboardWidgets({
       >
         <DriverShiftRows items={drivingNow} emptyText="Niemand aan het rijden op dit moment." />
       </DashboardListModal>
+
+      {/* Ziekmelding registreren — chauffeur + periode. Formulier-modal, dus
+          niet via DashboardListModal (die is voor lijsten). */}
+      <Modal
+        open={showSickModal}
+        onClose={() => setShowSickModal(false)}
+        maxWidth="sm"
+        className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0"
+      >
+        <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
+              <AlertTriangle size={17} />
+            </span>
+            <div className="min-w-0">
+              <h4 className="text-lg font-bold tracking-tight truncate">Ziekmelding registreren</h4>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">meteen onbeschikbaar</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowSickModal(false)}
+            aria-label="Sluiten"
+            className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-white/5"
+          >
+            <X size={18} />
+          </button>
+        </div>
+        <form
+          onSubmit={async (e) => {
+            e.preventDefault();
+            if (isSubmittingSick || !onSickReport) return;
+            if (!sickForm.userId) { setSickError('Kies de chauffeur die ziek is.'); return; }
+            const startDate = sickForm.startDate || todayKey;
+            const endDate = sickForm.endDate || startDate;
+            if (endDate < startDate) { setSickError('De einddatum ligt vóór de startdatum.'); return; }
+            setSickError('');
+            setIsSubmittingSick(true);
+            const ok = await onSickReport({ userId: sickForm.userId, startDate, endDate, comment: sickForm.comment })
+              .finally(() => setIsSubmittingSick(false));
+            if (ok) setShowSickModal(false);
+          }}
+          className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1"
+        >
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
+            <select
+              aria-label="Chauffeur"
+              value={sickForm.userId}
+              onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickError(''); }}
+              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60"
+            >
+              <option value="">Kies een chauffeur…</option>
+              {users
+                .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
+                .sort((a, b) => a.name.localeCompare(b.name))
+                .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
+              <input
+                type="date"
+                aria-label="Startdatum ziekmelding"
+                value={sickForm.startDate}
+                onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })}
+                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
+              <input
+                type="date"
+                aria-label="Einddatum ziekmelding"
+                value={sickForm.endDate}
+                min={sickForm.startDate}
+                onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })}
+                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60"
+              />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
+            <textarea
+              aria-label="Opmerking ziekmelding"
+              value={sickForm.comment}
+              onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
+              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-white/60"
+              placeholder="bv. gemeld via telefoon om 6u"
+            />
+          </div>
+          {sickError && (
+            <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{sickError}</p>
+          )}
+          <p className="text-[11.5px] font-medium text-slate-500">
+            De dag(en) komen meteen als onbeschikbaar in de planning; de andere planners krijgen een melding.
+          </p>
+          <button
+            type="submit"
+            disabled={!sickForm.userId || isSubmittingSick}
+            className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
+          >
+            {isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}
+          </button>
+        </form>
+      </Modal>
     </section>
   );
 }

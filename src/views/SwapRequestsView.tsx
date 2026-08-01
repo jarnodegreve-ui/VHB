@@ -142,6 +142,24 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     .filter(s => s.driverId === user.id && s.date >= todayIso)
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime).localeCompare(String(b.startTime)));
   const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
+  /**
+   * Dienst-info bij een ruil. `shifts` bevat alleen de éigen planning, dus de
+   * aangeboden dienst zit er lang niet altijd in: de aangezochte collega heeft
+   * hem nooit, en ná goedkeuring is de rij naar de collega verhuisd — de
+   * aanvrager zag dan "Dienst --" met lege datum bij precies de ruil die net
+   * gelukt was. De server bewaart daarom shiftDate/shiftLine op de ruil zelf;
+   * die zijn hier de bron, de planning-rij vult alleen de uren aan.
+   */
+  const shiftInfoFor = (swap: SwapRequest) => {
+    const shift = shifts.find(s => s.id === swap.shiftId);
+    return {
+      shift,
+      line: String(swap.shiftLine || shift?.line || '--').trim() || '--',
+      date: swap.shiftDate || shift?.date || '',
+      startTime: shift?.startTime,
+      endTime: shift?.endTime,
+    };
+  };
   // Gedeelde compacte dag-vorm ('vr 18 jul') — gelijk aan Dekking, i.p.v. de
   // eigen 'vr 18/07'-variant (datum-consolidatie).
   const fmtShort = formatShortDay;
@@ -370,7 +388,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                lijst groeit onbegrensd mee met de historiek (wens Jarno). */
             <div className="max-h-[420px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
               {mySwaps.map(swap => {
-                const shift = shifts.find(s => s.id === swap.shiftId);
+                const info = shiftInfoFor(swap);
                 const target = users.find(u => u.id === swap.targetDriverId);
                 const open = expandedSwapIds.includes(swap.id);
                 return (
@@ -382,8 +400,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
                     >
                       <div className="min-w-0 flex items-baseline gap-2.5">
-                        <span className="text-[13px] font-bold tracking-tight text-slate-800 whitespace-nowrap">Dienst {getServiceNumber(shift)}</span>
-                        <span className="text-[11px] font-medium text-slate-400 capitalize truncate">{formatDateHuman(shift?.date)}</span>
+                        <span className="text-[13px] font-bold tracking-tight text-slate-800 whitespace-nowrap">Dienst {info.line}</span>
+                        <span className="text-[11px] font-medium text-slate-400 capitalize truncate">{formatDateHuman(info.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <StatusBadge status={swap.status} />
@@ -392,7 +410,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </button>
                     {open && (
                       <div className="px-4 pb-4 pt-0.5">
-                        <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
+                        {info.startTime && info.endTime && (
+                          <p className="text-xs font-medium text-slate-500 tabular-nums">{info.startTime} - {info.endTime}</p>
+                        )}
                         {target && (
                           <p className="text-xs font-medium text-slate-500 mt-1.5">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
                         )}
@@ -440,16 +460,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           <MicroLabel className="text-slate-500 ml-1">Openstaande Dienstruilen</MicroLabel>
           {availableSwaps.length > 0 ? (
             availableSwaps.map(swap => {
-              const shift = shifts.find(s => s.id === swap.shiftId);
+              const info = shiftInfoFor(swap);
               const requester = users.find(u => u.id === swap.requesterId);
               const canRespond = canRespondToSwap(user, swap);
               return (
                 <div key={swap.id} className="surface-card p-5 rounded-2xl space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <MicroLabel>Dienst {getServiceNumber(shift)}</MicroLabel>
-                      <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(shift?.date)}</p>
-                      <p className="text-xs font-medium text-slate-500 tabular-nums">{shift?.startTime} - {shift?.endTime}</p>
+                      <MicroLabel>Dienst {info.line}</MicroLabel>
+                      <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(info.date)}</p>
+                      {info.startTime && info.endTime && (
+                        <p className="text-xs font-medium text-slate-500 tabular-nums">{info.startTime} - {info.endTime}</p>
+                      )}
                       <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
                       {isTakeoverSwap(swap) ? (
                         <div className="mt-1.5"><TakeoverBadge /></div>
@@ -524,7 +546,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   </thead>
                   <tbody className="divide-y divide-slate-50">
                     {actionableSwaps.map(swap => {
-                      const shift = shifts.find(s => s.id === swap.shiftId);
+                      const info = shiftInfoFor(swap);
                       const requester = users.find(u => u.id === swap.requesterId);
                       return (
                         <tr key={swap.id} className="hover:bg-slate-50/60 transition-colors">
@@ -545,8 +567,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </button>
                           </Td>
                           <Td>
-                            <span className="font-semibold text-oker-700">Dienst {getServiceNumber(shift)}</span>
-                            <span className="text-slate-500 tabular-nums"> — {formatDateHuman(shift?.date)} ({shift?.startTime} - {shift?.endTime})</span>
+                            <span className="font-semibold text-oker-700">Dienst {info.line}</span>
+                            <span className="text-slate-500 tabular-nums"> — {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${info.startTime} - ${info.endTime})` : ''}</span>
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
@@ -589,7 +611,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {/* Mobile cards */}
               <div className="md:hidden divide-y divide-slate-100">
                 {actionableSwaps.map(swap => {
-                  const shift = shifts.find(s => s.id === swap.shiftId);
+                  const info = shiftInfoFor(swap);
                   const requester = users.find(u => u.id === swap.requesterId);
                   return (
                     <div key={swap.id} className="p-5 space-y-3">
@@ -607,8 +629,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </span>
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
-                          <MicroLabel className="text-oker-700 mt-1">Dienst {getServiceNumber(shift)}</MicroLabel>
-                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(shift?.date)} · {shift?.startTime} - {shift?.endTime}</p>
+                          <MicroLabel className="text-oker-700 mt-1">Dienst {info.line}</MicroLabel>
+                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} - ${info.endTime}` : ''}</p>
                           {isTakeoverSwap(swap) ? (
                             <div className="mt-1"><TakeoverBadge compact /></div>
                           ) : returnLabel(swap) && (
@@ -1031,16 +1053,16 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         ) : undefined}
       >
         {reviewSwap && (() => {
-          const shift = shifts.find((s) => s.id === reviewSwap.shiftId);
+          const info = shiftInfoFor(reviewSwap);
           const requester = users.find((u) => u.id === reviewSwap.requesterId);
           const target = reviewSwap.targetDriverId ? users.find((u) => u.id === reviewSwap.targetDriverId) : undefined;
           return (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={reviewSwap.status} />
-                <Badge tone="oker">Dienst {getServiceNumber(shift)}</Badge>
-                {shift?.date && (
-                  <Badge tone="slate" className="tabular-nums">{shift.date} · {shift.startTime} - {shift.endTime}</Badge>
+                <Badge tone="oker">Dienst {info.line}</Badge>
+                {info.date && (
+                  <Badge tone="slate" className="tabular-nums">{info.date}{info.startTime && info.endTime ? ` · ${info.startTime} - ${info.endTime}` : ''}</Badge>
                 )}
                 {isTakeoverSwap(reviewSwap) && <TakeoverBadge compact />}
               </div>

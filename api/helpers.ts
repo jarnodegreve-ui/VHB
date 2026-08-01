@@ -160,6 +160,21 @@ export const isTakeoverCode = (code?: string | null) =>
   TAKEOVER_CODE_SET.has(toLookupToken(code));
 
 /**
+ * Planningcodes die gezondheidsgegevens prijsgeven — bijzondere categorie
+ * (AVG art. 9). Het gedeelde maandrooster staat bewust voor iedereen open
+ * (collega's zoeken er wissels), maar een chauffeur hoort van een cóllega
+ * alleen te zien *dát* die afwezig is, niet dat het om ziekte gaat.
+ * Planner/admin zien de echte code, en iedereen ziet zijn eigen cel
+ * ongemaskeerd. Wil je later ook 'kv' afschermen, dan is dít de enige plek.
+ */
+export const HEALTH_CODES = ["ziek"] as const;
+
+const HEALTH_CODE_SET = new Set<string>(HEALTH_CODES);
+
+export const isHealthCode = (code?: string | null) =>
+  HEALTH_CODE_SET.has(toLookupToken(code));
+
+/**
  * De planning-matrixcode per chauffeur-id voor één dag ('vrij', 'bv', '4101', …).
  * Naam-matching identiek aan buildPlanningFromMatrix/month-planning: strikt
  * genormaliseerd én volgorde-onafhankelijk ('Duysburgh Pascal' = 'Pascal
