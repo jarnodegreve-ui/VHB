@@ -2120,7 +2120,7 @@ export default function App() {
                 )
               )}
               {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
-              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
+              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
               {resolvedCurrentView === 'dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense>)}
               {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
