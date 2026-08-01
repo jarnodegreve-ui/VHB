@@ -1813,7 +1813,12 @@ describe('dienstruil — dóórgeef-ketting en stale goedkeuring', () => {
   });
 });
 
-describe('maandplanning — ziektecodes zijn bijzondere categorie', () => {
+describe('maandplanning — afwezigheidscodes zijn voor iedereen zichtbaar', () => {
+  // BEWUSTE KEUZE (Jarno, 01-08-2026): het maandrooster toont dezelfde codes
+  // als de fysieke planning in het chauffeurslokaal, ziekte incluis. Er is kort
+  // een maskering voor chauffeurs geweest (#290) die er op verzoek weer uit is.
+  // Deze test legt de keuze vast, zodat een volgende opruimronde hem niet
+  // ongemerkt terugdraait — en zodat je het bewust doet als je hem wél wil.
   beforeEach(() => {
     mem.planningCodes = [
       { id: 'pc-ziek', code: 'ziek', description: 'Ziek', category: 'absence' },
@@ -1825,18 +1830,15 @@ describe('maandplanning — ziektecodes zijn bijzondere categorie', () => {
     ];
   });
 
-  it('een chauffeur ziet de ziektecode van een collega niet, zijn eigen wél', async () => {
+  it('een chauffeur ziet de code van een collega ongewijzigd', async () => {
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-a' });
     expect(res.status).toBe(200);
-    // Eigen cel: ongemaskeerd.
     expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', kind: 'absence', label: 'Ziek' });
-    // Collega: neutrale afwezigheid, geen gezondheidsreden.
-    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'afw', kind: 'absence', label: 'Afwezig' });
-    // Verlof blijft gewoon zichtbaar — alleen ziekte is bijzondere categorie.
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'ziek', kind: 'absence', label: 'Ziek' });
     expect(res.json.cells['4']['2026-07-16']).toMatchObject({ code: 'bv', kind: 'leave' });
   });
 
-  it('planner en admin zien de echte code', async () => {
+  it('planner en admin zien hetzelfde', async () => {
     for (const token of ['tok-planner', 'tok-admin']) {
       const res = await api('GET', '/api/month-planning?month=2026-07', { token });
       expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', label: 'Ziek' });
