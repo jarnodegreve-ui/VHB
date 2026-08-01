@@ -1780,3 +1780,67 @@ describe('dienstnotities (planning_notes)', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('dienstruil — dóórgeef-ketting en stale goedkeuring', () => {
+  it('laat een via een ruil verkregen dienst opnieuw ruilen (geen 409 op een afgehandelde ruil)', async () => {
+    // s-1 is goedgekeurd én doorgevoerd: sh-a staat nu op naam van chauffeur 4.
+    // Vóór de fix blokkeerde die afgehandelde ruil elk nieuw verzoek voor
+    // dezelfde shiftId, waardoor de nieuwe eigenaar vastzat.
+    mem.swaps = [
+      { id: 's-1', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'approved', reason: '', createdAt: '2026-06-01T08:00:00Z', decidedAt: '2026-06-02T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' },
+    ];
+    mem.planning = mem.planning.map((r: any) => (r.id === 'sh-a' ? { ...r, driverId: '4' } : r));
+    const nieuw = {
+      id: 's-door', shiftId: 'sh-a', requesterId: '4', targetDriverId: '3', status: 'pending',
+      reason: '', createdAt: '2026-06-13T08:00:00Z', returnDate: '2026-07-08', returnCode: '12',
+    };
+    // Chauffeur-payload = eigen betrokken ruilen + de nieuwe (weglaten leest
+    // de server als een intrekking).
+    const own = mem.swaps.filter((s: any) => s.requesterId === '4' || s.targetDriverId === '4');
+    const res = await api('POST', '/api/swaps', { token: 'tok-b', body: [...own, nieuw] });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-door')).toBeTruthy();
+  });
+
+  it('weigert een goedkeuring als de dienst niet meer van de aanvrager is (409)', async () => {
+    mem.swaps = [
+      { id: 'x-stale', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: 'VRIJ' },
+    ];
+    mem.planning = mem.planning.map((r: any) => (r.id === 'sh-a' ? { ...r, driverId: '4' } : r));
+    const res = await api('PATCH', '/api/swaps/x-stale', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s: any) => s.id === 'x-stale')?.status).toBe('accepted');
+  });
+});
+
+describe('maandplanning — ziektecodes zijn bijzondere categorie', () => {
+  beforeEach(() => {
+    mem.planningCodes = [
+      { id: 'pc-ziek', code: 'ziek', description: 'Ziek', category: 'absence' },
+      { id: 'pc-bv', code: 'bv', description: 'Betaald Verlof', category: 'leave' },
+    ];
+    mem.planningMatrix = [
+      { id: 'm-z', source_date: '2026-07-15', day_type: 'week', assignments: { 'Chauffeur A': 'ziek', 'Chauffeur B': 'ziek' }, raw_row: '' },
+      { id: 'm-v', source_date: '2026-07-16', day_type: 'week', assignments: { 'Chauffeur B': 'bv' }, raw_row: '' },
+    ];
+  });
+
+  it('een chauffeur ziet de ziektecode van een collega niet, zijn eigen wél', async () => {
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    // Eigen cel: ongemaskeerd.
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', kind: 'absence', label: 'Ziek' });
+    // Collega: neutrale afwezigheid, geen gezondheidsreden.
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'afw', kind: 'absence', label: 'Afwezig' });
+    // Verlof blijft gewoon zichtbaar — alleen ziekte is bijzondere categorie.
+    expect(res.json.cells['4']['2026-07-16']).toMatchObject({ code: 'bv', kind: 'leave' });
+  });
+
+  it('planner en admin zien de echte code', async () => {
+    for (const token of ['tok-planner', 'tok-admin']) {
+      const res = await api('GET', '/api/month-planning?month=2026-07', { token });
+      expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', label: 'Ziek' });
+      expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'ziek', label: 'Ziek' });
+    }
+  });
+});

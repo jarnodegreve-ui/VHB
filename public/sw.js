@@ -113,11 +113,19 @@ self.addEventListener('fetch', (event) => {
   // Vanaf hier alleen same-origin.
   if (url.origin !== self.location.origin) return;
 
-  // === Profiel (/api/me) — network-first met cache-fallback ===
-  // Online altijd vers (anders toonde de stale-while-revalidate-cache op een
-  // gedeeld toestel het profiel van de vorige gebruiker); offline valt hij
-  // terug op het laatst gecachte profiel zodat de koude start blijft werken.
-  if (url.pathname === ME_API) {
+  // === Profiel (/api/me) + rooster (/api/planning) — network-first ===
+  // Online altijd vers, offline terugvallen op de laatst gecachte versie zodat
+  // de koude start blijft werken.
+  //
+  // /api/me stond hier al (stale-while-revalidate toonde op een gedeeld
+  // toestel het profiel van de vorige gebruiker). /api/planning is gevolgd om
+  // dezelfde reden: met SWR kreeg je eerst de gecachte body en pas bij een
+  // vólgende fetch de verse, dus het rooster liep structureel één generatie
+  // achter — ook na een pull-to-refresh en zelfs na een harde reload. Sinds een
+  // goedgekeurde ruil de planning echt doorvoert, is dat niet cosmetisch meer:
+  // de chauffeur zag dan nog zijn oude dienst. Een dienst is te belangrijk om
+  // uit een oude cache te serveren.
+  if (url.pathname === ME_API || url.pathname === PLANNING_API) {
     event.respondWith(
       fetch(req)
         .then((res) => {
@@ -132,10 +140,11 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // === Ritblaadje-metadata + rooster — stale-while-revalidate ===
-  // Keyed op de volledige URL (incl. query), dus /api/planning?driverId=…&
-  // month=… cachet per gebruiker/maand apart.
-  if (url.pathname === RITBLAADJE_API || url.pathname === PLANNING_API) {
+  // === Ritblaadje-metadata — stale-while-revalidate ===
+  // Keyed op de volledige URL (incl. query), dus per gebruiker/dag apart.
+  // Blijft bewust SWR: metadata die zelden wijzigt en waar een generatie
+  // vertraging niemand schaadt.
+  if (url.pathname === RITBLAADJE_API) {
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(req).then((cached) => {

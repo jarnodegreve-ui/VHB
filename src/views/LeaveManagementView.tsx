@@ -16,7 +16,12 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType } from '../lib/format';
 
 
-export function LeaveManagementView({ user, leaveRequests, users, onSave, onSickReport, autoOpenSick, onSickModalConsumed, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>; autoOpenSick?: boolean; onSickModalConsumed?: () => void; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
+// Ziek melden zit BEWUST niet meer in deze view maar bij de snelacties op het
+// planner-dashboard (PlannerDashboardWidgets). Het is geen verlofaanvraag maar
+// een registratie die de planning meteen raakt, en ze komt telefonisch binnen
+// tijdens de rit — dus hoort ze in de cockpit, niet achter een menu-item dat
+// verder over aanvragen beoordelen gaat.
+export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
@@ -29,9 +34,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
     run: () => void;
   } | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
-  const [showSickModal, setShowSickModal] = useState(false);
-  const [sickForm, setSickForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
-  const [isSubmittingSick, setIsSubmittingSick] = useState(false);
   // Historiek standaard gecapt op 5 — de volledige lijst groeide onbegrensd.
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
   const [viewMonth, setViewMonth] = useState(() => {
@@ -83,38 +85,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
     if (ok === false) return;
     setShowRequestModal(false);
     setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
-  };
-
-  // Chauffeurs voor de ziekmelding-picker (planner registreert namens hen).
-  const sickDrivers = users
-    .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
-    .sort((a, b) => a.name.localeCompare(b.name));
-
-  const openSickModal = () => {
-    setSickForm({ userId: '', startDate: today, endDate: today, comment: '' });
-    setShowSickModal(true);
-  };
-
-  // Vanuit de dashboard-snelactie "Ziek melden": modal direct openen.
-  useEffect(() => {
-    if (autoOpenSick && onSickReport) {
-      openSickModal();
-      onSickModalConsumed?.();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoOpenSick]);
-
-  const handleSickSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (isSubmittingSick || !onSickReport) return;
-    if (!sickForm.userId) { notify('Kies de chauffeur die ziek is.', 'error'); return; }
-    const startDate = sickForm.startDate || today;
-    const endDate = sickForm.endDate || startDate;
-    if (endDate < startDate) { notify('De einddatum ligt vóór de startdatum.', 'error'); return; }
-    setIsSubmittingSick(true);
-    const ok = await onSickReport({ userId: sickForm.userId, startDate, endDate, comment: sickForm.comment })
-      .finally(() => setIsSubmittingSick(false));
-    if (ok) setShowSickModal(false);
   };
 
   // === Live preview van impact van de nieuwe aanvraag ===
@@ -371,14 +341,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
         description={isPlanner ? 'Beheer verlofaanvragen en bekijk de bezetting.' : 'Vraag verlof aan en volg je aanvragen op.'}
         actions={(
           <div className="flex items-center gap-2">
-            {isPlanner && onSickReport && (
-              <button
-                onClick={openSickModal}
-                className="ios-pressable inline-flex items-center gap-2 rounded-2xl border border-red-200 bg-white px-5 py-4 text-sm font-semibold text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
-              >
-                <AlertTriangle size={18} /> Ziek melden
-              </button>
-            )}
             <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
               <Plus size={20} /> Verlof aanvragen
             </button>
@@ -747,44 +709,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onSick
                 )}
 
                 <button type="submit" disabled={!formData.startDate || !formData.endDate || isSubmitting} className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed">{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</button>
-              </form>
-      </Modal>
-
-      {/* Ziekmelding registreren (planner/admin) — chauffeur + periode. */}
-      <Modal open={showSickModal} onClose={() => setShowSickModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
-              <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-2xl bg-red-50 text-red-600 flex items-center justify-center"><AlertTriangle size={20} /></div>
-                  <div>
-                    <h4 className="text-lg font-bold tracking-tight">Ziekmelding registreren</h4>
-                    <p className="text-xs font-medium text-slate-500">De dag(en) komen meteen als onbeschikbaar in de planning.</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowSickModal(false)} aria-label="Sluiten" className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center text-slate-400 hover:bg-slate-50 rounded-xl"><X size={20} /></button>
-              </div>
-              <form onSubmit={handleSickSubmit} className="p-6 space-y-4 overflow-y-auto flex-1">
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
-                  <select aria-label="Chauffeur" value={sickForm.userId} onChange={(e) => setSickForm({ ...sickForm, userId: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60">
-                    <option value="">Kies een chauffeur…</option>
-                    {sickDrivers.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-                  </select>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
-                    <input type="date" aria-label="Startdatum ziekmelding" value={sickForm.startDate} onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
-                    <input type="date" aria-label="Einddatum ziekmelding" value={sickForm.endDate} min={sickForm.startDate} onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60" />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
-                  <textarea aria-label="Opmerking ziekmelding" value={sickForm.comment} onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-white/60" placeholder="bv. gemeld via telefoon om 6u" />
-                </div>
-                <button type="submit" disabled={!sickForm.userId || isSubmittingSick} className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed">{isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}</button>
               </form>
       </Modal>
 

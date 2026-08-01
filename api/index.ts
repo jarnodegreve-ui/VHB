@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, isHealthCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -703,7 +703,7 @@ app.get("/api/availability", authenticate, async (req, res) => {
 // (chauffeur × datum met codes) zoals die in het chauffeurslokaal hangt.
 // Server resolved per cel het type (dienst/verlof/afwezig/opleiding) via
 // services + planningcodes, en geeft een compacte, render-klare payload.
-app.get("/api/month-planning", authenticate, async (req, res) => {
+app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const month = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month) ? req.query.month : undefined;
     if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
@@ -779,6 +779,15 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
       return { kind: "unknown", label: "Onbekende code", segments: [] };
     };
 
+    // Ziektecodes worden voor een chauffeur gemaskeerd tot een neutrale
+    // "afwezig"-cel (zie HEALTH_CODES in helpers): hij ziet dus wél dat de
+    // collega die dag niet inzetbaar is — wat dit scherm bruikbaar houdt om
+    // wissels te zoeken — maar niet de gezondheidsreden. Zijn eigen cellen en
+    // die van planner/admin blijven ongemoeid.
+    const isStaff = req.appUser?.role === "planner" || req.appUser?.role === "admin";
+    const selfId = String(req.appUser?.id ?? "");
+    const maskedCell = () => ({ code: "afw", kind: "absence", label: "Afwezig", segments: [] as string[] });
+
     const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[] }>> = {};
     for (const row of monthRows) {
       const date = String(row.source_date);
@@ -791,7 +800,8 @@ app.get("/api/month-planning", authenticate, async (req, res) => {
         const r = resolve(code);
         if (!r) continue;
         if (!cells[id]) cells[id] = {};
-        cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
+        const mask = !isStaff && id !== selfId && isHealthCode(code);
+        cells[id][date] = mask ? maskedCell() : { code, kind: r.kind, label: r.label, segments: r.segments };
       }
     }
 
@@ -2448,6 +2458,46 @@ const reapplyApprovedSwaps = async (shifts: Array<{ date: string; line: string; 
   return applySwapsToPlanningRows(shifts, approved);
 };
 
+/**
+ * Exclusiviteit bij goedkeuren — vervangt de oude check "bestaat er al een
+ * andere goedgekeurde ruil voor deze shiftId?".
+ *
+ * Die check keek naar de rij-id, en die blijft na een doorvoer de
+ * oorspronkelijke chauffeur bevatten. Een tweede ruil op dezelfde shiftId is
+ * dus géén dubbele goedkeuring maar een legitieme dóórgeef-ketting
+ * (d1 → d2 → d3); de oude vorm blokkeerde die permanent.
+ *
+ * Wat we wél moeten tegenhouden is een STÁLE ruil: eentje waarvan de aanvrager
+ * de dienst intussen niet meer heeft. Die zou bij goedkeuring 0 rijen
+ * verplaatsen en alleen een waarschuwing in de log achterlaten — de planner
+ * denkt dan dat de wissel doorgevoerd is.
+ *
+ * Staat de dienst helemaal niet meer in de planning (heropbouw, handmatig
+ * verwijderd), dan valt eigendom niet te controleren. Daar vallen we terug op
+ * de oude regel, maar enkel voor dezélfde aanvrager: twee goedgekeurde ruilen
+ * waarin chauffeur X dezelfde dienst weggeeft kan nooit kloppen, terwijl een
+ * ketting (X → Y → Z) juist verschillende aanvragers heeft.
+ */
+const staleApprovalError = async (
+  swap: { id?: unknown; shiftId?: unknown; requesterId?: unknown },
+  allSwaps: Array<{ id?: unknown; shiftId?: unknown; requesterId?: unknown; status?: unknown }>,
+): Promise<string | null> => {
+  const shift = await getShiftById(String(swap?.shiftId ?? ""));
+  if (shift) {
+    return String(shift.driverId) === String(swap?.requesterId ?? "")
+      ? null
+      : "Deze dienst staat niet meer op naam van de aanvrager — de planning is intussen gewijzigd. Vernieuw de pagina en beoordeel opnieuw.";
+  }
+  const dubbelVanZelfdeAanvrager = allSwaps.some((s) =>
+    String(s.id) !== String(swap?.id)
+    && String(s.shiftId) === String(swap?.shiftId)
+    && String(s.requesterId) === String(swap?.requesterId)
+    && String(s.status) === "approved");
+  return dubbelVanZelfdeAanvrager
+    ? "Voor deze dienst is al een andere ruil van dezelfde chauffeur goedgekeurd."
+    : null;
+};
+
 app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -2468,9 +2518,18 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     const previousById = new Map(previousSwaps.map((s) => [String(s.id), s]));
     const newById = new Map(newData.map((s: any) => [String(s.id), s]));
     const swapIdsToDelete: string[] = [];
-    // Eén open/goedgekeurde ruil per dienst — voorkomt dat twee gelijktijdige
-    // verzoeken voor dezelfde shift allebei blijven lopen of goedgekeurd raken.
-    const OPEN_SWAP_STATES = new Set(["pending", "accepted", "approved"]);
+    // Eén lopende ruil per dienst — voorkomt dat twee gelijktijdige verzoeken
+    // voor dezelfde shift allebei blijven lopen of goedgekeurd raken.
+    //
+    // BEWUST zonder 'approved': sinds de planning-doorvoer (#289) verhuist een
+    // goedgekeurde ruil de dienst écht naar de collega, maar de rij-id blijft
+    // de oorspronkelijke chauffeur bevatten. Stond 'approved' er nog in, dan
+    // blokkeerde die afgehandelde ruil voor eeuwig élk nieuw verzoek voor
+    // dezelfde shiftId — de nieuwe eigenaar kon de dienst dus nooit doorgeven
+    // of terugruilen (409). Dat een dienst niet twee keer tegelijk weggegeven
+    // wordt, bewaakt de eigendomscheck hieronder al: alleen de húidige
+    // eigenaar kan hem aanbieden.
+    const OPEN_SWAP_STATES = new Set(["pending", "accepted"]);
     // Wat er werkelijk weggeschreven wordt. Planner/admin schrijven de hele
     // payload (vertrouwde rol); voor een chauffeur bouwen we de set op uit
     // enkel de records die hij/zij legitiem toevoegt of beantwoordt — zo
@@ -2634,17 +2693,16 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    // Exclusiviteit bij goedkeuren: een dienst kan niet via twee ruilen
-    // tegelijk goedgekeurd raken. Blokkeer een approve-overgang als er al een
-    // ándere goedgekeurde ruil voor dezelfde shift bestaat. Over recordsToWrite
-    // (niet newData): een stale echo die niet weggeschreven wordt mag geen
-    // vals 409 op een ongerelateerde nieuwe aanvraag veroorzaken.
+    // Exclusiviteit bij goedkeuren: de aanvrager moet de dienst op dat moment
+    // nog écht hebben (zie staleApprovalError). Over recordsToWrite (niet
+    // newData): een stale echo die niet weggeschreven wordt mag geen vals 409
+    // op een ongerelateerde nieuwe aanvraag veroorzaken.
     for (const next of recordsToWrite) {
       const prev = previousById.get(String(next.id));
       const becomesApproved = next.status === "approved" && (!prev || prev.status !== "approved");
-      if (becomesApproved && previousSwaps.some((s) => String(s.id) !== String(next.id) && String(s.shiftId) === String(next.shiftId) && String(s.status) === "approved")) {
-        return res.status(409).json({ error: "Voor deze dienst is al een andere ruil goedgekeurd." });
-      }
+      if (!becomesApproved) continue;
+      const stale = await staleApprovalError(next, previousSwaps);
+      if (stale) return res.status(409).json({ error: stale });
     }
 
     // State-machine: een afgehandelde ruil (geweigerd/geannuleerd/voltooid) kan
@@ -2900,11 +2958,11 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       return res.status(409).json({ error: "Deze dienstruil is al afgehandeld en kan niet meer van status veranderen." });
     }
 
-    // Exclusiviteit: een dienst kan niet via twee ruilen tegelijk goedgekeurd
-    // raken (zie ook POST /api/swaps).
-    if (status === "approved" && current.status !== "approved" &&
-        all.some((s) => String(s.id) !== id && String(s.shiftId) === String(current.shiftId) && String(s.status) === "approved")) {
-      return res.status(409).json({ error: "Voor deze dienst is al een andere ruil goedgekeurd." });
+    // Exclusiviteit: de aanvrager moet de dienst nog hebben (zie ook
+    // staleApprovalError bij POST /api/swaps).
+    if (status === "approved" && current.status !== "approved") {
+      const stale = await staleApprovalError(current, all);
+      if (stale) return res.status(409).json({ error: stale });
     }
 
     // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —

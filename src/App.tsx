@@ -172,7 +172,6 @@ export default function App() {
   const [leaveRequests, setLeaveRequests] = useState<LeaveRequest[]>([]);
   const [lastSeenLeaveDecisionAt, setLastSeenLeaveDecisionAt] = useState<string | null>(null);
   const [unseenDocuments, setUnseenDocuments] = useState(0);
-  const [autoOpenSick, setAutoOpenSick] = useState(false);
   const [myNotes, setMyNotes] = useState<Array<{ date: string; note: string }>>([]);
   const [planningMatrixRows, setPlanningMatrixRows] = useState<PlanningMatrixRow[]>([]);
   const [planningCodes, setPlanningCodes] = useState<PlanningCode[]>([]);
@@ -894,8 +893,12 @@ export default function App() {
         return false;
       }
       if (response.ok) {
-        setSwaps(newSwaps);
-        captureRevision('swaps', response);
+        // Bewust opnieuw ophalen i.p.v. setSwaps(newSwaps): de server vult bij
+        // het opslaan shiftDate/shiftLine aan — de dienst-info die de
+        // ruilkaarten tonen zodra de dienst niet (meer) in de eigen planning
+        // zit. Schreven we de client-array terug, dan bleef het dienstlabel
+        // leeg tot de volgende fetch. fetchSwaps legt zelf de revisie vast.
+        await fetchSwaps();
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
@@ -2108,7 +2111,7 @@ export default function App() {
                     activityLog={activityLog}
                     coverageDays={coverageDays}
                     onNavigate={(view) => setCurrentView(view)}
-                    onQuickSickReport={() => { setCurrentView('verlof'); setAutoOpenSick(true); }}
+                    onSickReport={reportSick}
                     isInitialLoad={isInitialLoad}
                     canPreview={isRealAdmin}
                     previewActive={previewChauffeur}
@@ -2184,9 +2187,6 @@ export default function App() {
                     leaveRequests={leaveRequests}
                     users={users}
                     onSave={saveLeave}
-                    onSickReport={reportSick}
-                    autoOpenSick={autoOpenSick}
-                    onSickModalConsumed={() => setAutoOpenSick(false)}
                     onDecide={currentUser.role !== 'chauffeur' ? decideLeave : undefined}
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
