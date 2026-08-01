@@ -49,7 +49,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
 
   return (
     <PageShell>
-      <PageHeader title="Mijn documenten" description="Attesten, reglement en andere documenten die de planning voor jou klaarzet." />
+      <PageHeader title="Mijn documenten" description="Documenten die de planning voor jou klaarzet vind je hier terug." />
 
       {loading ? (
         <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">

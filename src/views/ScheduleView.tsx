@@ -287,6 +287,23 @@ function MonthCalendar({
   });
   const [selected, setSelected] = useState<string>(today);
 
+  // Planning-horizon: de periode waarvoor er überhaupt planning voor deze
+  // chauffeur is ingelezen. Daarbuiten weten we niets — een maand die nog niet
+  // geïmporteerd is mag er niet uitzien als één grote vrije maand, dus daar
+  // markeren we niets. Bínnen de horizon betekent "geen dienst en geen verlof"
+  // gewoon vrij, precies zoals het bord in het chauffeurslokaal het toont.
+  const planningRange = useMemo(() => {
+    if (groups.length === 0) return null;
+    let van = groups[0].date;
+    let tot = groups[0].date;
+    for (const g of groups) {
+      if (g.date < van) van = g.date;
+      if (g.date > tot) tot = g.date;
+    }
+    return { van, tot };
+  }, [groups]);
+  const isVrijeDag = (iso: string) => !!planningRange && iso >= planningRange.van && iso <= planningRange.tot;
+
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -378,8 +395,8 @@ function MonthCalendar({
                 <span className={cn('text-xs font-semibold tabular-nums leading-none', isToday ? 'text-oker-700' : 'text-slate-700')}>
                   {day}
                 </span>
-                {td && (
-                  <span className={cn('text-[8px] font-bold leading-none', td.kort === 'F' ? 'text-oker-600' : 'text-slate-400')} title={td.titel}>
+                {td && td.kort === 'F' && (
+                  <span className="text-[8px] font-bold leading-none text-oker-600" title={td.titel}>
                     {td.kort}
                   </span>
                 )}
@@ -395,6 +412,10 @@ function MonthCalendar({
                       leaveDot(leave.status, leave.type),
                     )}
                   />
+                ) : isVrijeDag(iso) ? (
+                  <span className="text-[9px] font-bold lowercase leading-none text-slate-400" title="Vrij — geen dienst ingepland">
+                    v
+                  </span>
                 ) : null}
               </button>
             );
@@ -407,7 +428,7 @@ function MonthCalendar({
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
           <span className="inline-flex items-center gap-1.5"><span className="text-[9px] font-bold text-oker-600">F</span> feestdag</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-[9px] font-bold text-slate-400">V</span> schoolvakantie</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-[9px] font-bold text-slate-400">v</span> vrij</span>
         </div>
       </div>
 
@@ -528,7 +549,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                   <Td className="px-6 py-4">
                     <div className="space-y-1">
                       <p className={cn('font-semibold tabular-nums', isToday ? 'text-oker-700' : 'text-slate-800')}>
-                        {formatShiftDate(g.date)} <span className="font-medium text-slate-400">· wk {isoWeekOf(g.date)}</span>
+                        {formatShiftDate(g.date)}
                       </p>
                       <div className="flex items-center gap-2 flex-wrap">
                         {isToday && <Badge tone="oker">Vandaag</Badge>}
@@ -609,7 +630,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <MicroLabel className={cn(isToday && 'text-oker-600')}>
-                    {isToday ? 'Vandaag' : formatShortDate(g.date).split(' ')[0]} · wk {isoWeekOf(g.date)}
+                    {isToday ? 'Vandaag' : formatShortDate(g.date).split(' ')[0]}
                   </MicroLabel>
                   <p className="text-sm font-semibold text-slate-900 mt-0.5 tabular-nums">
                     {formatShortDate(g.date).split(' ').slice(1).join(' ')}

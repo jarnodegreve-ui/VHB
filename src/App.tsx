@@ -1744,7 +1744,7 @@ export default function App() {
     rooster: { title: 'Mijn rooster', subtitle: 'Je komende diensten en export naar agenda.' },
     dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
     ritblaadjes: { title: 'Ritbladen', subtitle: 'Actuele rit-informatie als PDF voor alle chauffeurs.' },
-    documenten: { title: 'Mijn documenten', subtitle: 'Attesten, reglement en andere documenten die de planning voor jou klaarzet.' },
+    documenten: { title: 'Mijn documenten', subtitle: 'Documenten die de planning voor jou klaarzet vind je hier terug.' },
     contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
     updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
