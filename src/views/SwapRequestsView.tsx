@@ -871,7 +871,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="block text-sm font-bold text-slate-800">Zonder tegenprestatie</span>
                               <span className="block text-xs font-medium text-slate-500">
                                 {takeoverCode
-                                  ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) — jij geeft niets terug</>
+                                  ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) jij geeft niets terug.</>
                                   : <>Kan niet: {voornaam} staat op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'} niet op vrij/bv/tk/ta</>}
                               </span>
                             </span>
