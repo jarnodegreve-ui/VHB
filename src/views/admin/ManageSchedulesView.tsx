@@ -332,7 +332,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       </h4>
                       <p className={cn('mt-1 text-sm font-medium', accent.body)}>
                         {hasChanges
-                          ? `${changesSinceImport.approvedLeave.length} verlof${changesSinceImport.approvedLeave.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd. Controleer of deze in jouw Excel verwerkt zijn.`
+                          ? `${changesSinceImport.approvedLeave.length} verlof${changesSinceImport.approvedLeave.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd. Dienstruilen voert het portaal automatisch door (ook na een import) — dit lijstje is ter controle voor je Excel-archief; verlof verwerk je wél in Excel.`
                           : 'Geen verloven of dienstruilen goedgekeurd in de app sinds je laatste matrix-import. Excel en app zijn in sync.'}
                       </p>
                       <MicroLabel className={cn('mt-1', accent.stamp)}>

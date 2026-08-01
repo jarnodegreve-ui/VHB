@@ -11,6 +11,7 @@ import type {
   PlanningMatrixRow,
   ServiceRecord,
   ShiftRecord,
+  SwapRecord,
 } from "./types.js";
 import {
   countAdmins,
@@ -128,20 +129,21 @@ export const savePlanningData = async (data: any) => {
 };
 
 /**
- * Eén shift gericht opzoeken (eigendoms-checks bij dienstruil). `date` hoort
- * erbij sinds de ruil zonder tegenprestatie: de servercheck moet weten op
- * welke dag de aangeboden dienst valt.
+ * Eén shift gericht opzoeken (eigendoms-checks bij dienstruil). `date` en
+ * `line` horen erbij sinds de overname-check en de planning-doorvoer: de
+ * server moet weten op welke dag en om welk dienstnummer het gaat.
  */
-export const getShiftById = async (id: string): Promise<{ id: string; driverId: string; date: string } | null> => {
+export const getShiftById = async (id: string): Promise<{ id: string; driverId: string; date: string; line: string } | null> => {
   if (!id) return null;
   const client = requireDb();
-  const { data, error } = await client.from('planning').select('id, driverId, date').eq('id', id).maybeSingle();
+  const { data, error } = await client.from('planning').select('id, driverId, date, line').eq('id', id).maybeSingle();
   if (error) throw error;
   if (!data) return null;
   return {
     id: String((data as any).id),
     driverId: String((data as any).driverId ?? ''),
     date: String((data as any).date ?? ''),
+    line: String((data as any).line ?? ''),
   };
 };
 
@@ -1772,6 +1774,112 @@ export const saveSwapsData = async (data: any, idsToDelete: string[] = []) => {
     const { error } = await client.from('swaps').delete().in('id', idsToDelete.map(String));
     if (error) throw error;
   }
+};
+
+// --- Planning-doorvoer van goedgekeurde ruilen -------------------------------
+//
+// Een goedgekeurde ruil/overname wordt direct in de planning doorgevoerd:
+// de aangeboden dienst verhuist naar de collega en (bij een 1-op-1 ruil met
+// een dienst als tegenprestatie) de terugdienst naar de aanvrager. De sleutel
+// is (datum, dienstnummer, chauffeur) — bewust NIET de planning-rij-id, want
+// die wordt bij elke heropbouw opnieuw gevormd. Annuleren draait de wissel
+// om; de heropbouw past goedgekeurde ruilen opnieuw toe via de pure functie.
+
+type SwapCarryFields = Pick<SwapRecord, 'requesterId' | 'targetDriverId' | 'swapType' | 'returnDate' | 'returnCode' | 'shiftDate' | 'shiftLine'>;
+
+/** Heeft deze ruil een dienst als tegenprestatie (1-op-1, geen vrije dag)? */
+const swapHasReturnShift = (swap: SwapCarryFields) =>
+  swap.swapType !== 'overname' &&
+  !!swap.returnDate &&
+  !!swap.returnCode &&
+  String(swap.returnCode).toLowerCase() !== 'vrij';
+
+/**
+ * Pure variant voor de heropbouw: past goedgekeurde ruilen toe op een
+ * in-memory rijenset (muteert de rijen in place, volgorde van `swaps` =
+ * toepassingsvolgorde; roep aan met decidedAt-oplopend zodat een latere
+ * ruil op het resultaat van een eerdere werkt).
+ */
+export const applySwapsToPlanningRows = (
+  rows: Array<Pick<ShiftRecord, 'date' | 'line' | 'driverId'>>,
+  swaps: SwapCarryFields[],
+): { applied: number; skipped: number } => {
+  let applied = 0;
+  let skipped = 0;
+  for (const swap of swaps) {
+    const target = String(swap.targetDriverId ?? '');
+    if (!swap.shiftDate || !swap.shiftLine || !target) {
+      // Legacy-ruil van vóór de shift_info-migratie (of backfill vond de rij
+      // niet meer): niet toepasbaar, telt als overgeslagen.
+      skipped++;
+      continue;
+    }
+    let touched = false;
+    for (const row of rows) {
+      if (row.date === swap.shiftDate && String(row.line) === String(swap.shiftLine) && String(row.driverId) === String(swap.requesterId)) {
+        row.driverId = target;
+        touched = true;
+      }
+    }
+    if (swapHasReturnShift(swap)) {
+      for (const row of rows) {
+        if (row.date === swap.returnDate && String(row.line) === String(swap.returnCode) && String(row.driverId) === target) {
+          row.driverId = String(swap.requesterId);
+          touched = true;
+        }
+      }
+    }
+    if (touched) applied++;
+    else skipped++;
+  }
+  return { applied, skipped };
+};
+
+/**
+ * Voert één richting van de wissel uit in de database. Geeft het aantal
+ * geraakte rijen terug zodat de route kan waarschuwen (0 = de dienst staat
+ * niet (meer) zo in de planning — bv. handmatig al aangepast).
+ */
+const movePlanningRows = async (date: string, line: string, fromDriverId: string, toDriverId: string): Promise<number> => {
+  const client = requireDb();
+  const { data, error } = await client
+    .from('planning')
+    .update({ driverId: toDriverId })
+    .eq('date', date)
+    .eq('line', line)
+    .eq('driverId', fromDriverId)
+    .select('id');
+  if (error) throw error;
+  return (data ?? []).length;
+};
+
+export type SwapCarryResult = {
+  offeredMoved: number;
+  returnMoved: number | null; // null = geen dienst-tegenprestatie (overname of vrije dag)
+};
+
+/** Goedgekeurde ruil doorvoeren in de planning. */
+export const applySwapToPlanning = async (swap: SwapCarryFields): Promise<SwapCarryResult | null> => {
+  const target = String(swap.targetDriverId ?? '');
+  if (!swap.shiftDate || !swap.shiftLine || !target) return null;
+  const offeredMoved = await movePlanningRows(swap.shiftDate, String(swap.shiftLine), String(swap.requesterId), target);
+  let returnMoved: number | null = null;
+  if (swapHasReturnShift(swap)) {
+    returnMoved = await movePlanningRows(String(swap.returnDate), String(swap.returnCode), target, String(swap.requesterId));
+  }
+  return { offeredMoved, returnMoved };
+};
+
+/** Geannuleerde (eerder goedgekeurde) ruil terugdraaien in de planning. */
+export const revertSwapFromPlanning = async (swap: SwapCarryFields): Promise<SwapCarryResult | null> => {
+  const target = String(swap.targetDriverId ?? '');
+  if (!swap.shiftDate || !swap.shiftLine || !target) return null;
+  const offeredMoved = await movePlanningRows(swap.shiftDate, String(swap.shiftLine), target, String(swap.requesterId));
+  let returnMoved: number | null = null;
+  if (swapHasReturnShift(swap)) {
+    returnMoved = await movePlanningRows(String(swap.returnDate), String(swap.returnCode), String(swap.requesterId), target);
+  }
+  return { offeredMoved, returnMoved };
 };
 
 // --- Leave ---

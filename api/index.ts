@@ -32,6 +32,9 @@ import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
 import {
+  applySwapsToPlanningRows,
+  applySwapToPlanning,
+  revertSwapFromPlanning,
   buildPlanningFromMatrix,
   getActivityLog,
   getLatestAuthEventAt,
@@ -1085,6 +1088,8 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     // codes of niet-gematchte chauffeurs zijn, weiger de import zodat de
     // planner eerst de oorzaak kan rechtzetten.
     const generatedPlanning = await buildPlanningFromMatrix(rows);
+    // Goedgekeurde ruilen opnieuw toepassen — de matrix kent ze niet.
+    const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts);
 
     // Verlof-conflict-detectie: import overschrijft anders een goedgekeurd
     // verlof met een dienst-toewijzing.
@@ -1143,7 +1148,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       req,
       "planning",
       "Matrix import bevestigd",
-      `${rows.length} dagen verwerkt (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
+      `${rows.length} dagen verwerkt (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
     );
 
     // Chauffeurs met diensten in deze import krijgen een seintje.
@@ -1186,6 +1191,9 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     const startDate = importedDates[0] || null;
     const endDate = importedDates[importedDates.length - 1] || null;
     const generatedPlanning = await buildPlanningFromMatrix(rows);
+    // Ook in het voorbeeld: goedgekeurde ruilen meenemen, anders toont de
+    // preview een ander eindbeeld dan wat de import werkelijk oplevert.
+    await reapplyApprovedSwaps(generatedPlanning.shifts);
 
     // Verlof-conflicten detecteren: een chauffeur staat met goedgekeurd
     // verlof én tegelijk met een dienst in de nieuwe import.
@@ -1239,6 +1247,8 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
 app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", "admin"), async (_req, res) => {
   try {
     const generatedPlanning = await buildPlanningFromMatrix();
+    // Goedgekeurde ruilen opnieuw toepassen — de matrix kent ze niet.
+    const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts);
     // Zelfde vangrails als /import: zonder deze guard liet een naamswijziging
     // in gebruikersbeheer ("unmatched driver") hier stilletjes alle diensten
     // van die chauffeur uit de planning vallen bij het heropbouwen.
@@ -1258,7 +1268,7 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
       _req,
       "planning",
       "Planning opnieuw opgebouwd",
-      `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}.`,
+      `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}.`,
     );
     res.json({ success: true, ...generatedPlanning.summary });
   } catch (err: any) {
@@ -2399,6 +2409,45 @@ app.get("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
 // Afgehandelde ruil-statussen: hieruit is geen overgang meer toegestaan.
 const TERMINAL_SWAP_STATES = new Set(["rejected", "cancelled", "completed"]);
 
+/** Leesbare activity-log-melding van een planning-doorvoer. `r` = resultaat
+ *  van applySwapToPlanning/revertSwapFromPlanning; null = geen dienst-info op
+ *  de swap (aanvraag van vóór de shift_info-migratie). */
+const describeSwapCarry = (
+  swap: any,
+  r: { offeredMoved: number; returnMoved: number | null } | null,
+  richting: "doorgevoerd" | "teruggedraaid",
+): string => {
+  if (!r) {
+    return "Planning NIET automatisch bijgewerkt (aanvraag zonder dienst-info) — pas de planning handmatig aan.";
+  }
+  const delen: string[] = [];
+  delen.push(
+    r.offeredMoved > 0
+      ? `dienst ${swap.shiftLine} op ${swap.shiftDate}: ${r.offeredMoved} rij(en) ${richting}`
+      : `LET OP: dienst ${swap.shiftLine} op ${swap.shiftDate} niet gevonden in de planning — controleer handmatig`,
+  );
+  if (r.returnMoved !== null) {
+    delen.push(
+      r.returnMoved > 0
+        ? `terugruil ${swap.returnCode} op ${swap.returnDate}: ${r.returnMoved} rij(en) ${richting}`
+        : `LET OP: terugruil ${swap.returnCode} op ${swap.returnDate} niet gevonden — controleer handmatig`,
+    );
+  }
+  return `Planning ${richting}: ${delen.join("; ")}.`;
+};
+
+/** Heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op een vers
+ *  gegenereerde planning. De matrix (Excel) kent de ruilen immers niet —
+ *  zonder deze stap veegde elke import/heropbouw alle doorgevoerde wissels
+ *  weer weg (en moest de planner ze in Excel overtypen). Volgorde op
+ *  decidedAt zodat een latere ruil op het resultaat van een eerdere werkt. */
+const reapplyApprovedSwaps = async (shifts: Array<{ date: string; line: string; driverId: string }>) => {
+  const approved = (await getSwapsData())
+    .filter((sw) => sw.status === "approved")
+    .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
+  return applySwapsToPlanningRows(shifts, approved);
+};
+
 app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -2663,13 +2712,46 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // Het ruiltype ligt vast bij het indienen. Bestaande records erven dus
     // altijd het opgeslagen type: een client die het veld niet meestuurt
     // (oudere bundel uit de PWA-cache) mag een overname niet stil naar een
-    // 1-op-1 ruil omzetten.
-    const finalRecords = recordsToWrite.map((n: any) => {
+    // 1-op-1 ruil omzetten. shift_date/shift_line komen NOOIT van de client:
+    // nieuw = server-side uit de planning-rij, bestaand = opgeslagen waarde —
+    // dit is de sleutel voor de automatische planning-doorvoer hieronder.
+    const finalRecords: any[] = [];
+    for (const n of recordsToWrite) {
       const prev = previousById.get(String(n.id));
-      return { ...n, swapType: normalizeSwapType(prev ? prev.swapType : n.swapType) };
-    });
+      let shiftDate = prev?.shiftDate;
+      let shiftLine = prev?.shiftLine;
+      if (!prev) {
+        const offeredShift = await getShiftById(String(n.shiftId ?? ""));
+        shiftDate = offeredShift?.date || undefined;
+        shiftLine = offeredShift?.line || undefined;
+      }
+      finalRecords.push({
+        ...n,
+        swapType: normalizeSwapType(prev ? prev.swapType : n.swapType),
+        shiftDate,
+        shiftLine,
+      });
+    }
 
     await saveSwapsData(finalRecords, swapIdsToDelete);
+
+    // Planning-doorvoer: een goedgekeurde ruil verhuist de dienst(en) direct
+    // in de planning; een geannuleerde eerder-goedgekeurde ruil draait de
+    // wissel terug. Bewust ná de save (de statusovergang is het besluit) en
+    // best-effort: is de dienst intussen handmatig verlegd, dan meldt de
+    // activity-log dat i.p.v. de beslissing te blokkeren.
+    const carryLogById = new Map<string, string>();
+    for (const next of finalRecords) {
+      const prev = previousById.get(String(next.id));
+      if (!prev || prev.status === next.status) continue;
+      if (next.status === "approved") {
+        const r = await applySwapToPlanning(next);
+        carryLogById.set(String(next.id), describeSwapCarry(next, r, "doorgevoerd"));
+      } else if (prev.status === "approved" && next.status === "cancelled") {
+        const r = await revertSwapFromPlanning(next);
+        carryLogById.set(String(next.id), describeSwapCarry(next, r, "teruggedraaid"));
+      }
+    }
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen. Over
     // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
@@ -2708,7 +2790,8 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         else if (next.status === "cancelled") action = "Dienstruil geannuleerd";
         else if (next.status === "completed") action = "Dienstruil voltooid";
         if (action) {
-          await logActivity(req, "swaps", action, `${userName(next.requesterId)} — dienstruil (${prev.status} → ${next.status}).`, { type: "swap", id: next.id });
+          const carry = carryLogById.get(String(next.id));
+          await logActivity(req, "swaps", action, `${userName(next.requesterId)} — dienstruil (${prev.status} → ${next.status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id: next.id });
           // Push naar de betrokkenen, behalve degene die de actie deed.
           const actorId = String(req.appUser?.id ?? "");
           const betrokkenen = [String(prev.requesterId), String(prev.targetDriverId ?? "")]
@@ -2832,6 +2915,17 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       : { ...current, status, decidedAt: new Date().toISOString() };
     await saveSwapsData([updated], []);
 
+    // Planning-doorvoer (zie POST /api/swaps): approve verhuist de dienst(en),
+    // annuleren van een goedgekeurde ruil draait de wissel terug.
+    let carry: string | undefined;
+    if (status === "approved" && current.status !== "approved") {
+      const r = await applySwapToPlanning(updated);
+      carry = describeSwapCarry(updated, r, "doorgevoerd");
+    } else if (current.status === "approved" && status === "cancelled") {
+      const r = await revertSwapFromPlanning(updated);
+      carry = describeSwapCarry(updated, r, "teruggedraaid");
+    }
+
     const usersForLog = await getUsersData();
     const userName = (uid: string) => usersForLog.find((u) => String(u.id) === String(uid))?.name || `Onbekende gebruiker (${uid})`;
     const actionLabels: Record<string, string> = {
@@ -2842,7 +2936,7 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       completed: "Dienstruil voltooid",
     };
     const action = actionLabels[status] ?? "Dienstruil bijgewerkt";
-    await logActivity(req, "swaps", action, `${userName(String(current.requesterId))} — dienstruil (${current.status} → ${status}).`, { type: "swap", id });
+    await logActivity(req, "swaps", action, `${userName(String(current.requesterId))} — dienstruil (${current.status} → ${status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id });
 
     const betrokkenen = [String(current.requesterId), String(current.targetDriverId ?? "")]
       .filter((uid) => uid && uid !== selfId);

@@ -145,6 +145,37 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     getShiftById: async (id: string) =>
       mem.planning.find((s: any) => String(s.id) === String(id)) ?? null,
+    // Planning-doorvoer: zelfde semantiek als de echte DB-functies, maar op
+    // mem.planning — zodat de integratietests het effect van approve/cancel
+    // op de planning kunnen asserten.
+    applySwapToPlanning: async (swap: any) => {
+      if (!swap.shiftDate || !swap.shiftLine || !swap.targetDriverId) return null;
+      const move = (date: string, line: string, from: string, to: string) => {
+        let n = 0;
+        for (const row of mem.planning) {
+          if (row.date === date && String(row.line) === String(line) && String(row.driverId) === String(from)) { row.driverId = String(to); n++; }
+        }
+        return n;
+      };
+      const offeredMoved = move(swap.shiftDate, swap.shiftLine, swap.requesterId, swap.targetDriverId);
+      const hasReturn = swap.swapType !== 'overname' && swap.returnDate && swap.returnCode && String(swap.returnCode).toLowerCase() !== 'vrij';
+      const returnMoved = hasReturn ? move(swap.returnDate, swap.returnCode, swap.targetDriverId, swap.requesterId) : null;
+      return { offeredMoved, returnMoved };
+    },
+    revertSwapFromPlanning: async (swap: any) => {
+      if (!swap.shiftDate || !swap.shiftLine || !swap.targetDriverId) return null;
+      const move = (date: string, line: string, from: string, to: string) => {
+        let n = 0;
+        for (const row of mem.planning) {
+          if (row.date === date && String(row.line) === String(line) && String(row.driverId) === String(from)) { row.driverId = String(to); n++; }
+        }
+        return n;
+      };
+      const offeredMoved = move(swap.shiftDate, swap.shiftLine, swap.targetDriverId, swap.requesterId);
+      const hasReturn = swap.swapType !== 'overname' && swap.returnDate && swap.returnCode && String(swap.returnCode).toLowerCase() !== 'vrij';
+      const returnMoved = hasReturn ? move(swap.returnDate, swap.returnCode, swap.requesterId, swap.targetDriverId) : null;
+      return { offeredMoved, returnMoved };
+    },
     getPlanningData: async () => mem.planning,
     getServicesData: async () => mem.services,
     saveServicesData: async (data: any[]) => { mem.services = data; },
@@ -170,6 +201,34 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     updateUserSessionMeta: async () => {},
     bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async () => mem.planningMatrix,
+    // Mini-versie van de matrix-heropbouw op mem: dienstcode matcht op
+    // services, al de rest telt als afwezigheid. De route-logica (guards,
+    // ruil-replay, save) draait onveranderd — alleen de generatie is mem.
+    buildPlanningFromMatrix: async (inputRows?: any[]) => {
+      const rows = inputRows ?? mem.planningMatrix;
+      const byName: Record<string, string> = { 'chauffeur a': '3', 'chauffeur b': '4' };
+      const shifts: any[] = [];
+      for (const row of rows) {
+        for (const [name, code] of Object.entries(row.assignments ?? {})) {
+          const driverId = byName[String(name).toLowerCase()];
+          const svc = mem.services.find((sv: any) => String(sv.serviceNumber) === String(code));
+          if (!driverId || !svc) continue;
+          shifts.push({
+            id: `${row.source_date}-${driverId}-${svc.serviceNumber}-1`,
+            date: row.source_date, startTime: svc.startTime, endTime: svc.endTime,
+            line: String(svc.serviceNumber), busNumber: '', loopnr: '', driverId,
+          });
+        }
+      }
+      return {
+        shifts,
+        summary: {
+          importedDays: rows.length, generatedShifts: shifts.length, matchedServices: shifts.length,
+          skippedAbsences: 0, unknownCodes: [], unmatchedDrivers: [], servicesWithoutSegments: [], perDriver: [],
+        },
+      };
+    },
+    replacePlanningData: async (shifts: any[]) => { mem.planning = shifts; },
     getCoverageExpectations: async () => ({}),
     listUserDocuments: async (userId?: string) =>
       userId ? mem.documents.filter((d: any) => String(d.userId) === String(userId)) : mem.documents,
@@ -305,9 +364,9 @@ beforeEach(() => {
     { id: 's-2', shiftId: 'sh-b', requesterId: '4', targetDriverId: '2', status: 'pending', reason: '', createdAt: '2026-06-01T09:00:00Z', returnDate: '2026-07-03', returnCode: '12' },
   ];
   mem.planning = [
-    { id: 'sh-a', driverId: '3', date: '2026-07-01', code: '12' },
-    { id: 'sh-b', driverId: '4', date: '2026-07-02', code: '14' },
-    { id: 'sh-c', driverId: '3', date: '2026-07-08', code: '12' }, // vrije dienst van chauffeur 3 (geen open ruil)
+    { id: 'sh-a', driverId: '3', date: '2026-07-01', line: '12' },
+    { id: 'sh-b', driverId: '4', date: '2026-07-02', line: '14' },
+    { id: 'sh-c', driverId: '3', date: '2026-07-08', line: '12' }, // vrije dienst van chauffeur 3 (geen open ruil)
   ];
   // 2026-07-08: chauffeur 3 rijdt dienst 12, chauffeur 4 staat op bv → een
   // overname (ruil zonder tegenprestatie) naar chauffeur 4 mag die dag.
@@ -626,6 +685,88 @@ describe('dienstruil zonder tegenprestatie (overname)', () => {
     const res = await api('GET', '/api/availability?from=2026-07-08&to=2026-07-08', { token: 'tok-a' });
     expect(res.status).toBe(200);
     expect(res.json.days[0].takeover).toBeUndefined();
+  });
+});
+
+describe('planning-doorvoer van goedgekeurde ruilen', () => {
+  // s-1 (bestaand record) mét dienst-info, alsof de backfill-migratie liep:
+  // sh-a = dienst 12 op 2026-07-01 van chauffeur 3, tegenprestatie = vrij.
+  const seedShiftInfo = () => {
+    mem.swaps = mem.swaps.map((s) => (s.id === 's-1' ? { ...s, shiftDate: '2026-07-01', shiftLine: '12' } : s));
+  };
+
+  it('verhuist de dienst naar de collega bij goedkeuring (vrije-dag-tegenprestatie)', async () => {
+    seedShiftInfo();
+    const accept = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    expect(accept.status).toBe(200);
+    const approve = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(approve.status).toBe(200);
+    // sh-a hoort nu bij chauffeur 4; er is geen terugdienst (returnCode VRIJ).
+    expect(mem.planning.find((p: any) => p.id === 'sh-a')?.driverId).toBe('4');
+    expect(mem.planning.find((p: any) => p.id === 'sh-b')?.driverId).toBe('4');
+  });
+
+  it('verhuist bij een 1-op-1 ruil ook de terugdienst naar de aanvrager', async () => {
+    // Chauffeur 3 geeft sh-c (dienst 12, 08/07) aan 4 en neemt diens dienst 14 (02/07).
+    mem.swaps = [];
+    const nieuw = {
+      id: 's-ruil', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-20T08:00:00Z', returnDate: '2026-07-02', returnCode: '14',
+    };
+    const post = await api('POST', '/api/swaps', { token: 'tok-a', body: [nieuw] });
+    expect(post.status).toBe(200);
+    // Server vulde de dienst-info zelf in (niet client-trusted).
+    const opgeslagen = mem.swaps.find((s: any) => s.id === 's-ruil');
+    expect(opgeslagen?.shiftDate).toBe('2026-07-08');
+    expect(opgeslagen?.shiftLine).toBe('12');
+
+    await api('PATCH', '/api/swaps/s-ruil', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    const approve = await api('PATCH', '/api/swaps/s-ruil', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(approve.status).toBe(200);
+    expect(mem.planning.find((p: any) => p.id === 'sh-c')?.driverId).toBe('4');
+    expect(mem.planning.find((p: any) => p.id === 'sh-b')?.driverId).toBe('3');
+  });
+
+  it('draait de wissel terug wanneer een goedgekeurde ruil geannuleerd wordt', async () => {
+    seedShiftInfo();
+    await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(mem.planning.find((p: any) => p.id === 'sh-a')?.driverId).toBe('4');
+
+    const cancel = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'cancelled', ifStatus: 'approved' } });
+    expect(cancel.status).toBe(200);
+    expect(mem.planning.find((p: any) => p.id === 'sh-a')?.driverId).toBe('3');
+  });
+
+  it('laat een aanvraag zonder dienst-info gewoon goedkeuren (legacy) zonder planning-wijziging', async () => {
+    // s-1 zonder shiftDate/shiftLine — van vóór de migratie én de rij is herbouwd.
+    await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    const approve = await api('PATCH', '/api/swaps/s-1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(approve.status).toBe(200);
+    expect(mem.planning.find((p: any) => p.id === 'sh-a')?.driverId).toBe('3');
+    // De activity-log waarschuwt dat handmatig bijwerken nodig is.
+    expect(mem.activity.some((a: any) => String(a.message).includes('NIET automatisch bijgewerkt'))).toBe(true);
+  });
+
+  it('past goedgekeurde ruilen opnieuw toe bij planning-heropbouw (sync-from-matrix)', async () => {
+    // Matrix voor 08/07: chauffeur 3 rijdt 12, chauffeur 4 vrij — maar er is
+    // een goedgekeurde overname van die dienst naar chauffeur 4.
+    mem.planningMatrix = [
+      { id: 'm-r', source_date: '2026-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
+    ];
+    mem.planningCodes = [
+      { code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true },
+    ];
+    mem.swaps = [{
+      id: 's-app', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'approved',
+      reason: '', createdAt: '2026-06-20T08:00:00Z', decidedAt: '2026-06-21T08:00:00Z',
+      swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12',
+    }];
+    const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    const rebuilt = mem.planning.filter((p: any) => p.date === '2026-07-08' && String(p.line) === '12');
+    expect(rebuilt.length).toBeGreaterThan(0);
+    for (const row of rebuilt) expect(row.driverId).toBe('4');
   });
 });
 
