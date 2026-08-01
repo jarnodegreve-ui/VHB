@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, isHealthCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -779,15 +779,18 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       return { kind: "unknown", label: "Onbekende code", segments: [] };
     };
 
-    // Ziektecodes worden voor een chauffeur gemaskeerd tot een neutrale
-    // "afwezig"-cel (zie HEALTH_CODES in helpers): hij ziet dus wél dat de
-    // collega die dag niet inzetbaar is — wat dit scherm bruikbaar houdt om
-    // wissels te zoeken — maar niet de gezondheidsreden. Zijn eigen cellen en
-    // die van planner/admin blijven ongemoeid.
-    const isStaff = req.appUser?.role === "planner" || req.appUser?.role === "admin";
-    const selfId = String(req.appUser?.id ?? "");
-    const maskedCell = () => ({ code: "afw", kind: "absence", label: "Afwezig", segments: [] as string[] });
-
+    // BEWUSTE KEUZE (Jarno, 01-08-2026): afwezigheidscodes — ziekte incluis —
+    // blijven voor iedereen zichtbaar, gelijk aan de fysieke planning in het
+    // chauffeurslokaal. Er is kort een maskering voor chauffeurs actief geweest
+    // (zie #290); die is er op verzoek weer uit gehaald omdat het digitale
+    // scherm niet strenger hoeft te zijn dan het bord waar iedereen langsloopt.
+    //
+    // Ziekte is wél een bijzondere categorie persoonsgegevens (AVG art. 9), dus
+    // dit is een openstaande keuze en geen afgesloten dossier — Jarno bekijkt
+    // het later opnieuw, dan samen met het bord. Voer het tot die tijd NIET
+    // opnieuw op als bevinding. De maskering terugzetten is klein werk: de
+    // implementatie staat in commit f2a9b33 (helpers: HEALTH_CODES /
+    // isHealthCode, hier: één ternary op de cel).
     const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[] }>> = {};
     for (const row of monthRows) {
       const date = String(row.source_date);
@@ -800,8 +803,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
         const r = resolve(code);
         if (!r) continue;
         if (!cells[id]) cells[id] = {};
-        const mask = !isStaff && id !== selfId && isHealthCode(code);
-        cells[id][date] = mask ? maskedCell() : { code, kind: r.kind, label: r.label, segments: r.segments };
+        cells[id][date] = { code, kind: r.kind, label: r.label, segments: r.segments };
       }
     }
 
