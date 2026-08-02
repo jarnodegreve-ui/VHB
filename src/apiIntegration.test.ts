@@ -47,7 +47,7 @@ const mem = vi.hoisted(() => ({
   // 'Actief'-event bij action:'resume'.
   lastAuthEventAt: null as string | null,
   clientErrors: [] as any[],
-  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string }>,
+  emailsSent: [] as Array<{ to: string[]; subject: string; context?: string; text?: string }>,
   storedBackups: [] as Array<{ filename: string; size: number }>,
   pushSubscriptions: [] as any[],
   pushesSent: [] as Array<{ userIds: string[]; payload: any }>,
@@ -102,7 +102,7 @@ vi.mock('../api/email.js', async (importOriginal) => ({
   ...(await importOriginal<any>()),
   sendLeaveDecisionEmail: vi.fn(async () => ({ ok: true, mocked: true })),
   sendEmail: vi.fn(async (opts: any) => {
-    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context });
+    mem.emailsSent.push({ to: opts.to, subject: opts.subject, context: opts.context, text: opts.text });
     return { ok: true, mocked: true };
   }),
   sendWelcomeEmail: vi.fn(async (ctx: any) => {
@@ -1221,16 +1221,47 @@ describe('foutmelding-digest (cron)', () => {
     expect(mem.emailsSent).toHaveLength(1);
     // Default-ontvanger = admin-account (admin@vhb.be).
     expect(mem.emailsSent[0].to).toContain('admin@vhb.be');
-    expect(mem.emailsSent[0].subject).toContain('3 fouten');
+    expect(mem.emailsSent[0].subject).toContain('3 meldingen');
     expect(mem.emailsSent[0].context).toBe('error-digest');
   });
 
-  it('stuurt niets als er geen recente fouten zijn', async () => {
+  it('stuurt ook een overzicht als er niets gebeurd is', async () => {
+    // Bewuste keuze (02-08): élke dag een mail, ook bij nul. Een bericht dat
+    // alleen bij problemen komt, laat je je afvragen of het niet gewoon niet
+    // verstuurd is.
     mem.clientErrors = [];
     const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
     expect(res.status).toBe(200);
-    expect(res.json.alerted).toBe(false);
-    expect(mem.emailsSent).toHaveLength(0);
+    expect(res.json.alerted).toBe(true);
+    expect(mem.emailsSent).toHaveLength(1);
+    expect(mem.emailsSent[0].subject).toContain('geen meldingen');
+  });
+
+  it('houdt de toon neutraal en noemt het aantal toestellen', async () => {
+    // Waarschuwingsteken weg (verzoek Jarno): 16 meldingen van één toestel las
+    // als een storing terwijl het deploy-ruis was. Het aantal toestellen is
+    // het signaal dat er wél toe doet.
+    mem.clientErrors = [
+      { id: 1, createdAt: recent(), message: 'Kon planning niet laden', source: 'error-toast', userId: '3' },
+      { id: 2, createdAt: recent(), message: 'Kon updates niet laden', source: 'error-toast', userId: 'onbevestigd:3' },
+    ];
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(mem.emailsSent[0].subject).not.toContain('⚠');
+    expect(mem.emailsSent[0].subject).toContain('dagoverzicht');
+    // 'onbevestigd:3' en '3' zijn hetzelfde toestel.
+    expect(mem.emailsSent[0].subject).toContain('1 toestel');
+  });
+
+  it('meldt hoeveel er als ruis genegeerd is', async () => {
+    mem.clientErrors = [
+      { id: 1, createdAt: recent(), message: 'Kon planning niet laden', source: 'error-toast', userId: '3' },
+      { id: 2, createdAt: recent(), message: 'Je sessie is verlopen. Log opnieuw in.', source: 'error-toast', userId: '4' },
+      { id: 3, createdAt: recent(), message: 'Failed to fetch dynamically imported module: /assets/x.js', source: 'unhandledrejection', userId: '4' },
+    ];
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.json.count).toBe(1);
+    expect(mem.emailsSent[0].text).toContain('2 meldingen niet meegeteld');
   });
 
   it('negeert fouten ouder dan het interval', async () => {
@@ -1238,8 +1269,10 @@ describe('foutmelding-digest (cron)', () => {
       { id: 1, createdAt: '2020-01-01T00:00:00.000Z', message: 'oud', source: 'error-toast' },
     ];
     const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
-    expect(res.json.alerted).toBe(false);
-    expect(mem.emailsSent).toHaveLength(0);
+    // Er komt wél een dagoverzicht (dat komt elke dag), maar de oude fout
+    // telt niet mee.
+    expect(res.json.count).toBe(0);
+    expect(mem.emailsSent[0].subject).toContain('geen meldingen');
   });
 
   it('respecteert ALERT_EMAIL als die gezet is', async () => {
