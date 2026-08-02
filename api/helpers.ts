@@ -564,3 +564,33 @@ export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => 
 
   return rows;
 };
+
+/**
+ * Meldingen die wél in client_errors thuishoren maar niet in de foutendigest.
+ * Twee soorten ruis, allebei geen defect:
+ *
+ *  - "sessie is verlopen" — levenscyclus. Wie lang niet inlogde krijgt die
+ *    toast gewoon (sinds #248 al gefilterd, verzoek Jarno).
+ *  - chunk-laadfouten na een deploy — een tabblad dat openstaat tijdens een
+ *    uitrol verwijst nog naar bestandsnamen die net vervangen zijn.
+ *    lazyWithRetry vangt dat op met een stille retry en desnoods één reload,
+ *    dus de gebruiker merkt er niets van; alleen de melding was al onderweg.
+ *    Op 02-08 vulde dat de digest met 10 van de 16 fouten, allemaal van de
+ *    eigen toestellen tijdens het uitrollen.
+ *
+ * De rijen blijven in de database en in Systeem Status zichtbaar — dit filtert
+ * alleen wat er in de dagelijkse mail terechtkomt, zodat een écht probleem
+ * daar niet in verdrinkt.
+ */
+const DIGEST_RUIS = [
+  "sessie is verlopen",
+  "failed to fetch dynamically imported module",
+  "error loading dynamically imported module",
+  "importing a module script failed",
+  "'text/html' is not a valid javascript mime type",
+];
+
+export const isDigestRuis = (message?: string | null): boolean => {
+  const m = String(message ?? "").toLowerCase();
+  return DIGEST_RUIS.some((patroon) => m.includes(patroon));
+};

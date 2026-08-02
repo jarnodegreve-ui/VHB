@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -1896,7 +1896,7 @@ app.get("/api/cron/week-rapport", async (req, res) => {
     const ruilNieuw = swaps.filter((sw) => inWindow(sw.createdAt)).length;
     const openVerlof = leave.filter((l) => l.status === "pending").length;
     const openRuil = swaps.filter((sw) => sw.status === "pending" || sw.status === "accepted").length;
-    const echteFouten = errors.filter((e) => !String(e.message || "").toLowerCase().includes("sessie is verlopen")).length;
+    const echteFouten = errors.filter((e) => !isDigestRuis(e.message)).length;
 
     const recipients = await systemMailRecipients();
     if (recipients.length === 0) {
@@ -1995,19 +1995,22 @@ app.get("/api/cron/error-digest", async (req, res) => {
       : 1440;
     const minCount = Number(process.env.ERROR_DIGEST_MIN_COUNT) > 0
       ? Number(process.env.ERROR_DIGEST_MIN_COUNT)
-      : 1;
+      : 0;
     const sinceMs = Date.now() - intervalMin * 60 * 1000;
     const sinceIso = new Date(sinceMs).toISOString();
 
     const allErrors = await getClientErrorsSince(sinceIso);
-    // "Sessie verlopen" is levenscyclus, geen fout: wie lang niet inlogde
-    // krijgt die toast gewoon. In de digest was het alleen ruis die de
-    // telling opblies (verzoek Jarno) — de rijen blijven wél in de DB en in
-    // Systeem Status zichtbaar.
-    const errors = allErrors.filter((e) => !String(e.message || "").toLowerCase().includes("sessie is verlopen"));
+    // Levenscyclus ("sessie verlopen") en deploy-ruis (chunk-laadfouten die
+    // lazyWithRetry al opvangt) horen niet in de mail — zie isDigestRuis.
+    // De rijen blijven wél in de DB en in Systeem Status zichtbaar.
+    const errors = allErrors.filter((e) => !isDigestRuis(e.message));
     const filtered = allErrors.length - errors.length;
-    if (errors.length < minCount) {
-      await logCronHeartbeat("error-digest", `Geen foutenpiek (${errors.length} fouten${filtered ? ` + ${filtered} sessie-verlopen genegeerd` : ""} in ${intervalMin} min).`);
+    // Bewust GEEN drempel meer (verzoek Jarno, 02-08): elke dag een overzicht,
+    // ook bij nul meldingen. Een mail die alleen bij problemen komt, laat je
+    // je afvragen of hij niet gewoon niet verstuurd is. ERROR_DIGEST_MIN_COUNT
+    // blijft bestaan voor wie hem toch wil gebruiken; standaard 0 = altijd.
+    if (minCount > 0 && errors.length < minCount) {
+      await logCronHeartbeat("error-digest", `Onder de drempel (${errors.length} meldingen${filtered ? ` + ${filtered} genegeerd als ruis` : ""} in ${intervalMin} min).`);
       return res.json({ success: true, count: errors.length, ignored: filtered, alerted: false });
     }
 
@@ -2044,17 +2047,38 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const moreLine = sorted.length > 15 ? `\n…en nog ${sorted.length - 15} andere foutsoorten.` : "";
 
     const windowLabel = intervalMin % 60 === 0 ? `${intervalMin / 60} uur` : `${intervalMin} min`;
-    const subject = `⚠️ VHB Portaal: ${errors.length} fout${errors.length === 1 ? "" : "en"} in de afgelopen ${windowLabel}`;
-    const text = `In de afgelopen ${windowLabel} zijn er ${errors.length} client-fouten gemeld (${sorted.length} unieke soorten).\n\n${topLines}${moreLine}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
+
+    // Hoeveel toestellen/gebruikers raakte het? Dát is het signaal, niet het
+    // aantal meldingen: 16 meldingen van één toestel is iemand die zit te
+    // klikken tijdens een deploy, 16 verdeeld over tien mensen is een storing.
+    // Lege userId = niet ingelogd; die tellen als één groep 'onbekend'.
+    const gebruikers = new Set(errors.map((e) => String(e.userId || "").replace(/^onbevestigd:/, "") || "onbekend"));
+    const impact = errors.length === 0
+      ? "geen meldingen"
+      : `${errors.length} melding${errors.length === 1 ? "" : "en"} · ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"}`;
+
+    // Neutrale toon, bewust zonder waarschuwingsteken (verzoek Jarno, 02-08):
+    // dit is een dagoverzicht dat élke ochtend komt, geen alarm. Een
+    // ⚠️ bij 16 meldingen van je eigen toestel las als een storing terwijl er
+    // niets aan de hand was. Wat er wél toe doet — hoeveel mensen geraakt
+    // zijn — staat nu in de onderwerpregel.
+    const subject = `VHB Portaal · dagoverzicht — ${impact}`;
+    const inleiding = errors.length === 0
+      ? `In de afgelopen ${windowLabel} zijn er geen meldingen binnengekomen.`
+      : `In de afgelopen ${windowLabel}: ${errors.length} melding${errors.length === 1 ? "" : "en"} van ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"} (${sorted.length} unieke soorten).`;
+    const staart = filtered > 0
+      ? `\n\n${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).`
+      : "";
+    const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
     // g.source/message/lastUrl zijn door de client aangeleverd — escapen,
     // anders is de digest-mail een HTML-injectiekanaal richting de admins.
     // De symbolicatie-uitkomst komt uit de sourcemap (indirect ook input) —
     // dus óók escapen.
-    const html = `<p>In de afgelopen <strong>${windowLabel}</strong> zijn er <strong>${errors.length}</strong> client-fouten gemeld (${sorted.length} unieke soorten).</p><ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere foutsoorten.</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+    const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
-    await logCronHeartbeat("error-digest", `${errors.length} fouten gemeld aan ${recipients.length} ontvanger(s).`);
+    await logCronHeartbeat("error-digest", `Dagoverzicht verstuurd: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
     res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
   } catch (err: any) {
     console.error("[error-digest] mislukt:", err?.message || err);
