@@ -156,7 +156,6 @@ export interface DiversionRecord {
   startDate: string;
   endDate?: string;
   pdfUrl?: string;
-  mapCoordinates?: string;
 }
 
 export interface ServiceRecord {

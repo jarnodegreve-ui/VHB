@@ -20,27 +20,15 @@ create policy users_select_self_or_staff
     or (select current_app_user_role()) in ('planner', 'admin')
   );
 
--- subscriptions: eigen rijen (user_id = auth-uid).
-drop policy if exists subs_select_own on public.subscriptions;
-create policy subs_select_own
-  on public.subscriptions for select
-  using ((select auth.uid()) = user_id);
-
-drop policy if exists subs_insert_own on public.subscriptions;
-create policy subs_insert_own
-  on public.subscriptions for insert
-  with check ((select auth.uid()) = user_id);
-
-drop policy if exists subs_update_own on public.subscriptions;
-create policy subs_update_own
-  on public.subscriptions for update
-  using ((select auth.uid()) = user_id)
-  with check ((select auth.uid()) = user_id);
-
-drop policy if exists subs_delete_own on public.subscriptions;
-create policy subs_delete_own
-  on public.subscriptions for delete
-  using ((select auth.uid()) = user_id);
+-- subscriptions: tabel gedropt op 02-08-2026 (zie
+-- 2026-08-02_drop_subscriptions.sql) — hij hoorde niet bij dit project. De
+-- vier subs_*_own-policies zijn met de tabel meegegaan.
+--
+-- Het blok dat hier stond is BEWUST geschrapt en niet geguard: `drop policy
+-- if exists` slikt een ontbrekende policy, maar niet een ontbrekende TABEL.
+-- Wie dit bestand opnieuw draaide op een omgeving zonder die tabel, kreeg
+-- `relation "public.subscriptions" does not exist` — en dan werden de zes
+-- policies hieronder (leave, swaps, …) niet meer aangemaakt.
 
 -- leave: betrokkene of staf.
 drop policy if exists leave_read_involved_or_staff on public.leave;

@@ -7,7 +7,7 @@ import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../c
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
-import { formatDateHuman, formatShortDay } from '../lib/format';
+import { formatDateHuman, formatShortDay, serviceNumberOf } from '../lib/format';
 import { canRespondToSwap } from '../lib/authorization';
 import { notify } from '../lib/ui';
 
@@ -149,7 +149,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   const myShifts = shifts
     .filter(s => s.driverId === user.id && s.date >= todayIso)
     .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime).localeCompare(String(b.startTime)));
-  const getServiceNumber = (shift: Shift | undefined) => String(shift?.line || '--').trim() || '--';
   /**
    * Dienst-info bij een ruil. `shifts` bevat alleen de éigen planning, dus de
    * aangeboden dienst zit er lang niet altijd in: de aangezochte collega heeft
@@ -754,7 +753,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         >
                           <span className="min-w-0">
                             <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(s.date)}</span>
-                            <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {getServiceNumber(s)} · {s.startTime} – {s.endTime}</span>
+                            <span className="block text-xs font-medium text-slate-500 tabular-nums">Dienst {serviceNumberOf(s)} · {s.startTime} – {s.endTime}</span>
                           </span>
                           <ChevronRight size={16} className="shrink-0 text-slate-300" />
                         </button>
@@ -772,7 +771,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {wizardStep === 2 && (
                   <>
                     <p className="text-xs font-medium text-slate-500">
-                      Jouw dienst: <span className="font-bold text-slate-800">Dienst {getServiceNumber(shifts.find((s) => s.id === selectedShift))}</span>
+                      Jouw dienst: <span className="font-bold text-slate-800">Dienst {serviceNumberOf(shifts.find((s) => s.id === selectedShift))}</span>
                       {selectedShiftDate && <span className="capitalize"> · {formatDateHuman(selectedShiftDate)}</span>}
                     </p>
                     {matchLoading ? (
@@ -866,7 +865,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   return (
                     <>
                       <p className="text-xs font-medium text-slate-500">
-                        Jij geeft <span className="font-bold text-slate-800">dienst {getServiceNumber(offered)}</span>
+                        Jij geeft <span className="font-bold text-slate-800">dienst {serviceNumberOf(offered)}</span>
                         {selectedShiftDate && <span> ({fmtShort(selectedShiftDate)})</span>} aan <span className="font-bold text-slate-800">{target?.name ?? '—'}</span>.
                       </p>
 
@@ -970,11 +969,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       </div>
                       {isTakeover ? (
                         <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
-                          Jij geeft <strong>dienst {getServiceNumber(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — <strong>zonder tegenprestatie</strong>.
+                          Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — <strong>zonder tegenprestatie</strong>.
                         </div>
                       ) : pick && (
                         <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
-                          Jij geeft <strong>dienst {getServiceNumber(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
+                          Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
                         </div>
                       )}
                       <button

@@ -3,7 +3,7 @@ import type { Shift, User } from '../types';
 import { getSupabaseAuthHeaders } from '../lib/ui';
 import { isoWeekNumber } from '../lib/week';
 import { shiftCategory } from '../lib/shiftTime';
-import { MONTH_NAMES } from '../lib/format';
+import { MONTH_NAMES, serviceNumberOf } from '../lib/format';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
@@ -257,7 +257,6 @@ function DriverMonthSheet({
   const totalMinutes = monthShifts.reduce((sum, s) => sum + minutesBetween(s.startTime, s.endTime), 0);
   const totalDaysWorked = new Set(monthShifts.map((s) => s.date)).size;
 
-  const getServiceNumber = (s: Shift) => String(s.line || '--').trim() || '--';
 
   return (
     <div className={newSheet ? 'print-new-sheet mt-16 print:mt-0' : undefined}>
@@ -367,7 +366,7 @@ function DriverMonthSheet({
                                   {CATEGORY_LABEL[cat]}
                                 </span>
                                 <span className="text-sm font-black text-slate-900">
-                                  Dienst {getServiceNumber(s)}
+                                  Dienst {serviceNumberOf(s)}
                                 </span>
                               </div>
                               <span className="text-sm font-mono font-bold text-slate-700 tabular-nums whitespace-nowrap">

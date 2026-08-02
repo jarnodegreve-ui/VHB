@@ -8,9 +8,11 @@
  * (#247, #261). Inline SVG wordt per device-pixel vectorieel getekend en
  * blijft dus overal strak, ongeacht de compositing-context.
  *
- * Geometrie is 1-op-1 die van public/vhb-logo-primair(-wit).svg (die
- * bestanden blijven bestaan voor mails e.d.); alleen de letterkleur
- * verschilt per ondergrond.
+ * Geometrie is 1-op-1 die van het oorspronkelijke primary-lockup; alleen de
+ * letterkleur verschilt per ondergrond. De losse public/vhb-logo-primair*.svg
+ * zijn weg (controle-ronde #53): na de inline-migratie verwees niets er nog
+ * naar, ook geen mailtemplate — die claim stond hier wel maar klopte niet.
+ * De bron staat in brand/.
  */
 export function BrandLogo({
   tone = 'licht',

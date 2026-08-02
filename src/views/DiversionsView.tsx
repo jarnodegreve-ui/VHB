@@ -1,4 +1,4 @@
-import { lazy, Suspense, useState } from 'react';
+import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import { isExpiredDiversion } from '../lib/diversions';
@@ -6,34 +6,9 @@ import type { Diversion } from '../types';
 import { formatDateHuman, formatSyncedTime } from '../lib/format';
 import { openPdfInNewTab, safeDocumentHref } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Badge, Button } from '../components/primitives';
 
-const DiversionMap = lazy(() => import('../components/DiversionMap').then((module) => ({ default: module.DiversionMap })));
 
-/**
- * Veilig parsen van de opgeslagen kaart-coördinaten. mapCoordinates is een
- * vrije tekst-string; ongeldige/legacy data zou anders JSON.parse laten
- * gooien middenin de render (crash). Geeft alleen een geldige, niet-lege
- * lijst [lat,lng]-paren terug — anders null (kaart wordt dan niet getoond).
- */
-function safeParseCoordinates(raw?: string): [number, number][] | null {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (
-      Array.isArray(parsed) &&
-      parsed.length > 0 &&
-      parsed.every(
-        (p) => Array.isArray(p) && p.length === 2 && typeof p[0] === 'number' && typeof p[1] === 'number',
-      )
-    ) {
-      return parsed as [number, number][];
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
 
 export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions: Diversion[]; lastSyncedAt?: number | null }) {
   const [selectedDiversion, setSelectedDiversion] = useState<Diversion | null>(null);
@@ -192,26 +167,6 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                         )}
                       </div>
 
-                      {(() => {
-                        const coords = safeParseCoordinates(div.mapCoordinates);
-                        if (!coords) return null;
-                        return (
-                          <div className="space-y-2">
-                            <MicroLabel className="mb-1">Visuele Omleiding</MicroLabel>
-                            <div className="h-64 rounded-3xl overflow-hidden border border-slate-100 shadow-inner z-0">
-                              <Suspense
-                                fallback={
-                                  <div className="flex h-full items-center justify-center bg-white/60 text-sm font-medium text-slate-500">
-                                    Kaart laden...
-                                  </div>
-                                }
-                              >
-                                <DiversionMap coordinates={coords} />
-                              </Suspense>
-                            </div>
-                          </div>
-                        );
-                      })()}
                     </div>
                   </div>
                 </motion.div>

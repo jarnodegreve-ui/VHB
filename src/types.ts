@@ -28,7 +28,6 @@ export interface Diversion {
   startDate: string;
   endDate?: string;
   pdfUrl?: string;
-  mapCoordinates?: string;
 }
 
 /**

@@ -86,3 +86,25 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = {
 };
 
 export const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
+
+/**
+ * Dienstnummer van een planning-rij, met een zichtbare val-terug. Stond vijf
+ * keer woordelijk in de views (controle-ronde #35) — telkens dezelfde
+ * normalisatie, telkens een eigen kopie die kon gaan afwijken.
+ */
+export const serviceNumberOf = (shift: { line?: string } | undefined | null) =>
+  String(shift?.line || '--').trim() || '--';
+
+/**
+ * Zelfde vorm als formatShortDay maar met een nul-geprefixte dag ("vr 08 jul").
+ * Rooster en dashboard gebruiken deze variant, de ruilwizard en Dekking de
+ * niet-geprefixte — dat verschil is zichtbaar voor de chauffeur ("vr 8 jul"
+ * tegenover "vr 08 jul") en dus een openstaande keuze, geen toeval. Het staat
+ * nu tenminste op één plek in plaats van vier keer los uitgeschreven.
+ */
+export function formatShortDayPadded(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' });
+}

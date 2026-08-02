@@ -4,7 +4,7 @@ import { activeDiversions } from '../lib/diversions';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
-import { formatDateHuman } from '../lib/format';
+import { formatDateHuman, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { hasShiftEnded, isShiftActiveAt } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
@@ -145,14 +145,6 @@ export function DashboardView({ notes = [],
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())
     .slice(0, 3);
 
-  const formatShiftDate = (date: string) =>
-    new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
-      weekday: 'short',
-      day: '2-digit',
-      month: 'short',
-    });
-
-  const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
   // "Lijn 5 & 8" vs "5": prefix alleen wanneer 't nog niet in de data zit.
   const lineLabel = (line: string) =>
@@ -308,13 +300,13 @@ export function DashboardView({ notes = [],
           icon={<Calendar size={16} />}
           tone={nextShift ? 'oker' : 'slate'}
           label="Volgende dienst"
-          text={nextShift ? getServiceNumber(nextShift) : '—'}
+          text={nextShift ? serviceNumberOf(nextShift) : '—'}
           // De subregel ís hier de boodschap (wanneer rijd ik?) — dus een
           // maat groter dan de standaard tegel-subtekst.
           subClassName="text-[14px] font-semibold text-slate-600"
           sub={
             nextShift
-              ? `${relativeDay(nextShift.date)} · ${new Date(`${nextShift.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })}`
+              ? `${relativeDay(nextShift.date)} · ${formatShortDay(nextShift.date)}`
               : 'niets ingepland'
           }
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
@@ -374,9 +366,9 @@ export function DashboardView({ notes = [],
                   <OpsRow
                     tone="oker"
                     icon={<Calendar size={15} />}
-                    primary={formatShiftDate(shift.date)}
+                    primary={formatShortDayPadded(shift.date)}
                     secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
-                    trailing={<ServiceChip serviceNumber={getServiceNumber(shift)} tone="oker" />}
+                    trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone="oker" />}
                     onClick={() => onNavigate?.('rooster')}
                   />
                 </Fragment>
