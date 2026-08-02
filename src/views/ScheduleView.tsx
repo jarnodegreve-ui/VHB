@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
@@ -15,6 +15,7 @@ import { isoDate } from '../lib/availability';
 import { shiftCategory } from '../lib/shiftTime';
 import { formatShortDayPadded, formatSyncedTime } from '../lib/format';
 import { buildCalendar, type IcsEvent } from '../lib/ics';
+import { openHuidigRitblad } from '../lib/ritblad';
 
 /**
  * Dagdeel-chip. Stond met alle drie op 'slate': dezelfde grijze badge voor
@@ -511,6 +512,15 @@ function MonthCalendar({
           </p>
         )}
 
+        {selected === today && selectedGroups.length > 0 && (
+          <button
+            type="button"
+            onClick={() => void openHuidigRitblad()}
+            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+          >
+            <FileText size={14} className="text-oker-500" /> Ritblad van vandaag
+          </button>
+        )}
         {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict || g.openSwap) && (
           <button
             type="button"
@@ -688,15 +698,29 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                 </p>
               )}
 
-              {onRequestSwap && !g.hasConflict && !g.openSwap && (
-                <button
-                  type="button"
-                  onClick={() => onRequestSwap(g.segments[0].id)}
-                  className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
-                >
-                  <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
-                </button>
-              )}
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {onRequestSwap && !g.hasConflict && !g.openSwap && (
+                  <button
+                    type="button"
+                    onClick={() => onRequestSwap(g.segments[0].id)}
+                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
+                  </button>
+                )}
+                {/* Alleen bij vandaag: er is één actueel ritblad, geen blad
+                    per dienst — bij een dienst van volgende week zou deze knop
+                    suggereren dat het dát blad is. */}
+                {isToday && (
+                  <button
+                    type="button"
+                    onClick={() => void openHuidigRitblad()}
+                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  >
+                    <FileText size={14} className="text-oker-500" /> Ritblad van vandaag
+                  </button>
+                )}
+              </div>
             </div>
           );
         })}
