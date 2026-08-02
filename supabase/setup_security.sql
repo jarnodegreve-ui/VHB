@@ -143,31 +143,42 @@ using (
 -- Zorg dat de overige tabellen minstens bestaan en RLS aan hebben.
 -- Je API gebruikt de service role key, dus servercalls blijven werken.
 
+-- LET OP: quoted camelCase identifiers — anders vouwt Postgres ze naar
+-- lowercase en mismatcht de mapper (toDatabase* schrijft camelCase).
+--
+-- planning en diversions stonden hier tot 02-08-2026 ONGEQUOTE, en met
+-- not-null-constraints die productie niet heeft. Een omgeving die zo herbouwd
+-- werd, brak meteen op 42703 — precies de fout die PR #286 aan de
+-- diversions-kant repareerde. Alles hieronder is geverifieerd tegen
+-- information_schema van het live project.
 create table if not exists public.planning (
   id text primary key,
-  date text not null,
-  startTime text not null,
-  endTime text not null,
-  line text not null,
-  busNumber text not null,
-  loopnr text not null,
-  driverId text not null
+  date text,
+  "startTime" text,
+  "endTime" text,
+  line text,
+  "busNumber" text,
+  loopnr text,
+  "driverId" text
 );
 
+-- severity is inmiddels nullable (diversions_drop_severity_notnull.sql), en
+-- mapCoordinates bestaat live NIET. Die kolom stond hier wél en hield de
+-- schema-drift in stand waar de omleidingen-mapper op stukliep.
 create table if not exists public.diversions (
   id text primary key,
-  line text not null,
-  title text not null,
-  description text not null,
-  startDate text not null,
-  endDate text,
-  severity text not null,
-  pdfUrl text,
-  mapCoordinates text
+  line text,
+  title text,
+  description text,
+  "startDate" text,
+  "endDate" text,
+  severity text,
+  "pdfUrl" text
 );
 
--- LET OP: quoted camelCase identifiers — anders vouwt Postgres ze naar
--- lowercase en mismatcht de mapper (toDatabaseService schrijft camelCase).
+-- loopnr/loopnr2/loopnr3 horen bij het blok waaronder de ritten vallen
+-- (supabase/services_loopnr.sql); zonder hen mist een verse omgeving de
+-- kolommen die toDatabaseService wél schrijft.
 create table if not exists public.services (
   id text primary key,
   "serviceNumber" text not null,
@@ -176,18 +187,31 @@ create table if not exists public.services (
   "startTime2" text,
   "endTime2" text,
   "startTime3" text,
-  "endTime3" text
+  "endTime3" text,
+  loopnr text,
+  loopnr2 text,
+  loopnr3 text
 );
 
+-- isUrgent bestaat live niet (meer) en content/category zijn nullable.
 create table if not exists public.updates (
   id text primary key,
   date text not null,
   title text not null,
-  content text not null,
-  category text not null,
-  isUrgent boolean default false
+  content text,
+  category text
 );
 
+-- swaps en leave staan hier bewust ONGEQUOTE: die tabellen hebben live wél
+-- lowercase kolomnamen (shiftid, requesterid, createdat…) en de mappers
+-- schrijven ze ook zo. Niet "gelijktrekken" met de camelCase-tabellen
+-- hierboven — dat is geen inconsistentie maar de werkelijkheid.
+--
+-- Latere migraties vullen deze basis aan: decidedat + return_date/return_code
+-- (swaps_decided_at.sql), swap_type (swaps_swap_type.sql), shift_date/
+-- shift_line (2026-08-01_swaps_shift_info.sql). Draai na een herbouw altijd
+-- GET /api/health/schema — die vergelijkt tegen api/schemaProbes.ts en meldt
+-- wat er nog mist.
 create table if not exists public.swaps (
   id text primary key,
   shiftId text not null,

@@ -64,11 +64,20 @@ het moment waarop je het onder stress nodig hebt.
 
 1. Nieuw Supabase-project; draai alle migraties uit `supabase/` in de SQL
    Editor (volgorde: setup_security eerst, daarna de rest; alles is idempotent).
-2. Zet de nieuwe URL/keys in Vercel-env-vars; deploy.
-3. Maak één admin-account aan (Auth + users-rij) om te kunnen inloggen.
-4. Upload de laatste back-up via de Debug-view (stap "Herstellen" hierboven).
-5. Auth-accounts van de rest: opnieuw aanmaken; e-mailadressen staan in
+2. **Controleer het schema vóór je data terugzet**: `GET /api/health/schema`
+   (Debug-view of curl met CRON_SECRET). Die vergelijkt tegen
+   `api/schemaProbes.ts` en meldt elke ontbrekende kolom. Doe je dit niet, dan
+   merk je een gat pas als een save faalt met `42703` — en dan zit je al met
+   halve data. `setup_security.sql` is de basis, niet het volledige schema: de
+   losse migratiebestanden vullen hem aan.
+3. Zet de nieuwe URL/keys in Vercel-env-vars; deploy.
+4. Maak één admin-account aan (Auth + users-rij) om te kunnen inloggen.
+5. Upload de laatste back-up via de Debug-view (stap "Herstellen" hierboven).
+6. Auth-accounts van de rest: opnieuw aanmaken; e-mailadressen staan in
    `authUsers` in de back-up. OCPI: handshake opnieuw (Token A uit ChargEye).
+7. Realtime: `supabase_realtime`-publicatie bevat in een vers project geen
+   tabellen — draai `2026-08-02_realtime_publicatie.sql`, anders werkt de
+   auto-verversing nergens (en merk je dat pas als iemand het meldt).
 
 ## De oefening (halfjaarlijks, ~5 min, zonder risico)
 

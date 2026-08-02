@@ -79,6 +79,17 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
         { event: '*', schema: 'public', table: 'updates' },
         () => debounce('updates', () => refRef.current.refetchUpdates?.()),
       )
+      // LET OP: deze twee vuren bewust NIET. planning en planning_matrix_rows
+      // zitten niet in de supabase_realtime-publicatie, en dat is een keuze —
+      // een heropbouw vervangt ~1.678 rijen in één transactie, wat per
+      // verbonden chauffeur een access-check per rij betekent op de ene thread
+      // die Realtime daarvoor heeft. Zie de toelichting in
+      // supabase/2026-08-02_realtime_publicatie.sql.
+      //
+      // De abonnementen blijven staan omdat ze meteen werken zodra de geplande
+      // planning_version-tabel er is (één event per import i.p.v. 1.678).
+      // Tot dan komt de planning van de refetch bij (her)aansluiting, de
+      // visibility-catch-up, en network-first op /api/planning in de SW.
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'planning' },
