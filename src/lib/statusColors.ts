@@ -36,6 +36,17 @@ export const leaveDot = (status: LeaveStatus | undefined, type?: LeaveType): str
   return 'bg-emerald-500';
 };
 
+/** Zachte chip: vlak + tekst (dagdetail in Mijn rooster). Bewust zonder eigen
+ *  dark:-varianten — de blanket-overrides in index.css klappen deze tinten al
+ *  om, net als bij leaveDayTint. Deze keten stond met de hand uitgeschreven in
+ *  ScheduleView, met een nét andere donkere tint dan de dagcel er vlak boven. */
+export const leaveChip = (status: LeaveStatus | undefined, type?: LeaveType): string => {
+  if (status === 'pending') return 'bg-amber-50 text-amber-800';
+  if (type === 'ziekte') return 'bg-rose-50 text-rose-700';
+  if (type === 'klein_verlet') return 'bg-blue-50 text-blue-700';
+  return 'bg-emerald-50 text-emerald-700';
+};
+
 /** Zachte dagtint (maandkalender-dagcellen). */
 export const leaveDayTint = (status: LeaveStatus | undefined, type?: LeaveType): string => {
   if (status === 'pending') return 'bg-amber-50';

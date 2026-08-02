@@ -386,7 +386,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
-              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-[11px] font-semibold text-slate-300 uppercase tracking-[0.08em] mb-2">{d}</div>)}
+              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em] mb-2">{d}</div>)}
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -621,7 +621,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </div>
                   <div className="grid grid-cols-7 gap-1">
                     {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => (
-                      <div key={d} className="text-center text-[11px] font-semibold text-slate-300 uppercase tracking-[0.08em] py-1">{d}</div>
+                      <div key={d} className="text-center text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em] py-1">{d}</div>
                     ))}
                     {calendarDays.map((day, i) => {
                       if (day === null) return <div key={`m-empty-${i}`} />;

@@ -3,7 +3,7 @@ import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, Chevro
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
-import { leaveDayTint, leaveDot } from '../lib/statusColors';
+import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
@@ -16,10 +16,16 @@ import { shiftCategory } from '../lib/shiftTime';
 import { formatSyncedTime } from '../lib/format';
 import { buildCalendar, type IcsEvent } from '../lib/ics';
 
+/**
+ * Dagdeel-chip. Stond met alle drie op 'slate': dezelfde grijze badge voor
+ * Vroeg, Middag en Laat, dus de kleur droeg geen informatie en kostte alleen
+ * breedte. De tinten volgen nu het moment van de dag — gedempt, want het is
+ * een terzijde naast het dienstnummer, geen statusmelding.
+ */
 const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' | 'slate' }> = {
-  ochtend: { label: 'Vroeg', tone: 'slate' },
+  ochtend: { label: 'Vroeg', tone: 'amber' },
   middag: { label: 'Middag', tone: 'slate' },
-  avond: { label: 'Laat', tone: 'slate' },
+  avond: { label: 'Laat', tone: 'emerald' },
 };
 
 type GroupedShift = {
@@ -55,6 +61,15 @@ const openSwapLabel = (swap: SwapRequest) => {
   if (swap.status === 'accepted') return 'Collega akkoord — wacht op planner';
   return swap.swapType === 'overname' ? 'Overname aangevraagd' : 'Ruil aangevraagd';
 };
+
+/**
+ * Toon van diezelfde badge, volgens de kleurtaal van StatusBadge: amber =
+ * wacht op de collega, blauw = collega akkoord en wacht op de planner.
+ * Stond hardgecodeerd op amber, waardoor één en dezelfde ruil hier amber was
+ * en in de ruillijst blauw. Amber betekent elders "wacht op collega", dus de
+ * chauffeur las de verkeerde fase.
+ */
+const openSwapTone = (swap: SwapRequest) => (swap.status === 'accepted' ? 'blue' : 'amber');
 
 export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequests = [], swaps = [], isInitialLoad = false, lastSyncedAt = null, onRequestSwap }: { user: User; shifts: Shift[]; users: User[]; notes?: Array<{ date: string; note: string }>; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[]; isInitialLoad?: boolean; lastSyncedAt?: number | null; onRequestSwap?: (shiftId: string) => void }) {
   const [showPast, setShowPast] = useState(false);
@@ -191,14 +206,18 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
 
       <div className="-mt-2 flex flex-wrap items-center justify-between gap-3">
         {/* Weergave-wissel: lijst (default) of persoonlijk maandgrid */}
-        <div className="inline-flex rounded-xl border border-slate-200 bg-white p-0.5">
+        {/* Gedeelde .glass-segmented-rail, zoals Dienstoverzicht,
+            Gebruikersbeheer en Planningscodes. Stond hier als eigen witte
+            variant met een andere radius en padding — de enige toggle in de
+            app die er anders uitzag. */}
+        <div className="glass-segmented inline-flex rounded-2xl p-1">
           {(['lijst', 'maand'] as const).map((w) => (
             <button
               key={w}
               type="button"
               onClick={() => setWeergave(w)}
               className={cn(
-                'ios-pressable rounded-[10px] px-3.5 py-1.5 text-xs font-semibold capitalize transition-colors',
+                'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold capitalize transition-all',
                 weergave === w ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
               )}
             >
@@ -217,7 +236,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         <div className="surface-card rounded-3xl overflow-hidden">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i}>
-              <SkeletonRow className="border-b border-white/40 last:border-0" />
+              <SkeletonRow className="border-b border-slate-100 last:border-0" />
             </div>
           ))}
         </div>
@@ -362,7 +381,7 @@ function MonthCalendar({
         {/* Grid */}
         <div className="mt-3 grid grid-cols-7 gap-1">
           {WEEKDAY_HEAD.map((d) => (
-            <div key={d} className="py-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-300">
+            <div key={d} className="py-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
               {d}
             </div>
           ))}
@@ -448,13 +467,7 @@ function MonthCalendar({
           <p
             className={cn(
               'mt-2.5 rounded-xl px-3 py-2 text-xs font-semibold',
-              selectedLeave.status === 'pending'
-                ? 'bg-amber-50 text-amber-800 dark:bg-amber-500/10 dark:text-amber-300'
-                : selectedLeave.type === 'ziekte'
-                  ? 'bg-rose-50 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300'
-                  : selectedLeave.type === 'klein_verlet'
-                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300'
-                    : 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
+              leaveChip(selectedLeave.status, selectedLeave.type),
             )}
           >
             {formatLeaveType(selectedLeave.type)}
@@ -473,7 +486,7 @@ function MonthCalendar({
                   <Badge tone="red" icon={<AlertTriangle size={10} />}>Verlof-conflict</Badge>
                 )}
                 {g.openSwap && (
-                  <Badge tone="amber" icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                  <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
                 )}
               </div>
               <div className="mt-1.5 space-y-1.5 pl-1">
@@ -559,7 +572,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                           </span>
                         )}
                         {g.openSwap && (
-                          <Badge tone="amber" icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                          <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
                         )}
                       </div>
                     </div>
@@ -645,7 +658,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                   )}
                   {g.openSwap && (
                     <div className="mt-1">
-                      <Badge tone="amber" icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                      <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
                     </div>
                   )}
                 </div>

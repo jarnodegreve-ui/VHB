@@ -400,7 +400,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 const target = users.find(u => u.id === swap.targetDriverId);
                 const open = expandedSwapIds.includes(swap.id);
                 return (
-                  <div key={swap.id} className="surface-card rounded-2xl overflow-hidden">
+                  <div key={swap.id} className="surface-card rounded-3xl overflow-hidden">
                     <button
                       type="button"
                       onClick={() => toggleSwapExpanded(swap.id)}
@@ -472,7 +472,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               const requester = users.find(u => u.id === swap.requesterId);
               const canRespond = canRespondToSwap(user, swap);
               return (
-                <div key={swap.id} className="surface-card p-5 rounded-2xl space-y-4">
+                <div key={swap.id} className="surface-card p-5 rounded-3xl space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <MicroLabel>Dienst {info.line}</MicroLabel>
@@ -537,9 +537,26 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           return true;
         });
 
+        // Eén gedeelde lege staat i.p.v. drie verschillende leegtes op één
+        // pagina: de desktoptabel liet enkel een kaal kopje achter en de
+        // mobiele kaart een cursief grijs zinnetje, terwijl de twee lijsten
+        // hierboven wél het EmptyState-patroon gebruiken.
+        if (actionableSwaps.length === 0) {
+          return (
+            <div className="space-y-4 pt-8">
+              <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
+              <EmptyState
+                icon={<ArrowLeftRight size={28} />}
+                title="Geen dienstruilen om te beoordelen"
+                message="Zodra een chauffeur een ruil aanvraagt en zijn collega akkoord gaat, verschijnt die hier."
+              />
+            </div>
+          );
+        }
+
         return (
           <div className="space-y-4 pt-8">
-            <MicroLabel className="text-slate-500 ml-1">Beheer Dienstruilen</MicroLabel>
+            <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
             <TableShell>
               {/* Desktop table */}
               <div className="hidden md:block">
@@ -600,7 +617,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                 </>
                               ) : (
                                 <>
-                                  <Badge tone="amber" dot className="whitespace-nowrap">wacht op collega</Badge>
+                                  <Badge tone="amber" dot className="whitespace-nowrap">Wacht op collega</Badge>
                                   <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
                                 </>
                               ))}
@@ -684,9 +701,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </div>
                   );
                 })}
-                {actionableSwaps.length === 0 && (
-                  <p className="text-center text-slate-400 font-medium italic py-8">Geen openstaande of goedgekeurde dienstruilen.</p>
-                )}
               </div>
             </TableShell>
           </div>
