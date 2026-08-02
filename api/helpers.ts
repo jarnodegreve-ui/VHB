@@ -202,7 +202,6 @@ export const toPublicDiversion = (d: any): DiversionRecord => ({
   startDate: d.startDate ?? d.startdate ?? "",
   endDate: d.endDate ?? d.enddate ?? undefined,
   pdfUrl: d.pdfUrl ?? d.pdfurl ?? undefined,
-  mapCoordinates: d.mapCoordinates ?? d.mapcoordinates ?? undefined,
 });
 
 /** De bijlage van een omleiding hoort altijd in onze eigen (privé) Storage-bucket

@@ -38,6 +38,28 @@ describe('Content-Security-Policy', () => {
     expect(scriptSrc).not.toContain("'unsafe-eval'");
   });
 
+  it('wordt afgedwongen, niet alleen gerapporteerd', () => {
+    // De policy stond op Content-Security-Policy-Report-Only zónder report-uri:
+    // niet afgedwongen én de meldingen kwamen nergens aan. Deze test bewaakte
+    // wél de inhoud maar niet de naam van de header, dus dat viel niemand op.
+    const keys: string[] = vercel.headers
+      .flatMap((h: any) => h.headers.map((x: any) => x.key.toLowerCase()));
+    expect(keys).toContain('content-security-policy');
+    expect(keys).not.toContain('content-security-policy-report-only');
+    expect(csp).toContain('report-uri /api/csp-report');
+  });
+
+  it('laat de bronnen door die de app echt gebruikt', () => {
+    // frame-src ontbrak en valt dan terug op default-src 'self'. Met een
+    // afgedwongen policy blokkeert dat de ritblad-preview, die de PDF in een
+    // iframe vanaf Supabase Storage toont (RitblaadjesView).
+    const frameSrc = csp.match(/frame-src([^;]*)/)?.[1] ?? '';
+    expect(frameSrc).toContain('supabase.co');
+    const connectSrc = csp.match(/connect-src([^;]*)/)?.[1] ?? '';
+    expect(connectSrc).toContain('https://nbupdofxuoxvgeiedzkk.supabase.co');
+    expect(connectSrc).toContain('wss://nbupdofxuoxvgeiedzkk.supabase.co');
+  });
+
   it('stuurt de basisheaders mee', () => {
     const keys = vercel.headers.flatMap((h: any) => h.headers.map((x: any) => x.key.toLowerCase()));
     expect(keys).toContain('x-content-type-options');

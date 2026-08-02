@@ -41,16 +41,14 @@ export default defineConfig(() => {
         output: {
           manualChunks(id) {
             if (!id.includes('node_modules')) return;
-            // Volgorde is betekenisvol: 'lucide-react' en 'react-leaflet'
-            // bevatten allebei de substring 'react' — de brede react-check
-            // ving ze eerst af, waardoor de complete kaart-stack (leaflet +
-            // react-leaflet) én alle lucide-iconen in react-vendor zaten en
-            // dus bij elke pagina-load meekwamen, terwijl DiversionMap juist
-            // lazy is. Kaart-stack nu apart: die laadt alleen wanneer iemand
-            // een omleiding met kaart opent.
-            if (id.includes('leaflet')) {
-              return 'map-vendor';
-            }
+            // Volgorde is betekenisvol: 'lucide-react' bevat de substring
+            // 'react', dus de brede react-check hieronder zou hem anders
+            // eerst afvangen.
+            //
+            // De map-vendor-regel is weg samen met de kaart-stack zelf
+            // (controle-ronde #7): mapCoordinates bestond live niet, werd
+            // nergens geschreven en had geen invoerveld, dus DiversionMap
+            // rendeerde nooit — de chunk werd nooit geladen.
             // ui-vendor levert BEWUST geen uitstel-winst: lucide en motion
             // worden rechtstreeks geïmporteerd door App.tsx en BottomNav, dus
             // ze zitten hoe dan ook in het kritieke pad. Het afsplitsen is er
@@ -67,9 +65,6 @@ export default defineConfig(() => {
             }
             if (id.includes('@supabase')) {
               return 'supabase-vendor';
-            }
-            if (id.includes('nodemailer')) {
-              return 'integrations-vendor';
             }
           },
         },

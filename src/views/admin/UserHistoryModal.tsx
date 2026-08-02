@@ -5,7 +5,7 @@ import { cn } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
-import { formatLeaveType } from '../../lib/format';
+import { formatLeaveType, serviceNumberOf } from '../../lib/format';
 
 
 const LEAVE_STATUS_LABELS: Record<LeaveRequest['status'], string> = {
@@ -64,7 +64,6 @@ export function UserHistoryModal({
   const allShifts = shifts.filter((s) => s.driverId === user.id && s.date >= yearStart && s.date <= yearEnd);
   const upcomingShifts = allShifts.filter((s) => s.date >= today).sort((a, b) => a.date.localeCompare(b.date));
   const pastShifts = allShifts.filter((s) => s.date < today).sort((a, b) => b.date.localeCompare(a.date));
-  const getServiceNumber = (s: Shift) => String(s.line || '--').trim() || '--';
 
   // Verlof dit jaar
   const userLeave = leaveRequests
@@ -181,7 +180,7 @@ export function UserHistoryModal({
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
                     <span className="text-sm font-semibold text-slate-800">{s.date}</span>
-                    <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{getServiceNumber(s)}</span></span>
+                    <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{serviceNumberOf(s)}</span></span>
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">
                     <Clock size={12} />
@@ -206,7 +205,7 @@ export function UserHistoryModal({
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
                     <span className="text-sm font-semibold text-slate-700">{s.date}</span>
-                    <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{getServiceNumber(s)}</span></span>
+                    <span className="text-xs font-medium text-slate-500">Dienst <span className="text-oker-700">{serviceNumberOf(s)}</span></span>
                   </div>
                   <span className="flex items-center gap-1 text-xs font-bold text-slate-500 shrink-0">
                     <Clock size={12} />

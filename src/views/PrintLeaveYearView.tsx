@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import type { LeaveRequest, User } from '../types';
 import { daysBetween, verlofBalans } from '../lib/leaveBalance';
-import { formatLeaveType, MONTH_NAMES } from '../lib/format';
+import { formatLeaveType, formatShortDay, MONTH_NAMES } from '../lib/format';
 
 /**
  * Print-vriendelijk verlof-jaaroverzicht voor één chauffeur: saldo,
@@ -21,12 +21,6 @@ const clipToYear = (iso: string, year: number, fallback: 'start' | 'end') => {
 };
 
 /** "ma 3 feb" zonder jaar — het jaar staat al groot in de kop. */
-const dagLabel = (iso: string) => {
-  const d = new Date(`${iso}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
-};
-
 export function PrintLeaveYearView({
   driver,
   year,
@@ -164,8 +158,8 @@ export function PrintLeaveYearView({
                 <tr key={l.id} className="print-card border-b border-slate-100">
                   <td className="py-2.5 pr-3 font-bold text-slate-900">
                     {l.startDate === l.endDate
-                      ? dagLabel(l.startDate)
-                      : `${dagLabel(l.startDate)} – ${dagLabel(l.endDate)}`}
+                      ? formatShortDay(l.startDate)
+                      : `${formatShortDay(l.startDate)} – ${formatShortDay(l.endDate)}`}
                     {(l.startDate < `${year}-01-01` || l.endDate > `${year}-12-31`) && (
                       <span className="ml-1.5 text-[10px] font-semibold text-slate-400">(deel in {year})</span>
                     )}
@@ -202,7 +196,7 @@ export function PrintLeaveYearView({
               {pending.map((l) => (
                 <li key={l.id} className="flex items-baseline justify-between gap-3">
                   <span className="font-bold text-slate-700">
-                    {l.startDate === l.endDate ? dagLabel(l.startDate) : `${dagLabel(l.startDate)} – ${dagLabel(l.endDate)}`}
+                    {l.startDate === l.endDate ? formatShortDay(l.startDate) : `${formatShortDay(l.startDate)} – ${formatShortDay(l.endDate)}`}
                     <span className="ml-2 font-medium text-slate-400">{formatLeaveType(l.type)}</span>
                   </span>
                   <span className="font-black tabular-nums">{l.dagenInJaar} {l.dagenInJaar === 1 ? 'dag' : 'dagen'}</span>

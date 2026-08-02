@@ -10,6 +10,11 @@ import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
 import { isExpiredDiversion as isExpired } from '../../lib/diversions';
+// isoDate = lokale dag. toISOString() is UTC en gaf tussen 00:00 en 02:00
+// Belgische zomertijd de dag ervóór: een omleiding die om 00:30 werd
+// aangemaakt kreeg standaard gisteren als startdatum. Zelfde reden als de
+// expliciete waarschuwing in ScheduleView.
+import { isoDate } from '../../lib/availability';
 
 export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
   const [showModal, setShowModal] = useState(false);
@@ -31,7 +36,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     line: '',
     title: '',
     description: '',
-    startDate: new Date().toISOString().split('T')[0],
+    startDate: isoDate(new Date()),
   });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -78,7 +83,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       line: '',
       title: '',
       description: '',
-      startDate: new Date().toISOString().split('T')[0],
+      startDate: isoDate(new Date()),
     });
     setPdfFile(null);
     setShowModal(true);

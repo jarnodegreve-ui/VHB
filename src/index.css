@@ -127,10 +127,6 @@
     0 6px 20px rgba(13, 13, 15, 0.04);
   --tile-bg-soft: rgba(255, 255, 255, 0.85);
   --tile-border-soft: 1px solid rgba(228, 230, 232, 0.75);
-  --tile-bg-hero: rgba(255, 255, 255, 0.97);
-  --tile-shadow-hero:
-    0 1px 2px rgba(13, 13, 15, 0.05),
-    0 12px 32px rgba(13, 13, 15, 0.06);
   /* === shadcn-tokens, gemapt op de VHB-huisstijl ===
      De init zette hier de neutral-defaults (zwart/grijs, en in dark een
      indigo sidebar-accent). Zo zou het eerste `shadcn add`-component stil
@@ -178,10 +174,6 @@ html.dark {
     0 8px 24px rgba(0, 0, 0, 0.4);
   --tile-bg-soft: rgba(23, 24, 26, 0.75);
   --tile-border-soft: 1px solid rgba(255, 255, 255, 0.06);
-  --tile-bg-hero: rgba(21, 22, 25, 0.94);
-  --tile-shadow-hero:
-    0 1px 2px rgba(0, 0, 0, 0.35),
-    0 12px 32px rgba(0, 0, 0, 0.5);
 }
 
 @layer base {
@@ -362,35 +354,6 @@ html.dark {
   /* Tilt-card: 3D-hover-kanteling verwijderd — de perspective-transform +
      will-change gaven merkbare hover-jank op Windows. Alleen nog een zachte
      schaduw-transitie. */
-  .tilt-card {
-    transition: box-shadow 320ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  /* Light-source glow: vleugje licht aan de bovenrand van een kaart. */
-  .glow-top::before {
-    content: "";
-    position: absolute;
-    inset: 0;
-    background:
-      radial-gradient(
-        ellipse 90% 50% at 50% -10%,
-        rgba(255, 255, 255, 0.5) 0%,
-        transparent 60%
-      );
-    pointer-events: none;
-    opacity: 0.4;
-    transition: opacity 320ms ease;
-    border-radius: inherit;
-  }
-  .glow-top:hover::before {
-    opacity: 0.7;
-  }
-
-  /* Multi-layer glass — extra diffuse achtergrond achter de tegel */
-  .glass-stack {
-    position: relative;
-    isolation: isolate;
-  }
   /* Diffuse hover-glow (filter: blur(40px)) verwijderd: een 40px-blur die bij
      élke hover in-/uitfadet is heel duur op Windows/Chrome → hover-jank. Botst
      ook met 'minimale gloed'. */
@@ -703,17 +666,6 @@ html.dark {
     0 28px 80px rgba(0, 0, 0, 0.7);
 }
 
-/* Dark mode adjustments voor depth-utilities */
-:where(.dark) .glow-top::before {
-  background:
-    radial-gradient(
-      ellipse 90% 60% at 50% -10%,
-      rgba(255, 255, 255, 0.18) 0%,
-      rgba(255, 248, 230, 0.08) 30%,
-      transparent 70%
-    );
-  opacity: 0.6;
-}
 :where(.dark) .surface-muted {
   background: rgba(23, 24, 26, 0.6);
   border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1022,11 +974,6 @@ html.dark {
    bleef op een near-black tegel. Eigen class = geen cascade-verrassing. */
 .quick-action-icon { background-color: #0D0D0F; color: #FFFFFF; }
 :where(.dark) .quick-action-icon { background-color: rgba(232, 163, 61, 0.15); color: rgb(236, 183, 95); }
-
-/* Neutrale sparkline-tint: op wit donker genoeg, op de donkere tegel licht
-   genoeg (≥ 3:1 voor grafische elementen). */
-:root { --spark-neutral: #4F575F; }
-html.dark { --spark-neutral: #9AA1A9; }
 
 /* De login is bewust ALTIJD carbon-donker (login-bg-dark / panel-login-dark,
    wit logo, witte koppen), los van de app-thema-toggle — zie LoginView.tsx.

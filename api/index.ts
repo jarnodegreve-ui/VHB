@@ -113,6 +113,12 @@ console.log("Server starting in environment:", process.env.NODE_ENV);
 console.log("Supabase URL present:", !!process.env.SUPABASE_URL);
 console.log("Supabase Key present:", !!process.env.SUPABASE_ANON_KEY);
 console.log("Supabase Service Role present:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+// Zonder eigen secret is de agenda-feed uit (fail-closed, zie CAL_SECRET).
+// Luid loggen: dit viel vroeger niet op omdat hij stil terugviel op de
+// service-role-key en dus altijd "werkte".
+if (!process.env.CALENDAR_FEED_SECRET) {
+  console.warn("[config] CALENDAR_FEED_SECRET ontbreekt — de agenda-feed is uitgeschakeld. Zet hem in de env om abonneren weer mogelijk te maken.");
+}
 
 const app = express();
 const PORT = 3000;
@@ -122,10 +128,18 @@ const PORT = 3000;
 // dit zelden nodig — maar wildcard liet elke website met een gestolen token
 // cross-origin lezen. exposedHeaders: laat clients de custom response-headers
 // lezen (revisie-check + 429-Retry-After).
+// vhbportaal.com ontbrak: de app draait daar same-origin, dus browsers vragen
+// er geen CORS voor — maar zodra iets wél een preflight doet (een tweede
+// domein, een tool), stond het echte productiedomein er niet in.
+// localhost staat er alleen buiten productie: op de live-deploy heeft niemand
+// een legitieme reden om vanaf een lokale pagina te posten, en het scheelt een
+// origin die een aanvaller op zijn eigen machine kan nabootsen.
 const ALLOWED_ORIGINS: Array<string | RegExp> = [
+  "https://vhbportaal.com",
+  "https://www.vhbportaal.com",
   "https://vhb-five.vercel.app",
   /^https:\/\/vhb-[a-z0-9-]+-jarnodegreve-uis-projects\.vercel\.app$/,
-  /^http:\/\/localhost:\d+$/,
+  ...(process.env.VERCEL_ENV === "production" ? [] : [/^http:\/\/localhost:\d+$/]),
 ];
 app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision", "Retry-After"] }));
 // 5 MB is eerlijk: Vercel kapt request-bodies sowieso op ~4,5 MB af — de
@@ -449,10 +463,12 @@ app.get("/api/planning", authenticate, async (req, res) => {
 // role-key ontbreekt. Ook GEEN hardcoded fallback-secret meer (stond in de
 // publieke repo → tokens waren forgebaar zodra beide env-vars ontbraken):
 // zonder secret is de feed gewoon uitgeschakeld (fail-closed).
-const CAL_SECRET =
-  process.env.CALENDAR_FEED_SECRET ||
-  process.env.SUPABASE_SERVICE_ROLE_KEY ||
-  null;
+// GEEN terugval meer op SUPABASE_SERVICE_ROLE_KEY. Die terugval maakte de
+// service-role-key tot ondertekensleutel van elke agenda-feed: één gelekte
+// feed-URL intrekken zou betekenen dat je de sleutel van je hele database
+// roteert. Nu fail-closed op een eigen secret — staat CALENDAR_FEED_SECRET
+// niet in de env, dan is de feed simpelweg uit (en meldt /api/health dat).
+const CAL_SECRET = process.env.CALENDAR_FEED_SECRET || null;
 
 const calendarToken = (userId: string) => {
   if (!CAL_SECRET) return null;
@@ -1620,6 +1636,43 @@ app.post("/api/client-errors", clientErrorRateLimit, async (req, res) => {
     res.status(204).end();
   }
 });
+
+// CSP-schendingen. De policy stond op Report-Only zónder report-uri: niet
+// afgedwongen én de meldingen kwamen nergens aan, dus effectief geen CSP. Nu
+// hij wél afgedwongen wordt, is dit het vangnet — een geblokkeerde bron
+// verschijnt in de foutendigest i.p.v. stil te falen bij één chauffeur.
+//
+// Browsers posten dit als application/csp-report, dat express.json() niet
+// standaard parseert; vandaar de eigen type-matcher. Bewust open (zoals
+// /api/client-errors) met dezelfde rate-limiter: zo'n rapport komt juist
+// binnen wanneer er iets stuk is, mogelijk nog vóór het inloggen.
+app.post(
+  "/api/csp-report",
+  express.json({ type: ["application/csp-report", "application/reports+json", "application/json"], limit: "64kb" }),
+  clientErrorRateLimit,
+  async (req, res) => {
+    try {
+      const r = ((req.body as any)?.["csp-report"] ?? req.body ?? {}) as Record<string, unknown>;
+      const cut = (v: unknown, max: number) => String(v ?? "").slice(0, max);
+      const geblokkeerd = cut(r["blocked-uri"] ?? r.blockedURL, 300);
+      const directive = cut(r["violated-directive"] ?? r.effectiveDirective, 100);
+      if (!geblokkeerd && !directive) return res.status(204).end();
+      const entry = {
+        message: `CSP blokkeerde ${geblokkeerd || "een bron"} (${directive || "onbekende directive"})`,
+        stack: cut(r["source-file"] ?? r.sourceFile, 4000),
+        source: "csp",
+        url: cut(r["document-uri"] ?? r.documentURL, 300),
+        userAgent: cut(req.headers["user-agent"], 300),
+        userId: "",
+      };
+      console.error("[csp-report]", JSON.stringify(entry));
+      await logClientError(entry);
+      res.status(204).end();
+    } catch {
+      res.status(204).end();
+    }
+  },
+);
 
 app.get("/api/client-errors", authenticate, requireRole("admin"), async (_req, res) => {
   try {

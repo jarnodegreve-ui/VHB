@@ -4,7 +4,7 @@ import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
 import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
-import { formatLeaveType } from '../lib/format';
+import { formatLeaveType, serviceNumberOf } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
@@ -13,7 +13,7 @@ import { cn, downloadBlob } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { shiftCategory } from '../lib/shiftTime';
-import { formatSyncedTime } from '../lib/format';
+import { formatShortDayPadded, formatSyncedTime } from '../lib/format';
 import { buildCalendar, type IcsEvent } from '../lib/ics';
 
 /**
@@ -47,14 +47,6 @@ const formatShiftDate = (date: string) =>
     year: 'numeric',
   });
 
-const formatShortDate = (date: string) =>
-  new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-  });
-
-const getServiceNumber = (shift: Shift) => String(shift.line || '--').trim() || '--';
 
 /** Badge-tekst voor een dienst waarvoor een eigen ruilaanvraag loopt. */
 const openSwapLabel = (swap: SwapRequest) => {
@@ -121,7 +113,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
   const grouped = useMemo<GroupedShift[]>(() => {
     const byKey = new Map<string, GroupedShift>();
     for (const s of myShifts) {
-      const key = `${s.date}__${getServiceNumber(s)}`;
+      const key = `${s.date}__${serviceNumberOf(s)}`;
       const hasConflict = conflictIds.has(s.id);
       const openSwap = openSwapByShiftId.get(s.id);
       const existing = byKey.get(key);
@@ -136,7 +128,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         byKey.set(key, {
           key,
           date: s.date,
-          line: getServiceNumber(s),
+          line: serviceNumberOf(s),
           segments: [s],
           earliestStart: s.startTime,
           hasConflict,
@@ -175,7 +167,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         date: shift.date,
         startTime: shift.startTime,
         endTime: shift.endTime,
-        summary: `Dienst ${getServiceNumber(shift)}`,
+        summary: `Dienst ${serviceNumberOf(shift)}`,
         description: `VHB · ${shift.startTime} - ${shift.endTime}`,
       }));
 
@@ -648,10 +640,10 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <MicroLabel className={cn(isToday && 'text-oker-600')}>
-                    {isToday ? 'Vandaag' : formatShortDate(g.date).split(' ')[0]}
+                    {isToday ? 'Vandaag' : formatShortDayPadded(g.date).split(' ')[0]}
                   </MicroLabel>
                   <p className="text-sm font-semibold text-slate-900 mt-0.5 tabular-nums">
-                    {formatShortDate(g.date).split(' ').slice(1).join(' ')}
+                    {formatShortDayPadded(g.date).split(' ').slice(1).join(' ')}
                   </p>
                   {g.hasConflict && (
                     <div className="mt-1">
