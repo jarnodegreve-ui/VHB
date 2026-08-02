@@ -1846,3 +1846,81 @@ describe('maandplanning — afwezigheidscodes zijn voor iedereen zichtbaar', () 
     }
   });
 });
+
+describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', () => {
+  it('approved → rejected draait de planning terug (niet alleen cancelled)', async () => {
+    // sh-a is via s-x doorgevoerd naar chauffeur 4; de planner wijst hem daarna
+    // alsnog af. Vóór de fix bleef de dienst bij 4 staan en zette de replay hem
+    // bij de volgende import stilletjes terug.
+    mem.swaps = [
+      { id: 's-x', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'approved', reason: '', createdAt: '2026-06-01T08:00:00Z', decidedAt: '2026-06-02T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-02', returnCode: 'VRIJ' },
+    ];
+    mem.planning = mem.planning.map((r: any) => (r.id === 'sh-a' ? { ...r, driverId: '4' } : r));
+    const res = await api('PATCH', '/api/swaps/s-x', { token: 'tok-admin', body: { status: 'rejected', ifStatus: 'approved' } });
+    expect(res.status).toBe(200);
+    expect(mem.planning.find((r: any) => r.id === 'sh-a')?.driverId).toBe('3');
+  });
+
+  it('completed laat de wissel juist staan', async () => {
+    mem.swaps = [
+      { id: 's-y', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'approved', reason: '', createdAt: '2026-06-01T08:00:00Z', decidedAt: '2026-06-02T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-02', returnCode: 'VRIJ' },
+    ];
+    mem.planning = mem.planning.map((r: any) => (r.id === 'sh-a' ? { ...r, driverId: '4' } : r));
+    const res = await api('PATCH', '/api/swaps/s-y', { token: 'tok-admin', body: { status: 'completed', ifStatus: 'approved' } });
+    expect(res.status).toBe(200);
+    expect(mem.planning.find((r: any) => r.id === 'sh-a')?.driverId).toBe('4');
+  });
+
+  it('een planner kan de voorwaarden van een geaccepteerde ruil niet herschrijven', async () => {
+    mem.swaps = [
+      { id: 's-acc', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', returnDate: '2026-07-02', returnCode: '14' },
+    ];
+    // Planner probeert in één keer de tegenprestatie én de collega te wijzigen
+    // en de ruil goed te keuren.
+    const res = await api('POST', '/api/swaps', {
+      token: 'tok-planner',
+      body: [{ ...mem.swaps[0], targetDriverId: '2', returnDate: '2026-07-08', returnCode: '12', status: 'approved' }],
+    });
+    expect(res.status).toBe(200);
+    const saved = mem.swaps.find((s: any) => s.id === 's-acc');
+    expect(saved?.status).toBe('approved');
+    // Alleen de status is meegegaan; de voorwaarden zijn bevroren.
+    expect(saved?.targetDriverId).toBe('4');
+    expect(saved?.returnDate).toBe('2026-07-02');
+    expect(saved?.returnCode).toBe('14');
+  });
+
+  it('weigert een tegenprestatie die niet in de planning van de collega staat', async () => {
+    const own = mem.swaps.filter((s: any) => s.requesterId === '3' || s.targetDriverId === '3');
+    const verzonnen = {
+      id: 's-fake', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-14T08:00:00Z', returnDate: '2026-07-02', returnCode: '99',
+    };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, verzonnen] });
+    expect(res.status).toBe(400);
+    expect(mem.swaps.find((s: any) => s.id === 's-fake')).toBeFalsy();
+  });
+
+  it('weigert een samengestelde dienstcode als tegenprestatie met uitleg', async () => {
+    const own = mem.swaps.filter((s: any) => s.requesterId === '3' || s.targetDriverId === '3');
+    const samengesteld = {
+      id: 's-multi', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-14T09:00:00Z', returnDate: '2026-07-02', returnCode: '14/12',
+    };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, samengesteld] });
+    expect(res.status).toBe(400);
+    expect(String(res.json?.error)).toContain('meerdere diensten');
+  });
+
+  it('laat een geldige tegenprestatie gewoon door', async () => {
+    const own = mem.swaps.filter((s: any) => s.requesterId === '3' || s.targetDriverId === '3');
+    // sh-b: chauffeur 4 rijdt dienst 14 op 2026-07-02.
+    const geldig = {
+      id: 's-ok', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending',
+      reason: '', createdAt: '2026-06-14T10:00:00Z', returnDate: '2026-07-02', returnCode: '14',
+    };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, geldig] });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-ok')).toBeTruthy();
+  });
+});

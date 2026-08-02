@@ -886,6 +886,17 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
           driverStats.servicesWithoutSegments += 1;
         }
         for (const segment of segments) {
+          // LET OP: driver.id hierin is de chauffeur uit de MATRIX, en die
+          // blijft in de id staan ook nadat een goedgekeurde ruil de rij naar
+          // een collega verhuisde (movePlanningRows wijzigt alleen de kolom
+          // driverId). De id is dus geen betrouwbare eigenaar-bron — lees
+          // altijd de kolom.
+          //
+          // Bewust niet herschreven bij een doorvoer: swaps.shiftId verwijst
+          // naar deze id, dus hernoemen zou bestaande ruilen laten dangelen.
+          // De exclusiviteitscheck bij goedkeuren keek hier vroeger wél naar
+          // en blokkeerde daardoor elke dóórgeef-ketting; die kijkt sinds
+          // 01-08-2026 naar de huidige eigenaar (staleApprovalError).
           generatedShifts.push({
             id: `${row.source_date}-${driver.id}-${matchedService.serviceNumber}-${segment.segment}`,
             date: row.source_date,
