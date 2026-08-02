@@ -1017,7 +1017,12 @@ function FeedRow({ entry }: { entry: ActivityLogEntry }) {
         {FEED_ICONS[entry.category] ?? <Activity size={13} />}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-[12.5px] font-medium text-slate-700">
+        {/* Twee regels i.p.v. truncate: de details zijn juist het interessante
+            deel en die viel er structureel af ("Chris Versluys — ziekte (2…",
+            "Systeem (cron) · 16 fouten gemeld aan 1 on…"). Nog steeds begrensd,
+            zodat één lange regel de zes feed-items niet uit elkaar duwt; wie
+            het volledige verhaal wil, klikt door naar de log. */}
+        <p className="line-clamp-2 text-[12.5px] font-medium leading-snug text-slate-700">
           <span className="font-semibold text-slate-900">{entry.actorName}</span> · {entry.details || entry.action}
         </p>
         <p className="text-[11px] font-normal text-slate-400">{relTime(entry.createdAt)}</p>
