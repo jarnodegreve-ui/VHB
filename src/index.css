@@ -322,12 +322,16 @@ html.dark {
       border-color 280ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
-  .surface-card-hover:hover {
-    transform: translateY(-2px);
-    border-color: rgba(205, 209, 213, 0.9);
-    box-shadow:
-      0 2px 4px rgba(13, 13, 15, 0.04),
-      0 14px 32px rgba(13, 13, 15, 0.08);
+  /* Zelfde reden als bij .ios-pressable:hover: op een touchscreen bleef de
+     opgetilde kaart na een tik hangen. */
+  @media (hover: hover) and (pointer: fine) {
+    .surface-card-hover:hover {
+      transform: translateY(-2px);
+      border-color: rgba(205, 209, 213, 0.9);
+      box-shadow:
+        0 2px 4px rgba(13, 13, 15, 0.04),
+        0 14px 32px rgba(13, 13, 15, 0.08);
+    }
   }
 
   .surface-table {
@@ -523,8 +527,16 @@ html.dark {
        muis/hover op Windows. De hover-transform hieronder werkt gewoon zonder. */
   }
 
-  .ios-pressable:hover {
-    transform: translateY(-1px) scale(1.01);
+  /* Alleen op toestellen met een échte aanwijzer. Zonder deze guard blijft op
+     iOS de hover-staat plakken ná een tik: elke aangetikte wizard-kaart, knop
+     of kaartrij bleef opgetild + 1% geschaald staan tot je ergens anders
+     tikte — en scale() op tekst geeft in WebKit een korte onscherpe
+     herrastering. Tailwind wrapt zijn eigen hover:-varianten al zo; deze
+     handgeschreven regels stonden er nog buiten. */
+  @media (hover: hover) and (pointer: fine) {
+    .ios-pressable:hover {
+      transform: translateY(-1px) scale(1.01);
+    }
   }
 
   .ios-pressable:active {

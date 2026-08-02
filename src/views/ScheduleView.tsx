@@ -356,7 +356,12 @@ function MonthCalendar({
 
   return (
     <div className="space-y-4">
-      <div className="surface-card rounded-3xl p-4">
+      {/* p-3 op mobiel i.p.v. p-4: op 375px kwamen de dagcellen anders op ~41px
+          breed uit — hoog genoeg (52px) maar te smal voor een betrouwbare tik
+          met een duim, en net boven de 40px-drempel van het auditscript, dus
+          het glipte er structureel doorheen. Met de kleinere gap erbij zitten
+          ze op ~44px. */}
+      <div className="surface-card rounded-3xl p-3 md:p-4">
         {/* Maandnavigatie */}
         <div className="flex items-center justify-between">
           <button
@@ -379,7 +384,7 @@ function MonthCalendar({
         </div>
 
         {/* Grid */}
-        <div className="mt-3 grid grid-cols-7 gap-1">
+        <div className="mt-3 grid grid-cols-7 gap-0.5 md:gap-1">
           {WEEKDAY_HEAD.map((d) => (
             <div key={d} className="py-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
               {d}

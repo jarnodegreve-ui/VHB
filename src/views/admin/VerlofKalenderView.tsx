@@ -3,7 +3,7 @@ import { typedagLabel } from '../../lib/typedag';
 import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
 import { leaveSolid } from '../../lib/statusColors';
-import { cn } from '../../lib/ui';
+import { cn, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -56,10 +56,12 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
   // jaar dat nu in beeld staat (zelfde print-modus-patroon als het
   // maandrooster in ManageSchedulesView).
   const openJaaroverzicht = (userId: string) => {
-    window.open(
+    // openPdfInNewTab i.p.v. rauwe window.open: in iOS-standalone geeft
+    // window.open geregeld null terug — dan deed de knop niets, of belandde je
+    // buiten de PWA in Safari zonder weg terug. De helper navigeert in dat
+    // geval in hetzelfde venster.
+    openPdfInNewTab(
       `${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(userId)}&print-verlof-jaar=${year}`,
-      '_blank',
-      'noopener',
     );
   };
 

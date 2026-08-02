@@ -67,6 +67,39 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
+// Gehashte assets stapelen op binnen dezelfde cache-naam: elke deploy levert
+// nieuwe bestandsnamen, en zolang CACHE_NAME gelijk blijft ruimt de
+// activate-stap hierboven ze niet op — die wist alleen ándere cachenamen. Een
+// bump is er bewust niet bij elke deploy, dus zonder plafond blijven de chunks
+// van élke tussenliggende versie voorgoed staan.
+//
+// De Cache API geeft keys in invoegvolgorde terug, dus de oudste vallen er als
+// eerste af. 120 entries ≈ acht deploys aan assets; ruim genoeg om offline te
+// blijven werken, en wie zoveel versies verzamelde draait allang op nieuwere
+// bestanden.
+const MAX_ASSET_ENTRIES = 120;
+let trimBezig = false;
+function trimAssetCache(cache) {
+  if (trimBezig) return Promise.resolve();
+  trimBezig = true;
+  return cache
+    .keys()
+    .then((keys) => {
+      const assets = keys.filter((r) => {
+        try {
+          return new URL(r.url).pathname.startsWith('/assets/');
+        } catch {
+          return false;
+        }
+      });
+      const overschot = assets.length - MAX_ASSET_ENTRIES;
+      if (overschot <= 0) return;
+      return Promise.all(assets.slice(0, overschot).map((r) => cache.delete(r)));
+    })
+    .catch(() => { /* opruimen mag nooit een fetch laten falen */ })
+    .then(() => { trimBezig = false; });
+}
+
 // Versie-indicator: de app vraagt via een MessageChannel naar de actieve
 // cache-naam, zodat Systeem-status toont of de PWA nog op een oude SW draait.
 self.addEventListener('message', (event) => {
@@ -208,7 +241,9 @@ self.addEventListener('fetch', (event) => {
           !contentType.includes('text/html')
         ) {
           const copy = res.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+          caches.open(CACHE_NAME).then((cache) =>
+            cache.put(req, copy).then(() => trimAssetCache(cache)),
+          );
         }
         return res;
       });
