@@ -260,7 +260,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         <div className="surface-card rounded-3xl overflow-hidden">
           {Array.from({ length: 5 }).map((_, i) => (
             <div key={i}>
-              <SkeletonRow className="border-b border-white/40 last:border-0" />
+              <SkeletonRow className="border-b border-slate-100 last:border-0" />
             </div>
           ))}
         </div>

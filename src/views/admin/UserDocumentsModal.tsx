@@ -98,7 +98,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:w-8 sm:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"><X size={16} /></button>
           </div>
 
-          <div className="p-6 border-b border-white/50 shrink-0 space-y-3">
+          <div className="p-6 border-b border-white/70 shrink-0 space-y-3">
             <div className="space-y-1.5">
               <MicroLabel>Categorie (optioneel)</MicroLabel>
               <input

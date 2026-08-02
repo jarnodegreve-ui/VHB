@@ -269,7 +269,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     <PageShell>
       <PageHeader
         eyebrow="Planningbeheer"
-        title="Beheer Roosters"
+        title="Beheer roosters"
         description="Importeer matrixplanning, bouw de actieve planning opnieuw op en controleer recente imports op problemen voordat je iets overschrijft."
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">
@@ -538,7 +538,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         </div>
       </div>
 
-      <div className="surface-card p-8 rounded-3xl">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Export"
           title="Print maandrooster"
@@ -589,7 +589,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         </p>
       </div>
 
-      <div className="surface-card p-8 rounded-3xl">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <AdminSubsectionHeader
           eyebrow="Controle"
           title="Huidige planning"
