@@ -122,6 +122,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         const opts: ReturnOption[] = [];
         for (const day of res.days) {
           const dienst = day.lines?.[selectedTargetDriver];
+          // Rijdt de collega die dag twéé verschillende diensten, dan plakt
+          // /api/availability ze samen tot "4101/4205". Zo'n samengestelde
+          // code matcht geen enkele planning-rij, dus bij de doorvoer zou de
+          // terugruil stil niets verplaatsen en werd de 1-op-1 ruil feitelijk
+          // een eenzijdige overname. De server weigert hem nu; hier bieden we
+          // hem niet meer aan, i.p.v. de aanvrager een doodlopend pad in te
+          // sturen.
+          if (dienst?.includes('/')) continue;
           if (dienst) opts.push({ date: day.date, code: dienst, isFree: false });
           else if (day.free?.includes(selectedTargetDriver)) opts.push({ date: day.date, code: 'vrij', isFree: true });
         }

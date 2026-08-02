@@ -1100,43 +1100,50 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     // codes of niet-gematchte chauffeurs zijn, weiger de import zodat de
     // planner eerst de oorzaak kan rechtzetten.
     const generatedPlanning = await buildPlanningFromMatrix(rows);
-    // Goedgekeurde ruilen opnieuw toepassen — de matrix kent ze niet.
-    const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts);
 
-    // Verlof-conflict-detectie: import overschrijft anders een goedgekeurd
-    // verlof met een dienst-toewijzing.
     const [leaveForCheck, usersForCheck] = await Promise.all([getLeaveData(), getUsersData()]);
     const userNameForConflict = (id: string) => usersForCheck.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
     const approvedLeaveForCheck = leaveForCheck.filter((l) => l.status === "approved");
-    const verlofConflictsForImport: Array<{ driverId: string; driverName: string; date: string; serviceNumber: string; leaveStart: string; leaveEnd: string }> = [];
-    for (const shift of generatedPlanning.shifts) {
-      const overlap = approvedLeaveForCheck.find((l) =>
-        String(l.userId) === String(shift.driverId) &&
-        l.startDate <= shift.date &&
-        l.endDate >= shift.date,
-      );
-      if (overlap) {
-        verlofConflictsForImport.push({
-          driverId: shift.driverId,
-          driverName: userNameForConflict(shift.driverId),
-          date: shift.date,
-          serviceNumber: shift.line,
-          leaveStart: overlap.startDate,
-          leaveEnd: overlap.endDate,
-        });
-      }
-    }
+
+    // Conflicten VÓÓR de replay = conflicten die in de Excel zelf zitten. Die
+    // kan de planner daar oplossen.
+    const matrixConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeaveForCheck, userNameForConflict);
+
+    // Goedgekeurde ruilen opnieuw toepassen — de matrix kent ze niet.
+    const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts, { van: startDate, tot: endDate });
+
+    // Alles ná de replay; het verschil komt dus uit een doorgevoerde ruil.
+    // Dat onderscheid is belangrijk: zo'n conflict staat NIET in de Excel — de
+    // planner zocht zich suf naar een rij die daar niet bestaat, en de import
+    // bleef geblokkeerd tot hij toevallig de ruil of het verlof vond.
+    const alleConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeaveForCheck, userNameForConflict);
+    const matrixKeys = new Set(matrixConflicts.map(verlofConflictKey));
+    const replayConflicts = alleConflicts.filter((c) => !matrixKeys.has(verlofConflictKey(c)));
+    const verlofConflictsForImport = alleConflicts;
 
     if (
       generatedPlanning.summary.unknownCodes.length > 0 ||
       generatedPlanning.summary.unmatchedDrivers.length > 0 ||
       verlofConflictsForImport.length > 0
     ) {
+      const delen: string[] = [];
+      if (generatedPlanning.summary.unknownCodes.length > 0 || generatedPlanning.summary.unmatchedDrivers.length > 0) {
+        delen.push("onbekende codes of niet-gematchte chauffeurs");
+      }
+      if (matrixConflicts.length > 0) delen.push(`${matrixConflicts.length} verlof-conflict(en) in de Excel`);
+      if (replayConflicts.length > 0) {
+        delen.push(
+          `${replayConflicts.length} verlof-conflict(en) die uit een doorgevoerde dienstruil komen — die staan NIET in je Excel. `
+          + "Los ze op door de betreffende ruil te annuleren of het verlof in te trekken",
+        );
+      }
       return res.status(400).json({
-        error: "Import geblokkeerd: er zijn onbekende codes, niet-gematchte chauffeurs of verlof-conflicten. Los deze eerst op en probeer opnieuw.",
+        error: `Import geblokkeerd: ${delen.join("; ")}.`,
         unknownCodes: generatedPlanning.summary.unknownCodes,
         unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
         verlofConflicts: verlofConflictsForImport,
+        matrixVerlofConflicts: matrixConflicts,
+        ruilVerlofConflicts: replayConflicts,
         blocked: true,
       });
     }
@@ -1203,36 +1210,34 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     const startDate = importedDates[0] || null;
     const endDate = importedDates[importedDates.length - 1] || null;
     const generatedPlanning = await buildPlanningFromMatrix(rows);
-    // Ook in het voorbeeld: goedgekeurde ruilen meenemen, anders toont de
-    // preview een ander eindbeeld dan wat de import werkelijk oplevert.
-    await reapplyApprovedSwaps(generatedPlanning.shifts);
 
-    // Verlof-conflicten detecteren: een chauffeur staat met goedgekeurd
-    // verlof én tegelijk met een dienst in de nieuwe import.
     const [leave, users] = await Promise.all([getLeaveData(), getUsersData()]);
     const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
     const approvedLeave = leave.filter((l) => l.status === "approved");
-    const verlofConflicts: Array<{
-      driverId: string; driverName: string; date: string; serviceNumber: string;
-      leaveStart: string; leaveEnd: string;
-    }> = [];
-    for (const shift of generatedPlanning.shifts) {
-      const overlap = approvedLeave.find((l) =>
-        String(l.userId) === String(shift.driverId) &&
-        l.startDate <= shift.date &&
-        l.endDate >= shift.date,
-      );
-      if (overlap) {
-        verlofConflicts.push({
-          driverId: shift.driverId,
-          driverName: userName(shift.driverId),
-          date: shift.date,
-          serviceNumber: shift.line,
-          leaveStart: overlap.startDate,
-          leaveEnd: overlap.endDate,
-        });
-      }
+
+    // Zelfde volgorde als de echte import (zie /planning-matrix/import), zodat
+    // het voorbeeld ook echt toont wat de import oplevert — inclusief het
+    // onderscheid tussen conflicten uit de Excel en conflicten die pas door een
+    // doorgevoerde ruil ontstaan.
+    const matrixConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeave, userName);
+    const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts, { van: startDate, tot: endDate });
+    const verlofConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeave, userName);
+    const matrixKeys = new Set(matrixConflicts.map(verlofConflictKey));
+    const replayConflicts = verlofConflicts.filter((c) => !matrixKeys.has(verlofConflictKey(c)));
+
+    // perDriver komt uit buildPlanningFromMatrix en is dus van vóór de replay:
+    // de chauffeur die een dienst wegruilde stond er nog mét, de ontvanger
+    // zonder. Het aantal rijen hertellen op het eindbeeld, zodat de preview
+    // niet half pre- en half post-ruil is (verlofConflicts hierboven was dat
+    // wél al).
+    const rijenPerDriver = new Map<string, number>();
+    for (const s of generatedPlanning.shifts) {
+      rijenPerDriver.set(String(s.driverId), (rijenPerDriver.get(String(s.driverId)) ?? 0) + 1);
     }
+    const perDriverNaRuilen = generatedPlanning.summary.perDriver.map((d: any) => ({
+      ...d,
+      shiftsGenerated: rijenPerDriver.get(String(d.driverId)) ?? 0,
+    }));
 
     res.json({
       success: true,
@@ -1245,10 +1250,15 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       endDate,
       importedDates,
       verlofConflicts,
+      matrixVerlofConflicts: matrixConflicts,
+      ruilVerlofConflicts: replayConflicts,
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
       servicesWithoutSegments: generatedPlanning.summary.servicesWithoutSegments,
-      perDriver: generatedPlanning.summary.perDriver,
+      perDriver: perDriverNaRuilen,
+      // De import meldde de replay wél in de log, het voorbeeld verzweeg hem —
+      // terwijl de cijfers hierboven er al door beïnvloed zijn.
+      reappliedSwaps: reapplied,
     });
   } catch (err: any) {
     console.error("Import-voorbeeld maken is mislukt.", err);
@@ -2453,11 +2463,58 @@ const describeSwapCarry = (
  *  zonder deze stap veegde elke import/heropbouw alle doorgevoerde wissels
  *  weer weg (en moest de planner ze in Excel overtypen). Volgorde op
  *  decidedAt zodat een latere ruil op het resultaat van een eerdere werkt. */
-const reapplyApprovedSwaps = async (shifts: Array<{ date: string; line: string; driverId: string }>) => {
+const reapplyApprovedSwaps = async (
+  shifts: Array<{ date: string; line: string; driverId: string }>,
+  bereik?: { van: string | null; tot: string | null },
+) => {
   const approved = (await getSwapsData())
     .filter((sw) => sw.status === "approved")
     .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
-  return applySwapsToPlanningRows(shifts, approved);
+  // Alleen ruilen binnen het geïmporteerde bereik meetellen. Zonder deze filter
+  // telde élke historische ruil buiten het bereik als "niet toepasbaar", zodat
+  // de import-log een almaar groeiend "(x niet toepasbaar)" meldde terwijl er
+  // niets mis was — en een échte mismatch (dienst intussen handmatig verlegd)
+  // daarin verdronk.
+  const relevant = bereik?.van && bereik?.tot
+    ? approved.filter((sw) => {
+        const d = String(sw.shiftDate ?? "");
+        return !d || (d >= bereik.van! && d <= bereik.tot!);
+      })
+    : approved;
+  return applySwapsToPlanningRows(shifts, relevant);
+};
+
+/** Verlof-conflicten in een set planning-rijen: de chauffeur staat ingepland
+ *  op een dag waarop hij goedgekeurd verlof heeft. */
+type VerlofConflict = {
+  driverId: string; driverName: string; date: string; serviceNumber: string;
+  leaveStart: string; leaveEnd: string;
+};
+const verlofConflictKey = (c: VerlofConflict) => `${c.driverId}|${c.date}`;
+const verlofConflictsIn = (
+  shifts: Array<{ driverId: string; date: string; line: string }>,
+  approvedLeave: Array<{ userId: string; startDate: string; endDate: string }>,
+  naamVan: (id: string) => string,
+): VerlofConflict[] => {
+  const uit: VerlofConflict[] = [];
+  for (const shift of shifts) {
+    const overlap = approvedLeave.find((l) =>
+      String(l.userId) === String(shift.driverId) &&
+      l.startDate <= shift.date &&
+      l.endDate >= shift.date,
+    );
+    if (overlap) {
+      uit.push({
+        driverId: shift.driverId,
+        driverName: naamVan(shift.driverId),
+        date: shift.date,
+        serviceNumber: shift.line,
+        leaveStart: overlap.startDate,
+        leaveEnd: overlap.endDate,
+      });
+    }
+  }
+  return uit;
 };
 
 /**
@@ -2727,6 +2784,43 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
+    // De tegenprestatie moet écht bestaan en van de aangezochte collega zijn.
+    // Tot nu toe werd alleen het datumformaat gecontroleerd, terwijl de
+    // planning-doorvoer die twee velden rechtstreeks vertaalt naar
+    // `update planning set driverId`. Twee gaten die dat openliet:
+    //
+    //  1) een aanvrager kon een returnDate/returnCode meesturen die naar een
+    //     ándere (aantrekkelijkere) dienst van de collega wijst dan de wizard
+    //     toonde — twee mensen moeten akkoord gaan, maar de collega ziet in de
+    //     UI wat er staat, niet wat er zou gebeuren;
+    //  2) staat de collega die dag op twéé verschillende diensten, dan plakt
+    //     /api/availability die samen tot "4101/4205". Als returnCode matcht
+    //     dat geen enkele rij: de aangeboden dienst verhuisde wél, de
+    //     tegenprestatie niet, en de 1-op-1 ruil werd stil een eenzijdige
+    //     overname met alleen een waarschuwing in de log.
+    //
+    // 'vrij' blijft geldig zonder planning-rij: dan geeft de collega een vrije
+    // dag en valt er niets te verplaatsen (zie swapHasReturnShift in storage).
+    for (const next of recordsToWrite) {
+      if (previousById.has(String(next.id))) continue;
+      if (normalizeSwapType(next.swapType) === "overname") continue;
+      const code = String(next.returnCode ?? "").trim();
+      const date = String(next.returnDate ?? "").trim();
+      if (!code || !date || code.toLowerCase() === "vrij") continue;
+      const targetId = String(next.targetDriverId ?? "");
+      const dagShifts = await getPlanningData({ driverId: targetId, monthIso: date.slice(0, 7) });
+      const match = dagShifts.some((s: any) => String(s.date) === date && String(s.line).trim() === code);
+      if (!match) {
+        // Users pas hier ophalen: in het normale geval kost dit niets.
+        const naam = (await getUsersData()).find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
+        return res.status(400).json({
+          error: code.includes("/")
+            ? `${naam} rijdt op ${date} meerdere diensten (${code}). Kies één dienst als tegenprestatie.`
+            : `Dienst ${code} staat op ${date} niet op naam van ${naam} — de planning is intussen gewijzigd. Vernieuw en kies opnieuw.`,
+        });
+      }
+    }
+
     // Ruil zonder tegenprestatie ('overname'): alleen toegestaan als de
     // collega die dag géén dienst rijdt én in de planning op vrij/bv/tk/ta
     // staat. Rol-onafhankelijk: een dienst doorschuiven naar iemand die rijdt
@@ -2785,21 +2879,43 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         shiftDate = offeredShift?.date || undefined;
         shiftLine = offeredShift?.line || undefined;
       }
+      // Zodra de collega heeft ingestemd (status niet meer 'pending') liggen
+      // de vóórwaarden van de ruil vast — alleen status en beslismoment mogen
+      // daarna nog wijzigen.
+      //
+      // Zonder deze bevriezing kon een planner een geaccepteerde ruil eerst
+      // inhoudelijk herschrijven (andere collega, andere tegenprestatie) en
+      // hem dan goedkeuren. Geen enkele guard hield dat tegen — er wordt geen
+      // 'accepted' geschreven en er is geen pending → approved-sprong —
+      // terwijl de doorvoer wél de gewijzigde voorwaarden uitvoert en de log
+      // "Dienstruil goedgekeurd" noteert alsof de collega daarmee instemde.
+      const bevroren = prev && String(prev.status) !== "pending"
+        ? {
+            shiftId: prev.shiftId,
+            requesterId: prev.requesterId,
+            targetDriverId: prev.targetDriverId,
+            returnDate: prev.returnDate,
+            returnCode: prev.returnCode,
+          }
+        : {};
       finalRecords.push({
         ...n,
+        ...bevroren,
         swapType: normalizeSwapType(prev ? prev.swapType : n.swapType),
         shiftDate,
         shiftLine,
       });
     }
 
-    await saveSwapsData(finalRecords, swapIdsToDelete);
-
-    // Planning-doorvoer: een goedgekeurde ruil verhuist de dienst(en) direct
-    // in de planning; een geannuleerde eerder-goedgekeurde ruil draait de
-    // wissel terug. Bewust ná de save (de statusovergang is het besluit) en
-    // best-effort: is de dienst intussen handmatig verlegd, dan meldt de
-    // activity-log dat i.p.v. de beslissing te blokkeren.
+    // Planning-doorvoer VÓÓR de save — zelfde reden als bij PATCH /api/swaps/:id:
+    // movePlanningRows filtert op de huidige eigenaar en is dus idempotent, dus
+    // een herhaalde poging is ongevaarlijk. Faalt de doorvoer halverwege, dan
+    // is de status nog niet gewijzigd en kan de planner het gewoon opnieuw
+    // proberen — voorheen bleef er een halve wissel achter bij een ruil die al
+    // op 'approved' stond. Blijft best-effort: 0 verplaatste rijen (dienst
+    // handmatig verlegd) blokkeert de beslissing niet, maar komt in de log.
+    //
+    // Terugdraaien bij annuleren én afwijzen; 'completed' laat de wissel staan.
     const carryLogById = new Map<string, string>();
     for (const next of finalRecords) {
       const prev = previousById.get(String(next.id));
@@ -2807,11 +2923,13 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       if (next.status === "approved") {
         const r = await applySwapToPlanning(next);
         carryLogById.set(String(next.id), describeSwapCarry(next, r, "doorgevoerd"));
-      } else if (prev.status === "approved" && next.status === "cancelled") {
+      } else if (prev.status === "approved" && (next.status === "cancelled" || next.status === "rejected")) {
         const r = await revertSwapFromPlanning(next);
         carryLogById.set(String(next.id), describeSwapCarry(next, r, "teruggedraaid"));
       }
     }
+
+    await saveSwapsData(finalRecords, swapIdsToDelete);
 
     // Activity log: detecteer state-overgangen en nieuwe aanvragen. Over
     // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
@@ -2967,6 +3085,27 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       if (stale) return res.status(409).json({ error: stale });
     }
 
+    // Planning-doorvoer VÓÓR de statuswijziging. movePlanningRows filtert op
+    // de huidige eigenaar en is daardoor idempotent: een tweede poging
+    // verplaatst niets extra. Andersom (eerst opslaan) liet een mislukte
+    // tweede leg een hálve wissel achter terwijl de ruil al op 'approved'
+    // stond — en dan blokkeerde de ifStatus-guard elke nieuwe poging, zodat
+    // alleen handmatig sleutelen in de database het nog rechttrok.
+    //
+    // Terugdraaien geldt voor élke overgang die betekent "gaat toch niet
+    // door": annuleren én afwijzen. Alleen 'completed' laat de wissel staan,
+    // want dat betekent juist dat hij is uitgevoerd. Stond hier eerst enkel
+    // 'cancelled', waardoor approved → rejected de dienst bij de collega liet
+    // staan terwijl de replay hem bij de volgende import weer terugzette.
+    let carry: string | undefined;
+    if (status === "approved" && current.status !== "approved") {
+      const r = await applySwapToPlanning(current);
+      carry = describeSwapCarry(current, r, "doorgevoerd");
+    } else if (current.status === "approved" && (status === "cancelled" || status === "rejected")) {
+      const r = await revertSwapFromPlanning(current);
+      carry = describeSwapCarry(current, r, "teruggedraaid");
+    }
+
     // 'accepted' is een tussenstap (collega akkoord), nog géén beslismoment —
     // decidedAt hoort pas bij een definitieve beslissing (zelfde semantiek
     // als de array-route/UI).
@@ -2974,17 +3113,6 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       ? { ...current, status }
       : { ...current, status, decidedAt: new Date().toISOString() };
     await saveSwapsData([updated], []);
-
-    // Planning-doorvoer (zie POST /api/swaps): approve verhuist de dienst(en),
-    // annuleren van een goedgekeurde ruil draait de wissel terug.
-    let carry: string | undefined;
-    if (status === "approved" && current.status !== "approved") {
-      const r = await applySwapToPlanning(updated);
-      carry = describeSwapCarry(updated, r, "doorgevoerd");
-    } else if (current.status === "approved" && status === "cancelled") {
-      const r = await revertSwapFromPlanning(updated);
-      carry = describeSwapCarry(updated, r, "teruggedraaid");
-    }
 
     const usersForLog = await getUsersData();
     const userName = (uid: string) => usersForLog.find((u) => String(u.id) === String(uid))?.name || `Onbekende gebruiker (${uid})`;
