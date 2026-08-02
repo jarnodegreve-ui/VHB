@@ -38,6 +38,18 @@ export function Modal({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
+  // Body-scroll-lock, zelfde patroon als SlideOver. Zonder dit scrollde en
+  // rubberbandde de pagina áchter de modal mee zodra je binnenin het einde van
+  // een lijst bereikte — de modal leek dan te "zwabberen".
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previous;
+    };
+  }, [open]);
+
   // iOS: het toetsenbord bedekt anders de onderkant van de modal (o.a. de
   // opslaan-knop), want de layout-viewport krimpt niet mee.
   const keyboardInset = useKeyboardInset(open);
@@ -78,10 +90,18 @@ export function Modal({
         // iets minder agressieve rounded-hoeken (32px voelt overkill op
         // bijna-full-screen). Op md+: zoals voorheen.
         className={cn(
-          'glass-modal rounded-3xl md:rounded-3xl w-full overflow-y-auto max-h-[calc(100dvh-1rem)] md:max-h-[88dvh]',
+          'glass-modal rounded-3xl md:rounded-3xl w-full overflow-y-auto overscroll-contain max-h-[calc(100dvh-1rem)] md:max-h-[88dvh]',
           widthClass,
           className,
         )}
+        // Toetsenbord open: ook het páneel moet krimpen, niet alleen de
+        // backdrop-padding. dvh krimpt op iOS niet mee met het toetsenbord, en
+        // de backdrop is items-center — het paneel behield dus zijn volle
+        // hoogte en liep boven én onder buiten beeld. In de ruilwizard zat de
+        // knop "Ruilverzoek versturen" daardoor achter het toetsenbord zodra
+        // je de opmerking-textarea aantikte. Inline, zodat het wint van een
+        // max-h die de aanroeper via className meegeeft.
+        style={keyboardInset ? { maxHeight: `calc(100dvh - ${keyboardInset}px - 1rem)` } : undefined}
       >
         {children}
       </motion.div>

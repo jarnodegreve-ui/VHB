@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
 import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronRight as ChevronRightSmall, History, Plus, Printer, User as UserIcon, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
-import { cn, notify } from '../lib/ui';
+import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal, PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives';
@@ -456,11 +456,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         <div className="lg:col-span-4 space-y-8">
           <div className="space-y-2">
             <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)} year={new Date().getFullYear()} compact />
-            {/* Nieuw tabblad: de print-modus rendert een kale pagina in
-                plaats van de app (zelfde patroon als het maandrooster). */}
+            {/* Nieuw tabblad: de print-modus rendert een kale pagina in plaats
+                van de app (zelfde patroon als het maandrooster). Via
+                openPdfInNewTab, niet via rauwe window.open — die geeft in
+                iOS-standalone geregeld null terug, en dan deed deze knop
+                niets. Dit is chauffeurs-facing, dus dat is een dood pad. */}
             <button
               type="button"
-              onClick={() => window.open(`${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(user.id)}&print-verlof-jaar=${new Date().getFullYear()}`, '_blank', 'noopener')}
+              onClick={() => openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(user.id)}&print-verlof-jaar=${new Date().getFullYear()}`)}
               className="ios-pressable flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700"
             >
               <Printer size={14} /> Jaaroverzicht (PDF)

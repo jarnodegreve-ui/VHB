@@ -51,6 +51,14 @@ export default defineConfig(() => {
             if (id.includes('leaflet')) {
               return 'map-vendor';
             }
+            // ui-vendor levert BEWUST geen uitstel-winst: lucide en motion
+            // worden rechtstreeks geïmporteerd door App.tsx en BottomNav, dus
+            // ze zitten hoe dan ook in het kritieke pad. Het afsplitsen is er
+            // voor caching (deze bundel wijzigt zelden, de app-code elke
+            // deploy) en parallelle download — niet voor minder bytes op de
+            // eerste render. Wie hier ooit denkt "waarom zit lucide nog in de
+            // startbundel?": dat is dit. Echt uitstellen vraagt per-icoon lazy
+            // imports door de hele app; bewust niet gedaan.
             if (id.includes('lucide-react') || id.includes('motion') || id.includes('clsx') || id.includes('tailwind-merge')) {
               return 'ui-vendor';
             }

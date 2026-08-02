@@ -712,12 +712,17 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
               <div className="px-6 py-5 md:px-8 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
+                  {/* 44x44 op beide headerknoppen: dit zijn de enige twee
+                      uitwegen uit een driestapswizard op een telefoon. Ze
+                      stonden op 36 resp. 38px — onder de norm, en buiten het
+                      bereik van scripts/mobile-audit.mjs, dat nooit een modal
+                      opent. */}
                   {wizardStep > 1 && (
                     <button
                       type="button"
                       onClick={() => setWizardStep((s) => (s === 3 ? 2 : 1))}
                       aria-label="Vorige stap"
-                      className="shrink-0 inline-flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                      className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
                     >
                       <ChevronRight size={18} className="rotate-180" />
                     </button>
@@ -729,7 +734,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Stap {wizardStep} van 3</p>
                   </div>
                 </div>
-                <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl shrink-0"><X size={22} /></button>
+                <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="inline-flex h-11 w-11 items-center justify-center text-slate-400 hover:bg-slate-50 rounded-xl shrink-0"><X size={22} /></button>
               </div>
               <form ref={wizardScrollRef} onSubmit={handleOfferShift} className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}

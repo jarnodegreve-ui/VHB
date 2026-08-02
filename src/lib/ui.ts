@@ -144,4 +144,12 @@ export function applyThemeColorMeta(dark: boolean) {
   if (typeof document === 'undefined') return;
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', dark ? '#0D0D0F' : '#F2F3F4');
+  // In een geïnstalleerde iOS-PWA stuurt DEZE meta de statusbalk aan, niet
+  // theme-color. Hij stond hard op 'black', dus in lichte modus hield je
+  // alsnog een zwarte strook boven een lichtgrijze app — precies wat de regel
+  // hierboven wilde wegnemen. 'default' = lichte balk met donkere tekst.
+  // iOS leest hem bij het opstarten van de PWA, dus het effect is er vooral
+  // vanaf de volgende keer openen; beter dan permanent verkeerd staan.
+  const statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
+  if (statusBar) statusBar.setAttribute('content', dark ? 'black' : 'default');
 }
