@@ -527,13 +527,13 @@ export function PlannerDashboardWidgets({
       {/* === Operations Center ===
           Geen items-start meer: beide kolommen rekken tot dezelfde hoogte,
           zodat er geen leeg gat onder de kortste kolom valt. */}
-      {/* 60/40 in plaats van 2/3–1/3: Live activiteit kapte zijn regels te
-          vroeg af ("Chris Versluys — ziekte (2…"), en Open taken had de ruimte
-          niet nodig. Vijf kolommen omdat 60/40 met drie niet uitkomt. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-5">
+      {/* Gelijke helften. Ging in stappen: 2/3–1/3 was te scheef (Live
+          activiteit kapte zijn regels af, "Chris Versluys — ziekte (2…"),
+          60/40 hielp maar niet genoeg. Open taken heeft de breedte niet nodig
+          — dat zijn korte rijen en er staan er meestal maar twee of drie. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Open taken — gecombineerde werkvoorraad */}
         <OpsPanel
-          className="lg:col-span-3"
           icon={<Inbox size={15} />}
           title="Open taken"
           aside={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item' : 'items'}` : undefined}
@@ -634,7 +634,7 @@ export function PlannerDashboardWidgets({
             is bewust weg: import-status en dekking staan al in de status-strip
             bovenaan, en "Portaal Online"/"Realtime Actief" waren hardcoded
             (decoratie) — tegen het eigen niets-is-decoratief-principe in. */}
-        <div className="flex flex-col gap-4 lg:col-span-2">
+        <div className="flex flex-col gap-4">
           {isAdmin && activityLog.length > 0 ? (
             <OpsPanel
               className="flex-1"
