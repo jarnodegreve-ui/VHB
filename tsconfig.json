@@ -23,5 +23,12 @@
     "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
     "noEmit": true
-  }
+  },
+  // Expliciete afbakening. Zonder include/exclude neemt tsc álles onder de
+  // projectmap mee — ook de geneste, ongetrackte repo in rostering/. Die staat
+  // niet in git, dus CI zag hem nooit: lokaal draaide je een andere check dan
+  // de CI, met eigen fouten die niemand kon reproduceren. Nu draait `npm run
+  // lint` overal hetzelfde.
+  "include": ["src", "api", "e2e", "scripts", "*.ts", "*.config.ts"],
+  "exclude": ["node_modules", "dist", "rostering", "coverage", "playwright-report"]
 }

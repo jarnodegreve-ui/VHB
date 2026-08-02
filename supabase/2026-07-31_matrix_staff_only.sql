@@ -31,9 +31,24 @@ begin;
 -- RLS staat al aan op alle drie (geverifieerd 31-07-2026), maar een policy
 -- zonder RLS is decoratie — en voor chauffeur_ids geeft de repo geen enkele
 -- garantie. Idempotent, dus vandaag een no-op.
+--
+-- chauffeur_ids is buiten de repo om aangemaakt en staat in geen enkel
+-- schemabestand. In een verse omgeving bestaat die tabel dus niet, en een
+-- `alter table` op iets onbestaands rolt de héle transactie terug — inclusief
+-- de afscherming van de matrix, terwijl de migratie eruitziet als "gefaald op
+-- een detail". Vandaar de guard: ontbreekt de tabel, dan slaan we alleen dát
+-- deel over. (2026-08-02)
 alter table public.planning_matrix_rows           enable row level security;
 alter table public.planning_matrix_import_history enable row level security;
-alter table public.chauffeur_ids                  enable row level security;
+
+do $$
+begin
+  if to_regclass('public.chauffeur_ids') is not null then
+    execute 'alter table public.chauffeur_ids enable row level security';
+  else
+    raise notice 'chauffeur_ids bestaat niet in deze omgeving — RLS overgeslagen';
+  end if;
+end $$;
 
 -- Alle bestaande policies op de drie tabellen weg, ongeacht hun naam.
 do $$
@@ -63,11 +78,24 @@ create policy planning_matrix_import_history_staff_only
   to authenticated
   using ((select public.current_app_user_role()) in ('planner', 'admin'));
 
--- Chauffeur-ID-mapping: interne koppeling matrixkolom -> chauffeur.
-create policy chauffeur_ids_staff_only
-  on public.chauffeur_ids for select
-  to authenticated
-  using ((select public.current_app_user_role()) in ('planner', 'admin'));
+-- Chauffeur-ID-mapping: naam -> personeelsnummer. Zelfde guard als hierboven.
+--
+-- LET OP (02-08-2026): deze tabel lijkt dood — geen enkele codepad leest hem —
+-- maar hij is dat NIET. Hij bevat 31 personeelsnummers (307, 346, 108, …)
+-- terwijl users.employeeid bij 29 van de 41 chauffeurs het GSM-nummer bevat,
+-- letterlijk gelijk aan users.phone. Dit is dus mogelijk de enige plek waar de
+-- échte personeelsnummers staan. Niet droppen zonder dat uit te zoeken.
+do $$
+begin
+  if to_regclass('public.chauffeur_ids') is not null then
+    execute $p$
+      create policy chauffeur_ids_staff_only
+        on public.chauffeur_ids for select
+        to authenticated
+        using ((select public.current_app_user_role()) in ('planner', 'admin'))
+    $p$;
+  end if;
+end $$;
 
 commit;
 

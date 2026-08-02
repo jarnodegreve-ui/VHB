@@ -308,6 +308,11 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               icon={<Plus size={16} />}
               onClick={() => {
                 setEditingId(null);
+                // De drie loopnr-velden hoorden hier ook thuis: zonder hen
+                // werden de inputs na "Nieuwe dienst" ongecontroleerd (React
+                // waarschuwt daarover en de vorige waarde kan blijven hangen).
+                // Precies de loopnummer-laag die eerder al stil data wiste —
+                // de typecheck ving dit pas zodra de React-types meededen.
                 setFormData({
                   serviceNumber: '',
                   startTime: '',
@@ -315,7 +320,10 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   startTime2: '',
                   endTime2: '',
                   startTime3: '',
-                  endTime3: ''
+                  endTime3: '',
+                  loopnr: '',
+                  loopnr2: '',
+                  loopnr3: '',
                 });
                 setShowModal(true);
               }}

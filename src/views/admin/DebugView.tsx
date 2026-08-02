@@ -23,7 +23,11 @@ const COLLECTION_LABELS: Record<string, string> = {
 
 const TEST_SHIFT_ID_PREFIX = 'test-shift-';
 
-export function DebugView({ currentUser, shifts, services, onSaveShifts }: { currentUser: User; shifts: Shift[]; services: Service[]; onSaveShifts: (s: Shift[]) => void | Promise<void> }) {
+// onSaveShifts geeft in de praktijk savePlanning door, en dat is een
+// Promise<boolean> (false = de save is afgewezen). Het type stond op
+// Promise<void> en verzweeg dat — zichtbaar geworden toen de React-types
+// eindelijk meededen. Zelfde vorm als onSave elders in de app.
+export function DebugView({ currentUser, shifts, services, onSaveShifts }: { currentUser: User; shifts: Shift[]; services: Service[]; onSaveShifts: (s: Shift[]) => void | boolean | Promise<void | boolean> }) {
   const [healthData, setHealthData] = useState<any>(null);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
   const [testResult, setTestResult] = useState<string | null>(null);
