@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -1896,7 +1896,7 @@ app.get("/api/cron/week-rapport", async (req, res) => {
     const ruilNieuw = swaps.filter((sw) => inWindow(sw.createdAt)).length;
     const openVerlof = leave.filter((l) => l.status === "pending").length;
     const openRuil = swaps.filter((sw) => sw.status === "pending" || sw.status === "accepted").length;
-    const echteFouten = errors.filter((e) => !String(e.message || "").toLowerCase().includes("sessie is verlopen")).length;
+    const echteFouten = errors.filter((e) => !isDigestRuis(e.message)).length;
 
     const recipients = await systemMailRecipients();
     if (recipients.length === 0) {
@@ -2000,14 +2000,13 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const sinceIso = new Date(sinceMs).toISOString();
 
     const allErrors = await getClientErrorsSince(sinceIso);
-    // "Sessie verlopen" is levenscyclus, geen fout: wie lang niet inlogde
-    // krijgt die toast gewoon. In de digest was het alleen ruis die de
-    // telling opblies (verzoek Jarno) — de rijen blijven wél in de DB en in
-    // Systeem Status zichtbaar.
-    const errors = allErrors.filter((e) => !String(e.message || "").toLowerCase().includes("sessie is verlopen"));
+    // Levenscyclus ("sessie verlopen") en deploy-ruis (chunk-laadfouten die
+    // lazyWithRetry al opvangt) horen niet in de mail — zie isDigestRuis.
+    // De rijen blijven wél in de DB en in Systeem Status zichtbaar.
+    const errors = allErrors.filter((e) => !isDigestRuis(e.message));
     const filtered = allErrors.length - errors.length;
     if (errors.length < minCount) {
-      await logCronHeartbeat("error-digest", `Geen foutenpiek (${errors.length} fouten${filtered ? ` + ${filtered} sessie-verlopen genegeerd` : ""} in ${intervalMin} min).`);
+      await logCronHeartbeat("error-digest", `Geen foutenpiek (${errors.length} fouten${filtered ? ` + ${filtered} genegeerd als ruis` : ""} in ${intervalMin} min).`);
       return res.json({ success: true, count: errors.length, ignored: filtered, alerted: false });
     }
 
