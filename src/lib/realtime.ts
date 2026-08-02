@@ -79,26 +79,24 @@ export function useRealtimeSync(enabled: boolean, refetchers: RealtimeRefetchers
         { event: '*', schema: 'public', table: 'updates' },
         () => debounce('updates', () => refRef.current.refetchUpdates?.()),
       )
-      // LET OP: deze twee vuren bewust NIET. planning en planning_matrix_rows
-      // zitten niet in de supabase_realtime-publicatie, en dat is een keuze —
-      // een heropbouw vervangt ~1.678 rijen in één transactie, wat per
-      // verbonden chauffeur een access-check per rij betekent op de ene thread
-      // die Realtime daarvoor heeft. Zie de toelichting in
-      // supabase/2026-08-02_realtime_publicatie.sql.
+      // planning en planning_matrix_rows zitten BEWUST niet in de publicatie:
+      // een heropbouw vervangt ~1.678 rijen in één transactie, en Realtime doet
+      // per abonnee een access-check per rij op één thread. In plaats daarvan
+      // luisteren we op planning_version — één rij met een teller die een
+      // statement-trigger ophoogt zodra planning óf de matrix wijzigt. Vier
+      // events per import in plaats van 1.678, en de debounce hieronder maakt
+      // daar één refetch van.
       //
-      // De abonnementen blijven staan omdat ze meteen werken zodra de geplande
-      // planning_version-tabel er is (één event per import i.p.v. 1.678).
-      // Tot dan komt de planning van de refetch bij (her)aansluiting, de
-      // visibility-catch-up, en network-first op /api/planning in de SW.
+      // Eén event dekt allebei de tabellen, dus we verversen ze allebei.
+      // refetchMatrix is voor een chauffeur toch een no-op (App.tsx slaat hem
+      // over voor die rol).
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'planning' },
-        () => debounce('planning', () => refRef.current.refetchPlanning?.()),
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'planning_matrix_rows' },
-        () => debounce('matrix', () => refRef.current.refetchMatrix?.()),
+        { event: '*', schema: 'public', table: 'planning_version' },
+        () => debounce('planning-version', () => {
+          refRef.current.refetchPlanning?.();
+          refRef.current.refetchMatrix?.();
+        }),
       )
       .subscribe((status) => {
         // Na élke (her)aansluiting één catch-up: events die tijdens een dode
