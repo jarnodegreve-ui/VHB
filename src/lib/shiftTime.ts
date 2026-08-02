@@ -101,3 +101,38 @@ export const hasShiftEnded = (
   if (dayDiff < 0) return false; // dienstdag ligt nog in de toekomst
   return nowMin + dayDiff * 24 * 60 >= endNorm;
 };
+
+/**
+ * Hoeveel minuten loopt dit segment nog? null als de tijden ongeldig zijn of
+ * het segment niet (meer) bezig is — de aanroeper toont dan gewoon niets.
+ *
+ * Zelfde tijdframe als isShiftActiveAt: alles in minuten t.o.v. middernacht
+ * van de dienstdag, zodat de busvak-notatie ("24:20" = 00:20 de nacht erna)
+ * en een dienst van gisteren die nu nog loopt allebei goed uitkomen.
+ */
+export const minutesUntilShiftEnd = (
+  shift: { date: string; startTime: string; endTime: string },
+  now: Date,
+): number | null => {
+  if (!isShiftActiveAt(shift, now)) return null;
+  const start = parseHHMM(shift.startTime);
+  const end = parseHHMM(shift.endTime);
+  if (start === null || end === null) return null;
+  const endNorm = end <= start ? end + 24 * 60 : end;
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const dagVerschil = Math.round(
+    (new Date(`${localIso(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
+  );
+  const resterend = endNorm - (nowMin + dagVerschil * 24 * 60);
+  return resterend > 0 ? resterend : null;
+};
+
+/** "nog 1u 32min" / "nog 47min" / "nog 2u". Compact, want dit staat als
+ *  terzijde naast de diensttijden. */
+export const formatRemaining = (minuten: number): string => {
+  const u = Math.floor(minuten / 60);
+  const m = minuten % 60;
+  if (u === 0) return `nog ${m}min`;
+  if (m === 0) return `nog ${u}u`;
+  return `nog ${u}u ${m}min`;
+};

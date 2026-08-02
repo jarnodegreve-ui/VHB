@@ -33,7 +33,7 @@ import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
-import { isShiftActiveAt } from '../lib/shiftTime';
+import { formatRemaining, isShiftActiveAt, minutesUntilShiftEnd } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
@@ -325,29 +325,44 @@ export function PlannerDashboardWidgets({
     return (Number(h) || 0) * 60 + (Number(m) || 0);
   };
   const lineNum = (lines: string) => Number((/\d+/.exec(lines) || ['0'])[0]);
-  const groupShiftsByDriver = (list: Shift[]) => {
+  // metAftelling: alleen de popup "Chauffeurs actief" toont de resterende
+  // rijtijd. In "Vandaag ingepland" staan ook diensten die nog moeten beginnen
+  // of al klaar zijn, en dan is een aftelling bij enkele rijen meer ruis dan
+  // informatie.
+  const groupShiftsByDriver = (list: Shift[], metAftelling = false) => {
     const byDriver = [...list]
       .sort((a, b) => timeMin(a.startTime) - timeMin(b.startTime))
       .reduce((acc, s) => {
         const id = String(s.driverId);
         let entry = acc.get(id);
         if (!entry) {
-          entry = { id, name: userNameById(id), lineSet: new Set<string>(), segs: [] as string[] };
+          entry = { id, name: userNameById(id), lineSet: new Set<string>(), segs: [] as string[], restMin: null as number | null };
           acc.set(id, entry);
         }
         if (s.line) entry.lineSet.add(String(s.line));
         if (s.startTime && s.endTime) entry.segs.push(`${s.startTime}–${s.endTime}`);
+        // Resterende rijtijd van het segment dat nú loopt. Bij een gesplitste
+        // dienst is dat er hooguit één; de langste wint zodat een randgeval
+        // (twee overlappende rijen) niet te vroeg afloopt.
+        const rest = metAftelling ? minutesUntilShiftEnd(s, now) : null;
+        if (rest !== null && (entry.restMin === null || rest > entry.restMin)) entry.restMin = rest;
         return acc;
-      }, new Map<string, { id: string; name: string; lineSet: Set<string>; segs: string[] }>());
+      }, new Map<string, { id: string; name: string; lineSet: Set<string>; segs: string[]; restMin: number | null }>());
     return [...byDriver.values()]
-      .map((d) => ({ id: d.id, name: d.name, lines: [...d.lineSet].join(' / ') || '•', times: d.segs.join(' · ') }))
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        lines: [...d.lineSet].join(' / ') || '•',
+        times: d.segs.join(' · '),
+        remaining: d.restMin === null ? undefined : formatRemaining(d.restMin),
+      }))
       .sort((a, b) => lineNum(a.lines) - lineNum(b.lines) || a.lines.localeCompare(b.lines));
   };
   const scheduledToday = groupShiftsByDriver(todayShifts);
   // Wie rijdt er nú? Zelfde filter als de teller op de tegel — over álle
   // shifts, want een nachtdienst van gisteren kan nu nog bezig zijn. De
   // tijden tonen alleen de segmenten die op dit moment lopen.
-  const drivingNow = groupShiftsByDriver(shifts.filter((s) => isShiftActiveAt(s, now)));
+  const drivingNow = groupShiftsByDriver(shifts.filter((s) => isShiftActiveAt(s, now)), true);
   const availableToday = users
     .filter(isRealDriver)
     .filter((u) =>
@@ -898,7 +913,7 @@ export function PlannerDashboardWidgets({
 /** Rijenlijst voor de dienst-popups: naam + tijden links, dienst-chip rechts.
  *  Bewust zónder hover-highlight: deze rijen zijn niet klikbaar, en in de
  *  Beschikbaar-popup betekent diezelfde highlight "tik = bellen". */
-function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; times: string }[]; emptyText: string }) {
+function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; times: string; remaining?: string }[]; emptyText: string }) {
   if (items.length === 0) {
     return <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">{emptyText}</p>;
   }
@@ -908,7 +923,16 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
         <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2">
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold text-slate-800">{d.name}</span>
-            <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">{d.times}</span>
+            <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">
+              {d.times}
+              {/* Resterende rijtijd — alleen bij wie nú rijdt (de popup
+                  "Chauffeurs actief"). Ververst mee met de minuut-klok van
+                  het dashboard. Dit staat alleen op het planner/admin-scherm:
+                  PlannerDashboardWidgets rendert niet voor een chauffeur. */}
+              {d.remaining && (
+                <span className="ml-1.5 font-semibold text-oker-700">· {d.remaining}</span>
+              )}
+            </span>
           </span>
           <ServiceChip serviceNumber={d.lines} />
         </li>
