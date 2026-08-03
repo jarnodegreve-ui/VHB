@@ -39,7 +39,7 @@ import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { ServiceChip } from '../components/ServiceChip';
-import { OpsPanel, OpsRow, OpsStat, QuickAction, relTime } from '../components/ops';
+import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
 import { cn, getSupabaseAuthHeaders, telHref } from '../lib/ui';
 
 /**
@@ -399,6 +399,7 @@ export function PlannerDashboardWidgets({
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
+        <div className="flex w-fit items-center gap-2">
         <div
           className={cn(
             'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
@@ -423,6 +424,26 @@ export function PlannerDashboardWidgets({
           )}>
             {needsAttention ? 'Open taken' : 'Operationeel'}
           </span>
+        </div>
+        {/* Ziekmelding komt telefonisch binnen tijdens de rit, dus de planner
+            moet er altijd bij kunnen — vandaar hier en niet achter een menu.
+            Bewust ingetogen: zelfde pilvorm en hoogte als de statuspil, maar
+            in slate. Het is een ingang, geen alarm; de rode toon hoort bij de
+            melding zélf, niet bij de knop ernaartoe. */}
+        {onSickReport && (
+          <button
+            type="button"
+            onClick={() => {
+              setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
+              setSickError('');
+              setShowSickModal(true);
+            }}
+            className="ios-pressable inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+          >
+            <AlertTriangle size={12} className="text-slate-400" />
+            Ziek melden
+          </button>
+        )}
         </div>
       </div>
 
@@ -658,28 +679,6 @@ export function PlannerDashboardWidgets({
             )
           )}
         </div>
-      </div>
-
-      {/* === Snelle acties ===
-          Op breed scherm één rij die zich gelijk verdeelt over de aanwezige
-          acties (grid-flow-col: werkt met 4 én 5 tegels — "Ziek melden" is
-          conditioneel). */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-flow-col xl:auto-cols-fr">
-        <QuickAction icon={<MapPin size={16} />} label="Omleiding toevoegen" sub="Hinder registreren" onClick={() => onNavigate('beheer-omleidingen')} />
-        <QuickAction icon={<CalendarDays size={16} />} label="Verlofbeheer" sub="Aanvragen beoordelen" onClick={() => onNavigate('verlof')} />
-        {onSickReport && (
-          <QuickAction
-            icon={<AlertTriangle size={16} />}
-            label="Ziek melden"
-            sub="Chauffeur afwezig"
-            onClick={() => {
-              setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
-              setSickError('');
-              setShowSickModal(true);
-            }}
-          />
-        )}
-        <QuickAction icon={<Bell size={16} />} label="Update publiceren" sub="Chauffeurs informeren" onClick={() => onNavigate('beheer-updates')} />
       </div>
 
       {/* === Popup: wie is er vandaag beschikbaar === */}
