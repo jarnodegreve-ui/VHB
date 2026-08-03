@@ -949,7 +949,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
           <span className="flex shrink-0 flex-col items-end gap-1">
             <ServiceChip serviceNumber={d.lines} />
             {d.remaining && (
-              <span className="whitespace-nowrap text-[11px] font-semibold text-oker-700">{d.remaining}</span>
+              <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums text-oker-700">{d.remaining}</span>
             )}
           </span>
         </li>
