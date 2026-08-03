@@ -944,15 +944,14 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                   "Chauffeurs actief"). Ververst mee met de minuut-klok van
                   het dashboard. Dit staat alleen op het planner/admin-scherm:
                   PlannerDashboardWidgets rendert niet voor een chauffeur. */}
-              {d.remaining && (
-                <>
-                  <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-slate-300" />
-                  <span className="whitespace-nowrap font-semibold text-oker-700">{d.remaining}</span>
-                </>
-              )}
             </span>
           </span>
-          <ServiceChip serviceNumber={d.lines} />
+          <span className="flex shrink-0 flex-col items-end gap-1">
+            <ServiceChip serviceNumber={d.lines} />
+            {d.remaining && (
+              <span className="whitespace-nowrap text-[11px] font-semibold text-oker-700">{d.remaining}</span>
+            )}
+          </span>
         </li>
       ))}
     </ul>
