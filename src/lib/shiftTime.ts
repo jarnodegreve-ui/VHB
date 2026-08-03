@@ -127,12 +127,22 @@ export const minutesUntilShiftEnd = (
   return resterend > 0 ? resterend : null;
 };
 
-/** "nog 1u 32min" / "nog 47min" / "nog 2u". Compact, want dit staat als
- *  terzijde naast de diensttijden. */
+/**
+ * "nog 1u 32min" / "nog 2u 08min" / "nog 47min" / "nog 2u".
+ *
+ * De minuten worden nul-geprefixt zodra er ook uren zijn, zodat elke
+ * "Xu YYmin" even breed is en de aftellingen in de popup een rechte kolom
+ * vormen — anders sprong de linkerrand heen en weer tussen "2u 8min" en
+ * "2u 42min". Onder het uur ("nog 7min") bewust niet: "nog 07min" leest raar,
+ * en die rijen staan er maar kort.
+ *
+ * Reken hierbij op tabular-nums in de weergave: zonder gelijke cijferbreedte
+ * verschuift de tekst nog steeds elke minuut mee.
+ */
 export const formatRemaining = (minuten: number): string => {
   const u = Math.floor(minuten / 60);
   const m = minuten % 60;
   if (u === 0) return `nog ${m}min`;
   if (m === 0) return `nog ${u}u`;
-  return `nog ${u}u ${m}min`;
+  return `nog ${u}u ${String(m).padStart(2, '0')}min`;
 };

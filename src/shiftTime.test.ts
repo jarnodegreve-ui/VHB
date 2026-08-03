@@ -45,6 +45,10 @@ describe('minutesUntilShiftEnd', () => {
 describe('formatRemaining', () => {
   it('schrijft uren en minuten compact', () => {
     expect(formatRemaining(92)).toBe('nog 1u 32min');
+    // Nul-geprefixt zodra er uren zijn: anders springt de linkerrand van de
+    // aftel-kolom heen en weer tussen "2u 8min" en "2u 42min".
+    expect(formatRemaining(128)).toBe('nog 2u 08min');
+    expect(formatRemaining(61)).toBe('nog 1u 01min');
     expect(formatRemaining(47)).toBe('nog 47min');
     expect(formatRemaining(120)).toBe('nog 2u');
     expect(formatRemaining(1)).toBe('nog 1min');
