@@ -227,11 +227,10 @@ export function PlannerDashboardWidgets({
 
   // Dekking: null = niet geladen/fout — behandel als 'onbekend', nooit
   // als 'volledig gedekt' (vals-groen is erger dan geen data).
-  const coverageKnown = coverageDays !== null;
   const knownDays = coverageDays ?? [];
-  const todayGap = knownDays.find((d) => d.date === today);
-  const openToday = todayGap?.missing.length ?? 0;
-  const openWeek = knownDays.reduce((n, d) => n + d.missing.length, 0);
+  // Dagen met een gat voeden de rijen in Open taken en de aandacht-teller.
+  // De losse tegel "Open diensten" is er op verzoek uit (03-08); de dekking
+  // zelf blijft dus gewoon meelopen.
   const gapDays = knownDays.filter((d) => d.missing.length > 0);
 
   // Verlopen omleidingen (einddatum in het verleden) tellen niet mee: de
@@ -428,10 +427,13 @@ export function PlannerDashboardWidgets({
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling van 8 tegels op elke breedte: mobiel 2×3 + twee
-          volle-breedte-rijen ("Vandaag afwezig" en "Beschikbaar" delen op md
-          de laatste rij, xl alles naast elkaar in 8 kolommen). */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-8">
+          Gat-vrije verdeling van 7 tegels op elke breedte. Het aantal doet er
+          echt toe: mobiel 2 kolommen (3 rijen van 2 + de laatste over de volle
+          breedte), md 6 kolommen (2 rijen van 3 tegels à 2 + de laatste over
+          6), xl 7 kolommen naast elkaar. Haal je hier een tegel weg of zet je
+          er een bij, dan moeten deze drie tellingen mee — anders valt er een
+          gat in de rij. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-7">
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Bus size={16} />}
@@ -461,7 +463,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAvailable(true)}
         />
         <OpsStat
-          className="md:col-span-2 xl:col-span-1"
+          className="md:col-span-3 xl:col-span-1"
           icon={<CalendarClock size={16} />}
           tone={todayAbsent.some((a) => a.isSick) ? 'amber' : 'slate'}
           label="Vandaag afwezig"
@@ -472,7 +474,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAbsent(true)}
         />
         <OpsStat
-          className="md:col-span-2 xl:col-span-1"
+          className="md:col-span-3 xl:col-span-1"
           icon={<Inbox size={16} />}
           tone={openTasks > 0 ? 'amber' : 'emerald'}
           label="Aanvragen"
@@ -480,27 +482,6 @@ export function PlannerDashboardWidgets({
           sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof')}
         />
-        {coverageKnown ? (
-          <OpsStat
-            className="md:col-span-2 xl:col-span-1"
-            icon={<AlertTriangle size={16} />}
-            tone={openToday > 0 ? 'red' : 'emerald'}
-            label="Open diensten"
-            value={openToday}
-            sub={openWeek > 0 ? `${openWeek} in komende 7 dagen` : 'komende 7 dagen volledig'}
-            onClick={() => onNavigate('dekking')}
-          />
-        ) : (
-          <OpsStat
-            className="md:col-span-2 xl:col-span-1"
-            icon={<AlertTriangle size={16} />}
-            tone="slate"
-            label="Open diensten"
-            text="—"
-            sub="dekking niet beschikbaar"
-            onClick={() => onNavigate('dekking')}
-          />
-        )}
         <OpsStat
           className="md:col-span-3 xl:col-span-1"
           icon={<MapPin size={16} />}
@@ -511,7 +492,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate('omleidingen')}
         />
         <OpsStat
-          className="md:col-span-3 xl:col-span-1"
+          className="col-span-2 md:col-span-3 xl:col-span-1"
           icon={<CalendarClock size={16} />}
           tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
           label="Laatste import"
