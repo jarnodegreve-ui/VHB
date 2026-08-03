@@ -353,7 +353,10 @@ export function PlannerDashboardWidgets({
         id: d.id,
         name: d.name,
         lines: [...d.lineSet].join(' / ') || '•',
-        times: d.segs.join(' · '),
+        // De losse blokken, niet één samengevoegde string: bij een dienst van
+        // drie delen liep die tot tegen de dienstchip aan en las hij als één
+        // grijze sliert. De rij zet ze nu apart met een scheidingsstip.
+        segs: d.segs,
         remaining: d.restMin === null ? undefined : formatRemaining(d.restMin),
       }))
       .sort((a, b) => lineNum(a.lines) - lineNum(b.lines) || a.lines.localeCompare(b.lines));
@@ -916,7 +919,7 @@ export function PlannerDashboardWidgets({
 /** Rijenlijst voor de dienst-popups: naam + tijden links, dienst-chip rechts.
  *  Bewust zónder hover-highlight: deze rijen zijn niet klikbaar, en in de
  *  Beschikbaar-popup betekent diezelfde highlight "tik = bellen". */
-function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; times: string; remaining?: string }[]; emptyText: string }) {
+function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; segs: string[]; remaining?: string }[]; emptyText: string }) {
   if (items.length === 0) {
     return <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">{emptyText}</p>;
   }
@@ -926,18 +929,29 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
         <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2">
           <span className="min-w-0 flex-1">
             <span className="block truncate text-sm font-semibold text-slate-800">{d.name}</span>
-            <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">
-              {d.times}
+            {/* Elk dienstblok als eigen element, met een stip ertussen en
+                flex-wrap: bij één of twee blokken staat het op één regel zoals
+                voorheen, bij drie wijkt het netjes uit naar een tweede regel
+                in plaats van tegen de dienstchip te duwen. */}
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] font-medium text-slate-500 tabular-nums">
+              {d.segs.map((seg, i) => (
+                <Fragment key={seg}>
+                  {i > 0 && <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-slate-300" />}
+                  <span className="whitespace-nowrap">{seg}</span>
+                </Fragment>
+              ))}
               {/* Resterende rijtijd — alleen bij wie nú rijdt (de popup
                   "Chauffeurs actief"). Ververst mee met de minuut-klok van
                   het dashboard. Dit staat alleen op het planner/admin-scherm:
                   PlannerDashboardWidgets rendert niet voor een chauffeur. */}
-              {d.remaining && (
-                <span className="ml-1.5 font-semibold text-oker-700">· {d.remaining}</span>
-              )}
             </span>
           </span>
-          <ServiceChip serviceNumber={d.lines} />
+          <span className="flex shrink-0 flex-col items-end gap-1">
+            <ServiceChip serviceNumber={d.lines} />
+            {d.remaining && (
+              <span className="whitespace-nowrap text-[11px] font-semibold text-oker-700">{d.remaining}</span>
+            )}
+          </span>
         </li>
       ))}
     </ul>
