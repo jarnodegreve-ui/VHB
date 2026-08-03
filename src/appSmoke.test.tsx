@@ -103,11 +103,13 @@ describe('app smoke test', () => {
     render(<App />);
 
     // Operations Center verschijnt zodra profiel + data geladen zijn. Anker op
-    // 'Update publiceren' (unieke snelactie, altijd zichtbaar). 'Open taken'
-    // kan meerdere keren voorkomen (statuspil + werkvoorraad-kop), dus daar
-    // findAllByText met een lengte-check i.p.v. findByText — anders faalt de
-    // test op een label-duplicaat i.p.v. op een echte regressie.
-    expect(await screen.findByText('Update publiceren', undefined, { timeout: 5000 })).toBeTruthy();
+    // de tegel 'Chauffeurs actief': die staat er altijd en hoort bij de kern
+    // van dit scherm. Stond eerst op de snelactie 'Update publiceren', maar de
+    // hele snelacties-rij is op verzoek weg (03-08) — een anker op een losse
+    // actie is te broos gebleken. 'Open taken' kan meerdere keren voorkomen
+    // (statuspil + werkvoorraad-kop), dus daar findAllByText met een
+    // lengte-check i.p.v. findByText.
+    expect(await screen.findByText('Chauffeurs actief', undefined, { timeout: 5000 })).toBeTruthy();
     expect((await screen.findAllByText('Open taken', undefined, { timeout: 5000 })).length).toBeGreaterThanOrEqual(1);
 
     // Alle boot-fetches zijn daadwerkelijk uitgevoerd...
@@ -127,15 +129,15 @@ describe('app smoke test', () => {
     const { default: App } = await import('./App');
     render(<App />);
 
-    expect(await screen.findByText('Update publiceren', undefined, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText('Chauffeurs actief', undefined, { timeout: 5000 })).toBeTruthy();
     const toggle = await screen.findByRole('switch', { name: /chauffeurs-weergave/i });
     expect(toggle.getAttribute('aria-checked')).toBe('false');
 
     fireEvent.click(toggle);
 
-    // Chauffeursdashboard verschijnt (Operations Center-snelactie is weg) en
-    // de schakelaar staat nu aan, zodat je ook terug kunt.
-    await waitFor(() => expect(screen.queryByText('Update publiceren')).toBeNull());
+    // Chauffeursdashboard verschijnt (de planner-tegels zijn weg) en de
+    // schakelaar staat nu aan, zodat je ook terug kunt.
+    await waitFor(() => expect(screen.queryByText('Chauffeurs actief')).toBeNull());
     expect(screen.getByRole('switch', { name: /chauffeurs-weergave/i }).getAttribute('aria-checked')).toBe('true');
   });
 
@@ -143,7 +145,7 @@ describe('app smoke test', () => {
     const { default: App } = await import('./App');
     render(<App />);
 
-    expect(await screen.findByText('Update publiceren', undefined, { timeout: 5000 })).toBeTruthy();
+    expect(await screen.findByText('Chauffeurs actief', undefined, { timeout: 5000 })).toBeTruthy();
     fireEvent.click(await screen.findByRole('switch', { name: /chauffeurs-weergave/i }));
 
     // Statusstrip + panelen + snelle acties van de chauffeur.
