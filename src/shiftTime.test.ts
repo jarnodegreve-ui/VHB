@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatRemaining, minutesUntilShiftEnd } from './lib/shiftTime';
+import { formatRemaining, formatStartsIn, minutesUntilShiftEnd, minutesUntilShiftStart } from './lib/shiftTime';
 
 /** Lokale tijd (geen UTC) — de helpers rekenen met getHours(). */
 const om = (iso: string, uur: number, minuut: number) =>
@@ -52,5 +52,39 @@ describe('formatRemaining', () => {
     expect(formatRemaining(47)).toBe('nog 47min');
     expect(formatRemaining(120)).toBe('nog 2u');
     expect(formatRemaining(1)).toBe('nog 1min');
+  });
+});
+
+describe('minutesUntilShiftStart', () => {
+  const dienst = { date: '2026-08-04', startTime: '13:11', endTime: '20:55' };
+
+  it('telt af naar een dienst die vandaag nog moet beginnen', () => {
+    expect(minutesUntilShiftStart(dienst, om('2026-08-04', 11, 51))).toBe(80);
+  });
+
+  it('geeft niets zodra de dienst begonnen is', () => {
+    expect(minutesUntilShiftStart(dienst, om('2026-08-04', 13, 11))).toBeNull();
+    expect(minutesUntilShiftStart(dienst, om('2026-08-04', 15, 0))).toBeNull();
+    // Ook een dienst van gisteren telt niet meer vooruit.
+    expect(minutesUntilShiftStart(dienst, om('2026-08-05', 6, 0))).toBeNull();
+  });
+
+  it('telt over middernacht heen naar een dienst van morgen', () => {
+    // Om 22:00 vanavond is de vroege dienst van morgen nog 7u 25min weg.
+    expect(minutesUntilShiftStart({ date: '2026-08-05', startTime: '05:25' }, om('2026-08-04', 22, 0))).toBe(445);
+  });
+
+  it('geeft niets bij onleesbare tijden', () => {
+    expect(minutesUntilShiftStart({ date: '2026-08-04', startTime: 'x' }, om('2026-08-04', 9, 0))).toBeNull();
+    expect(minutesUntilShiftStart({ date: '2026-08-04', startTime: '08:75' }, om('2026-08-04', 6, 0))).toBeNull();
+  });
+});
+
+describe('formatStartsIn', () => {
+  it('gebruikt dezelfde opmaak als de aftelling, met "over"', () => {
+    expect(formatStartsIn(80)).toBe('over 1u 20min');
+    expect(formatStartsIn(128)).toBe('over 2u 08min');
+    expect(formatStartsIn(47)).toBe('over 47min');
+    expect(formatStartsIn(120)).toBe('over 2u');
   });
 });
