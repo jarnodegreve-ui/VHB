@@ -3385,10 +3385,17 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
       body: `${target.name} is ziek gemeld voor ${period}.`,
       url: "/",
     });
+    // Per planner een eigen mail, rechtstreeks geadresseerd — géén BCC-batch.
+    // sendEmail zet meerdere ontvangers in BCC (met noreply als To), en
+    // Microsoft 365 filterde precies die vorm stilletjes weg: de testmail
+    // (direct in To) kwam wél aan op hetzelfde adres (04-08). De BCC-vorm is
+    // er tegen adressenlekken bij bulk naar alle chauffeurs; voor een handvol
+    // planners die elkaars adres kennen is los versturen veiliger én leest de
+    // mail normaal. Volgorde: één voor één, fouten loggen maar niet blokkeren.
     const recipients = planningRollen.filter((u) => u.email).map((u) => u.email as string);
-    if (recipients.length > 0) {
+    for (const adres of recipients) {
       await sendEmail({
-        to: recipients,
+        to: [adres],
         context: `sick:${forUserId}`,
         subject: `Ziekmelding — ${target.name} (${period})`,
         text: `${target.name} is ziek gemeld voor ${period}.${comment ? `\n\nToelichting: ${comment}` : ""}\n\nDe dienst(en) staan nu als onbeschikbaar in de Maandplanning en Dekking.`,
