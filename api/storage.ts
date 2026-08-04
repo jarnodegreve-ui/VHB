@@ -1895,11 +1895,19 @@ export const revertSwapFromPlanning = async (swap: SwapCarryFields): Promise<Swa
 
 // --- Leave ---
 
-export const getLeaveData = async () => {
+export const getLeaveData = async (filters?: { endOnOrAfter?: string }) => {
   const client = requireDb();
-  const rows = await paginatedFetch((from, to) =>
-    client.from('leave').select('*').order('id', { ascending: true }).range(from, to),
-  );
+  // Optioneel afkappen op einddatum: lezers die alleen actuele/toekomstige
+  // afwezigheid nodig hebben (maandplanning-overlay, dekking, availability)
+  // hoeven de volledige, onbegrensd groeiende historiek niet mee te slepen.
+  const endOnOrAfter = filters?.endOnOrAfter && /^\d{4}-\d{2}-\d{2}$/.test(filters.endOnOrAfter)
+    ? filters.endOnOrAfter
+    : null;
+  const rows = await paginatedFetch((from, to) => {
+    let q = client.from('leave').select('*');
+    if (endOnOrAfter) q = q.gte('enddate', endOnOrAfter);
+    return q.order('id', { ascending: true }).range(from, to);
+  });
   return rows.map(toPublicLeave);
 };
 
