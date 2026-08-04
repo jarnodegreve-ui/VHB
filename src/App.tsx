@@ -1174,7 +1174,11 @@ export default function App() {
         body: JSON.stringify(payload),
       });
       if (response.ok) {
-        await fetchLeave();
+        // Dekking meteen mee verversen: het gat dat deze ziekmelding slaat
+        // moet direct in "Open taken" en Openstaande diensten staan — dít is
+        // het moment waarop de planner een vervanger zoekt, niet na een
+        // harde refresh. Best-effort naast de leave-fetch.
+        await Promise.all([fetchLeave(), refreshCoverageGaps()]);
         showToast('Ziekmelding doorgegeven — de planning is verwittigd.', 'success');
         return true;
       }
