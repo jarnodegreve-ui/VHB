@@ -33,7 +33,7 @@ import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
-import { formatRemaining, isShiftActiveAt, minutesUntilShiftEnd } from '../lib/shiftTime';
+import { formatRemaining, formatStartsIn, isShiftActiveAt, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
@@ -324,18 +324,24 @@ export function PlannerDashboardWidgets({
     return (Number(h) || 0) * 60 + (Number(m) || 0);
   };
   const lineNum = (lines: string) => Number((/\d+/.exec(lines) || ['0'])[0]);
-  // metAftelling: alleen de popup "Chauffeurs actief" toont de resterende
-  // rijtijd. In "Vandaag ingepland" staan ook diensten die nog moeten beginnen
-  // of al klaar zijn, en dan is een aftelling bij enkele rijen meer ruis dan
-  // informatie.
-  const groupShiftsByDriver = (list: Shift[], metAftelling = false) => {
+  // Busvak-notatie mag: "26:16" is een geldige eindtijd (= 02:16 de nacht erna).
+  const tijdGeldig = (t: string) => /^\d{1,2}:[0-5]\d$/.test(String(t ?? ''));
+  // Beide popups tellen af, maar "Vandaag ingepland" staat vol chauffeurs die
+  // nog moeten beginnen of al klaar zijn. Vandaar drie toestanden per chauffeur
+  // i.p.v. één: bezig → "nog 2u 36min", nog niet begonnen → "over 1u 20min",
+  // klaar → "afgelopen". In "Chauffeurs actief" is per definitie iedereen
+  // bezig, dus daar levert dezelfde berekening gewoon overal "nog …".
+  const groupShiftsByDriver = (list: Shift[]) => {
     const byDriver = [...list]
       .sort((a, b) => timeMin(a.startTime) - timeMin(b.startTime))
       .reduce((acc, s) => {
         const id = String(s.driverId);
         let entry = acc.get(id);
         if (!entry) {
-          entry = { id, name: userNameById(id), lineSet: new Set<string>(), segs: [] as string[], restMin: null as number | null };
+          entry = {
+            id, name: userNameById(id), lineSet: new Set<string>(), segs: [] as string[],
+            restMin: null as number | null, startMin: null as number | null, geldig: false,
+          };
           acc.set(id, entry);
         }
         if (s.line) entry.lineSet.add(String(s.line));
@@ -343,28 +349,43 @@ export function PlannerDashboardWidgets({
         // Resterende rijtijd van het segment dat nú loopt. Bij een gesplitste
         // dienst is dat er hooguit één; de langste wint zodat een randgeval
         // (twee overlappende rijen) niet te vroeg afloopt.
-        const rest = metAftelling ? minutesUntilShiftEnd(s, now) : null;
+        const rest = minutesUntilShiftEnd(s, now);
         if (rest !== null && (entry.restMin === null || rest > entry.restMin)) entry.restMin = rest;
+        // Het eerstvolgende segment dat nog moet beginnen. Bij een gesplitste
+        // dienst telt in de pauze dus af naar het tweede deel — precies wat je
+        // op dat moment wil weten.
+        const tot = minutesUntilShiftStart(s, now);
+        if (tot !== null && (entry.startMin === null || tot < entry.startMin)) entry.startMin = tot;
+        // "afgelopen" zeggen we alleen als er minstens één leesbaar tijdvak is;
+        // bij rommel in de tijden weten we het niet en tonen we niets.
+        if (tijdGeldig(s.startTime) && tijdGeldig(s.endTime)) entry.geldig = true;
         return acc;
-      }, new Map<string, { id: string; name: string; lineSet: Set<string>; segs: string[]; restMin: number | null }>());
+      }, new Map<string, { id: string; name: string; lineSet: Set<string>; segs: string[]; restMin: number | null; startMin: number | null; geldig: boolean }>());
     return [...byDriver.values()]
-      .map((d) => ({
-        id: d.id,
-        name: d.name,
-        lines: [...d.lineSet].join(' / ') || '•',
-        // De losse blokken, niet één samengevoegde string: bij een dienst van
-        // drie delen liep die tot tegen de dienstchip aan en las hij als één
-        // grijze sliert. De rij zet ze nu apart met een scheidingsstip.
-        segs: d.segs,
-        remaining: d.restMin === null ? undefined : formatRemaining(d.restMin),
-      }))
+      .map((d) => {
+        const aftelling: { remaining: string; remainingTone: AftelTone } | undefined =
+          d.restMin !== null ? { remaining: formatRemaining(d.restMin), remainingTone: 'bezig' }
+          : d.startMin !== null ? { remaining: formatStartsIn(d.startMin), remainingTone: 'straks' }
+          : d.geldig ? { remaining: 'afgelopen', remainingTone: 'klaar' }
+          : undefined;
+        return {
+          id: d.id,
+          name: d.name,
+          lines: [...d.lineSet].join(' / ') || '•',
+          // De losse blokken, niet één samengevoegde string: bij een dienst van
+          // drie delen liep die tot tegen de dienstchip aan en las hij als één
+          // grijze sliert. De rij zet ze nu apart met een scheidingsstip.
+          segs: d.segs,
+          ...aftelling,
+        };
+      })
       .sort((a, b) => lineNum(a.lines) - lineNum(b.lines) || a.lines.localeCompare(b.lines));
   };
   const scheduledToday = groupShiftsByDriver(todayShifts);
   // Wie rijdt er nú? Zelfde filter als de teller op de tegel — over álle
   // shifts, want een nachtdienst van gisteren kan nu nog bezig zijn. De
   // tijden tonen alleen de segmenten die op dit moment lopen.
-  const drivingNow = groupShiftsByDriver(shifts.filter((s) => isShiftActiveAt(s, now)), true);
+  const drivingNow = groupShiftsByDriver(shifts.filter((s) => isShiftActiveAt(s, now)));
   const availableToday = users
     .filter(isRealDriver)
     .filter((u) =>
@@ -899,7 +920,19 @@ export function PlannerDashboardWidgets({
 /** Rijenlijst voor de dienst-popups: naam + tijden links, dienst-chip rechts.
  *  Bewust zónder hover-highlight: deze rijen zijn niet klikbaar, en in de
  *  Beschikbaar-popup betekent diezelfde highlight "tik = bellen". */
-function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; segs: string[]; remaining?: string }[]; emptyText: string }) {
+/** Waar in zijn dag zit deze chauffeur: bezig · moet nog beginnen · klaar. */
+type AftelTone = 'bezig' | 'straks' | 'klaar';
+
+/** Toon van de aftelling: amber blijft voorbehouden aan wie nú rijdt, zodat die
+ *  kleur op het hele dashboard hetzelfde betekent. "over …" en "afgelopen" zijn
+ *  bijschrift, geen signaal, en blijven dus grijs — steeds een tint lichter. */
+const AFTEL_TOON: Record<AftelTone, string> = {
+  bezig: 'text-oker-700',
+  straks: 'text-slate-500',
+  klaar: 'text-slate-400',
+};
+
+function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; segs: string[]; remaining?: string; remainingTone?: AftelTone }[]; emptyText: string }) {
   if (items.length === 0) {
     return <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">{emptyText}</p>;
   }
@@ -920,16 +953,18 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                   <span className="whitespace-nowrap">{seg}</span>
                 </Fragment>
               ))}
-              {/* Resterende rijtijd — alleen bij wie nú rijdt (de popup
-                  "Chauffeurs actief"). Ververst mee met de minuut-klok van
-                  het dashboard. Dit staat alleen op het planner/admin-scherm:
-                  PlannerDashboardWidgets rendert niet voor een chauffeur. */}
             </span>
           </span>
           <span className="flex shrink-0 flex-col items-end gap-1">
             <ServiceChip serviceNumber={d.lines} />
+            {/* Aftelling onder de dienstchip, rechts uitgelijnd. Ververst mee
+                met de minuut-klok van het dashboard. Dit staat alleen op het
+                planner/admin-scherm: PlannerDashboardWidgets rendert niet voor
+                een chauffeur. */}
             {d.remaining && (
-              <span className="whitespace-nowrap text-[11px] font-semibold tabular-nums text-oker-700">{d.remaining}</span>
+              <span className={cn('whitespace-nowrap text-[11px] font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
+                {d.remaining}
+              </span>
             )}
           </span>
         </li>
