@@ -42,6 +42,7 @@ const mem = vi.hoisted(() => ({
   // 'vrij/bv/tk/ta'-check bij een ruil zonder tegenprestatie.
   planningMatrix: [] as any[],
   planningCodes: [] as any[],
+  coverageExpectations: {} as Record<string, unknown>,
   activity: [] as any[],
   // Retourwaarde van getLatestAuthEventAt — stuurt de per-dag-dedup van het
   // 'Actief'-event bij action:'resume'.
@@ -229,7 +230,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       };
     },
     replacePlanningData: async (shifts: any[]) => { mem.planning = shifts; },
-    getCoverageExpectations: async () => ({}),
+    getCoverageExpectations: async () => mem.coverageExpectations ?? {},
     listUserDocuments: async (userId?: string) =>
       userId ? mem.documents.filter((d: any) => String(d.userId) === String(userId)) : mem.documents,
     getUserDocument: async (id: string) => mem.documents.find((d: any) => String(d.id) === String(id)) ?? null,
@@ -387,6 +388,7 @@ beforeEach(() => {
   }));
   mem.diversions = [];
   mem.planningCodes = [];
+  mem.coverageExpectations = {};
   mem.activity = [];
   mem.lastAuthEventAt = null;
   mem.clientErrors = [];
@@ -1877,6 +1879,76 @@ describe('maandplanning — afwezigheidscodes zijn voor iedereen zichtbaar', () 
       expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', label: 'Ziek' });
       expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'ziek', label: 'Ziek' });
     }
+  });
+});
+
+describe('ziekte werkt door in maandplanning en dekking', () => {
+  // De Excel-import is een momentopname: wie dáárna ziek gemeld wordt, stond
+  // in het maandrooster nog op zijn dienst en zijn dienst telde in de dekking
+  // als ingevuld — terwijl de ziekmeldings-mail het omgekeerde beloofde.
+  beforeEach(() => {
+    mem.planningCodes = [
+      { id: 'pc-ziek', code: 'ziek', description: 'Ziek', category: 'absence' },
+      { id: 'pc-bv', code: 'bv', description: 'Betaald Verlof', category: 'leave' },
+    ];
+    mem.planningMatrix = [
+      { id: 'm-1', source_date: '2026-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' },
+      { id: 'm-2', source_date: '2026-07-16', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.leave = [
+      { id: 'l-ziek', userId: '3', startDate: '2026-07-15', endDate: '2026-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-07-15T06:00:00Z', decidedAt: '2026-07-15T06:00:00Z' },
+    ];
+  });
+
+  it('een ziekmelding overschrijft de dienst in het maandrooster, alleen op de ziektedagen', async () => {
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    // 15/07: ziek — de matrix-code 12 is overschreven met de ziekte-code.
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', kind: 'absence', label: 'Ziek' });
+    // 16/07 (buiten de ziekteperiode): de dienst staat er nog gewoon.
+    expect(res.json.cells['3']['2026-07-16']).toMatchObject({ kind: 'service' });
+    // De collega is onaangeroerd.
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ kind: 'service' });
+  });
+
+  it('ook een naderhand goedgekeurd verlof overschrijft de cel', async () => {
+    mem.leave.push({ id: 'l-bv', userId: '4', startDate: '2026-07-15', endDate: '2026-07-16', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-07-10T06:00:00Z', decidedAt: '2026-07-11T06:00:00Z' });
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'bv', kind: 'leave' });
+  });
+
+  it('pending of afgewezen leave verandert niets aan het rooster', async () => {
+    mem.leave = [
+      { id: 'l-p', userId: '3', startDate: '2026-07-15', endDate: '2026-07-15', type: 'ziekte', status: 'pending', comment: '', createdAt: '2026-07-15T06:00:00Z' },
+      { id: 'l-r', userId: '4', startDate: '2026-07-15', endDate: '2026-07-15', type: 'betaald_verlof', status: 'rejected', comment: '', createdAt: '2026-07-15T06:00:00Z', decidedAt: '2026-07-15T07:00:00Z' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ kind: 'service' });
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ kind: 'service' });
+  });
+
+  it('de dienst van een zieke chauffeur telt als gat in de dekking', async () => {
+    mem.coverageExpectations = { week: ['12', '11'] };
+    const res = await api('GET', '/api/coverage-gaps?from=2026-07-15&to=2026-07-16', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    // 15/07: Chauffeur A (dienst 12) is ziek → 12 valt open; 11 blijft gedekt.
+    const dag15 = res.json.days.find((d: any) => d.date === '2026-07-15');
+    expect(dag15.missing).toEqual(['12']);
+    expect(dag15.covered).toBe(1);
+    // 16/07: niemand ziek → geen gat voor 12 (11 staat die dag niet in de matrix).
+    const dag16 = res.json.days.find((d: any) => d.date === '2026-07-16');
+    expect(dag16.missing).toEqual(['11']);
+  });
+
+  it('de dekking matcht de zieke ook op omgekeerde naamvolgorde', async () => {
+    // De matrix schrijft "A Chauffeur" (achternaam eerst) — zelfde
+    // volgorde-onafhankelijke resolutie als /api/month-planning.
+    mem.planningMatrix = [
+      { id: 'm-3', source_date: '2026-07-15', day_type: 'week', assignments: { 'A Chauffeur': '12' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12'] };
+    const res = await api('GET', '/api/coverage-gaps?from=2026-07-15&to=2026-07-15', { token: 'tok-planner' });
+    expect(res.json.days[0].missing).toEqual(['12']);
   });
 });
 
