@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
-import { computeDayGap, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
+import { computeDayGap, normalizeCode, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
 // de uitzonderingen op te slaan — zo is er geen aparte tabel/migratie nodig.
@@ -962,12 +962,15 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
     // volgorde-onafhankelijke naam-resolutie als /api/month-planning.
     const approvedLeaveAll = (leaveAll as any[]).filter((l) => l?.status === "approved");
     const idByNameToken = new Map<string, string>();
+    const userNameById = new Map<string, string>();
     for (const u of usersForLeave as any[]) {
       if (u?.role !== "chauffeur") continue;
       const token = toLookupToken(String(u.name ?? ""));
       idByNameToken.set(token, String(u.id));
       idByNameToken.set(token.split(/\s+/).filter(Boolean).sort().join(" "), String(u.id));
+      userNameById.set(String(u.id), String(u.name ?? ""));
     }
+    const UITVAL_REDEN: Record<string, string> = { ziekte: "ziek", betaald_verlof: "verlof", klein_verlet: "klein verlet" };
     const inRange = rows
       .filter((r: any) => {
         const d = String(r.source_date ?? "");
@@ -978,21 +981,42 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       const date = String(r.source_date ?? "");
       const dayType = resolveDayType(r.day_type, date, weekdays, overrides);
       const expected = stored[dayType] || [];
-      const afwezigIds = new Set(
-        approvedLeaveAll
-          .filter((l) => String(l.startDate) <= date && date <= String(l.endDate))
-          .map((l) => String(l.userId)),
-      );
-      const assignmentValues = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
+      // Afwezige chauffeurs mét hun reden — de reden reist mee naar de tegel
+      // ("4407 · Pascal · ziek"), zodat de planner ziet wáárom een dienst
+      // openvalt en niet alleen dát hij openvalt.
+      const afwezigen = new Map<string, string>(); // userId → reden
+      for (const l of approvedLeaveAll) {
+        if (String(l.startDate) <= date && date <= String(l.endDate)) {
+          afwezigen.set(String(l.userId), UITVAL_REDEN[String(l.type)] ?? String(l.type));
+        }
+      }
+      // Cellen van afwezigen tellen niet mee als invulling; onthoud per
+      // weggefilterde code wie uitviel. Eén uitvaller per code volstaat — twee
+      // zieken op dezelfde dienst is theorie, en dan is elke naam even goed.
+      const uitvalByCode = new Map<string, { name: string; reason: string }>();
+      const assignmentValues: string[] = [];
+      const entries = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
         ? Object.entries(r.assignments)
-            .filter(([naam]) => {
-              const token = toLookupToken(String(naam));
-              const id = idByNameToken.get(token) ?? idByNameToken.get(token.split(/\s+/).filter(Boolean).sort().join(" "));
-              return !(id && afwezigIds.has(id));
-            })
-            .map(([, v]) => String(v))
         : [];
-      return computeDayGap(date, dayType, expected, assignmentValues);
+      for (const [naam, v] of entries) {
+        const token = toLookupToken(String(naam));
+        const id = idByNameToken.get(token) ?? idByNameToken.get(token.split(/\s+/).filter(Boolean).sort().join(" "));
+        const reden = id ? afwezigen.get(id) : undefined;
+        if (id && reden) {
+          uitvalByCode.set(normalizeCode(String(v)), { name: userNameById.get(id) || String(naam), reason: reden });
+        } else {
+          assignmentValues.push(String(v));
+        }
+      }
+      const gap = computeDayGap(date, dayType, expected, assignmentValues);
+      // Alleen uitval-info voor codes die ook echt als gat eindigen — een
+      // weggefilterde 'bv'-cel is geen dienst en hoort nergens te verschijnen.
+      const uitval: NonNullable<DayGap["uitval"]> = {};
+      for (const svc of gap.missing) {
+        const info = uitvalByCode.get(normalizeCode(svc));
+        if (info) uitval[normalizeCode(svc)] = info;
+      }
+      return Object.keys(uitval).length > 0 ? { ...gap, uitval } : gap;
     });
     res.json({ from, to, days });
   } catch (err) {
@@ -3350,15 +3374,18 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     const period = startDate === endDate ? startDate : `${startDate} t/m ${endDate}`;
     await logActivity(req, "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period} (door ${req.appUser?.name}).`, { type: "leave", id: record.id });
 
-    // De rest van de planning waarschuwen (push + mail), behalve wie het zelf
-    // registreerde.
-    const beslissers = users.filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== selfId);
+    // De hele planning waarschuwen. Push gaat niet naar wie het zelf
+    // registreerde (een melding over je eigen klik is ruis), maar de mail
+    // wél — die dient als vastlegging in de mailbox, en de registrerende
+    // planner wil hem juist óók (verzoek Jarno 04-08).
+    const planningRollen = users.filter((u) => u.role === "planner" || u.role === "admin");
+    const beslissers = planningRollen.filter((u) => String(u.id) !== selfId);
     await sendPushToUsers(beslissers.map((u) => String(u.id)), {
       title: "Ziekmelding",
       body: `${target.name} is ziek gemeld voor ${period}.`,
       url: "/",
     });
-    const recipients = beslissers.filter((u) => u.email).map((u) => u.email as string);
+    const recipients = planningRollen.filter((u) => u.email).map((u) => u.email as string);
     if (recipients.length > 0) {
       await sendEmail({
         to: recipients,
