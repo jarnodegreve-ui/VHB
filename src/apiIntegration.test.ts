@@ -455,10 +455,14 @@ describe('PII-scoping voor chauffeurs', () => {
     expect(res.json.leave).toMatchObject({ userId: '4', type: 'ziekte', status: 'approved', startDate: '2026-09-02', endDate: '2026-09-03' });
     const stored = mem.leave.find((l: any) => l.type === 'ziekte');
     expect(stored?.status).toBe('approved');
-    // De rest van de planning krijgt push + mail (behalve de melder = planner, id 2).
+    // Push naar de rest van de planning (behalve de melder = planner, id 2)…
     const sickPush = mem.pushesSent.find((p) => p.payload.title === 'Ziekmelding');
     expect(sickPush?.userIds).toEqual(['1']);
-    expect(mem.emailsSent.some((m) => (m.context ?? '').startsWith('sick:'))).toBe(true);
+    // …maar de mail gaat naar álle planner/admin-adressen, de melder incluis:
+    // die dient als vastlegging in de mailbox (verzoek Jarno 04-08).
+    const sickMail = mem.emailsSent.find((m) => (m.context ?? '').startsWith('sick:'));
+    expect(sickMail?.to).toContain('planner@vhb.be');
+    expect(sickMail?.to).toContain('admin@vhb.be');
   });
 
   it('ziekmelding zonder chauffeur wordt geweigerd (400)', async () => {
@@ -1935,9 +1939,13 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     const dag15 = res.json.days.find((d: any) => d.date === '2026-07-15');
     expect(dag15.missing).toEqual(['12']);
     expect(dag15.covered).toBe(1);
+    // De tegel weet wie er uitviel en waarom.
+    expect(dag15.uitval).toEqual({ '12': { name: 'Chauffeur A', reason: 'ziek' } });
     // 16/07: niemand ziek → geen gat voor 12 (11 staat die dag niet in de matrix).
     const dag16 = res.json.days.find((d: any) => d.date === '2026-07-16');
     expect(dag16.missing).toEqual(['11']);
+    // 11 was nooit toegewezen → géén uitval-info (kale chip in de UI).
+    expect(dag16.uitval).toBeUndefined();
   });
 
   it('de dekking matcht de zieke ook op omgekeerde naamvolgorde', async () => {

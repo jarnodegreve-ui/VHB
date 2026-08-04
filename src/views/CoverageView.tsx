@@ -16,6 +16,7 @@ import {
   type CoverageOverride,
   type DayGap,
 } from '../lib/coverage';
+import { normalizeCode } from '../lib/coverageGaps';
 
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
@@ -430,17 +431,26 @@ export function CoverageView() {
                     <span className="text-xs font-medium text-emerald-600 inline-flex items-center gap-1"><Check size={13} /> volledig gedekt</span>
                   ) : (
                     <div className="flex flex-wrap gap-1.5">
-                      {d.missing.map((svc) => (
-                        <button
-                          key={svc}
-                          type="button"
-                          onClick={() => setPick({ date: d.date, code: svc })}
-                          title="Klik om te zien wie vrij is"
-                          className="rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
-                        >
-                          {svc}
-                        </button>
-                      ))}
+                      {d.missing.map((svc) => {
+                        // Gat door een gemelde afwezigheid: toon wie uitviel en
+                        // waarom ("4407 · Pascal Duysburgh · ziek"). Een dienst
+                        // die nooit toegewezen was, blijft een kale chip.
+                        const info = d.uitval?.[normalizeCode(svc)];
+                        return (
+                          <button
+                            key={svc}
+                            type="button"
+                            onClick={() => setPick({ date: d.date, code: svc })}
+                            title="Klik om te zien wie vrij is"
+                            className="inline-flex max-w-full items-center gap-1 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
+                          >
+                            {svc}
+                            {info && (
+                              <span className="min-w-0 truncate font-medium text-red-600/80">· {info.name} · {info.reason}</span>
+                            )}
+                          </button>
+                        );
+                      })}
                     </div>
                   )}
                 </div>

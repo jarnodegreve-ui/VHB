@@ -76,6 +76,10 @@ export type DayGap = {
   covered: number;
   /** dienstnummers die ontbreken (niet toegekend die dag) */
   missing: string[];
+  /** Per opengevallen dienst (genormaliseerde code): wie viel uit en waarom.
+   *  Alleen gevuld als het gat door een goedgekeurde afwezigheid komt —
+   *  een dienst die nooit toegewezen was, heeft geen uitval-info. */
+  uitval?: Record<string, { name: string; reason: string }>;
 };
 
 /** Bereken ontbrekende diensten voor één dag. */
