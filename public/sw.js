@@ -45,7 +45,11 @@
 // de naamregel) — zelfde bestandsnamen, dus bump om de oude uit cache te duwen.
 // v22: shape-rendering uit de primair-logo's (WebKit rendert 'auto' strakker)
 // — zelfde bestandsnamen, dus bump om de oude uit cache te duwen.
-const CACHE_NAME = 'vhb-portaal-v22';
+// v23: hele dagoplevering 03/04-08 (ziekte-keten, dashboard, dekking) — een
+// standalone PWA die uit de app-switcher hervat doet géén navigatie-fetch en
+// herlaadt alleen op controllerchange, en die vuurt alleen als sw.js zélf
+// wijzigt. Bump dus bij elke betekenisvolle release, ook zonder sw-wijziging.
+const CACHE_NAME = 'vhb-portaal-v23';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';

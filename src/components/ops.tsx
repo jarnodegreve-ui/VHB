@@ -7,7 +7,8 @@ import { cn } from '../lib/ui';
  * Gedeelde bouwstenen van het Operations Center-dashboard.
  *
  * Stonden eerst alleen in PlannerDashboardWidgets; het chauffeursdashboard
- * gebruikt nu dezelfde look (tegels, panelen, snelle acties) met eigen data,
+ * gebruikt dezelfde look (tegels, panelen) met eigen data; snelacties
+ * bestaan alleen nog op het chauffeursdashboard (planner-kant weg, 03-08),
  * zodat beide schermen niet uit elkaar groeien.
  */
 export const STAT_TONES = {

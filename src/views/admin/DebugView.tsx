@@ -210,7 +210,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     }
   };
 
-  const myTestShifts = shifts.filter((s) => s.driverId === currentUser.id && (s.id.startsWith(TEST_SHIFT_ID_PREFIX) || s.line === 'TEST-DEMO'));
+  const myTestShifts = shifts.filter((s) => s.driverId === currentUser.id && s.id.startsWith(TEST_SHIFT_ID_PREFIX));
 
   const addTestShift = async () => {
     if (services.length === 0) {
@@ -240,7 +240,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       notify('Geen fictieve diensten op je naam gevonden.', 'info');
       return;
     }
-    const remaining = shifts.filter((s) => !(s.driverId === currentUser.id && (s.id.startsWith(TEST_SHIFT_ID_PREFIX) || s.line === 'TEST-DEMO')));
+    const remaining = shifts.filter((s) => !(s.driverId === currentUser.id && s.id.startsWith(TEST_SHIFT_ID_PREFIX)));
     await onSaveShifts(remaining);
     notify(`${myTestShifts.length} fictieve dienst${myTestShifts.length === 1 ? '' : 'en'} verwijderd.`, 'success');
   };

@@ -16,7 +16,7 @@ import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType } from '../lib/format';
 
 
-// Ziek melden zit BEWUST niet meer in deze view maar bij de snelacties op het
+// Ziek melden zit BEWUST niet meer in deze view maar in de kop van het
 // planner-dashboard (PlannerDashboardWidgets). Het is geen verlofaanvraag maar
 // een registratie die de planning meteen raakt, en ze komt telefonisch binnen
 // tijdens de rit — dus hoort ze in de cockpit, niet achter een menu-item dat
