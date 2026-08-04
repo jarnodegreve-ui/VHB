@@ -217,7 +217,14 @@ function DriverMonthSheet({
       if (!a.date.startsWith(`${yearStr}-${monthStr}`)) continue;
       const existing = byDate.get(a.date);
       if (existing) {
-        if (existing.shifts.length === 0 && !existing.absence) existing.absence = { code: a.code, label: a.label };
+        // Afwezigheid wint van de dienst. Sinds de leave-overlay kan een dag
+        // én planning-rijen én een afwezigheidscode hebben (ziek gemeld ná de
+        // Excel-import) — die dienst wordt niet gereden, dus niet printen en
+        // niet meetellen in de uren- en dagtotalen. Voorheen werd de
+        // afwezigheid hier stilzwijgend weggegooid en stond de zieke met
+        // dienst + uren op zijn maandblad.
+        existing.shifts = [];
+        if (!existing.absence) existing.absence = { code: a.code, label: a.label };
       } else {
         byDate.set(a.date, { date: a.date, shifts: [], minutes: 0, absence: { code: a.code, label: a.label } });
       }

@@ -531,7 +531,12 @@ app.get("/api/calendar/:userId/:token", async (req, res) => {
     } catch { /* notities zijn nice-to-have in de feed */ }
     // Rijen zonder tijden overslaan: de 00:00-fallback werd door de
     // eind≤start-regel van buildVevent een 24-uursblok in de agenda.
-    const events: IcsEvent[] = (shifts as any[]).filter((s) => s.startTime && s.endTime).map((s) => ({
+    // Diensten binnen een goedgekeurde afwezigheid overslaan: wie ziek
+    // gemeld is, hoort geen agenda-melding voor die dienst te krijgen —
+    // de hele-dag-gebeurtenis hieronder dekt die dag al.
+    const events: IcsEvent[] = (shifts as any[])
+      .filter((s) => s.startTime && s.endTime && !afwezigOp(leave as any[], userId, String(s.date)))
+      .map((s) => ({
       uid: `vhb-shift-${s.id}@vhb-portaal`,
       date: String(s.date),
       startTime: String(s.startTime),
