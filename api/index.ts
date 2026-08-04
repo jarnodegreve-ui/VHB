@@ -3418,14 +3418,14 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     // planners die elkaars adres kennen is los versturen veiliger én leest de
     // mail normaal. Volgorde: één voor één, fouten loggen maar niet blokkeren.
     const recipients = planningRollen.filter((u) => u.email).map((u) => u.email as string);
-    // Opengevallen diensten in de mail: "do 6 aug — 4407". Geen diensten in
+    // Openstaande diensten in de mail (zelfde term als het scherm): "do 6 aug — 4407". Geen diensten in
     // de periode (ziek op vrije dagen) → dat óók gewoon zeggen, dan hoeft de
     // planner het rooster niet open te doen om niets te vinden.
     const dienstenTekst = openDiensten.length > 0
-      ? `\n\nOpengevallen dienst(en):\n${openDiensten.map((o) => `- ${o.label} — ${o.nummers}`).join("\n")}\n\nDeze staan nu als onbeschikbaar in de Maandplanning en Dekking.`
+      ? `\n\nOpenstaande dienst(en):\n${openDiensten.map((o) => `- ${o.label} — ${o.nummers}`).join("\n")}\n\nDeze staan nu als onbeschikbaar in de Maandplanning en Dekking.`
       : "\n\nGeen ingeplande diensten in deze periode.";
     const dienstenHtml = openDiensten.length > 0
-      ? `<p><strong>Opengevallen dienst(en):</strong></p><ul>${openDiensten.map((o) => `<li>${escapeHtml(o.label)} — ${escapeHtml(o.nummers)}</li>`).join("")}</ul><p>Deze staan nu als onbeschikbaar in de Maandplanning en Dekking.</p>`
+      ? `<p><strong>Openstaande dienst(en):</strong></p><ul>${openDiensten.map((o) => `<li>${escapeHtml(o.label)} — ${escapeHtml(o.nummers)}</li>`).join("")}</ul><p>Deze staan nu als onbeschikbaar in de Maandplanning en Dekking.</p>`
       : `<p>Geen ingeplande diensten in deze periode.</p>`;
     for (const adres of recipients) {
       await sendEmail({

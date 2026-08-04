@@ -476,7 +476,7 @@ describe('PII-scoping voor chauffeurs', () => {
     // De opengevallen diensten staan in de mail: per dag het nummer, de
     // gesplitste dienst één keer, de dienst van de collega niet.
     const body = sickMails[0]?.text ?? '';
-    expect(body).toContain('Opengevallen dienst(en):');
+    expect(body).toContain('Openstaande dienst(en):');
     expect(body).toMatch(/wo 2 sep.* — 4407/);
     expect(body).toMatch(/do 3 sep.* — 4408/);
     expect(body).not.toContain('4407 / 4407');
