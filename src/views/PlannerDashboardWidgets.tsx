@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   Activity,
   AlertTriangle,
@@ -33,7 +33,7 @@ import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate } from '../lib/availability';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
-import { formatRemaining, formatStartsIn, isShiftActiveAt, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
+import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
@@ -175,6 +175,13 @@ export function PlannerDashboardWidgets({
   // planner moet hem vanuit de cockpit kunnen invoeren zonder van scherm te
   // wisselen. De server maakt er een direct goedgekeurd 'ziekte'-verlof van.
   const [showSickModal, setShowSickModal] = useState(false);
+  // Focus keert na het sluiten terug naar de knop die de dialoog opende —
+  // anders landt een VoiceOver-gebruiker weer bovenaan de pagina.
+  const sickTriggerRef = useRef<HTMLButtonElement | null>(null);
+  const closeSickModal = () => {
+    setShowSickModal(false);
+    sickTriggerRef.current?.focus();
+  };
   const [sickForm, setSickForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
   const [isSubmittingSick, setIsSubmittingSick] = useState(false);
   const [sickError, setSickError] = useState('');
@@ -208,30 +215,46 @@ export function PlannerDashboardWidgets({
   const greeting = getDaypartGreeting(now);
   const isAdmin = currentUser.role === 'admin';
 
-  // Goedgekeurde afwezigheid die vandáág loopt, op user-id. Stuurt drie
-  // dingen: het label in de popup "Vandaag ingepland" (iemand die ziek gemeld
-  // is ná de Excel-import staat daar anders gewoon met een aftelling), het
-  // wegfilteren uit "Chauffeurs actief" (wie ziek thuis zit rijdt niet, ook
-  // al loopt zijn dienst volgens de planning), en de afwezig-tegel verderop.
+  // Goedgekeurde afwezigheid, getoetst per DIENSTDAG (niet per kalender-
+  // vandaag): wie om 01:30 nog de nachtdienst van gisteren rijdt maar pas
+  // vanaf vandaag ziek gemeld is, rijdt op dat moment gewoon — de dienstdag
+  // (gisteren) valt buiten de ziekteperiode. Ziekte wint bij overlappende
+  // records (verlof mag een ziekmelding nooit maskeren); kapotte of
+  // omgekeerde datums tellen niet mee. Zelfde regels als afwezigOp op de
+  // server. Stuurt het label in "Vandaag ingepland", het wegfilteren uit
+  // "Chauffeurs actief" en de afwezig-tegel verderop.
   const ABSENCE_LABEL: Record<string, string> = { betaald_verlof: 'Verlof', klein_verlet: 'Klein verlet', ziekte: 'Ziek' };
-  const leaveTodayById = new Map<string, { label: string; isSick: boolean }>();
-  for (const l of leaveRequests) {
-    if (l.status === 'approved' && l.startDate <= today && today <= l.endDate) {
-      leaveTodayById.set(String(l.userId), { label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' });
+  const ABSENCE_TONE: Record<string, AftelTone> = { ziekte: 'ziek', betaald_verlof: 'verlof', klein_verlet: 'verlet' };
+  const isoDagRe = /^\d{4}-\d{2}-\d{2}$/;
+  const afwezigOpDag = (driverId: string, date: string): { label: string; tone: AftelTone; isSick: boolean } | null => {
+    let gevonden: { label: string; tone: AftelTone; isSick: boolean } | null = null;
+    for (const l of leaveRequests) {
+      if (l.status !== 'approved' || String(l.userId) !== driverId) continue;
+      if (!isoDagRe.test(l.startDate) || !isoDagRe.test(l.endDate) || l.startDate > l.endDate) continue;
+      if (l.startDate <= date && date <= l.endDate) {
+        const kandidaat = { label: ABSENCE_LABEL[l.type] ?? l.type, tone: ABSENCE_TONE[l.type] ?? ('verlof' as AftelTone), isSick: l.type === 'ziekte' };
+        if (kandidaat.isSick) return kandidaat;
+        gevonden = kandidaat;
+      }
     }
-  }
+    return gevonden;
+  };
 
   // === Operationele kerncijfers (alles uit echte data) ===
-  const driversActiveToday = new Set(
-    shifts.filter((s) => s.date === today).map((s) => String(s.driverId)),
-  ).size;
+  const ingeplandeIds = new Set(shifts.filter((s) => s.date === today).map((s) => String(s.driverId)));
+  const driversActiveToday = ingeplandeIds.size;
+  // Hoeveel van de ingeplanden zijn intussen afwezig gemeld? De tegel telt ze
+  // bewust mee in het hoofdcijfer (ze stáán ingepland; de popup labelt ze),
+  // maar de sub-regel maakt het gat meteen zichtbaar — anders las "30 / 45"
+  // alsof er niets aan de hand was terwijl er drie ziek thuis zitten.
+  const ingeplandAfwezig = [...ingeplandeIds].filter((id) => afwezigOpDag(id, today)).length;
   // Wie zit er nú effectief op de bus? Actuele tijd vs. de segmenttijden
   // (incl. nachtdiensten van gisteren die nog lopen); de 60s-klok hierboven
   // houdt dit cijfer live. Gesplitste diensten: pauze telt niet mee, en wie
   // vandaag afwezig gemeld is telt níét als rijdend.
   const driversDrivingNow = new Set(
     shifts
-      .filter((s) => isShiftActiveAt(s, now) && !leaveTodayById.has(String(s.driverId)))
+      .filter((s) => isShiftActiveAt(s, now) && !afwezigOpDag(String(s.driverId), s.date))
       .map((s) => String(s.driverId)),
   ).size;
   // Noemer van "Vandaag ingepland X / N": alleen inzetbare chauffeurs, zelfde
@@ -339,8 +362,10 @@ export function PlannerDashboardWidgets({
     return (Number(h) || 0) * 60 + (Number(m) || 0);
   };
   const lineNum = (lines: string) => Number((/\d+/.exec(lines) || ['0'])[0]);
-  // Busvak-notatie mag: "26:16" is een geldige eindtijd (= 02:16 de nacht erna).
-  const tijdGeldig = (t: string) => /^\d{1,2}:[0-5]\d$/.test(String(t ?? ''));
+  // Busvak-notatie mag: "26:16" is een geldige eindtijd (= 02:16 de nacht
+  // erna). Zelfde grens als parseHHMM (t/m 47:59) — een eigen, lossere regex
+  // liet "50:00" door en toonde dan "afgelopen" waar niets tonen de afspraak is.
+  const tijdGeldig = (t: string) => isValidBusvakTime(String(t ?? ''));
   // Beide popups tellen af, maar "Vandaag ingepland" staat vol chauffeurs die
   // nog moeten beginnen of al klaar zijn. Vandaar drie toestanden per chauffeur
   // i.p.v. één: bezig → "nog 2u 36min", nog niet begonnen → "over 1u 20min",
@@ -400,15 +425,15 @@ export function PlannerDashboardWidgets({
   // planning) nog op zijn dienst. De aftelling zou dan doodleuk "nog 2u"
   // tonen voor iemand die ziek thuis zit — vervang die door het afwezig-label.
   const scheduledToday = groupShiftsByDriver(todayShifts).map((d) => {
-    const afwezig = leaveTodayById.get(d.id);
+    const afwezig = afwezigOpDag(d.id, today);
     if (!afwezig) return d;
-    return { ...d, remaining: afwezig.label.toLowerCase(), remainingTone: (afwezig.isSick ? 'ziek' : 'afwezig') as AftelTone };
+    return { ...d, remaining: afwezig.label.toLowerCase(), remainingTone: afwezig.tone };
   });
   // Wie rijdt er nú? Zelfde filter als de teller op de tegel — over álle
   // shifts, want een nachtdienst van gisteren kan nu nog bezig zijn. De
   // tijden tonen alleen de segmenten die op dit moment lopen.
   const drivingNow = groupShiftsByDriver(
-    shifts.filter((s) => isShiftActiveAt(s, now) && !leaveTodayById.has(String(s.driverId))),
+    shifts.filter((s) => isShiftActiveAt(s, now) && !afwezigOpDag(String(s.driverId), s.date)),
   );
   const availableToday = users
     .filter(isRealDriver)
@@ -472,20 +497,24 @@ export function PlannerDashboardWidgets({
         </div>
         {/* Ziekmelding komt telefonisch binnen tijdens de rit, dus de planner
             moet er altijd bij kunnen — vandaar hier en niet achter een menu.
-            Bewust ingetogen: zelfde pilvorm en hoogte als de statuspil, maar
-            in slate. Het is een ingang, geen alarm; de rode toon hoort bij de
-            melding zélf, niet bij de knop ernaartoe. */}
+            Zelfde kleur en vorm als de "Open taken"-statuspil (keuze Jarno
+            04-08): de enige échte actie in de kop mag niet stiller zijn dan de
+            niet-klikbare readout ernaast. De pil blijft visueel gelijk in
+            hoogte met de statuspil; het raakvlak wordt met een onzichtbare
+            after-rand opgerekt tot ±44 px voor duimen (Apple HIG). */}
         {onSickReport && (
           <button
+            ref={sickTriggerRef}
             type="button"
+            aria-haspopup="dialog"
             onClick={() => {
               setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
               setSickError('');
               setShowSickModal(true);
             }}
-            className="ios-pressable inline-flex w-fit items-center gap-1.5 rounded-full border border-slate-200 px-3 py-1.5 text-[11px] font-semibold text-slate-500 transition-colors hover:border-slate-300 hover:text-slate-700"
+            className="ios-pressable relative inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
           >
-            <AlertTriangle size={12} className="text-slate-400" />
+            <AlertTriangle size={12} className="text-amber-600" />
             Ziek melden
           </button>
         )}
@@ -516,7 +545,7 @@ export function PlannerDashboardWidgets({
           label="Vandaag ingepland"
           value={driversActiveToday}
           suffix={totalDrivers > 0 ? ` / ${totalDrivers}` : undefined}
-          sub="chauffeurs met dienst"
+          sub={ingeplandAfwezig > 0 ? `waarvan ${ingeplandAfwezig} afwezig gemeld` : 'chauffeurs met dienst'}
           onClick={() => setShowScheduled(true)}
         />
         <OpsStat
@@ -531,7 +560,7 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="md:col-span-3 xl:col-span-1"
           icon={<CalendarClock size={16} />}
-          tone={todayAbsent.some((a) => a.isSick) ? 'amber' : 'slate'}
+          tone={todayAbsent.some((a) => a.isSick) ? 'rose' : 'slate'}
           label="Vandaag afwezig"
           value={todayAbsent.length}
           sub={todayAbsent.length === 0
@@ -835,7 +864,7 @@ export function PlannerDashboardWidgets({
           niet via DashboardListModal (die is voor lijsten). */}
       <Modal
         open={showSickModal}
-        onClose={() => setShowSickModal(false)}
+        onClose={closeSickModal}
         maxWidth="sm"
         className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0"
       >
@@ -851,7 +880,7 @@ export function PlannerDashboardWidgets({
           </div>
           <button
             type="button"
-            onClick={() => setShowSickModal(false)}
+            onClick={closeSickModal}
             aria-label="Sluiten"
             className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-white/5"
           >
@@ -870,7 +899,7 @@ export function PlannerDashboardWidgets({
             setIsSubmittingSick(true);
             const ok = await onSickReport({ userId: sickForm.userId, startDate, endDate, comment: sickForm.comment })
               .finally(() => setIsSubmittingSick(false));
-            if (ok) setShowSickModal(false);
+            if (ok) closeSickModal();
           }}
           className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
@@ -930,7 +959,7 @@ export function PlannerDashboardWidgets({
           </p>
           <button
             type="submit"
-            disabled={!sickForm.userId || isSubmittingSick}
+            disabled={isSubmittingSick}
             className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}
@@ -945,19 +974,23 @@ export function PlannerDashboardWidgets({
  *  Bewust zónder hover-highlight: deze rijen zijn niet klikbaar, en in de
  *  Beschikbaar-popup betekent diezelfde highlight "tik = bellen". */
 /** Waar in zijn dag zit deze chauffeur: bezig · moet nog beginnen · klaar —
- *  of afwezig gemeld (ziek apart, dat vraagt actie van de planner). */
-type AftelTone = 'bezig' | 'straks' | 'klaar' | 'ziek' | 'afwezig';
+ *  of afwezig gemeld, uitgesplitst per soort zodat de kleur de toestand draagt. */
+type AftelTone = 'bezig' | 'straks' | 'klaar' | 'ziek' | 'verlof' | 'verlet';
 
-/** Toon van de aftelling: amber blijft voorbehouden aan wie nú rijdt, zodat die
- *  kleur op het hele dashboard hetzelfde betekent. "over …" en "afgelopen" zijn
- *  bijschrift, geen signaal, en blijven dus grijs — steeds een tint lichter.
- *  Ziek is rose: zelfde signaalkleur als de afwezig-tegel en de rijen daar. */
+/** Toon van de aftelling. Merk-oker blijft voorbehouden aan wie nú rijdt,
+ *  zodat die kleur op het hele dashboard hetzelfde betekent; "over …" en
+ *  "afgelopen" zijn bijschrift en blijven grijs (allebei slate-500 —
+ *  slate-400 haalde op 11 px geen leesbaar contrast). De afwezig-tonen
+ *  volgen de statuskleurtaal uit lib/statusColors: ziekte rose, verlof
+ *  emerald, klein verlet blue — "verlof" en "over 1u" zijn zo ook op kleur
+ *  te onderscheiden (komt-niet vs. komt-nog). */
 const AFTEL_TOON: Record<AftelTone, string> = {
   bezig: 'text-oker-700',
   straks: 'text-slate-500',
-  klaar: 'text-slate-400',
+  klaar: 'text-slate-500',
   ziek: 'text-rose-600 dark:text-rose-400',
-  afwezig: 'text-slate-500',
+  verlof: 'text-emerald-600 dark:text-emerald-400',
+  verlet: 'text-blue-600 dark:text-blue-400',
 };
 
 function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; segs: string[]; remaining?: string; remainingTone?: AftelTone }[]; emptyText: string }) {

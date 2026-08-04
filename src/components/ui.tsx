@@ -117,7 +117,7 @@ export function ConfirmationModal({
                   onConfirm();
                   onClose();
                 }}
-                className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'text-white bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'text-slate-950 bg-amber-500 hover:bg-amber-400 shadow-amber-500/20')}
+                className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'text-white bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'text-slate-950 bg-oker-500 hover:bg-oker-400 shadow-oker-500/20')}
               >
                 {confirmText}
               </button>

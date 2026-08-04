@@ -22,7 +22,7 @@ export function BrandLogo({
   tone?: 'licht' | 'donker';
   className?: string;
 }) {
-  const letters = tone === 'donker' ? '#F7F3EA' : '#0D0D0F';
+  const letters = tone === 'donker' ? '#F7F3EA' : 'var(--color-slate-900, #0D0D0F)';
   return (
     <svg
       viewBox="0 0 620 240"
@@ -33,7 +33,7 @@ export function BrandLogo({
       className={className}
     >
       <g transform="translate(81.2 23.2) scale(0.86)">
-        <path d="M0 0H43L112 122L185 0H228L130 160H102L0 0Z" fill="#E8A33D" />
+        <path d="M0 0H43L112 122L185 0H228L130 160H102L0 0Z" fill="var(--color-oker-500, #E8A33D)" />
         <path d="M234 0H270L252 62H342L360 0H396L350 160H314L332 96H242L224 160H188L234 0Z" fill={letters} />
         <path fill={letters} fillRule="evenodd" d="M385 0H473C509 0 530 16 527 41C525 59 515 71 497 78C519 84 531 98 529 121C527 147 507 160 471 160H338L385 0ZM397 34H469C482 34 490 40 489 49C488 58 480 63 467 63H389L397 34ZM379 95H475C490 95 498 101 497 111C496 121 487 126 472 126H370L379 95Z" />
       </g>

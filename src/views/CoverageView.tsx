@@ -430,11 +430,17 @@ export function CoverageView() {
                   {ok ? (
                     <span className="text-xs font-medium text-emerald-600 inline-flex items-center gap-1"><Check size={13} /> volledig gedekt</span>
                   ) : (
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex flex-wrap gap-2">
                       {d.missing.map((svc) => {
                         // Gat door een gemelde afwezigheid: toon wie uitviel en
                         // waarom ("4407 · Pascal Duysburgh · ziek"). Een dienst
                         // die nooit toegewezen was, blijft een kale chip.
+                        // Vorm: min-h 36px + gap-2 — de oude 20px-chips met
+                        // 6px ertussen waren op een telefoon niet raakbaar.
+                        // De NAAM truncate't, de REDEN nooit (shrink-0): de
+                        // reden was juist de toevoeging. Redenkleur volgt de
+                        // statuskleurtaal: ziek rose, verlof/verlet slate —
+                        // rood blijft van het gat zelf, niet van de persoon.
                         const info = d.uitval?.[normalizeCode(svc)];
                         return (
                           <button
@@ -442,11 +448,14 @@ export function CoverageView() {
                             type="button"
                             onClick={() => setPick({ date: d.date, code: svc })}
                             title="Klik om te zien wie vrij is"
-                            className="inline-flex max-w-full items-center gap-1 rounded-md bg-red-100 text-red-700 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
+                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-[11px] font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer dark:text-red-300"
                           >
-                            {svc}
+                            <span className="tabular-nums">{svc}</span>
                             {info && (
-                              <span className="min-w-0 truncate font-medium text-red-600/80">· {info.name} · {info.reason}</span>
+                              <span className="flex min-w-0 items-baseline gap-1 font-medium">
+                                <span className="min-w-0 truncate text-red-700/90 dark:text-red-300/80">· {info.name}</span>
+                                <span className={cn('shrink-0', info.reason === 'ziek' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-300')}>· {info.reason}</span>
+                              </span>
                             )}
                           </button>
                         );

@@ -14,6 +14,9 @@ export const STAT_TONES = {
   emerald: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400',
   red: 'bg-red-500/12 text-red-600 dark:text-red-400',
   amber: 'bg-amber-500/12 text-amber-600 dark:text-amber-400',
+  // Ziekte volgt de statuskleurtaal (lib/statusColors): rose, niet amber —
+  // anders betekende ziek op de tegel iets anders dan in de rijen eronder.
+  rose: 'bg-rose-500/12 text-rose-600 dark:text-rose-400',
   oker: 'bg-oker-500/15 text-oker-600 dark:text-oker-400',
   blue: 'bg-blue-500/12 text-blue-600 dark:text-blue-400',
   slate: 'bg-slate-500/12 text-slate-600 dark:text-slate-300',
