@@ -208,15 +208,31 @@ export function PlannerDashboardWidgets({
   const greeting = getDaypartGreeting(now);
   const isAdmin = currentUser.role === 'admin';
 
+  // Goedgekeurde afwezigheid die vandáág loopt, op user-id. Stuurt drie
+  // dingen: het label in de popup "Vandaag ingepland" (iemand die ziek gemeld
+  // is ná de Excel-import staat daar anders gewoon met een aftelling), het
+  // wegfilteren uit "Chauffeurs actief" (wie ziek thuis zit rijdt niet, ook
+  // al loopt zijn dienst volgens de planning), en de afwezig-tegel verderop.
+  const ABSENCE_LABEL: Record<string, string> = { betaald_verlof: 'Verlof', klein_verlet: 'Klein verlet', ziekte: 'Ziek' };
+  const leaveTodayById = new Map<string, { label: string; isSick: boolean }>();
+  for (const l of leaveRequests) {
+    if (l.status === 'approved' && l.startDate <= today && today <= l.endDate) {
+      leaveTodayById.set(String(l.userId), { label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' });
+    }
+  }
+
   // === Operationele kerncijfers (alles uit echte data) ===
   const driversActiveToday = new Set(
     shifts.filter((s) => s.date === today).map((s) => String(s.driverId)),
   ).size;
   // Wie zit er nú effectief op de bus? Actuele tijd vs. de segmenttijden
   // (incl. nachtdiensten van gisteren die nog lopen); de 60s-klok hierboven
-  // houdt dit cijfer live. Gesplitste diensten: pauze telt niet mee.
+  // houdt dit cijfer live. Gesplitste diensten: pauze telt niet mee, en wie
+  // vandaag afwezig gemeld is telt níét als rijdend.
   const driversDrivingNow = new Set(
-    shifts.filter((s) => isShiftActiveAt(s, now)).map((s) => String(s.driverId)),
+    shifts
+      .filter((s) => isShiftActiveAt(s, now) && !leaveTodayById.has(String(s.driverId)))
+      .map((s) => String(s.driverId)),
   ).size;
   // Noemer van "Vandaag ingepland X / N": alleen inzetbare chauffeurs, zelfde
   // afbakening als /api/availability en de Beschikbaar-tegel — anders telt
@@ -275,7 +291,6 @@ export function PlannerDashboardWidgets({
   // Wie is er vandaag afwezig? Twee bronnen: goedgekeurde aanvragen uit de
   // verlof-module + de afwezigheidscodes uit de geïmporteerde matrix
   // (gededuped op naam — module-aanvraag wint, die heeft het rijkere label).
-  const ABSENCE_LABEL: Record<string, string> = { betaald_verlof: 'Verlof', klein_verlet: 'Klein verlet', ziekte: 'Ziek' };
   const moduleAbsent = leaveRequests
     .filter((l) => l.status === 'approved' && l.startDate <= today && today <= l.endDate)
     .map((l) => ({ id: l.id, name: userNameById(l.userId), label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' }));
@@ -381,11 +396,20 @@ export function PlannerDashboardWidgets({
       })
       .sort((a, b) => lineNum(a.lines) - lineNum(b.lines) || a.lines.localeCompare(b.lines));
   };
-  const scheduledToday = groupShiftsByDriver(todayShifts);
+  // Wie ná de import afwezig gemeld is, staat in de matrix (en dus in de
+  // planning) nog op zijn dienst. De aftelling zou dan doodleuk "nog 2u"
+  // tonen voor iemand die ziek thuis zit — vervang die door het afwezig-label.
+  const scheduledToday = groupShiftsByDriver(todayShifts).map((d) => {
+    const afwezig = leaveTodayById.get(d.id);
+    if (!afwezig) return d;
+    return { ...d, remaining: afwezig.label.toLowerCase(), remainingTone: (afwezig.isSick ? 'ziek' : 'afwezig') as AftelTone };
+  });
   // Wie rijdt er nú? Zelfde filter als de teller op de tegel — over álle
   // shifts, want een nachtdienst van gisteren kan nu nog bezig zijn. De
   // tijden tonen alleen de segmenten die op dit moment lopen.
-  const drivingNow = groupShiftsByDriver(shifts.filter((s) => isShiftActiveAt(s, now)));
+  const drivingNow = groupShiftsByDriver(
+    shifts.filter((s) => isShiftActiveAt(s, now) && !leaveTodayById.has(String(s.driverId))),
+  );
   const availableToday = users
     .filter(isRealDriver)
     .filter((u) =>
@@ -920,16 +944,20 @@ export function PlannerDashboardWidgets({
 /** Rijenlijst voor de dienst-popups: naam + tijden links, dienst-chip rechts.
  *  Bewust zónder hover-highlight: deze rijen zijn niet klikbaar, en in de
  *  Beschikbaar-popup betekent diezelfde highlight "tik = bellen". */
-/** Waar in zijn dag zit deze chauffeur: bezig · moet nog beginnen · klaar. */
-type AftelTone = 'bezig' | 'straks' | 'klaar';
+/** Waar in zijn dag zit deze chauffeur: bezig · moet nog beginnen · klaar —
+ *  of afwezig gemeld (ziek apart, dat vraagt actie van de planner). */
+type AftelTone = 'bezig' | 'straks' | 'klaar' | 'ziek' | 'afwezig';
 
 /** Toon van de aftelling: amber blijft voorbehouden aan wie nú rijdt, zodat die
  *  kleur op het hele dashboard hetzelfde betekent. "over …" en "afgelopen" zijn
- *  bijschrift, geen signaal, en blijven dus grijs — steeds een tint lichter. */
+ *  bijschrift, geen signaal, en blijven dus grijs — steeds een tint lichter.
+ *  Ziek is rose: zelfde signaalkleur als de afwezig-tegel en de rijen daar. */
 const AFTEL_TOON: Record<AftelTone, string> = {
   bezig: 'text-oker-700',
   straks: 'text-slate-500',
   klaar: 'text-slate-400',
+  ziek: 'text-rose-600 dark:text-rose-400',
+  afwezig: 'text-slate-500',
 };
 
 function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; segs: string[]; remaining?: string; remainingTone?: AftelTone }[]; emptyText: string }) {

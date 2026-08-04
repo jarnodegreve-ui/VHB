@@ -725,11 +725,12 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
 
     const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
-    const [rows, users, services, codes] = await Promise.all([
+    const [rows, users, services, codes, leave] = await Promise.all([
       getPlanningMatrixRows(),
       getUsersData(),
       getServicesData(),
       getPlanningCodesData(),
+      getLeaveData(),
     ]);
 
     const monthRows = rows
@@ -823,6 +824,38 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       }
     }
 
+    // Goedgekeurde afwezigheden uit de verlof-module (ziekmelding incluis)
+    // overschrijven de matrix-cel. De Excel-import is een momentopname; wie
+    // dáárna ziek gemeld wordt, stond in het maandrooster nog gewoon op zijn
+    // dienst — terwijl de ziekmeldings-mail belooft dat de dienst als
+    // onbeschikbaar zichtbaar is. De overlay gebruikt de bestaande matrix-
+    // codes (ziek/bv/kv), dus de weergave is identiek aan een code die via
+    // de Excel zelf binnenkwam. Overschrijven per dag, alleen op dagen die
+    // een matrix-rij hebben — kolommen zonder rij rendert de UI toch niet.
+    const LEAVE_CODE: Record<string, string> = { ziekte: "ziek", betaald_verlof: "bv", klein_verlet: "kv" };
+    const LEAVE_FALLBACK: Record<string, { kind: string; label: string }> = {
+      ziekte: { kind: "absence", label: "Ziek" },
+      betaald_verlof: { kind: "leave", label: "Betaald Verlof" },
+      klein_verlet: { kind: "absence", label: "Klein Verlet" },
+    };
+    const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
+    for (const l of leave as any[]) {
+      if (l?.status !== "approved") continue;
+      const id = String(l.userId ?? "");
+      if (!chauffeurIds.has(id)) continue;
+      const code = LEAVE_CODE[String(l.type)] ?? "ziek";
+      const r = resolve(code) ?? LEAVE_FALLBACK[String(l.type)] ?? LEAVE_FALLBACK.ziekte;
+      // resolve() kan 'unknown' geven als de code niet in planning_codes
+      // staat — dan wint de fallback, anders leest de cel als 'Onbekende code'.
+      const cel = r.kind === "unknown" ? { ...LEAVE_FALLBACK[String(l.type)] ?? LEAVE_FALLBACK.ziekte, segments: [] as string[] } : r;
+      for (const date of dates) {
+        if (String(l.startDate) <= date && date <= String(l.endDate)) {
+          if (!cells[id]) cells[id] = {};
+          cells[id][date] = { code, kind: cel.kind, label: cel.label, segments: [] };
+        }
+      }
+    }
+
     res.json({ month, dates, drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })), cells });
   } catch (err: any) {
     console.error("Error computing month planning:", err);
@@ -912,15 +945,29 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
       return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
     }
-    const [stored, rows] = await Promise.all([
+    const [stored, rows, usersForLeave, leaveAll] = await Promise.all([
       getCoverageExpectations(),
       getPlanningMatrixRows(),
+      getUsersData(),
+      getLeaveData(),
     ]);
     // Zelfde weekdag-toewijzing + uitzonderingen als bij het instellen, zodat
     // het dag-type per dag consistent bepaald wordt.
     const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
     const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
     const overrides = parseOverrides(stored[COVERAGE_OVERRIDES_KEY]);
+    // Goedgekeurde afwezigheden: de matrix-cel van die chauffeur telt die dag
+    // niet mee als invulling — zijn dienst valt dus (terecht) als gat uit de
+    // dekking. Matrix-cellen zijn op náám, leave op user-id; zelfde
+    // volgorde-onafhankelijke naam-resolutie als /api/month-planning.
+    const approvedLeaveAll = (leaveAll as any[]).filter((l) => l?.status === "approved");
+    const idByNameToken = new Map<string, string>();
+    for (const u of usersForLeave as any[]) {
+      if (u?.role !== "chauffeur") continue;
+      const token = toLookupToken(String(u.name ?? ""));
+      idByNameToken.set(token, String(u.id));
+      idByNameToken.set(token.split(/\s+/).filter(Boolean).sort().join(" "), String(u.id));
+    }
     const inRange = rows
       .filter((r: any) => {
         const d = String(r.source_date ?? "");
@@ -928,12 +975,24 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       })
       .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
     const days: DayGap[] = inRange.map((r: any) => {
-      const dayType = resolveDayType(r.day_type, String(r.source_date ?? ""), weekdays, overrides);
+      const date = String(r.source_date ?? "");
+      const dayType = resolveDayType(r.day_type, date, weekdays, overrides);
       const expected = stored[dayType] || [];
+      const afwezigIds = new Set(
+        approvedLeaveAll
+          .filter((l) => String(l.startDate) <= date && date <= String(l.endDate))
+          .map((l) => String(l.userId)),
+      );
       const assignmentValues = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
-        ? Object.values(r.assignments).map((v) => String(v))
+        ? Object.entries(r.assignments)
+            .filter(([naam]) => {
+              const token = toLookupToken(String(naam));
+              const id = idByNameToken.get(token) ?? idByNameToken.get(token.split(/\s+/).filter(Boolean).sort().join(" "));
+              return !(id && afwezigIds.has(id));
+            })
+            .map(([, v]) => String(v))
         : [];
-      return computeDayGap(String(r.source_date), dayType, expected, assignmentValues);
+      return computeDayGap(date, dayType, expected, assignmentValues);
     });
     res.json({ from, to, days });
   } catch (err) {
