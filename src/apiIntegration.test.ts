@@ -450,6 +450,15 @@ describe('PII-scoping voor chauffeurs', () => {
   });
 
   it('een planner registreert een ziekmelding: direct goedgekeurd ziekte-verlof + push/mail', async () => {
+    // Diensten in de ziekteperiode: één gesplitste dienst op 02/09 (twee
+    // planning-rijen, zelfde nummer) en een gewone op 03/09 — de mail hoort
+    // ze per dag gededupliceerd op te sommen.
+    mem.planning.push(
+      { id: 'zk-1', driverId: '4', date: '2026-09-02', line: '4407' },
+      { id: 'zk-2', driverId: '4', date: '2026-09-02', line: '4407' },
+      { id: 'zk-3', driverId: '4', date: '2026-09-03', line: '4408' },
+      { id: 'zk-4', driverId: '3', date: '2026-09-02', line: '4409' }, // collega — hoort er níét in
+    );
     const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-02', endDate: '2026-09-03' } });
     expect(res.status).toBe(200);
     expect(res.json.leave).toMatchObject({ userId: '4', type: 'ziekte', status: 'approved', startDate: '2026-09-02', endDate: '2026-09-03' });
@@ -464,6 +473,21 @@ describe('PII-scoping voor chauffeurs', () => {
     // weggefilterd terwijl de directe testmail wél aankwam (04-08).
     const sickMails = mem.emailsSent.filter((m) => (m.context ?? '').startsWith('sick:'));
     expect(sickMails.map((m) => m.to).sort()).toEqual([['admin@vhb.be'], ['planner@vhb.be']]);
+    // De opengevallen diensten staan in de mail: per dag het nummer, de
+    // gesplitste dienst één keer, de dienst van de collega niet.
+    const body = sickMails[0]?.text ?? '';
+    expect(body).toContain('Openstaande dienst(en):');
+    expect(body).toMatch(/wo 2 sep.* — 4407/);
+    expect(body).toMatch(/do 3 sep.* — 4408/);
+    expect(body).not.toContain('4407 / 4407');
+    expect(body).not.toContain('4409');
+  });
+
+  it('ziekmelding zonder diensten in de periode zegt dat expliciet in de mail', async () => {
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-10-05' } });
+    expect(res.status).toBe(200);
+    const mail = mem.emailsSent.find((m) => (m.context ?? '').startsWith('sick:'));
+    expect(mail?.text).toContain('Geen ingeplande diensten in deze periode.');
   });
 
   it('ziekmelding zonder chauffeur wordt geweigerd (400)', async () => {

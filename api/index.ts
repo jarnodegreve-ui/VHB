@@ -3374,6 +3374,31 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     const period = startDate === endDate ? startDate : `${startDate} t/m ${endDate}`;
     await logActivity(req, "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period} (door ${req.appUser?.name}).`, { type: "leave", id: record.id });
 
+    // Welke diensten vallen door deze ziekte open? Per dag van de periode de
+    // ingeplande dienst(en) van de chauffeur — dat is wat de planner meteen
+    // wil weten (verzoek Jarno 04-08). Gesplitste diensten = meerdere
+    // planning-rijen met hetzelfde nummer → dedupliceren per dag.
+    const zichtMaanden = Array.from(new Set([startDate.slice(0, 7), endDate.slice(0, 7)]));
+    const planningChunks = await Promise.all(zichtMaanden.map((m) => getPlanningData({ driverId: forUserId, monthIso: m })));
+    const dagDiensten = new Map<string, string[]>(); // datum → dienstnummers
+    for (const s of planningChunks.flat() as any[]) {
+      // Zelf óók op chauffeur filteren, niet alleen op het storage-filter
+      // vertrouwen — een dienst van een collega in deze mail zet de planner
+      // op het verkeerde been.
+      if (String(s.driverId ?? "") !== forUserId) continue;
+      const d = String(s.date ?? "");
+      if (d < startDate || d > endDate) continue;
+      const nummer = String(s.line ?? "").trim();
+      if (!nummer) continue;
+      const lijst = dagDiensten.get(d) ?? [];
+      if (!lijst.includes(nummer)) dagDiensten.set(d, [...lijst, nummer]);
+    }
+    const dagLabel = (iso: string) =>
+      new Date(`${iso}T00:00:00`).toLocaleDateString("nl-BE", { weekday: "short", day: "numeric", month: "short" });
+    const openDiensten = [...dagDiensten.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([d, nummers]) => ({ label: dagLabel(d), nummers: nummers.join(" / ") }));
+
     // De hele planning waarschuwen. Push gaat niet naar wie het zelf
     // registreerde (een melding over je eigen klik is ruis), maar de mail
     // wél — die dient als vastlegging in de mailbox, en de registrerende
@@ -3393,13 +3418,22 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     // planners die elkaars adres kennen is los versturen veiliger én leest de
     // mail normaal. Volgorde: één voor één, fouten loggen maar niet blokkeren.
     const recipients = planningRollen.filter((u) => u.email).map((u) => u.email as string);
+    // Openstaande diensten in de mail (zelfde term als het scherm): "do 6 aug — 4407". Geen diensten in
+    // de periode (ziek op vrije dagen) → dat óók gewoon zeggen, dan hoeft de
+    // planner het rooster niet open te doen om niets te vinden.
+    const dienstenTekst = openDiensten.length > 0
+      ? `\n\nOpenstaande dienst(en):\n${openDiensten.map((o) => `- ${o.label} — ${o.nummers}`).join("\n")}\n\nDeze staan nu als onbeschikbaar in de Maandplanning en Dekking.`
+      : "\n\nGeen ingeplande diensten in deze periode.";
+    const dienstenHtml = openDiensten.length > 0
+      ? `<p><strong>Openstaande dienst(en):</strong></p><ul>${openDiensten.map((o) => `<li>${escapeHtml(o.label)} — ${escapeHtml(o.nummers)}</li>`).join("")}</ul><p>Deze staan nu als onbeschikbaar in de Maandplanning en Dekking.</p>`
+      : `<p>Geen ingeplande diensten in deze periode.</p>`;
     for (const adres of recipients) {
       await sendEmail({
         to: [adres],
         context: `sick:${forUserId}`,
         subject: `Ziekmelding — ${target.name} (${period})`,
-        text: `${target.name} is ziek gemeld voor ${period}.${comment ? `\n\nToelichting: ${comment}` : ""}\n\nDe dienst(en) staan nu als onbeschikbaar in de Maandplanning en Dekking.`,
-        html: `<p><strong>${escapeHtml(target.name)}</strong> is ziek gemeld voor <strong>${escapeHtml(period)}</strong>.</p>${comment ? `<p>Toelichting: ${escapeHtml(comment)}</p>` : ""}<p>De dienst(en) staan nu als onbeschikbaar in de Maandplanning en Dekking.</p>`,
+        text: `${target.name} is ziek gemeld voor ${period}.${comment ? `\n\nToelichting: ${comment}` : ""}${dienstenTekst}`,
+        html: `<p><strong>${escapeHtml(target.name)}</strong> is ziek gemeld voor <strong>${escapeHtml(period)}</strong>.</p>${comment ? `<p>Toelichting: ${escapeHtml(comment)}</p>` : ""}${dienstenHtml}`,
       });
     }
 
