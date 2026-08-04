@@ -458,11 +458,12 @@ describe('PII-scoping voor chauffeurs', () => {
     // Push naar de rest van de planning (behalve de melder = planner, id 2)…
     const sickPush = mem.pushesSent.find((p) => p.payload.title === 'Ziekmelding');
     expect(sickPush?.userIds).toEqual(['1']);
-    // …maar de mail gaat naar álle planner/admin-adressen, de melder incluis:
-    // die dient als vastlegging in de mailbox (verzoek Jarno 04-08).
-    const sickMail = mem.emailsSent.find((m) => (m.context ?? '').startsWith('sick:'));
-    expect(sickMail?.to).toContain('planner@vhb.be');
-    expect(sickMail?.to).toContain('admin@vhb.be');
+    // …maar de mail gaat naar álle planner/admin-adressen, de melder incluis
+    // (verzoek Jarno 04-08) — en PER PERSOON een eigen mail, rechtstreeks in
+    // de To-regel. De eerdere BCC-batch werd door Microsoft 365 stilletjes
+    // weggefilterd terwijl de directe testmail wél aankwam (04-08).
+    const sickMails = mem.emailsSent.filter((m) => (m.context ?? '').startsWith('sick:'));
+    expect(sickMails.map((m) => m.to).sort()).toEqual([['admin@vhb.be'], ['planner@vhb.be']]);
   });
 
   it('ziekmelding zonder chauffeur wordt geweigerd (400)', async () => {
