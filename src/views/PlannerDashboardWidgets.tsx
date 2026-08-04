@@ -961,8 +961,18 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                 met de minuut-klok van het dashboard. Dit staat alleen op het
                 planner/admin-scherm: PlannerDashboardWidgets rendert niet voor
                 een chauffeur. */}
+            {/* pr-2 spiegelt de RECHTER binnenmarge van ServiceChip. Zonder dat
+                eindigt de aftelling 8 px verder naar rechts dan de cijfers ín
+                de pil: de pilrand is een vorm, de tekst is de lijn waar je oog
+                op afgaat, en die twee lagen dus niet gelijk.
+                De -ml-2 heft de padding op in de breedteberekening: de kolom
+                blijft even breed als voorheen, alleen de tekst schuift 8 px
+                naar links. Zonder die compensatie gaat de ruimte van de
+                dienstblokken af en wipt een dienst van drie delen naar een
+                tweede regel (rijhoogte 59 → 75 px). Marges en geen transform:
+                een extra compositing-laag geeft in Safari rasterrandjes. */}
             {d.remaining && (
-              <span className={cn('whitespace-nowrap text-[11px] font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
+              <span className={cn('-ml-2 whitespace-nowrap pr-2 text-[11px] font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
                 {d.remaining}
               </span>
             )}
