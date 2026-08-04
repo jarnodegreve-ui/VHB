@@ -162,7 +162,7 @@ export const minutesUntilShiftStart = (
  * Reken hierbij op tabular-nums in de weergave: zonder gelijke cijferbreedte
  * verschuift de tekst nog steeds elke minuut mee.
  */
-export const formatDuration = (minuten: number): string => {
+const formatDuration = (minuten: number): string => {
   const u = Math.floor(minuten / 60);
   const m = minuten % 60;
   if (u === 0) return `${m}min`;

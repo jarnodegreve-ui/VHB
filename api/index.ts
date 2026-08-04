@@ -109,10 +109,14 @@ import {
 
 dotenv.config();
 
-console.log("Server starting in environment:", process.env.NODE_ENV);
-console.log("Supabase URL present:", !!process.env.SUPABASE_URL);
-console.log("Supabase Key present:", !!process.env.SUPABASE_ANON_KEY);
-console.log("Supabase Service Role present:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+// Env-dump alleen buiten productie: op serverless herhaalt dit zich bij elke
+// koude start en verdunt het de echte fouten in de logs.
+if (process.env.NODE_ENV !== "production") {
+  console.log("Server starting in environment:", process.env.NODE_ENV);
+  console.log("Supabase URL present:", !!process.env.SUPABASE_URL);
+  console.log("Supabase Key present:", !!process.env.SUPABASE_ANON_KEY);
+  console.log("Supabase Service Role present:", !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
 // Zonder eigen secret is de agenda-feed uit (fail-closed, zie CAL_SECRET).
 // Luid loggen: dit viel vroeger niet op omdat hij stil terugviel op de
 // service-role-key en dus altijd "werkte".
@@ -151,10 +155,14 @@ app.use(express.json({ limit: '5mb' }));
 // limiet deelt. Zie rateLimit.ts voor de serverless-nuance.
 app.use("/api", rateLimitMiddleware);
 
-app.use((req, res, next) => {
-  console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
-  next();
-});
+// Request-logging alleen buiten productie — Vercel logt method/pad/status
+// zelf al per aanroep, dus in productie was dit louter dubbel geluid.
+if (process.env.NODE_ENV !== "production") {
+  app.use((req, _res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    next();
+  });
+}
 
 // OCPI 2.2.1 (eMSP, read-only monitoring van ChargEye) — eigen token-auth,
 // los van de Supabase-auth. Zie api/ocpi.ts.
