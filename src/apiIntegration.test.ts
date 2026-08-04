@@ -177,7 +177,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       const returnMoved = hasReturn ? move(swap.returnDate, swap.returnCode, swap.requesterId, swap.targetDriverId) : null;
       return { offeredMoved, returnMoved };
     },
-    getPlanningData: async () => mem.planning,
+    getPlanningData: async (f?: { driverId?: string; monthIso?: string }) =>
+      mem.planning.filter((s: any) =>
+        (!f?.driverId || String(s.driverId) === String(f.driverId)) &&
+        (!f?.monthIso || String(s.date ?? '').startsWith(`${f.monthIso}-`))),
     getServicesData: async () => mem.services,
     saveServicesData: async (data: any[]) => { mem.services = data; },
     getUpdatesData: async () => mem.updates,
@@ -493,6 +496,65 @@ describe('PII-scoping voor chauffeurs', () => {
   it('ziekmelding zonder chauffeur wordt geweigerd (400)', async () => {
     const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { startDate: '2026-09-02' } });
     expect(res.status).toBe(400);
+  });
+
+  it('ziekmelding over drie maanden somt ook de middelste maand op in de mail', async () => {
+    mem.planning.push(
+      { id: 'mnd-1', driverId: '4', date: '2026-09-25', line: '4401' },
+      { id: 'mnd-2', driverId: '4', date: '2026-10-10', line: '4402' }, // middelste maand
+      { id: 'mnd-3', driverId: '4', date: '2026-11-03', line: '4403' },
+    );
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-20', endDate: '2026-11-05' } });
+    expect(res.status).toBe(200);
+    const body = mem.emailsSent.find((m) => (m.context ?? '').startsWith('sick:'))?.text ?? '';
+    expect(body).toContain('4401');
+    expect(body).toContain('4402');
+    expect(body).toContain('4403');
+  });
+
+  it('ziekmelding weigert onbestaande kalenderdatums en absurde periodes', async () => {
+    const kapot = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-02-31' } });
+    expect(kapot.status).toBe(400);
+    const eeuwig = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-01', endDate: '9999-12-31' } });
+    expect(eeuwig.status).toBe(400);
+    expect(mem.leave.some((l: any) => l.type === 'ziekte')).toBe(false);
+  });
+
+  it('ziekmelding weigert een tweede melding over een overlappende periode (409)', async () => {
+    const eerste = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-02', endDate: '2026-09-05' } });
+    expect(eerste.status).toBe(200);
+    const tweede = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-04', endDate: '2026-09-08' } });
+    expect(tweede.status).toBe(409);
+    expect(mem.leave.filter((l: any) => l.type === 'ziekte').length).toBe(1);
+  });
+
+  it('ziekmelding kan alleen voor een actieve chauffeur (niet voor een admin)', async () => {
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '1', startDate: '2026-09-02' } });
+    expect(res.status).toBe(400);
+    expect(mem.leave.some((l: any) => l.type === 'ziekte')).toBe(false);
+  });
+
+  it('ziekmelding herschrijft niet de hele verloftabel (raakt bestaande rijen niet aan)', async () => {
+    // Simuleer de race: een collega-beslissing die ná onze snapshot zou
+    // vallen. Omdat sick-report alleen zijn eigen record schrijft, blijft
+    // elke andere rij exact zoals hij was.
+    const voor = JSON.stringify(mem.leave);
+    const res = await api('POST', '/api/leave/sick-report', { token: 'tok-planner', body: { userId: '4', startDate: '2026-09-02' } });
+    expect(res.status).toBe(200);
+    const na = mem.leave.filter((l: any) => l.type !== 'ziekte');
+    expect(JSON.stringify(na)).toBe(voor);
+  });
+
+  it('een dienst doorgeven aan een ziek gemelde collega wordt geweigerd (409)', async () => {
+    // Chauffeur B ('4') staat in de matrix op bv voor 2026-07-08 (overname
+    // normaal toegestaan), maar is intussen via de verlofmodule ziek gemeld.
+    mem.leave.push({ id: 'l-zkr', userId: '4', startDate: '2026-07-08', endDate: '2026-07-08', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-07-07T06:00:00Z', decidedAt: '2026-07-07T06:00:00Z' });
+    const eigen = mem.swaps.filter((sw: any) => sw.requesterId === '3' || sw.targetDriverId === '3');
+    const nieuw = { id: 's-ziek', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-07-01T08:00:00Z', swapType: 'overname' };
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...eigen, nieuw] });
+    expect(res.status).toBe(409);
+    expect(String(res.json.error)).toContain('ziek');
+    expect(mem.swaps.find((sw: any) => sw.id === 's-ziek')).toBeUndefined();
   });
 
   it('GET /api/swaps geeft een chauffeur alleen ruilen waar die bij betrokken is', async () => {
@@ -1956,32 +2018,77 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(res.json.cells['4']['2026-07-15']).toMatchObject({ kind: 'service' });
   });
 
-  it('de dienst van een zieke chauffeur telt als gat in de dekking', async () => {
+  it('de dienst van een zieke chauffeur telt als gat in de dekking (vandaag/toekomst)', async () => {
+    // Toekomstige datums: de dekking past afwezigheid bewust alleen toe op
+    // vandaag en later — een gereden dag is geen gat meer (zie test hieronder).
+    mem.planningMatrix = [
+      { id: 'm-t1', source_date: '2030-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' },
+      { id: 'm-t2', source_date: '2030-07-16', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.leave = [
+      { id: 'l-t', userId: '3', startDate: '2030-07-15', endDate: '2030-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-15T06:00:00Z', decidedAt: '2030-07-15T06:00:00Z' },
+    ];
     mem.coverageExpectations = { week: ['12', '11'] };
-    const res = await api('GET', '/api/coverage-gaps?from=2026-07-15&to=2026-07-16', { token: 'tok-planner' });
+    const res = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-16', { token: 'tok-planner' });
     expect(res.status).toBe(200);
     // 15/07: Chauffeur A (dienst 12) is ziek → 12 valt open; 11 blijft gedekt.
-    const dag15 = res.json.days.find((d: any) => d.date === '2026-07-15');
+    const dag15 = res.json.days.find((d: any) => d.date === '2030-07-15');
     expect(dag15.missing).toEqual(['12']);
     expect(dag15.covered).toBe(1);
     // De tegel weet wie er uitviel en waarom.
     expect(dag15.uitval).toEqual({ '12': { name: 'Chauffeur A', reason: 'ziek' } });
     // 16/07: niemand ziek → geen gat voor 12 (11 staat die dag niet in de matrix).
-    const dag16 = res.json.days.find((d: any) => d.date === '2026-07-16');
+    const dag16 = res.json.days.find((d: any) => d.date === '2030-07-16');
     expect(dag16.missing).toEqual(['11']);
     // 11 was nooit toegewezen → géén uitval-info (kale chip in de UI).
     expect(dag16.uitval).toBeUndefined();
+  });
+
+  it('een gereden (historische) dag wordt niet met terugwerkende kracht een gat', async () => {
+    // Een achteraf ingevoerd ziektebriefje voor 15 juli (verleden): die dag ís
+    // gereden — door een invaller die nooit in de matrix is bijgewerkt. De
+    // dekking blijft hem als gedekt tonen; alleen vandaag/toekomst filtert.
+    mem.coverageExpectations = { week: ['12', '11'] };
+    const res = await api('GET', '/api/coverage-gaps?from=2026-07-15&to=2026-07-15', { token: 'tok-planner' });
+    const dag = res.json.days[0];
+    expect(dag.missing).toEqual([]);
+    expect(dag.covered).toBe(2);
+    expect(dag.uitval).toBeUndefined();
   });
 
   it('de dekking matcht de zieke ook op omgekeerde naamvolgorde', async () => {
     // De matrix schrijft "A Chauffeur" (achternaam eerst) — zelfde
     // volgorde-onafhankelijke resolutie als /api/month-planning.
     mem.planningMatrix = [
-      { id: 'm-3', source_date: '2026-07-15', day_type: 'week', assignments: { 'A Chauffeur': '12' }, raw_row: '' },
+      { id: 'm-3', source_date: '2030-07-15', day_type: 'week', assignments: { 'A Chauffeur': '12' }, raw_row: '' },
+    ];
+    mem.leave = [
+      { id: 'l-t', userId: '3', startDate: '2030-07-15', endDate: '2030-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-15T06:00:00Z', decidedAt: '2030-07-15T06:00:00Z' },
     ];
     mem.coverageExpectations = { week: ['12'] };
-    const res = await api('GET', '/api/coverage-gaps?from=2026-07-15&to=2026-07-15', { token: 'tok-planner' });
+    const res = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-15', { token: 'tok-planner' });
     expect(res.json.days[0].missing).toEqual(['12']);
+  });
+
+  it('ziekte wint van overlappend verlof in het maandrooster', async () => {
+    mem.leave = [
+      { id: 'l-bv', userId: '3', startDate: '2026-07-14', endDate: '2026-07-16', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-07-01T06:00:00Z', decidedAt: '2026-07-02T06:00:00Z' },
+      { id: 'l-zk', userId: '3', startDate: '2026-07-15', endDate: '2026-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-07-15T06:00:00Z', decidedAt: '2026-07-15T06:00:00Z' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    // Op de ziektedag wint ziek; de dag ervoor/erna blijft verlof.
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek' });
+    expect(res.json.cells['3']['2026-07-16']).toMatchObject({ code: 'bv' });
+  });
+
+  it('een leave-record met kapotte datums overschrijft niets', async () => {
+    mem.leave = [
+      { id: 'l-kapot', userId: '3', startDate: '', endDate: '2026-07-31', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-07-01T06:00:00Z' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    // Lege startdatum vergeleek vroeger als "altijd waar" en zette de hele
+    // maand op ziek; nu wordt zo'n record genegeerd.
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ kind: 'service' });
   });
 });
 

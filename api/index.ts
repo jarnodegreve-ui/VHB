@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -730,7 +730,9 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       getUsersData(),
       getServicesData(),
       getPlanningCodesData(),
-      getLeaveData(),
+      // Alleen afwezigheid die deze maand nog raakt — de volledige historiek
+      // groeit onbegrensd en is hier nooit nodig.
+      getLeaveData({ endOnOrAfter: `${month}-01` }),
     ]);
 
     const monthRows = rows
@@ -742,8 +744,6 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // strikt: accenten/interpunctie/hoofdletters genormaliseerd). Anders kreeg
     // /month-planning lege of foute cellen voor accent-/omgekeerde namen en
     // toonde een dienst met scheidingsteken als 'onbekend'.
-    const sortedNameToken = (name: string) =>
-      toLookupToken(name).split(/\s+/).filter(Boolean).sort().join(" ");
     // Groepering + volgorde per sectie (uit users.section, gezet in het
     // gebruikersbeheer — staat los van de Excel-import). Onbekende/lege sectie
     // sorteert achteraan; binnen een sectie op anciënniteit (vroegste startdatum
@@ -763,12 +763,9 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
         || seniorityKey(a.startDate).localeCompare(seniorityKey(b.startDate))
         || a.name.localeCompare(b.name),
       );
-    // Volgorde-onafhankelijke index: zowel "Jan Janssen" als "Janssen Jan" matcht.
-    const idByNameKey = new Map<string, string>();
-    for (const c of chauffeurs) {
-      idByNameKey.set(toLookupToken(c.name), c.id);
-      idByNameKey.set(sortedNameToken(c.name), c.id);
-    }
+    // Volgorde-onafhankelijke index: zowel "Jan Janssen" als "Janssen Jan"
+    // matcht; botsende sleutels vallen weg i.p.v. last-wins (zie nameIdIndex).
+    const idByNameKey = nameIdIndex(chauffeurs);
 
     // Code-resolutie — zelfde token-normalisatie als de matrix-import.
     // We geven ook label + uren-segmenten mee zodat de UI per cel een
@@ -839,17 +836,30 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       klein_verlet: { kind: "absence", label: "Klein Verlet" },
     };
     const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
-    for (const l of leave as any[]) {
-      if (l?.status !== "approved") continue;
+    // Ziekte als laatste verwerken zodat die bij overlappende records wint —
+    // "ziek tijdens verlof" moet als ziek op het rooster, niet als bv.
+    const overlayLeave = (leave as any[])
+      .filter((l) => l?.status === "approved")
+      .sort((a, b) => (String(a.type) === "ziekte" ? 1 : 0) - (String(b.type) === "ziekte" ? 1 : 0));
+    for (const l of overlayLeave) {
       const id = String(l.userId ?? "");
       if (!chauffeurIds.has(id)) continue;
-      const code = LEAVE_CODE[String(l.type)] ?? "ziek";
-      const r = resolve(code) ?? LEAVE_FALLBACK[String(l.type)] ?? LEAVE_FALLBACK.ziekte;
-      // resolve() kan 'unknown' geven als de code niet in planning_codes
-      // staat — dan wint de fallback, anders leest de cel als 'Onbekende code'.
-      const cel = r.kind === "unknown" ? { ...LEAVE_FALLBACK[String(l.type)] ?? LEAVE_FALLBACK.ziekte, segments: [] as string[] } : r;
+      // Onbekend (toekomstig) verloftype: niets tonen. Een fallback naar
+      // "ziek" zou een valse gezondheidsstatus publiceren.
+      const code = LEAVE_CODE[String(l.type)];
+      if (!code) continue;
+      // Records met kapotte of omgekeerde datums overslaan: een lege
+      // startdatum vergeleek anders als "altijd waar" en overschreef de
+      // hele maand.
+      const start = String(l.startDate ?? "");
+      const eind = String(l.endDate ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(eind) || start > eind) continue;
+      // resolve() kent de code alleen als hij in planning_codes staat; zo
+      // niet, dan wint het fallback-label (anders las de cel "Onbekende code").
+      const r = resolve(code);
+      const cel = !r || r.kind === "unknown" ? LEAVE_FALLBACK[String(l.type)] : r;
       for (const date of dates) {
-        if (String(l.startDate) <= date && date <= String(l.endDate)) {
+        if (start <= date && date <= eind) {
           if (!cells[id]) cells[id] = {};
           cells[id][date] = { code, kind: cel.kind, label: cel.label, segments: [] };
         }
@@ -949,7 +959,8 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       getCoverageExpectations(),
       getPlanningMatrixRows(),
       getUsersData(),
-      getLeaveData(),
+      // Alleen afwezigheid die het gevraagde bereik nog raakt.
+      getLeaveData({ endOnOrAfter: from }),
     ]);
     // Zelfde weekdag-toewijzing + uitzonderingen als bij het instellen, zodat
     // het dag-type per dag consistent bepaald wordt.
@@ -958,18 +969,17 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
     const overrides = parseOverrides(stored[COVERAGE_OVERRIDES_KEY]);
     // Goedgekeurde afwezigheden: de matrix-cel van die chauffeur telt die dag
     // niet mee als invulling — zijn dienst valt dus (terecht) als gat uit de
-    // dekking. Matrix-cellen zijn op náám, leave op user-id; zelfde
-    // volgorde-onafhankelijke naam-resolutie als /api/month-planning.
+    // dekking. Matrix-cellen zijn op náám, leave op user-id; naam-resolutie
+    // via nameIdIndex (volgorde-onafhankelijk, botsingen vallen weg).
+    // ALLEEN voor vandaag en later: een achteraf ingevoerd ziektebriefje mag
+    // van een gereden dag geen fantoom-gat maken — die dag ís gereden (door
+    // een invaller die nooit in de matrix is bijgewerkt), en de dekking is
+    // een vooruitkijk-instrument, geen historiek.
+    const vandaagIso = new Date().toLocaleDateString("en-CA");
     const approvedLeaveAll = (leaveAll as any[]).filter((l) => l?.status === "approved");
-    const idByNameToken = new Map<string, string>();
-    const userNameById = new Map<string, string>();
-    for (const u of usersForLeave as any[]) {
-      if (u?.role !== "chauffeur") continue;
-      const token = toLookupToken(String(u.name ?? ""));
-      idByNameToken.set(token, String(u.id));
-      idByNameToken.set(token.split(/\s+/).filter(Boolean).sort().join(" "), String(u.id));
-      userNameById.set(String(u.id), String(u.name ?? ""));
-    }
+    const chauffeursVoorNaam = (usersForLeave as any[]).filter((u) => u?.role === "chauffeur");
+    const idByNameToken = nameIdIndex(chauffeursVoorNaam);
+    const userNameById = new Map<string, string>(chauffeursVoorNaam.map((u) => [String(u.id), String(u.name ?? "")]));
     const UITVAL_REDEN: Record<string, string> = { ziekte: "ziek", betaald_verlof: "verlof", klein_verlet: "klein verlet" };
     const inRange = rows
       .filter((r: any) => {
@@ -981,29 +991,25 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       const date = String(r.source_date ?? "");
       const dayType = resolveDayType(r.day_type, date, weekdays, overrides);
       const expected = stored[dayType] || [];
-      // Afwezige chauffeurs mét hun reden — de reden reist mee naar de tegel
-      // ("4407 · Pascal · ziek"), zodat de planner ziet wáárom een dienst
-      // openvalt en niet alleen dát hij openvalt.
-      const afwezigen = new Map<string, string>(); // userId → reden
-      for (const l of approvedLeaveAll) {
-        if (String(l.startDate) <= date && date <= String(l.endDate)) {
-          afwezigen.set(String(l.userId), UITVAL_REDEN[String(l.type)] ?? String(l.type));
-        }
-      }
       // Cellen van afwezigen tellen niet mee als invulling; onthoud per
-      // weggefilterde code wie uitviel. Eén uitvaller per code volstaat — twee
-      // zieken op dezelfde dienst is theorie, en dan is elke naam even goed.
+      // weggefilterde code wie uitviel en waarom — de reden reist mee naar de
+      // tegel ("4407 · Pascal · ziek"). afwezigOp geeft ziekte voorrang bij
+      // overlappende records en negeert kapotte datums.
       const uitvalByCode = new Map<string, { name: string; reason: string }>();
       const assignmentValues: string[] = [];
       const entries = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
         ? Object.entries(r.assignments)
         : [];
+      const historisch = date < vandaagIso;
       for (const [naam, v] of entries) {
         const token = toLookupToken(String(naam));
-        const id = idByNameToken.get(token) ?? idByNameToken.get(token.split(/\s+/).filter(Boolean).sort().join(" "));
-        const reden = id ? afwezigen.get(id) : undefined;
-        if (id && reden) {
-          uitvalByCode.set(normalizeCode(String(v)), { name: userNameById.get(id) || String(naam), reason: reden });
+        const id = idByNameToken.get(token) ?? idByNameToken.get(sortedNameToken(String(naam)));
+        const afwezig = !historisch && id ? afwezigOp(approvedLeaveAll, id, date) : null;
+        if (id && afwezig) {
+          uitvalByCode.set(normalizeCode(String(v)), {
+            name: userNameById.get(id) || String(naam),
+            reason: UITVAL_REDEN[afwezig.type] ?? afwezig.type,
+          });
         } else {
           assignmentValues.push(String(v));
         }
@@ -1025,6 +1031,15 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
   }
 });
 
+
+// Eén bron voor de nette verloftype-labels — stond 3× lokaal gekopieerd,
+// waarvan één kopie 'ziekte' miste (annuleringsmail toonde toen de rauwe
+// enum-waarde).
+const LEAVE_TYPE_LABEL: Record<string, string> = {
+  betaald_verlof: "Betaald verlof",
+  klein_verlet: "Klein verlet",
+  ziekte: "Ziekte",
+};
 
 // --- Dienstnotities: kort bericht van de planner bij één dienstdag ---
 const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -3023,6 +3038,33 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
+    // Afwezigheids-check voor élke nieuwe ruil (1-op-1 én overname): de
+    // verlofmodule is sinds de ziek-melden-knop een eigen bron naast de
+    // matrix — wie dáár ziek of met verlof gemeld staat, staat in de Excel
+    // vaak nog gewoon op 'vrij'. Zonder deze check accepteerde de server een
+    // dienst voor een ziek gemelde collega, die vervolgens in de dekking ook
+    // nog als 'gedekt' telde.
+    {
+      const nieuweRuilen = recordsToWrite.filter((n: any) => !previousById.has(String(n.id)));
+      if (nieuweRuilen.length > 0) {
+        const [leaveVoorRuil, usersVoorRuil] = await Promise.all([getLeaveData(), getUsersData()]);
+        const AFWEZIG_LABEL: Record<string, string> = { ziekte: "ziek gemeld", betaald_verlof: "met verlof", klein_verlet: "afwezig (klein verlet)" };
+        for (const next of nieuweRuilen) {
+          const targetId = String(next.targetDriverId ?? "").trim();
+          if (!targetId) continue; // de takeover-tak hierboven geeft hier al een 400 voor
+          const offeredShift = await getShiftById(String(next.shiftId ?? ""));
+          if (!offeredShift) continue; // bestaande checks vangen dit al af
+          const afwezig = afwezigOp(leaveVoorRuil as any[], targetId, String(offeredShift.date));
+          if (afwezig) {
+            const naam = usersVoorRuil.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
+            return res.status(409).json({
+              error: `${naam} is ${AFWEZIG_LABEL[afwezig.type] ?? "afwezig gemeld"} op ${offeredShift.date} — een dienst doorgeven kan dan niet.`,
+            });
+          }
+        }
+      }
+    }
+
     // Het ruiltype ligt vast bij het indienen. Bestaande records erven dus
     // altijd het opgeslagen type: een client die het veld niet meestuurt
     // (oudere bundel uit de PWA-cache) mag een overname niet stil naar een
@@ -3346,16 +3388,54 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     const forUserId = String(req.body?.userId ?? "");
     if (!forUserId) return res.status(400).json({ error: "Kies de chauffeur die ziek is." });
 
-    const isoDay = (v: unknown): string | null => (typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    // Echte kalendercheck, niet alleen het patroon: "2026-02-31" past in de
+    // regex maar bestaat niet, en Date maakt er stilletjes 3 maart van — dan
+    // klopt geen enkele vergelijking meer.
+    const isoDay = (v: unknown): string | null => {
+      if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+      const d = new Date(`${v}T00:00:00`);
+      return Number.isFinite(d.getTime()) && d.toLocaleDateString("en-CA") === v ? v : null;
+    };
     const todayLocal = new Date().toLocaleDateString("en-CA"); // yyyy-mm-dd, lokale dag
+    if (req.body?.startDate != null && !isoDay(req.body.startDate)) {
+      return res.status(400).json({ error: "Ongeldige startdatum." });
+    }
+    if (req.body?.endDate != null && !isoDay(req.body.endDate)) {
+      return res.status(400).json({ error: "Ongeldige einddatum." });
+    }
     const startDate = isoDay(req.body?.startDate) ?? todayLocal;
     const endDate = isoDay(req.body?.endDate) ?? startDate;
     if (endDate < startDate) return res.status(400).json({ error: "Einddatum ligt vóór de startdatum." });
+    // Cap op de periode: één tikfout in het jaartal ("2027" i.p.v. "2026")
+    // zette iemand anders permanent ziek in het hele rooster. Een jaar is
+    // ruim genoeg voor langdurige ziekte; langer kan altijd via verlengen.
+    const spanDagen = Math.round((new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime()) / 86400000);
+    if (spanDagen > 366) {
+      return res.status(400).json({ error: "Ziekteperiode is langer dan een jaar — controleer de datums (tikfout in het jaartal?)." });
+    }
     const comment = String(req.body?.comment ?? "").slice(0, 1000);
 
     const users = await getUsersData();
     const target = users.find((u) => String(u.id) === forUserId);
     if (!target) return res.status(400).json({ error: "Onbekende gebruiker." });
+    // Alleen actieve chauffeurs: een admin, planner of ex-medewerker ziek
+    // melden registreert gezondheidsdata op de verkeerde plek.
+    if (target.role !== "chauffeur" || target.isActive === false) {
+      return res.status(400).json({ error: "Ziek melden kan alleen voor een actieve chauffeur." });
+    }
+
+    const previousLeave = await getLeaveData();
+    // Duplicaat-/overlapcheck: een tweede ziekmelding over (deels) dezelfde
+    // periode maakt geen extra record maar verwijst naar het bestaande —
+    // verlengen of corrigeren gaat via Verlofbeheer.
+    const overlappend = previousLeave.find((l: any) =>
+      l?.status === "approved" && l?.type === "ziekte" && String(l.userId) === forUserId &&
+      String(l.startDate) <= endDate && startDate <= String(l.endDate),
+    );
+    if (overlappend) {
+      const p = overlappend.startDate === overlappend.endDate ? overlappend.startDate : `${overlappend.startDate} t/m ${overlappend.endDate}`;
+      return res.status(409).json({ error: `${target.name} staat al ziek gemeld voor ${p}. Pas die melding aan via Verlofbeheer.` });
+    }
 
     const record = {
       id: crypto.randomUUID(),
@@ -3368,8 +3448,10 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
       createdAt: new Date().toISOString(),
       decidedAt: new Date().toISOString(),
     };
-    const previousLeave = await getLeaveData();
-    await saveLeaveData([...previousLeave, record]);
+    // Alleen het nieuwe record schrijven — géén snapshot-herschrijf van de
+    // hele tabel: die draaide een gelijktijdige verlofbeslissing van een
+    // collega-planner stil terug naar de stand van dit request.
+    await saveLeaveData([record]);
 
     const period = startDate === endDate ? startDate : `${startDate} t/m ${endDate}`;
     await logActivity(req, "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period} (door ${req.appUser?.name}).`, { type: "leave", id: record.id });
@@ -3378,7 +3460,15 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     // ingeplande dienst(en) van de chauffeur — dat is wat de planner meteen
     // wil weten (verzoek Jarno 04-08). Gesplitste diensten = meerdere
     // planning-rijen met hetzelfde nummer → dedupliceren per dag.
-    const zichtMaanden = Array.from(new Set([startDate.slice(0, 7), endDate.slice(0, 7)]));
+    // ÁLLE maanden van de periode enumereren, niet alleen start- en eindmaand:
+    // bij een ziekte over drie maanden verzweeg de mail anders de middelste
+    // maand — zonder enige aanwijzing dat er iets ontbrak.
+    const zichtMaanden: string[] = [];
+    for (let m = startDate.slice(0, 7); m <= endDate.slice(0, 7); ) {
+      zichtMaanden.push(m);
+      const [jr, mnd] = m.split("-").map(Number);
+      m = mnd === 12 ? `${jr + 1}-01` : `${jr}-${String(mnd + 1).padStart(2, "0")}`;
+    }
     const planningChunks = await Promise.all(zichtMaanden.map((m) => getPlanningData({ driverId: forUserId, monthIso: m })));
     const dagDiensten = new Map<string, string[]>(); // datum → dienstnummers
     for (const s of planningChunks.flat() as any[]) {
@@ -3466,12 +3556,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
     const users = await getUsersData();
     const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
     const formatPeriod = (start: string, end: string) => start === end ? start : `${start} t/m ${end}`;
-    const leaveTypeLabels: Record<string, string> = {
-      betaald_verlof: "Betaald verlof",
-      klein_verlet: "Klein verlet",
-      ziekte: "Ziekte",
-    };
-    const formatLeaveType = (t: string) => leaveTypeLabels[t] ?? t;
+    const formatLeaveType = (t: string) => LEAVE_TYPE_LABEL[t] ?? t;
 
     // Server-side autorisatie: chauffeurs kunnen alleen eigen pending-aanvragen
     // toevoegen of intrekken. Status-overgangen en bewerken van anderen vereist
@@ -3544,7 +3629,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       if (end < start) {
         return res.status(400).json({ error: "De einddatum ligt vóór de startdatum." });
       }
-      if (!leaveTypeLabels[String(next.type ?? "")]) {
+      if (!LEAVE_TYPE_LABEL[String(next.type ?? "")]) {
         return res.status(400).json({ error: "Ongeldig verloftype." });
       }
     }
@@ -3678,8 +3763,7 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
     const requester = users.find((u) => String(u.id) === String(current.userId));
     const requesterName = requester?.name || `Onbekende gebruiker (${current.userId})`;
     const period = current.startDate === current.endDate ? current.startDate : `${current.startDate} t/m ${current.endDate}`;
-    const leaveTypeLabels: Record<string, string> = { betaald_verlof: "Betaald verlof", klein_verlet: "Klein verlet" };
-    const typeLabel = leaveTypeLabels[current.type] ?? current.type;
+    const typeLabel = LEAVE_TYPE_LABEL[current.type] ?? current.type;
     const actionLabels: Record<string, string> = {
       approved: "Verlof goedgekeurd",
       rejected: "Verlof afgewezen",

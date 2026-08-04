@@ -354,6 +354,62 @@ export const toLookupToken = (value?: string | null) =>
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
 
+/** Volgorde-onafhankelijke naam-token: "Jan Peeters" en "Peeters Jan" → zelfde
+ *  sleutel. Stond 4× lokaal uitgeschreven; dit is nu dé plek. */
+export const sortedNameToken = (name: string) =>
+  toLookupToken(name).split(/\s+/).filter(Boolean).sort().join(" ");
+
+/**
+ * Naam→id-index over beide token-vormen, mét botsingsdetectie: komen twee
+ * verschillende gebruikers op dezelfde sleutel uit ("Jan Peeters" naast
+ * "Peeters Jan"), dan wordt die sleutel onbruikbaar in plaats van last-wins —
+ * dezelfde weigering die buildPlanningFromMatrix hanteert. Anders filtert de
+ * dekking bij zo'n botsing de cel van de verkeerde chauffeur weg en meldt hij
+ * een fantoom-gat op de verkeerde naam.
+ */
+export const nameIdIndex = (users: Array<{ id: string | number; name?: string | null }>): Map<string, string> => {
+  const map = new Map<string, string>();
+  const botsingen = new Set<string>();
+  const zet = (token: string, id: string) => {
+    if (!token) return;
+    const bestaand = map.get(token);
+    if (bestaand !== undefined && bestaand !== id) botsingen.add(token);
+    else map.set(token, id);
+  };
+  for (const u of users) {
+    const id = String(u.id);
+    zet(toLookupToken(u.name), id);
+    zet(sortedNameToken(String(u.name ?? "")), id);
+  }
+  for (const token of botsingen) map.delete(token);
+  return map;
+};
+
+/**
+ * Is deze gebruiker op deze dag goedgekeurd afwezig? Geeft het type terug;
+ * ziekte wint bij overlappende records (dát is het signaal waar actie op moet
+ * volgen — verlof mag een ziekmelding nooit maskeren). Records met kapotte of
+ * omgekeerde datums tellen niet mee.
+ */
+export const afwezigOp = (
+  leave: Array<{ userId?: unknown; startDate?: unknown; endDate?: unknown; status?: unknown; type?: unknown }>,
+  userId: string,
+  date: string,
+): { type: string } | null => {
+  let gevonden: { type: string } | null = null;
+  for (const l of leave) {
+    if (l?.status !== "approved" || String(l.userId) !== userId) continue;
+    const start = String(l.startDate ?? "");
+    const eind = String(l.endDate ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(eind) || start > eind) continue;
+    if (start <= date && date <= eind) {
+      if (String(l.type) === "ziekte") return { type: "ziekte" };
+      gevonden = { type: String(l.type) };
+    }
+  }
+  return gevonden;
+};
+
 export const ensureUniqueUserEmails = (users: IncomingUser[]) => {
   const seen = new Set<string>();
 
