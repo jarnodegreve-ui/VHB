@@ -7,7 +7,50 @@ import { SkeletonTile } from '../../components/Skeleton';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 
 type Connector = { id: string; standard?: string; power_type?: string; max_electric_power?: number };
-type Evse = { uid: string; evse_id?: string; status?: string; connectors: Connector[] };
+type Evse = { uid: string; evse_id?: string; status?: string; physical_reference?: string | null; connectors: Connector[] };
+
+/** Groepeer laadpunten per CPU (het fysieke station): het uid-voorvoegsel
+ *  vóór het laatste "-N" identificeert het station. Het CPU-nummer komt uit
+ *  de physical_reference ("CPU3 sat1.1" → 3, "mal.1.5" → 1, "2.7" → 2);
+ *  zonder herkenbaar nummer valt de groep terug op "Station N". */
+function groepeerPerCpu(evses: Evse[]): Array<{ key: string; label: string; evses: Evse[] }> {
+  const groepen = new Map<string, Evse[]>();
+  for (const e of evses) {
+    const key = String(e.uid ?? '').replace(/-\d+$/, '') || 'onbekend';
+    groepen.set(key, [...(groepen.get(key) ?? []), e]);
+  }
+  const cpuNummer = (lijst: Evse[]): number | null => {
+    for (const e of lijst) {
+      const ref = String(e.physical_reference ?? '');
+      const cpu = /cpu\s*(\d+)/i.exec(ref);
+      if (cpu) return Number(cpu[1]);
+      const leidend = /^(?:[a-z]+\.)?(\d+)\./i.exec(ref);
+      if (leidend) return Number(leidend[1]);
+    }
+    return null;
+  };
+  // Laadpunt-nummers natuurlijk sorteren: 1, 2, … 12.A, 12.B (niet "1", "10", "11").
+  const nummerKey = (e: Evse): [number, string] => {
+    const m = /^(\d+)(?:\.(.+))?$/.exec(String(e.evse_id ?? ''));
+    return m ? [Number(m[1]), m[2] ?? ''] : [Number.MAX_SAFE_INTEGER, String(e.evse_id ?? e.uid)];
+  };
+  return [...groepen.entries()]
+    .map(([key, lijst], i) => {
+      const nr = cpuNummer(lijst);
+      return {
+        key,
+        label: nr !== null ? `CPU ${nr}` : `Station ${i + 1}`,
+        volgorde: nr ?? 90 + i,
+        evses: [...lijst].sort((a, b) => {
+          const [an, as] = nummerKey(a);
+          const [bn, bs] = nummerKey(b);
+          return an - bn || as.localeCompare(bs);
+        }),
+      };
+    })
+    .sort((a, b) => a.volgorde - b.volgorde)
+    .map(({ key, label, evses: lijst }) => ({ key, label, evses: lijst }));
+}
 type DashLocation = { id: string; name?: string; city?: string; evses: Evse[] };
 type ActiveSession = { id: string; evse_uid?: string; location_id?: string; status?: string; start_date_time?: string; kwh?: number; powerKw?: number | null; soc?: number | null };
 type Dashboard = {
@@ -226,23 +269,37 @@ export function OcpiDashboardView() {
                     {loc.evses.length === 0 ? (
                       <p className="text-sm text-slate-500">Geen laadpunten.</p>
                     ) : (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        {loc.evses.map((evse) => (
-                          <div key={evse.uid} className="rounded-2xl border border-slate-100 p-3.5">
-                            <div className="flex items-center justify-between gap-2 mb-2">
-                              <span className="text-sm font-semibold text-slate-700 truncate">{evse.evse_id ?? evse.uid}</span>
-                              <Badge tone={statusTone(evse.status)} dot>{statusLabel(evse.status)}</Badge>
+                      // Eén kolom per CPU (fysiek station) — de nummering van
+                      // de laadpunten (1…7, 12.A/B, CPU3-satellieten) loopt
+                      // per CPU, dus door elkaar gehusseld las de lijst als
+                      // willekeur. Op mobiel stapelen de kolommen onder elkaar.
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        {groepeerPerCpu(loc.evses).map((cpu) => {
+                          const laden = cpu.evses.filter((e) => e.status === 'CHARGING').length;
+                          return (
+                            <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
+                              <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
+                                <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
+                                <span className="text-[11px] font-medium tabular-nums text-slate-400">
+                                  {laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}
+                                </span>
+                              </div>
+                              <div className="space-y-1">
+                                {cpu.evses.map((evse) => (
+                                  <div key={evse.uid} className="flex min-h-8 items-center justify-between gap-2">
+                                    <span className="flex min-w-0 items-baseline gap-1.5">
+                                      <span className="text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
+                                      {evse.connectors[0] && (
+                                        <span className="truncate text-[11px] text-slate-400 tabular-nums">{kW(evse.connectors[0].max_electric_power)}</span>
+                                      )}
+                                    </span>
+                                    <Badge tone={statusTone(evse.status)} dot>{statusLabel(evse.status)}</Badge>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                            <div className="space-y-1">
-                              {evse.connectors.map((c) => (
-                                <div key={c.id} className="flex items-center justify-between text-[11px] text-slate-500">
-                                  <span className="truncate">{c.standard ?? 'connector'} · {c.power_type ?? ''}</span>
-                                  <span className="font-mono tabular-nums shrink-0">{kW(c.max_electric_power)}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </div>

@@ -745,7 +745,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
       const [locsR, evsesR, connsR, sessR, sess30R] = await Promise.all([
         db.from("ocpi_locations").select("country_code,party_id,id,name,city").order("name", { ascending: true }),
-        db.from("ocpi_evses").select("uid,evse_id,status,location_id"),
+        db.from("ocpi_evses").select("uid,evse_id,status,location_id,physical_reference"),
         db.from("ocpi_connectors").select("evse_uid,id,standard,power_type,max_electric_power"),
         // raw meelezen: daar zitten de charging_periods met de POWER- en
         // STATE_OF_CHARGE-dimensies in (actueel vermogen + batterij% van de bus).
@@ -800,7 +800,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
         const st = e.status ?? "UNKNOWN";
         statusCounts[st] = (statusCounts[st] ?? 0) + 1;
         const list = evsesByLoc.get(e.location_id) ?? [];
-        list.push({ uid: e.uid, evse_id: e.evse_id, status: e.status, connectors: connByEvse.get(e.uid) ?? [] });
+        list.push({ uid: e.uid, evse_id: e.evse_id, status: e.status, physical_reference: e.physical_reference ?? null, connectors: connByEvse.get(e.uid) ?? [] });
         evsesByLoc.set(e.location_id, list);
       }
       const locations = locRows.map((l) => ({
