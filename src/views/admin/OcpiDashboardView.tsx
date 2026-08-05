@@ -127,6 +127,10 @@ export function OcpiDashboardView() {
     const piek = punten.reduce((best, pt) => (pt.kw > best.kw ? pt : best), { ts: '', kw: 0, charging: 0 });
     return { punten, maxKw, piek };
   }, [data?.powerCurve]);
+  // Tik-selectie op de grafiekstaven: op een telefoon is er geen hover-title,
+  // dus een tik op een staaf toont de details in de samenvattingsregel.
+  const [gekozenDag, setGekozenDag] = useState<string | null>(null);
+  const [gekozenSlot, setGekozenSlot] = useState<string | null>(null);
   const sessieByEvse = useMemo(
     () => new Map((data?.activeSessions ?? []).filter((x) => x.evse_uid).map((x) => [String(x.evse_uid), x])),
     [data?.activeSessions],
@@ -184,7 +188,7 @@ export function OcpiDashboardView() {
               icon={<BatteryCharging size={20} className="text-blue-600 dark:text-blue-400" />}
               label="Aan de lader"
               value={`${kpi.laden} / ${data.totals.evses}`}
-              subValue={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW op dit moment` : 'geen vermogen op dit moment'}
+              subValue={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW nu` : 'geen vermogen nu'}
             />
             <StatCard
               icon={<Zap size={20} className="text-emerald-600" />}
@@ -201,8 +205,8 @@ export function OcpiDashboardView() {
             <StatCard
               icon={<Gauge size={20} className="text-oker-600" />}
               label="Vandaag geladen"
-              value={`${grafiek.dagen.at(-1)?.kwh ?? 0} kWh`}
-              subValue={`30 d: ${grafiek.totaal} kWh · ${data.totals.sessions30d} sessies`}
+              value={`${Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh`}
+              subValue={`30 d: ${Math.round(grafiek.totaal)} kWh · ${data.totals.sessions30d} sessies`}
             />
           </div>
 
@@ -228,17 +232,22 @@ export function OcpiDashboardView() {
                 <div className="flex h-24 items-end gap-[3px]">
                   {grafiek.dagen.map((d, i) => {
                     const vandaag = i === grafiek.dagen.length - 1;
+                    const gekozen = gekozenDag === d.date;
                     return (
-                      <div
+                      <button
                         key={d.date}
+                        type="button"
+                        onClick={() => setGekozenDag(gekozen ? null : d.date)}
+                        aria-pressed={gekozen}
+                        aria-label={`${d.date.slice(5)}: ${d.kwh} kWh, ${d.sessions} sessies`}
                         title={`${d.date.slice(5)} · ${d.kwh} kWh · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
-                        className="flex h-full flex-1 flex-col justify-end"
+                        className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                       >
                         <div
-                          className={vandaag ? 'rounded-t-[3px] bg-oker-500' : 'rounded-t-[3px] bg-oker-400/70'}
+                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-700 dark:bg-slate-200' : vandaag ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-oker-400/70'}
                           style={{ height: d.kwh > 0 ? `${Math.max(4, Math.round((d.kwh / grafiek.max) * 100))}%` : '2px' }}
                         />
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -249,9 +258,18 @@ export function OcpiDashboardView() {
                     </span>
                   ))}
                 </div>
-                <p className="mt-3 text-[11px] font-medium tabular-nums text-slate-500">
-                  vandaag {grafiek.dagen.at(-1)?.kwh ?? 0} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {grafiek.piek} kWh
-                </p>
+                {(() => {
+                  const dag = grafiek.dagen.find((d) => d.date === gekozenDag);
+                  return dag ? (
+                    <p className="mt-3 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                      {new Date(`${dag.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · {dag.kwh} kWh · {dag.sessions} sessie{dag.sessions === 1 ? '' : 's'}
+                    </p>
+                  ) : (
+                    <p className="mt-3 text-[11px] font-medium tabular-nums text-slate-500">
+                      vandaag {Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {Math.round(grafiek.piek)} kWh
+                    </p>
+                  );
+                })()}
               </>
             )}
           </div>
@@ -273,19 +291,39 @@ export function OcpiDashboardView() {
             ) : (
               <>
                 <div className="flex h-20 items-end gap-[2px]">
-                  {vermogen.punten.map((pt) => (
-                    <div key={pt.ts} title={`${uurLabel(pt.ts)} · ${pt.kw} kW · ${pt.charging} sessie${pt.charging === 1 ? '' : 's'}`} className="flex h-full flex-1 flex-col justify-end">
-                      <div
-                        className={pt.ts === vermogen.piek.ts ? 'rounded-t-[3px] bg-oker-500' : 'rounded-t-[3px] bg-blue-400/60'}
-                        style={{ height: pt.kw > 0 ? `${Math.max(4, Math.round((pt.kw / vermogen.maxKw) * 100))}%` : '2px' }}
-                      />
+                  {vermogen.punten.map((pt) => {
+                    const gekozen = gekozenSlot === pt.ts;
+                    return (
+                      <button
+                        key={pt.ts}
+                        type="button"
+                        onClick={() => setGekozenSlot(gekozen ? null : pt.ts)}
+                        aria-pressed={gekozen}
+                        aria-label={`${uurLabel(pt.ts)}: ${pt.kw} kW, ${pt.charging} sessies`}
+                        title={`${uurLabel(pt.ts)} · ${pt.kw} kW · ${pt.charging} sessie${pt.charging === 1 ? '' : 's'}`}
+                        className="flex h-full flex-1 cursor-pointer flex-col justify-end"
+                      >
+                        <div
+                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-700 dark:bg-slate-200' : pt.ts === vermogen.piek.ts ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-blue-400/60'}
+                          style={{ height: pt.kw > 0 ? `${Math.max(4, Math.round((pt.kw / vermogen.maxKw) * 100))}%` : '2px' }}
+                        />
+                      </button>
+                    );
+                  })}
+                </div>
+                {(() => {
+                  const slot = vermogen.punten.find((pt) => pt.ts === gekozenSlot);
+                  return slot ? (
+                    <p className="mt-1.5 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                      {uurLabel(slot.ts)} · {slot.kw} kW · {slot.charging} sessie{slot.charging === 1 ? '' : 's'}
+                    </p>
+                  ) : (
+                    <div className="mt-1 flex justify-between text-[10px] font-medium tabular-nums text-slate-400">
+                      <span>{uurLabel(vermogen.punten[0].ts)}</span>
+                      <span>nu</span>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-1 flex justify-between text-[10px] font-medium tabular-nums text-slate-400">
-                  <span>{uurLabel(vermogen.punten[0].ts)}</span>
-                  <span>nu</span>
-                </div>
+                  );
+                })()}
               </>
             )}
           </div>
