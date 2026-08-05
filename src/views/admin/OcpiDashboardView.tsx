@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
+import { busVoorLaadpunt } from '../../lib/laadplein';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 import { SkeletonTile } from '../../components/Skeleton';
@@ -194,6 +195,15 @@ export function OcpiDashboardView() {
   // dus een tik op een staaf toont de details in de samenvattingsregel.
   const [gekozenDag, setGekozenDag] = useState<string | null>(null);
   const [gekozenSlot, setGekozenSlot] = useState<string | null>(null);
+  // uid → laadpunt-nummer, zodat sessiekaarten "13.A" tonen i.p.v. de rauwe
+  // ChargEye-uid ("CSrh1AH0aNN-3").
+  const nummerByUid = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const loc of data?.locations ?? []) {
+      for (const e of loc.evses) if (e.evse_id) map.set(e.uid, e.evse_id);
+    }
+    return map;
+  }, [data?.locations]);
   const sessieByEvse = useMemo(
     () => new Map((data?.activeSessions ?? []).filter((x) => x.evse_uid).map((x) => [String(x.evse_uid), x])),
     [data?.activeSessions],
@@ -433,7 +443,13 @@ export function OcpiDashboardView() {
                   return (
                     <div key={s.id} className="surface-card p-4 rounded-2xl flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">{s.evse_uid ?? 'Onbekende paal'}</p>
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {(() => {
+                            const nummer = (s.evse_uid && nummerByUid.get(s.evse_uid)) || s.evse_uid || 'Onbekende paal';
+                            const bus = busVoorLaadpunt(nummer);
+                            return bus ? `Laadpunt ${nummer} · bus ${bus}` : `Laadpunt ${nummer}`;
+                          })()}
+                        </p>
                         <p className="text-[11px] text-slate-500">
                           sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString() : '—'}
                           {typeof s.kwh === 'number' ? ` · ${s.kwh} kWh geladen` : ''}
@@ -499,6 +515,9 @@ export function OcpiDashboardView() {
                                     <div key={evse.uid} className="flex min-h-8 items-center justify-between gap-2">
                                       <span className="flex min-w-0 items-baseline gap-1.5">
                                         <span className="text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
+                                        {busVoorLaadpunt(evse.evse_id) && (
+                                          <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">bus {busVoorLaadpunt(evse.evse_id)}</span>
+                                        )}
                                         {sessie ? (
                                           <span className={cn('truncate text-[11px] font-semibold tabular-nums', vol ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400')}>
                                             {vol ? 'vol' : `${sessie.powerKw} kW`}{typeof sessie.soc === 'number' ? ` · ${sessie.soc}%` : ''}
