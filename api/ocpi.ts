@@ -552,6 +552,48 @@ const syncCdrs = async (summary: OcpiSyncSummary, opts: { dateFrom?: string } = 
  * onbereikbare pal of een DB-hapering) wordt in `errors` gezet maar laat de
  * andere modules gewoon doorlopen. Niet-geregistreerd → vroege, nette return.
  */
+// Actueel vermogen + SoC uit de laatste charging_period van een sessie.
+// POWER is volgens OCPI in kW; mocht een CPO toch watt sturen (waarden ver
+// boven wat een laadpunt fysiek kan), normaliseren we terug. Gedeeld door het
+// dashboard (per-sessie-weergave) en de sync (vermogens-snapshot).
+const dimensiesUitRaw = (raw: any): { powerKw: number | null; soc: number | null } => {
+  const periods = Array.isArray(raw?.charging_periods) ? raw.charging_periods : [];
+  if (periods.length === 0) return { powerKw: null, soc: null };
+  const laatste = [...periods].sort((a, b) => String(a?.start_date_time ?? "").localeCompare(String(b?.start_date_time ?? ""))).at(-1);
+  const dims = Array.isArray(laatste?.dimensions) ? laatste.dimensions : [];
+  const dim = (type: string): number | null => {
+    const d = dims.find((x: any) => x?.type === type);
+    const v = d ? Number(d.volume) : NaN;
+    return Number.isFinite(v) ? v : null;
+  };
+  let power = dim("POWER");
+  if (power !== null && power > 2000) power = power / 1000; // watt → kW
+  const soc = dim("STATE_OF_CHARGE");
+  return {
+    powerKw: power === null ? null : Math.round(power * 10) / 10,
+    soc: soc === null ? null : Math.round(soc),
+  };
+};
+
+/**
+ * Vermogens-snapshot voor de piekbewaking: som van het actuele vermogen over
+ * alle ACTIVE-sessies, weggeschreven op de 30-minuten-slotgrens (afgerond —
+ * vereiste van de SQL-review: zonder afronding vuurt ON CONFLICT nooit en
+ * stapelen dubbele syncs binnen één slot als losse rijen). Retentie: 35 dagen.
+ * Best-effort — een falende snapshot mag de sync zelf nooit breken.
+ */
+const schrijfVermogensSnapshot = async (): Promise<void> => {
+  if (!db) return;
+  const { data } = await db.from("ocpi_sessions").select("raw").eq("status", "ACTIVE");
+  const sessies = (data ?? []) as any[];
+  const totaal = Math.round(sessies.reduce((a, r) => a + (dimensiesUitRaw(r.raw).powerKw ?? 0), 0) * 10) / 10;
+  const slotMs = 30 * 60 * 1000;
+  const slot = new Date(Math.floor(Date.now() / slotMs) * slotMs).toISOString();
+  await db.from("ocpi_power_snapshots").upsert({ ts: slot, total_power_kw: totaal, charging: sessies.length }, { onConflict: "ts" });
+  const grens = new Date(Date.now() - 35 * 24 * 3600 * 1000).toISOString();
+  await db.from("ocpi_power_snapshots").delete().lt("ts", grens);
+};
+
 export const runOcpiSync = async (
   parts: { locations?: boolean; sessions?: boolean; cdrs?: boolean } = { locations: true, sessions: true, cdrs: true },
 ): Promise<OcpiSyncSummary> => {
@@ -566,6 +608,7 @@ export const runOcpiSync = async (
   }
   if (parts.sessions) {
     try { await syncSessions(summary); } catch (e: any) { summary.errors.push(`sessions: ${e?.message ?? e}`); }
+    try { await schrijfVermogensSnapshot(); } catch (e: any) { console.error("[ocpi] vermogens-snapshot mislukt:", e?.message ?? e); }
   }
   if (parts.cdrs) {
     try { await syncCdrs(summary); } catch (e: any) { summary.errors.push(`cdrs: ${e?.message ?? e}`); }
@@ -681,6 +724,33 @@ export const mountOcpiRoutes = (app: express.Express) => {
     }
   });
 
+  // Samenvatting voor de planner-dashboard-tegel: alleen tellers en het
+  // totaalvermogen — planner én admin (het volle dashboard blijft admin-only,
+  // maar "hoeveel bussen hangen er aan de lader" is operationele kerninfo).
+  app.get("/api/ocpi/summary", authenticate, requireRole("planner", "admin"), async (_req: AuthenticatedRequest, res) => {
+    if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
+    try {
+      const [evsesR, sessR] = await Promise.all([
+        db.from("ocpi_evses").select("status"),
+        db.from("ocpi_sessions").select("raw").eq("status", "ACTIVE"),
+      ]);
+      const statussen = ((evsesR.data ?? []) as any[]).map((e) => String(e.status ?? ""));
+      const sessies = (sessR.data ?? []) as any[];
+      const totalPowerKw = Math.round(sessies.reduce((a, r) => a + (dimensiesUitRaw(r.raw).powerKw ?? 0), 0) * 10) / 10;
+      res.json({
+        evses: statussen.length,
+        charging: statussen.filter((st) => st === "CHARGING").length,
+        available: statussen.filter((st) => st === "AVAILABLE").length,
+        outOfOrder: statussen.filter((st) => st === "INOPERATIVE" || st === "OUTOFORDER").length,
+        activeSessions: sessies.length,
+        totalPowerKw,
+      });
+    } catch (err: any) {
+      console.error("[ocpi] summary mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-samenvatting mislukt" });
+    }
+  });
+
   // Beheer: huidige registratiestatus (zonder de geheime tokens prijs te geven).
   app.get("/api/ocpi/status", authenticate, requireRole("admin"), async (_req: AuthenticatedRequest, res) => {
     const reg = await getOcpiRegistration();
@@ -743,7 +813,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
     try {
       const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-      const [locsR, evsesR, connsR, sessR, sess30R] = await Promise.all([
+      const [locsR, evsesR, connsR, sessR, sess30R, powerR] = await Promise.all([
         db.from("ocpi_locations").select("country_code,party_id,id,name,city").order("name", { ascending: true }),
         db.from("ocpi_evses").select("uid,evse_id,status,location_id,physical_reference"),
         db.from("ocpi_connectors").select("evse_uid,id,standard,power_type,max_electric_power"),
@@ -754,34 +824,22 @@ export const mountOcpiRoutes = (app: express.Express) => {
         // blijven bij depotladen zonder tarieven voorgoed leeg, waardoor de
         // 30-dagen-grafiek anders nooit iets toont.
         db.from("ocpi_sessions").select("start_date_time,kwh").gte("start_date_time", since30),
+        // Vermogenscurve van de afgelopen 24 uur (48 sync-slots) — bewust een
+        // rollend venster, geen kalenderdag: de server rekent in UTC en het
+        // laden gebeurt juist rond middernacht.
+        db.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", new Date(Date.now() - 24 * 3600 * 1000).toISOString()).order("ts", { ascending: true }),
       ]);
 
       const locRows = (locsR.data ?? []) as any[];
       const evseRows = (evsesR.data ?? []) as any[];
       const connRows = (connsR.data ?? []) as any[];
       const sess30Rows = (sess30R.data ?? []) as any[];
+      const powerCurve = ((powerR.data ?? []) as any[]).map((r) => ({
+        ts: String(r.ts),
+        kw: Math.round((Number(r.total_power_kw) || 0) * 10) / 10,
+        charging: Number(r.charging) || 0,
+      }));
 
-      // Actueel vermogen + SoC uit de laatste charging_period van de sessie.
-      // POWER is volgens OCPI in kW; mocht een CPO toch watt sturen (waarden
-      // ver boven wat een laadpunt fysiek kan), normaliseren we terug.
-      const dimensiesUitRaw = (raw: any): { powerKw: number | null; soc: number | null } => {
-        const periods = Array.isArray(raw?.charging_periods) ? raw.charging_periods : [];
-        if (periods.length === 0) return { powerKw: null, soc: null };
-        const laatste = [...periods].sort((a, b) => String(a?.start_date_time ?? "").localeCompare(String(b?.start_date_time ?? ""))).at(-1);
-        const dims = Array.isArray(laatste?.dimensions) ? laatste.dimensions : [];
-        const dim = (type: string): number | null => {
-          const d = dims.find((x: any) => x?.type === type);
-          const v = d ? Number(d.volume) : NaN;
-          return Number.isFinite(v) ? v : null;
-        };
-        let power = dim("POWER");
-        if (power !== null && power > 2000) power = power / 1000; // watt → kW
-        const soc = dim("STATE_OF_CHARGE");
-        return {
-          powerKw: power === null ? null : Math.round(power * 10) / 10,
-          soc: soc === null ? null : Math.round(soc),
-        };
-      };
       // raw niet naar de client sturen — alleen de twee afgeleide velden.
       const activeSessions = ((sessR.data ?? []) as any[]).map(({ raw, ...rest }) => ({ ...rest, ...dimensiesUitRaw(raw) }));
       const totalPowerKw = Math.round(activeSessions.reduce((a, sSes) => a + (sSes.powerKw ?? 0), 0) * 10) / 10;
@@ -836,6 +894,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
         locations,
         activeSessions,
         kwhPerDay,
+        powerCurve,
       });
     } catch (err: any) {
       console.error("[ocpi] dashboard mislukt:", err?.message ?? err);

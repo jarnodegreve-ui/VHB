@@ -17,6 +17,7 @@ import {
   Users,
   Smartphone,
   X,
+  Zap,
 } from 'lucide-react';
 import type {
   ActivityLogEntry,
@@ -35,6 +36,7 @@ import { isoDate } from '../lib/availability';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
+import { apiFetch } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
 import { PreviewToggle } from '../components/PreviewToggle';
@@ -118,6 +120,17 @@ export function PlannerDashboardWidgets({
   const [showAbsent, setShowAbsent] = useState(false);
   const [showScheduled, setShowScheduled] = useState(false);
   const [showDriving, setShowDriving] = useState(false);
+  // Laadplein-samenvatting voor de tegel "Aan de lader". Best-effort: faalt
+  // de fetch (OCPI niet geconfigureerd, storing), dan verdwijnt de tegel
+  // gewoon — het dashboard mag er nooit op wachten of door breken.
+  const [laadplein, setLaadplein] = useState<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number }>('/api/ocpi/summary')
+      .then((sum) => { if (!cancelled && sum && sum.evses > 0) setLaadplein(sum); })
+      .catch(() => { /* geen OCPI = geen tegel */ });
+    return () => { cancelled = true; };
+  }, [todayKey]);
   useEffect(() => {
     let cancelled = false;
     fetchMonthPlanning(todayKey.slice(0, 7))
@@ -528,7 +541,7 @@ export function PlannerDashboardWidgets({
           6), xl 7 kolommen naast elkaar. Haal je hier een tegel weg of zet je
           er een bij, dan moeten deze drie tellingen mee — anders valt er een
           gat in de rij. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-6 xl:grid-cols-7">
+      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-8' : 'xl:grid-cols-7')}>
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Bus size={16} />}
@@ -587,7 +600,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate('omleidingen')}
         />
         <OpsStat
-          className="col-span-2 md:col-span-3 xl:col-span-1"
+          className={cn('md:col-span-3 xl:col-span-1', laadplein ? '' : 'col-span-2')}
           icon={<CalendarClock size={16} />}
           tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
           label="Laatste import"
@@ -601,6 +614,25 @@ export function PlannerDashboardWidgets({
           }
           onClick={() => onNavigate('beheer-roosters')}
         />
+        {/* Laadplein-tegel — alleen zodra de OCPI-koppeling data levert.
+            Doorklikken naar het volle OCPI-scherm kan alleen als admin;
+            voor een planner is de tegel zelf de informatie. */}
+        {laadplein && (
+          <OpsStat
+            className="md:col-span-3 xl:col-span-1"
+            icon={<Zap size={16} />}
+            tone={laadplein.outOfOrder > 0 ? 'red' : laadplein.charging > 0 ? 'blue' : 'slate'}
+            label="Aan de lader"
+            value={laadplein.charging}
+            suffix={` / ${laadplein.evses}`}
+            sub={laadplein.outOfOrder > 0
+              ? `${laadplein.outOfOrder} in storing`
+              : laadplein.totalPowerKw > 0
+                ? `${laadplein.totalPowerKw} kW op dit moment`
+                : 'laadpunten bezet'}
+            onClick={isAdmin ? () => onNavigate('ocpi-monitoring') : undefined}
+          />
+        )}
       </div>
 
       {/* === Operations Center ===
