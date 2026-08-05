@@ -22,7 +22,7 @@ export function setMonitoringUser(userId: string | null) {
 type ClientErrorReport = {
   message: string;
   stack?: string;
-  source: 'window.onerror' | 'unhandledrejection' | 'error-toast' | 'react-boundary';
+  source: 'window.onerror' | 'unhandledrejection' | 'error-toast' | 'react-boundary' | 'gebruikersmelding';
 };
 
 function send(report: ClientErrorReport) {
@@ -44,6 +44,28 @@ function send(report: ClientErrorReport) {
         message: report.message,
         stack: report.stack,
         source: report.source,
+        url: window.location.pathname,
+        userAgent: navigator.userAgent,
+        userId: currentUserId ?? undefined,
+      }),
+    }).catch(() => {});
+  } catch {
+    // Rapportage mag zelf nooit een nieuwe fout veroorzaken.
+  }
+}
+
+/** Handmatige melding via de "Meld een probleem"-knop: de tekst van de
+ *  gebruiker + waar die op dat moment was. Bewust búiten de dedupe — twee
+ *  verschillende meldingen met dezelfde strekking zijn allebei welkom. */
+export function reportUserFeedback(message: string, context: { view?: string } = {}) {
+  try {
+    void fetch('/api/client-errors', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      keepalive: true,
+      body: JSON.stringify({
+        message: `Melding gebruiker${context.view ? ` (scherm: ${context.view})` : ''}: ${message}`,
+        source: 'gebruikersmelding',
         url: window.location.pathname,
         userAgent: navigator.userAgent,
         userId: currentUserId ?? undefined,

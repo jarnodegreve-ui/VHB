@@ -1412,6 +1412,26 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
         blocked: true,
       });
     }
+    // Diff vóór het vervangen: alleen chauffeurs van wie het rooster écht
+    // wijzigt krijgen straks een push. Jarno herbouwt tijdens de testfase
+    // meerdere keren per dag — iedereen elke keer pingen traint mensen om
+    // meldingen te negeren, en dan mist iemand de wijziging die wél telt.
+    const vorigePlanning = await getPlanningData();
+    const dienstSleutel = (r: any) => `${r.date}|${r.startTime ?? ""}|${r.endTime ?? ""}|${r.line ?? ""}|${r.loopnr ?? ""}|${r.busNumber ?? ""}`;
+    const perChauffeur = (rows: any[]) => {
+      const map = new Map<string, string>();
+      for (const r of rows) {
+        const id = String(r.driverId ?? "");
+        if (!id) continue;
+        map.set(id, [...(map.get(id) ?? "").split("\n"), dienstSleutel(r)].sort().join("\n"));
+      }
+      return map;
+    };
+    const oud = perChauffeur(vorigePlanning as any[]);
+    const nieuwSet = perChauffeur(generatedPlanning.shifts); // ruilen zijn in-place toegepast
+    const gewijzigd = [...new Set([...oud.keys(), ...nieuwSet.keys()])]
+      .filter((id) => oud.get(id) !== nieuwSet.get(id));
+
     await replacePlanningData(generatedPlanning.shifts);
     await logActivity(
       _req,
@@ -1419,7 +1439,16 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
       "Planning opnieuw opgebouwd",
       `${generatedPlanning.summary.generatedShifts} diensten opgebouwd vanuit de actuele matrix, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}.`,
     );
-    res.json({ success: true, ...generatedPlanning.summary });
+    // "Staat mijn rooster er al op?" is dé vraag van personeel — beantwoord
+    // hem proactief, maar alleen bij wie er iets veranderde.
+    if (gewijzigd.length > 0) {
+      await sendPushToUsers(gewijzigd, {
+        title: "Rooster bijgewerkt",
+        body: "Je rooster is gewijzigd — bekijk je diensten.",
+        url: "/",
+      });
+    }
+    res.json({ success: true, ...generatedPlanning.summary, notifiedDrivers: gewijzigd.length });
   } catch (err: any) {
     console.error("Planning opnieuw opbouwen is mislukt.", err);
     res.status(500).json({ error: "Planning opnieuw opbouwen is mislukt." });
