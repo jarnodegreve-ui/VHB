@@ -25,6 +25,7 @@ import {
   Phone,
   Activity,
   KeyRound,
+  LifeBuoy,
   Moon,
   ShieldAlert,
   Smartphone,
@@ -42,7 +43,7 @@ import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveReques
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { applyThemeColorMeta, cn } from './lib/ui';
 import { lazyWithRetry } from './lib/lazyRetry';
-import { reportHandledError, setMonitoringUser } from './lib/monitoring';
+import { reportHandledError, reportUserFeedback, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
 import { addDays, isoDate } from './lib/availability';
@@ -56,6 +57,7 @@ import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { Modal } from './components/Modal';
 import { LoginView } from './views/LoginView';
 import { ContactsView } from './views/ContactsView';
 import { DashboardView } from './views/DashboardView';
@@ -206,6 +208,11 @@ export default function App() {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
+  // "Meld een probleem" (testfase): vrije tekst → client_errors met bron
+  // 'gebruikersmelding', zichtbaar in Systeem Status en de dagoverzicht-mail.
+  const [showProbleemMelder, setShowProbleemMelder] = useState(false);
+  const [probleemTekst, setProbleemTekst] = useState('');
+  const [probleemVerstuurd, setProbleemVerstuurd] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const isPasswordRecoveryRef = useRef(false);
@@ -1792,6 +1799,66 @@ export default function App() {
         onClose={() => setShowChangePassword(false)}
         email={currentUser?.email || session?.user?.email || ''}
       />
+      {/* Probleem-melder (testfase): tekst + scherm-context → client_errors,
+          bron 'gebruikersmelding'. Geen aparte tabel of mailstroom nodig —
+          het komt in Systeem Status en het dagoverzicht terecht. */}
+      <Modal open={showProbleemMelder} onClose={() => setShowProbleemMelder(false)} maxWidth="sm">
+        <div className="p-6">
+          {probleemVerstuurd ? (
+            <div className="text-center py-4">
+              <p className="text-sm font-bold text-slate-800">Bedankt — je melding is verstuurd.</p>
+              <p className="mt-1.5 text-xs text-slate-500">De planning ziet hem in het systeemoverzicht.</p>
+              <button
+                type="button"
+                onClick={() => setShowProbleemMelder(false)}
+                className="btn-primary ios-pressable mt-5 rounded-2xl px-5 py-2.5 text-sm font-bold"
+              >
+                Sluiten
+              </button>
+            </div>
+          ) : (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const tekst = probleemTekst.trim();
+                if (!tekst) return;
+                reportUserFeedback(tekst, { view: currentView });
+                setProbleemVerstuurd(true);
+              }}
+            >
+              <h3 className="text-base font-bold text-slate-800">Meld een probleem</h3>
+              <p className="mt-1 text-xs text-slate-500">
+                Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee.
+              </p>
+              <textarea
+                aria-label="Beschrijf het probleem"
+                value={probleemTekst}
+                onChange={(e) => setProbleemTekst(e.target.value)}
+                maxLength={900}
+                rows={4}
+                placeholder="Bijv. de aftelling bij Chris klopt niet — hij is al klaar…"
+                className="control-input mt-4 w-full rounded-2xl bg-white/60 px-4 py-3 text-base font-medium outline-none sm:text-sm"
+              />
+              <div className="mt-4 flex justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setShowProbleemMelder(false)}
+                  className="ios-pressable rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-700"
+                >
+                  Annuleren
+                </button>
+                <button
+                  type="submit"
+                  disabled={!probleemTekst.trim()}
+                  className="btn-primary ios-pressable rounded-2xl px-5 py-2.5 text-sm font-bold disabled:opacity-40"
+                >
+                  Versturen
+                </button>
+              </div>
+            </form>
+          )}
+        </div>
+      </Modal>
       <AnimatePresence>
         {isLoading && !isInitialLoad && (
           <motion.div
@@ -1995,6 +2062,16 @@ export default function App() {
               <KeyRound size={16} />
             </span>
             <span>Wachtwoord wijzigen</span>
+          </button>
+          <button
+            onClick={() => { setProbleemTekst(''); setProbleemVerstuurd(false); setShowProbleemMelder(true); setIsSidebarOpen(false); }}
+            aria-haspopup="dialog"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors duration-150 font-medium text-[13px]"
+          >
+            <span className="text-slate-400 shrink-0">
+              <LifeBuoy size={16} />
+            </span>
+            <span>Meld een probleem</span>
           </button>
           <button
             onClick={handleLogout}

@@ -861,6 +861,25 @@ describe('planning-doorvoer van goedgekeurde ruilen', () => {
     expect(rebuilt.length).toBeGreaterThan(0);
     for (const row of rebuilt) expect(row.driverId).toBe('4');
   });
+
+  it('heropbouw pusht alléén naar chauffeurs van wie het rooster wijzigde', async () => {
+    // Uitgangssituatie: chauffeur 3 heeft dienst 12 op 08/07 (sh-c uit de
+    // fixture, 08:00-16:00 volgens dienst d3). De matrix bevestigt exact
+    // diezelfde toestand voor 3, maar geeft chauffeur 4 een nieuwe dienst 11.
+    mem.planning = [
+      { id: 'sh-c', driverId: '3', date: '2026-07-08', line: '12', startTime: '08:00', endTime: '16:00' },
+    ];
+    mem.planningMatrix = [
+      { id: 'm-p', source_date: '2026-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' },
+    ];
+    mem.swaps = [];
+    const res = await api('POST', '/api/planning/sync-from-matrix', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    const push = mem.pushesSent.find((pz) => pz.payload.title === 'Rooster bijgewerkt');
+    // Chauffeur 4 kreeg een nieuwe dienst → push; chauffeur 3 bleef gelijk → stil.
+    expect(push?.userIds).toEqual(['4']);
+    expect(res.json.notifiedDrivers).toBe(1);
+  });
 });
 
 describe('urgente-update-mail: ontvangers server-side', () => {
