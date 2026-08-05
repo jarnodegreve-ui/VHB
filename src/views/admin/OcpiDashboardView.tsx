@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
+import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 import { SkeletonTile } from '../../components/Skeleton';
@@ -195,6 +196,10 @@ export function OcpiDashboardView() {
   // dus een tik op een staaf toont de details in de samenvattingsregel.
   const [gekozenDag, setGekozenDag] = useState<string | null>(null);
   const [gekozenSlot, setGekozenSlot] = useState<string | null>(null);
+  // Detail-popup per laadpunt (tik op een rij): daar wonen de technische
+  // gegevens zoals het maximale vermogen — die stonden inline maar zijn
+  // dagelijks ruis (verzoek Jarno 05-08).
+  const [gekozenPunt, setGekozenPunt] = useState<Evse | null>(null);
   // uid → laadpunt-nummer, zodat sessiekaarten "13.A" tonen i.p.v. de rauwe
   // ChargEye-uid ("CSrh1AH0aNN-3").
   const nummerByUid = useMemo(() => {
@@ -428,6 +433,42 @@ export function OcpiDashboardView() {
 
           </div>
 
+          {/* Detail-popup per laadpunt: technische gegevens die dagelijks
+              ruis zijn maar soms nodig — max. vermogen, connector-type — plus
+              de live sessie als die er is. */}
+          <Modal open={!!gekozenPunt} onClose={() => setGekozenPunt(null)} maxWidth="sm">
+            {gekozenPunt && (() => {
+              const sessie = sessieByEvse.get(gekozenPunt.uid);
+              const bus = busVoorLaadpunt(gekozenPunt.evse_id);
+              const conn = gekozenPunt.connectors[0];
+              const rij = (label: string, waarde: string) => (
+                <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-b-0">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</span>
+                  <span className="text-sm font-semibold tabular-nums text-slate-800">{waarde}</span>
+                </div>
+              );
+              return (
+                <div className="p-6">
+                  <div className="mb-4 flex items-center justify-between gap-3">
+                    <h3 className="text-base font-bold text-slate-800">
+                      Laadpunt {gekozenPunt.evse_id ?? gekozenPunt.uid}{bus ? ` · bus ${bus}` : ''}
+                    </h3>
+                    <Badge tone={statusTone(gekozenPunt.status)} dot>{statusLabel(gekozenPunt.status)}</Badge>
+                  </div>
+                  <div>
+                    {sessie && typeof sessie.powerKw === 'number' && rij('Actueel vermogen', `${sessie.powerKw} kW`)}
+                    {sessie && typeof sessie.soc === 'number' && rij('Batterij voertuig', `${sessie.soc}%`)}
+                    {sessie && typeof sessie.kwh === 'number' && rij('Geladen deze sessie', `${sessie.kwh} kWh`)}
+                    {sessie?.start_date_time && rij('Aangekoppeld sinds', new Date(sessie.start_date_time).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}
+                    {conn && rij('Max. vermogen', kW(conn.max_electric_power))}
+                    {conn && rij('Connector', `${conn.standard ?? '—'}${conn.power_type ? ` · ${conn.power_type}` : ''}`)}
+                    {!sessie && rij('Voertuig', 'geen aangekoppeld')}
+                  </div>
+                </div>
+              );
+            })()}
+          </Modal>
+
           {/* Live sessies */}
           <div>
             <AdminSubsectionHeader title="Lopende sessies" />
@@ -505,33 +546,38 @@ export function OcpiDashboardView() {
                               </div>
                               <div className="space-y-1">
                                 {cpu.evses.map((evse) => {
-                                  // Actuele sessie bij dit punt: toon kW + batterij%
-                                  // op de regel zelf i.p.v. alleen bij "Lopende
-                                  // sessies" — vol (0 kW / 100%) leest als "vol".
+                                  // Indeling (verzoek Jarno 05-08): nummer · bus ·
+                                  // batterij% van het aangekoppelde voertuig; het
+                                  // vermogen staat alleen bij status Laden ín de
+                                  // badge ("Laden · 112 kW"). Technische details
+                                  // (max vermogen, connector) zitten achter een tik.
                                   const sessie = sessieByEvse.get(evse.uid);
                                   const vol = sessie && ((sessie.soc ?? 0) >= 100 || (typeof sessie.powerKw === 'number' && sessie.powerKw <= 0));
+                                  const laadt = evse.status === 'CHARGING' && typeof sessie?.powerKw === 'number' && sessie.powerKw > 0;
                                   return (
-                                    <div key={evse.uid} className="flex min-h-8 items-center justify-between gap-2">
-                                      {/* Vaste kolombreedtes: "1" en "13.A" verschillen
-                                          in breedte, en zonder kolommen schoof alles wat
-                                          erachter komt per rij naar een andere plek. De
-                                          bus-kolom rendert ook leeg, zodat kW/percentage
-                                          bij álle rijen op dezelfde x beginnen. */}
+                                    <button
+                                      key={evse.uid}
+                                      type="button"
+                                      onClick={() => setGekozenPunt(evse)}
+                                      aria-haspopup="dialog"
+                                      title="Tik voor details (max. vermogen, connector)"
+                                      className="ios-pressable flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
+                                    >
                                       <span className="flex min-w-0 items-baseline">
                                         <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
                                         <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-slate-400">
                                           {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
                                         </span>
-                                        {sessie ? (
+                                        {sessie && typeof sessie.soc === 'number' && (
                                           <span className={cn('truncate text-[11px] font-semibold tabular-nums', vol ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400')}>
-                                            {vol ? 'vol' : `${sessie.powerKw} kW`}{typeof sessie.soc === 'number' ? ` · ${sessie.soc}%` : ''}
+                                            {sessie.soc}%
                                           </span>
-                                        ) : evse.connectors[0] ? (
-                                          <span className="truncate text-[11px] text-slate-400 tabular-nums">{kW(evse.connectors[0].max_electric_power)}</span>
-                                        ) : null}
+                                        )}
                                       </span>
-                                      <Badge tone={statusTone(evse.status)} dot>{statusLabel(evse.status)}</Badge>
-                                    </div>
+                                      <Badge tone={statusTone(evse.status)} dot>
+                                        {statusLabel(evse.status)}{laadt ? ` · ${Math.round(sessie!.powerKw!)} kW` : ''}
+                                      </Badge>
+                                    </button>
                                   );
                                 })}
                               </div>
