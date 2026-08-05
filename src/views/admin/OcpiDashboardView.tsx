@@ -513,11 +513,16 @@ export function OcpiDashboardView() {
                                   const vol = sessie && ((sessie.soc ?? 0) >= 100 || (typeof sessie.powerKw === 'number' && sessie.powerKw <= 0));
                                   return (
                                     <div key={evse.uid} className="flex min-h-8 items-center justify-between gap-2">
-                                      <span className="flex min-w-0 items-baseline gap-1.5">
-                                        <span className="text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
-                                        {busVoorLaadpunt(evse.evse_id) && (
-                                          <span className="shrink-0 text-[11px] font-medium tabular-nums text-slate-400">bus {busVoorLaadpunt(evse.evse_id)}</span>
-                                        )}
+                                      {/* Vaste kolombreedtes: "1" en "13.A" verschillen
+                                          in breedte, en zonder kolommen schoof alles wat
+                                          erachter komt per rij naar een andere plek. De
+                                          bus-kolom rendert ook leeg, zodat kW/percentage
+                                          bij álle rijen op dezelfde x beginnen. */}
+                                      <span className="flex min-w-0 items-baseline">
+                                        <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
+                                        <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-slate-400">
+                                          {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
+                                        </span>
                                         {sessie ? (
                                           <span className={cn('truncate text-[11px] font-semibold tabular-nums', vol ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400')}>
                                             {vol ? 'vol' : `${sessie.powerKw} kW`}{typeof sessie.soc === 'number' ? ` · ${sessie.soc}%` : ''}
