@@ -487,7 +487,8 @@ export function OcpiDashboardView() {
                           {(() => {
                             const nummer = (s.evse_uid && nummerByUid.get(s.evse_uid)) || s.evse_uid || 'Onbekende paal';
                             const bus = busVoorLaadpunt(nummer);
-                            return bus ? `Laadpunt ${nummer} · bus ${bus}` : `Laadpunt ${nummer}`;
+                            const soc = typeof s.soc === 'number' ? ` · ${s.soc}%` : '';
+                            return `Laadpunt ${nummer}${bus ? ` · bus ${bus}` : ''}${soc}`;
                           })()}
                         </p>
                         <p className="text-[11px] text-slate-500">
@@ -495,14 +496,12 @@ export function OcpiDashboardView() {
                           {typeof s.kwh === 'number' ? ` · ${s.kwh} kWh geladen` : ''}
                         </p>
                       </div>
-                      <div className="flex shrink-0 flex-col items-end gap-1">
-                        <Badge tone={vol ? 'emerald' : 'blue'} dot>
-                          {typeof s.powerKw === 'number' ? (vol ? 'vol' : `${s.powerKw} kW`) : 'Laden'}
-                        </Badge>
-                        {typeof s.soc === 'number' && (
-                          <span className="text-[11px] font-semibold tabular-nums text-slate-500">{s.soc}% batterij</span>
-                        )}
-                      </div>
+                      {/* "Laden" blijft leesbaar als woord mét het vermogen erbij;
+                          een volle bus heet "100% geladen" (verzoek Jarno 05-08).
+                          Het percentage zelf staat in de titel naast de bus. */}
+                      <Badge tone={vol ? 'emerald' : 'blue'} dot>
+                        {vol ? '100% geladen' : typeof s.powerKw === 'number' && s.powerKw > 0 ? `Laden · ${Math.round(s.powerKw)} kW` : 'Laden'}
+                      </Badge>
                     </div>
                   );
                 })}
