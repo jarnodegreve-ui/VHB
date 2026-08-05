@@ -6,6 +6,29 @@ import { StatCard } from '../../components/StatCard';
 import { SkeletonTile } from '../../components/Skeleton';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 
+/** Compacte termijn-schakelaar in dezelfde toggle-taal als de rest van de
+ *  app (glass-segmented + oker-actief, zie ScheduleView/Gebruikersbeheer). */
+function TermijnKeuze<T extends string>({ waarde, opties, onKies }: { waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void }) {
+  return (
+    <div className="glass-segmented inline-flex shrink-0 rounded-xl p-0.5">
+      {opties.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onClick={() => onKies(o.id)}
+          aria-pressed={waarde === o.id}
+          className={cn(
+            'ios-pressable rounded-[10px] px-2.5 py-1 text-[11px] font-semibold transition-all',
+            waarde === o.id ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 type Connector = { id: string; standard?: string; power_type?: string; max_electric_power?: number };
 type Evse = { uid: string; evse_id?: string; status?: string; physical_reference?: string | null; connectors: Connector[] };
 
@@ -100,33 +123,73 @@ export function OcpiDashboardView() {
 
   useEffect(() => { load(); }, []);
 
-  // Doorlopende 30-dagen-reeks voor de kolomgrafiek: dagen zonder sessies
-  // worden 0 in plaats van weggelaten, anders schuiven de kolommen en klopt
-  // het ritme (weekend vs. week) niet meer.
+  // Termijn-schakelaars (verzoek Jarno 05-08). Verbruik telt per dag, dus
+  // daar is 24u geen zinnige stap; bij het vermogen tonen 7d/maand de
+  // DÁGPIEK per dag — dat is het getal dat voor het capaciteitstarief telt.
+  const [verbruikTermijn, setVerbruikTermijn] = useState<'7d' | '30d' | 'maand'>('30d');
+  const [vermogenTermijn, setVermogenTermijn] = useState<'24u' | '7d' | 'maand'>('24u');
+  const uurLabel = (ts: string) => new Date(ts).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+  const lokaleDag = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+  const maandStart = () => { const nu = new Date(); return `${nu.getFullYear()}-${String(nu.getMonth() + 1).padStart(2, '0')}-01`; };
+  const WEEKDAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+
+  // Doorlopende reeks voor de kolomgrafiek: dagen zonder sessies worden 0
+  // in plaats van weggelaten, anders schuiven de kolommen en klopt het
+  // ritme (weekend vs. week) niet meer. De termijn snijdt uit de 30 dagen.
   const grafiek = useMemo(() => {
     const perDag = new Map((data?.kwhPerDay ?? []).map((d) => [d.date, d]));
-    const dagen: Array<{ date: string; kwh: number; sessions: number; dow: number }> = [];
+    const alle: Array<{ date: string; kwh: number; sessions: number; dow: number }> = [];
     for (let i = 29; i >= 0; i--) {
       const dt = new Date();
       dt.setDate(dt.getDate() - i);
-      const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      const iso = lokaleDag(dt);
       const rij = perDag.get(iso);
-      dagen.push({ date: iso, kwh: rij?.kwh ?? 0, sessions: rij?.sessions ?? 0, dow: dt.getDay() });
+      alle.push({ date: iso, kwh: rij?.kwh ?? 0, sessions: rij?.sessions ?? 0, dow: dt.getDay() });
     }
+    const dagen = verbruikTermijn === '7d' ? alle.slice(-7)
+      : verbruikTermijn === 'maand' ? alle.filter((d) => d.date >= maandStart())
+      : alle;
     const max = Math.max(1, ...dagen.map((d) => d.kwh));
     const totaal = Math.round(dagen.reduce((a, d) => a + d.kwh, 0) * 10) / 10;
     const actieveDagen = dagen.filter((d) => d.kwh > 0).length;
     const gemiddeld = actieveDagen > 0 ? Math.round((totaal / actieveDagen) * 10) / 10 : 0;
-    return { dagen, max, totaal, gemiddeld, piek: Math.max(...dagen.map((d) => d.kwh)) };
-  }, [data?.kwhPerDay]);
+    return { dagen, max, totaal, gemiddeld, piek: Math.max(0, ...dagen.map((d) => d.kwh)) };
+  }, [data?.kwhPerDay, verbruikTermijn]);
 
-  // Vermogenscurve (24u): piek + piekmoment voor de samenvattingsregel.
+  // Vermogen: 24u = de ruwe 30-min-slots; 7d/maand = één staaf per dag met
+  // de dágpiek (en het moment waarop die viel).
   const vermogen = useMemo(() => {
-    const punten = data?.powerCurve ?? [];
-    const maxKw = Math.max(1, ...punten.map((pt) => pt.kw));
-    const piek = punten.reduce((best, pt) => (pt.kw > best.kw ? pt : best), { ts: '', kw: 0, charging: 0 });
-    return { punten, maxKw, piek };
-  }, [data?.powerCurve]);
+    const alle = data?.powerCurve ?? [];
+    if (vermogenTermijn === '24u') {
+      const punten = alle.filter((pt) => Date.parse(pt.ts) >= Date.now() - 24 * 3600 * 1000);
+      const maxKw = Math.max(1, ...punten.map((pt) => pt.kw));
+      const piek = punten.reduce((best, pt) => (pt.kw > best.kw ? pt : best), { ts: '', kw: 0, charging: 0 });
+      const staven = punten.map((pt) => ({ key: pt.ts, kw: pt.kw, charging: pt.charging, isPiek: pt.ts === piek.ts, asLabel: '' }));
+      return { modus: 'slots' as const, staven, maxKw, piekKw: piek.kw, piekTs: piek.ts, piekWanneer: piek.ts ? `om ${uurLabel(piek.ts)}` : '' };
+    }
+    const vanaf = vermogenTermijn === '7d'
+      ? lokaleDag(new Date(Date.now() - 6 * 24 * 3600 * 1000))
+      : maandStart();
+    const perDag = new Map<string, { kw: number; ts: string; charging: number; dow: number }>();
+    for (const pt of alle) {
+      const dt = new Date(pt.ts);
+      const dag = lokaleDag(dt);
+      if (dag < vanaf) continue;
+      const cur = perDag.get(dag);
+      if (!cur || pt.kw > cur.kw) perDag.set(dag, { kw: pt.kw, ts: pt.ts, charging: pt.charging, dow: dt.getDay() });
+    }
+    const staven = [...perDag.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([dag, v]) => ({
+        key: dag, kw: v.kw, charging: v.charging, ts: v.ts, isPiek: false,
+        asLabel: vermogenTermijn === '7d' ? WEEKDAG_KORT[v.dow] : v.dow === 1 ? String(Number(dag.slice(8))) : '',
+      }));
+    const maxKw = Math.max(1, ...staven.map((st) => st.kw));
+    const piek = staven.reduce((best, st) => (st.kw > best.kw ? st : best), { key: '', kw: 0, ts: '', charging: 0, isPiek: false, asLabel: '' });
+    for (const st of staven) (st as any).isPiek = st.key === piek.key;
+    const piekDagLabel = piek.key ? new Date(`${piek.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+    return { modus: 'dagen' as const, staven, maxKw, piekKw: piek.kw, piekTs: (piek as any).ts ?? '', piekWanneer: piek.key ? `op ${piekDagLabel}` : '' };
+  }, [data?.powerCurve, vermogenTermijn]);
   // Tik-selectie op de grafiekstaven: op een telefoon is er geen hover-title,
   // dus een tik op een staaf toont de details in de samenvattingsregel.
   const [gekozenDag, setGekozenDag] = useState<string | null>(null);
@@ -135,7 +198,6 @@ export function OcpiDashboardView() {
     () => new Map((data?.activeSessions ?? []).filter((x) => x.evse_uid).map((x) => [String(x.evse_uid), x])),
     [data?.activeSessions],
   );
-  const uurLabel = (ts: string) => new Date(ts).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
   // KPI-afgeleiden: de status-telling gecomprimeerd tot wat operationeel
   // telt. Alles wat niet beschikbaar/ladend is, is afwijkend — meestal 0,
   // en dan hoort de tegel stil (slate) te zijn, geen loos alarm.
@@ -219,11 +281,13 @@ export function OcpiDashboardView() {
               regels). Ontbrekende dagen tellen als 0 zodat het weekritme
               klopt; maandagen krijgen een dagnummer als anker. */}
           <div className="surface-card p-6 rounded-3xl">
-            <div className="mb-4 flex items-baseline justify-between gap-3">
-              <MicroLabel>Verbruik per dag (kWh)</MicroLabel>
-              <span className="text-[11px] font-semibold tabular-nums text-slate-500">
-                {grafiek.totaal} kWh · 30 dagen
-              </span>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <MicroLabel>Verbruik (kWh)</MicroLabel>
+              <TermijnKeuze
+                waarde={verbruikTermijn}
+                opties={[{ id: '7d', label: '7 d' }, { id: '30d', label: '30 d' }, { id: 'maand', label: 'maand' }]}
+                onKies={(t) => { setVerbruikTermijn(t); setGekozenDag(null); }}
+              />
             </div>
             {data.kwhPerDay.length === 0 ? (
               <p className="text-sm text-slate-500">Nog geen sessies gesynchroniseerd.</p>
@@ -254,7 +318,7 @@ export function OcpiDashboardView() {
                 <div className="mt-1 flex gap-[3px]">
                   {grafiek.dagen.map((d) => (
                     <span key={d.date} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-400">
-                      {d.dow === 1 ? Number(d.date.slice(8)) : ''}
+                      {grafiek.dagen.length <= 7 ? WEEKDAG_KORT[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
                     </span>
                   ))}
                 </div>
@@ -266,7 +330,7 @@ export function OcpiDashboardView() {
                     </p>
                   ) : (
                     <p className="mt-3 text-[11px] font-medium tabular-nums text-slate-500">
-                      vandaag {Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {Math.round(grafiek.piek)} kWh
+                      totaal {Math.round(grafiek.totaal)} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {Math.round(grafiek.piek)} kWh
                     </p>
                   );
                 })()}
@@ -274,56 +338,81 @@ export function OcpiDashboardView() {
             )}
           </div>
 
-          {/* Vermogen (24u) — de kwartierpiek bepaalt in België het
-              capaciteitstarief; deze curve laat zien wannéér alles tegelijk
-              trekt. Gevoed door de 30-min-snapshots van de sync. */}
+          {/* Vermogen — de kwartierpiek bepaalt in België het capaciteits-
+              tarief. 24u toont de ruwe 30-min-slots; 7d/maand tonen per dag
+              de dágpiek en wanneer die viel. Gevoed door de sync-snapshots. */}
           <div className="surface-card p-6 rounded-3xl">
-            <div className="mb-4 flex items-baseline justify-between gap-3">
-              <MicroLabel>Vermogen (24 u)</MicroLabel>
-              {vermogen.piek.kw > 0 && (
-                <span className="text-[11px] font-semibold tabular-nums text-slate-500">
-                  piek {vermogen.piek.kw} kW om {uurLabel(vermogen.piek.ts)}
-                </span>
-              )}
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <MicroLabel>Vermogen (kW)</MicroLabel>
+              <TermijnKeuze
+                waarde={vermogenTermijn}
+                opties={[{ id: '24u', label: '24 u' }, { id: '7d', label: '7 d' }, { id: 'maand', label: 'maand' }]}
+                onKies={(t) => { setVermogenTermijn(t); setGekozenSlot(null); }}
+              />
             </div>
-            {vermogen.punten.length === 0 ? (
+            {vermogen.staven.length === 0 ? (
               <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elke 30 min).</p>
             ) : (
               <>
-                <div className="flex h-20 items-end gap-[2px]">
-                  {vermogen.punten.map((pt) => {
-                    const gekozen = gekozenSlot === pt.ts;
+                <div className={cn('flex h-20 items-end', vermogen.modus === 'slots' ? 'gap-[2px]' : 'gap-[3px]')}>
+                  {vermogen.staven.map((st) => {
+                    const gekozen = gekozenSlot === st.key;
+                    const kop = vermogen.modus === 'slots'
+                      ? uurLabel(st.key)
+                      : new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
                     return (
                       <button
-                        key={pt.ts}
+                        key={st.key}
                         type="button"
-                        onClick={() => setGekozenSlot(gekozen ? null : pt.ts)}
+                        onClick={() => setGekozenSlot(gekozen ? null : st.key)}
                         aria-pressed={gekozen}
-                        aria-label={`${uurLabel(pt.ts)}: ${pt.kw} kW, ${pt.charging} sessies`}
-                        title={`${uurLabel(pt.ts)} · ${pt.kw} kW · ${pt.charging} sessie${pt.charging === 1 ? '' : 's'}`}
+                        aria-label={`${kop}: ${st.kw} kW, ${st.charging} sessies`}
+                        title={`${kop} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
                         className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                       >
                         <div
-                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-700 dark:bg-slate-200' : pt.ts === vermogen.piek.ts ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-blue-400/60'}
-                          style={{ height: pt.kw > 0 ? `${Math.max(4, Math.round((pt.kw / vermogen.maxKw) * 100))}%` : '2px' }}
+                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-700 dark:bg-slate-200' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-blue-400/60'}
+                          style={{ height: st.kw > 0 ? `${Math.max(4, Math.round((st.kw / vermogen.maxKw) * 100))}%` : '2px' }}
                         />
                       </button>
                     );
                   })}
                 </div>
+                {vermogen.modus === 'dagen' && (
+                  <div className="mt-1 flex gap-[3px]">
+                    {vermogen.staven.map((st) => (
+                      <span key={st.key} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-400">{st.asLabel}</span>
+                    ))}
+                  </div>
+                )}
                 {(() => {
-                  const slot = vermogen.punten.find((pt) => pt.ts === gekozenSlot);
-                  return slot ? (
-                    <p className="mt-1.5 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
-                      {uurLabel(slot.ts)} · {slot.kw} kW · {slot.charging} sessie{slot.charging === 1 ? '' : 's'}
-                    </p>
-                  ) : (
+                  const st = vermogen.staven.find((x) => x.key === gekozenSlot);
+                  if (st) {
+                    const kop = vermogen.modus === 'slots'
+                      ? uurLabel(st.key)
+                      : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel((st as any).ts ?? st.key)}`;
+                    return (
+                      <p className="mt-1.5 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                        {kop} · {st.kw} kW · {st.charging} sessie{st.charging === 1 ? '' : 's'}
+                      </p>
+                    );
+                  }
+                  return vermogen.modus === 'slots' ? (
                     <div className="mt-1 flex justify-between text-[10px] font-medium tabular-nums text-slate-400">
-                      <span>{uurLabel(vermogen.punten[0].ts)}</span>
+                      <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
                       <span>nu</span>
                     </div>
+                  ) : (
+                    <p className="mt-1.5 text-[11px] font-medium tabular-nums text-slate-500">
+                      piek {vermogen.piekKw} kW {vermogen.piekWanneer}{vermogen.piekTs ? ` om ${uurLabel(vermogen.piekTs)}` : ''}
+                    </p>
                   );
                 })()}
+                {vermogen.modus === 'slots' && vermogen.piekKw > 0 && !gekozenSlot && (
+                  <p className="mt-1.5 text-[11px] font-medium tabular-nums text-slate-500">
+                    piek {vermogen.piekKw} kW {vermogen.piekWanneer}
+                  </p>
+                )}
               </>
             )}
           </div>

@@ -824,10 +824,11 @@ export const mountOcpiRoutes = (app: express.Express) => {
         // blijven bij depotladen zonder tarieven voorgoed leeg, waardoor de
         // 30-dagen-grafiek anders nooit iets toont.
         db.from("ocpi_sessions").select("start_date_time,kwh").gte("start_date_time", since30),
-        // Vermogenscurve van de afgelopen 24 uur (48 sync-slots) — bewust een
-        // rollend venster, geen kalenderdag: de server rekent in UTC en het
-        // laden gebeurt juist rond middernacht.
-        db.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", new Date(Date.now() - 24 * 3600 * 1000).toISOString()).order("ts", { ascending: true }),
+        // Vermogens-snapshots van de laatste 31 dagen (≤ ~1.500 rijen à drie
+        // velden): de UI kiest daar zelf de termijn uit (24u als slots,
+        // 7d/maand als dágpieken). Rollend venster, geen kalenderdag — de
+        // server rekent in UTC en het laden gebeurt juist rond middernacht.
+        db.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()).order("ts", { ascending: true }),
       ]);
 
       const locRows = (locsR.data ?? []) as any[];
