@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Zap, MapPin, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
-import { getSupabaseAuthHeaders } from '../../lib/ui';
+import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 import { SkeletonTile } from '../../components/Skeleton';
@@ -59,6 +59,7 @@ type Dashboard = {
   locations: DashLocation[];
   activeSessions: ActiveSession[];
   kwhPerDay: Array<{ date: string; kwh: number; sessions: number }>;
+  powerCurve: Array<{ ts: string; kw: number; charging: number }>;
 };
 
 type BadgeTone = 'slate' | 'emerald' | 'red' | 'amber' | 'blue';
@@ -118,6 +119,19 @@ export function OcpiDashboardView() {
     const gemiddeld = actieveDagen > 0 ? Math.round((totaal / actieveDagen) * 10) / 10 : 0;
     return { dagen, max, totaal, gemiddeld, piek: Math.max(...dagen.map((d) => d.kwh)) };
   }, [data?.kwhPerDay]);
+
+  // Vermogenscurve (24u): piek + piekmoment voor de samenvattingsregel.
+  const vermogen = useMemo(() => {
+    const punten = data?.powerCurve ?? [];
+    const maxKw = Math.max(1, ...punten.map((pt) => pt.kw));
+    const piek = punten.reduce((best, pt) => (pt.kw > best.kw ? pt : best), { ts: '', kw: 0, charging: 0 });
+    return { punten, maxKw, piek };
+  }, [data?.powerCurve]);
+  const sessieByEvse = useMemo(
+    () => new Map((data?.activeSessions ?? []).filter((x) => x.evse_uid).map((x) => [String(x.evse_uid), x])),
+    [data?.activeSessions],
+  );
+  const uurLabel = (ts: string) => new Date(ts).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
 
   return (
     <PageShell width="5xl">
@@ -215,6 +229,40 @@ export function OcpiDashboardView() {
             )}
           </div>
 
+          {/* Vermogen (24u) — de kwartierpiek bepaalt in België het
+              capaciteitstarief; deze curve laat zien wannéér alles tegelijk
+              trekt. Gevoed door de 30-min-snapshots van de sync. */}
+          <div className="surface-card p-6 rounded-3xl">
+            <div className="mb-4 flex items-baseline justify-between gap-3">
+              <MicroLabel>Vermogen (24 u)</MicroLabel>
+              {vermogen.piek.kw > 0 && (
+                <span className="text-[11px] font-semibold tabular-nums text-slate-500">
+                  piek {vermogen.piek.kw} kW om {uurLabel(vermogen.piek.ts)}
+                </span>
+              )}
+            </div>
+            {vermogen.punten.length === 0 ? (
+              <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elke 30 min).</p>
+            ) : (
+              <>
+                <div className="flex h-20 items-end gap-[2px]">
+                  {vermogen.punten.map((pt) => (
+                    <div key={pt.ts} title={`${uurLabel(pt.ts)} · ${pt.kw} kW · ${pt.charging} sessie${pt.charging === 1 ? '' : 's'}`} className="flex h-full flex-1 flex-col justify-end">
+                      <div
+                        className={pt.ts === vermogen.piek.ts ? 'rounded-t-[3px] bg-oker-500' : 'rounded-t-[3px] bg-blue-400/60'}
+                        style={{ height: pt.kw > 0 ? `${Math.max(4, Math.round((pt.kw / vermogen.maxKw) * 100))}%` : '2px' }}
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-1 flex justify-between text-[10px] font-medium tabular-nums text-slate-400">
+                  <span>{uurLabel(vermogen.punten[0].ts)}</span>
+                  <span>nu</span>
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Live sessies */}
           <div>
             <AdminSubsectionHeader title="Lopende sessies" />
@@ -285,17 +333,28 @@ export function OcpiDashboardView() {
                                 </span>
                               </div>
                               <div className="space-y-1">
-                                {cpu.evses.map((evse) => (
-                                  <div key={evse.uid} className="flex min-h-8 items-center justify-between gap-2">
-                                    <span className="flex min-w-0 items-baseline gap-1.5">
-                                      <span className="text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
-                                      {evse.connectors[0] && (
-                                        <span className="truncate text-[11px] text-slate-400 tabular-nums">{kW(evse.connectors[0].max_electric_power)}</span>
-                                      )}
-                                    </span>
-                                    <Badge tone={statusTone(evse.status)} dot>{statusLabel(evse.status)}</Badge>
-                                  </div>
-                                ))}
+                                {cpu.evses.map((evse) => {
+                                  // Actuele sessie bij dit punt: toon kW + batterij%
+                                  // op de regel zelf i.p.v. alleen bij "Lopende
+                                  // sessies" — vol (0 kW / 100%) leest als "vol".
+                                  const sessie = sessieByEvse.get(evse.uid);
+                                  const vol = sessie && ((sessie.soc ?? 0) >= 100 || (typeof sessie.powerKw === 'number' && sessie.powerKw <= 0));
+                                  return (
+                                    <div key={evse.uid} className="flex min-h-8 items-center justify-between gap-2">
+                                      <span className="flex min-w-0 items-baseline gap-1.5">
+                                        <span className="text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
+                                        {sessie ? (
+                                          <span className={cn('truncate text-[11px] font-semibold tabular-nums', vol ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400')}>
+                                            {vol ? 'vol' : `${sessie.powerKw} kW`}{typeof sessie.soc === 'number' ? ` · ${sessie.soc}%` : ''}
+                                          </span>
+                                        ) : evse.connectors[0] ? (
+                                          <span className="truncate text-[11px] text-slate-400 tabular-nums">{kW(evse.connectors[0].max_electric_power)}</span>
+                                        ) : null}
+                                      </span>
+                                      <Badge tone={statusTone(evse.status)} dot>{statusLabel(evse.status)}</Badge>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             </div>
                           );
