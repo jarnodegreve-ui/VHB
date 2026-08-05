@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Zap, MapPin, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
 import { getSupabaseAuthHeaders } from '../../lib/ui';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
@@ -56,7 +56,25 @@ export function OcpiDashboardView() {
 
   useEffect(() => { load(); }, []);
 
-  const maxKwh = Math.max(1, ...(data?.kwhPerDay ?? []).map((d) => d.kwh));
+  // Doorlopende 30-dagen-reeks voor de kolomgrafiek: dagen zonder sessies
+  // worden 0 in plaats van weggelaten, anders schuiven de kolommen en klopt
+  // het ritme (weekend vs. week) niet meer.
+  const grafiek = useMemo(() => {
+    const perDag = new Map((data?.kwhPerDay ?? []).map((d) => [d.date, d]));
+    const dagen: Array<{ date: string; kwh: number; sessions: number; dow: number }> = [];
+    for (let i = 29; i >= 0; i--) {
+      const dt = new Date();
+      dt.setDate(dt.getDate() - i);
+      const iso = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+      const rij = perDag.get(iso);
+      dagen.push({ date: iso, kwh: rij?.kwh ?? 0, sessions: rij?.sessions ?? 0, dow: dt.getDay() });
+    }
+    const max = Math.max(1, ...dagen.map((d) => d.kwh));
+    const totaal = Math.round(dagen.reduce((a, d) => a + d.kwh, 0) * 10) / 10;
+    const actieveDagen = dagen.filter((d) => d.kwh > 0).length;
+    const gemiddeld = actieveDagen > 0 ? Math.round((totaal / actieveDagen) * 10) / 10 : 0;
+    return { dagen, max, totaal, gemiddeld, piek: Math.max(...dagen.map((d) => d.kwh)) };
+  }, [data?.kwhPerDay]);
 
   return (
     <PageShell width="5xl">
@@ -108,24 +126,49 @@ export function OcpiDashboardView() {
             )}
           </div>
 
-          {/* kWh per dag */}
+          {/* kWh per dag — compacte kolomgrafiek: 30 dagen naast elkaar in een
+              vast laag blok i.p.v. één rij per dag (dat werd een muur van 30
+              regels). Ontbrekende dagen tellen als 0 zodat het weekritme
+              klopt; maandagen krijgen een dagnummer als anker. */}
           <div className="surface-card p-6 rounded-3xl">
-            <MicroLabel className="mb-4">Verbruik per dag (kWh)</MicroLabel>
+            <div className="mb-4 flex items-baseline justify-between gap-3">
+              <MicroLabel>Verbruik per dag (kWh)</MicroLabel>
+              <span className="text-[11px] font-semibold tabular-nums text-slate-500">
+                {grafiek.totaal} kWh · 30 dagen
+              </span>
+            </div>
             {data.kwhPerDay.length === 0 ? (
-              <p className="text-sm text-slate-500">Nog geen afgeronde sessies (CDR's) gesynchroniseerd.</p>
+              <p className="text-sm text-slate-500">Nog geen sessies gesynchroniseerd.</p>
             ) : (
-              <div className="space-y-1.5">
-                {data.kwhPerDay.map((d) => (
-                  <div key={d.date} className="flex items-center gap-3">
-                    <span className="w-20 shrink-0 text-[11px] font-mono text-slate-500 tabular-nums">{d.date.slice(5)}</span>
-                    <div className="flex-1 h-4 rounded-md bg-slate-100 overflow-hidden">
-                      <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.kwh / maxKwh) * 100)}%` }} />
-                    </div>
-                    <span className="w-24 shrink-0 text-right text-xs font-semibold text-slate-700 tabular-nums">{d.kwh} kWh</span>
-                    <span className="w-14 shrink-0 text-right text-[11px] text-slate-400 tabular-nums">{d.sessions}×</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="flex h-24 items-end gap-[3px]">
+                  {grafiek.dagen.map((d, i) => {
+                    const vandaag = i === grafiek.dagen.length - 1;
+                    return (
+                      <div
+                        key={d.date}
+                        title={`${d.date.slice(5)} · ${d.kwh} kWh · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
+                        className="flex h-full flex-1 flex-col justify-end"
+                      >
+                        <div
+                          className={vandaag ? 'rounded-t-[3px] bg-oker-500' : 'rounded-t-[3px] bg-oker-400/70'}
+                          style={{ height: d.kwh > 0 ? `${Math.max(4, Math.round((d.kwh / grafiek.max) * 100))}%` : '2px' }}
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-1 flex gap-[3px]">
+                  {grafiek.dagen.map((d) => (
+                    <span key={d.date} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-400">
+                      {d.dow === 1 ? Number(d.date.slice(8)) : ''}
+                    </span>
+                  ))}
+                </div>
+                <p className="mt-3 text-[11px] font-medium tabular-nums text-slate-500">
+                  vandaag {grafiek.dagen.at(-1)?.kwh ?? 0} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {grafiek.piek} kWh
+                </p>
+              </>
             )}
           </div>
 
