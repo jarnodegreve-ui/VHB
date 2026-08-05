@@ -325,7 +325,7 @@ export function OcpiDashboardView() {
                     );
                   })}
                 </div>
-                <div className="mt-1 flex gap-[3px]">
+                <div className="mt-1 flex min-h-4 gap-[3px]">
                   {grafiek.dagen.map((d) => (
                     <span key={d.date} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-400">
                       {grafiek.dagen.length <= 7 ? WEEKDAG_KORT[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
@@ -335,11 +335,11 @@ export function OcpiDashboardView() {
                 {(() => {
                   const dag = grafiek.dagen.find((d) => d.date === gekozenDag);
                   return dag ? (
-                    <p className="mt-3 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                    <p className="mt-2 min-h-4 truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
                       {new Date(`${dag.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · {dag.kwh} kWh · {dag.sessions} sessie{dag.sessions === 1 ? '' : 's'}
                     </p>
                   ) : (
-                    <p className="mt-3 text-[11px] font-medium tabular-nums text-slate-500">
+                    <p className="mt-2 min-h-4 truncate text-[11px] font-medium tabular-nums text-slate-500">
                       totaal {Math.round(grafiek.totaal)} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {Math.round(grafiek.piek)} kWh
                     </p>
                   );
@@ -364,7 +364,7 @@ export function OcpiDashboardView() {
               <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elke 30 min).</p>
             ) : (
               <>
-                <div className={cn('flex h-20 items-end', vermogen.modus === 'slots' ? 'gap-[2px]' : 'gap-[3px]')}>
+                <div className={cn('flex h-24 items-end', vermogen.modus === 'slots' ? 'gap-[2px]' : 'gap-[3px]')}>
                   {vermogen.staven.map((st) => {
                     const gekozen = gekozenSlot === st.key;
                     const kop = vermogen.modus === 'slots'
@@ -388,11 +388,20 @@ export function OcpiDashboardView() {
                     );
                   })}
                 </div>
-                {vermogen.modus === 'dagen' && (
-                  <div className="mt-1 flex gap-[3px]">
+                {/* Vaste opbouw, identiek aan de verbruikskaart ernaast: één
+                    as-regel (min-h-4) en één samenvattingsregel (mt-2 min-h-4)
+                    — zo liggen grafiekbodem, as en tekst in beide kaarten op
+                    exact dezelfde hoogte. */}
+                {vermogen.modus === 'dagen' ? (
+                  <div className="mt-1 flex min-h-4 gap-[3px]">
                     {vermogen.staven.map((st) => (
                       <span key={st.key} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-400">{st.asLabel}</span>
                     ))}
+                  </div>
+                ) : (
+                  <div className="mt-1 flex min-h-4 justify-between text-[10px] font-medium tabular-nums text-slate-400">
+                    <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
+                    <span>nu</span>
                   </div>
                 )}
                 {(() => {
@@ -402,27 +411,17 @@ export function OcpiDashboardView() {
                       ? uurLabel(st.key)
                       : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel((st as any).ts ?? st.key)}`;
                     return (
-                      <p className="mt-1.5 text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                      <p className="mt-2 min-h-4 truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
                         {kop} · {st.kw} kW · {st.charging} sessie{st.charging === 1 ? '' : 's'}
                       </p>
                     );
                   }
-                  return vermogen.modus === 'slots' ? (
-                    <div className="mt-1 flex justify-between text-[10px] font-medium tabular-nums text-slate-400">
-                      <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
-                      <span>nu</span>
-                    </div>
-                  ) : (
-                    <p className="mt-1.5 text-[11px] font-medium tabular-nums text-slate-500">
-                      piek {vermogen.piekKw} kW {vermogen.piekWanneer}{vermogen.piekTs ? ` om ${uurLabel(vermogen.piekTs)}` : ''}
+                  return (
+                    <p className="mt-2 min-h-4 truncate text-[11px] font-medium tabular-nums text-slate-500">
+                      {vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}${vermogen.modus === 'dagen' && vermogen.piekTs ? ` om ${uurLabel(vermogen.piekTs)}` : ''}` : 'nog geen vermogen gemeten'}
                     </p>
                   );
                 })()}
-                {vermogen.modus === 'slots' && vermogen.piekKw > 0 && !gekozenSlot && (
-                  <p className="mt-1.5 text-[11px] font-medium tabular-nums text-slate-500">
-                    piek {vermogen.piekKw} kW {vermogen.piekWanneer}
-                  </p>
-                )}
               </>
             )}
           </div>
