@@ -743,19 +743,48 @@ export const mountOcpiRoutes = (app: express.Express) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
     try {
       const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-      const [locsR, evsesR, connsR, sessR, cdrsR] = await Promise.all([
+      const [locsR, evsesR, connsR, sessR, sess30R] = await Promise.all([
         db.from("ocpi_locations").select("country_code,party_id,id,name,city").order("name", { ascending: true }),
         db.from("ocpi_evses").select("uid,evse_id,status,location_id"),
         db.from("ocpi_connectors").select("evse_uid,id,standard,power_type,max_electric_power"),
-        db.from("ocpi_sessions").select("id,evse_uid,location_id,status,start_date_time,kwh").eq("status", "ACTIVE").order("start_date_time", { ascending: false }),
-        db.from("ocpi_cdrs").select("start_date_time,total_energy").gte("start_date_time", since30),
+        // raw meelezen: daar zitten de charging_periods met de POWER- en
+        // STATE_OF_CHARGE-dimensies in (actueel vermogen + batterij% van de bus).
+        db.from("ocpi_sessions").select("id,evse_uid,location_id,status,start_date_time,kwh,raw").eq("status", "ACTIVE").order("start_date_time", { ascending: false }),
+        // Verbruik per dag uit de sessies zelf — CDR's zijn factuurrecords en
+        // blijven bij depotladen zonder tarieven voorgoed leeg, waardoor de
+        // 30-dagen-grafiek anders nooit iets toont.
+        db.from("ocpi_sessions").select("start_date_time,kwh").gte("start_date_time", since30),
       ]);
 
       const locRows = (locsR.data ?? []) as any[];
       const evseRows = (evsesR.data ?? []) as any[];
       const connRows = (connsR.data ?? []) as any[];
-      const activeSessions = (sessR.data ?? []) as any[];
-      const cdrRows = (cdrsR.data ?? []) as any[];
+      const sess30Rows = (sess30R.data ?? []) as any[];
+
+      // Actueel vermogen + SoC uit de laatste charging_period van de sessie.
+      // POWER is volgens OCPI in kW; mocht een CPO toch watt sturen (waarden
+      // ver boven wat een laadpunt fysiek kan), normaliseren we terug.
+      const dimensiesUitRaw = (raw: any): { powerKw: number | null; soc: number | null } => {
+        const periods = Array.isArray(raw?.charging_periods) ? raw.charging_periods : [];
+        if (periods.length === 0) return { powerKw: null, soc: null };
+        const laatste = [...periods].sort((a, b) => String(a?.start_date_time ?? "").localeCompare(String(b?.start_date_time ?? ""))).at(-1);
+        const dims = Array.isArray(laatste?.dimensions) ? laatste.dimensions : [];
+        const dim = (type: string): number | null => {
+          const d = dims.find((x: any) => x?.type === type);
+          const v = d ? Number(d.volume) : NaN;
+          return Number.isFinite(v) ? v : null;
+        };
+        let power = dim("POWER");
+        if (power !== null && power > 2000) power = power / 1000; // watt → kW
+        const soc = dim("STATE_OF_CHARGE");
+        return {
+          powerKw: power === null ? null : Math.round(power * 10) / 10,
+          soc: soc === null ? null : Math.round(soc),
+        };
+      };
+      // raw niet naar de client sturen — alleen de twee afgeleide velden.
+      const activeSessions = ((sessR.data ?? []) as any[]).map(({ raw, ...rest }) => ({ ...rest, ...dimensiesUitRaw(raw) }));
+      const totalPowerKw = Math.round(activeSessions.reduce((a, sSes) => a + (sSes.powerKw ?? 0), 0) * 10) / 10;
 
       // Connectors groeperen per EVSE.
       const connByEvse = new Map<string, any[]>();
@@ -778,13 +807,13 @@ export const mountOcpiRoutes = (app: express.Express) => {
         id: l.id, name: l.name, city: l.city, evses: evsesByLoc.get(l.id) ?? [],
       }));
 
-      // kWh per dag (laatste 30d aanwezig in CDR's).
+      // kWh per dag uit de sessies van de laatste 30 dagen.
       const perDay = new Map<string, { kwh: number; sessions: number }>();
-      for (const c of cdrRows) {
+      for (const c of sess30Rows) {
         const d = String(c.start_date_time ?? "").slice(0, 10);
         if (!d) continue;
         const cur = perDay.get(d) ?? { kwh: 0, sessions: 0 };
-        cur.kwh += Number(c.total_energy) || 0;
+        cur.kwh += Number(c.kwh) || 0;
         cur.sessions += 1;
         perDay.set(d, cur);
       }
@@ -799,7 +828,8 @@ export const mountOcpiRoutes = (app: express.Express) => {
           evses: evseRows.length,
           connectors: connRows.length,
           activeSessions: activeSessions.length,
-          cdrs30d: cdrRows.length,
+          sessions30d: sess30Rows.length,
+          totalPowerKw,
           kwh30d,
         },
         statusCounts,

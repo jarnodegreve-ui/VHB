@@ -9,9 +9,9 @@ import { Badge, Button, MicroLabel } from '../../components/primitives';
 type Connector = { id: string; standard?: string; power_type?: string; max_electric_power?: number };
 type Evse = { uid: string; evse_id?: string; status?: string; connectors: Connector[] };
 type DashLocation = { id: string; name?: string; city?: string; evses: Evse[] };
-type ActiveSession = { id: string; evse_uid?: string; location_id?: string; status?: string; start_date_time?: string; kwh?: number };
+type ActiveSession = { id: string; evse_uid?: string; location_id?: string; status?: string; start_date_time?: string; kwh?: number; powerKw?: number | null; soc?: number | null };
 type Dashboard = {
-  totals: { locations: number; evses: number; connectors: number; activeSessions: number; cdrs30d: number; kwh30d: number };
+  totals: { locations: number; evses: number; connectors: number; activeSessions: number; sessions30d: number; totalPowerKw: number; kwh30d: number };
   statusCounts: Record<string, number>;
   locations: DashLocation[];
   activeSessions: ActiveSession[];
@@ -89,8 +89,8 @@ export function OcpiDashboardView() {
           {/* KPI-tegels */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={<MapPin size={20} className="text-oker-600" />} label="Locaties" value={String(data.totals.locations)} subValue={`${data.totals.evses} laadpunten`} />
-            <StatCard icon={<BatteryCharging size={20} className="text-blue-600 dark:text-blue-400" />} label="Actieve sessies" value={String(data.totals.activeSessions)} subValue="op dit moment" />
-            <StatCard icon={<Zap size={20} className="text-emerald-600" />} label="kWh (30 dagen)" value={String(data.totals.kwh30d)} subValue={`${data.totals.cdrs30d} sessies`} />
+            <StatCard icon={<BatteryCharging size={20} className="text-blue-600 dark:text-blue-400" />} label="Actieve sessies" value={String(data.totals.activeSessions)} subValue={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW op dit moment` : 'op dit moment'} />
+            <StatCard icon={<Zap size={20} className="text-emerald-600" />} label="kWh (30 dagen)" value={String(data.totals.kwh30d)} subValue={`${data.totals.sessions30d} sessies`} />
             <StatCard icon={<Gauge size={20} className="text-slate-600" />} label="Connectoren" value={String(data.totals.connectors)} subValue="totaal aangesloten" />
           </div>
 
@@ -136,15 +136,30 @@ export function OcpiDashboardView() {
               <EmptyState mascotte={false} title="Geen lopende sessies" message="Er wordt op dit moment niet geladen (of ze zijn nog niet gesynchroniseerd)." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {data.activeSessions.map((s) => (
-                  <div key={s.id} className="surface-card p-4 rounded-2xl flex items-center justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-slate-800 truncate">{s.evse_uid ?? 'Onbekende paal'}</p>
-                      <p className="text-[11px] text-slate-500">sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString() : '—'}</p>
+                {data.activeSessions.map((s) => {
+                  // powerKw 0 op 100% SoC is correct (vol, druppelt niet meer);
+                  // dan zegt "vol" meer dan "0 kW".
+                  const vol = (s.soc ?? 0) >= 100 || (typeof s.powerKw === 'number' && s.powerKw <= 0);
+                  return (
+                    <div key={s.id} className="surface-card p-4 rounded-2xl flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">{s.evse_uid ?? 'Onbekende paal'}</p>
+                        <p className="text-[11px] text-slate-500">
+                          sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString() : '—'}
+                          {typeof s.kwh === 'number' ? ` · ${s.kwh} kWh geladen` : ''}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 flex-col items-end gap-1">
+                        <Badge tone={vol ? 'emerald' : 'blue'} dot>
+                          {typeof s.powerKw === 'number' ? (vol ? 'vol' : `${s.powerKw} kW`) : 'Laden'}
+                        </Badge>
+                        {typeof s.soc === 'number' && (
+                          <span className="text-[11px] font-semibold tabular-nums text-slate-500">{s.soc}% batterij</span>
+                        )}
+                      </div>
                     </div>
-                    <Badge tone="blue" dot>{typeof s.kwh === 'number' ? `${s.kwh} kWh` : 'Laden'}</Badge>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
