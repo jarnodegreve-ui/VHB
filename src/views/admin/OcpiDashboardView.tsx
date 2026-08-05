@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
-import { Zap, MapPin, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
@@ -132,6 +132,21 @@ export function OcpiDashboardView() {
     [data?.activeSessions],
   );
   const uurLabel = (ts: string) => new Date(ts).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+  // KPI-afgeleiden: de status-telling gecomprimeerd tot wat operationeel
+  // telt. Alles wat niet beschikbaar/ladend is, is afwijkend — meestal 0,
+  // en dan hoort de tegel stil (slate) te zijn, geen loos alarm.
+  const kpi = useMemo(() => {
+    const sc = data?.statusCounts ?? {};
+    const laden = sc.CHARGING ?? 0;
+    const beschikbaar = sc.AVAILABLE ?? 0;
+    const afwijkend = Object.entries(sc).filter(([st]) => st !== 'AVAILABLE' && st !== 'CHARGING');
+    const afwijkendTotaal = afwijkend.reduce((a, [, n]) => a + Number(n), 0);
+    const afwijkendTekst = afwijkend
+      .sort((a, b) => Number(b[1]) - Number(a[1]))
+      .map(([st, n]) => `${n}× ${statusLabel(st).toLowerCase()}`)
+      .join(' · ');
+    return { laden, beschikbaar, afwijkend: afwijkendTotaal, afwijkendTekst };
+  }, [data?.statusCounts]);
 
   return (
     <PageShell width="5xl">
@@ -161,28 +176,40 @@ export function OcpiDashboardView() {
 
       {data && (
         <div className="space-y-6">
-          {/* KPI-tegels */}
+          {/* KPI-rij — vier tegels die állemaal iets operationeels zeggen.
+              "Locaties: 1" en "Connectoren: 24" stonden hier eerst, maar die
+              veranderen nooit; de status-badges-kaart is in de rij opgegaan. */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard icon={<MapPin size={20} className="text-oker-600" />} label="Locaties" value={String(data.totals.locations)} subValue={`${data.totals.evses} laadpunten`} />
-            <StatCard icon={<BatteryCharging size={20} className="text-blue-600 dark:text-blue-400" />} label="Actieve sessies" value={String(data.totals.activeSessions)} subValue={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW op dit moment` : 'op dit moment'} />
-            <StatCard icon={<Zap size={20} className="text-emerald-600" />} label="kWh (30 dagen)" value={String(data.totals.kwh30d)} subValue={`${data.totals.sessions30d} sessies`} />
-            <StatCard icon={<Gauge size={20} className="text-slate-600" />} label="Connectoren" value={String(data.totals.connectors)} subValue="totaal aangesloten" />
+            <StatCard
+              icon={<BatteryCharging size={20} className="text-blue-600 dark:text-blue-400" />}
+              label="Aan de lader"
+              value={`${kpi.laden} / ${data.totals.evses}`}
+              subValue={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW op dit moment` : 'geen vermogen op dit moment'}
+            />
+            <StatCard
+              icon={<Zap size={20} className="text-emerald-600" />}
+              label="Beschikbaar"
+              value={String(kpi.beschikbaar)}
+              subValue="vrije laadpunten"
+            />
+            <StatCard
+              icon={<AlertTriangle size={20} className={kpi.afwijkend > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400'} />}
+              label="Afwijkend"
+              value={String(kpi.afwijkend)}
+              subValue={kpi.afwijkend > 0 ? kpi.afwijkendTekst : 'alles operationeel'}
+            />
+            <StatCard
+              icon={<Gauge size={20} className="text-oker-600" />}
+              label="Vandaag geladen"
+              value={`${grafiek.dagen.at(-1)?.kwh ?? 0} kWh`}
+              subValue={`30 d: ${grafiek.totaal} kWh · ${data.totals.sessions30d} sessies`}
+            />
           </div>
 
-          {/* Statusoverzicht */}
-          <div className="surface-card p-6 rounded-3xl">
-            <MicroLabel className="mb-4">Status laadpunten</MicroLabel>
-            {Object.keys(data.statusCounts).length === 0 ? (
-              <p className="text-sm text-slate-500">Nog geen laadpunten gesynchroniseerd.</p>
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {Object.entries(data.statusCounts).sort((a, b) => Number(b[1]) - Number(a[1])).map(([status, count]) => (
-                  <Fragment key={status}><Badge tone={statusTone(status)} dot>{`${statusLabel(status)}: ${count}`}</Badge></Fragment>
-                ))}
-              </div>
-            )}
-          </div>
-
+          {/* Grafieken naast elkaar op desktop (gestapeld op mobiel):
+              verbruik per dag + vermogen 24u horen als paar gelezen te
+              worden — hoevéél er geladen is en wannéér het trekt. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* kWh per dag — compacte kolomgrafiek: 30 dagen naast elkaar in een
               vast laag blok i.p.v. één rij per dag (dat werd een muur van 30
               regels). Ontbrekende dagen tellen als 0 zodat het weekritme
@@ -261,6 +288,8 @@ export function OcpiDashboardView() {
                 </div>
               </>
             )}
+          </div>
+
           </div>
 
           {/* Live sessies */}
