@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -738,7 +738,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     if (!month) return res.status(400).json({ error: "Geef een geldige maand (YYYY-MM)." });
 
     const norm = (v: unknown) => String(v ?? "").trim().toLowerCase();
-    const [rows, users, services, codes, leave] = await Promise.all([
+    const [rows, users, services, codes, leave, swaps] = await Promise.all([
       getPlanningMatrixRows(),
       getUsersData(),
       getServicesData(),
@@ -746,6 +746,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       // Alleen afwezigheid die deze maand nog raakt — de volledige historiek
       // groeit onbegrensd en is hier nooit nodig.
       getLeaveData({ endOnOrAfter: `${month}-01` }),
+      getSwapsData(),
     ]);
 
     const monthRows = rows
@@ -834,6 +835,47 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       }
     }
 
+    const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
+
+    // Goedgekeurde dienstruilen doorvoeren in het maandbeeld (bevinding Jarno
+    // 06-08): een goedgekeurde ruil verhuist de dienst wél in de planning-
+    // tabel, maar de matrix — de bron van dit scherm — bleef de oude eigenaar
+    // tonen. We wisselen de cellen van aanvrager en collega op de dienstdag
+    // en (bij een 1-op-1 ruil) op de terugruil-dag, in beslisvolgorde zodat
+    // kettingen (A→B, daarna B→C) kloppen. Guard tegen dubbel doorvoeren:
+    // alleen wisselen als de cel van de gever nog de geruilde dienstcode
+    // toont — is de Excel intussen opnieuw geïmporteerd mét de ruil erin
+    // verwerkt, dan matcht dat niet meer en blijft alles staan. 'completed'
+    // telt mee: ook een voltooide ruil is gereden zoals gewisseld.
+    const dateSet = new Set(dates);
+    const wisselCel = (date: string, vanId: string, naarId: string, verwachtCode: string) => {
+      const vanCel = cells[vanId]?.[date];
+      if (!vanCel || toLookupToken(vanCel.code) !== toLookupToken(verwachtCode)) return;
+      const naarCel = cells[naarId]?.[date];
+      if (!cells[naarId]) cells[naarId] = {};
+      cells[naarId][date] = vanCel;
+      if (naarCel) cells[vanId][date] = naarCel;
+      else delete cells[vanId][date];
+    };
+    const doorgevoerdeRuilen = (swaps as any[])
+      .filter((sw) => sw?.status === "approved" || sw?.status === "completed")
+      .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
+    for (const sw of doorgevoerdeRuilen) {
+      const van = String(sw.requesterId ?? "");
+      const naar = String(sw.targetDriverId ?? "");
+      if (!chauffeurIds.has(van) || !chauffeurIds.has(naar)) continue;
+      const dienstDag = String(sw.shiftDate ?? "");
+      const dienstCode = String(sw.shiftLine ?? "").trim();
+      // Zonder dienst-info (aanvraag van vóór de shift_info-migratie) valt er
+      // niets veilig te wisselen.
+      if (dienstDag && dienstCode && dateSet.has(dienstDag)) wisselCel(dienstDag, van, naar, dienstCode);
+      const terugDag = String(sw.returnDate ?? "");
+      const terugCode = String(sw.returnCode ?? "").trim();
+      if (normalizeSwapType(sw.swapType) !== "overname" && terugDag && terugCode && terugCode.toLowerCase() !== "vrij" && dateSet.has(terugDag)) {
+        wisselCel(terugDag, naar, van, terugCode);
+      }
+    }
+
     // Goedgekeurde afwezigheden uit de verlof-module (ziekmelding incluis)
     // overschrijven de matrix-cel. De Excel-import is een momentopname; wie
     // dáárna ziek gemeld wordt, stond in het maandrooster nog gewoon op zijn
@@ -842,13 +884,13 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // codes (ziek/bv/kv), dus de weergave is identiek aan een code die via
     // de Excel zelf binnenkwam. Overschrijven per dag, alleen op dagen die
     // een matrix-rij hebben — kolommen zonder rij rendert de UI toch niet.
+    // Ná de ruil-overlay: ziekte moet ook een geruilde dienst overschrijven.
     const LEAVE_CODE: Record<string, string> = { ziekte: "ziek", betaald_verlof: "bv", klein_verlet: "kv" };
     const LEAVE_FALLBACK: Record<string, { kind: string; label: string }> = {
       ziekte: { kind: "absence", label: "Ziek" },
       betaald_verlof: { kind: "leave", label: "Betaald Verlof" },
       klein_verlet: { kind: "absence", label: "Klein Verlet" },
     };
-    const chauffeurIds = new Set(chauffeurs.map((c) => c.id));
     // Ziekte als laatste verwerken zodat die bij overlappende records wint —
     // "ziek tijdens verlof" moet als ziek op het rooster, niet als bv.
     const overlayLeave = (leave as any[])
@@ -1045,14 +1087,9 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
 });
 
 
-// Eén bron voor de nette verloftype-labels — stond 3× lokaal gekopieerd,
-// waarvan één kopie 'ziekte' miste (annuleringsmail toonde toen de rauwe
-// enum-waarde).
-const LEAVE_TYPE_LABEL: Record<string, string> = {
-  betaald_verlof: "Betaald verlof",
-  klein_verlet: "Klein verlet",
-  ziekte: "Ziekte",
-};
+// De verloftype-labels (LEAVE_TYPE_LABEL) wonen sinds de consolidatie in
+// helpers.ts, naast de drift-test tegen de bewuste client-kopie in
+// src/lib/format.ts.
 
 // --- Dienstnotities: kort bericht van de planner bij één dienstdag ---
 const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -1419,13 +1456,18 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
     const vorigePlanning = await getPlanningData();
     const dienstSleutel = (r: any) => `${r.date}|${r.startTime ?? ""}|${r.endTime ?? ""}|${r.line ?? ""}|${r.loopnr ?? ""}|${r.busNumber ?? ""}`;
     const perChauffeur = (rows: any[]) => {
-      const map = new Map<string, string>();
+      // Eerst lijsten verzamelen, dan één keer sorteren/joinen — de oude
+      // opbouw her-splitte en her-sorteerde de string per rij (O(n²)) en
+      // smokkelde via "".split("\n") een lege regel in elke sleutel.
+      const lijsten = new Map<string, string[]>();
       for (const r of rows) {
         const id = String(r.driverId ?? "");
         if (!id) continue;
-        map.set(id, [...(map.get(id) ?? "").split("\n"), dienstSleutel(r)].sort().join("\n"));
+        const lijst = lijsten.get(id) ?? [];
+        lijst.push(dienstSleutel(r));
+        lijsten.set(id, lijst);
       }
-      return map;
+      return new Map([...lijsten].map(([id, keys]) => [id, keys.sort().join("\n")] as const));
     };
     const oud = perChauffeur(vorigePlanning as any[]);
     const nieuwSet = perChauffeur(generatedPlanning.shifts); // ruilen zijn in-place toegepast
@@ -2675,6 +2717,41 @@ const describeSwapCarry = (
   return `Planning ${richting}: ${delen.join("; ")}.`;
 };
 
+/** Afwezigheids-check voor een dienstruil, in béíde richtingen: de collega
+ *  moet er zijn op de dienstdag die hij overneemt, en bij een 1-op-1 ruil de
+ *  aanvrager op de terugruil-dag. Wordt gebruikt bij het indienen én bij het
+ *  goedkeuren — tussen die twee momenten kan iemand ziek gemeld zijn, en de
+ *  check dekte voorheen alleen het indienen (en alleen de collega). Geeft een
+ *  foutzin of null. */
+const AFWEZIG_LABEL: Record<string, string> = { ziekte: "ziek gemeld", betaald_verlof: "met verlof", klein_verlet: "afwezig (klein verlet)" };
+const ruilAfwezigheidsFout = async (swap: {
+  requesterId?: unknown; targetDriverId?: unknown; swapType?: unknown;
+  shiftDate?: unknown; returnDate?: unknown; returnCode?: unknown;
+}): Promise<string | null> => {
+  const targetId = String(swap.targetDriverId ?? "").trim();
+  const requesterId = String(swap.requesterId ?? "").trim();
+  const dienstDag = String(swap.shiftDate ?? "").trim();
+  const terugDag = String(swap.returnDate ?? "").trim();
+  const terugCode = String(swap.returnCode ?? "").trim();
+  const checks: Array<{ userId: string; date: string; wie: "collega" | "aanvrager" }> = [];
+  if (targetId && dienstDag) checks.push({ userId: targetId, date: dienstDag, wie: "collega" });
+  // Bij een overname of een 'vrij'-tegenprestatie rijdt de aanvrager niets terug.
+  if (normalizeSwapType(swap.swapType) !== "overname" && requesterId && terugDag && terugCode && terugCode.toLowerCase() !== "vrij") {
+    checks.push({ userId: requesterId, date: terugDag, wie: "aanvrager" });
+  }
+  if (checks.length === 0) return null;
+  const vroegste = checks.map((c) => c.date).sort()[0];
+  const [leave, users] = await Promise.all([getLeaveData({ endOnOrAfter: vroegste }), getUsersData()]);
+  for (const c of checks) {
+    const afwezig = afwezigOp(leave as any[], c.userId, c.date);
+    if (afwezig) {
+      const naam = users.find((u: any) => String(u.id) === c.userId)?.name ?? (c.wie === "collega" ? "De collega" : "De aanvrager");
+      return `${naam} is ${AFWEZIG_LABEL[afwezig.type] ?? "afwezig gemeld"} op ${c.date} — deze ruil kan niet doorgaan.`;
+    }
+  }
+  return null;
+};
+
 /** Heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op een vers
  *  gegenereerde planning. De matrix (Excel) kent de ruilen immers niet —
  *  zonder deze stap veegde elke import/heropbouw alle doorgevoerde wissels
@@ -2979,6 +3056,10 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       if (!becomesApproved) continue;
       const stale = await staleApprovalError(next, previousSwaps);
       if (stale) return res.status(409).json({ error: stale });
+      // Tussen indienen en goedkeuren kan iemand ziek gemeld zijn — bij het
+      // goedkeuren opnieuw toetsen, op de ópgeslagen voorwaarden.
+      const afwFout = await ruilAfwezigheidsFout(prev ?? next);
+      if (afwFout) return res.status(409).json({ error: afwFout });
     }
 
     // State-machine: een afgehandelde ruil (geweigerd/geannuleerd/voltooid) kan
@@ -3083,27 +3164,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // Afwezigheids-check voor élke nieuwe ruil (1-op-1 én overname): de
     // verlofmodule is sinds de ziek-melden-knop een eigen bron naast de
     // matrix — wie dáár ziek of met verlof gemeld staat, staat in de Excel
-    // vaak nog gewoon op 'vrij'. Zonder deze check accepteerde de server een
-    // dienst voor een ziek gemelde collega, die vervolgens in de dekking ook
-    // nog als 'gedekt' telde.
+    // vaak nog gewoon op 'vrij'. In beide richtingen (collega op de dienstdag,
+    // aanvrager op de terugruil-dag) — zie ruilAfwezigheidsFout.
     {
       const nieuweRuilen = recordsToWrite.filter((n: any) => !previousById.has(String(n.id)));
-      if (nieuweRuilen.length > 0) {
-        const [leaveVoorRuil, usersVoorRuil] = await Promise.all([getLeaveData(), getUsersData()]);
-        const AFWEZIG_LABEL: Record<string, string> = { ziekte: "ziek gemeld", betaald_verlof: "met verlof", klein_verlet: "afwezig (klein verlet)" };
-        for (const next of nieuweRuilen) {
-          const targetId = String(next.targetDriverId ?? "").trim();
-          if (!targetId) continue; // de takeover-tak hierboven geeft hier al een 400 voor
-          const offeredShift = await getShiftById(String(next.shiftId ?? ""));
-          if (!offeredShift) continue; // bestaande checks vangen dit al af
-          const afwezig = afwezigOp(leaveVoorRuil as any[], targetId, String(offeredShift.date));
-          if (afwezig) {
-            const naam = usersVoorRuil.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
-            return res.status(409).json({
-              error: `${naam} is ${AFWEZIG_LABEL[afwezig.type] ?? "afwezig gemeld"} op ${offeredShift.date} — een dienst doorgeven kan dan niet.`,
-            });
-          }
-        }
+      for (const next of nieuweRuilen) {
+        // Ontbrekende shift/target vangen de bestaande checks hierboven al af.
+        const offeredShift = await getShiftById(String(next.shiftId ?? ""));
+        const fout = await ruilAfwezigheidsFout({ ...next, shiftDate: offeredShift?.date });
+        if (fout) return res.status(409).json({ error: fout });
       }
     }
 
@@ -3327,6 +3396,10 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
     if (status === "approved" && current.status !== "approved") {
       const stale = await staleApprovalError(current, all);
       if (stale) return res.status(409).json({ error: stale });
+      // Zelfde afwezigheids-hercheck als de array-route: wie ziek gemeld is
+      // sinds het indienen, mag de dienst niet alsnog toegeschoven krijgen.
+      const afwFout = await ruilAfwezigheidsFout(current);
+      if (afwFout) return res.status(409).json({ error: afwFout });
     }
 
     // Planning-doorvoer VÓÓR de statuswijziging. movePlanningRows filtert op

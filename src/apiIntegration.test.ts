@@ -2111,6 +2111,99 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
   });
 });
 
+describe('maandplanning — goedgekeurde dienstruilen zichtbaar (bevinding Jarno 06-08)', () => {
+  // Een goedgekeurde ruil verhuist de dienst in de planning-tabel, maar het
+  // maandrooster leest de matrix — zonder overlay bleef de oude eigenaar
+  // daar op zijn dienst staan.
+  beforeEach(() => {
+    mem.planningMatrix = [
+      { id: 'm-r1', source_date: '2026-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+      { id: 'm-r2', source_date: '2026-07-16', day_type: 'week', assignments: { 'Chauffeur B': '11' }, raw_row: '' },
+    ];
+    mem.swaps = [];
+    mem.leave = [];
+  });
+
+  it('een goedgekeurde overname verhuist de dienst-cel naar de collega', async () => {
+    mem.swaps = [
+      { id: 'r-1', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved', swapType: 'overname', reason: '', createdAt: '2026-07-10T08:00:00Z', decidedAt: '2026-07-11T08:00:00Z', shiftDate: '2026-07-15', shiftLine: '12' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: '12', kind: 'service' });
+    expect(res.json.cells['3']?.['2026-07-15']).toBeUndefined();
+  });
+
+  it('een 1-op-1 ruil wisselt óók de terugruil-dag', async () => {
+    mem.swaps = [
+      { id: 'r-2', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved', swapType: 'ruil', reason: '', createdAt: '2026-07-10T08:00:00Z', decidedAt: '2026-07-11T08:00:00Z', shiftDate: '2026-07-15', shiftLine: '12', returnDate: '2026-07-16', returnCode: '11' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: '12', kind: 'service' });
+    expect(res.json.cells['3']['2026-07-16']).toMatchObject({ code: '11', kind: 'service' });
+    expect(res.json.cells['4']?.['2026-07-16']).toBeUndefined();
+  });
+
+  it('geen dubbele doorvoer als de Excel de ruil al verwerkt heeft', async () => {
+    // De planner importeerde een nieuwe Excel mét de ruil erin: de cel staat
+    // al bij de collega. De overlay mag hem dan niet terug-wisselen.
+    mem.planningMatrix = [
+      { id: 'm-r3', source_date: '2026-07-15', day_type: 'week', assignments: { 'Chauffeur B': '12' }, raw_row: '' },
+    ];
+    mem.swaps = [
+      { id: 'r-3', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved', swapType: 'overname', reason: '', createdAt: '2026-07-10T08:00:00Z', decidedAt: '2026-07-11T08:00:00Z', shiftDate: '2026-07-15', shiftLine: '12' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: '12', kind: 'service' });
+    expect(res.json.cells['3']?.['2026-07-15']).toBeUndefined();
+  });
+
+  it('een latere ziekmelding wint van de geruilde dienst', async () => {
+    mem.planningCodes = [{ id: 'pc-ziek', code: 'ziek', description: 'Ziek', category: 'absence' }];
+    mem.swaps = [
+      { id: 'r-4', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved', swapType: 'overname', reason: '', createdAt: '2026-07-10T08:00:00Z', decidedAt: '2026-07-11T08:00:00Z', shiftDate: '2026-07-15', shiftLine: '12' },
+    ];
+    mem.leave = [
+      { id: 'l-r', userId: '4', startDate: '2026-07-15', endDate: '2026-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-07-14T06:00:00Z', decidedAt: '2026-07-14T06:00:00Z' },
+    ];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({ code: 'ziek', kind: 'absence' });
+  });
+});
+
+describe('dienstruil — afwezigheids-check in beide richtingen', () => {
+  it('weigert een nieuwe ruil als de AANVRAGER ziek is op de terugruil-dag (409)', async () => {
+    // Chauffeur 4 biedt sh-b aan en zou op 08/07 dienst 12 van chauffeur 3
+    // terugrijden — maar is die dag zelf ziek gemeld. De oude check keek
+    // alleen naar de collega op de dienstdag.
+    mem.swaps = [];
+    mem.leave = [
+      { id: 'l-req', userId: '4', startDate: '2026-07-08', endDate: '2026-07-08', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-07-07T06:00:00Z', decidedAt: '2026-07-07T06:00:00Z' },
+    ];
+    const nieuw = {
+      id: 's-richting', shiftId: 'sh-b', requesterId: '4', targetDriverId: '3', status: 'pending',
+      reason: '', createdAt: '2026-06-13T08:00:00Z', returnDate: '2026-07-08', returnCode: '12',
+    };
+    const res = await api('POST', '/api/swaps', { token: 'tok-b', body: [nieuw] });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s: any) => s.id === 's-richting')).toBeUndefined();
+  });
+
+  it('weigert goedkeuren als de collega ná het accepteren ziek gemeld is (409)', async () => {
+    mem.swaps = [
+      { id: 's-zk', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-02', returnCode: 'VRIJ' },
+    ];
+    mem.leave = [
+      { id: 'l-na', userId: '4', startDate: '2026-07-01', endDate: '2026-07-01', type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-06-20T06:00:00Z', decidedAt: '2026-06-20T06:00:00Z' },
+    ];
+    const res = await api('PATCH', '/api/swaps/s-zk', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s: any) => s.id === 's-zk')?.status).toBe('accepted');
+    // De planning is niet halverwege gewisseld.
+    expect(mem.planning.find((r: any) => r.id === 'sh-a')?.driverId).toBe('3');
+  });
+});
+
 describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', () => {
   it('approved → rejected draait de planning terug (niet alleen cancelled)', async () => {
     // sh-a is via s-x doorgevoerd naar chauffeur 4; de planner wijst hem daarna

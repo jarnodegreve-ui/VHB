@@ -26,6 +26,7 @@ import {
   toDatabaseSwap,
   toDatabaseUpdate,
   toDatabaseUser,
+  sortedNameToken,
   toLookupToken,
   toPublicDiversion,
   toPublicLeave,
@@ -784,14 +785,6 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
   ]);
   const rows = inputRows ?? await getPlanningMatrixRows();
 
-  // Volgorde-onafhankelijke naam-key zodat 'Pascal Duysburgh' en
-  // 'Duysburgh Pascal' beide naar dezelfde gebruiker matchen.
-  const sortedNameToken = (name: string) =>
-    toLookupToken(name)
-      .split(/\s+/)
-      .filter(Boolean)
-      .sort()
-      .join(" ");
   // Botsings-detectie: twee verschillende gebruikers die op dezelfde
   // naam-sleutel uitkomen (zelfde naam, of "Jan Karel" vs "Karel Jan" via de
   // gesorteerde token). Voorheen was dit laatste-wint → alle diensten van

@@ -126,10 +126,16 @@ export function PlannerDashboardWidgets({
   const [laadplein, setLaadplein] = useState<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number } | null>(null);
   useEffect(() => {
     let cancelled = false;
-    apiFetch<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number }>('/api/ocpi/summary')
-      .then((sum) => { if (!cancelled && sum && sum.evses > 0) setLaadplein(sum); })
-      .catch(() => { /* geen OCPI = geen tegel */ });
-    return () => { cancelled = true; };
+    const haal = () => {
+      apiFetch<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number }>('/api/ocpi/summary')
+        .then((sum) => { if (!cancelled && sum && sum.evses > 0) setLaadplein(sum); })
+        .catch(() => { /* geen OCPI = geen tegel */ });
+    };
+    haal();
+    // Elke 5 min verversen: het dashboard staat vaak de hele dag open en de
+    // tegel toonde anders de laadstand van 's ochtends.
+    const timer = window.setInterval(haal, 5 * 60 * 1000);
+    return () => { cancelled = true; window.clearInterval(timer); };
   }, [todayKey]);
   useEffect(() => {
     let cancelled = false;
@@ -188,13 +194,11 @@ export function PlannerDashboardWidgets({
   // planner moet hem vanuit de cockpit kunnen invoeren zonder van scherm te
   // wisselen. De server maakt er een direct goedgekeurd 'ziekte'-verlof van.
   const [showSickModal, setShowSickModal] = useState(false);
-  // Focus keert na het sluiten terug naar de knop die de dialoog opende —
-  // anders landt een VoiceOver-gebruiker weer bovenaan de pagina.
+  // Focus-herstel doet de Modal zelf (previouslyFocused in Modal.tsx) —
+  // een eigen .focus() hier vocht daarmee en kon op een tussenliggende
+  // renderstap de verkeerde knop pakken.
   const sickTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const closeSickModal = () => {
-    setShowSickModal(false);
-    sickTriggerRef.current?.focus();
-  };
+  const closeSickModal = () => setShowSickModal(false);
   const [sickForm, setSickForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
   const [isSubmittingSick, setIsSubmittingSick] = useState(false);
   const [sickError, setSickError] = useState('');
@@ -327,9 +331,19 @@ export function PlannerDashboardWidgets({
   // Wie is er vandaag afwezig? Twee bronnen: goedgekeurde aanvragen uit de
   // verlof-module + de afwezigheidscodes uit de geïmporteerde matrix
   // (gededuped op naam — module-aanvraag wint, die heeft het rijkere label).
-  const moduleAbsent = leaveRequests
-    .filter((l) => l.status === 'approved' && l.startDate <= today && today <= l.endDate)
-    .map((l) => ({ id: l.id, name: userNameById(l.userId), label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' }));
+  // Zelfde regels als afwezigOpDag: kapotte/omgekeerde datums tellen niet
+  // mee, en per collega wint ziekte — de popup ernaast deed dat al, deze
+  // tegel liep nog op de oude losse filter.
+  const moduleAbsentByUser = new Map<string, { id: string; name: string; label: string; isSick: boolean }>();
+  for (const l of leaveRequests) {
+    if (l.status !== 'approved') continue;
+    if (!isoDagRe.test(l.startDate) || !isoDagRe.test(l.endDate) || l.startDate > l.endDate) continue;
+    if (!(l.startDate <= today && today <= l.endDate)) continue;
+    const kandidaat = { id: l.id, name: userNameById(l.userId), label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' };
+    const bestaand = moduleAbsentByUser.get(String(l.userId));
+    if (!bestaand || (kandidaat.isSick && !bestaand.isSick)) moduleAbsentByUser.set(String(l.userId), kandidaat);
+  }
+  const moduleAbsent = [...moduleAbsentByUser.values()];
   const seenNames = new Set(moduleAbsent.map((a) => a.name.trim().toLowerCase()));
   const todayAbsent = [
     ...moduleAbsent,
@@ -535,12 +549,13 @@ export function PlannerDashboardWidgets({
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling van 7 tegels op elke breedte. Het aantal doet er
-          echt toe: mobiel 2 kolommen (3 rijen van 2 + de laatste over de volle
-          breedte), md 6 kolommen (2 rijen van 3 tegels à 2 + de laatste over
-          6), xl 7 kolommen naast elkaar. Haal je hier een tegel weg of zet je
-          er een bij, dan moeten deze drie tellingen mee — anders valt er een
-          gat in de rij. */}
+          Gat-vrije verdeling op elke breedte, voor 7 én 8 tegels (de
+          laadplein-tegel verschijnt alleen mét OCPI-data). Zonder laadplein:
+          md = 3 tegels à span-2 + 4 à span-3 (rijen 3/2/2). Mét laadplein:
+          md = 6 tegels à span-2 + 2 à span-3 (rijen 3/3/2) — voorheen bleef
+          de 8e tegel alleen achter met een gat van een halve rij ernaast.
+          Haal je hier een tegel weg of zet je er een bij, dan moeten deze
+          tellingen mee. */}
       <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-8' : 'xl:grid-cols-7')}>
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
@@ -571,7 +586,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAvailable(true)}
         />
         <OpsStat
-          className="md:col-span-3 xl:col-span-1"
+          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
           icon={<CalendarClock size={16} />}
           tone={todayAbsent.some((a) => a.isSick) ? 'rose' : 'slate'}
           label="Vandaag afwezig"
@@ -582,7 +597,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAbsent(true)}
         />
         <OpsStat
-          className="md:col-span-3 xl:col-span-1"
+          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
           icon={<Inbox size={16} />}
           tone={openTasks > 0 ? 'amber' : 'emerald'}
           label="Aanvragen"
@@ -591,7 +606,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof')}
         />
         <OpsStat
-          className="md:col-span-3 xl:col-span-1"
+          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
           icon={<MapPin size={16} />}
           tone="slate"
           label="Omleidingen"
