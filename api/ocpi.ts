@@ -813,7 +813,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
     try {
       const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-      const [locsR, evsesR, connsR, sessR, sess30R, powerR] = await Promise.all([
+      const [locsR, evsesR, connsR, sessR, sess30R, powerR, sess7R] = await Promise.all([
         db.from("ocpi_locations").select("country_code,party_id,id,name,city").order("name", { ascending: true }),
         db.from("ocpi_evses").select("uid,evse_id,status,location_id,physical_reference"),
         db.from("ocpi_connectors").select("evse_uid,id,standard,power_type,max_electric_power"),
@@ -829,12 +829,38 @@ export const mountOcpiRoutes = (app: express.Express) => {
         // 7d/maand als dágpieken). Rollend venster, geen kalenderdag — de
         // server rekent in UTC en het laden gebeurt juist rond middernacht.
         db.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()).order("ts", { ascending: true }),
+        // Sessies van de laatste 7 dagen mét raw: ChargEye stuurt per sessie
+        // een technicalFailClassification mee ("OK" of bv. HANDSHAKE_FAIL) —
+        // dé bron voor mislukte laadbeurten die verder nergens zichtbaar zijn.
+        db.from("ocpi_sessions").select("id,evse_uid,start_date_time,end_date_time,raw").gte("start_date_time", new Date(Date.now() - 7 * 24 * 3600 * 1000).toISOString()).order("start_date_time", { ascending: false }),
       ]);
 
       const locRows = (locsR.data ?? []) as any[];
       const evseRows = (evsesR.data ?? []) as any[];
       const connRows = (connsR.data ?? []) as any[];
       const sess30Rows = (sess30R.data ?? []) as any[];
+      // Storingen (verzoek Jarno 06-08): (a) laadpunten met een defect-status,
+      // (b) sessies van de afgelopen week met een technicalFailClassification
+      // anders dan OK — het "stekker in maar laadt niet"-scenario.
+      const DEFECT_STATUSSEN = new Set(["INOPERATIVE", "OUTOFORDER", "BLOCKED", "UNKNOWN"]);
+      const storingen: Array<{ soort: "laadpunt" | "sessie"; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }> = [];
+      for (const e of (evsesR.data ?? []) as any[]) {
+        if (DEFECT_STATUSSEN.has(String(e.status ?? ""))) {
+          storingen.push({ soort: "laadpunt", evseUid: String(e.uid), status: String(e.status), wanneer: null });
+        }
+      }
+      for (const r of (sess7R.data ?? []) as any[]) {
+        const klasse = String(r?.raw?.custom?.technicalFailClassification ?? "");
+        if (klasse && klasse !== "OK") {
+          storingen.push({
+            soort: "sessie",
+            evseUid: r.evse_uid ? String(r.evse_uid) : null,
+            classificatie: klasse,
+            wanneer: String(r.end_date_time ?? r.start_date_time ?? "") || null,
+          });
+        }
+      }
+
       const powerCurve = ((powerR.data ?? []) as any[]).map((r) => ({
         ts: String(r.ts),
         kw: Math.round((Number(r.total_power_kw) || 0) * 10) / 10,
@@ -896,6 +922,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
         activeSessions,
         kwhPerDay,
         powerCurve,
+        storingen,
       });
     } catch (err: any) {
       console.error("[ocpi] dashboard mislukt:", err?.message ?? err);

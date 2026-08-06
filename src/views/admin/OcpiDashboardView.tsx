@@ -85,6 +85,7 @@ type Dashboard = {
   activeSessions: ActiveSession[];
   kwhPerDay: Array<{ date: string; kwh: number; sessions: number }>;
   powerCurve: Array<{ ts: string; kw: number; charging: number }>;
+  storingen: Array<{ soort: 'laadpunt' | 'sessie'; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }>;
 };
 
 type BadgeTone = 'slate' | 'emerald' | 'red' | 'amber' | 'blue';
@@ -587,6 +588,41 @@ export function OcpiDashboardView() {
                     )}
                   </div>
                 ))}
+              </div>
+            )}
+          </div>
+
+          {/* Storingen uit ChargEye (verzoek Jarno 06-08): defecte laadpunten
+              + mislukte laadsessies (technicalFailClassification ≠ OK) van de
+              afgelopen 7 dagen. Dit maakt het "stekker in maar laadt niet"-
+              scenario zichtbaar dat anders alleen in de ruwe data stond. */}
+          <div>
+            <AdminSubsectionHeader title="Storingen (ChargEye)" />
+            {data.storingen.length === 0 ? (
+              <div className="surface-card p-6 rounded-3xl">
+                <p className="text-sm font-semibold text-emerald-600">Geen storingen — alle laadpunten en laadbeurten van de afgelopen 7 dagen in orde.</p>
+              </div>
+            ) : (
+              <div className="surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
+                {data.storingen.map((st, i) => {
+                  const nummer = st.evseUid ? nummerByUid.get(st.evseUid) ?? st.evseUid : null;
+                  const bus = nummer ? busVoorLaadpunt(nummer) : null;
+                  return (
+                    <div key={`${st.soort}-${st.evseUid ?? 'x'}-${st.wanneer ?? i}`} className="flex items-center justify-between gap-3 p-4">
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-800 truncate">
+                          {nummer ? `Laadpunt ${nummer}` : 'Onbekend laadpunt'}{bus ? ` · bus ${bus}` : ''}
+                        </p>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
+                          {st.soort === 'laadpunt'
+                            ? `laadpunt in storing (${statusLabel(st.status).toLowerCase()})`
+                            : `mislukte laadbeurt (${st.classificatie})${st.wanneer ? ` · ${new Date(st.wanneer).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}
+                        </p>
+                      </div>
+                      <Badge tone="red" dot>{st.soort === 'laadpunt' ? statusLabel(st.status) : 'Sessie mislukt'}</Badge>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>
