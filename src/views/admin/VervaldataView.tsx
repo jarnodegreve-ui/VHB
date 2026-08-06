@@ -5,7 +5,7 @@ import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
-import { StatCard } from '../../components/StatCard';
+import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Badge, Button, MicroLabel, type BadgeTone } from '../../components/primitives';
 
@@ -153,30 +153,38 @@ export function VervaldataView({ users }: { users: User[] }) {
         <div className="p-4 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-100">{error}</div>
       )}
 
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard
-          icon={<AlertTriangle size={20} className={tellers.verlopen > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400'} />}
+      {/* Ops-tegels (zelfde als de status-strip op het dashboard): vaste
+          twee-regel-labelzone, dus cijfers en subteksten van alle vier de
+          tegels liggen op exact dezelfde lijn — de brede StatCards lieten
+          de labels wikkelen en alles verspringen (melding Jarno). */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <OpsStat
+          icon={<AlertTriangle size={16} />}
+          tone={tellers.verlopen > 0 ? 'red' : 'slate'}
           label="Verlopen"
-          value={String(tellers.verlopen)}
-          subValue={tellers.verlopen > 0 ? 'direct actie nodig' : 'niets verlopen'}
+          value={tellers.verlopen}
+          sub={tellers.verlopen > 0 ? 'direct actie nodig' : 'niets verlopen'}
         />
-        <StatCard
-          icon={<IdCard size={20} className={tellers.binnen30 > 0 ? 'text-amber-600' : 'text-slate-400'} />}
+        <OpsStat
+          icon={<IdCard size={16} />}
+          tone={tellers.binnen30 > 0 ? 'amber' : 'slate'}
           label="Binnen 30 dagen"
-          value={String(tellers.binnen30)}
-          subValue="vernieuwing plannen"
+          value={tellers.binnen30}
+          sub="vernieuwing plannen"
         />
-        <StatCard
-          icon={<IdCard size={20} className="text-oker-600" />}
+        <OpsStat
+          icon={<IdCard size={16} />}
+          tone={tellers.binnen90 > 0 ? 'oker' : 'slate'}
           label="Binnen 90 dagen"
-          value={String(tellers.binnen90)}
-          subValue="komt eraan"
+          value={tellers.binnen90}
+          sub="komt eraan"
         />
-        <StatCard
-          icon={<UserX size={20} className={tellers.zonder > 0 ? 'text-amber-600' : 'text-slate-400'} />}
+        <OpsStat
+          icon={<UserX size={16} />}
+          tone={tellers.zonder > 0 ? 'amber' : 'slate'}
           label="Zonder datums"
-          value={String(tellers.zonder)}
-          subValue={tellers.zonder > 0 ? 'nog in te vullen' : 'alles ingevuld'}
+          value={tellers.zonder}
+          sub={tellers.zonder > 0 ? 'nog in te vullen' : 'alles ingevuld'}
         />
       </div>
 
