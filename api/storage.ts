@@ -2218,3 +2218,44 @@ export const deletePlanningNote = async (driverId: string, date: string): Promis
     .eq('date', date);
   if (error) throw error;
 };
+
+// === Vervaldata (rijbewijs / Code 95 / medische schifting) ===
+// Eén rij per gebruiker+soort; beheer door planner/admin via de API.
+export type UserExpiryRecord = {
+  userId: string;
+  soort: string;
+  validUntil: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+};
+
+export const getUserExpiries = async (): Promise<UserExpiryRecord[]> => {
+  const client = requireDb();
+  const { data, error } = await client.from('user_expiries').select('*');
+  if (error) throw error;
+  return ((data ?? []) as any[]).map((r) => ({
+    userId: String(r.user_id),
+    soort: String(r.soort),
+    validUntil: String(r.valid_until),
+    updatedAt: r.updated_at ? String(r.updated_at) : null,
+    updatedBy: r.updated_by ? String(r.updated_by) : null,
+  }));
+};
+
+export const saveUserExpiry = async (rec: { userId: string; soort: string; validUntil: string; updatedBy: string | null }): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.from('user_expiries').upsert({
+    user_id: String(rec.userId),
+    soort: rec.soort,
+    valid_until: rec.validUntil,
+    updated_by: rec.updatedBy,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) throw error;
+};
+
+export const deleteUserExpiry = async (userId: string, soort: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.from('user_expiries').delete().eq('user_id', String(userId)).eq('soort', soort);
+  if (error) throw error;
+};

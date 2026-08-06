@@ -38,4 +38,9 @@ describe('gedeelde types blijven synchroon (src/types ↔ api/types)', () => {
     const { LEAVE_TYPE_LABELS } = await import('./lib/format');
     expect(LEAVE_TYPE_LABELS).toEqual(LEAVE_TYPE_LABEL);
   });
+  it('vervaldata-labels zijn identiek (api/helpers ↔ src/lib/format)', async () => {
+    const { EXPIRY_SOORT_LABEL } = await import('../api/helpers');
+    const { EXPIRY_SOORT_LABELS } = await import('./lib/format');
+    expect(EXPIRY_SOORT_LABELS).toEqual(EXPIRY_SOORT_LABEL);
+  });
 });

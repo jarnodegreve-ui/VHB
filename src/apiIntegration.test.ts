@@ -56,6 +56,7 @@ const mem = vi.hoisted(() => ({
   ritblaadje: null as any,
   devices: [] as any[],
   planningNotes: [] as any[],
+  userExpiries: [] as any[],
 }));
 
 vi.mock('../api/db.js', () => {
@@ -125,6 +126,14 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     getUsersData: async () => mem.users,
     getPlanningNotes: async (o: any) => mem.planningNotes.filter((n: any) => (!o.driverId || n.driverId === o.driverId) && n.date >= o.fromIso && n.date <= o.toIso),
     upsertPlanningNote: async (driverId: string, date: string, note: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); mem.planningNotes.push({ driverId, date, note }); },
+    getUserExpiries: async () => mem.userExpiries,
+    saveUserExpiry: async (rec: any) => {
+      mem.userExpiries = mem.userExpiries.filter((e: any) => !(e.userId === rec.userId && e.soort === rec.soort));
+      mem.userExpiries.push({ ...rec, updatedAt: null });
+    },
+    deleteUserExpiry: async (userId: string, soort: string) => {
+      mem.userExpiries = mem.userExpiries.filter((e: any) => !(e.userId === userId && e.soort === soort));
+    },
     deletePlanningNote: async (driverId: string, date: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); },
     saveUsersData: async (data: any[]) => {
       // Zelfde contract als de echte functie: nieuwe e-mailadressen = nieuw
@@ -404,6 +413,7 @@ beforeEach(() => {
   // Beide chauffeurs hebben één goedgekeurd toestel ('dev-ok' — de default
   // van de api()-helper), zodat de whitelist-gate bestaande tests niet raakt.
   mem.planningNotes = [];
+  mem.userExpiries = [];
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
     { userId: '4', deviceToken: 'dev-ok', name: 'Android · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
@@ -2279,5 +2289,35 @@ describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', (
     const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, geldig] });
     expect(res.status).toBe(200);
     expect(mem.swaps.find((s: any) => s.id === 's-ok')).toBeTruthy();
+  });
+});
+
+describe('vervaldata (rijbewijs / Code 95 / medische schifting)', () => {
+  it('planner zet een vervaldatum; chauffeur ziet alleen zijn eigen datums', async () => {
+    const zet = await api('PUT', '/api/user-expiries', { token: 'tok-planner', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });
+    expect(zet.status).toBe(200);
+    await api('PUT', '/api/user-expiries', { token: 'tok-planner', body: { userId: '4', soort: 'rijbewijs', validUntil: '2028-01-15' } });
+    // Chauffeur 3 (tok-a) ziet alleen zichzelf.
+    const eigen = await api('GET', '/api/user-expiries', { token: 'tok-a' });
+    expect(eigen.status).toBe(200);
+    expect(eigen.json).toEqual([{ userId: '3', soort: 'code95', validUntil: '2027-03-01' }]);
+    // Planner ziet alles.
+    const alle = await api('GET', '/api/user-expiries', { token: 'tok-planner' });
+    expect(alle.json).toHaveLength(2);
+  });
+
+  it('chauffeur mag niet schrijven (403); lege datum verwijdert; rommel wordt geweigerd', async () => {
+    const verboden = await api('PUT', '/api/user-expiries', { token: 'tok-a', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });
+    expect(verboden.status).toBe(403);
+    await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });
+    const weg = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: null } });
+    expect(weg.status).toBe(200);
+    expect(mem.userExpiries).toHaveLength(0);
+    const fouteSoort = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'tachograaf', validUntil: '2027-01-01' } });
+    expect(fouteSoort.status).toBe(400);
+    const fouteDatum = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: '01/03/2027' } });
+    expect(fouteDatum.status).toBe(400);
+    const onbekendeUser = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: 'geest', soort: 'code95', validUntil: '2027-01-01' } });
+    expect(onbekendeUser.status).toBe(404);
   });
 });

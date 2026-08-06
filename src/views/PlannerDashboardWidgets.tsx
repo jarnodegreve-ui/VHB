@@ -6,6 +6,7 @@ import {
   Bus,
   CalendarClock,
   CalendarDays,
+  IdCard,
   Inbox,
   KeyRound,
   MapPin,
@@ -19,6 +20,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
+import { EXPIRY_SOORT_LABELS } from '../lib/format';
 import type {
   ActivityLogEntry,
   Diversion,
@@ -124,6 +126,17 @@ export function PlannerDashboardWidgets({
   // de fetch (OCPI niet geconfigureerd, storing), dan verdwijnt de tegel
   // gewoon — het dashboard mag er nooit op wachten of door breken.
   const [laadplein, setLaadplein] = useState<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number } | null>(null);
+  // Vervaldata (rijbewijs/Code 95/medische schifting): rijen in Open taken
+  // zodra iets binnen 30 dagen verloopt. Best-effort, net als de laad-tegel.
+  const [vervaldata, setVervaldata] = useState<Array<{ userId: string; soort: string; validUntil: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    apiFetch<Array<{ userId: string; soort: string; validUntil: string }>>('/api/user-expiries')
+      .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
+      .catch(() => { /* geen data = geen rijen */ });
+    return () => { cancelled = true; };
+  }, [todayKey]);
+
   useEffect(() => {
     let cancelled = false;
     const haal = () => {
@@ -314,13 +327,22 @@ export function PlannerDashboardWidgets({
   // als rij in 'Open taken' verschijnt telt mee — niets anders.
   // (Omleidingen tellen bewust niet mee: een omleiding is informatief, geen
   // openstaande taak.)
+  // Documenten die binnen 30 dagen verlopen (of al verlopen zijn) — alleen
+  // van actieve chauffeurs; gesorteerd op urgentie.
+  const isActiveUserId = (id: string) => users.some((u) => String(u.id) === id && u.isActive !== false);
+  const vervalTaken = vervaldata
+    .filter((e) => isActiveUserId(e.userId))
+    .map((e) => ({ ...e, dagen: Math.round((Date.parse(e.validUntil) - Date.parse(today)) / 86400000) }))
+    .filter((e) => Number.isFinite(e.dagen) && e.dagen <= 30)
+    .sort((a, b) => a.dagen - b.dagen);
   const attentionCount =
-    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks;
+    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks + vervalTaken.length;
   const needsAttention = attentionCount > 0;
   // Het paneel toont per soort een top-N (3 dekkingsdagen, 4 verlof, 4 ruil,
   // 3 toestellen); dit is wat daarbuiten valt, zodat de teller in de kop
   // eerlijk blijft.
   const hiddenAttentionCount =
+    Math.max(0, vervalTaken.length - 3) +
     Math.max(0, gapDays.length - 3) +
     Math.max(0, pendingLeave.length - 4) +
     Math.max(0, pendingSwaps.length - 4) +
@@ -686,6 +708,21 @@ export function PlannerDashboardWidgets({
                 onClick={() => onNavigate('beheer-roosters')}
               />
             )}
+            {vervalTaken.slice(0, 3).map((e) => (
+              <Fragment key={`${e.userId}:${e.soort}`}>
+              <OpsRow
+                tone={e.dagen < 0 ? 'red' : 'amber'}
+                icon={<IdCard size={15} />}
+                primary={`${EXPIRY_SOORT_LABELS[e.soort] ?? e.soort} · ${userNameById(e.userId)}`}
+                secondary={e.dagen < 0
+                  ? `Verlopen sinds ${e.validUntil}`
+                  : e.dagen === 0
+                    ? `Verloopt vandaag (${e.validUntil})`
+                    : `Verloopt over ${e.dagen} ${e.dagen === 1 ? 'dag' : 'dagen'} (${e.validUntil})`}
+                onClick={() => onNavigate('gebruikers')}
+              />
+              </Fragment>
+            ))}
             {gapDays.slice(0, 3).map((d) => (
               <Fragment key={d.date}>
               <OpsRow
@@ -739,7 +776,7 @@ export function PlannerDashboardWidgets({
                 de teller in de kop dat je alles ziet. */}
             {hiddenAttentionCount > 0 && (
               <p className="px-4 pt-1 text-xs font-medium text-slate-500">
-                +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil of Toestellen voor de volledige lijst.
+                +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil, Toestellen of Gebruikers voor de volledige lijst.
               </p>
             )}
             {attentionCount === 0 && (
