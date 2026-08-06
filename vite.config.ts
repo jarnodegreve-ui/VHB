@@ -13,9 +13,24 @@ const BUILD_INFO = {
   builtAt: new Date().toISOString(),
 };
 
+// Stempelt de service-worker-cache-naam bij elke build: public/sw.js bevat
+// de placeholder __VHB_BUILD_ID__; hier wordt hij vervangen door de
+// commit-SHA (Vercel) of de buildtijd (lokaal). Zo wijzigt sw.js bij élke
+// deploy en pikt een standalone PWA de nieuwe versie vanzelf op — de
+// handmatige CACHE_NAME-bump werd structureel vergeten (14 releases lang).
+const stampServiceWorker = () => ({
+  name: 'vhb-stamp-sw',
+  closeBundle() {
+    const swPath = path.resolve(__dirname, 'dist/sw.js');
+    if (!fs.existsSync(swPath)) return;
+    const id = BUILD_INFO.sha || BUILD_INFO.builtAt.replace(/[-:TZ.]/g, '').slice(0, 12);
+    fs.writeFileSync(swPath, fs.readFileSync(swPath, 'utf-8').replaceAll('__VHB_BUILD_ID__', id));
+  },
+});
+
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), stampServiceWorker()],
     define: {
       __BUILD_INFO__: JSON.stringify(BUILD_INFO),
     },

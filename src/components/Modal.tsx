@@ -4,6 +4,12 @@ import { motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 
+// Stapel van open modals (module-scope): bij een dialoog bóven een dialoog
+// (bv. verwijder-bevestiging boven Gebruikersbeheer-modal) mogen ESC en de
+// focus-trap alleen op de bovenste werken — anders sloten beide tegelijk en
+// trok de onderliggende trap de focus uit de bevestiging weg.
+const modalStack: symbol[] = [];
+
 /**
  * Portal-rendered modal with backdrop, click-outside-to-close and ESC support.
  *
@@ -21,6 +27,8 @@ export function Modal({
   maxWidth = 'md',
   className,
   dismissOnBackdrop = true,
+  ariaLabel,
+  boven = false,
 }: {
   open: boolean;
   onClose: () => void;
@@ -28,11 +36,32 @@ export function Modal({
   maxWidth?: 'sm' | 'md' | 'lg' | 'xl' | '2xl';
   className?: string;
   dismissOnBackdrop?: boolean;
+  /** Toegankelijke naam van de dialoog — zonder deze heet elke modal voor
+   *  VoiceOver alleen "dialoog". Geef mee wat de kop van de inhoud is. */
+  ariaLabel?: string;
+  /** Rendert boven een al openstaande modal (hogere z-index) — voor
+   *  bevestigings-dialogen bovenop een formulier-modal. */
+  boven?: boolean;
 }) {
+  const idRef = useRef(Symbol('modal'));
+  const isBovenste = () => modalStack[modalStack.length - 1] === idRef.current;
+
+  useEffect(() => {
+    if (!open) return;
+    const id = idRef.current;
+    modalStack.push(id);
+    return () => {
+      const i = modalStack.indexOf(id);
+      if (i !== -1) modalStack.splice(i, 1);
+    };
+  }, [open]);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      // Alleen de bovenste dialoog sluit op ESC — anders klapte een
+      // bevestiging én zijn onderliggende formulier in één toets dicht.
+      if (event.key === 'Escape' && isBovenste()) onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -46,10 +75,12 @@ export function Modal({
   useEffect(() => {
     if (!open) return;
     const previouslyFocused = document.activeElement as HTMLElement | null;
-    panelRef.current?.focus();
+    // Respecteer een autoFocus-veld in de inhoud: React zet die focus vóór
+    // dit effect, en het paneel mag hem dan niet meer afpakken.
+    const panel = panelRef.current;
+    if (panel && !(document.activeElement && panel.contains(document.activeElement))) panel.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== 'Tab') return;
-      const panel = panelRef.current;
+      if (event.key !== 'Tab' || !isBovenste()) return;
       if (!panel) return;
       const focusables = panel.querySelectorAll<HTMLElement>(
         'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])',
@@ -80,15 +111,21 @@ export function Modal({
     };
   }, [open]);
 
-  // Body-scroll-lock, zelfde patroon als SlideOver. Zonder dit scrollde en
-  // rubberbandde de pagina áchter de modal mee zodra je binnenin het einde van
-  // een lijst bereikte — de modal leek dan te "zwabberen".
+  // Scroll-lock. De app scrolt niet op <body> maar in een eigen container
+  // ([data-scroll-root] in App.tsx) — alleen body locken was daardoor een
+  // no-op en de pagina rubberbandde achter de modal mee zodra je binnenin
+  // het einde van een lijst bereikte. Beide locken: body als vangnet (print,
+  // login), de echte scroll-root voor de app zelf.
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
+    const scrollRoot = document.querySelector<HTMLElement>('[data-scroll-root]');
+    const previousBody = document.body.style.overflow;
+    const previousRoot = scrollRoot?.style.overflow ?? '';
     document.body.style.overflow = 'hidden';
+    if (scrollRoot) scrollRoot.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = previous;
+      document.body.style.overflow = previousBody;
+      if (scrollRoot) scrollRoot.style.overflow = previousRoot;
     };
   }, [open]);
 
@@ -115,7 +152,10 @@ export function Modal({
       // Op mobile: minimale padding zodat de modal bijna full-screen kan,
       // en respecteer safe-area (notch + home-indicator).
       // Op md+: 1rem padding rondom de modal.
-      className="fixed inset-0 z-[100] flex items-center justify-center p-2 md:p-4 bg-slate-900/40 backdrop-blur-sm"
+      className={cn(
+        'fixed inset-0 flex items-center justify-center p-2 md:p-4 bg-slate-900/40 backdrop-blur-sm',
+        boven ? 'z-[120]' : 'z-[100]',
+      )}
       style={{
         paddingTop: 'max(0.5rem, env(safe-area-inset-top))',
         paddingBottom: keyboardInset
@@ -127,6 +167,7 @@ export function Modal({
         ref={panelRef}
         role="dialog"
         aria-modal="true"
+        aria-label={ariaLabel}
         tabIndex={-1}
         initial={{ opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}

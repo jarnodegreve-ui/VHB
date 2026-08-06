@@ -14,7 +14,10 @@ export function StatCard({ icon, label, value, subValue }: { icon: React.ReactNo
         {icon}
       </div>
       <div className="relative z-10 min-w-0 w-full flex-1">
-        <p className="truncate text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em]">{label}</p>
+        {/* line-clamp i.p.v. truncate: labels als "Niet-gematchte chauffeurs"
+            verloren anders stil hun betekenis; de grid-rij rekt kaarten toch
+            tot gelijke hoogte. */}
+        <p className="line-clamp-2 text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em]" title={label}>{label}</p>
         <p className="section-title text-xl sm:text-2xl md:text-[1.75rem] font-black text-slate-900 mt-1 tracking-tight leading-none tabular-nums">{value}</p>
         <p className="text-[11px] sm:text-xs text-slate-500 mt-1.5 font-medium leading-snug">{subValue}</p>
       </div>

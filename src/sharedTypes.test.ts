@@ -29,4 +29,13 @@ describe('gedeelde types blijven synchroon (src/types ↔ api/types)', () => {
     expect(typeof clientToApiCategory).toBe('function');
     expect(typeof apiToClientCategory).toBe('function');
   });
+  it('verloftype-labels zijn identiek (api/helpers ↔ src/lib/format)', async () => {
+    // Bewuste duplicatie (geen cross-imports api↔src in productie-code):
+    // deze runtime-check bewaakt dat de twee kopieën gelijk blijven — een
+    // label dat maar aan één kant wijzigt gaf eerder rauwe enum-waarden in
+    // mails of UI.
+    const { LEAVE_TYPE_LABEL } = await import('../api/helpers');
+    const { LEAVE_TYPE_LABELS } = await import('./lib/format');
+    expect(LEAVE_TYPE_LABELS).toEqual(LEAVE_TYPE_LABEL);
+  });
 });

@@ -230,7 +230,10 @@ export function PlanningMatrixView({
         title="Planningsoverzicht"
         description="Controleer de geïmporteerde matrix en los onbekende codes of niet-gematchte chauffeurs op."
       />
-      <div className="grid gap-4 md:grid-cols-3">
+      {/* 2 kolommen op mobiel: bij één kolom werd elke kaart een volle-
+          breedte-strook met het icoon erboven en veel leegte (StatCard
+          stapelt onder sm juist voor smalle 2-koloms cellen). */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
         <StatCard
           icon={<Clock className="text-emerald-600" />}
           label="Gegenereerde Diensten"
@@ -449,7 +452,7 @@ export function PlanningMatrixView({
                 <Badge tone="oker">Matrix staging</Badge>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
                 <StatCard
                   icon={<Users className="text-oker-600" />}
                   label="Chauffeurs"

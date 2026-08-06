@@ -170,13 +170,11 @@ export const matrixCodesForDate = (
   users: Array<Pick<AppUser, "id" | "name">>,
   date: string,
 ): Map<string, string> => {
-  const sortedNameToken = (name: string) =>
-    toLookupToken(name).split(/\s+/).filter(Boolean).sort().join(" ");
-  const idByName = new Map<string, string>();
-  for (const u of users) {
-    idByName.set(toLookupToken(u.name), String(u.id));
-    idByName.set(sortedNameToken(u.name), String(u.id));
-  }
+  // Gedeelde index mét botsingsdetectie — de lokale variant hier was
+  // last-wins, waardoor bij twee gebruikers op dezelfde naam-sleutel de
+  // codes stil bij de verkeerde chauffeur belandden terwijl de rest van de
+  // app zulke sleutels juist weigert.
+  const idByName = nameIdIndex(users);
 
   const out = new Map<string, string>();
   for (const row of rows) {
@@ -383,6 +381,16 @@ export const nameIdIndex = (users: Array<{ id: string | number; name?: string | 
   }
   for (const token of botsingen) map.delete(token);
   return map;
+};
+
+/** Nette verloftype-labels (server-kant). Bewust gedupliceerd in
+ *  src/lib/format.ts (LEAVE_TYPE_LABELS) — de repo-conventie verbiedt
+ *  cross-imports tussen api/ en src/; de drift-test in sharedTypes.test.ts
+ *  bewaakt dat de twee gelijk blijven. */
+export const LEAVE_TYPE_LABEL: Record<string, string> = {
+  betaald_verlof: "Betaald verlof",
+  klein_verlet: "Klein verlet",
+  ziekte: "Ziekte",
 };
 
 /**

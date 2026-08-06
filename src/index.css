@@ -45,9 +45,11 @@
    en niet op de Donkere-modus-knop in de app. */
 /* :is() i.p.v. :where(): geeft dark:-utilities specificiteit (0,2,0), zodat
    ze wínnen van de blanket-overrides onderaan dit bestand (die staan op
-   :where(.dark) = (0,1,0)). Zonder dat verschil verslond elke
-   `.dark .text-x`-override stil de bijbehorende `dark:`-utility — de bron
-   van vier contrastbugs uit de controle-ronde. */
+   :where(.dark) = (0,1,0)). LET OP: dat werkt alléén doordat die overrides
+   in `@layer utilities` gewikkeld zijn — cascade-layers gaan vóór
+   specificiteit, dus een unlayered override verslaat élke dark:-utility,
+   hoe specifiek ook. Nieuwe blanket-overrides op utility-klassen horen dus
+   altijd ín dat @layer-blok. */
 @custom-variant dark (&:is(.dark, .dark *));
 
 @theme {
@@ -715,6 +717,17 @@ html.dark {
 
 :where(.dark) .fine-divider { border-color: rgba(154, 161, 169, 0.12); }
 
+/* === Blanket-overrides op Tailwind-UTILITY-klassen — verplicht ín
+   @layer utilities. Unlayered CSS wint van álle layered CSS ongeacht
+   specificiteit; buiten de layer versloegen deze overrides dus elke
+   `dark:`-utility (die in @layer utilities leeft) en was de halve
+   dark:-strategie dode code. Binnen de layer beslist specificiteit wél:
+   dark:-utilities staan op (0,2,0) via :is() en winnen; de kale utility
+   (0,1,0) verliest op bron-volgorde van de override (0,1,0) die later
+   komt. Component-klassen (.surface-card, .panel, …) hierboven blijven
+   bewust unlayered — hun light-basisregels zijn zelf unlayered, dus hun
+   dark-overrides moeten dat ook zijn. === */
+@layer utilities {
 /* Opacity-varianten van border-slate-200 (klassen mét /NN zijn aparte
    classnamen, dus de kale override hierboven matcht ze niet). */
 :where(.dark) .border-slate-200\/60,
@@ -968,6 +981,7 @@ html.dark {
 :where(.dark) .hover\:text-slate-950:hover { color: #0D0D0F; }
 :where(.dark) .active\:bg-slate-100:active { background-color: rgba(79, 87, 95, 0.45); }
 :where(.dark) .active\:bg-slate-50:active { background-color: rgba(79, 87, 95, 0.32); }
+}
 
 /* Icoonvierkant van de snelle acties: `dark:bg-oker-500/15` verloor het van
    de unlayered `.dark .bg-slate-900` hierboven, waardoor het vlak pikzwart

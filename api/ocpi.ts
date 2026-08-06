@@ -190,7 +190,7 @@ const ocpiFetch = async (url: string, token: string, init?: { method?: string; b
  * sla het resultaat (Token C + endpoints) op. Idempotent: opnieuw draaien
  * registreert opnieuw en overschrijft de opgeslagen rij.
  */
-export const registerWithCpo = async (): Promise<{ version: string; cpoPartyId: string | null; endpoints: number }> => {
+const registerWithCpo = async (): Promise<{ version: string; cpoPartyId: string | null; endpoints: number }> => {
   if (!CPO_VERSIONS_URL) throw new Error("OCPI_CPO_VERSIONS_URL ontbreekt in de omgeving.");
   if (!TOKEN_A) throw new Error("OCPI_TOKEN_A ontbreekt in de omgeving.");
   if (!PUBLIC_BASE) throw new Error("OCPI_PUBLIC_BASE_URL ontbreekt (nodig zodat de CPO ons kan bereiken).");
@@ -425,21 +425,21 @@ const resolveSenderEndpoint = (reg: OcpiRegistration, identifier: string): strin
   return url ? assertSafeOcpiUrl(url, `sender-endpoint '${identifier}'`) : null;
 };
 
-export const fetchLocations = async (): Promise<OcpiLocation[]> => {
+const fetchLocations = async (): Promise<OcpiLocation[]> => {
   const reg = await requireRegistration();
   const url = resolveSenderEndpoint(reg, "locations");
   if (!url) throw new Error("OCPI: geen 'locations' Sender-endpoint bij de CPO.");
   return ocpiGetAll<OcpiLocation>(withParams(url, {}), reg.cpo_token_c!);
 };
 
-export const fetchSessions = async (opts: { dateFrom?: string; dateTo?: string } = {}): Promise<OcpiSession[]> => {
+const fetchSessions = async (opts: { dateFrom?: string; dateTo?: string } = {}): Promise<OcpiSession[]> => {
   const reg = await requireRegistration();
   const url = resolveSenderEndpoint(reg, "sessions");
   if (!url) throw new Error("OCPI: geen 'sessions' Sender-endpoint bij de CPO.");
   return ocpiGetAll<OcpiSession>(withParams(url, { date_from: opts.dateFrom, date_to: opts.dateTo }), reg.cpo_token_c!);
 };
 
-export const fetchCdrs = async (opts: { dateFrom?: string; dateTo?: string } = {}): Promise<OcpiCdr[]> => {
+const fetchCdrs = async (opts: { dateFrom?: string; dateTo?: string } = {}): Promise<OcpiCdr[]> => {
   const reg = await requireRegistration();
   const url = resolveSenderEndpoint(reg, "cdrs");
   if (!url) throw new Error("OCPI: geen 'cdrs' Sender-endpoint bij de CPO.");
@@ -451,7 +451,7 @@ export const fetchCdrs = async (opts: { dateFrom?: string; dateTo?: string } = {
 // zodat één fout de rest niet meesleurt; idempotent via upsert op de PK's.
 // ============================================================================
 
-export type OcpiSyncSummary = {
+type OcpiSyncSummary = {
   locations: number;
   evses: number;
   connectors: number;
@@ -553,9 +553,11 @@ const syncCdrs = async (summary: OcpiSyncSummary, opts: { dateFrom?: string } = 
  * andere modules gewoon doorlopen. Niet-geregistreerd → vroege, nette return.
  */
 // Actueel vermogen + SoC uit de laatste charging_period van een sessie.
-// POWER is volgens OCPI in kW; mocht een CPO toch watt sturen (waarden ver
-// boven wat een laadpunt fysiek kan), normaliseren we terug. Gedeeld door het
-// dashboard (per-sessie-weergave) en de sync (vermogens-snapshot).
+// POWER is volgens OCPI in kW; mocht een CPO toch watt sturen, normaliseren we
+// terug. De grens ligt op 700: geen enkel laadpunt op het depot komt boven
+// ~600 kW, dus alles daarboven is watt — de oude grens van 2000 liet
+// watt-waarden tussen 700 en 2000 (bv. 1.500 W) als "1500 kW" doorglippen.
+// Gedeeld door het dashboard (per-sessie-weergave) en de sync (snapshot).
 const dimensiesUitRaw = (raw: any): { powerKw: number | null; soc: number | null } => {
   const periods = Array.isArray(raw?.charging_periods) ? raw.charging_periods : [];
   if (periods.length === 0) return { powerKw: null, soc: null };
@@ -567,7 +569,7 @@ const dimensiesUitRaw = (raw: any): { powerKw: number | null; soc: number | null
     return Number.isFinite(v) ? v : null;
   };
   let power = dim("POWER");
-  if (power !== null && power > 2000) power = power / 1000; // watt → kW
+  if (power !== null && power > 700) power = power / 1000; // watt → kW
   const soc = dim("STATE_OF_CHARGE");
   return {
     powerKw: power === null ? null : Math.round(power * 10) / 10,
@@ -575,26 +577,75 @@ const dimensiesUitRaw = (raw: any): { powerKw: number | null; soc: number | null
   };
 };
 
+// PostgREST kapt élke select stil af op 1.000 rijen. Reeksen die daar
+// overheen kunnen (31 dagen snapshots ≈ 1.500 rijen, sessies per maand) halen
+// we per pagina op via .range() — anders verliest een grafiek stil zijn staart
+// zonder ook maar één foutmelding. De builder MOET een .order() bevatten,
+// anders is de paginering niet stabiel.
+const selectAlles = async (bouw: (van: number, tot: number) => PromiseLike<{ data: unknown; error: { message: string } | null }>): Promise<any[]> => {
+  const uit: any[] = [];
+  const stap = 1000;
+  for (let van = 0; van < 100_000; van += stap) {
+    const { data, error } = await bouw(van, van + stap - 1);
+    if (error) throw new Error(error.message);
+    const rijen = (data ?? []) as any[];
+    uit.push(...rijen);
+    if (rijen.length < stap) break;
+  }
+  return uit;
+};
+
+// Kalenderdag in Europe/Brussels. De sessies starten juist rond middernacht
+// (depotladen), dus bucketen op de UTC-datum schoof een flink deel van het
+// nachtverbruik naar de verkeerde dag en liet "vandaag geladen" te laag staan.
+const brusselseDag = (iso: unknown): string => {
+  const d = new Date(String(iso ?? ""));
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+};
+
+// Eén sessie per laadpunt: bij twee ACTIVE-sessies op dezelfde EVSE (stale
+// sync-data) is de jóngste de werkelijkheid — de oudste is een spooksessie
+// die anders het totaalvermogen dubbel telde en in de UI de verkeerde
+// SoC/vermogen toonde. Sessies zonder evse_uid blijven allemaal staan.
+const perEvseNieuwste = <T extends { evse_uid?: unknown; start_date_time?: unknown }>(sessies: T[]): T[] => {
+  const nieuwste = new Map<string, T>();
+  const zonderEvse: T[] = [];
+  for (const s of sessies) {
+    const uid = String(s.evse_uid ?? "");
+    if (!uid) { zonderEvse.push(s); continue; }
+    const huidige = nieuwste.get(uid);
+    if (!huidige || String(s.start_date_time ?? "") > String(huidige.start_date_time ?? "")) nieuwste.set(uid, s);
+  }
+  return [...nieuwste.values(), ...zonderEvse];
+};
+
 /**
  * Vermogens-snapshot voor de piekbewaking: som van het actuele vermogen over
  * alle ACTIVE-sessies, weggeschreven op de 30-minuten-slotgrens (afgerond —
  * vereiste van de SQL-review: zonder afronding vuurt ON CONFLICT nooit en
- * stapelen dubbele syncs binnen één slot als losse rijen). Retentie: 35 dagen.
- * Best-effort — een falende snapshot mag de sync zelf nooit breken.
+ * stapelen dubbele syncs binnen één slot als losse rijen). Binnen één slot
+ * wint de hoogste meting: een handmatige sync mocht de cron-piek niet
+ * overschrijven — dat is precies het getal waar het capaciteitstarief om
+ * draait. Retentie: 35 dagen. Best-effort — een falende snapshot mag de
+ * sync zelf nooit breken.
  */
 const schrijfVermogensSnapshot = async (): Promise<void> => {
   if (!db) return;
-  const { data } = await db.from("ocpi_sessions").select("raw").eq("status", "ACTIVE");
-  const sessies = (data ?? []) as any[];
+  const { data } = await db.from("ocpi_sessions").select("raw,evse_uid,start_date_time").eq("status", "ACTIVE");
+  const sessies = perEvseNieuwste((data ?? []) as any[]);
   const totaal = Math.round(sessies.reduce((a, r) => a + (dimensiesUitRaw(r.raw).powerKw ?? 0), 0) * 10) / 10;
   const slotMs = 30 * 60 * 1000;
   const slot = new Date(Math.floor(Date.now() / slotMs) * slotMs).toISOString();
-  await db.from("ocpi_power_snapshots").upsert({ ts: slot, total_power_kw: totaal, charging: sessies.length }, { onConflict: "ts" });
+  const { data: bestaand } = await db.from("ocpi_power_snapshots").select("total_power_kw").eq("ts", slot).maybeSingle();
+  if (!bestaand || Number(bestaand.total_power_kw) < totaal) {
+    await db.from("ocpi_power_snapshots").upsert({ ts: slot, total_power_kw: totaal, charging: sessies.length }, { onConflict: "ts" });
+  }
   const grens = new Date(Date.now() - 35 * 24 * 3600 * 1000).toISOString();
   await db.from("ocpi_power_snapshots").delete().lt("ts", grens);
 };
 
-export const runOcpiSync = async (
+const runOcpiSync = async (
   parts: { locations?: boolean; sessions?: boolean; cdrs?: boolean } = { locations: true, sessions: true, cdrs: true },
 ): Promise<OcpiSyncSummary> => {
   const summary: OcpiSyncSummary = { locations: 0, evses: 0, connectors: 0, sessions: 0, cdrs: 0, errors: [] };
@@ -732,17 +783,16 @@ export const mountOcpiRoutes = (app: express.Express) => {
     try {
       const [evsesR, sessR] = await Promise.all([
         db.from("ocpi_evses").select("status"),
-        db.from("ocpi_sessions").select("raw").eq("status", "ACTIVE"),
+        db.from("ocpi_sessions").select("raw,evse_uid,start_date_time").eq("status", "ACTIVE"),
       ]);
       const statussen = ((evsesR.data ?? []) as any[]).map((e) => String(e.status ?? ""));
-      const sessies = (sessR.data ?? []) as any[];
+      // Zelfde spooksessie-dedupe als het dashboard: jongste sessie per EVSE.
+      const sessies = perEvseNieuwste((sessR.data ?? []) as any[]);
       const totalPowerKw = Math.round(sessies.reduce((a, r) => a + (dimensiesUitRaw(r.raw).powerKw ?? 0), 0) * 10) / 10;
       res.json({
         evses: statussen.length,
         charging: statussen.filter((st) => st === "CHARGING").length,
-        available: statussen.filter((st) => st === "AVAILABLE").length,
         outOfOrder: statussen.filter((st) => st === "INOPERATIVE" || st === "OUTOFORDER").length,
-        activeSessions: sessies.length,
         totalPowerKw,
       });
     } catch (err: any) {
@@ -768,10 +818,14 @@ export const mountOcpiRoutes = (app: express.Express) => {
   // Beheer: handmatig synchroniseren (knop in de OCPI-kaart). Standaard alles.
   app.post("/api/ocpi/sync", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     try {
+      // CDR's bewust NIET standaard: het zijn factuurrecords die bij
+      // depotladen zonder tarieven altijd leeg blijven — de keten draaide
+      // maandenlang 48×/dag voor 0 rijen. Wie ze toch wil, vraagt er
+      // expliciet om (body.cdrs / ?parts=cdrs).
       const body = (req.body ?? {}) as { locations?: boolean; sessions?: boolean; cdrs?: boolean };
       const parts = (body.locations || body.sessions || body.cdrs)
         ? body
-        : { locations: true, sessions: true, cdrs: true };
+        : { locations: true, sessions: true };
       const summary = await runOcpiSync(parts);
       res.json({ success: summary.errors.length === 0, ...summary });
     } catch (err: any) {
@@ -788,8 +842,9 @@ export const mountOcpiRoutes = (app: express.Express) => {
       return res.status(401).json({ error: "Niet toegestaan." });
     }
     const which = String(req.query.parts ?? "all");
+    // "all" slaat CDR's bewust over — zie de toelichting bij de handmatige sync.
     const parts = which === "all"
-      ? { locations: true, sessions: true, cdrs: true }
+      ? { locations: true, sessions: true }
       : { locations: which === "locations", sessions: which === "sessions", cdrs: which === "cdrs" };
     try {
       const summary = await runOcpiSync(parts);
@@ -813,7 +868,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
     try {
       const since30 = new Date(Date.now() - 30 * 24 * 3600 * 1000).toISOString();
-      const [locsR, evsesR, connsR, sessR, sess30R, powerR, sess7R] = await Promise.all([
+      const [locsR, evsesR, connsR, sessR, sess30Rows, powerRows, sess7R] = await Promise.all([
         db.from("ocpi_locations").select("country_code,party_id,id,name,city").order("name", { ascending: true }),
         db.from("ocpi_evses").select("uid,evse_id,status,location_id,physical_reference"),
         db.from("ocpi_connectors").select("evse_uid,id,standard,power_type,max_electric_power"),
@@ -822,13 +877,15 @@ export const mountOcpiRoutes = (app: express.Express) => {
         db.from("ocpi_sessions").select("id,evse_uid,location_id,status,start_date_time,kwh,raw").eq("status", "ACTIVE").order("start_date_time", { ascending: false }),
         // Verbruik per dag uit de sessies zelf — CDR's zijn factuurrecords en
         // blijven bij depotladen zonder tarieven voorgoed leeg, waardoor de
-        // 30-dagen-grafiek anders nooit iets toont.
-        db.from("ocpi_sessions").select("start_date_time,kwh").gte("start_date_time", since30),
-        // Vermogens-snapshots van de laatste 31 dagen (≤ ~1.500 rijen à drie
-        // velden): de UI kiest daar zelf de termijn uit (24u als slots,
-        // 7d/maand als dágpieken). Rollend venster, geen kalenderdag — de
-        // server rekent in UTC en het laden gebeurt juist rond middernacht.
-        db.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()).order("ts", { ascending: true }),
+        // 30-dagen-grafiek anders nooit iets toont. Gepagineerd: een maand kan
+        // over de 1.000-rijen-cap van PostgREST heen.
+        selectAlles((van, tot) => db!.from("ocpi_sessions").select("start_date_time,kwh").gte("start_date_time", since30).order("start_date_time", { ascending: true }).range(van, tot)),
+        // Vermogens-snapshots van de laatste 31 dagen, gepagineerd (48 slots
+        // per dag ≈ 1.500 rijen — boven de 1.000-rijen-cap, die anders stil de
+        // nieuwste rijen liet vallen). Rollend venster; de server splitst ze
+        // hieronder in 24u-slots + dágpieken zodat de client geen ~90 KB aan
+        // ruwe slots hoeft te slikken.
+        selectAlles((van, tot) => db!.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()).order("ts", { ascending: true }).range(van, tot)),
         // Sessies van de laatste 7 dagen mét raw: ChargEye stuurt per sessie
         // een technicalFailClassification mee ("OK" of bv. HANDSHAKE_FAIL) —
         // dé bron voor mislukte laadbeurten die verder nergens zichtbaar zijn.
@@ -838,21 +895,25 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const locRows = (locsR.data ?? []) as any[];
       const evseRows = (evsesR.data ?? []) as any[];
       const connRows = (connsR.data ?? []) as any[];
-      const sess30Rows = (sess30R.data ?? []) as any[];
       // Storingen (verzoek Jarno 06-08): (a) laadpunten met een defect-status,
       // (b) sessies van de afgelopen week met een technicalFailClassification
-      // anders dan OK — het "stekker in maar laadt niet"-scenario.
+      // anders dan OK — het "stekker in maar laadt niet"-scenario. Een EVSE
+      // zonder status telt als UNKNOWN, net als in de statustelling.
       const DEFECT_STATUSSEN = new Set(["INOPERATIVE", "OUTOFORDER", "BLOCKED", "UNKNOWN"]);
-      const storingen: Array<{ soort: "laadpunt" | "sessie"; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }> = [];
-      for (const e of (evsesR.data ?? []) as any[]) {
-        if (DEFECT_STATUSSEN.has(String(e.status ?? ""))) {
-          storingen.push({ soort: "laadpunt", evseUid: String(e.uid), status: String(e.status), wanneer: null });
+      const laadpuntStoringen: Array<{ soort: "laadpunt"; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }> = [];
+      const sessieStoringen: Array<{ soort: "sessie"; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }> = [];
+      for (const e of evseRows) {
+        const st = String(e.status ?? "") || "UNKNOWN";
+        if (DEFECT_STATUSSEN.has(st)) {
+          laadpuntStoringen.push({ soort: "laadpunt", evseUid: String(e.uid), status: st, wanneer: null });
         }
       }
       for (const r of (sess7R.data ?? []) as any[]) {
-        const klasse = String(r?.raw?.custom?.technicalFailClassification ?? "");
+        // Cap op de string zelf: dit veld komt letterlijk van een externe
+        // partij en gaat ongefilterd de UI in.
+        const klasse = String(r?.raw?.custom?.technicalFailClassification ?? "").slice(0, 80);
         if (klasse && klasse !== "OK") {
-          storingen.push({
+          sessieStoringen.push({
             soort: "sessie",
             evseUid: r.evse_uid ? String(r.evse_uid) : null,
             classificatie: klasse,
@@ -860,15 +921,43 @@ export const mountOcpiRoutes = (app: express.Express) => {
           });
         }
       }
+      // Doorlopende defecten eerst (die zijn nú aan de hand), daarna de
+      // mislukte laadbeurten op recentheid — de UI toont er standaard vijf en
+      // beloofde "recentste", maar kreeg ze voorheen in sync-volgorde. Cap als
+      // vangnet: de lijst is voor mensen, niet voor bulk-export.
+      sessieStoringen.sort((a, b) => String(b.wanneer ?? "").localeCompare(String(a.wanneer ?? "")));
+      const storingen = [...laadpuntStoringen, ...sessieStoringen].slice(0, 100);
 
-      const powerCurve = ((powerR.data ?? []) as any[]).map((r) => ({
-        ts: String(r.ts),
-        kw: Math.round((Number(r.total_power_kw) || 0) * 10) / 10,
-        charging: Number(r.charging) || 0,
-      }));
+      // 24u aan ruwe 30-min-slots voor de fijne grafiek…
+      const sinds24u = Date.now() - 24 * 3600 * 1000;
+      const powerCurve = powerRows
+        .filter((r) => new Date(String(r.ts)).getTime() >= sinds24u)
+        .map((r) => ({
+          ts: String(r.ts),
+          kw: Math.round((Number(r.total_power_kw) || 0) * 10) / 10,
+          charging: Number(r.charging) || 0,
+        }));
+      // …en per Brusselse kalenderdag de piek voor de 7d/maand-termijnen.
+      // De piek per dag is het capaciteitstarief-getal; door hem hier te
+      // bepalen kan de dag-grens niet meer verschuiven tussen server (UTC)
+      // en client (lokaal).
+      const piekPerDag = new Map<string, { date: string; kw: number; ts: string; charging: number }>();
+      for (const r of powerRows) {
+        const dag = brusselseDag(r.ts);
+        if (!dag) continue;
+        const kw = Math.round((Number(r.total_power_kw) || 0) * 10) / 10;
+        const huidige = piekPerDag.get(dag);
+        if (!huidige || kw > huidige.kw) {
+          piekPerDag.set(dag, { date: dag, kw, ts: String(r.ts), charging: Number(r.charging) || 0 });
+        }
+      }
+      const powerDays = [...piekPerDag.values()].sort((a, b) => a.date.localeCompare(b.date));
 
       // raw niet naar de client sturen — alleen de twee afgeleide velden.
-      const activeSessions = ((sessR.data ?? []) as any[]).map(({ raw, ...rest }) => ({ ...rest, ...dimensiesUitRaw(raw) }));
+      // Eén sessie per laadpunt (jongste wint): een spooksessie uit stale
+      // sync-data telde anders dubbel mee in het totaalvermogen én won in de
+      // UI van de echte sessie.
+      const activeSessions = perEvseNieuwste((sessR.data ?? []) as any[]).map(({ raw, ...rest }: any) => ({ ...rest, ...dimensiesUitRaw(raw) }));
       const totalPowerKw = Math.round(activeSessions.reduce((a, sSes) => a + (sSes.powerKw ?? 0), 0) * 10) / 10;
 
       // Connectors groeperen per EVSE.
@@ -892,10 +981,11 @@ export const mountOcpiRoutes = (app: express.Express) => {
         id: l.id, name: l.name, city: l.city, evses: evsesByLoc.get(l.id) ?? [],
       }));
 
-      // kWh per dag uit de sessies van de laatste 30 dagen.
+      // kWh per dag uit de sessies van de laatste 30 dagen, gebucket op de
+      // Brusselse kalenderdag (niet de UTC-datum — zie brusselseDag).
       const perDay = new Map<string, { kwh: number; sessions: number }>();
       for (const c of sess30Rows) {
-        const d = String(c.start_date_time ?? "").slice(0, 10);
+        const d = brusselseDag(c.start_date_time);
         if (!d) continue;
         const cur = perDay.get(d) ?? { kwh: 0, sessions: 0 };
         cur.kwh += Number(c.kwh) || 0;
@@ -905,23 +995,21 @@ export const mountOcpiRoutes = (app: express.Express) => {
       const kwhPerDay = [...perDay.entries()]
         .sort(([a], [b]) => a.localeCompare(b))
         .map(([date, v]) => ({ date, kwh: Math.round(v.kwh * 10) / 10, sessions: v.sessions }));
-      const kwh30d = Math.round([...perDay.values()].reduce((a, v) => a + v.kwh, 0) * 10) / 10;
 
       res.json({
+        // Alleen de velden die de view echt leest — locations/connectors/
+        // kwh30d gingen mee over de lijn maar werden nergens getoond.
         totals: {
-          locations: locRows.length,
           evses: evseRows.length,
-          connectors: connRows.length,
-          activeSessions: activeSessions.length,
           sessions30d: sess30Rows.length,
           totalPowerKw,
-          kwh30d,
         },
         statusCounts,
         locations,
         activeSessions,
         kwhPerDay,
         powerCurve,
+        powerDays,
         storingen,
       });
     } catch (err: any) {
