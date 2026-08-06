@@ -25,6 +25,7 @@ import {
   Phone,
   Activity,
   KeyRound,
+  IdCard,
   LifeBuoy,
   Moon,
   ShieldAlert,
@@ -74,6 +75,7 @@ import { CapacityView } from './views/CapacityView';
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
 const LazyActivityLogView = lazyWithRetry(() => import('./views/admin/ActivityLogView').then((module) => ({ default: module.ActivityLogView })));
 const LazyOcpiDashboardView = lazyWithRetry(() => import('./views/admin/OcpiDashboardView').then((module) => ({ default: module.OcpiDashboardView })));
+const LazyVervaldataView = lazyWithRetry(() => import('./views/admin/VervaldataView').then((module) => ({ default: module.VervaldataView })));
 const LazyManageSchedulesView = lazyWithRetry(() => import('./views/admin/ManageSchedulesView').then((module) => ({ default: module.ManageSchedulesView })));
 const LazyPlanningMatrixView = lazyWithRetry(() => import('./views/admin/PlanningMatrixView').then((module) => ({ default: module.PlanningMatrixView })));
 const LazyPlanningCodesView = lazyWithRetry(() => import('./views/admin/PlanningCodesView').then((module) => ({ default: module.PlanningCodesView })));
@@ -116,6 +118,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-updates',
     'beheer-omleidingen',
     'beheer-dienstoverzicht',
+    'vervaldata',
   ],
   admin: [
     'dashboard',
@@ -136,6 +139,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-updates',
     'beheer-omleidingen',
     'beheer-dienstoverzicht',
+    'vervaldata',
     'gebruikers',
     'toestellen',
     'activiteit',
@@ -2025,8 +2029,8 @@ export default function App() {
           {isPlanner && (
             <NavSection
               title="Beheer"
-              count={9}
-              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
+              count={10}
+              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'vervaldata', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
             >
               <NavItem icon={<Settings size={18} />} label="Beheer roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
               <NavItem icon={<FileText size={18} />} label="Planningsoverzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
@@ -2035,6 +2039,7 @@ export default function App() {
               <NavItem icon={<Bus size={18} />} label="Beheer dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
               <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<IdCard size={18} />} label="Vervaldata" active={currentView === 'vervaldata'} onClick={() => { setCurrentView('vervaldata'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Plus size={18} />} label="Beheer updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
               <NavItem icon={<MapIcon size={18} />} label="Beheer omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
             </NavSection>
@@ -2284,6 +2289,7 @@ export default function App() {
               )}
               {resolvedCurrentView === 'activiteit' && <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
+              {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
               {resolvedCurrentView === 'beheer-omleidingen' && <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} /></Suspense>}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>}
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}

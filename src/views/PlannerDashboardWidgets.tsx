@@ -719,7 +719,7 @@ export function PlannerDashboardWidgets({
                   : e.dagen === 0
                     ? `Verloopt vandaag (${e.validUntil})`
                     : `Verloopt over ${e.dagen} ${e.dagen === 1 ? 'dag' : 'dagen'} (${e.validUntil})`}
-                onClick={() => onNavigate('gebruikers')}
+                onClick={() => onNavigate('vervaldata')}
               />
               </Fragment>
             ))}
@@ -776,7 +776,7 @@ export function PlannerDashboardWidgets({
                 de teller in de kop dat je alles ziet. */}
             {hiddenAttentionCount > 0 && (
               <p className="px-4 pt-1 text-xs font-medium text-slate-500">
-                +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil, Toestellen of Gebruikers voor de volledige lijst.
+                +{hiddenAttentionCount} niet getoond — open Verlof, Dienstruil, Toestellen of Vervaldata voor de volledige lijst.
               </p>
             )}
             {attentionCount === 0 && (
