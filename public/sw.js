@@ -49,7 +49,12 @@
 // standalone PWA die uit de app-switcher hervat doet géén navigatie-fetch en
 // herlaadt alleen op controllerchange, en die vuurt alleen als sw.js zélf
 // wijzigt. Bump dus bij elke betekenisvolle release, ook zonder sw-wijziging.
-const CACHE_NAME = 'vhb-portaal-v23';
+// Sinds 06-08: de versie wordt bij élke build gestempeld — vite.config.ts
+// vervangt __VHB_BUILD_ID__ door de commit-SHA (of buildtijd). Handmatig
+// bumpen hoeft niet meer: elke deploy wijzigt sw.js zelf en triggert dus de
+// SW-update; het terugkerende "14 releases zonder bump"-gat kan niet meer.
+// (In `vite dev` blijft de placeholder staan — daar is geen SW-cache-zorg.)
+const CACHE_NAME = 'vhb-portaal-__VHB_BUILD_ID__';
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';

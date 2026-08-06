@@ -261,8 +261,13 @@ function DriverMonthSheet({
       .sort((a, b) => a.days[0].date.localeCompare(b.days[0].date));
   }, [monthShifts, absences, yearStr, monthStr]);
 
-  const totalMinutes = monthShifts.reduce((sum, s) => sum + minutesBetween(s.startTime, s.endTime), 0);
-  const totalDaysWorked = new Set(monthShifts.map((s) => s.date)).size;
+  // Kop-totalen uit dezelfde bron als de weekblokken: `weeks` heeft de
+  // diensten op afwezigheidsdagen al weggestreept. Rechtstreeks uit
+  // monthShifts tellen liet het blad zichzelf tegenspreken — de kop telde de
+  // uren van een zieke dag mee terwijl het weekblok hem op 0 zette.
+  const totalMinutes = weeks.reduce((sum, w) => sum + w.totalMinutes, 0);
+  const totalDaysWorked = weeks.reduce((sum, w) => sum + w.totalDays, 0);
+  const totalShiftsPrinted = weeks.reduce((sum, w) => sum + w.days.reduce((a, d) => a + d.shifts.length, 0), 0);
 
 
   return (
@@ -286,7 +291,7 @@ function DriverMonthSheet({
           <div className="flex items-stretch divide-x divide-slate-200">
             <div className="pr-5">
               <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Diensten</p>
-              <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{monthShifts.length}</p>
+              <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{totalShiftsPrinted}</p>
             </div>
             <div className="px-5">
               <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Totaal uren</p>

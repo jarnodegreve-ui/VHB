@@ -439,9 +439,18 @@ export function CoverageView() {
                         // 6px ertussen waren op een telefoon niet raakbaar.
                         // De NAAM truncate't, de REDEN nooit (shrink-0): de
                         // reden was juist de toevoeging. Redenkleur volgt de
-                        // statuskleurtaal: ziek rose, verlof/verlet slate —
-                        // rood blijft van het gat zelf, niet van de persoon.
+                        // statuskleurtaal app-breed: ziek rose, verlof
+                        // emerald, klein verlet blue (zelfde als dashboard-
+                        // aftelling) — rood blijft van het gat zelf, niet
+                        // van de persoon.
                         const info = d.uitval?.[normalizeCode(svc)];
+                        const redenKleur = info?.reason === 'ziek'
+                          ? 'text-rose-600 dark:text-rose-400'
+                          : info?.reason === 'verlof'
+                            ? 'text-emerald-700 dark:text-emerald-400'
+                            : info?.reason === 'klein verlet'
+                              ? 'text-blue-700 dark:text-blue-300'
+                              : 'text-slate-600 dark:text-slate-300';
                         return (
                           <button
                             key={svc}
@@ -454,7 +463,7 @@ export function CoverageView() {
                             {info && (
                               <span className="flex min-w-0 items-baseline gap-1 font-medium">
                                 <span className="min-w-0 truncate text-red-700/90 dark:text-red-300/80">· {info.name}</span>
-                                <span className={cn('shrink-0', info.reason === 'ziek' ? 'text-rose-600 dark:text-rose-400' : 'text-slate-600 dark:text-slate-300')}>· {info.reason}</span>
+                                <span className={cn('shrink-0', redenKleur)}>· {info.reason}</span>
                               </span>
                             )}
                           </button>

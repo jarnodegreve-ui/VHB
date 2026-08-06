@@ -1,9 +1,8 @@
 import React from 'react';
-import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { BrandBus } from './BrandBus';
+import { Modal } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
 
 export function PageShell({
@@ -95,38 +94,38 @@ export function ConfirmationModal({
   cancelText?: string;
   variant?: 'danger' | 'warning';
 }) {
-  if (typeof document === 'undefined') return null;
-  return createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden">
-            <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0">
-              <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-600' : 'bg-amber-500/15 text-amber-600')}>
-                <AlertTriangle size={22} />
-              </div>
-              <h4 className="text-lg font-bold tracking-tight">{title}</h4>
-              <p className="text-sm text-slate-500 font-normal mt-1.5 leading-relaxed">{message}</p>
-            </div>
-            <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
-              <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-slate-200 transition-all">
-                {cancelText}
-              </button>
-              <button
-                onClick={() => {
-                  onConfirm();
-                  onClose();
-                }}
-                className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'text-white bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'text-slate-950 bg-oker-500 hover:bg-oker-400 shadow-oker-500/20')}
-              >
-                {confirmText}
-              </button>
-            </div>
-          </motion.div>
+  // Op de gedeelde Modal gebouwd, met `boven` (hogere z-index + stapel-besef
+  // voor ESC/focus-trap): als eigen portal op z-[100] rendert een bevestiging
+  // die vanuit een open modal wordt geopend (bv. verwijderen in
+  // Gebruikersbeheer) áchter die modal — de knop leek dan gewoon dood. Via de
+  // Modal krijgt hij nu ook ESC, focus-trap en focus-herstel, die deze
+  // variant miste.
+  return (
+    <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
+      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+        <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0">
+          <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-600' : 'bg-amber-500/15 text-amber-600')}>
+            <AlertTriangle size={22} />
+          </div>
+          <h4 className="text-lg font-bold tracking-tight">{title}</h4>
+          <p className="text-sm text-slate-500 font-normal mt-1.5 leading-relaxed">{message}</p>
         </div>
-      )}
-    </AnimatePresence>,
-    document.body,
+        <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
+          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-slate-200 transition-all">
+            {cancelText}
+          </button>
+          <button
+            onClick={() => {
+              onConfirm();
+              onClose();
+            }}
+            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'text-white bg-red-500 hover:bg-red-600 shadow-red-500/20' : 'text-slate-950 bg-oker-500 hover:bg-oker-400 shadow-oker-500/20')}
+          >
+            {confirmText}
+          </button>
+        </div>
+      </div>
+    </Modal>
   );
 }
 
@@ -212,43 +211,40 @@ export function CredentialsModal({
     }
   };
 
-  if (typeof document === 'undefined') return null;
-  return createPortal(
-    <AnimatePresence>
-      {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
-          <motion.div initial={{ opacity: 0, scale: 0.96, y: 16 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.96, y: 16 }} className="glass-modal rounded-3xl w-full max-w-md max-h-[88dvh] flex flex-col overflow-hidden">
-            <div className="p-6 md:p-7 border-b border-slate-200/70 flex items-center justify-between shrink-0">
-              <div>
-                <h4 className="text-lg font-bold tracking-tight">{title}</h4>
-                <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
-              </div>
-              <button aria-label="Sluiten" onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="p-6 md:p-7 space-y-3 overflow-y-auto flex-1">
-              <div className="surface-muted rounded-xl p-4">
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">E-mailadres</p>
-                <p className="mt-1.5 font-semibold text-slate-800 break-all">{email}</p>
-              </div>
-              <div className="surface-muted rounded-xl p-4">
-                <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">Tijdelijk wachtwoord</p>
-                <p className="mt-1.5 font-mono font-semibold text-slate-800">{password}</p>
-              </div>
-              <div className="flex gap-2.5 pt-2">
-                <button onClick={handleCopy} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-700 control-button-soft transition-all">
-                  Kopieer gegevens
-                </button>
-                <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3 text-sm">
-                  Sluiten
-                </button>
-              </div>
-            </div>
-          </motion.div>
+  // Zelfde verhaal als ConfirmationModal: op de gedeelde Modal met `boven`,
+  // zodat hij ook bóven een open formulier-modal (Gebruikersbeheer) rendert
+  // en ESC/focus-trap meekrijgt.
+  return (
+    <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
+      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+        <div className="p-6 md:p-7 border-b border-slate-200/70 flex items-center justify-between shrink-0">
+          <div>
+            <h4 className="text-lg font-bold tracking-tight">{title}</h4>
+            <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
+          </div>
+          <button aria-label="Sluiten" onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors">
+            <X size={18} />
+          </button>
         </div>
-      )}
-    </AnimatePresence>,
-    document.body,
+        <div className="p-6 md:p-7 space-y-3 overflow-y-auto flex-1">
+          <div className="surface-muted rounded-xl p-4">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">E-mailadres</p>
+            <p className="mt-1.5 font-semibold text-slate-800 break-all">{email}</p>
+          </div>
+          <div className="surface-muted rounded-xl p-4">
+            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">Tijdelijk wachtwoord</p>
+            <p className="mt-1.5 font-mono font-semibold text-slate-800">{password}</p>
+          </div>
+          <div className="flex gap-2.5 pt-2">
+            <button onClick={handleCopy} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-700 control-button-soft transition-all">
+              Kopieer gegevens
+            </button>
+            <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3 text-sm">
+              Sluiten
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
   );
 }

@@ -213,6 +213,8 @@ export default function App() {
   const [showProbleemMelder, setShowProbleemMelder] = useState(false);
   const [probleemTekst, setProbleemTekst] = useState('');
   const [probleemVerstuurd, setProbleemVerstuurd] = useState(false);
+  const [probleemBezig, setProbleemBezig] = useState(false);
+  const [probleemFout, setProbleemFout] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const isPasswordRecoveryRef = useRef(false);
@@ -283,6 +285,18 @@ export default function App() {
       document.body.style.overflow = prev;
     };
   }, [isSidebarOpen]);
+
+  // Op mobiel is de dichte sidebar alleen visueel weggeschoven
+  // (-translate-x-full): zonder `inert` bleef hij focusbaar en landde
+  // Tab/VoiceOver onzichtbaar buiten beeld. Op lg+ staat hij altijd in
+  // beeld en moet hij juist wél bereikbaar blijven.
+  const [isDesktopNav, setIsDesktopNav] = useState(() => typeof window !== 'undefined' && window.matchMedia('(min-width: 1024px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)');
+    const luister = (e: MediaQueryListEvent) => setIsDesktopNav(e.matches);
+    mq.addEventListener('change', luister);
+    return () => mq.removeEventListener('change', luister);
+  }, []);
 
   // ⌘K / Ctrl+K opent het command palette
   useCommandPaletteShortcut(() => setIsCommandPaletteOpen(true));
@@ -1802,7 +1816,7 @@ export default function App() {
       {/* Probleem-melder (testfase): tekst + scherm-context → client_errors,
           bron 'gebruikersmelding'. Geen aparte tabel of mailstroom nodig —
           het komt in Systeem Status en het dagoverzicht terecht. */}
-      <Modal open={showProbleemMelder} onClose={() => setShowProbleemMelder(false)} maxWidth="sm">
+      <Modal open={showProbleemMelder} onClose={() => setShowProbleemMelder(false)} maxWidth="sm" ariaLabel="Meld een probleem">
         <div className="p-6">
           {probleemVerstuurd ? (
             <div className="text-center py-4">
@@ -1821,24 +1835,37 @@ export default function App() {
               onSubmit={(e) => {
                 e.preventDefault();
                 const tekst = probleemTekst.trim();
-                if (!tekst) return;
-                reportUserFeedback(tekst, { view: currentView });
-                setProbleemVerstuurd(true);
+                if (!tekst || probleemBezig) return;
+                // Pas "verstuurd" tonen als de server de melding écht heeft:
+                // een stil weggevallen POST kreeg voorheen ook een "Bedankt!".
+                setProbleemBezig(true);
+                setProbleemFout(false);
+                void reportUserFeedback(tekst, { view: currentView }).then((ok) => {
+                  setProbleemBezig(false);
+                  if (ok) setProbleemVerstuurd(true);
+                  else setProbleemFout(true);
+                });
               }}
             >
               <h3 className="text-base font-bold text-slate-800">Meld een probleem</h3>
               <p className="mt-1 text-xs text-slate-500">
                 Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee.
               </p>
+              <label htmlFor="probleem-tekst" className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+                Wat ging er mis?
+              </label>
               <textarea
-                aria-label="Beschrijf het probleem"
+                id="probleem-tekst"
                 value={probleemTekst}
                 onChange={(e) => setProbleemTekst(e.target.value)}
                 maxLength={900}
                 rows={4}
                 placeholder="Bijv. de aftelling bij Chris klopt niet — hij is al klaar…"
-                className="control-input mt-4 w-full rounded-2xl bg-white/60 px-4 py-3 text-base font-medium outline-none sm:text-sm"
+                className="control-input mt-1.5 w-full rounded-2xl bg-white/60 px-4 py-3 text-base font-medium outline-none sm:text-sm"
               />
+              {probleemFout && (
+                <p className="mt-2 text-xs font-semibold text-red-600">Versturen lukte niet — controleer je verbinding en probeer opnieuw.</p>
+              )}
               <div className="mt-4 flex justify-end gap-2.5">
                 <button
                   type="button"
@@ -1849,10 +1876,10 @@ export default function App() {
                 </button>
                 <button
                   type="submit"
-                  disabled={!probleemTekst.trim()}
+                  disabled={!probleemTekst.trim() || probleemBezig}
                   className="btn-primary ios-pressable rounded-2xl px-5 py-2.5 text-sm font-bold disabled:opacity-40"
                 >
-                  Versturen
+                  {probleemBezig ? 'Versturen…' : 'Versturen'}
                 </button>
               </div>
             </form>
@@ -1895,6 +1922,7 @@ export default function App() {
 
       {/* Sidebar — vaste rail, full-height, haarlijn rechts */}
       <aside
+        inert={!isSidebarOpen && !isDesktopNav}
         className={cn(
           "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -2103,7 +2131,8 @@ export default function App() {
         </div>
         <div
           ref={scrollContainerRef}
-          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pb-[calc(9.5rem+env(safe-area-inset-bottom))] lg:pb-8"
+          data-scroll-root
+          className="flex-1 w-full min-w-0 overflow-y-auto overflow-x-hidden overscroll-y-contain px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7 pb-[calc(9.5rem+env(safe-area-inset-bottom))] md:pb-8"
           onScroll={(e) => {
             const top = e.currentTarget.scrollTop ?? 0;
             const next = top > 8;

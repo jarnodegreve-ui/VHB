@@ -9,9 +9,13 @@
  * try/catch en was daardoor onzichtbaar voor window.onerror.
  */
 
+import { getSupabaseAuthHeaders } from './ui';
+
 const MAX_REPORTS_PER_SESSION = 20;
+const MAX_FEEDBACK_PER_SESSION = 10;
 const seenMessages = new Set<string>();
 let reportCount = 0;
+let feedbackCount = 0;
 let currentUserId: string | null = null;
 
 /** Wie is ingelogd — alleen het id, geen PII; null bij uitloggen. */
@@ -25,6 +29,28 @@ type ClientErrorReport = {
   source: 'window.onerror' | 'unhandledrejection' | 'error-toast' | 'react-boundary' | 'gebruikersmelding';
 };
 
+/** Eén plek voor de POST zelf (stond drie keer uitgeschreven). Met
+ *  `auth: true` gaan de sessie-headers mee zodat de server de afzender
+ *  verifieert; zonder sessie (loginscherm, crash vóór init) valt hij terug
+ *  op een anonieme melding. Geeft terug of de server hem accepteerde. */
+async function postClientError(body: Record<string, unknown>, opts: { auth?: boolean } = {}): Promise<boolean> {
+  try {
+    let headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (opts.auth) {
+      try {
+        headers = { ...headers, ...(await getSupabaseAuthHeaders()) };
+      } catch {
+        // Zonder sessie: de server markeert de melding dan als onbevestigd.
+      }
+    }
+    const res = await fetch('/api/client-errors', { method: 'POST', headers, keepalive: true, body: JSON.stringify(body) });
+    return res.ok;
+  } catch {
+    // Rapportage mag zelf nooit een nieuwe fout veroorzaken.
+    return false;
+  }
+}
+
 function send(report: ClientErrorReport) {
   // Dedupe + plafond: één kapotte render-loop mag geen duizenden requests
   // afvuren. Het patroon is in de server-logs ook zichtbaar met één melding
@@ -35,45 +61,34 @@ function send(report: ClientErrorReport) {
   seenMessages.add(key);
   reportCount += 1;
 
-  try {
-    void fetch('/api/client-errors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
-      body: JSON.stringify({
-        message: report.message,
-        stack: report.stack,
-        source: report.source,
-        url: window.location.pathname,
-        userAgent: navigator.userAgent,
-        userId: currentUserId ?? undefined,
-      }),
-    }).catch(() => {});
-  } catch {
-    // Rapportage mag zelf nooit een nieuwe fout veroorzaken.
-  }
+  void postClientError({
+    message: report.message,
+    stack: report.stack,
+    source: report.source,
+    url: window.location.pathname,
+    userAgent: navigator.userAgent,
+    userId: currentUserId ?? undefined,
+  });
 }
 
 /** Handmatige melding via de "Meld een probleem"-knop: de tekst van de
  *  gebruiker + waar die op dat moment was. Bewust búiten de dedupe — twee
- *  verschillende meldingen met dezelfde strekking zijn allebei welkom. */
-export function reportUserFeedback(message: string, context: { view?: string } = {}) {
-  try {
-    void fetch('/api/client-errors', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      keepalive: true,
-      body: JSON.stringify({
-        message: `Melding gebruiker${context.view ? ` (scherm: ${context.view})` : ''}: ${message}`,
-        source: 'gebruikersmelding',
-        url: window.location.pathname,
-        userAgent: navigator.userAgent,
-        userId: currentUserId ?? undefined,
-      }),
-    }).catch(() => {});
-  } catch {
-    // Rapportage mag zelf nooit een nieuwe fout veroorzaken.
-  }
+ *  verschillende meldingen met dezelfde strekking zijn allebei welkom.
+ *  Mét sessie-headers: zo staat de melding op naam van de échte afzender
+ *  (voorheen was élke melding "onbevestigd" en kon iedereen andermans id
+ *  invullen). Geeft terug of de melding is aangekomen, zodat de UI geen
+ *  "Bedankt!" toont voor een melding die de server nooit zag. Eigen plafond
+ *  als vangnet tegen scripted spam vanaf één sessie. */
+export async function reportUserFeedback(message: string, context: { view?: string } = {}): Promise<boolean> {
+  if (feedbackCount >= MAX_FEEDBACK_PER_SESSION) return false;
+  feedbackCount += 1;
+  return postClientError({
+    message: `Melding gebruiker${context.view ? ` (scherm: ${context.view})` : ''}: ${message}`,
+    source: 'gebruikersmelding',
+    url: window.location.pathname,
+    userAgent: navigator.userAgent,
+    userId: currentUserId ?? undefined,
+  }, { auth: true });
 }
 
 /** Voor fouten die de app zelf al afving maar wel aan de gebruiker toonde
