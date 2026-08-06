@@ -1,6 +1,4 @@
 @import "tailwindcss";
-@import "tw-animate-css";
-@import "shadcn/tailwind.css";
 
 /* Zelf-gehoste fonts (variabel, latin + latin-ext) — vervangt de render-
    blokkerende Google Fonts @import en werkt offline. Bestanden in
@@ -114,6 +112,22 @@
   --color-slate-800: #1C2025;
   --color-slate-900: #0D0D0F;
   --color-slate-950: #08090A;
+
+  /* === Semantische oppervlak-tokens (pilot: ops.tsx + beide dashboards) ===
+     Eén klasse per rol (bg-surface-row, ring-hairline, …); html.dark verlegt
+     de variabele, dus deze klassen hebben GEEN blanket-override in
+     @layer utilities nodig en kunnen niet stil breken in dark mode.
+     Waarden zijn 1-op-1 de bestaande paren uit de override-tabel.
+     Nieuwe dashboard-oppervlakken: déze tokens gebruiken, geen bg-white/NN. */
+  --color-surface-row: rgba(255, 255, 255, 0.70);      /* rij op een paneel (was bg-white/70) */
+  --color-surface-row-hover: #FFFFFF;                  /* (was hover:bg-white) */
+  --color-surface-field: rgba(255, 255, 255, 0.60);    /* invoerveld-vlak (was bg-white/60) */
+  --color-surface-white: #FFFFFF;                      /* opaak wit vlak (was bg-white) */
+  --color-surface-muted: #F2F3F4;                      /* gedempt vlak / meter-track (was bg-slate-100) */
+  --color-surface-soft: #F7F8F8;                       /* zachtste vlak (was bg-slate-50) */
+  --color-surface-soft-hover: #F7F8F8;                 /* (was hover:bg-slate-50) */
+  --color-hairline: rgba(228, 230, 232, 0.70);         /* ring om rijen (was ring-slate-200/60-70) */
+  --color-hairline-strong: rgba(205, 209, 213, 0.80);  /* hover-ring (was ring-slate-300/80) */
 }
 
 /* === Tile-surface variabelen ===
@@ -129,43 +143,9 @@
     0 6px 20px rgba(13, 13, 15, 0.04);
   --tile-bg-soft: rgba(255, 255, 255, 0.85);
   --tile-border-soft: 1px solid rgba(228, 230, 232, 0.75);
-  /* === shadcn-tokens, gemapt op de VHB-huisstijl ===
-     De init zette hier de neutral-defaults (zwart/grijs, en in dark een
-     indigo sidebar-accent). Zo zou het eerste `shadcn add`-component stil
-     buiten de huisstijl vallen. Primary = VHB Amber met VHB Black-tekst
-     (nooit wit op amber), charts = het gedempte juweelpalet. */
-  --background: #FFFFFF;
-  --foreground: #0D0D0F;
-  --card: #FFFFFF;
-  --card-foreground: #0D0D0F;
-  --popover: #FFFFFF;
-  --popover-foreground: #0D0D0F;
-  --primary: #E8A33D;
-  --primary-foreground: #0D0D0F;
-  --secondary: #F2F3F4;
-  --secondary-foreground: #2C3137;
-  --muted: #F2F3F4;
-  --muted-foreground: #6E767F;
-  --accent: #FCF7ED;
-  --accent-foreground: #A2691A;
-  --destructive: #DC2626;
-  --border: #E4E6E8;
-  --input: #E4E6E8;
-  --ring: #E8A33D;
-  --chart-1: #C9851F;
-  --chart-2: #57BB92;
-  --chart-3: #64AADE;
-  --chart-4: #DD8093;
-  --chart-5: #4F575F;
-  --radius: 0.625rem;
-  --sidebar: #0D0D0F;
-  --sidebar-foreground: #E4E6E8;
-  --sidebar-primary: #E8A33D;
-  --sidebar-primary-foreground: #0D0D0F;
-  --sidebar-accent: rgba(232, 163, 61, 0.12);
-  --sidebar-accent-foreground: #ECB75F;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #E8A33D;
+  /* Standaard randkleur voor kale border-utilities (zie de *-regel in
+     @layer base). Zelfde waarde als slate-200. */
+  --border-default: #E4E6E8;
 }
 
 html.dark {
@@ -176,6 +156,25 @@ html.dark {
     0 8px 24px rgba(0, 0, 0, 0.4);
   --tile-bg-soft: rgba(23, 24, 26, 0.75);
   --tile-border-soft: 1px solid rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  /* Opake sticky-oppervlakken (maandplanning-grid): de generieke dark-
+     overrides zijn alpha-kleuren, waardoor scrollende cellen door de vaste
+     naamkolom/koprij heen schemerden. Kop iets lichter dan de cel; "own"
+     = de eigen rij met een warme oker-zweem. */
+  --surface-sticky-head: rgb(30, 31, 34);
+  --surface-sticky-cell: rgb(23, 24, 26);
+  --surface-sticky-own: rgb(41, 35, 25);
+  /* Donkere kant van de semantische oppervlak-tokens (zelfde waarden als
+     de blanket-overrides voor hun oude utility-tegenhangers). */
+  --color-surface-row: rgba(23, 24, 26, 0.74);
+  --color-surface-row-hover: rgba(38, 40, 43, 0.85);
+  --color-surface-field: rgba(23, 24, 26, 0.68);
+  --color-surface-white: rgba(23, 24, 26, 0.85);
+  --color-surface-muted: rgba(38, 40, 43, 0.60);
+  --color-surface-soft: rgba(23, 24, 26, 0.60);
+  --color-surface-soft-hover: rgba(38, 40, 43, 0.40);
+  --color-hairline: rgba(79, 87, 95, 0.32);
+  --color-hairline-strong: rgba(110, 118, 127, 0.45);
 }
 
 @layer base {
@@ -230,7 +229,11 @@ html.dark {
   * {
     scrollbar-width: thin;
     scrollbar-color: rgba(205, 209, 213, 0.6) transparent;
-    @apply border-border outline-ring/50;
+    /* Standaard rand- en outlinekleur (was shadcn's `border-border
+       outline-ring/50`, nu expliciet): kale `border`-utilities zonder
+       kleurklasse krijgen de haarlijn-kleur i.p.v. currentColor. */
+    border-color: var(--border-default);
+    outline-color: rgba(232, 163, 61, 0.5);
   }
 
   *::-webkit-scrollbar {
@@ -983,6 +986,21 @@ html.dark {
 :where(.dark) .active\:bg-slate-50:active { background-color: rgba(79, 87, 95, 0.32); }
 }
 
+/* === Maandplanning-grid (CapacityView) ===
+   Stond eerst als inline <style> in de view; hier (unlayered) winnen deze
+   regels van de blanket-overrides in @layer utilities én van de kale
+   bg-utilities op dezelfde cellen. */
+.mp-weekend { background-color: rgba(241, 245, 249, 0.85); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100, 116, 139, 0.09) 3px, rgba(100, 116, 139, 0.09) 4px); }
+.dark .mp-weekend { background-color: rgba(255, 255, 255, 0.03); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.05) 3px, rgba(255, 255, 255, 0.05) 4px); }
+/* Alleen de arcering (geen eigen achtergrond) — voor cellen die al een
+   band-/vandaag-tint hebben, zoals de sectiekop-rij. */
+.mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100, 116, 139, 0.09) 3px, rgba(100, 116, 139, 0.09) 4px); }
+.dark .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255, 255, 255, 0.05) 3px, rgba(255, 255, 255, 0.05) 4px); }
+/* Sticky cellen moeten OPAAK zijn (tokens in html.dark hierboven). */
+.dark th.mp-sticky { background-color: var(--surface-sticky-head) !important; }
+.dark td.mp-sticky { background-color: var(--surface-sticky-cell) !important; }
+.dark td.mp-sticky-own { background-color: var(--surface-sticky-own) !important; }
+
 /* Icoonvierkant van de snelle acties: `dark:bg-oker-500/15` verloor het van
    de unlayered `.dark .bg-slate-900` hierboven, waardoor het vlak pikzwart
    bleef op een near-black tegel. Eigen class = geen cascade-verrassing. */
@@ -993,29 +1011,8 @@ html.dark {
    wit logo, witte koppen), los van de app-thema-toggle — zie LoginView.tsx.
    De pre-app-schermen (Sessie/Profiel laden, toestel-wachtscherm) volgen dat. */
 
-/* === Login redesign — light variant ===
-   Witte achtergrond met subtiele oker-vignet rond het center en
-   onderaan voor warmte. Card is licht glas (.panel), inputs zijn
-   .control-input. Layout is centered single-column. */
-
-.login-bg-light {
-  background:
-    radial-gradient(
-      ellipse 1000px 800px at 50% 30%,
-      rgba(232, 163, 61, 0.08) 0%,
-      transparent 60%
-    ),
-    radial-gradient(
-      ellipse 700px 500px at 50% 95%,
-      rgba(201, 133, 31, 0.05) 0%,
-      transparent 60%
-    ),
-    linear-gradient(180deg, #fafbfc 0%, #F2F3F4 100%);
-}
-
 /* === Dark login (carbon) — gebruikt door LoginView ===
-   Past bij het carbon app-/tab-icoon en de carbon theme-color. De lichte
-   variant (.login-bg-light) blijft bewaard mocht je ooit terug willen. */
+   Past bij het carbon app-/tab-icoon en de carbon theme-color. */
 
 .login-bg-dark {
   background:
@@ -1088,78 +1085,3 @@ html.dark {
   }
 }
 
-/* shadcn-theming: alleen de kleur-mapping. Bewust WEG uit de standaard-
-   init: de font-regels (Geist zou Inter/Manrope overschrijven) en de
-   radius-mapping (--radius-xl/2xl/3xl zou de eigen tokens bovenaan dit
-   bestand — en dus élke kaart in de app — herschalen). shadcn-componenten
-   volgen zo de Tailwind-default-radius en de huisstijl-fonts. */
-@theme inline {
-  --color-sidebar-ring: var(--sidebar-ring);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
-  --color-chart-5: var(--chart-5);
-  --color-chart-4: var(--chart-4);
-  --color-chart-3: var(--chart-3);
-  --color-chart-2: var(--chart-2);
-  --color-chart-1: var(--chart-1);
-  --color-ring: var(--ring);
-  --color-input: var(--input);
-  --color-border: var(--border);
-  --color-destructive: var(--destructive);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-secondary: var(--secondary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-primary: var(--primary);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
-  --color-card-foreground: var(--card-foreground);
-  --color-card: var(--card);
-  --color-foreground: var(--foreground);
-  --color-background: var(--background);
-}
-
-/* Donkere tegenhanger van de shadcn-tokens hierboven: dezelfde carbon-tinten
-   als de rest van de dark mode (bewust géén koel-blauwe/indigo zweem) en
-   amber als accent. */
-.dark {
-  --background: #0D0D0F;
-  --foreground: #F2F3F4;
-  --card: #17181A;
-  --card-foreground: #F2F3F4;
-  --popover: #17181A;
-  --popover-foreground: #F2F3F4;
-  --primary: #E8A33D;
-  --primary-foreground: #0D0D0F;
-  --secondary: rgba(79, 87, 95, 0.35);
-  --secondary-foreground: #E4E6E8;
-  --muted: rgba(79, 87, 95, 0.28);
-  --muted-foreground: #9AA1A9;
-  --accent: rgba(232, 163, 61, 0.14);
-  --accent-foreground: #ECB75F;
-  --destructive: #F87171;
-  --border: rgba(255, 255, 255, 0.10);
-  --input: rgba(255, 255, 255, 0.15);
-  --ring: #E8A33D;
-  --chart-1: #ECB75F;
-  --chart-2: #57BB92;
-  --chart-3: #64AADE;
-  --chart-4: #DD8093;
-  --chart-5: #9AA1A9;
-  --sidebar: #101113;
-  --sidebar-foreground: #E4E6E8;
-  --sidebar-primary: #E8A33D;
-  --sidebar-primary-foreground: #0D0D0F;
-  --sidebar-accent: rgba(232, 163, 61, 0.12);
-  --sidebar-accent-foreground: #ECB75F;
-  --sidebar-border: rgba(255, 255, 255, 0.08);
-  --sidebar-ring: #E8A33D;
-}

@@ -44,6 +44,7 @@ import { Modal } from '../components/Modal';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
+import { Button } from '../components/primitives';
 import { cn, getSupabaseAuthHeaders, telHref } from '../lib/ui';
 
 /**
@@ -785,7 +786,7 @@ export function PlannerDashboardWidgets({
                   <CheckCircle2 size={16} />
                 </span>
                 <div>
-                  <p className="text-[13.5px] font-semibold text-slate-800">Alles ok</p>
+                  <p className="text-[13px] font-semibold text-slate-800">Alles ok</p>
                   <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
                 </div>
               </div>
@@ -863,7 +864,7 @@ export function PlannerDashboardWidgets({
                   <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-slate-800">{u.name}</span>
-                    <span className="block text-[11.5px] font-medium text-slate-500 tabular-nums">
+                    <span className="block text-[11px] font-medium text-slate-500 tabular-nums">
                       {u.phone || 'geen nummer bekend'}
                     </span>
                   </span>
@@ -876,7 +877,7 @@ export function PlannerDashboardWidgets({
                     <a
                       href={href}
                       aria-label={`Bel ${u.name}`}
-                      className="ios-pressable flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-slate-50 active:bg-slate-100"
+                      className="ios-pressable flex items-center gap-3 rounded-xl px-3 py-2.5 hover:bg-surface-soft-hover active:bg-slate-100"
                     >
                       {inner}
                     </a>
@@ -906,7 +907,7 @@ export function PlannerDashboardWidgets({
             {todayAbsent.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5">
                 <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{a.name}</span>
-                <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-slate-100 text-slate-600')}>{a.label}</span>
+                <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-surface-muted text-slate-600')}>{a.label}</span>
               </li>
             ))}
           </ul>
@@ -914,7 +915,7 @@ export function PlannerDashboardWidgets({
         <button
           type="button"
           onClick={() => { setShowAbsent(false); onNavigate('verlof-kalender'); }}
-          className="ios-pressable mt-2 w-full rounded-xl border border-slate-200 py-2.5 text-center text-xs font-semibold text-slate-600 hover:bg-slate-50"
+          className="ios-pressable mt-2 w-full rounded-xl border border-slate-200 py-2.5 text-center text-xs font-semibold text-slate-600 hover:bg-surface-soft-hover"
         >
           Volledige kalender openen
         </button>
@@ -925,7 +926,7 @@ export function PlannerDashboardWidgets({
         open={showScheduled}
         onClose={() => setShowScheduled(false)}
         icon={<Users size={17} />}
-        iconClassName="bg-slate-100 text-slate-600"
+        iconClassName="bg-surface-muted text-slate-600"
         title="Vandaag ingepland"
         subtitle={`${formatDay(today)} · ${scheduledToday.length} ${scheduledToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
@@ -966,7 +967,7 @@ export function PlannerDashboardWidgets({
             type="button"
             onClick={closeSickModal}
             aria-label="Sluiten"
-            className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-slate-50 hover:text-slate-900 dark:hover:bg-white/5"
+            className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-surface-soft-hover hover:text-slate-900 dark:hover:bg-white/5"
           >
             <X size={18} />
           </button>
@@ -993,7 +994,7 @@ export function PlannerDashboardWidgets({
               aria-label="Chauffeur"
               value={sickForm.userId}
               onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickError(''); }}
-              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60"
+              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
             >
               <option value="">Kies een chauffeur…</option>
               {users
@@ -1010,7 +1011,7 @@ export function PlannerDashboardWidgets({
                 aria-label="Startdatum ziekmelding"
                 value={sickForm.startDate}
                 onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })}
-                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60"
+                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
               />
             </div>
             <div className="space-y-1.5">
@@ -1021,7 +1022,7 @@ export function PlannerDashboardWidgets({
                 value={sickForm.endDate}
                 min={sickForm.startDate}
                 onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })}
-                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-white/60"
+                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
               />
             </div>
           </div>
@@ -1031,23 +1032,19 @@ export function PlannerDashboardWidgets({
               aria-label="Opmerking ziekmelding"
               value={sickForm.comment}
               onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
-              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-white/60"
+              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-surface-field"
               placeholder="bv. gemeld via telefoon om 6u"
             />
           </div>
           {sickError && (
             <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{sickError}</p>
           )}
-          <p className="text-[11.5px] font-medium text-slate-500">
+          <p className="text-[11px] font-medium text-slate-500">
             De dag(en) komen meteen als onbeschikbaar in de planning; de andere planners krijgen een melding.
           </p>
-          <button
-            type="submit"
-            disabled={isSubmittingSick}
-            className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
-          >
+          <Button type="submit" variant="primary" size="lg" full disabled={isSubmittingSick}>
             {isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}
-          </button>
+          </Button>
         </form>
       </Modal>
     </section>
@@ -1091,7 +1088,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                 flex-wrap: bij één of twee blokken staat het op één regel zoals
                 voorheen, bij drie wijkt het netjes uit naar een tweede regel
                 in plaats van tegen de dienstchip te duwen. */}
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11.5px] font-medium text-slate-500 tabular-nums">
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-500 tabular-nums">
               {d.segs.map((seg, i) => (
                 <Fragment key={seg}>
                   {i > 0 && <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-slate-300" />}
@@ -1164,7 +1161,7 @@ function DashboardListModal({
           type="button"
           onClick={onClose}
           aria-label="Sluiten"
-          className="ios-pressable shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+          className="ios-pressable shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover"
         >
           <X size={17} />
         </button>
@@ -1206,7 +1203,7 @@ function FeedRow({ entry }: { entry: ActivityLogEntry }) {
             "Systeem (cron) · 16 fouten gemeld aan 1 on…"). Nog steeds begrensd,
             zodat één lange regel de zes feed-items niet uit elkaar duwt; wie
             het volledige verhaal wil, klikt door naar de log. */}
-        <p className="line-clamp-2 text-[12.5px] font-medium leading-snug text-slate-700">
+        <p className="line-clamp-2 text-[13px] font-medium leading-snug text-slate-700">
           <span className="font-semibold text-slate-900">{entry.actorName}</span> · {entry.details || entry.action}
         </p>
         <p className="text-[11px] font-normal text-slate-400">{relTime(entry.createdAt)}</p>

@@ -239,11 +239,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         description="Wie rijdt welke dienst, zoals het overzicht in het chauffeurslokaal."
         actions={(
           <div className="flex items-center gap-2">
-            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronLeft size={18} />
             </button>
             <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
-            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
               <ChevronRight size={18} />
             </button>
             <Button variant="secondary" size="sm" className="ml-1 h-9 rounded-xl" onClick={goToday}>
@@ -271,21 +271,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         />
       ) : (
         <>
-          <style>{`
-            .mp-weekend { background-color: rgba(241,245,249,0.85); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100,116,139,0.09) 3px, rgba(100,116,139,0.09) 4px); }
-            .dark .mp-weekend { background-color: rgba(255,255,255,0.03); background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.05) 3px, rgba(255,255,255,0.05) 4px); }
-            /* Sticky cellen moeten OPAAK zijn: de generieke dark-overrides van
-               bg-white/bg-slate-100/bg-oker-50 zijn alpha-kleuren, waardoor de
-               scrollende cellen in dark mode door de vaste naamkolom/koprij
-               heen schemerden. */
-            /* Alleen de arcering (geen eigen achtergrond) — voor cellen die al
-               een band-/vandaag-tint hebben, zoals de sectiekop-rij. */
-            .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(100,116,139,0.09) 3px, rgba(100,116,139,0.09) 4px); }
-            .dark .mp-hatch { background-image: repeating-linear-gradient(45deg, transparent, transparent 3px, rgba(255,255,255,0.05) 3px, rgba(255,255,255,0.05) 4px); }
-            .dark th.mp-sticky { background-color: rgb(30, 31, 34) !important; }
-            .dark td.mp-sticky { background-color: rgb(23, 24, 26) !important; }
-            .dark td.mp-sticky-own { background-color: rgb(41, 35, 25) !important; }
-          `}</style>
+          {/* .mp-*-klassen (weekend-arcering, opake sticky-cellen) staan in
+              index.css bij de andere component-klassen. */}
           {/* Desktop: Excel-achtig maandgrid (chauffeur × dag) — dunne gridlijnen,
               platte dienstnummers, gearceerde weekend-kolommen. */}
           <div className="hidden md:block surface-card rounded-3xl overflow-hidden">
@@ -312,7 +299,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         >
                           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
-                          <div className="mt-0.5 h-3 text-[9px] font-bold leading-3">
+                          <div className="mt-0.5 h-3 text-[10px] font-bold leading-3">
                             {td && (
                               <span className={td.kort === 'F' ? 'text-oker-600' : 'text-slate-400'}>{td.kort}</span>
                             )}
@@ -498,7 +485,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <MicroLabel className="capitalize">{formatDateLong(selected.iso)}</MicroLabel>
                 <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
               </div>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:w-8 sm:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
                 <X size={16} />
               </button>
             </div>

@@ -413,12 +413,12 @@ function MonthCalendar({
                   {day}
                 </span>
                 {td && td.kort === 'F' && (
-                  <span className="text-[8px] font-bold leading-none text-oker-600" title={td.titel}>
+                  <span className="text-[10px] font-bold leading-none text-oker-600" title={td.titel}>
                     {td.kort}
                   </span>
                 )}
                 {dayGroups.length > 0 ? (
-                  <span className={cn('max-w-full truncate text-[9px] font-bold tabular-nums leading-none', conflict ? 'text-red-600' : 'text-oker-700')}>
+                  <span className={cn('max-w-full truncate text-[10px] font-bold tabular-nums leading-none', conflict ? 'text-red-600' : 'text-oker-700')}>
                     {dayGroups[0].line}
                     {dayGroups.length > 1 && '+'}
                   </span>
@@ -430,7 +430,7 @@ function MonthCalendar({
                     )}
                   />
                 ) : isVrijeDag(iso) ? (
-                  <span className="text-[9px] font-bold lowercase leading-none text-slate-400" title="Vrij — geen dienst ingepland">
+                  <span className="text-[10px] font-bold lowercase leading-none text-slate-400" title="Vrij — geen dienst ingepland">
                     v
                   </span>
                 ) : null}
@@ -444,8 +444,8 @@ function MonthCalendar({
           <span className="inline-flex items-center gap-1.5"><span className="text-[10px] font-bold tabular-nums text-oker-700">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-[9px] font-bold text-oker-600">F</span> feestdag</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-[9px] font-bold text-slate-400">v</span> vrij</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-[10px] font-bold text-oker-600">F</span> feestdag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-[10px] font-bold text-slate-400">v</span> vrij</span>
         </div>
       </div>
 
@@ -474,7 +474,7 @@ function MonthCalendar({
         )}
 
         {selectedGroups.length === 0 && !selectedLeave ? (
-          <p className="mt-2.5 text-xs italic text-slate-400">Geen dienst gepland.</p>
+          <p className="mt-2.5 text-xs font-medium text-slate-400">Geen dienst gepland.</p>
         ) : (
           selectedGroups.map((g) => (
             <div key={g.key} className="mt-3">

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Download, WifiOff, X } from 'lucide-react';
+import { Button } from './primitives';
 
 /**
  * PWA-randzaken: offline-indicator + install-prompt.
@@ -139,12 +140,9 @@ export function InstallPrompt() {
                 Sneller openen, werkt als een app.
               </p>
             </div>
-            <button
-              onClick={install}
-              className="btn-primary ios-pressable shrink-0 px-3.5 py-2 text-[11px] uppercase tracking-[0.08em]"
-            >
+            <Button variant="primary" size="sm" className="shrink-0" onClick={install}>
               Toevoegen
-            </button>
+            </Button>
             <button
               onClick={() => dismiss(true)}
               aria-label="Niet nu"

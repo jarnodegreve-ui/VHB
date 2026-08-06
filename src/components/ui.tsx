@@ -1,6 +1,7 @@
 import React from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { Button } from './primitives';
 import { BrandBus } from './BrandBus';
 import { Modal } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
@@ -222,7 +223,7 @@ export function CredentialsModal({
             <h4 className="text-lg font-bold tracking-tight">{title}</h4>
             <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
           </div>
-          <button aria-label="Sluiten" onClick={onClose} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-lg transition-colors">
+          <button aria-label="Sluiten" onClick={onClose} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors">
             <X size={18} />
           </button>
         </div>
@@ -236,12 +237,12 @@ export function CredentialsModal({
             <p className="mt-1.5 font-mono font-semibold text-slate-800">{password}</p>
           </div>
           <div className="flex gap-2.5 pt-2">
-            <button onClick={handleCopy} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-700 control-button-soft transition-all">
+            <Button variant="secondary" className="flex-1" onClick={handleCopy}>
               Kopieer gegevens
-            </button>
-            <button onClick={onClose} className="btn-primary ios-pressable flex-1 px-4 py-3 text-sm">
+            </Button>
+            <Button variant="primary" className="flex-1" onClick={onClose}>
               Sluiten
-            </button>
+            </Button>
           </div>
         </div>
       </div>

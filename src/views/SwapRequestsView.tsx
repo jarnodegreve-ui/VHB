@@ -366,7 +366,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         title="Dienstruil"
         description="Ruil een dienst met een collega, die accepteert eerst, daarna keurt de planning goed."
         actions={(
-          <button
+          <Button
+            variant="primary"
+            size="lg"
             onClick={() => {
               // Verse wizard bij elk openen — geen halve vorige aanvraag.
               setWizardStep(1);
@@ -380,10 +382,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               setShowAllShifts(false);
               setShowOfferModal(true);
             }}
-            className="btn-primary ios-pressable px-6 py-3 text-sm"
           >
             Dienstruil aanvragen
-          </button>
+          </Button>
         )}
       />
 
@@ -976,13 +977,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
                         </div>
                       )}
-                      <button
+                      <Button
                         type="submit"
+                        variant="primary"
+                        size="lg"
+                        full
                         disabled={!selectedShift || !selectedTargetDriver || (isTakeover ? !takeoverCode : !returnPick) || isSubmitting}
-                        className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed"
                       >
                         {isSubmitting ? 'Versturen…' : isTakeover ? 'Vraag om over te nemen' : 'Ruilverzoek versturen'}
-                      </button>
+                      </Button>
                       <p className="text-[11px] font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
                     </>
                   );

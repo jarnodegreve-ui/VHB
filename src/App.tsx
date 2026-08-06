@@ -51,6 +51,7 @@ import { addDays, isoDate } from './lib/availability';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
+import { Button } from './components/primitives';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { NavItem, NavSection } from './components/Navigation';
@@ -1697,8 +1698,9 @@ export default function App() {
               : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen — zodra het toestel is goedgekeurd kun je verder. Tip: zet je de app op je beginscherm, dan kan die één keer apart goedgekeurd moeten worden.'}
           </p>
           {!revoked && (
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              className="mt-5"
               onClick={async () => {
                 if (!session?.access_token) return;
                 const status = await registerThisDevice(session.access_token);
@@ -1711,10 +1713,9 @@ export default function App() {
                   showToast('Nog niet goedgekeurd — vraag de planning om dit toestel goed te keuren.', 'info');
                 }
               }}
-              className="btn-primary ios-pressable mt-5 px-5 py-3 text-xs uppercase tracking-[0.08em]"
             >
               Opnieuw controleren
-            </button>
+            </Button>
           )}
           <div className="mt-4">
             <button
@@ -1826,13 +1827,9 @@ export default function App() {
             <div className="text-center py-4">
               <p className="text-sm font-bold text-slate-800">Bedankt — je melding is verstuurd.</p>
               <p className="mt-1.5 text-xs text-slate-500">De planning ziet hem in het systeemoverzicht.</p>
-              <button
-                type="button"
-                onClick={() => setShowProbleemMelder(false)}
-                className="btn-primary ios-pressable mt-5 rounded-2xl px-5 py-2.5 text-sm font-bold"
-              >
+              <Button variant="primary" className="mt-5" onClick={() => setShowProbleemMelder(false)}>
                 Sluiten
-              </button>
+              </Button>
             </div>
           ) : (
             <form
@@ -1878,13 +1875,9 @@ export default function App() {
                 >
                   Annuleren
                 </button>
-                <button
-                  type="submit"
-                  disabled={!probleemTekst.trim() || probleemBezig}
-                  className="btn-primary ios-pressable rounded-2xl px-5 py-2.5 text-sm font-bold disabled:opacity-40"
-                >
+                <Button type="submit" variant="primary" disabled={!probleemTekst.trim() || probleemBezig}>
                   {probleemBezig ? 'Versturen…' : 'Versturen'}
-                </button>
+                </Button>
               </div>
             </form>
           )}
@@ -2164,7 +2157,7 @@ export default function App() {
                       {currentMeta.title}
                     </h2>
                     {currentMeta.subtitle && (
-                      <p className="hidden md:block text-[11.5px] font-normal text-slate-500 mt-px max-w-xl truncate">{currentMeta.subtitle}</p>
+                      <p className="hidden md:block text-[11px] font-normal text-slate-500 mt-px max-w-xl truncate">{currentMeta.subtitle}</p>
                     )}
                   </div>
                 </div>
@@ -2195,7 +2188,7 @@ export default function App() {
               keek je zonder het te weten naar verouderde data. */}
           {!isOnline && (
             <div className="mx-auto w-full max-w-[1360px]">
-              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-[12.5px] font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300">
+              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-[13px] font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300">
                 <WifiOff size={14} className="shrink-0" />
                 <span>
                   Offline — wijzigingen komen niet door
@@ -2324,9 +2317,12 @@ export default function App() {
       <BottomNav
         currentView={resolvedCurrentView}
         onSelect={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
+        role={effectiveRole}
         unseenLeaveCount={unseenLeaveDecisionCount}
+        pendingLeaveCount={pendingLeaveCount}
+        pendingSwapsCount={pendingSwapsCount}
         onMore={() => setIsSidebarOpen(true)}
-        moreDot={targetedSwapsCount > 0}
+        moreDot={isPlanner ? false : targetedSwapsCount > 0}
         hidden={isSidebarOpen}
       />
 

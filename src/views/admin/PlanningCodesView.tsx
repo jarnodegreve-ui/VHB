@@ -4,7 +4,7 @@ import type { PlanningCode } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, TableShell, Td, Th } from '../../components/primitives';
-import { StatCard } from '../../components/StatCard';
+import { OpsStat } from '../../components/ops';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 // Draft-rijen krijgen een stabiele key, los van de (bewerkbare) code-tekst.
@@ -107,13 +107,14 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         )}
       />
 
-      {/* 4 kaarten → gat-vrij op elke breedte (mobiel 2×2, breed 4 op een
-          rij). "Totaal" staat al als teller bij de tabel. */}
-      <div className="grid grid-cols-2 gap-4 xl:grid-cols-4">
-        <StatCard icon={<Bus className="text-slate-600" />} label="Diensten" value={summary.service.toString()} subValue="tellen als dienst" />
-        <StatCard icon={<Calendar className="text-emerald-600" />} label="Verlof" value={summary.leave.toString()} subValue="betaalde afwezigheid" />
-        <StatCard icon={<AlertTriangle className="text-amber-600" />} label="Afwezigheid" value={summary.absence.toString()} subValue="niet inzetbaar" />
-        <StatCard icon={<Info className="text-amber-500" />} label="Onbekend" value={summary.unknown.toString()} subValue="nog te verfijnen" />
+      {/* 4 tegels → gat-vrij op elke breedte (mobiel 2×2, breed 4 op een
+          rij). "Totaal" staat al als teller bij de tabel. OpsStat i.p.v.
+          StatCard (vaste regel voor KPI-strips). */}
+      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
+        <OpsStat icon={<Bus size={16} />} tone="slate" label="Diensten" value={summary.service} sub="tellen als dienst" />
+        <OpsStat icon={<Calendar size={16} />} tone="emerald" label="Verlof" value={summary.leave} sub="betaalde afwezigheid" />
+        <OpsStat icon={<AlertTriangle size={16} />} tone="amber" label="Afwezigheid" value={summary.absence} sub="niet inzetbaar" />
+        <OpsStat icon={<Info size={16} />} tone={summary.unknown > 0 ? 'oker' : 'slate'} label="Onbekend" value={summary.unknown} sub="nog te verfijnen" />
       </div>
 
       <section className="surface-card rounded-3xl p-6">
