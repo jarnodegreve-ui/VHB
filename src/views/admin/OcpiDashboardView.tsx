@@ -201,6 +201,8 @@ export function OcpiDashboardView() {
   // gegevens zoals het maximale vermogen — die stonden inline maar zijn
   // dagelijks ruis (verzoek Jarno 05-08).
   const [gekozenPunt, setGekozenPunt] = useState<Evse | null>(null);
+  // Storingen-lijst: standaard de 5 recentste, de rest achter "Toon alles".
+  const [alleStoringen, setAlleStoringen] = useState(false);
   // uid → laadpunt-nummer, zodat sessiekaarten "13.A" tonen i.p.v. de rauwe
   // ChargEye-uid ("CSrh1AH0aNN-3").
   const nummerByUid = useMemo(() => {
@@ -599,30 +601,40 @@ export function OcpiDashboardView() {
           <div>
             <AdminSubsectionHeader title="Storingen (ChargEye)" />
             {data.storingen.length === 0 ? (
-              <div className="surface-card p-6 rounded-3xl">
+              <div className="surface-card p-5 rounded-3xl">
                 <p className="text-sm font-semibold text-emerald-600">Geen storingen — alle laadpunten en laadbeurten van de afgelopen 7 dagen in orde.</p>
               </div>
             ) : (
-              <div className="surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
-                {data.storingen.map((st, i) => {
-                  const nummer = st.evseUid ? nummerByUid.get(st.evseUid) ?? st.evseUid : null;
-                  const bus = nummer ? busVoorLaadpunt(nummer) : null;
-                  return (
-                    <div key={`${st.soort}-${st.evseUid ?? 'x'}-${st.wanneer ?? i}`} className="flex items-center justify-between gap-3 p-4">
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">
-                          {nummer ? `Laadpunt ${nummer}` : 'Onbekend laadpunt'}{bus ? ` · bus ${bus}` : ''}
+              <div className="surface-card rounded-3xl overflow-hidden">
+                <div className="divide-y divide-slate-100">
+                  {(alleStoringen ? data.storingen : data.storingen.slice(0, 5)).map((st, i) => {
+                    const nummer = st.evseUid ? nummerByUid.get(st.evseUid) ?? st.evseUid : null;
+                    const bus = nummer ? busVoorLaadpunt(nummer) : null;
+                    return (
+                      <div key={`${st.soort}-${st.evseUid ?? 'x'}-${st.wanneer ?? i}`} className="flex min-h-11 items-center justify-between gap-3 px-4 py-2">
+                        <p className="min-w-0 truncate text-[13px] font-medium text-slate-700">
+                          <span className="font-semibold text-slate-800">{nummer ? `Laadpunt ${nummer}` : 'Onbekend laadpunt'}{bus ? ` · bus ${bus}` : ''}</span>
+                          <span className="text-slate-500">
+                            {' — '}
+                            {st.soort === 'laadpunt'
+                              ? `in storing (${statusLabel(st.status).toLowerCase()})`
+                              : `laadbeurt mislukt (${st.classificatie})${st.wanneer ? ` · ${new Date(st.wanneer).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}
+                          </span>
                         </p>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
-                          {st.soort === 'laadpunt'
-                            ? `laadpunt in storing (${statusLabel(st.status).toLowerCase()})`
-                            : `mislukte laadbeurt (${st.classificatie})${st.wanneer ? ` · ${new Date(st.wanneer).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}
-                        </p>
+                        <Badge tone="red" dot>{st.soort === 'laadpunt' ? statusLabel(st.status) : 'Mislukt'}</Badge>
                       </div>
-                      <Badge tone="red" dot>{st.soort === 'laadpunt' ? statusLabel(st.status) : 'Sessie mislukt'}</Badge>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
+                </div>
+                {data.storingen.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setAlleStoringen((v) => !v)}
+                    className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-[12px] font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-white/5"
+                  >
+                    {alleStoringen ? 'Toon minder' : `Toon alle ${data.storingen.length} storingen`}
+                  </button>
+                )}
               </div>
             )}
           </div>
