@@ -1,18 +1,21 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw } from 'lucide-react';
+import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
+import { isoDate } from '../../lib/availability';
 import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { StatCard } from '../../components/StatCard';
 import { SkeletonTile } from '../../components/Skeleton';
-import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { Badge, Button, MicroLabel, type BadgeTone } from '../../components/primitives';
 
-/** Compacte termijn-schakelaar in dezelfde toggle-taal als de rest van de
- *  app (glass-segmented + oker-actief, zie ScheduleView/Gebruikersbeheer). */
-function TermijnKeuze<T extends string>({ waarde, opties, onKies }: { waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void }) {
+/** Termijn-schakelaar in exact de app-standaard segmented-maat (rail
+ *  rounded-2xl p-1, knoppen px-3.5 py-2 text-xs — zie ScheduleView,
+ *  Dienstoverzicht, Gebruikersbeheer). Stond hier eerst als eigen mini-variant
+ *  van 24 px hoog — te klein als raakvlak én de enige afwijkende toggle. */
+function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { label: string; waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void }) {
   return (
-    <div className="glass-segmented inline-flex shrink-0 rounded-xl p-0.5">
+    <div role="group" aria-label={label} className="glass-segmented inline-flex shrink-0 rounded-2xl p-1">
       {opties.map((o) => (
         <button
           key={o.id}
@@ -20,7 +23,7 @@ function TermijnKeuze<T extends string>({ waarde, opties, onKies }: { waarde: T;
           onClick={() => onKies(o.id)}
           aria-pressed={waarde === o.id}
           className={cn(
-            'ios-pressable rounded-[10px] px-2.5 py-1 text-[11px] font-semibold transition-all',
+            'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
             waarde === o.id ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
           )}
         >
@@ -59,7 +62,7 @@ function groepeerPerCpu(evses: Evse[]): Array<{ key: string; label: string; evse
     const m = /^(\d+)(?:\.(.+))?$/.exec(String(e.evse_id ?? ''));
     return m ? [Number(m[1]), m[2] ?? ''] : [Number.MAX_SAFE_INTEGER, String(e.evse_id ?? e.uid)];
   };
-  return [...groepen.entries()]
+  const kolommen = [...groepen.entries()]
     .map(([key, lijst], i) => {
       const nr = cpuNummer(lijst);
       return {
@@ -75,20 +78,32 @@ function groepeerPerCpu(evses: Evse[]): Array<{ key: string; label: string; evse
     })
     .sort((a, b) => a.volgorde - b.volgorde)
     .map(({ key, label, evses: lijst }) => ({ key, label, evses: lijst }));
+  // Twee stations die op hetzelfde CPU-nummer uitkomen (rommelige
+  // physical_reference) kregen identieke koppen — nummer ze dan door.
+  const gezien = new Map<string, number>();
+  for (const kolom of kolommen) {
+    const n = (gezien.get(kolom.label) ?? 0) + 1;
+    gezien.set(kolom.label, n);
+    if (n > 1) kolom.label = `${kolom.label} (${n})`;
+  }
+  return kolommen;
 }
 type DashLocation = { id: string; name?: string; city?: string; evses: Evse[] };
 type ActiveSession = { id: string; evse_uid?: string; location_id?: string; status?: string; start_date_time?: string; kwh?: number; powerKw?: number | null; soc?: number | null };
 type Dashboard = {
-  totals: { locations: number; evses: number; connectors: number; activeSessions: number; sessions30d: number; totalPowerKw: number; kwh30d: number };
+  totals: { evses: number; sessions30d: number; totalPowerKw: number };
   statusCounts: Record<string, number>;
   locations: DashLocation[];
   activeSessions: ActiveSession[];
   kwhPerDay: Array<{ date: string; kwh: number; sessions: number }>;
+  /** Ruwe 30-min-slots van de laatste 24 uur. */
   powerCurve: Array<{ ts: string; kw: number; charging: number }>;
-  storingen: Array<{ soort: 'laadpunt' | 'sessie'; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }>;
+  /** Dágpieken (Brusselse kalenderdag) van de laatste 31 dagen — server-side
+   *  bepaald zodat de dag-grens niet verschuift tussen UTC en lokaal. */
+  powerDays?: Array<{ date: string; kw: number; ts: string; charging: number }>;
+  storingen?: Array<{ soort: 'laadpunt' | 'sessie'; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }>;
 };
 
-type BadgeTone = 'slate' | 'emerald' | 'red' | 'amber' | 'blue';
 const STATUS_LABEL: Record<string, string> = {
   AVAILABLE: 'Beschikbaar', CHARGING: 'Laden', RESERVED: 'Gereserveerd', BLOCKED: 'Geblokkeerd',
   INOPERATIVE: 'Buiten dienst', OUTOFORDER: 'Storing', PLANNED: 'Gepland', REMOVED: 'Verwijderd', UNKNOWN: 'Onbekend',
@@ -132,67 +147,92 @@ export function OcpiDashboardView() {
   const [verbruikTermijn, setVerbruikTermijn] = useState<'7d' | '30d' | 'maand'>('30d');
   const [vermogenTermijn, setVermogenTermijn] = useState<'24u' | '7d' | 'maand'>('24u');
   const uurLabel = (ts: string) => new Date(ts).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
-  const lokaleDag = (dt: Date) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
   const maandStart = () => { const nu = new Date(); return `${nu.getFullYear()}-${String(nu.getMonth() + 1).padStart(2, '0')}-01`; };
   const WEEKDAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 
+  // Op een smal scherm (telefoon) zijn 48 slot-staven van ~4 px geen
+  // raakvlak; dan voegen we de 24u-reeks samen tot uur-staven (piek per uur).
+  const [smalScherm, setSmalScherm] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 640px)');
+    const luister = (e: MediaQueryListEvent) => setSmalScherm(e.matches);
+    mq.addEventListener('change', luister);
+    return () => mq.removeEventListener('change', luister);
+  }, []);
+
   // Doorlopende reeks voor de kolomgrafiek: dagen zonder sessies worden 0
   // in plaats van weggelaten, anders schuiven de kolommen en klopt het
-  // ritme (weekend vs. week) niet meer. De termijn snijdt uit de 30 dagen.
+  // ritme (weekend vs. week) niet meer. De reeks loopt van maandstart óf 30
+  // dagen terug (wat het vroegst is) — een vaste 30-dagen-reeks miste dag 1
+  // in maanden van 31 dagen.
   const grafiek = useMemo(() => {
     const perDag = new Map((data?.kwhPerDay ?? []).map((d) => [d.date, d]));
+    const dagInMaand = new Date().getDate();
+    const terug = Math.max(29, dagInMaand - 1);
     const alle: Array<{ date: string; kwh: number; sessions: number; dow: number }> = [];
-    for (let i = 29; i >= 0; i--) {
+    for (let i = terug; i >= 0; i--) {
       const dt = new Date();
       dt.setDate(dt.getDate() - i);
-      const iso = lokaleDag(dt);
+      const iso = isoDate(dt);
       const rij = perDag.get(iso);
       alle.push({ date: iso, kwh: rij?.kwh ?? 0, sessions: rij?.sessions ?? 0, dow: dt.getDay() });
     }
     const dagen = verbruikTermijn === '7d' ? alle.slice(-7)
       : verbruikTermijn === 'maand' ? alle.filter((d) => d.date >= maandStart())
-      : alle;
+      : alle.slice(-30);
     const max = Math.max(1, ...dagen.map((d) => d.kwh));
     const totaal = Math.round(dagen.reduce((a, d) => a + d.kwh, 0) * 10) / 10;
     const actieveDagen = dagen.filter((d) => d.kwh > 0).length;
     const gemiddeld = actieveDagen > 0 ? Math.round((totaal / actieveDagen) * 10) / 10 : 0;
     return { dagen, max, totaal, gemiddeld, piek: Math.max(0, ...dagen.map((d) => d.kwh)) };
   }, [data?.kwhPerDay, verbruikTermijn]);
+  // Vast 30-dagen-totaal voor de KPI-tegel, onafhankelijk van de gekozen
+  // grafiektermijn — de tegel zei "30 d" maar toonde het termijn-totaal.
+  const kwh30 = useMemo(() => Math.round((data?.kwhPerDay ?? []).reduce((a, d) => a + d.kwh, 0)), [data?.kwhPerDay]);
 
-  // Vermogen: 24u = de ruwe 30-min-slots; 7d/maand = één staaf per dag met
-  // de dágpiek (en het moment waarop die viel).
+  // Vermogen: 24u = de 30-min-slots (op mobiel samengevoegd per uur);
+  // 7d/maand = één staaf per dag met de server-side bepaalde dágpiek.
   const vermogen = useMemo(() => {
-    const alle = data?.powerCurve ?? [];
     if (vermogenTermijn === '24u') {
-      const punten = alle.filter((pt) => Date.parse(pt.ts) >= Date.now() - 24 * 3600 * 1000);
+      let punten = (data?.powerCurve ?? []).map((pt) => ({ ts: pt.ts, kw: pt.kw, charging: pt.charging }));
+      if (smalScherm) {
+        const perUur = new Map<string, { ts: string; kw: number; charging: number }>();
+        for (const pt of punten) {
+          const uur = pt.ts.slice(0, 13);
+          const cur = perUur.get(uur);
+          if (!cur || pt.kw > cur.kw) perUur.set(uur, pt);
+        }
+        punten = [...perUur.values()].sort((a, b) => a.ts.localeCompare(b.ts));
+      }
       const maxKw = Math.max(1, ...punten.map((pt) => pt.kw));
       const piek = punten.reduce((best, pt) => (pt.kw > best.kw ? pt : best), { ts: '', kw: 0, charging: 0 });
-      const staven = punten.map((pt) => ({ key: pt.ts, kw: pt.kw, charging: pt.charging, isPiek: pt.ts === piek.ts, asLabel: '' }));
+      const staven = punten.map((pt) => ({ key: pt.ts, ts: pt.ts, kw: pt.kw, charging: pt.charging, isPiek: pt.ts === piek.ts && pt.kw > 0, asLabel: '' }));
       return { modus: 'slots' as const, staven, maxKw, piekKw: piek.kw, piekTs: piek.ts, piekWanneer: piek.ts ? `om ${uurLabel(piek.ts)}` : '' };
     }
     const vanaf = vermogenTermijn === '7d'
-      ? lokaleDag(new Date(Date.now() - 6 * 24 * 3600 * 1000))
+      ? isoDate(new Date(Date.now() - 6 * 24 * 3600 * 1000))
       : maandStart();
-    const perDag = new Map<string, { kw: number; ts: string; charging: number; dow: number }>();
-    for (const pt of alle) {
-      const dt = new Date(pt.ts);
-      const dag = lokaleDag(dt);
-      if (dag < vanaf) continue;
-      const cur = perDag.get(dag);
-      if (!cur || pt.kw > cur.kw) perDag.set(dag, { kw: pt.kw, ts: pt.ts, charging: pt.charging, dow: dt.getDay() });
-    }
-    const staven = [...perDag.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([dag, v]) => ({
-        key: dag, kw: v.kw, charging: v.charging, ts: v.ts, isPiek: false,
-        asLabel: vermogenTermijn === '7d' ? WEEKDAG_KORT[v.dow] : v.dow === 1 ? String(Number(dag.slice(8))) : '',
-      }));
+    let maandagTeller = 0;
+    const staven = (data?.powerDays ?? [])
+      .filter((d) => d.date >= vanaf)
+      .map((d) => {
+        const dow = new Date(`${d.date}T00:00:00`).getDay();
+        if (dow === 1) maandagTeller += 1;
+        return {
+          key: d.date, ts: d.ts, kw: d.kw, charging: d.charging, isPiek: false,
+          // Maand-as: alleen (op smal scherm elke twééde) maandag een dagnummer
+          // — 31 labels van twee cijfers passen niet op 320 px.
+          asLabel: vermogenTermijn === '7d'
+            ? WEEKDAG_KORT[dow]
+            : dow === 1 && (!smalScherm || maandagTeller % 2 === 1) ? String(Number(d.date.slice(8))) : '',
+        };
+      });
     const maxKw = Math.max(1, ...staven.map((st) => st.kw));
     const piek = staven.reduce((best, st) => (st.kw > best.kw ? st : best), { key: '', kw: 0, ts: '', charging: 0, isPiek: false, asLabel: '' });
-    for (const st of staven) (st as any).isPiek = st.key === piek.key;
+    for (const st of staven) st.isPiek = st.key === piek.key && st.kw > 0;
     const piekDagLabel = piek.key ? new Date(`${piek.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
-    return { modus: 'dagen' as const, staven, maxKw, piekKw: piek.kw, piekTs: (piek as any).ts ?? '', piekWanneer: piek.key ? `op ${piekDagLabel}` : '' };
-  }, [data?.powerCurve, vermogenTermijn]);
+    return { modus: 'dagen' as const, staven, maxKw, piekKw: piek.kw, piekTs: piek.ts, piekWanneer: piek.key ? `op ${piekDagLabel}` : '' };
+  }, [data?.powerCurve, data?.powerDays, vermogenTermijn, smalScherm]);
   // Tik-selectie op de grafiekstaven: op een telefoon is er geen hover-title,
   // dus een tik op een staaf toont de details in de samenvattingsregel.
   const [gekozenDag, setGekozenDag] = useState<string | null>(null);
@@ -202,7 +242,10 @@ export function OcpiDashboardView() {
   // dagelijks ruis (verzoek Jarno 05-08).
   const [gekozenPunt, setGekozenPunt] = useState<Evse | null>(null);
   // Storingen-lijst: standaard de 5 recentste, de rest achter "Toon alles".
+  // ??-guard: een oudere API-respons (uit de PWA-cache of tijdens een deploy)
+  // mist het veld en gaf anders een witte pagina.
   const [alleStoringen, setAlleStoringen] = useState(false);
+  const storingen = data?.storingen ?? [];
   // uid → laadpunt-nummer, zodat sessiekaarten "13.A" tonen i.p.v. de rauwe
   // ChargEye-uid ("CSrh1AH0aNN-3").
   const nummerByUid = useMemo(() => {
@@ -286,7 +329,7 @@ export function OcpiDashboardView() {
               icon={<Gauge size={20} className="text-oker-600" />}
               label="Vandaag geladen"
               value={`${Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh`}
-              subValue={`30 d: ${Math.round(grafiek.totaal)} kWh · ${data.totals.sessions30d} sessies`}
+              subValue={`30 d: ${kwh30} kWh · ${data.totals.sessions30d} sessies`}
             />
           </div>
 
@@ -302,6 +345,7 @@ export function OcpiDashboardView() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <MicroLabel>Verbruik (kWh)</MicroLabel>
               <TermijnKeuze
+                label="Termijn verbruiksgrafiek"
                 waarde={verbruikTermijn}
                 opties={[{ id: '7d', label: '7 d' }, { id: '30d', label: '30 d' }, { id: 'maand', label: 'maand' }]}
                 onKies={(t) => { setVerbruikTermijn(t); setGekozenDag(null); }}
@@ -311,31 +355,41 @@ export function OcpiDashboardView() {
               <p className="text-sm text-slate-500">Nog geen sessies gesynchroniseerd.</p>
             ) : (
               <>
-                <div className="flex h-24 items-end gap-[3px]">
-                  {grafiek.dagen.map((d, i) => {
-                    const vandaag = i === grafiek.dagen.length - 1;
+                {/* Rol img + samenvatting: VoiceOver leest zo één zin i.p.v.
+                    30 losse staaf-knoppen af te lopen. De staven zelf blijven
+                    tikbaar maar vallen buiten de focus-volgorde; de details
+                    komen in de samenvattingsregel eronder. Kleuren zonder
+                    opacity-tinten (contrast ≥ 3:1) en oker betekent in beide
+                    grafieken hetzelfde: de piek. */}
+                <div
+                  role="img"
+                  aria-label={`Verbruik per dag: totaal ${Math.round(grafiek.totaal)} kWh, gemiddeld ${grafiek.gemiddeld} kWh per laaddag, piek ${Math.round(grafiek.piek)} kWh`}
+                  className="flex h-24 items-end gap-[3px]"
+                >
+                  {grafiek.dagen.map((d) => {
                     const gekozen = gekozenDag === d.date;
+                    const isPiek = d.kwh > 0 && d.kwh === grafiek.piek;
                     return (
                       <button
                         key={d.date}
                         type="button"
+                        tabIndex={-1}
+                        aria-hidden="true"
                         onClick={() => setGekozenDag(gekozen ? null : d.date)}
-                        aria-pressed={gekozen}
-                        aria-label={`${d.date.slice(5)}: ${d.kwh} kWh, ${d.sessions} sessies`}
                         title={`${d.date.slice(5)} · ${d.kwh} kWh · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
                         className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                       >
                         <div
-                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-700 dark:bg-slate-200' : vandaag ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-oker-400/70'}
+                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
                           style={{ height: d.kwh > 0 ? `${Math.max(4, Math.round((d.kwh / grafiek.max) * 100))}%` : '2px' }}
                         />
                       </button>
                     );
                   })}
                 </div>
-                <div className="mt-1 flex min-h-4 gap-[3px]">
+                <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                   {grafiek.dagen.map((d) => (
-                    <span key={d.date} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-400">
+                    <span key={d.date} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
                       {grafiek.dagen.length <= 7 ? WEEKDAG_KORT[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
                     </span>
                   ))}
@@ -363,6 +417,7 @@ export function OcpiDashboardView() {
             <div className="mb-4 flex items-center justify-between gap-3">
               <MicroLabel>Vermogen (kW)</MicroLabel>
               <TermijnKeuze
+                label="Termijn vermogensgrafiek"
                 waarde={vermogenTermijn}
                 opties={[{ id: '24u', label: '24 u' }, { id: '7d', label: '7 d' }, { id: 'maand', label: 'maand' }]}
                 onKies={(t) => { setVermogenTermijn(t); setGekozenSlot(null); }}
@@ -372,7 +427,11 @@ export function OcpiDashboardView() {
               <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elke 30 min).</p>
             ) : (
               <>
-                <div className={cn('flex h-24 items-end', vermogen.modus === 'slots' ? 'gap-[2px]' : 'gap-[3px]')}>
+                <div
+                  role="img"
+                  aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}`}
+                  className={cn('flex h-24 items-end', vermogen.modus === 'slots' ? 'gap-[2px]' : 'gap-[3px]')}
+                >
                   {vermogen.staven.map((st) => {
                     const gekozen = gekozenSlot === st.key;
                     const kop = vermogen.modus === 'slots'
@@ -382,14 +441,14 @@ export function OcpiDashboardView() {
                       <button
                         key={st.key}
                         type="button"
+                        tabIndex={-1}
+                        aria-hidden="true"
                         onClick={() => setGekozenSlot(gekozen ? null : st.key)}
-                        aria-pressed={gekozen}
-                        aria-label={`${kop}: ${st.kw} kW, ${st.charging} sessies`}
                         title={`${kop} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
                         className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                       >
                         <div
-                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-700 dark:bg-slate-200' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-blue-400/60'}
+                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
                           style={{ height: st.kw > 0 ? `${Math.max(4, Math.round((st.kw / vermogen.maxKw) * 100))}%` : '2px' }}
                         />
                       </button>
@@ -401,13 +460,13 @@ export function OcpiDashboardView() {
                     — zo liggen grafiekbodem, as en tekst in beide kaarten op
                     exact dezelfde hoogte. */}
                 {vermogen.modus === 'dagen' ? (
-                  <div className="mt-1 flex min-h-4 gap-[3px]">
+                  <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                     {vermogen.staven.map((st) => (
-                      <span key={st.key} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-400">{st.asLabel}</span>
+                      <span key={st.key} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-1 flex min-h-4 justify-between text-[10px] font-medium tabular-nums text-slate-400">
+                  <div className="mt-1 flex min-h-4 justify-between text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
                     <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
                     <span>nu</span>
                   </div>
@@ -417,7 +476,7 @@ export function OcpiDashboardView() {
                   if (st) {
                     const kop = vermogen.modus === 'slots'
                       ? uurLabel(st.key)
-                      : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel((st as any).ts ?? st.key)}`;
+                      : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel(st.ts || st.key)}`;
                     return (
                       <p className="mt-2 min-h-4 truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
                         {kop} · {st.kw} kW · {st.charging} sessie{st.charging === 1 ? '' : 's'}
@@ -439,7 +498,12 @@ export function OcpiDashboardView() {
           {/* Detail-popup per laadpunt: technische gegevens die dagelijks
               ruis zijn maar soms nodig — max. vermogen, connector-type — plus
               de live sessie als die er is. */}
-          <Modal open={!!gekozenPunt} onClose={() => setGekozenPunt(null)} maxWidth="sm">
+          <Modal
+            open={!!gekozenPunt}
+            onClose={() => setGekozenPunt(null)}
+            maxWidth="sm"
+            ariaLabel={gekozenPunt ? `Laadpunt ${gekozenPunt.evse_id ?? gekozenPunt.uid}` : 'Laadpunt'}
+          >
             {gekozenPunt && (() => {
               const sessie = sessieByEvse.get(gekozenPunt.uid);
               const bus = busVoorLaadpunt(gekozenPunt.evse_id);
@@ -453,10 +517,23 @@ export function OcpiDashboardView() {
               return (
                 <div className="p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <h3 className="text-base font-bold text-slate-800">
+                    <h3 className="min-w-0 truncate text-base font-bold text-slate-800">
                       Laadpunt {gekozenPunt.evse_id ?? gekozenPunt.uid}{bus ? ` · bus ${bus}` : ''}
                     </h3>
-                    <Badge tone={statusTone(gekozenPunt.status)} dot>{statusLabel(gekozenPunt.status)}</Badge>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <Badge tone={statusTone(gekozenPunt.status)} dot>{statusLabel(gekozenPunt.status)}</Badge>
+                      {/* Expliciete sluitknop: tik-buiten en ESC bestaan, maar
+                          een popup zonder zichtbare uitgang is op een telefoon
+                          een raadsel. */}
+                      <button
+                        type="button"
+                        onClick={() => setGekozenPunt(null)}
+                        aria-label="Sluiten"
+                        className="ios-pressable flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10"
+                      >
+                        <X size={16} />
+                      </button>
+                    </span>
                   </div>
                   <div>
                     {sessie && typeof sessie.powerKw === 'number' && rij('Actueel vermogen', `${sessie.powerKw} kW`)}
@@ -501,8 +578,10 @@ export function OcpiDashboardView() {
                       </div>
                       {/* "Laden" blijft leesbaar als woord mét het vermogen erbij;
                           een volle bus heet "100% geladen" (verzoek Jarno 05-08).
-                          Het percentage zelf staat in de titel naast de bus. */}
-                      <Badge tone={vol ? 'emerald' : 'blue'} dot>
+                          Het percentage zelf staat in de titel naast de bus.
+                          nowrap: op iPad-breedte wikkelde "Laden · 112 kW" naar
+                          twee regels en werden de kaarten ongelijk hoog. */}
+                      <Badge tone={vol ? 'emerald' : 'blue'} dot className="shrink-0 whitespace-nowrap">
                         {vol ? '100% geladen' : typeof s.powerKw === 'number' && s.powerKw > 0 ? `Laden · ${Math.round(s.powerKw)} kW` : 'Laden'}
                       </Badge>
                     </div>
@@ -542,7 +621,7 @@ export function OcpiDashboardView() {
                             <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
                               <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
                                 <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
-                                <span className="text-[11px] font-medium tabular-nums text-slate-400">
+                                <span className="text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
                                   {laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}
                                 </span>
                               </div>
@@ -563,11 +642,13 @@ export function OcpiDashboardView() {
                                       onClick={() => setGekozenPunt(evse)}
                                       aria-haspopup="dialog"
                                       title="Tik voor details (max. vermogen, connector)"
-                                      className="ios-pressable flex min-h-10 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
+                                      className="ios-pressable flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
                                     >
                                       <span className="flex min-w-0 items-baseline">
                                         <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
-                                        <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-slate-400">
+                                        {/* Busnummer is dé operationele sleutel van dit
+                                            scherm — niet in de zwakste tint zetten. */}
+                                        <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-slate-600 dark:text-slate-300">
                                           {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
                                         </span>
                                         {sessie && typeof sessie.soc === 'number' && (
@@ -576,7 +657,7 @@ export function OcpiDashboardView() {
                                           </span>
                                         )}
                                       </span>
-                                      <Badge tone={statusTone(evse.status)} dot>
+                                      <Badge tone={statusTone(evse.status)} dot className="shrink-0 whitespace-nowrap">
                                         {statusLabel(evse.status)}{laadt ? ` · ${Math.round(sessie!.powerKw!)} kW` : ''}
                                       </Badge>
                                     </button>
@@ -600,19 +681,20 @@ export function OcpiDashboardView() {
               scenario zichtbaar dat anders alleen in de ruwe data stond. */}
           <div>
             <AdminSubsectionHeader title="Storingen (ChargEye)" />
-            {data.storingen.length === 0 ? (
-              <div className="surface-card p-5 rounded-3xl">
-                <p className="text-sm font-semibold text-emerald-600">Geen storingen — alle laadpunten en laadbeurten van de afgelopen 7 dagen in orde.</p>
-              </div>
+            {storingen.length === 0 ? (
+              <EmptyState mascotte={false} title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
             ) : (
               <div className="surface-card rounded-3xl overflow-hidden">
                 <div className="divide-y divide-slate-100">
-                  {(alleStoringen ? data.storingen : data.storingen.slice(0, 5)).map((st, i) => {
+                  {(alleStoringen ? storingen : storingen.slice(0, 5)).map((st, i) => {
                     const nummer = st.evseUid ? nummerByUid.get(st.evseUid) ?? st.evseUid : null;
                     const bus = nummer ? busVoorLaadpunt(nummer) : null;
                     return (
-                      <div key={`${st.soort}-${st.evseUid ?? 'x'}-${st.wanneer ?? i}`} className="flex min-h-11 items-center justify-between gap-3 px-4 py-2">
-                        <p className="min-w-0 truncate text-[13px] font-medium text-slate-700">
+                      <div key={`${st.soort}-${st.evseUid ?? 'x'}-${st.wanneer ?? ''}-${i}`} className="flex min-h-11 items-center justify-between gap-3 px-4 py-2">
+                        {/* Op mobiel twee regels toestaan: truncate sneed
+                            precies de reden en het tijdstip weg — de kern van
+                            de melding. */}
+                        <p className="min-w-0 text-[13px] font-medium text-slate-700 max-sm:line-clamp-2 sm:truncate">
                           <span className="font-semibold text-slate-800">{nummer ? `Laadpunt ${nummer}` : 'Onbekend laadpunt'}{bus ? ` · bus ${bus}` : ''}</span>
                           <span className="text-slate-500">
                             {' — '}
@@ -621,18 +703,19 @@ export function OcpiDashboardView() {
                               : `laadbeurt mislukt (${st.classificatie})${st.wanneer ? ` · ${new Date(st.wanneer).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}
                           </span>
                         </p>
-                        <Badge tone="red" dot>{st.soort === 'laadpunt' ? statusLabel(st.status) : 'Mislukt'}</Badge>
+                        <Badge tone="red" dot className="shrink-0 whitespace-nowrap">{st.soort === 'laadpunt' ? statusLabel(st.status) : 'Mislukt'}</Badge>
                       </div>
                     );
                   })}
                 </div>
-                {data.storingen.length > 5 && (
+                {storingen.length > 5 && (
                   <button
                     type="button"
                     onClick={() => setAlleStoringen((v) => !v)}
+                    aria-expanded={alleStoringen}
                     className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-[12px] font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-white/5"
                   >
-                    {alleStoringen ? 'Toon minder' : `Toon alle ${data.storingen.length} storingen`}
+                    {alleStoringen ? 'Toon minder' : `Toon alle ${storingen.length} storingen`}
                   </button>
                 )}
               </div>

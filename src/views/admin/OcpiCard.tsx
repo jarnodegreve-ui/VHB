@@ -74,7 +74,7 @@ export function OcpiCard() {
       if (!response.ok) {
         notify(data.details || data.error || `Sync mislukt (${response.status}).`, 'error');
       } else {
-        const s = `${data.locations ?? 0} locaties · ${data.evses ?? 0} palen · ${data.sessions ?? 0} sessies · ${data.cdrs ?? 0} CDR's`;
+        const s = `${data.locations ?? 0} locaties · ${data.evses ?? 0} palen · ${data.sessions ?? 0} sessies`;
         setLastSync(s);
         if (data.errors?.length) notify(`Sync deels gelukt (${data.errors.length} fout(en)): ${s}`, 'error');
         else notify(`Sync klaar: ${s}`, 'success');
