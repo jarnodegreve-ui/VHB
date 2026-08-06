@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -103,6 +103,9 @@ import {
   getDevice,
   getPlanningNotes,
   upsertPlanningNote,
+  getUserExpiries,
+  saveUserExpiry,
+  deleteUserExpiry,
   deletePlanningNote,
   getLatestBackup,
 } from "./storage.js";
@@ -1090,6 +1093,60 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
 // De verloftype-labels (LEAVE_TYPE_LABEL) wonen sinds de consolidatie in
 // helpers.ts, naast de drift-test tegen de bewuste client-kopie in
 // src/lib/format.ts.
+
+// --- Vervaldata: rijbewijs / Code 95 / medische schifting per chauffeur ---
+// Beheer door planner/admin; een chauffeur ziet alleen zijn eigen datums.
+// De dagelijkse digest-cron waarschuwt op 90/30/7/0 dagen (zie error-digest).
+app.get("/api/user-expiries", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const alle = await getUserExpiries();
+    const eigen = req.appUser?.role === "chauffeur"
+      ? alle.filter((e) => e.userId === String(req.appUser!.id))
+      : alle;
+    res.json(eigen.map((e) => ({ userId: e.userId, soort: e.soort, validUntil: e.validUntil })));
+  } catch (err) {
+    console.error("Error reading user expiries:", err);
+    res.status(500).json({ error: "Kon vervaldata niet lezen." });
+  }
+});
+
+app.put("/api/user-expiries", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const userId = String(req.body?.userId ?? "").trim();
+    const soort = String(req.body?.soort ?? "").trim();
+    // Lege datum = verwijderen (datum onbekend/niet van toepassing).
+    const rauw = req.body?.validUntil;
+    const validUntil = rauw === null || rauw === undefined || String(rauw).trim() === "" ? null : String(rauw).trim();
+    if (!EXPIRY_SOORT_LABEL[soort]) {
+      return res.status(400).json({ error: "Onbekende soort vervaldatum." });
+    }
+    if (validUntil !== null && !/^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
+      return res.status(400).json({ error: "Ongeldige datum: verwacht JJJJ-MM-DD." });
+    }
+    const users = await getUsersData();
+    const user = users.find((u: any) => String(u.id) === userId);
+    if (!user) {
+      return res.status(404).json({ error: "Gebruiker niet gevonden." });
+    }
+    const label = EXPIRY_SOORT_LABEL[soort];
+    if (validUntil === null) {
+      await deleteUserExpiry(userId, soort);
+    } else {
+      await saveUserExpiry({ userId, soort, validUntil, updatedBy: String(req.appUser?.id ?? "") || null });
+    }
+    await logActivity(
+      req,
+      "users",
+      validUntil ? "Vervaldatum bijgewerkt" : "Vervaldatum verwijderd",
+      `${user.name}: ${label} ${validUntil ? `geldig tot ${validUntil}` : "— datum verwijderd"}.`,
+      { type: "user", id: userId },
+    );
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Error saving user expiry:", err);
+    res.status(500).json({ error: "Kon vervaldatum niet opslaan." });
+  }
+});
 
 // --- Dienstnotities: kort bericht van de planner bij één dienstdag ---
 const ISO_DAY_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -2187,6 +2244,55 @@ app.get("/api/cron/error-digest", async (req, res) => {
     // De rijen blijven wél in de DB en in Systeem Status zichtbaar.
     const errors = allErrors.filter((e) => !isDigestRuis(e.message));
     const filtered = allErrors.length - errors.length;
+
+    // Vervaldata-bewaker (07-08): één keer per dag — dus in deze cron —
+    // nakijken welke documenten (rijbewijs/Code 95/medische schifting) bijna
+    // verlopen. Pushes op de vaste mijlpalen 90/30/7/0 dagen: de cron draait
+    // 1×/dag, dus dat is vanzelf exact één push per mijlpaal, zonder aparte
+    // verstuurd-administratie. De mailsectie hieronder toont alles binnen 60
+    // dagen (herhaling in een dagoverzicht is juist de bedoeling).
+    // Best-effort — mag het dagoverzicht nooit breken.
+    let vervalTekst = "";
+    let vervalHtml = "";
+    try {
+      const [expiries, alleUsers] = await Promise.all([getUserExpiries(), getUsersData()]);
+      const actief = new Map(alleUsers.filter((u: any) => u.isActive !== false).map((u: any) => [String(u.id), u]));
+      const vandaag = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+      const dagenTot = (d: string) => Math.round((Date.parse(d) - Date.parse(vandaag)) / 86400000);
+      const rijen = expiries
+        .filter((e) => actief.has(e.userId))
+        .map((e) => ({
+          ...e,
+          naam: String((actief.get(e.userId) as any)?.name ?? "Onbekend"),
+          label: EXPIRY_SOORT_LABEL[e.soort] ?? e.soort,
+          dagen: dagenTot(e.validUntil),
+        }))
+        .filter((e) => Number.isFinite(e.dagen))
+        .sort((a, b) => a.dagen - b.dagen);
+      for (const e of rijen) {
+        if (e.dagen === 90 || e.dagen === 30 || e.dagen === 7 || e.dagen === 0) {
+          await sendPushToUsers([e.userId], {
+            title: e.dagen === 0 ? `${e.label} verloopt vandaag` : `${e.label} verloopt over ${e.dagen} dagen`,
+            body: `Je ${e.label.toLowerCase()} is geldig tot ${e.validUntil}. Regel tijdig de vernieuwing en geef het door aan de planning.`,
+            url: "/",
+          });
+        }
+      }
+      const teMelden = rijen.filter((e) => e.dagen <= 60);
+      if (teMelden.length > 0) {
+        const regel = (e: (typeof teMelden)[number]) =>
+          e.dagen < 0
+            ? `${e.naam} — ${e.label} is VERLOPEN sinds ${e.validUntil} (${Math.abs(e.dagen)} dagen)`
+            : e.dagen === 0
+              ? `${e.naam} — ${e.label} verloopt VANDAAG (${e.validUntil})`
+              : `${e.naam} — ${e.label} verloopt over ${e.dagen} ${e.dagen === 1 ? "dag" : "dagen"} (${e.validUntil})`;
+        vervalTekst = `\n\nDocumenten (binnen 60 dagen):\n${teMelden.map((e) => `• ${regel(e)}`).join("\n")}`;
+        vervalHtml = `<p><strong>Documenten (binnen 60 dagen)</strong></p><ul>${teMelden.map((e) => `<li>${escapeHtml(regel(e))}</li>`).join("")}</ul>`;
+      }
+    } catch (err: any) {
+      console.error("[error-digest] vervaldata-sectie mislukt:", err?.message ?? err);
+    }
+
     // Bewust GEEN drempel meer (verzoek Jarno, 02-08): elke dag een overzicht,
     // ook bij nul meldingen. Een mail die alleen bij problemen komt, laat je
     // je afvragen of hij niet gewoon niet verstuurd is. ERROR_DIGEST_MIN_COUNT
@@ -2251,12 +2357,12 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const staart = filtered > 0
       ? `\n\n${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).`
       : "";
-    const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
+    const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}${vervalTekst}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
     // g.source/message/lastUrl zijn door de client aangeleverd — escapen,
     // anders is de digest-mail een HTML-injectiekanaal richting de admins.
     // De symbolicatie-uitkomst komt uit de sourcemap (indirect ook input) —
     // dus óók escapen.
-    const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).</p>` : ""}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+    const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).</p>` : ""}${vervalHtml}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);

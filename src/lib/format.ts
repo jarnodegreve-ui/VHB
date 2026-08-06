@@ -87,6 +87,14 @@ export const LEAVE_TYPE_LABELS: Record<string, string> = {
 
 export const formatLeaveType = (type: string) => LEAVE_TYPE_LABELS[type] ?? type;
 
+/** Vervaldata-soorten — bewuste kopie van api/helpers.ts (EXPIRY_SOORT_LABEL);
+ *  de drift-test in sharedTypes.test.ts bewaakt gelijkheid. */
+export const EXPIRY_SOORT_LABELS: Record<string, string> = {
+  rijbewijs: 'Rijbewijs',
+  code95: 'Code 95',
+  medische_schifting: 'Medische schifting',
+};
+
 /**
  * Dienstnummer van een planning-rij, met een zichtbare val-terug. Stond vijf
  * keer woordelijk in de views (controle-ronde #35) — telkens dezelfde

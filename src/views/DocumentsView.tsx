@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react';
-import { Download, FileText } from 'lucide-react';
+import { Download, FileText, IdCard } from 'lucide-react';
 import type { User } from '../types';
 import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, MicroLabel } from '../components/primitives';
 import { SkeletonRow } from '../components/Skeleton';
-import { formatDateHuman } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../lib/format';
 
 export type UserDocument = {
   id: string;
@@ -26,6 +26,24 @@ const prettySize = (bytes: number | null) =>
 export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSeen?: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
   const [loading, setLoading] = useState(true);
+  // Eigen vervaldata (rijbewijs/Code 95/medische schifting): zo ziet de
+  // chauffeur zelf wanneer er iets vernieuwd moet worden — de pushmeldingen
+  // op 90/30/7 dagen verwijzen hierheen. Best-effort: zonder data geen blok.
+  const [verval, setVerval] = useState<Array<{ soort: string; validUntil: string }>>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/user-expiries', { headers: await getSupabaseAuthHeaders() });
+        if (!res.ok) return;
+        const rows = await res.json();
+        if (!cancelled && Array.isArray(rows)) setVerval(rows);
+      } catch { /* stil */ }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser.id]);
+  const vandaag = new Date();
+  const dagenTot = (d: string) => Math.round((Date.parse(d) - Date.parse(`${vandaag.getFullYear()}-${String(vandaag.getMonth() + 1).padStart(2, '0')}-${String(vandaag.getDate()).padStart(2, '0')}`)) / 86400000);
 
   useEffect(() => {
     // De view openen = documenten gezien: badge/lastseen bijwerken.
@@ -50,6 +68,31 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
   return (
     <PageShell>
       <PageHeader title="Mijn documenten" description="Documenten die de planning voor jou klaarzet vind je hier terug." />
+
+      {verval.length > 0 && (
+        <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+          {verval.map((e) => {
+            const dagen = dagenTot(e.validUntil);
+            const urgent = Number.isFinite(dagen) && dagen <= 30;
+            return (
+              <div key={e.soort} className="flex items-center gap-4 px-5 py-4">
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${urgent ? 'bg-red-50 text-red-600' : 'bg-oker-50 text-oker-600'}`}>
+                  <IdCard size={20} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold text-slate-900 truncate">{EXPIRY_SOORT_LABELS[e.soort] ?? e.soort}</p>
+                  <MicroLabel className="mt-0.5">Geldig tot {formatDateHuman(e.validUntil)}</MicroLabel>
+                </div>
+                {Number.isFinite(dagen) && (
+                  <Badge tone={dagen < 0 ? 'red' : dagen <= 30 ? 'amber' : 'emerald'} dot className="shrink-0 whitespace-nowrap">
+                    {dagen < 0 ? 'Verlopen' : dagen === 0 ? 'Verloopt vandaag' : dagen <= 60 ? `Nog ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}` : 'In orde'}
+                  </Badge>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {loading ? (
         <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">

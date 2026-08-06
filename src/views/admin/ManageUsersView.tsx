@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FolderOpen, History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { formatDateTimeHuman } from '../../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
@@ -20,6 +20,36 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
+  // Vervaldata (rijbewijs/Code 95/medische schifting): aparte mini-API naast
+  // de users-collectie. Eén keer laden; per bewerkte gebruiker een draft die
+  // pas bij Opslaan wordt weggeschreven (zelfde moment als de rest van het
+  // formulier — geen halve saves bij Annuleren).
+  const [userExpiries, setUserExpiries] = useState<Record<string, Record<string, string>>>({});
+  const [vervalDraft, setVervalDraft] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/user-expiries', { headers: await getSupabaseAuthHeaders() });
+        if (!res.ok) return;
+        const rows: Array<{ userId: string; soort: string; validUntil: string }> = await res.json();
+        if (cancelled || !Array.isArray(rows)) return;
+        const map: Record<string, Record<string, string>> = {};
+        for (const r of rows) {
+          if (!map[r.userId]) map[r.userId] = {};
+          map[r.userId][r.soort] = r.validUntil;
+        }
+        setUserExpiries(map);
+      } catch { /* zonder vervaldata gewoon lege velden */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  useEffect(() => {
+    setVervalDraft(editingUser ? { ...(userExpiries[editingUser.id] ?? {}) } : {});
+    // Bewust alleen op de gebruikers-id: de draft mag niet resetten terwijl
+    // je typt doordat een fetch de kaart ververst.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editingUser?.id]);
   const [viewingHistoryUser, setViewingHistoryUser] = useState<User | null>(null);
   const [viewingChangeLogUser, setViewingChangeLogUser] = useState<User | null>(null);
   const [documentsUser, setDocumentsUser] = useState<User | null>(null);
@@ -106,6 +136,28 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     setIsSubmittingUser(true);
     const success = await onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u))).finally(() => setIsSubmittingUser(false));
     if (!success) return;
+    // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten.
+    const bestaand = userExpiries[editingUser.id] ?? {};
+    for (const soort of Object.keys(EXPIRY_SOORT_LABELS)) {
+      const nieuw = (vervalDraft[soort] ?? '').trim();
+      const oud = bestaand[soort] ?? '';
+      if (nieuw === oud) continue;
+      try {
+        const res = await fetch('/api/user-expiries', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+          body: JSON.stringify({ userId: editingUser.id, soort, validUntil: nieuw || null }),
+        });
+        if (!res.ok) throw new Error(String(res.status));
+        setUserExpiries((prev) => {
+          const per = { ...(prev[editingUser.id] ?? {}) };
+          if (nieuw) per[soort] = nieuw; else delete per[soort];
+          return { ...prev, [editingUser.id]: per };
+        });
+      } catch {
+        notify(`${EXPIRY_SOORT_LABELS[soort]} kon niet opgeslagen worden — probeer opnieuw.`, 'error');
+      }
+    }
     setEditingUser(null);
   };
 
@@ -544,6 +596,26 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   />
                   <p className="text-[11px] text-slate-400 font-medium px-1">Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).</p>
                 </div>
+                {editingUser.role === 'chauffeur' && (
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <MicroLabel>Documenten geldig tot</MicroLabel>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
+                        <div key={soort} className="space-y-1">
+                          <p className="px-1 text-[11px] font-medium text-slate-500">{label}</p>
+                          <input
+                            type="date"
+                            aria-label={`${label} geldig tot`}
+                            value={vervalDraft[soort] ?? ''}
+                            onChange={(e) => setVervalDraft((d) => ({ ...d, [soort]: e.target.value }))}
+                            className="control-input w-full px-3 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium"
+                          />
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-[11px] text-slate-400 font-medium px-1">Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.</p>
+                  </div>
+                )}
               </div>
               <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
                 <div><p className="text-sm font-semibold text-slate-700">Account Actief</p><p className="text-[11px] text-slate-400">Inactieve gebruikers kunnen niet inloggen.</p></div>
