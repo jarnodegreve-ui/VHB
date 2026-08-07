@@ -640,7 +640,11 @@ export function OcpiDashboardView() {
                       // de laadpunten (1…7, 12.A/B, CPU3-satellieten) loopt
                       // per CPU, dus door elkaar gehusseld las de lijst als
                       // willekeur. Op mobiel stapelen de kolommen onder elkaar.
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      // Pas drie kolommen vanaf 2xl: op 1280px bleef er ~270px
+                      // per rij over, te weinig voor nummer + bus + percentage
+                      // + "Laden · 112 kW" — de pillen werden dan platgedrukt
+                      // en liepen in elkaar (melding Jarno).
+                      <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                         {groepeerPerCpu(loc.evses).map((cpu) => {
                           const laden = cpu.evses.filter((e) => e.status === 'CHARGING').length;
                           return (
@@ -671,7 +675,12 @@ export function OcpiDashboardView() {
                                       title="Tik voor details (max. vermogen, connector)"
                                       className="ios-pressable flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-surface-soft-hover dark:hover:bg-white/5"
                                     >
-                                      <span className="flex min-w-0 items-center gap-1.5">
+                                      {/* shrink-0 i.p.v. min-w-0: met min-w-0 werd
+                                          deze groep bij krappe kolombreedte
+                                          samengedrukt, liep het percentage uit
+                                          zijn pil ("61%" werd "6") en schoof
+                                          hij ín de statuspil ernaast. */}
+                                      <span className="flex shrink-0 items-center gap-1.5">
                                         <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
                                         {/* Busnummer is dé operationele sleutel van dit
                                             scherm — niet in de zwakste tint zetten. */}
