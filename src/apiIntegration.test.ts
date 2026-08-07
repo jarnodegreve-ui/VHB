@@ -2292,11 +2292,11 @@ describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', (
   });
 });
 
-describe('vervaldata (rijbewijs / Code 95 / medische schifting)', () => {
+describe('vervaldata (Code 95 / medische schifting)', () => {
   it('planner zet een vervaldatum; chauffeur ziet alleen zijn eigen datums', async () => {
     const zet = await api('PUT', '/api/user-expiries', { token: 'tok-planner', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });
     expect(zet.status).toBe(200);
-    await api('PUT', '/api/user-expiries', { token: 'tok-planner', body: { userId: '4', soort: 'rijbewijs', validUntil: '2028-01-15' } });
+    await api('PUT', '/api/user-expiries', { token: 'tok-planner', body: { userId: '4', soort: 'medische_schifting', validUntil: '2028-01-15' } });
     // Chauffeur 3 (tok-a) ziet alleen zichzelf.
     const eigen = await api('GET', '/api/user-expiries', { token: 'tok-a' });
     expect(eigen.status).toBe(200);
@@ -2319,5 +2319,16 @@ describe('vervaldata (rijbewijs / Code 95 / medische schifting)', () => {
     expect(fouteDatum.status).toBe(400);
     const onbekendeUser = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: 'geest', soort: 'code95', validUntil: '2027-01-01' } });
     expect(onbekendeUser.status).toBe(404);
+  });
+
+  it('rijbewijs wordt niet meer bewaakt: PUT weigert, oude rijen komen niet in de GET', async () => {
+    const oud = await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'rijbewijs', validUntil: '2029-05-01' } });
+    expect(oud.status).toBe(400);
+    // Rij die vóór de wijziging is opgeslagen: blijft in de DB staan, maar
+    // mag nergens meer opduiken.
+    mem.userExpiries.push({ userId: '3', soort: 'rijbewijs', validUntil: '2029-05-01', updatedAt: null, updatedBy: null });
+    await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });
+    const alle = await api('GET', '/api/user-expiries', { token: 'tok-planner' });
+    expect(alle.json).toEqual([{ userId: '3', soort: 'code95', validUntil: '2027-03-01' }]);
   });
 });

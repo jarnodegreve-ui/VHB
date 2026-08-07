@@ -393,11 +393,12 @@ export const LEAVE_TYPE_LABEL: Record<string, string> = {
   ziekte: "Ziekte",
 };
 
-/** Vervaldata-soorten (rijbewijs/Code 95/medische schifting). Bewust
- *  gedupliceerd in src/lib/format.ts (EXPIRY_SOORT_LABELS) — zelfde
- *  drift-test-afspraak als LEAVE_TYPE_LABEL. */
+/** Vervaldata-soorten (Code 95 / medische schifting). Bewust gedupliceerd in
+ *  src/lib/format.ts (EXPIRY_SOORT_LABELS) — zelfde drift-test-afspraak als
+ *  LEAVE_TYPE_LABEL. Rijbewijs is er op verzoek van Jarno (07-08) uit: de PUT
+ *  weigert die soort daardoor met een 400 en de GET filtert oude rijen weg
+ *  (zie /api/user-expiries), zodat achtergebleven data nergens meer opduikt. */
 export const EXPIRY_SOORT_LABEL: Record<string, string> = {
-  rijbewijs: "Rijbewijs",
   code95: "Code 95",
   medische_schifting: "Medische schifting",
 };

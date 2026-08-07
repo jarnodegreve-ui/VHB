@@ -2219,7 +2219,7 @@ export const deletePlanningNote = async (driverId: string, date: string): Promis
   if (error) throw error;
 };
 
-// === Vervaldata (rijbewijs / Code 95 / medische schifting) ===
+// === Vervaldata (Code 95 / medische schifting) ===
 // Eén rij per gebruiker+soort; beheer door planner/admin via de API.
 export type UserExpiryRecord = {
   userId: string;

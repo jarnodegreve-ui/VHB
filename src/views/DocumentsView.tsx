@@ -26,7 +26,7 @@ const prettySize = (bytes: number | null) =>
 export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSeen?: () => void }) {
   const [docs, setDocs] = useState<UserDocument[]>([]);
   const [loading, setLoading] = useState(true);
-  // Eigen vervaldata (rijbewijs/Code 95/medische schifting): zo ziet de
+  // Eigen vervaldata (Code 95 / medische schifting): zo ziet de
   // chauffeur zelf wanneer er iets vernieuwd moet worden — de pushmeldingen
   // op 90/30/7 dagen verwijzen hierheen. Best-effort: zonder data geen blok.
   const [verval, setVerval] = useState<Array<{ soort: string; validUntil: string }>>([]);

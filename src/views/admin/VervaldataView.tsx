@@ -11,8 +11,8 @@ import { Badge, Button, MicroLabel, type BadgeTone } from '../../components/prim
 
 type ExpiryRow = { userId: string; soort: string; validUntil: string };
 
-/** Overzicht + beheer van de vervaldata (rijbewijs / Code 95 / medische
- *  schifting), gesorteerd op wie het eerst vervalt — zodat de planner het
+/** Overzicht + beheer van de vervaldata (Code 95 / medische schifting),
+ *  gesorteerd op wie het eerst vervalt — zodat de planner het
  *  zelf kan raadplegen in plaats van op de herinneringen te wachten
  *  (verzoek Jarno 07-08). Zelfde PUT-API als Gebruikersbeheer, maar dan
  *  bereikbaar voor planners (Gebruikersbeheer is admin-only). */
@@ -20,7 +20,7 @@ export function VervaldataView({ users }: { users: User[] }) {
   const [expiries, setExpiries] = useState<ExpiryRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  // Bewerken: per chauffeur een draft met de drie datums.
+  // Bewerken: per chauffeur een draft met de bewaakte datums.
   const [bewerkt, setBewerkt] = useState<User | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -140,7 +140,7 @@ export function VervaldataView({ users }: { users: User[] }) {
       <PageHeader
         eyebrow="Beheer"
         title="Vervaldata"
-        description="Rijbewijs, Code 95 en medische schifting per chauffeur — gesorteerd op wie het eerst vervalt. Tik op een chauffeur om de datums aan te passen."
+        description="Code 95 en medische schifting per chauffeur — gesorteerd op wie het eerst vervalt. Tik op een chauffeur om de datums aan te passen."
         actions={(
           <Button variant="secondary" onClick={() => void load()} disabled={isLoading}>
             <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />

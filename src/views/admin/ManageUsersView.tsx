@@ -20,7 +20,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
-  // Vervaldata (rijbewijs/Code 95/medische schifting): aparte mini-API naast
+  // Vervaldata (Code 95 / medische schifting): aparte mini-API naast
   // de users-collectie. Eén keer laden; per bewerkte gebruiker een draft die
   // pas bij Opslaan wordt weggeschreven (zelfde moment als de rest van het
   // formulier — geen halve saves bij Annuleren).
