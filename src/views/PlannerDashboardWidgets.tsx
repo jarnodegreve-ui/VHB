@@ -127,7 +127,7 @@ export function PlannerDashboardWidgets({
   // de fetch (OCPI niet geconfigureerd, storing), dan verdwijnt de tegel
   // gewoon — het dashboard mag er nooit op wachten of door breken.
   const [laadplein, setLaadplein] = useState<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number } | null>(null);
-  // Vervaldata (rijbewijs/Code 95/medische schifting): rijen in Open taken
+  // Vervaldata (Code 95 / medische schifting): rijen in Open taken
   // zodra iets binnen 30 dagen verloopt. Best-effort, net als de laad-tegel.
   const [vervaldata, setVervaldata] = useState<Array<{ userId: string; soort: string; validUntil: string }>>([]);
   useEffect(() => {

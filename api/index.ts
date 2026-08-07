@@ -1094,15 +1094,19 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
 // helpers.ts, naast de drift-test tegen de bewuste client-kopie in
 // src/lib/format.ts.
 
-// --- Vervaldata: rijbewijs / Code 95 / medische schifting per chauffeur ---
+// --- Vervaldata: Code 95 / medische schifting per chauffeur ---
 // Beheer door planner/admin; een chauffeur ziet alleen zijn eigen datums.
 // De dagelijkse digest-cron waarschuwt op 90/30/7/0 dagen (zie error-digest).
 app.get("/api/user-expiries", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const alle = await getUserExpiries();
+    // Alleen bewaakte soorten: rijbewijs is er uit (07-08) en eventuele oude
+    // rijen in user_expiries mogen niet alsnog in de lijsten opduiken. De
+    // rijen zelf blijven in de DB staan — geen dataverlies.
+    const bewaakt = alle.filter((e) => Boolean(EXPIRY_SOORT_LABEL[e.soort]));
     const eigen = req.appUser?.role === "chauffeur"
-      ? alle.filter((e) => e.userId === String(req.appUser!.id))
-      : alle;
+      ? bewaakt.filter((e) => e.userId === String(req.appUser!.id))
+      : bewaakt;
     res.json(eigen.map((e) => ({ userId: e.userId, soort: e.soort, validUntil: e.validUntil })));
   } catch (err) {
     console.error("Error reading user expiries:", err);
@@ -2246,7 +2250,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const filtered = allErrors.length - errors.length;
 
     // Vervaldata-bewaker (07-08): één keer per dag — dus in deze cron —
-    // nakijken welke documenten (rijbewijs/Code 95/medische schifting) bijna
+    // nakijken welke documenten (Code 95 / medische schifting) bijna
     // verlopen. Pushes op de vaste mijlpalen 90/30/7/0 dagen: de cron draait
     // 1×/dag, dus dat is vanzelf exact één push per mijlpaal, zonder aparte
     // verstuurd-administratie. De mailsectie hieronder toont alles binnen 60
@@ -2260,11 +2264,13 @@ app.get("/api/cron/error-digest", async (req, res) => {
       const vandaag = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
       const dagenTot = (d: string) => Math.round((Date.parse(d) - Date.parse(vandaag)) / 86400000);
       const rijen = expiries
-        .filter((e) => actief.has(e.userId))
+        // Alleen bewaakte soorten (rijbewijs is er uit): een achtergebleven
+        // rij mag geen push of mailregel meer veroorzaken.
+        .filter((e) => actief.has(e.userId) && Boolean(EXPIRY_SOORT_LABEL[e.soort]))
         .map((e) => ({
           ...e,
           naam: String((actief.get(e.userId) as any)?.name ?? "Onbekend"),
-          label: EXPIRY_SOORT_LABEL[e.soort] ?? e.soort,
+          label: EXPIRY_SOORT_LABEL[e.soort],
           dagen: dagenTot(e.validUntil),
         }))
         .filter((e) => Number.isFinite(e.dagen))
