@@ -51,7 +51,18 @@ const witteVlakken = (page: Page) =>
     return treffers.slice(0, 8);
   });
 
-for (const [naam, view] of [['dashboard', 'dashboard'], ['vervaldata', 'vervaldata'], ['gebruikers', 'gebruikers']] as const) {
+// Alle hoofdschermen die een gewone gebruiker of planner dagelijks opent,
+// plus de beheerschermen met veel oppervlakken. Bewust niet: de printviews
+// (die zijn per definitie wit, A4) en het inlogscherm (altijd carbon).
+const SCHERMEN = [
+  'dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten',
+  'contacten', 'updates', 'ruil-verzoeken', 'verlof', 'bezetting',
+  'dekking', 'verlof-kalender', 'dienstoverzicht', 'planning-codes',
+  'vervaldata', 'gebruikers', 'toestellen', 'activiteit',
+] as const;
+
+for (const view of SCHERMEN) {
+  const naam = view;
   test(`donkere modus: geen witte vlakken op ${naam}`, async ({ page }) => {
     await seed(page, view);
     await page.route('**/api/**', (route) => {
@@ -68,6 +79,11 @@ for (const [naam, view] of [['dashboard', 'dashboard'], ['vervaldata', 'vervalda
     await page.goto('/');
     await expect(page.locator('html')).toHaveClass(/dark/, { timeout: 15_000 });
     await page.waitForTimeout(700);
+    // Vangnet tegen een vals-groene test: als het scherm niet rendert (lazy
+    // chunk stuk, view niet toegestaan) valt er niets te controleren en zou
+    // "geen witte vlakken" niets betekenen.
+    const aantalVlakken = await page.locator('main div').count();
+    expect(aantalVlakken, `${naam} rendert nauwelijks iets`).toBeGreaterThan(10);
     expect(await witteVlakken(page), 'witte vlakken in donkere modus').toEqual([]);
   });
 }
