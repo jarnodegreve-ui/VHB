@@ -7,6 +7,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** sessionStorage-sleutel waarmee een gedwongen uitlog zijn reden doorgeeft
+ *  aan het inlogscherm. Een toast kon dat niet: LoginView vervangt de hele
+ *  app, dus die melding verdween meteen en je stond zonder uitleg voor een
+ *  leeg formulier. Waarde: 'sessie' of 'account'. */
+export const LOGIN_MELDING_KEY = 'vhb-login-melding';
+
 export function notify(message: string, tone: 'success' | 'error' | 'info' = 'info') {
   if (typeof window === 'undefined') return;
   window.dispatchEvent(new CustomEvent('vhb-toast', { detail: { message, tone } }));
