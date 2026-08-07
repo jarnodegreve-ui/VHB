@@ -98,6 +98,7 @@ vi.mock('../api/push.js', async (importOriginal) => ({
   sendPushToUsers: async (userIds: string[], payload: any) => {
     if (userIds.length > 0) mem.pushesSent.push({ userIds, payload });
   },
+  getUsersMetPush: async () => [...new Set(mem.pushSubscriptions.map((s: any) => String(s.userId)))],
 }));
 
 vi.mock('../api/email.js', async (importOriginal) => ({
@@ -2289,6 +2290,21 @@ describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', (
     const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, geldig] });
     expect(res.status).toBe(200);
     expect(mem.swaps.find((s: any) => s.id === 's-ok')).toBeTruthy();
+  });
+});
+
+describe('push-abonnees (wie kan meldingen ontvangen)', () => {
+  it('planner ziet de ids, chauffeur krijgt 403', async () => {
+    await api('POST', '/api/push/subscribe', {
+      token: 'tok-a',
+      body: { endpoint: 'https://push.test/abc', keys: { p256dh: 'p', auth: 'a' } },
+    });
+    const alsPlanner = await api('GET', '/api/push/subscribers', { token: 'tok-planner' });
+    expect(alsPlanner.status).toBe(200);
+    expect(alsPlanner.json).toEqual({ userIds: ['3'] });
+    // Geen chauffeur-inzage: wie meldingen aan heeft is beheerinformatie.
+    const alsChauffeur = await api('GET', '/api/push/subscribers', { token: 'tok-a' });
+    expect(alsChauffeur.status).toBe(403);
   });
 });
 
