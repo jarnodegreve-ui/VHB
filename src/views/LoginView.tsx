@@ -3,8 +3,9 @@ import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/primitives';
 import { supabase } from '../lib/supabase';
-import { applyThemeColorMeta } from '../lib/ui';
+import { applyThemeColorMeta, LOGIN_MELDING_KEY } from '../lib/ui';
 import { BrandLogo } from '../components/BrandLogo';
+
 
 type Mode = 'login' | 'forgot';
 
@@ -22,10 +23,15 @@ export function LoginView({
   onLogin,
   recoveryMode = false,
   onRecoveryComplete,
+  melding = '',
 }: {
   onLogin: (accessToken?: string) => Promise<void>;
   recoveryMode?: boolean;
   onRecoveryComplete?: () => Promise<void>;
+  /** Reden van een gedwongen uitlog ('sessie' | 'account'), doorgegeven door
+   *  App. sessionStorage vangt daarnaast het geval af dat de gebruiker de
+   *  pagina herlaadt. */
+  melding?: 'sessie' | 'account' | '';
 }) {
   const [mode, setMode] = useState<Mode>('login');
 
@@ -51,6 +57,27 @@ export function LoginView({
   const [error, setError] = useState<string>('');
   const [info, setInfo] = useState<string>('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Waarom sta je hier? Een gedwongen uitlog (verlopen sessie, gedeactiveerd
+  // account) legde dat uit in een toast — maar LoginView vervangt de hele app,
+  // dus die melding was meteen weg en je stond zonder uitleg voor een leeg
+  // formulier. De reden komt nu via sessionStorage mee en blijft staan.
+  const [opgeslagenReden, setOpgeslagenReden] = useState<string>('');
+  useEffect(() => {
+    try {
+      const reden = sessionStorage.getItem(LOGIN_MELDING_KEY);
+      if (!reden) return;
+      sessionStorage.removeItem(LOGIN_MELDING_KEY);
+      setOpgeslagenReden(reden);
+    } catch {
+      // Privémodus of geblokkeerde storage: dan simpelweg geen melding.
+    }
+  }, []);
+  const reden = melding || opgeslagenReden;
+  const uitlogReden = reden === 'account'
+    ? 'Je account is gedeactiveerd. Neem contact op met de planning.'
+    : reden === 'sessie'
+      ? 'Je sessie is verlopen omdat je een tijdje weg was. Log opnieuw in — er is niets van je werk verloren.'
+      : '';
 
   const resetFeedback = () => {
     setError('');
@@ -212,6 +239,17 @@ export function LoginView({
                   <p className="mt-2 text-sm text-slate-300 font-normal">{headerCopy.description}</p>
                 </motion.div>
               </AnimatePresence>
+
+              {/* Reden van een gedwongen uitlog — blijft staan tot je opnieuw
+                  inlogt, in tegenstelling tot de toast die hier voorheen
+                  achter dit scherm verdween. Oker (info), niet rood: er is
+                  niets stuk, je moet alleen opnieuw inloggen. */}
+              {uitlogReden && !recoveryMode && (
+                <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-oker-500/25 bg-oker-500/12 px-4 py-3">
+                  <ShieldCheck size={15} className="mt-px shrink-0 text-oker-400" />
+                  <p className="text-[13px] font-medium leading-relaxed text-oker-100">{uitlogReden}</p>
+                </div>
+              )}
 
               {recoveryMode ? (
                 <form onSubmit={handleRecovery} className="space-y-4">

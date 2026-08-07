@@ -42,7 +42,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { applyThemeColorMeta, cn } from './lib/ui';
+import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY } from './lib/ui';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { reportHandledError, reportUserFeedback, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
@@ -272,6 +272,11 @@ export default function App() {
   // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
   // verwijderde dan twee meldingen tegelijk).
   const toastIdRef = useRef(0);
+  // Staat de sessie op uitloggen? Dan zijn alle lopende calls gedoemd en
+  // onderdrukken we hun individuele fout-toasts (zie showToast/forceSignOut).
+  const sessieBeeindigdRef = useRef(false);
+  // Reden van een gedwongen uitlog, door te geven aan het inlogscherm.
+  const [uitlogMelding, setUitlogMelding] = useState<'sessie' | 'account' | ''>('');
   // Dubbele-init-guard: bootstrap én het INITIAL_SESSION/SIGNED_IN-event
   // proberen allebei te initialiseren; per gebruiker doen we het één keer.
   const initializedUserIdRef = useRef<string | null>(null);
@@ -459,11 +464,22 @@ export default function App() {
   };
 
   const showToast = (message: string, tone: Toast['tone'] = 'info') => {
+    // Sessie loopt af: de catch-blokken van alle lopende calls komen hier
+    // tegelijk binnen ("Kon de verlofaanvragen niet laden", "…de dienstruilen
+    // niet laden", …). Dat waren vijf rode toasts én vijf regels in de
+    // foutenlog voor één oorzaak — 142 meldingen in twee weken, waarvan het
+    // leeuwendeel afgeleid. De sessie zelf is al gemeld op het inlogscherm.
+    if (tone === 'error' && sessieBeeindigdRef.current) return;
     // Elke fout-toast is een gebroken flow — meld die ook aan de monitoring,
     // anders blijven afgehandelde fouten (catch-blokken) onzichtbaar.
     if (tone === 'error') reportHandledError(message);
     const id = ++toastIdRef.current;
-    setToasts((current) => [...current, { id, message, tone }]);
+    setToasts((current) => {
+      // Dezelfde melding niet stapelen: twee schermen die dezelfde bron
+      // ophalen gaven anders twee identieke toasts onder elkaar.
+      if (current.some((t) => t.message === message && t.tone === tone)) return current;
+      return [...current, { id, message, tone }];
+    });
     // Fout-toasts bevatten vaak instructies ("probeer opnieuw") — die moeten
     // lang genoeg blijven staan om rustig te lezen. Succes/info mag snel weg.
     window.setTimeout(() => {
@@ -541,6 +557,11 @@ export default function App() {
         return;
       }
       if (nextSession) {
+        // Verse sessie: de onderdrukking van fout-toasts en de eenmalige
+        // uitlog-guard weer vrijgeven, anders blijft de app na opnieuw
+        // inloggen stil bij échte fouten.
+        sessieBeeindigdRef.current = false;
+        forceSignOutRef.current = false;
         await initializeAuthenticatedApp(nextSession.access_token, nextSession.user.id);
       } else {
         setRecoveryMode(false);
@@ -588,6 +609,25 @@ export default function App() {
     window.addEventListener('vhb-toast', handler as EventListener);
     return () => window.removeEventListener('vhb-toast', handler as EventListener);
   }, []);
+
+  // Terug uit de achtergrond: de ververs-timer van Supabase staat stil zolang
+  // de PWA in de app-switcher hangt, dus na een paar uur is het token bij
+  // hervatten verlopen en liep de eerstvolgende call tegen een 401 — precies
+  // het patroon achter de trosjes fouten in de log. Hier vernieuwen we vóór er
+  // iets geladen wordt; de 401-retry in apiFetch blijft het vangnet.
+  useEffect(() => {
+    if (!supabase || !session) return;
+    const controleer = () => {
+      if (document.visibilityState !== 'visible') return;
+      const verlooptOp = session.expires_at ? session.expires_at * 1000 : 0;
+      // Marge van een minuut: een net-niet-verlopen token is tegen de tijd dat
+      // de eerste fetch aankomt alsnog te oud.
+      if (verlooptOp && verlooptOp - Date.now() > 60_000) return;
+      void vernieuwSessie();
+    };
+    document.addEventListener('visibilitychange', controleer);
+    return () => document.removeEventListener('visibilitychange', controleer);
+  }, [session]);
 
   // Auth-events uit de stand-alone apiFetch (src/lib/api.ts) — die heeft geen
   // toegang tot deze React-state, dus een verlopen sessie/geblokkeerd toestel
@@ -651,14 +691,63 @@ export default function App() {
   // gedeactiveerd account). Eén keer per sessie: onAuthStateChange(SIGNED_OUT)
   // wist verder alle state en toont LoginView.
   const forceSignOutRef = useRef(false);
-  const forceSignOut = async (msg: string) => {
+  const forceSignOut = async (msg: string, reden: 'sessie' | 'account' = 'sessie') => {
     if (forceSignOutRef.current) return;
     forceSignOutRef.current = true;
-    showToast(msg, 'error');
+    // Vanaf hier is élke lopende fetch gedoemd: hun catch-blokken mogen geen
+    // eigen fout-toast meer tonen (dat waren er vijf tegelijk) en ook niets
+    // meer naar de foutenlog sturen. showToast leest deze vlag.
+    sessieBeeindigdRef.current = true;
+    // De melding hoort thuis op het inlogscherm, niet in een toast die
+    // meteen daarna achter LoginView verdwijnt. Via state (LoginView kan al
+    // gemonteerd zijn) én sessionStorage (overleeft een herlaadbeurt).
+    setUitlogMelding(reden);
+    try { sessionStorage.setItem(LOGIN_MELDING_KEY, reden); } catch { /* privémodus */ }
+    if (reden === 'account') showToast(msg, 'error');
     try { await supabase?.auth.signOut(); } catch { /* val sowieso terug op login */ }
+    // Zelf de sessie-state wissen i.p.v. te wachten op SIGNED_OUT: als de
+    // signOut-call zelf faalt (offline, of de auth-server geeft een fout)
+    // blijft dat event uit en bleef de app op "Profiel laden…" hangen met
+    // een sessie die nergens meer geldig is. De listener doet hetzelfde werk
+    // idempotent zodra hij alsnog binnenkomt.
+    setSession(null);
+    setCurrentUser(null);
+    setAuthReady(true);
+    initializedUserIdRef.current = null;
   };
 
-  const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token) => {
+  /** Verlopen token stil vernieuwen. Supabase ververst zelf op een timer,
+   *  maar die staat stil zolang de PWA in de app-switcher zit: bij hervatten
+   *  is het token verlopen en gaf de eerstvolgende call een 401 → uitgelogd.
+   *  Eén poging per 401, gedeeld door alle parallelle calls (dezelfde belofte
+   *  hergebruiken), en daarna één keer opnieuw proberen. */
+  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
+  const vernieuwSessie = async (): Promise<string | null> => {
+    if (!supabase) return null;
+    if (!refreshPromiseRef.current) {
+      // Tijdslimiet: refreshSession() kan blijven hangen op de interne lock
+      // (zelfde Supabase-fenomeen waarvoor de bootstrap al een watchdog heeft).
+      // Zonder limiet bleef de app dan op "Profiel laden…" staan i.p.v. terug
+      // te vallen op opnieuw inloggen.
+      const metLimiet = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
+        Promise.race([p, new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms))]);
+      refreshPromiseRef.current = metLimiet(supabase.auth.refreshSession(), 5000)
+        .then((res) => {
+          if (!res || res.error || !res.data.session) return null;
+          setSession(res.data.session);
+          return res.data.session.access_token;
+        })
+        .catch(() => null)
+        .finally(() => {
+          // Pas ná deze tick vrijgeven, zodat gelijktijdige 401's dezelfde
+          // poging delen en er niet alsnog vijf refresh-calls vertrekken.
+          window.setTimeout(() => { refreshPromiseRef.current = null; }, 0);
+        });
+    }
+    return refreshPromiseRef.current;
+  };
+
+  const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token, alGeprobeerd = false) => {
     const headers = new Headers(init.headers || {});
     if (!headers.has('Content-Type') && init.body) {
       headers.set('Content-Type', 'application/json');
@@ -671,10 +760,16 @@ export default function App() {
     }
 
     const response = await fetch(url, { ...init, headers });
-    // 401 = sessie ongeldig/verlopen → forceer relogin. 403 alleen forceren bij
-    // een gedeactiveerd account; een gewone "onvoldoende rechten"-403 is enkel
-    // een fout op die actie en mag de gebruiker niet uitloggen.
+    // 401 = sessie ongeldig/verlopen. Eerst stil vernieuwen en één keer
+    // opnieuw proberen; pas als dát faalt is de sessie écht op en volgt een
+    // relogin. 403 alleen forceren bij een gedeactiveerd account; een gewone
+    // "onvoldoende rechten"-403 is enkel een fout op die actie en mag de
+    // gebruiker niet uitloggen.
     if (response.status === 401) {
+      if (!alGeprobeerd) {
+        const versToken = await vernieuwSessie();
+        if (versToken) return apiFetch(url, init, versToken, true);
+      }
       void forceSignOut('Je sessie is verlopen. Log opnieuw in.');
       throw new Error('Je sessie is verlopen.');
     }
@@ -1753,7 +1848,10 @@ export default function App() {
         </div>
       );
     }
-    return <LoginView onLogin={handleLogin} />;
+    // uitlogMelding als prop: sessionStorage alleen is niet genoeg, want bij
+    // een gedwongen uitlog kan LoginView al gemonteerd zijn vóórdat de vlag
+    // geschreven is — dan zou de uitleg nooit verschijnen (viel om in e2e).
+    return <LoginView onLogin={handleLogin} melding={uitlogMelding} />;
   }
 
   const isRealAdmin = currentUser.role === 'admin';
