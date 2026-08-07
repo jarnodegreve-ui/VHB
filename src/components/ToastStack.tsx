@@ -6,6 +6,9 @@ export type Toast = {
   id: number;
   message: string;
   tone?: 'success' | 'error' | 'info';
+  /** Optionele actie in de melding zelf — bv. "Opnieuw proberen" bij een
+   *  mislukte laadbeurt, zodat je niet de hele pagina hoeft te vernieuwen. */
+  action?: { label: string; run: () => void };
 };
 
 const TONE_STYLES = {
@@ -84,9 +87,18 @@ export function ToastStack({
                 >
                   <ToneIcon size={15} strokeWidth={2} />
                 </div>
-                <p className="min-w-0 flex-1 pt-1 text-[13px] font-medium leading-snug text-slate-800">
-                  {toast.message}
-                </p>
+                <div className="min-w-0 flex-1 pt-1">
+                  <p className="text-[13px] font-medium leading-snug text-slate-800">{toast.message}</p>
+                  {toast.action && (
+                    <button
+                      type="button"
+                      onClick={() => { toast.action!.run(); onDismiss(toast.id); }}
+                      className="ios-pressable mt-1.5 -ml-1 rounded-lg px-1 py-0.5 text-[13px] font-semibold text-oker-700 underline-offset-2 hover:underline dark:text-oker-500"
+                    >
+                      {toast.action.label}
+                    </button>
+                  )}
+                </div>
                 <button
                   onClick={() => onDismiss(toast.id)}
                   className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"

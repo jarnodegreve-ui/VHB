@@ -275,6 +275,11 @@ export default function App() {
   // Staat de sessie op uitloggen? Dan zijn alle lopende calls gedoemd en
   // onderdrukken we hun individuele fout-toasts (zie showToast/forceSignOut).
   const sessieBeeindigdRef = useRef(false);
+  // Laadfouten van gelijktijdige calls verzamelen: bij een hik (netwerk,
+  // uitrol) faalt de hele reeks tegelijk en kreeg je vier losse rode
+  // meldingen. We bundelen ze tot één melding mét "Opnieuw proberen".
+  const laadfoutenRef = useRef<Set<string>>(new Set());
+  const laadfoutTimerRef = useRef<number | null>(null);
   // Reden van een gedwongen uitlog, door te geven aan het inlogscherm.
   const [uitlogMelding, setUitlogMelding] = useState<'sessie' | 'account' | ''>('');
   // Dubbele-init-guard: bootstrap én het INITIAL_SESSION/SIGNED_IN-event
@@ -463,7 +468,7 @@ export default function App() {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   };
 
-  const showToast = (message: string, tone: Toast['tone'] = 'info') => {
+  const showToast = (message: string, tone: Toast['tone'] = 'info', action?: Toast['action']) => {
     // Sessie loopt af: de catch-blokken van alle lopende calls komen hier
     // tegelijk binnen ("Kon de verlofaanvragen niet laden", "…de dienstruilen
     // niet laden", …). Dat waren vijf rode toasts én vijf regels in de
@@ -478,13 +483,42 @@ export default function App() {
       // Dezelfde melding niet stapelen: twee schermen die dezelfde bron
       // ophalen gaven anders twee identieke toasts onder elkaar.
       if (current.some((t) => t.message === message && t.tone === tone)) return current;
-      return [...current, { id, message, tone }];
+      return [...current, { id, message, tone, action }];
     });
     // Fout-toasts bevatten vaak instructies ("probeer opnieuw") — die moeten
     // lang genoeg blijven staan om rustig te lezen. Succes/info mag snel weg.
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
     }, tone === 'error' ? 10000 : 4200);
+  };
+
+  /**
+   * Eén melding voor alles wat tegelijk misging. De app haalt bij het openen
+   * (en bij elke verversing) een stuk of acht bronnen parallel op; bij een
+   * netwerkhik of tijdens een uitrol faalt die hele reeks, en dan kreeg je
+   * vier tot vijf losse rode toasts voor één oorzaak — gemeten op 07-08.
+   * We verzamelen de namen kort en tonen daarna één melding met een knop die
+   * alles opnieuw ophaalt, i.p.v. de gebruiker naar 'vernieuw de pagina' te
+   * sturen.
+   */
+  const meldLaadfout = (bron: string) => {
+    if (sessieBeeindigdRef.current) return;
+    laadfoutenRef.current.add(bron);
+    if (laadfoutTimerRef.current !== null) return;
+    laadfoutTimerRef.current = window.setTimeout(() => {
+      laadfoutTimerRef.current = null;
+      const bronnen = [...laadfoutenRef.current];
+      laadfoutenRef.current.clear();
+      if (bronnen.length === 0 || sessieBeeindigdRef.current) return;
+      const opsomming = bronnen.length === 1
+        ? bronnen[0]
+        : `${bronnen.slice(0, -1).join(', ')} en ${bronnen[bronnen.length - 1]}`;
+      showToast(
+        `Kon ${opsomming} niet laden. Controleer je verbinding.`,
+        'error',
+        { label: 'Opnieuw proberen', run: () => { void refreshAll(); } },
+      );
+    }, 400);
   };
 
   useEffect(() => {
@@ -759,7 +793,25 @@ export default function App() {
       if (!headers.has(key)) headers.set(key, value);
     }
 
-    const response = await fetch(url, { ...init, headers });
+    // Eén stille herkansing bij een netwerkfout of een 5xx — dat zijn de
+    // gevallen die vanzelf overgaan: een tikje geen bereik, of het moment
+    // waarop een nieuwe versie wordt uitgerold en de functie kort
+    // onbereikbaar is. Alleen voor GET's: een POST/PUT opnieuw sturen kan
+    // dubbel wegschrijven. Zonder dit kreeg je vier rode meldingen voor één
+    // hik (gemeten 07-08 tijdens een uitrol).
+    const isLezen = !init.method || init.method.toUpperCase() === 'GET';
+    let response: Response;
+    try {
+      response = await fetch(url, { ...init, headers });
+    } catch (netwerkfout) {
+      if (!isLezen || alGeprobeerd) throw netwerkfout;
+      await new Promise((r) => window.setTimeout(r, 600));
+      return apiFetch(url, init, accessToken, true);
+    }
+    if (response.status >= 500 && isLezen && !alGeprobeerd) {
+      await new Promise((r) => window.setTimeout(r, 600));
+      return apiFetch(url, init, accessToken, true);
+    }
     // 401 = sessie ongeldig/verlopen. Eerst stil vernieuwen en één keer
     // opnieuw proberen; pas als dát faalt is de sessie écht op en volgt een
     // relogin. 403 alleen forceren bij een gedeactiveerd account; een gewone
@@ -834,7 +886,7 @@ export default function App() {
       setLastSyncedAt(Date.now());
     } catch (error) {
       console.error('Error loading app data:', error);
-      showToast('Kon de gegevens niet laden. Controleer je verbinding en vernieuw.', 'error');
+      meldLaadfout('de gegevens');
     } finally {
       setIsInitialLoad(false);
     }
@@ -927,7 +979,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching updates:', error);
-      showToast('Kon de updates niet laden.', 'error');
+      meldLaadfout('de updates');
     }
   };
 
@@ -993,7 +1045,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching swaps:', error);
-      showToast('Kon de dienstruilen niet laden.', 'error');
+      meldLaadfout('de dienstruilen');
     }
   };
 
@@ -1047,7 +1099,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching leave:', error);
-      showToast('Kon de verlofaanvragen niet laden.', 'error');
+      meldLaadfout('de verlofaanvragen');
     }
   };
 
@@ -1404,7 +1456,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching services:', error);
-      showToast('Kon het dienstoverzicht niet laden.', 'error');
+      meldLaadfout('het dienstoverzicht');
     } finally {
       endLoading();
     }
@@ -1461,7 +1513,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching users:', error);
-      showToast('Kon de gebruikerslijst niet laden.', 'error');
+      meldLaadfout('de gebruikerslijst');
     }
   };
 
@@ -1537,7 +1589,7 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error fetching planning:', error);
-      showToast('Kon de planning niet laden. Probeer te vernieuwen.', 'error');
+      meldLaadfout('de planning');
     } finally {
       if (!opts?.silent) endLoading();
     }
