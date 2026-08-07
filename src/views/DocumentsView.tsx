@@ -130,7 +130,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                   openPdfInNewTab(doc.url);
                 }}
                 aria-label={`Open ${doc.filename}`}
-                className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-surface-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
               >
                 <Download size={16} className="text-oker-500" /> Openen
               </button>

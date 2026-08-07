@@ -129,7 +129,7 @@ export function ServicesView({ services }: { services: Service[] }) {
         {/* Desktop Table View */}
         <div className="hidden md:block">
           <table className="w-full text-left">
-            <thead className="bg-slate-50 border-b border-slate-100">
+            <thead className="bg-surface-soft border-b border-slate-100">
               {/* Zelfde indeling als het totaaloverzicht van de planning:
                   per deel eerst het loopnummer, dan de uren. */}
               <tr>
@@ -237,7 +237,7 @@ export function ServicesView({ services }: { services: Service[] }) {
 function LoopChip({ loopnr }: { loopnr?: string }) {
   if (!loopnr?.trim()) return null;
   return (
-    <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+    <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
       loop {loopnr.trim()}
     </span>
   );

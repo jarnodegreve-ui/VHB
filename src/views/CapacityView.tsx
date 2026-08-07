@@ -239,11 +239,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         description="Wie rijdt welke dienst, zoals het overzicht in het chauffeurslokaal."
         actions={(
           <div className="flex items-center gap-2">
-            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
               <ChevronLeft size={18} />
             </button>
             <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
-            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors">
+            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
               <ChevronRight size={18} />
             </button>
             <Button variant="secondary" size="sm" className="ml-1 h-9 rounded-xl" onClick={goToday}>
@@ -280,7 +280,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className="mp-sticky sticky left-0 top-0 z-30 bg-slate-100 px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
+                    <th className="mp-sticky sticky left-0 top-0 z-30 bg-surface-muted px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
@@ -294,7 +294,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           className={cn(
                             'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-slate-300',
                             h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
-                            today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-slate-50',
+                            today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
                           )}
                         >
                           <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
@@ -313,7 +313,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   {drivers.map((drv, i) => {
                     const row = cells[drv.id] || {};
                     const isOwn = ownId && drv.id === ownId;
-                    const rowBg = isOwn ? 'bg-oker-50' : 'bg-white';
+                    const rowBg = isOwn ? 'bg-oker-50' : 'bg-surface-white';
                     const section = sectionOf(drv);
                     const showHeader = showSections && (i === 0 || sectionOf(drivers[i - 1]) !== section);
                     return (
@@ -485,7 +485,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <MicroLabel className="capitalize">{formatDateLong(selected.iso)}</MicroLabel>
                 <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
               </div>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
                 <X size={16} />
               </button>
             </div>

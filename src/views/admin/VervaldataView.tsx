@@ -252,7 +252,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                     type="button"
                     onClick={() => openBewerken(user)}
                     style={kolommen}
-                    className="ios-pressable flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 md:grid md:gap-4 dark:hover:bg-white/5"
+                    className="ios-pressable flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-left transition-colors hover:bg-surface-soft-hover md:grid md:gap-4 dark:hover:bg-white/5"
                   >
                     <div className="min-w-0 flex-1 basis-44 md:flex-none md:basis-auto">
                       <p className={cn('truncate text-sm font-semibold', eerste < 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-800')}>{user.name}</p>
@@ -309,7 +309,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                     type="button"
                     onClick={() => openBewerken(u)}
                     style={kolommen}
-                    className="ios-pressable flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50 md:grid md:gap-4 dark:hover:bg-white/5"
+                    className="ios-pressable flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-soft-hover md:grid md:gap-4 dark:hover:bg-white/5"
                   >
                     <p className="min-w-0 truncate text-sm font-semibold text-slate-700">{u.name}</p>
                     {/* Zelfde kolomraster als de lijst hierboven, zodat beide

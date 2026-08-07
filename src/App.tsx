@@ -1715,20 +1715,20 @@ export default function App() {
     // shifts moeten er zijn vóór de auto-print afgaat.
     if (printDriverId === 'alle') {
       if (isInitialLoad) {
-        return <div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
+        return <div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
       }
       const bulkDrivers = users
         .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
         .sort((a, b) => a.name.localeCompare(b.name));
       return (
-        <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+        <Suspense fallback={<div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
           <LazyPrintMonthlyScheduleView drivers={bulkDrivers} monthIso={printMonth} shifts={shifts} />
         </Suspense>
       );
     }
     const driver = users.find((u) => String(u.id) === String(printDriverId)) || null;
     return (
-      <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+      <Suspense fallback={<div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
         <LazyPrintMonthlyScheduleView driver={driver} monthIso={printMonth} shifts={shifts} />
       </Suspense>
     );
@@ -1746,11 +1746,11 @@ export default function App() {
       // Pas renderen als de collecties er zijn: de view print automatisch,
       // en dat mag niet gebeuren met een nog lege verloflijst.
       if (isInitialLoad) {
-        return <div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
+        return <div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
       }
       const driver = isSelf ? currentUser : users.find((u) => String(u.id) === String(printVerlofDriverId)) || null;
       return (
-        <Suspense fallback={<div className="min-h-screen bg-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+        <Suspense fallback={<div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
           <LazyPrintLeaveYearView driver={driver} year={printVerlofJaar} leaves={leaveRequests} />
         </Suspense>
       );
@@ -1960,7 +1960,7 @@ export default function App() {
                 maxLength={900}
                 rows={4}
                 placeholder="Bijv. de aftelling bij Chris klopt niet — hij is al klaar…"
-                className="control-input mt-1.5 w-full rounded-2xl bg-white/60 px-4 py-3 text-base font-medium outline-none sm:text-sm"
+                className="control-input mt-1.5 w-full rounded-2xl bg-surface-field px-4 py-3 text-base font-medium outline-none sm:text-sm"
               />
               {probleemFout && (
                 <p className="mt-2 text-xs font-semibold text-red-600">Versturen lukte niet — controleer je verbinding en probeer opnieuw.</p>
@@ -2190,7 +2190,7 @@ export default function App() {
           <button
             onClick={() => { setProbleemTekst(''); setProbleemVerstuurd(false); setShowProbleemMelder(true); setIsSidebarOpen(false); }}
             aria-haspopup="dialog"
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-50 rounded-xl transition-colors duration-150 font-medium text-[13px]"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-surface-soft-hover rounded-xl transition-colors duration-150 font-medium text-[13px]"
           >
             <span className="text-slate-400 shrink-0">
               <LifeBuoy size={16} />
@@ -2221,7 +2221,7 @@ export default function App() {
           ref={ptrIndicatorRef}
           className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center opacity-0"
         >
-          <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-md ring-1 ring-slate-200/70">
+          <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white shadow-md ring-1 ring-hairline">
             <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500', ptrRefreshing && 'animate-spin')} />
           </div>
         </div>

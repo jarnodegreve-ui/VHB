@@ -648,7 +648,7 @@ export function OcpiDashboardView() {
                                       onClick={() => setGekozenPunt(evse)}
                                       aria-haspopup="dialog"
                                       title="Tik voor details (max. vermogen, connector)"
-                                      className="ios-pressable flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
+                                      className="ios-pressable flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-surface-soft-hover dark:hover:bg-white/5"
                                     >
                                       <span className="flex min-w-0 items-baseline">
                                         <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
@@ -719,7 +719,7 @@ export function OcpiDashboardView() {
                     type="button"
                     onClick={() => setAlleStoringen((v) => !v)}
                     aria-expanded={alleStoringen}
-                    className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-white/5"
+                    className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-xs font-semibold text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-700 dark:hover:bg-white/5"
                   >
                     {alleStoringen ? 'Toon minder' : `Toon alle ${storingen.length} storingen`}
                   </button>

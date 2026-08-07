@@ -31,7 +31,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
             <span className="text-slate-400"> / {balance.betaaldBudget} dagen</span>
           </span>
         </div>
-        <div className="h-2 rounded-full bg-slate-100 overflow-hidden">
+        <div className="h-2 rounded-full bg-surface-muted overflow-hidden">
           <div
             className={cn('h-full rounded-full transition-all', overBudget ? 'bg-red-500' : percentage > 80 ? 'bg-amber-500' : 'bg-emerald-500')}
             style={{ width: `${Math.max(2, percentage)}%` }}

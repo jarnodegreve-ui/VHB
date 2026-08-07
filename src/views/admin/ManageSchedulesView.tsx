@@ -293,7 +293,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             <div className="mt-5 rounded-3xl border border-oker-100 bg-oker-50/80 p-5 text-sm">
               <p className="font-bold text-oker-800">Importvolgorde</p>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-oker-700">
-                <li>Upload het hele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab automatisch.</li>
+                <li>Upload het hele <code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab automatisch.</li>
                 <li>Controleer in de preview: dagen, diensten, onbekende codes, niet-gematchte chauffeurs en services zonder uren.</li>
               </ol>
             </div>
@@ -401,7 +401,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <MicroLabel className="text-emerald-700">Primair</MicroLabel>
                   <h4 className="mt-2 text-base font-bold tracking-tight text-slate-900">Excel-matrix uploaden</h4>
                   <p className="mt-2 text-sm font-medium text-slate-600">
-                    Upload je originele <code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-white/70 px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
+                    Upload je originele <code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
                   </p>
                   {pendingMatrixFilename && (
                     <MicroLabel className="mt-2 text-emerald-700">

@@ -29,7 +29,7 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
         'ios-pressable rounded-full border px-3 py-1.5 text-[11px] font-semibold transition-colors',
         active
           ? 'border-oker-200 bg-oker-50 text-oker-700'
-          : 'border-slate-200 bg-white/70 text-slate-500 hover:bg-slate-50 hover:text-slate-700',
+          : 'border-slate-200 bg-surface-row text-slate-500 hover:bg-surface-soft-hover hover:text-slate-700',
       )}
     >
       {children}
@@ -69,12 +69,12 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
       type="button"
       onClick={() => setOpenDay(d.day)}
       title="Klik om te zien wie er actief was"
-      className="flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left hover:bg-slate-50 transition-colors"
+      className="flex w-full items-center gap-3 rounded-lg px-1 py-0.5 text-left hover:bg-surface-soft-hover transition-colors"
     >
       <span className="w-20 shrink-0 text-xs font-medium text-slate-500 tabular-nums">
         {new Date(`${d.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' })}
       </span>
-      <div className="flex-1 h-3.5 rounded-md bg-slate-100 overflow-hidden">
+      <div className="flex-1 h-3.5 rounded-md bg-surface-muted overflow-hidden">
         <div className="h-full rounded-md bg-oker-400" style={{ width: `${Math.round((d.count / maxDaily) * 100)}%` }} />
       </div>
       <span className="w-6 shrink-0 text-right text-xs font-bold text-slate-700 tabular-nums">{d.count}</span>
@@ -215,7 +215,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 <button
                   type="button"
                   onClick={() => setShowDailyModal(true)}
-                  className="ios-pressable mt-2 w-full rounded-xl py-2 text-center text-xs font-semibold text-oker-700 hover:text-oker-800 hover:bg-slate-50 transition-colors"
+                  className="ios-pressable mt-2 w-full rounded-xl py-2 text-center text-xs font-semibold text-oker-700 hover:text-oker-800 hover:bg-surface-soft-hover transition-colors"
                 >
                   Alle dagen bekijken ({dailyActive.length})
                 </button>
@@ -225,7 +225,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               <MicroLabel className="mb-2">Recente aanmeldingen</MicroLabel>
               <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
                 {recentLogins.map((e) => (
-                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1 hover:bg-slate-50">
+                  <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1 hover:bg-surface-soft-hover">
                     <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-slate-800">{e.actorName}</span>
                     <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">
                       {new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -344,7 +344,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             type="button"
             onClick={() => setShowDailyModal(false)}
             aria-label="Sluiten"
-            className="ios-pressable p-2 -m-1 text-slate-400 hover:bg-slate-50 rounded-xl"
+            className="ios-pressable p-2 -m-1 text-slate-400 hover:bg-surface-soft-hover rounded-xl"
           >
             <X size={20} />
           </button>
@@ -368,15 +368,15 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 type="button"
                 onClick={() => setOpenDay(null)}
                 aria-label="Sluiten"
-                className="ios-pressable p-2 -m-1 text-slate-400 hover:bg-slate-50 rounded-xl"
+                className="ios-pressable p-2 -m-1 text-slate-400 hover:bg-surface-soft-hover rounded-xl"
               >
                 <X size={20} />
               </button>
             </div>
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-0.5">
               {openDayData.names.map((name) => (
-                <div key={name} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-slate-50">
-                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-100 text-[10px] font-bold text-slate-500">
+                <div key={name} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-soft-hover">
+                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[10px] font-bold text-slate-500">
                     {name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
                   </span>
                   <span className="min-w-0 truncate text-[13px] font-semibold text-slate-800">{name}</span>

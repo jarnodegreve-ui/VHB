@@ -460,7 +460,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           <div className="flex-1 min-w-0">
             <h4 className="text-slate-900 font-semibold text-lg mb-2">Recente client-fouten</h4>
             <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Fouten die bij gebruikers in de browser optraden (crashes én fout-toasts) worden automatisch gerapporteerd. Ze staan altijd in de Vercel-functielogs; hieronder verschijnen ze zodra de optionele <code className="bg-slate-100 px-1 rounded font-semibold">client_errors</code>-tabel in Supabase bestaat.
+              Fouten die bij gebruikers in de browser optraden (crashes én fout-toasts) worden automatisch gerapporteerd. Ze staan altijd in de Vercel-functielogs; hieronder verschijnen ze zodra de optionele <code className="bg-surface-muted px-1 rounded font-semibold">client_errors</code>-tabel in Supabase bestaat.
             </p>
             {clientErrors === null ? (
               <p className="text-sm font-medium text-slate-400">Niet beschikbaar.</p>
@@ -469,7 +469,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             ) : (
               <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
                 {clientErrors.slice(0, 25).map((e) => (
-                  <div key={e.id} className="rounded-xl bg-slate-50 border border-slate-200/70 p-3">
+                  <div key={e.id} className="rounded-xl bg-surface-soft border border-slate-200/70 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <Badge tone="red" dot>{e.source || 'onbekend'}</Badge>
                       <span className="text-[11px] font-mono text-slate-400 tabular-nums shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
@@ -494,7 +494,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           <div className="flex-1">
             <h4 className="text-slate-900 font-semibold text-lg mb-2">Test-omgeving</h4>
             <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <code className="bg-slate-100 px-1 rounded font-semibold">TEST</code> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.
+              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <code className="bg-surface-muted px-1 rounded font-semibold">TEST</code> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.
             </p>
             <div className="flex flex-wrap items-center gap-3">
               <Button variant="primary" onClick={addTestShift}>

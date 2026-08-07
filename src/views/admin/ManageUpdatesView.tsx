@@ -26,7 +26,7 @@ function Input({
     <div className="space-y-2">
       <MicroLabel className="ml-1">{label}</MicroLabel>
       {type === 'select' ? (
-        <select aria-label={label} value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all bg-white/60">
+        <select aria-label={label} value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all bg-surface-field">
           {options?.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
@@ -262,7 +262,7 @@ export function ManageUpdatesView({
               {open && (
                 <div className="px-4 pb-4 pt-0.5">
                   {update.isUrgent && totalChauffeurs > 0 && (
-                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
+                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
                       <Eye size={12} />
                       {readCounts[update.id] ?? 0}/{totalChauffeurs} gelezen
                     </span>

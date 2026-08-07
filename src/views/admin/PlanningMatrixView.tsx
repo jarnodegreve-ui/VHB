@@ -391,7 +391,7 @@ export function PlanningMatrixView({
                   onClick={() => setSelectedDate(row.source_date)}
                   className={cn(
                     'ios-pressable w-full rounded-2xl border px-4 py-3 text-left transition-all',
-                    isActive ? 'border-oker-400 bg-oker-50 ring-2 ring-oker-500/10' : 'border-slate-100 bg-white/60 hover:bg-slate-50/60'
+                    isActive ? 'border-oker-400 bg-oker-50 ring-2 ring-oker-500/10' : 'border-slate-100 bg-surface-field hover:bg-slate-50/60'
                   )}
                 >
                   <p className="text-sm font-semibold text-slate-800 tabular-nums">

@@ -106,7 +106,7 @@ export function ChangePasswordModal({
           <button
             onClick={handleClose}
             aria-label="Sluiten"
-            className="w-11 h-11 inline-flex items-center justify-center text-slate-400 hover:bg-slate-50 rounded-xl shrink-0 transition-colors"
+            className="w-11 h-11 inline-flex items-center justify-center text-slate-400 hover:bg-surface-soft-hover rounded-xl shrink-0 transition-colors"
           >
             <X size={20} />
           </button>
@@ -175,7 +175,7 @@ export function ChangePasswordModal({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-3 rounded-xl font-semibold text-slate-600 hover:bg-white/70 hover:text-slate-900 transition-all text-sm border border-transparent hover:border-white/80"
+              className="flex-1 px-4 py-3 rounded-xl font-semibold text-slate-600 hover:bg-surface-row hover:text-slate-900 transition-all text-sm border border-transparent hover:border-white/80"
             >
               Annuleren
             </button>

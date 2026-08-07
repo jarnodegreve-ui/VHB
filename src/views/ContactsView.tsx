@@ -114,7 +114,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                   <MicroLabel>{roleLabel(selected.role)}</MicroLabel>
                 </div>
               </div>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -135,7 +135,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                   <button
                     type="button"
                     onClick={() => copyNumber(selected.phone!)}
-                    className="ios-pressable flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="ios-pressable flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-surface-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
                   >
                     {copied ? <><Check size={16} className="text-emerald-500" /> Gekopieerd</> : <><Copy size={16} /> Kopieer nummer</>}
                   </button>

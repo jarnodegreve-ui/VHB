@@ -27,7 +27,7 @@ export function ServiceChip({
         'inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-bold tabular-nums',
         tone === 'oker'
           ? 'bg-oker-500/15 text-oker-700 dark:text-oker-400'
-          : 'bg-slate-100 text-slate-700',
+          : 'bg-surface-muted text-slate-700',
         className,
       )}
     >

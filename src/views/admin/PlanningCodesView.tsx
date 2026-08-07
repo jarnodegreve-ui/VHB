@@ -149,7 +149,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
               className={cn(
                 'rounded-xl px-4 py-2 text-xs font-semibold transition-all',
-                filter === option.key ? 'bg-white text-oker-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
+                filter === option.key ? 'bg-surface-white text-oker-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
               )}
             >
               {option.label}
@@ -289,15 +289,15 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                         placeholder="Beschrijving"
                       />
                       <div className="grid gap-3 sm:grid-cols-3">
-                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs font-semibold text-slate-600">
+                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-3 text-xs font-semibold text-slate-600">
                           Dienst
                           <input type="checkbox" checked={code.countsAsShift} onChange={(event) => updateCode(index, { countsAsShift: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                         </label>
-                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs font-semibold text-slate-600">
+                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-3 text-xs font-semibold text-slate-600">
                           Betaald
                           <input type="checkbox" checked={code.isPaidAbsence} onChange={(event) => updateCode(index, { isPaidAbsence: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                         </label>
-                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-white/70 px-4 py-3 text-xs font-semibold text-slate-600">
+                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-3 text-xs font-semibold text-slate-600">
                           Vrij
                           <input type="checkbox" checked={code.isDayOff} onChange={(event) => updateCode(index, { isDayOff: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
                         </label>
