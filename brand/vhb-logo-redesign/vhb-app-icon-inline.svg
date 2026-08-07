@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">VHB Inline app-icoon</title>
+  <desc id="desc">Het volledige VHB Schakel-monogram horizontaal op een Carbon apptegel.</desc>
+  <rect width="1024" height="1024" fill="#0D0D0F"/>
+  <g transform="translate(93 386) scale(1.58)">
+    <path d="M0 0H43L112 122L185 0H228L130 160H102L0 0Z" fill="#E8A33D"/>
+    <path d="M234 0H270L252 62H342L360 0H396L350 160H314L332 96H242L224 160H188L234 0Z" fill="#FFF9F0"/>
+    <path fill="#FFF9F0" fill-rule="evenodd" d="M385 0H473C509 0 530 16 527 41C525 59 515 71 497 78C519 84 531 98 529 121C527 147 507 160 471 160H338L385 0ZM397 34H469C482 34 490 40 489 49C488 58 480 63 467 63H389L397 34ZM379 95H475C490 95 498 101 497 111C496 121 487 126 472 126H370L379 95Z"/>
+  </g>
+</svg>
