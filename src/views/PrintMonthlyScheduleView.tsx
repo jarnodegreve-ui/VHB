@@ -121,14 +121,14 @@ export function PrintMonthlyScheduleView({
 
   if (targets.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-slate-700 font-bold p-8">
+      <div className="min-h-screen flex items-center justify-center bg-surface-white text-slate-700 font-bold p-8">
         Chauffeur niet gevonden. Sluit dit tabblad.
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 print:bg-white">
+    <div className="min-h-screen bg-surface-white text-slate-900 print:bg-white">
       <style>{`
         @media print {
           @page { size: A4; margin: 14mm 14mm 18mm; }
@@ -343,7 +343,7 @@ function DriverMonthSheet({
                     <div
                       key={date}
                       className={`print-card grid grid-cols-[6rem_minmax(0,1fr)_4.5rem] items-start gap-4 rounded-lg border border-slate-200 px-4 py-3 ${
-                        isWeekend ? 'bg-slate-50' : ''
+                        isWeekend ? 'bg-surface-soft' : ''
                       }`}
                     >
                       {/* Datum */}
@@ -368,7 +368,7 @@ function DriverMonthSheet({
                           const catColors = {
                             ochtend: 'border-amber-200 bg-amber-50 text-amber-700',
                             middag: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-                            avond: 'border-slate-300 bg-slate-100 text-slate-700',
+                            avond: 'border-slate-300 bg-surface-muted text-slate-700',
                           }[cat];
 
                           return (

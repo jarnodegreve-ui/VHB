@@ -277,7 +277,7 @@ export function CoverageView() {
                     {dayTypes.map((dt, i) => {
                       const selected = new Set(dt.services);
                       return (
-                        <div key={i} className="rounded-2xl border border-slate-100 bg-white/60 p-4">
+                        <div key={i} className="rounded-2xl border border-slate-100 bg-surface-field p-4">
                           <div className="flex items-center gap-2">
                             <input
                               ref={i === 0 ? firstNameRef : undefined}
@@ -302,7 +302,7 @@ export function CoverageView() {
                                   onClick={() => toggleService(i, svc)}
                                   className={cn(
                                     'rounded-lg px-2 py-1 text-[11px] font-semibold tabular-nums ring-1 transition-colors',
-                                    on ? 'bg-oker-100 text-oker-700 ring-oker-300' : 'bg-white text-slate-400 ring-slate-200 hover:text-slate-600 hover:ring-slate-300',
+                                    on ? 'bg-oker-100 text-oker-700 ring-oker-300' : 'bg-surface-white text-slate-400 ring-slate-200 hover:text-slate-600 hover:ring-slate-300',
                                   )}
                                 >
                                   {svc}
@@ -325,7 +325,7 @@ export function CoverageView() {
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {WEEKDAY_ORDER.map(({ dow, label }) => (
-                    <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-white ring-1 ring-slate-200/60 px-3 py-2">
+                    <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
                       <span className="text-sm font-bold text-slate-700">{label}</span>
                       <select
                         value={weekdays[dow] || ''}
@@ -487,7 +487,7 @@ export function CoverageView() {
                 <MicroLabel className="tabular-nums">Kandidaten voor dienst {pick.code}</MicroLabel>
                 <h3 className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 capitalize">{dayLabel(pick.date)}</h3>
               </div>
-              <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-8 h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
                 <X size={16} />
               </button>
             </div>

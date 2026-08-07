@@ -62,7 +62,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonHTMLAttributes<HTMLBut
 export type BadgeTone = 'slate' | 'oker' | 'emerald' | 'red' | 'amber' | 'blue';
 
 const BADGE_TONES: Record<BadgeTone, { chip: string; dot: string }> = {
-  slate: { chip: 'border-slate-200 bg-slate-50 text-slate-600', dot: 'bg-slate-400' },
+  slate: { chip: 'border-slate-200 bg-surface-soft text-slate-600', dot: 'bg-slate-400' },
   oker: { chip: 'border-oker-200 bg-oker-50 text-oker-700', dot: 'bg-oker-500' },
   emerald: { chip: 'border-emerald-100 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' },
   red: { chip: 'border-red-100 bg-red-50 text-red-700', dot: 'bg-red-500' },

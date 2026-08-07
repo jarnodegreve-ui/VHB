@@ -189,7 +189,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   }, [preselectShiftId]);
   // Tikbare wizard-kaart (stap 1/2/3): geselecteerd = oker-accent.
   const cnCard = (selected: boolean) =>
-    `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-slate-200 bg-white hover:bg-slate-50'}`;
+    `ios-pressable w-full flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-left transition-colors ${selected ? 'border-oker-300 bg-oker-50 ring-1 ring-oker-200' : 'border-slate-200 bg-surface-white hover:bg-surface-soft-hover'}`;
   /** Ruil zonder tegenprestatie: de collega neemt de dienst gewoon over. */
   const isTakeoverSwap = (swap: SwapRequest) => swap.swapType === 'overname';
   // "krijgt: dienst 4101 (vr 10/07)" of "krijgt: vrij (vr 10/07)"
@@ -561,7 +561,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {/* Desktop table */}
               <div className="hidden md:block">
                 <table className="w-full text-left">
-                  <thead className="bg-slate-50 border-b border-slate-100">
+                  <thead className="bg-surface-soft border-b border-slate-100">
                     <tr>
                       <Th>Chauffeur</Th>
                       <Th>Dienst</Th>
@@ -722,7 +722,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       type="button"
                       onClick={() => setWizardStep((s) => (s === 3 ? 2 : 1))}
                       aria-label="Vorige stap"
-                      className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                      className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover"
                     >
                       <ChevronRight size={18} className="rotate-180" />
                     </button>
@@ -734,7 +734,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Stap {wizardStep} van 3</p>
                   </div>
                 </div>
-                <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="inline-flex h-11 w-11 items-center justify-center text-slate-400 hover:bg-slate-50 rounded-xl shrink-0"><X size={22} /></button>
+                <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="inline-flex h-11 w-11 items-center justify-center text-slate-400 hover:bg-surface-soft-hover rounded-xl shrink-0"><X size={22} /></button>
               </div>
               <form ref={wizardScrollRef} onSubmit={handleOfferShift} className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}
@@ -890,7 +890,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           type="button"
                           disabled={!takeoverCode}
                           onClick={() => { setSwapType('overname'); setReturnPick(''); }}
-                          className={`${cnCard(isTakeover)} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-white`}
+                          className={`${cnCard(isTakeover)} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface-row-hover`}
                         >
                           <span className="min-w-0 flex items-start gap-2.5">
                             <Handshake size={15} className="mt-0.5 shrink-0 text-blue-500" />
@@ -1113,7 +1113,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               {reviewSwap.reason && (
                 <div>
                   <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-slate-50 border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
                     {reviewSwap.reason}
                   </p>
                 </div>

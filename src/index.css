@@ -739,8 +739,6 @@ html.dark {
 :where(.dark) .border-slate-200\/90 { border-color: rgba(79, 87, 95, 0.38); }
 
 /* Ring-varianten op rijen/kaarten (OpsRow, PendingRow, QuickLink, …). */
-:where(.dark) .ring-slate-200\/60,
-:where(.dark) .ring-slate-200\/70 { --tw-ring-color: rgba(79, 87, 95, 0.32); }
 :where(.dark) .hover\:ring-slate-300\/80:hover { --tw-ring-color: rgba(110, 118, 127, 0.45); }
 
 /* Status-teksten op geflipte tint-chips (pill 'Operationeel', severity-
@@ -755,7 +753,6 @@ html.dark {
 /* --- Tailwind utility overrides (most-used) --- */
 
 /* White backgrounds */
-:where(.dark) .bg-white { background-color: rgba(23, 24, 26, 0.85); }
 :where(.dark) .bg-white\/30 { background-color: rgba(23, 24, 26, 0.40); }
 :where(.dark) .bg-white\/35 { background-color: rgba(23, 24, 26, 0.45); }
 :where(.dark) .bg-white\/40 { background-color: rgba(23, 24, 26, 0.50); }
@@ -764,10 +761,8 @@ html.dark {
 :where(.dark) .bg-white\/50 { background-color: rgba(23, 24, 26, 0.60); }
 :where(.dark) .bg-white\/55 { background-color: rgba(23, 24, 26, 0.65); }
 :where(.dark) .bg-white\/58 { background-color: rgba(23, 24, 26, 0.68); }
-:where(.dark) .bg-white\/60 { background-color: rgba(23, 24, 26, 0.68); }
 :where(.dark) .bg-white\/62 { background-color: rgba(23, 24, 26, 0.70); }
 :where(.dark) .bg-white\/65 { background-color: rgba(23, 24, 26, 0.72); }
-:where(.dark) .bg-white\/70 { background-color: rgba(23, 24, 26, 0.74); }
 :where(.dark) .bg-white\/74 { background-color: rgba(23, 24, 26, 0.76); }
 :where(.dark) .bg-white\/75 { background-color: rgba(23, 24, 26, 0.78); }
 :where(.dark) .bg-white\/80 { background-color: rgba(23, 24, 26, 0.82); }
@@ -779,16 +774,13 @@ html.dark {
 :where(.dark) .hover\:bg-white\/70:hover { background-color: rgba(38, 40, 43, 0.72); }
 
 /* Slate surfaces */
-:where(.dark) .bg-slate-50 { background-color: rgba(23, 24, 26, 0.60); }
 :where(.dark) .bg-slate-50\/50 { background-color: rgba(23, 24, 26, 0.30); }
 :where(.dark) .bg-slate-50\/55 { background-color: rgba(23, 24, 26, 0.32); }
 :where(.dark) .bg-slate-50\/60 { background-color: rgba(23, 24, 26, 0.36); }
 :where(.dark) .bg-slate-50\/80 { background-color: rgba(23, 24, 26, 0.50); }
 :where(.dark) .bg-slate-50\/90 { background-color: rgba(23, 24, 26, 0.55); }
-:where(.dark) .bg-slate-100 { background-color: rgba(38, 40, 43, 0.60); }
 :where(.dark) .bg-slate-100\/60 { background-color: rgba(38, 40, 43, 0.38); }
 :where(.dark) .bg-slate-100\/70 { background-color: rgba(38, 40, 43, 0.45); }
-:where(.dark) .hover\:bg-slate-50:hover { background-color: rgba(38, 40, 43, 0.40); }
 :where(.dark) .hover\:bg-slate-50\/40:hover { background-color: rgba(38, 40, 43, 0.22); }
 :where(.dark) .hover\:bg-slate-50\/50:hover { background-color: rgba(38, 40, 43, 0.26); }
 :where(.dark) .hover\:bg-slate-50\/60:hover { background-color: rgba(38, 40, 43, 0.30); }
@@ -932,7 +924,6 @@ html.dark {
 /* rose = ziekte in de statuskleurtaal; ontbrak nog als tekstkleur, waardoor
    de enige plek die hem gebruikte een eigen dark:-variant moest meeslepen. */
 :where(.dark) .text-rose-700 { color: rgb(253, 164, 175); }
-:where(.dark) .hover\:bg-white:hover { background-color: rgba(38, 40, 43, 0.85); }
 :where(.dark) .hover\:bg-oker-100\/70:hover { background-color: rgba(232, 163, 61, 0.14); }
 :where(.dark) .group:hover .group-hover\:bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
 :where(.dark) .bg-emerald-50\/70 { background-color: rgba(16, 185, 129, 0.10); }

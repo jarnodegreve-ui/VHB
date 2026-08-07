@@ -161,7 +161,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                             </a>
                           </div>
                         ) : (
-                          <div className="p-4 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-center">
+                          <div className="p-4 bg-surface-soft rounded-2xl border border-dashed border-slate-200 text-center">
                             <p className="text-xs font-medium text-slate-400">Geen PDF bijlage beschikbaar</p>
                           </div>
                         )}

@@ -134,7 +134,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       }`}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500">
+        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-slate-500">
           <Smartphone size={15} />
         </div>
         <div className="min-w-0">
@@ -226,7 +226,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   const renderDeviceCompact = (device: Device) => {
     const isRenaming = renaming && keyOf(renaming) === keyOf(device);
     return (
-      <div key={keyOf(device)} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-slate-50 transition-colors">
+      <div key={keyOf(device)} className="flex items-center justify-between gap-2 rounded-lg px-2 py-1 hover:bg-surface-soft-hover transition-colors">
         <div className="flex min-w-0 items-center gap-2">
           {isRenaming ? (
             <form onSubmit={(e) => { e.preventDefault(); void submitRename(); }} className="flex items-center gap-2">
@@ -303,7 +303,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             disabled={gateEnabled === null || isTogglingGate}
             className={`ios-pressable relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${gateEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}
           >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition-transform ${gateEnabled !== false ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+            <span className={`inline-block h-5 w-5 transform rounded-full bg-surface-white shadow transition-transform ${gateEnabled !== false ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
           </button>
         </div>
         {gateEnabled === false && (
@@ -348,7 +348,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                     type="button"
                     onClick={() => toggleUser(userId)}
                     aria-expanded={open}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-slate-50 transition-colors"
+                    className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-soft-hover transition-colors"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="truncate text-[13px] font-bold tracking-tight text-slate-800">{userName(userId)}</span>

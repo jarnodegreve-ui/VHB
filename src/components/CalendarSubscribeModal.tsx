@@ -60,7 +60,7 @@ export function CalendarSubscribeModal({
               <p className="text-xs font-medium text-slate-500">Je diensten in je eigen agenda — automatisch bijgewerkt.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+          <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
             <X size={16} />
           </button>
         </div>
@@ -89,7 +89,7 @@ export function CalendarSubscribeModal({
                   href={links.googleUrl}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-surface-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
                 >
                   <ExternalLink size={16} className="text-oker-500" /> Google Agenda
                 </a>
@@ -100,12 +100,12 @@ export function CalendarSubscribeModal({
                   readOnly
                   value={links.url}
                   onFocus={(e) => e.currentTarget.select()}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-base sm:text-xs font-medium text-slate-600 select-all"
+                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-surface-soft px-3 py-2 text-base sm:text-xs font-medium text-slate-600 select-all"
                 />
                 <button
                   type="button"
                   onClick={copy}
-                  className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 transition-colors"
+                  className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-surface-soft-hover transition-colors"
                 >
                   {copied ? <><Check size={14} className="text-emerald-500" /> Gekopieerd</> : <><Copy size={14} /> Kopieer</>}
                 </button>
@@ -129,7 +129,7 @@ export function CalendarSubscribeModal({
           <button
             type="button"
             onClick={() => { onDownload(); onClose(); }}
-            className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-surface-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
           >
             <Download size={16} className="text-oker-500" /> Download .ics-bestand
           </button>

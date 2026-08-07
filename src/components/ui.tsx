@@ -112,7 +112,7 @@ export function ConfirmationModal({
           <p className="text-sm text-slate-500 font-normal mt-1.5 leading-relaxed">{message}</p>
         </div>
         <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
-          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-white hover:text-slate-900 border border-transparent hover:border-slate-200 transition-all">
+          <button onClick={onClose} className="flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-slate-600 hover:bg-surface-row-hover hover:text-slate-900 border border-transparent hover:border-slate-200 transition-all">
             {cancelText}
           </button>
           <button

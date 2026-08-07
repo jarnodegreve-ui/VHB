@@ -316,7 +316,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
               <iframe
                 src={current.url}
                 title="Ritblad-voorbeeld"
-                className="w-full h-[70vh] min-h-[480px] bg-white"
+                className="w-full h-[70vh] min-h-[480px] bg-surface-white"
               />
             ) : (
               /* Oude offline-cache van vóór deze fix heeft geen url — dan

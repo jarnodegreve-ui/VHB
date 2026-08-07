@@ -68,7 +68,7 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
                 <p className="text-xs font-medium text-slate-500">Elke actieve chauffeur krijgt een eigen kopie + melding.</p>
               </div>
             </div>
-            <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"><X size={16} /></button>
+            <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors"><X size={16} /></button>
           </div>
 
           <div className="p-6 space-y-4">
@@ -78,7 +78,7 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="bv. reglement, mededeling"
-                className="control-input w-full px-4 py-2.5 rounded-2xl outline-none text-base sm:text-sm font-medium bg-white/60"
+                className="control-input w-full px-4 py-2.5 rounded-2xl outline-none text-base sm:text-sm font-medium bg-surface-field"
               />
             </div>
             <input ref={fileRef} type="file" accept={ACCEPT} onChange={pickFile} className="hidden" />

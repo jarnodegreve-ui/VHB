@@ -70,14 +70,14 @@ export function PrintLeaveYearView({
 
   if (!driver) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-white text-slate-700 font-bold p-8">
+      <div className="min-h-screen flex items-center justify-center bg-surface-white text-slate-700 font-bold p-8">
         Chauffeur niet gevonden. Sluit dit tabblad.
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-white text-slate-900 print:bg-white">
+    <div className="min-h-screen bg-surface-white text-slate-900 print:bg-white">
       <style>{`
         @media print {
           @page { size: A4; margin: 14mm 14mm 18mm; }

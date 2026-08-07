@@ -186,7 +186,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
           return (
           <div key={div.id} className={cn('surface-card surface-card-hover p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group', expired && 'opacity-60')}>
             <div className="flex items-start gap-5">
-              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-slate-100 text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-600')}>
+              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-surface-muted text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-600')}>
                 <MapPin size={28} />
               </div>
               <div>

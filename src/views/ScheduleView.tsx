@@ -361,7 +361,7 @@ function MonthCalendar({
             type="button"
             onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
             aria-label="Vorige maand"
-            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800"
           >
             <ChevronLeft size={16} />
           </button>
@@ -370,7 +370,7 @@ function MonthCalendar({
             type="button"
             onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
             aria-label="Volgende maand"
-            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-800"
+            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800"
           >
             <ChevronRight size={16} />
           </button>
@@ -403,7 +403,7 @@ function MonthCalendar({
                 aria-label={`${iso}${dayGroups.length > 0 ? ', dienst' : ''}${leave ? ', verlof' : ''}`}
                 className={cn(
                   'flex min-h-[52px] flex-col items-center gap-0.5 rounded-xl px-0.5 py-1.5 transition-colors',
-                  !isSelected && 'hover:bg-slate-50',
+                  !isSelected && 'hover:bg-surface-soft-hover',
                   isSelected && 'bg-oker-500/15 ring-1 ring-oker-400',
                   !isSelected && isToday && 'ring-1 ring-oker-300',
                   !isSelected && leave && leaveDayTint(leave.status, leave.type),
@@ -495,7 +495,7 @@ function MonthCalendar({
                       {s.startTime} – {s.endTime}
                     </span>
                     {s.loopnr && (
-                      <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
                         loop {s.loopnr}
                       </span>
                     )}
@@ -516,7 +516,7 @@ function MonthCalendar({
           <button
             type="button"
             onClick={() => void openHuidigRitblad()}
-            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
           >
             <FileText size={14} className="text-oker-500" /> Ritblad van vandaag
           </button>
@@ -525,7 +525,7 @@ function MonthCalendar({
           <button
             type="button"
             onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)}
-            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50"
+            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-surface-soft-hover"
           >
             <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
           </button>
@@ -604,7 +604,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                             {s.startTime} – {s.endTime}
                           </span>
                           {s.loopnr && (
-                            <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                            <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
                               loop {s.loopnr}
                             </span>
                           )}
@@ -684,7 +684,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                       {s.startTime} – {s.endTime}
                     </span>
                     {s.loopnr && (
-                      <span className="shrink-0 rounded-md bg-slate-100 px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
                         loop {s.loopnr}
                       </span>
                     )}
@@ -703,7 +703,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                   <button
                     type="button"
                     onClick={() => onRequestSwap(g.segments[0].id)}
-                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
                   >
                     <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
                   </button>
@@ -715,7 +715,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                   <button
                     type="button"
                     onClick={() => void openHuidigRitblad()}
-                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
                   >
                     <FileText size={14} className="text-oker-500" /> Ritblad van vandaag
                   </button>

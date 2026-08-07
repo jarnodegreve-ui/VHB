@@ -137,7 +137,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/60 border-b border-slate-100">
-                <Th className="sticky left-0 z-10 bg-slate-50 min-w-[180px]">
+                <Th className="sticky left-0 z-10 bg-surface-soft min-w-[180px]">
                   Chauffeur
                 </Th>
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
@@ -170,7 +170,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 const userMap = leaveByUserDay.get(u.id);
                 return (
                   <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
-                    <Td className="sticky left-0 z-10 bg-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
+                    <Td className="sticky left-0 z-10 bg-surface-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
                       <button
                         type="button"
                         onClick={() => openJaaroverzicht(u.id)}
