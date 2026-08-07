@@ -94,12 +94,21 @@ export function VervaldataView({ users }: { users: User[] }) {
   }, [chauffeurs, perUser, vandaagIso]);
 
   const chipTone = (dagen: number): BadgeTone => (dagen < 0 ? 'red' : dagen <= 30 ? 'amber' : dagen <= 90 ? 'oker' : 'emerald');
-  const chipTekst = (dagen: number, datum: string) =>
-    dagen < 0
-      ? `verlopen (${formatDateHuman(datum)})`
-      : dagen === 0
-        ? 'verloopt vandaag'
-        : `${formatDateHuman(datum)} · ${dagen} d`;
+  /** Compacte datum ("27 nov 2027") — de lange variant met weekdag maakte de
+   *  pillen zó breed dat ze op desktop niet meer in één kolom pasten en per
+   *  rij op een andere x begonnen. De volledige datum staat in de tooltip. */
+  const kortDatum = (iso: string) => {
+    const d = new Date(`${iso.slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(d.getTime())) return iso;
+    return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
+  };
+  const dagenTekst = (dagen: number) => (dagen < 0 ? 'verlopen' : dagen === 0 ? 'vandaag' : `${dagen} d`);
+
+  // Kolommen: naam + één vaste kolom per bewaakte soort. Inline zodat het
+  // meebeweegt als er ooit een soort bij komt; de klasse `md:grid` bepaalt
+  // vanaf wanneer het raster geldt (mobiel blijven het wikkelende pillen).
+  const soorten = Object.entries(EXPIRY_SOORT_LABELS);
+  const kolommen = { gridTemplateColumns: `minmax(0,1fr) repeat(${soorten.length}, 11.5rem)` };
 
   const openBewerken = (u: User) => {
     setBewerkt(u);
@@ -157,7 +166,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           twee-regel-labelzone, dus cijfers en subteksten van alle vier de
           tegels liggen op exact dezelfde lijn — de brede StatCards lieten
           de labels wikkelen en alles verspringen (melding Jarno). */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <OpsStat
           icon={<AlertTriangle size={16} />}
           tone={tellers.verlopen > 0 ? 'red' : 'slate'}
@@ -199,40 +208,65 @@ export function VervaldataView({ users }: { users: User[] }) {
       ) : (
         <>
           {metDatums.length > 0 && (
-            <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
-              {metDatums.map(({ user, datums, eerste }) => (
-                <button
-                  key={user.id}
-                  type="button"
-                  onClick={() => openBewerken(user)}
-                  className="ios-pressable flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
-                >
-                  <div className="min-w-0 flex-1 basis-44">
-                    <p className={cn('truncate text-sm font-semibold', eerste < 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-800')}>{user.name}</p>
-                    <p className="text-[11px] font-medium tabular-nums text-slate-500">
-                      {eerste < 0
-                        ? `al ${Math.abs(eerste)} ${Math.abs(eerste) === 1 ? 'dag' : 'dagen'} verlopen`
-                        : eerste === 0
-                          ? 'verloopt vandaag'
-                          : `eerst vervallend over ${eerste} ${eerste === 1 ? 'dag' : 'dagen'}`}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => {
+            <div>
+              {/* Kolomkoppen (alleen desktop): met vaste kolommen hoeft het
+                  soort-label niet meer in élke pil te staan — dat was precies
+                  wat de rijen ongelijk maakte. */}
+              <div className="hidden md:grid px-5 pb-2 gap-4" style={kolommen}>
+                <MicroLabel>Chauffeur</MicroLabel>
+                {soorten.map(([soort, label]) => <MicroLabel key={soort}>{label}</MicroLabel>)}
+              </div>
+              <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+                {metDatums.map(({ user, datums, eerste }) => (
+                  <button
+                    key={user.id}
+                    type="button"
+                    onClick={() => openBewerken(user)}
+                    style={kolommen}
+                    className="ios-pressable flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-left transition-colors hover:bg-slate-50 md:grid md:gap-4 dark:hover:bg-white/5"
+                  >
+                    <div className="min-w-0 flex-1 basis-44 md:flex-none md:basis-auto">
+                      <p className={cn('truncate text-sm font-semibold', eerste < 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-800')}>{user.name}</p>
+                      <p className="text-[11px] font-medium tabular-nums text-slate-500">
+                        {eerste < 0
+                          ? `al ${Math.abs(eerste)} ${Math.abs(eerste) === 1 ? 'dag' : 'dagen'} verlopen`
+                          : eerste === 0
+                            ? 'verloopt vandaag'
+                            : `eerst vervallend over ${eerste} ${eerste === 1 ? 'dag' : 'dagen'}`}
+                      </p>
+                    </div>
+                    {/* Op desktop vult elke pil zijn kolom volledig (md:w-full):
+                        zo staan de datums links én de dagentellers rechts van
+                        álle rijen op exact dezelfde x. Mobiel blijven het
+                        compacte pillen mét soort-label, want daar is geen
+                        kolomkop. */}
+                    {soorten.map(([soort, label]) => {
                       const datum = datums[soort];
                       if (!datum) {
-                        return <Badge key={soort} tone="slate" className="whitespace-nowrap opacity-70">{label}: —</Badge>;
+                        return (
+                          <Badge key={soort} tone="slate" className="whitespace-nowrap opacity-70 md:flex md:w-full">
+                            <span className="md:hidden">{label}:</span>—
+                          </Badge>
+                        );
                       }
                       const dagen = dagenTot(datum);
                       return (
-                        <Badge key={soort} tone={chipTone(dagen)} dot className="whitespace-nowrap tabular-nums">
-                          {label}: {chipTekst(dagen, datum)}
+                        <Badge
+                          key={soort}
+                          tone={chipTone(dagen)}
+                          dot
+                          className="whitespace-nowrap tabular-nums md:flex md:w-full"
+                        >
+                          <span className="md:hidden">{label}:</span>
+                          <span title={formatDateHuman(datum)}>{kortDatum(datum)}</span>
+                          <span className="ml-1.5 md:hidden">· {dagenTekst(dagen)}</span>
+                          <span className="hidden md:ml-auto md:inline">{dagenTekst(dagen)}</span>
                         </Badge>
                       );
                     })}
-                  </div>
-                </button>
-              ))}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
 
@@ -245,9 +279,13 @@ export function VervaldataView({ users }: { users: User[] }) {
                     key={u.id}
                     type="button"
                     onClick={() => openBewerken(u)}
-                    className="ios-pressable flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-white/5"
+                    style={kolommen}
+                    className="ios-pressable flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-slate-50 md:grid md:gap-4 dark:hover:bg-white/5"
                   >
                     <p className="min-w-0 truncate text-sm font-semibold text-slate-700">{u.name}</p>
+                    {/* Zelfde kolomraster als de lijst hierboven, zodat beide
+                        blokken één tabel lijken; "Invullen" staat in de eerste
+                        documentkolom en dus recht onder de pillen. */}
                     <span className="shrink-0 text-[11px] font-semibold text-oker-700 dark:text-oker-600">Invullen</span>
                   </button>
                 ))}
