@@ -118,6 +118,26 @@ const statusTone = (s?: string): BadgeTone => {
   }
 };
 const statusLabel = (s?: string) => STATUS_LABEL[(s ?? '').toUpperCase()] ?? (s ?? 'Onbekend');
+
+/** Eén bron voor de rijstructuur van een laadpunt (verzoek Jarno 07-08):
+ *  laadpunt · bus · SoC-pil · statuspil. "Vol" is 100% batterij óf laden
+ *  zónder vermogen (de bus druppelt niet meer na) — dan zegt "Laden voltooid"
+ *  meer dan "0 kW". Zonder sessie is er geen label en valt de rij terug op de
+ *  gewone status ("Beschikbaar", "Storing", …). */
+const laadStatus = (status: string | undefined, sessie?: { soc?: number | null; powerKw?: number | null } | null) => {
+  const soc = typeof sessie?.soc === 'number' ? sessie.soc : null;
+  const kw = typeof sessie?.powerKw === 'number' ? sessie.powerKw : null;
+  const laadt = (status ?? '').toUpperCase() === 'CHARGING';
+  const vol = Boolean(sessie) && ((soc ?? 0) >= 100 || (laadt && kw !== null && kw <= 0));
+  const label = !sessie
+    ? null
+    : vol
+      ? 'Laden voltooid'
+      : laadt && kw !== null && kw > 0
+        ? `Laden · ${Math.round(kw)} kW`
+        : null;
+  return { soc, kw, laadt, vol, label };
+};
 const kW = (w?: number) => (typeof w === 'number' ? `${Math.round(w / 100) / 10} kW` : '—');
 
 export function OcpiDashboardView() {
@@ -563,32 +583,32 @@ export function OcpiDashboardView() {
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {data.activeSessions.map((s) => {
-                  // powerKw 0 op 100% SoC is correct (vol, druppelt niet meer);
-                  // dan zegt "vol" meer dan "0 kW".
-                  const vol = (s.soc ?? 0) >= 100 || (typeof s.powerKw === 'number' && s.powerKw <= 0);
+                  // Zelfde rijstructuur als de laadpuntenlijst hieronder
+                  // (verzoek Jarno 07-08): laadpunt · bus · SoC-pil · statuspil.
+                  // Een lopende sessie laadt per definitie, dus 'CHARGING'.
+                  const st = laadStatus('CHARGING', s);
+                  const nummer = (s.evse_uid && nummerByUid.get(s.evse_uid)) || s.evse_uid || 'Onbekende paal';
+                  const bus = busVoorLaadpunt(nummer);
                   return (
                     <div key={s.id} className="surface-card p-4 rounded-2xl flex items-center justify-between gap-3">
                       <div className="min-w-0">
-                        <p className="text-sm font-semibold text-slate-800 truncate">
-                          {(() => {
-                            const nummer = (s.evse_uid && nummerByUid.get(s.evse_uid)) || s.evse_uid || 'Onbekende paal';
-                            const bus = busVoorLaadpunt(nummer);
-                            const soc = typeof s.soc === 'number' ? ` · ${s.soc}%` : '';
-                            return `Laadpunt ${nummer}${bus ? ` · bus ${bus}` : ''}${soc}`;
-                          })()}
-                        </p>
-                        <p className="text-[11px] text-slate-500">
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="text-sm font-semibold text-slate-800">
+                            Laadpunt {nummer}{bus ? ` · bus ${bus}` : ''}
+                          </span>
+                          {st.soc !== null && (
+                            <Badge tone={st.vol ? 'emerald' : 'blue'} className="shrink-0 tabular-nums">{st.soc}%</Badge>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-slate-500">
                           sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString() : '—'}
                           {typeof s.kwh === 'number' ? ` · ${s.kwh} kWh geladen` : ''}
                         </p>
                       </div>
-                      {/* "Laden" blijft leesbaar als woord mét het vermogen erbij;
-                          een volle bus heet "100% geladen" (verzoek Jarno 05-08).
-                          Het percentage zelf staat in de titel naast de bus.
-                          nowrap: op iPad-breedte wikkelde "Laden · 112 kW" naar
+                      {/* nowrap: op iPad-breedte wikkelde "Laden · 112 kW" naar
                           twee regels en werden de kaarten ongelijk hoog. */}
-                      <Badge tone={vol ? 'emerald' : 'blue'} dot className="shrink-0 whitespace-nowrap">
-                        {vol ? '100% geladen' : typeof s.powerKw === 'number' && s.powerKw > 0 ? `Laden · ${Math.round(s.powerKw)} kW` : 'Laden'}
+                      <Badge tone={st.vol ? 'emerald' : 'blue'} dot className="shrink-0 whitespace-nowrap">
+                        {st.label ?? 'Laden'}
                       </Badge>
                     </div>
                   );
@@ -633,14 +653,15 @@ export function OcpiDashboardView() {
                               </div>
                               <div className="space-y-1">
                                 {cpu.evses.map((evse) => {
-                                  // Indeling (verzoek Jarno 05-08): nummer · bus ·
-                                  // batterij% van het aangekoppelde voertuig; het
-                                  // vermogen staat alleen bij status Laden ín de
-                                  // badge ("Laden · 112 kW"). Technische details
-                                  // (max vermogen, connector) zitten achter een tik.
+                                  // Vaste rijstructuur (verzoek Jarno 07-08):
+                                  // nummer · bus · SoC-pil · status-pil. Het
+                                  // batterijpercentage was hiervóór losse
+                                  // gekleurde tekst; als pil staat het naast de
+                                  // statuspil op één lijn en lees je de kolom
+                                  // in één oogopslag. Technische details (max
+                                  // vermogen, connector) zitten achter een tik.
                                   const sessie = sessieByEvse.get(evse.uid);
-                                  const vol = sessie && ((sessie.soc ?? 0) >= 100 || (typeof sessie.powerKw === 'number' && sessie.powerKw <= 0));
-                                  const laadt = evse.status === 'CHARGING' && typeof sessie?.powerKw === 'number' && sessie.powerKw > 0;
+                                  const s = laadStatus(evse.status, sessie);
                                   return (
                                     <button
                                       key={evse.uid}
@@ -650,21 +671,23 @@ export function OcpiDashboardView() {
                                       title="Tik voor details (max. vermogen, connector)"
                                       className="ios-pressable flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-surface-soft-hover dark:hover:bg-white/5"
                                     >
-                                      <span className="flex min-w-0 items-baseline">
+                                      <span className="flex min-w-0 items-center gap-1.5">
                                         <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
                                         {/* Busnummer is dé operationele sleutel van dit
                                             scherm — niet in de zwakste tint zetten. */}
                                         <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-slate-600 dark:text-slate-300">
                                           {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
                                         </span>
-                                        {sessie && typeof sessie.soc === 'number' && (
-                                          <span className={cn('truncate text-[11px] font-semibold tabular-nums', vol ? 'text-emerald-600 dark:text-emerald-400' : 'text-blue-600 dark:text-blue-400')}>
-                                            {sessie.soc}%
-                                          </span>
+                                        {s.soc !== null && (
+                                          <Badge tone={s.vol ? 'emerald' : 'blue'} className="shrink-0 tabular-nums">{s.soc}%</Badge>
                                         )}
                                       </span>
-                                      <Badge tone={statusTone(evse.status)} dot className="shrink-0 whitespace-nowrap">
-                                        {statusLabel(evse.status)}{laadt ? ` · ${Math.round(sessie!.powerKw!)} kW` : ''}
+                                      {/* Vol = groen, ook al staat de paal
+                                          technisch nog op CHARGING — anders
+                                          stond "Laden voltooid" in een blauwe
+                                          pil naast een groene 100%-pil. */}
+                                      <Badge tone={s.vol ? 'emerald' : statusTone(evse.status)} dot className="shrink-0 whitespace-nowrap">
+                                        {s.label ?? statusLabel(evse.status)}
                                       </Badge>
                                     </button>
                                   );
