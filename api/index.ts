@@ -19,7 +19,7 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
 import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, isSmtpConfigured, type LeaveDecisionAction } from "./email.js";
-import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers } from "./push.js";
+import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
@@ -1831,6 +1831,18 @@ app.post("/api/push/subscribe", authenticate, async (req: AuthenticatedRequest, 
   } catch (err: any) {
     console.error("Abonneren mislukt", err);
     res.status(500).json({ error: "Abonneren mislukt" });
+  }
+});
+
+// Wie kán meldingen ontvangen? Voedt de badge in Gebruikersbeheer; tijdens de
+// uitrol is dat het verschil tussen "hij reageert niet" en "hij krijgt niets".
+// Alleen gebruikers-ids, en alleen voor planner/admin.
+app.get("/api/push/subscribers", authenticate, requireRole("planner", "admin"), async (_req: AuthenticatedRequest, res) => {
+  try {
+    res.json({ userIds: await getUsersMetPush() });
+  } catch (err) {
+    console.error("Push-abonnees lezen mislukt", err);
+    res.status(500).json({ error: "Kon niet ophalen wie meldingen aan heeft staan." });
   }
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, IdCard, RefreshCw, UserX } from 'lucide-react';
+import { AlertTriangle, IdCard, RefreshCw, Search, UserX } from 'lucide-react';
 import type { User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../../lib/format';
@@ -24,6 +24,9 @@ export function VervaldataView({ users }: { users: User[] }) {
   const [bewerkt, setBewerkt] = useState<User | null>(null);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
+  // 39 chauffeurs doorscrollen om er één te vinden was op een telefoon de
+  // enige weg (zelfde zoekpatroon als Contacten en Gebruikersbeheer).
+  const [zoek, setZoek] = useState('');
 
   const load = async () => {
     setIsLoading(true);
@@ -57,22 +60,27 @@ export function VervaldataView({ users }: { users: User[] }) {
     return map;
   }, [expiries]);
 
-  const chauffeurs = useMemo(
+  const alleChauffeurs = useMemo(
     () => users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder'),
     [users],
   );
+  const chauffeurs = useMemo(() => {
+    const q = zoek.trim().toLowerCase();
+    if (!q) return alleChauffeurs;
+    return alleChauffeurs.filter((u) => `${u.name} ${u.employeeId ?? ''}`.toLowerCase().includes(q));
+  }, [alleChauffeurs, zoek]);
 
   // Rijen gesorteerd op de éérst vervallende datum van de chauffeur; wie
   // helemaal geen datums heeft komt in een aparte sectie onderaan — dat is
   // geen "in orde" maar "nog niet ingevuld", en dat onderscheid moet zichtbaar
   // blijven.
-  const { metDatums, zonderDatums, tellers } = useMemo(() => {
+  const indelen = (lijst: User[]) => {
     const met: Array<{ user: User; datums: Record<string, string>; eerste: number }> = [];
     const zonder: User[] = [];
     let verlopen = 0;
     let binnen30 = 0;
     let binnen90 = 0;
-    for (const u of chauffeurs) {
+    for (const u of lijst) {
       const datums = perUser.get(String(u.id)) ?? {};
       const dagen = Object.values(datums).map(dagenTot).filter((n) => Number.isFinite(n));
       if (dagen.length === 0) {
@@ -90,8 +98,14 @@ export function VervaldataView({ users }: { users: User[] }) {
     met.sort((a, b) => a.eerste - b.eerste || a.user.name.localeCompare(b.user.name, 'nl'));
     zonder.sort((a, b) => a.name.localeCompare(b.name, 'nl'));
     return { metDatums: met, zonderDatums: zonder, tellers: { verlopen, binnen30, binnen90, zonder: zonder.length } };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chauffeurs, perUser, vandaagIso]);
+  };
+
+  // Lijst volgt de zoekterm; de tegels blijven het totaalbeeld tonen — een
+  // teller die meebeweegt met een zoekterm is geen overzicht meer.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { metDatums, zonderDatums } = useMemo(() => indelen(chauffeurs), [chauffeurs, perUser, vandaagIso]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const { tellers } = useMemo(() => indelen(alleChauffeurs), [alleChauffeurs, perUser, vandaagIso]);
 
   const chipTone = (dagen: number): BadgeTone => (dagen < 0 ? 'red' : dagen <= 30 ? 'amber' : dagen <= 90 ? 'oker' : 'emerald');
   /** Compacte datum ("27 nov 2027") — de lange variant met weekdag maakte de
@@ -151,10 +165,25 @@ export function VervaldataView({ users }: { users: User[] }) {
         title="Vervaldata"
         description="Code 95 en medische schifting per chauffeur — gesorteerd op wie het eerst vervalt. Tik op een chauffeur om de datums aan te passen."
         actions={(
-          <Button variant="secondary" onClick={() => void load()} disabled={isLoading}>
-            <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
-            <span className="ml-1.5">Ververs</span>
-          </Button>
+          <div className="flex w-full items-center gap-2 md:w-auto">
+            <div className="relative flex-1 md:w-64 md:flex-none">
+              <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
+                <Search size={16} className="text-slate-400" />
+              </div>
+              <input
+                type="search"
+                aria-label="Zoek een chauffeur"
+                placeholder="Zoek chauffeur…"
+                value={zoek}
+                onChange={(e) => setZoek(e.target.value)}
+                className="control-input w-full rounded-2xl py-3 pl-11 pr-4 text-base font-medium outline-none sm:text-sm"
+              />
+            </div>
+            <Button variant="secondary" onClick={() => void load()} disabled={isLoading} aria-label="Ververs">
+              <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
+              <span className="ml-1.5 hidden sm:inline">Ververs</span>
+            </Button>
+          </div>
         )}
       />
 

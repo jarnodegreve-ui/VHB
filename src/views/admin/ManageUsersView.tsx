@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { FolderOpen, History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
+import { Bell, BellOff, FolderOpen, History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
@@ -26,6 +26,22 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   // formulier — geen halve saves bij Annuleren).
   const [userExpiries, setUserExpiries] = useState<Record<string, Record<string, string>>>({});
   const [vervalDraft, setVervalDraft] = useState<Record<string, string>>({});
+  // Wie heeft meldingen aanstaan? Zonder abonnement komt er niets aan — bij de
+  // uitrol is dat het verschil tussen "hij reageert niet" en "hij krijgt
+  // niets". Best-effort: mislukt de call, dan blijft de kolom gewoon "uit".
+  const [pushUserIds, setPushUserIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/push/subscribers', { headers: await getSupabaseAuthHeaders() });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (!cancelled && Array.isArray(body?.userIds)) setPushUserIds(new Set(body.userIds.map(String)));
+      } catch { /* zonder deze lijst tonen we simpelweg geen 'aan' */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -70,6 +86,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   // ⋯-overflowmenu per rij: zes losse knoppen naast elkaar was te druk
   // (design-review); Bewerken blijft direct, de rest zit in het menu.
   const [menuUserId, setMenuUserId] = useState<string | null>(null);
+
+  // Uitrol-teller: alleen actieve medewerkers tellen mee — een gepauzeerd
+  // account zonder meldingen is geen openstaand punt.
+  const actieveUsers = users.filter((u) => u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder');
+  const pushTotaal = actieveUsers.length;
+  const pushMetAan = actieveUsers.filter((u) => pushUserIds.has(String(u.id))).length;
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
@@ -389,7 +411,16 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             eyebrow="Werkset"
             title="Zichtbare gebruikers"
             description="Filter de huidige lijst per rol voordat je wijzigingen doorvoert."
-            aside={<Badge tone="slate">{filteredUsers.length} zichtbaar</Badge>}
+            aside={(
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge tone="slate">{filteredUsers.length} zichtbaar</Badge>
+                {/* Uitrol-teller: hoeveel actieve medewerkers kunnen de
+                    meldingen die de app verstuurt écht ontvangen? */}
+                <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} icon={<Bell size={11} />}>
+                  {pushMetAan} van {pushTotaal} met meldingen
+                </Badge>
+              </div>
+            )}
           />
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="glass-segmented inline-flex rounded-2xl p-1 self-start">
@@ -444,6 +475,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <Th className="w-10"><input type="checkbox" aria-label="Alles selecteren" checked={allSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 accent-oker-500 cursor-pointer" /></Th>
                 <Th>Medewerker</Th>
                 <Th>Status</Th>
+                <Th title="Heeft deze medewerker meldingen aan staan op minstens één toestel?">Meldingen</Th>
                 <Th>Laatst Actief</Th>
                 <Th className="text-center">Sessies</Th>
                 <Th className="text-right">Acties</Th>
@@ -458,7 +490,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     <div className="mt-1"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
                   </Td>
                   <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>
-                  <Td className="tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="italic text-slate-400">Nooit</span>}</Td>
+                  {/* Zonder abonnement komt géén enkele melding aan. */}
+                  <Td>
+                    {pushUserIds.has(String(u.id))
+                      ? <Badge tone="emerald" icon={<Bell size={11} />}>Aan</Badge>
+                      : <Badge tone="slate" icon={<BellOff size={11} />}>Uit</Badge>}
+                  </Td>
+                  <Td className="tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>
                   <Td className="text-center"><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-slate-50 text-slate-400')}>{u.activeSessions || 0}</span></Td>
                   <Td className="text-right">
                     <div className="relative flex items-center justify-end gap-1.5">
@@ -517,7 +555,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     <div className="mt-1.5"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
                   </div>
                 </div>
-                <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
+                <div className="flex shrink-0 flex-col items-end gap-1.5">
+                  <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
+                  {pushUserIds.has(String(u.id))
+                    ? <Badge tone="emerald" icon={<Bell size={11} />}>Meldingen aan</Badge>
+                    : <Badge tone="slate" icon={<BellOff size={11} />}>Meldingen uit</Badge>}
+                </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
                 <div className="p-3 bg-slate-50 rounded-2xl"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-[13px] font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></div>

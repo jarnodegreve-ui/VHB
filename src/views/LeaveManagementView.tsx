@@ -36,6 +36,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   // Historiek standaard gecapt op 5 — de volledige lijst groeide onbegrensd.
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
+  // Voor wie vraag je aan? Alleen zichtbaar voor planner/admin: in de
+  // testfase belt of zegt een deel van de chauffeurs zijn verlof gewoon door,
+  // en dan kon de planning dat nergens kwijt. Leeg = voor jezelf.
+  const [voorWie, setVoorWie] = useState<string>('');
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -66,25 +70,49 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     .filter((r) => r.status === 'rejected' || r.status === 'cancelled' || (r.status === 'approved' && r.endDate < today))
     .sort((a, b) => b.startDate.localeCompare(a.startDate));
 
+  // Voor wie wordt deze aanvraag opgeslagen? Chauffeurs altijd voor zichzelf;
+  // een planner kan een collega kiezen (dan is het een registratie van iets
+  // dat al mondeling is afgesproken).
+  const aanvraagVoorId = isPlanner && voorWie ? voorWie : String(user.id);
+  const namensIemandAnders = aanvraagVoorId !== String(user.id);
+
   const handleRequestLeave = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
     if (!formData.startDate || !formData.endDate) {
       return;
     }
-    if (formData.startDate < today) {
+    // Een planner die verlof achteraf registreert mag wél in het verleden
+    // boeken (de chauffeur belde het vorige week door); een eigen aanvraag
+    // niet.
+    if (formData.startDate < today && !namensIemandAnders) {
       notify('Je kan geen verlof aanvragen in het verleden.', 'error');
       return;
     }
     // Pas sluiten/wissen ná een geslaagde save — bij een fout blijft de
     // aanvraag ingevuld staan zodat de chauffeur niet opnieuw moet beginnen.
     setIsSubmitting(true);
-    const ok = await Promise.resolve(
-      onSave([...leaveRequests, { id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, userId: user.id, ...formData, status: 'pending', createdAt: new Date().toISOString() }]),
-    ).finally(() => setIsSubmitting(false));
+    // Namens een chauffeur ingevoerd verlof staat meteen op goedgekeurd: de
+    // planner ís de beoordelaar, en een eigen aanvraag die je daarna zelf nog
+    // moet goedkeuren is een lege stap (en zou wél als "wacht op planner" in
+    // de open taken staan).
+    const nieuw: LeaveRequest = {
+      id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      userId: aanvraagVoorId,
+      ...formData,
+      status: namensIemandAnders ? 'approved' : 'pending',
+      createdAt: new Date().toISOString(),
+      ...(namensIemandAnders ? { decidedAt: new Date().toISOString() } : {}),
+    };
+    const ok = await Promise.resolve(onSave([...leaveRequests, nieuw])).finally(() => setIsSubmitting(false));
     if (ok === false) return;
     setShowRequestModal(false);
     setFormData({ startDate: '', endDate: '', type: 'betaald_verlof', comment: '' });
+    setVoorWie('');
+    if (namensIemandAnders) {
+      const naam = users.find((u) => String(u.id) === aanvraagVoorId)?.name ?? 'de chauffeur';
+      notify(`Verlof voor ${naam} vastgelegd en meteen goedgekeurd.`, 'success');
+    }
   };
 
   // === Live preview van impact van de nieuwe aanvraag ===
@@ -99,7 +127,11 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     const requestedDays = daysBetween(formData.startDate, formData.endDate);
     if (requestedDays <= 0) return null;
 
-    const currentBalance = verlofBalans(leaveRequests, user.id, requestedYear, user.verlofBudget);
+    // Saldo en conflicten van dégene voor wie je aanvraagt — anders keek een
+    // planner naar zijn eigen saldo terwijl hij verlof van een chauffeur
+    // invoert.
+    const doelUser = users.find((u) => String(u.id) === aanvraagVoorId) ?? user;
+    const currentBalance = verlofBalans(leaveRequests, aanvraagVoorId, requestedYear, doelUser.verlofBudget);
     const wouldExceed =
       formData.type === 'betaald_verlof' &&
       currentBalance.betaaldGebruikt + requestedDays > currentBalance.betaaldBudget;
@@ -107,7 +139,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
     const conflictingShifts = shiftsConflictingWithLeave(shifts, {
       id: '__draft__',
-      userId: user.id,
+      userId: aanvraagVoorId,
       startDate: formData.startDate,
       endDate: formData.endDate,
       type: formData.type,
@@ -123,7 +155,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       gebruikt: currentBalance.betaaldGebruikt,
       conflictingShifts,
     };
-  }, [formData.startDate, formData.endDate, formData.type, leaveRequests, shifts, user.id, user.verlofBudget]);
+  }, [formData.startDate, formData.endDate, formData.type, leaveRequests, shifts, aanvraagVoorId, users, user]);
 
   const handleCalendarDateClick = (dateStr: string) => {
     if (!showRequestModal) {
@@ -591,6 +623,36 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
               <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof aanvragen</h4><button aria-label="Sluiten" onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-slate-50 rounded-xl"><X size={24} /></button></div>
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
+                {/* Alleen planner/admin: verlof registreren dat een chauffeur
+                    mondeling of telefonisch doorgaf. Kiest de planner een
+                    collega, dan is het meteen goedgekeurd (hij ís de
+                    beoordelaar) en rekenen saldo én dienstconflicten hieronder
+                    op díe chauffeur. */}
+                {isPlanner && (
+                  <div className="space-y-1.5">
+                    <MicroLabel>Voor wie</MicroLabel>
+                    <select
+                      aria-label="Voor wie vraag je verlof aan"
+                      value={voorWie}
+                      onChange={(e) => setVoorWie(e.target.value)}
+                      className="control-input w-full rounded-2xl px-4 py-3 text-base font-medium outline-none sm:text-sm"
+                    >
+                      <option value="">Mezelf ({user.name})</option>
+                      {users
+                        .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
+                        .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
+                        .map((u) => (
+                          <option key={u.id} value={String(u.id)}>{u.name}</option>
+                        ))}
+                    </select>
+                    {namensIemandAnders && (
+                      <p className="text-[11px] font-medium text-oker-700 dark:text-oker-600">
+                        Wordt meteen als goedgekeurd verlof vastgelegd — je hoeft het daarna niet nog eens te beoordelen.
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
                   <p className="mt-2 font-medium">

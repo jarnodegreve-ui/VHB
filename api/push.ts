@@ -64,6 +64,17 @@ export const deletePushSubscriptionForUser = async (endpoint: string, userId: st
   await db.from("push_subscriptions").delete().eq("endpoint", endpoint).eq("user_id", String(userId));
 };
 
+/** Wie heeft er meldingen aanstaan? Alleen gebruikers-ids — geen endpoints of
+ *  sleutels, want dit voedt enkel een badge in Gebruikersbeheer. Nodig bij de
+ *  uitrol: zonder dit overzicht is niet te zien wie de meldingen die de app
+ *  verstuurt überhaupt kán ontvangen. */
+export const getUsersMetPush = async (): Promise<string[]> => {
+  if (!db) return [];
+  const { data, error } = await db.from("push_subscriptions").select("user_id");
+  if (error) return [];
+  return [...new Set((data ?? []).map((r: any) => String(r.user_id)))];
+};
+
 const getSubscriptionsForUsers = async (userIds: string[]): Promise<Array<{ endpoint: string; p256dh: string; auth: string }>> => {
   if (!db || userIds.length === 0) return [];
   const { data, error } = await db
