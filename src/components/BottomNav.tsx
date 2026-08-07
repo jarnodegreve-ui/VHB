@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, Calendar, MapPin, CalendarCheck, FileText, Menu } from 'lucide-react';
-import type { View } from '../types';
+import { LayoutDashboard, Calendar, MapPin, CalendarCheck, FileText, Menu, AlertTriangle, RotateCcw, IdCard } from 'lucide-react';
+import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
 
 type NavSlot = {
@@ -12,25 +12,39 @@ type NavSlot = {
 };
 
 /**
- * Mobile bottom-tab-bar voor chauffeurs. Vervangt de hamburger op
- * kleine schermen. 5 hoofdacties — sneller dan een menu openen.
+ * Mobile bottom-tab-bar. Vervangt de hamburger op kleine schermen.
+ * 5 hoofdacties — sneller dan een menu openen.
+ *
+ * Rolbewust: chauffeurs krijgen hun rij-tabs, planners/admins hun
+ * dagelijkse plannerwerk (dekking, verlof- en ruilaanvragen, vervaldata) —
+ * die zaten eerst allemaal achter "Meer". De preview-schakelaar ("bekijk
+ * als chauffeur") stuurt hier de effectieve rol in, dus de balk wisselt mee.
  *
  * - Floating glass-card stijl, sticky aan de onderkant
  * - Actief item heeft oker-fill + animated layoutId-pill
- * - Badges (bv. ongelezen updates) tonen rechtsboven
+ * - Badges (bv. openstaande aanvragen) tonen rechtsboven
  * - Alleen rendered op md:hidden (mobile/tablet portrait)
  */
 export function BottomNav({
   currentView,
   onSelect,
+  role = 'chauffeur',
   unseenLeaveCount = 0,
+  pendingLeaveCount = 0,
+  pendingSwapsCount = 0,
   onMore,
   moreDot = false,
   hidden = false,
 }: {
   currentView: View;
   onSelect: (view: View) => void;
+  /** Effectieve rol (dus mét preview-modus verrekend). */
+  role?: Role;
   unseenLeaveCount?: number;
+  /** Openstaande verlofaanvragen (badge op de planner-tab Verlof). */
+  pendingLeaveCount?: number;
+  /** Openstaande dienstruilen (badge op de planner-tab Ruil). */
+  pendingSwapsCount?: number;
   /** Opent het "Meer"-menu (de volledige sidebar-sheet) op de telefoon,
    *  zodat de bottom-nav het enige nav-systeem is (geen aparte hamburger). */
   onMore?: () => void;
@@ -41,16 +55,25 @@ export function BottomNav({
    *  hij niet onder de overlay door piept. */
   hidden?: boolean;
 }) {
-  const slots: NavSlot[] = [
-    { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
-    { view: 'rooster', label: 'Rooster', icon: <Calendar size={20} /> },
-    { view: 'omleidingen', label: 'Omleidingen', icon: <MapPin size={20} /> },
-    { view: 'ritblaadjes', label: 'Ritbladen', icon: <FileText size={20} /> },
-    // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount),
-    // dus die hoort hier — op 'Updates' was hij misleidend. Updates blijven op
-    // het dashboard zichtbaar.
-    { view: 'verlof', label: 'Verlof', icon: <CalendarCheck size={20} />, badge: unseenLeaveCount },
-  ];
+  const isPlanner = role === 'planner' || role === 'admin';
+  const slots: NavSlot[] = isPlanner
+    ? [
+        { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { view: 'dekking', label: 'Dekking', icon: <AlertTriangle size={20} /> },
+        { view: 'verlof', label: 'Verlof', icon: <CalendarCheck size={20} />, badge: pendingLeaveCount },
+        { view: 'ruil-verzoeken', label: 'Ruil', icon: <RotateCcw size={20} />, badge: pendingSwapsCount },
+        { view: 'vervaldata', label: 'Vervaldata', icon: <IdCard size={20} /> },
+      ]
+    : [
+        { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={20} /> },
+        { view: 'rooster', label: 'Rooster', icon: <Calendar size={20} /> },
+        { view: 'omleidingen', label: 'Omleidingen', icon: <MapPin size={20} /> },
+        { view: 'ritblaadjes', label: 'Ritbladen', icon: <FileText size={20} /> },
+        // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount),
+        // dus die hoort hier — op 'Updates' was hij misleidend. Updates blijven op
+        // het dashboard zichtbaar.
+        { view: 'verlof', label: 'Verlof', icon: <CalendarCheck size={20} />, badge: unseenLeaveCount },
+      ];
 
   return (
     <nav

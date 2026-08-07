@@ -1,9 +1,8 @@
 import React, { useRef, useState } from 'react';
 import { Send, Upload, Users, X } from 'lucide-react';
-import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'motion/react';
 import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { Button, MicroLabel } from '../../components/primitives';
+import { Modal } from '../../components/Modal';
 
 const MAX_MB = 15;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
@@ -56,18 +55,11 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
     }
   };
 
-  return createPortal(
-    <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
-        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="glass-modal rounded-3xl w-full max-w-md flex flex-col overflow-hidden"
-        >
+  // Op de gedeelde Modal met `boven` (was een eigen portal op z-[120]) —
+  // zo krijgt hij ook ESC, focus-trap en scroll-lock.
+  return (
+    <Modal open onClose={onClose} maxWidth="md" ariaLabel="Document naar alle chauffeurs" boven>
+      <div className="flex flex-col overflow-hidden">
           <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center"><Users size={20} /></div>
@@ -76,7 +68,7 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
                 <p className="text-xs font-medium text-slate-500">Elke actieve chauffeur krijgt een eigen kopie + melding.</p>
               </div>
             </div>
-            <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable w-11 h-11 sm:w-8 sm:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"><X size={16} /></button>
+            <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"><X size={16} /></button>
           </div>
 
           <div className="p-6 space-y-4">
@@ -97,9 +89,7 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
               {sending ? 'Versturen…' : 'Naar alle chauffeurs versturen'}
             </Button>
           </div>
-        </motion.div>
       </div>
-    </AnimatePresence>,
-    document.body,
+    </Modal>
   );
 }

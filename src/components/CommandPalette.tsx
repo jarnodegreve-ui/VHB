@@ -321,7 +321,7 @@ export function CommandPalette({
                       }}
                       onMouseEnter={() => setSelectedIdx(i)}
                       className={cn(
-                        'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-[13.5px] font-medium transition-colors',
+                        'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-[13px] font-medium transition-colors',
                         isActive
                           ? 'bg-slate-100 text-slate-900'
                           : 'text-slate-700 hover:bg-slate-50',
@@ -337,7 +337,7 @@ export function CommandPalette({
                       </span>
                       <span className="flex-1 min-w-0 truncate">{cmd.label}</span>
                       {cmd.hint && (
-                        <span className="hidden sm:block shrink-0 max-w-[45%] truncate text-[12px] font-normal text-slate-400">
+                        <span className="hidden sm:block shrink-0 max-w-[45%] truncate text-xs font-normal text-slate-400">
                           {cmd.hint}
                         </span>
                       )}

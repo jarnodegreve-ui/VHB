@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
+import { Button } from '../components/primitives';
 import { supabase } from '../lib/supabase';
 import { applyThemeColorMeta } from '../lib/ui';
 import { BrandLogo } from '../components/BrandLogo';
@@ -465,18 +466,15 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
 
 function SubmitButton({ loading, children }: { loading: boolean; children: React.ReactNode }) {
   return (
-    <button
-      type="submit"
-      disabled={loading}
-      // btn-primary = VHB Amber met VHB Black-tekst (huisstijl: nooit wit op
-      // amber — contrast 2,2:1). De eigen inline gradient met text-white
-      // overtrad precies die regel, op het meest bekeken scherm.
-      className="btn-primary group w-full inline-flex items-center justify-center gap-2 py-3.5 mt-2 rounded-xl text-[15px] font-bold transition-all active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-    >
+    // btn-primary (via Button) = VHB Amber met VHB Black-tekst (huisstijl:
+    // nooit wit op amber — contrast 2,2:1). De login-CTA blijft bewust een
+    // maat groter (15px bold) dan de standaard lg-knop: hero-knop op het
+    // meest bekeken scherm.
+    <Button type="submit" variant="primary" size="lg" full disabled={loading} className="group mt-2 py-3.5 text-[15px] font-bold">
       <span>{loading ? 'Even geduld…' : children}</span>
       {!loading && (
         <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
       )}
-    </button>
+    </Button>
   );
 }

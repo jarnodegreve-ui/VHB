@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { Button } from './components/primitives';
 import { initMonitoring } from './lib/monitoring';
 
 initMonitoring();
@@ -16,12 +17,9 @@ function CrashFallback() {
         <p className="mt-2 text-sm font-medium text-slate-500">
           De pagina kon niet correct geladen worden. Probeer het opnieuw.
         </p>
-        <button
-          onClick={() => window.location.reload()}
-          className="btn-primary ios-pressable mt-5 px-5 py-3 text-xs uppercase tracking-[0.08em]"
-        >
+        <Button variant="primary" className="mt-5" onClick={() => window.location.reload()}>
           Pagina herladen
-        </button>
+        </Button>
       </div>
     </div>
   );

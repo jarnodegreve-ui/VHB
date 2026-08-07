@@ -341,9 +341,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         description={isPlanner ? 'Beheer verlofaanvragen en bekijk de bezetting.' : 'Vraag verlof aan en volg je aanvragen op.'}
         actions={(
           <div className="flex items-center gap-2">
-            <button onClick={() => setShowRequestModal(true)} className="btn-primary ios-pressable px-8 py-4 text-sm flex items-center gap-2">
-              <Plus size={20} /> Verlof aanvragen
-            </button>
+            <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={() => setShowRequestModal(true)}>
+              Verlof aanvragen
+            </Button>
           </div>
         )}
       />
@@ -357,7 +357,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   type="button"
                   onClick={goToPrevMonth}
                   aria-label="Vorige maand"
-                  className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                  className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
                 >
                   <ChevronLeft size={18} />
                 </button>
@@ -366,7 +366,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   type="button"
                   onClick={goToNextMonth}
                   aria-label="Volgende maand"
-                  className="ios-pressable w-11 h-11 sm:w-9 sm:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
+                  className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:text-slate-800 hover:bg-slate-50 flex items-center justify-center transition-colors"
                 >
                   <ChevronRight size={18} />
                 </button>
@@ -447,7 +447,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       </div>
                     </div>
                   );
-                }) : <p className="text-center py-4 text-slate-400 font-medium italic">Geen afwezigen op deze dag.</p>}
+                }) : <p className="text-center py-4 text-slate-400 font-medium">Geen afwezigen op deze dag.</p>}
               </div>
             </motion.div>
           )}
@@ -532,7 +532,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         >
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-2">
-                              <span className="truncate text-[13.5px] font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
+                              <span className="truncate text-[13px] font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
                               {conflictShifts.length > 0 && (
                                 <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
                                   <AlertTriangle size={13} className="shrink-0 text-red-500" />
@@ -711,7 +711,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </div>
                 )}
 
-                <button type="submit" disabled={!formData.startDate || !formData.endDate || isSubmitting} className="btn-primary ios-pressable w-full py-4 disabled:opacity-40 disabled:cursor-not-allowed">{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</button>
+                <Button type="submit" variant="primary" size="lg" full disabled={!formData.startDate || !formData.endDate || isSubmitting}>{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</Button>
               </form>
       </Modal>
 

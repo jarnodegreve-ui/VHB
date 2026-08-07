@@ -99,17 +99,17 @@ export function UserHistoryModal({
         <div className="grid grid-cols-3 gap-3">
           <div className="surface-muted rounded-2xl p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Diensten</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{allShifts.length}</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{allShifts.length}</p>
             <p className="text-[11px] font-medium text-slate-400 mt-1">{upcomingShifts.length} komende</p>
           </div>
           <div className="surface-muted rounded-2xl p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Verlof</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{approvedLeaveCount}</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{approvedLeaveCount}</p>
             <p className="text-[11px] font-medium text-slate-400 mt-1">goedgekeurd</p>
           </div>
           <div className="surface-muted rounded-2xl p-4">
             <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Dienstruilen</p>
-            <p className="mt-1 text-2xl font-semibold text-slate-900">{userSwaps.length}</p>
+            <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{userSwaps.length}</p>
             <p className="text-[11px] font-medium text-slate-400 mt-1">totaal</p>
           </div>
         </div>

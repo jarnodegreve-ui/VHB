@@ -153,7 +153,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                       <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
                       <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                       {typedagLabel(dateIso(day)) && (
-                        <div className={cn('text-[9px] font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+                        <div className={cn('text-[10px] font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
                           {typedagLabel(dateIso(day))!.kort}
                         </div>
                       )}
@@ -206,7 +206,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 );
               })}
               {visibleUsers.length === 0 && (
-                <tr><td colSpan={daysInMonth + 1} className="px-4 py-8 text-center text-sm italic text-slate-400">Geen actieve chauffeurs gevonden.</td></tr>
+                <tr><td colSpan={daysInMonth + 1} className="px-4 py-8 text-center text-sm font-medium text-slate-400">Geen actieve chauffeurs gevonden.</td></tr>
               )}
             </tbody>
           </table>
@@ -241,7 +241,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 )}
               </div>
               {uniqueLeaves.length === 0 ? (
-                <div className="mt-2 text-xs text-slate-300 italic">Geen afwezigheden deze maand.</div>
+                <div className="mt-2 text-xs font-medium text-slate-400">Geen afwezigheden deze maand.</div>
               ) : (
                 <ul className="mt-2 space-y-1.5">
                   {uniqueLeaves.map((leave) => {
@@ -271,7 +271,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
           );
         })}
         {visibleUsers.length === 0 && (
-          <div className="p-6 text-center text-sm italic text-slate-400">
+          <div className="p-6 text-center text-sm font-medium text-slate-400">
             Geen actieve chauffeurs gevonden.
           </div>
         )}

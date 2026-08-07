@@ -5,7 +5,7 @@ import { cn, downloadBlob, notify } from '../../lib/ui';
 import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
-import { StatCard } from '../../components/StatCard';
+import { OpsStat } from '../../components/ops';
 import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, suggestClosestName } from '../../lib/planning';
 
 /** Badge-tone per assignment-soort (presentatie van de matrixcodes). */
@@ -230,27 +230,29 @@ export function PlanningMatrixView({
         title="Planningsoverzicht"
         description="Controleer de geïmporteerde matrix en los onbekende codes of niet-gematchte chauffeurs op."
       />
-      {/* 2 kolommen op mobiel: bij één kolom werd elke kaart een volle-
-          breedte-strook met het icoon erboven en veel leegte (StatCard
-          stapelt onder sm juist voor smalle 2-koloms cellen). */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-        <StatCard
-          icon={<Clock className="text-emerald-600" />}
+      {/* OpsStat i.p.v. StatCard (vaste regel voor KPI-strips): vaste
+          twee-regel-labelzone, dus cijfers en subteksten op één lijn. */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+        <OpsStat
+          icon={<Clock size={16} />}
+          tone="emerald"
           label="Gegenereerde Diensten"
-          value={derived.totalGeneratedServices.toString()}
-          subValue="Gematcht vanuit Dienstoverzicht"
+          value={derived.totalGeneratedServices}
+          sub="gematcht vanuit Dienstoverzicht"
         />
-        <StatCard
-          icon={<AlertTriangle className="text-slate-600" />}
+        <OpsStat
+          icon={<AlertTriangle size={16} />}
+          tone={derived.globalUnknownCodes.length > 0 ? 'amber' : 'slate'}
           label="Onbekende Codes"
-          value={derived.globalUnknownCodes.length.toString()}
-          subValue={derived.globalUnknownCodes.length === 0 ? 'Alles herkend' : derived.globalUnknownCodes.slice(0, 3).join(' • ')}
+          value={derived.globalUnknownCodes.length}
+          sub={derived.globalUnknownCodes.length === 0 ? 'alles herkend' : derived.globalUnknownCodes.slice(0, 3).join(' • ')}
         />
-        <StatCard
-          icon={<Users className="text-oker-600" />}
+        <OpsStat
+          icon={<Users size={16} />}
+          tone={derived.globalUnmatchedDrivers.length > 0 ? 'oker' : 'slate'}
           label="Niet-Gematchte Chauffeurs"
-          value={derived.globalUnmatchedDrivers.length.toString()}
-          subValue={derived.globalUnmatchedDrivers.length === 0 ? 'Alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' • ')}
+          value={derived.globalUnmatchedDrivers.length}
+          sub={derived.globalUnmatchedDrivers.length === 0 ? 'alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' • ')}
         />
       </div>
 
@@ -442,7 +444,7 @@ export function PlanningMatrixView({
             <>
               <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h3 className="text-2xl font-semibold tracking-tight">
+                  <h3 className="text-lg md:text-xl font-bold tracking-tight text-slate-900">
                     {new Date(selectedRow.source_date).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                   </h3>
                   <p className="mt-1 text-sm font-medium text-slate-500">
@@ -452,24 +454,27 @@ export function PlanningMatrixView({
                 <Badge tone="oker">Matrix staging</Badge>
               </div>
 
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
-                <StatCard
-                  icon={<Users className="text-oker-600" />}
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
+                <OpsStat
+                  icon={<Users size={16} />}
+                  tone="oker"
                   label="Chauffeurs"
-                  value={assignments.length.toString()}
-                  subValue="Met een ingevulde code"
+                  value={assignments.length}
+                  sub="met een ingevulde code"
                 />
-                <StatCard
-                  icon={<Clock className="text-emerald-600" />}
+                <OpsStat
+                  icon={<Clock size={16} />}
+                  tone="emerald"
                   label="Herkende Diensten"
-                  value={serviceAssignments.toString()}
-                  subValue="Gematcht met Dienstoverzicht"
+                  value={serviceAssignments}
+                  sub="gematcht met Dienstoverzicht"
                 />
-                <StatCard
-                  icon={<AlertTriangle className="text-slate-600" />}
+                <OpsStat
+                  icon={<AlertTriangle size={16} />}
+                  tone={unknownAssignments > 0 ? 'amber' : 'slate'}
                   label="Onbekende Codes"
-                  value={unknownAssignments.toString()}
-                  subValue={unknownAssignments === 0 ? 'Alles herkend' : 'Nog te mappen'}
+                  value={unknownAssignments}
+                  sub={unknownAssignments === 0 ? 'alles herkend' : 'nog te mappen'}
                 />
               </div>
 
@@ -587,7 +592,7 @@ export function PlanningMatrixView({
       <div className="surface-card rounded-3xl p-6">
         <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
           <MicroLabel className="text-red-700">Schermfout</MicroLabel>
-          <h3 className="mt-3 text-2xl font-semibold tracking-tight text-slate-900">Planning Overzicht kon niet geladen worden</h3>
+          <h3 className="mt-3 text-lg md:text-xl font-bold tracking-tight text-slate-900">Planning Overzicht kon niet geladen worden</h3>
           <p className="mt-2 text-sm font-medium text-slate-600">
             {error instanceof Error ? error.message : 'Onbekende renderfout'}
           </p>

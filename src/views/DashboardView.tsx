@@ -12,6 +12,7 @@ import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
+import { Button } from '../components/primitives';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -221,18 +222,14 @@ export function DashboardView({ notes = [],
           </div>
           <div className="flex flex-col sm:flex-row gap-2">
             {onChangePassword && (
-              <button
-                type="button"
-                onClick={() => { dismissWelcome(); onChangePassword(); }}
-                className="btn-primary ios-pressable px-4 py-2.5 text-sm min-h-11"
-              >
+              <Button variant="primary" onClick={() => { dismissWelcome(); onChangePassword(); }}>
                 Kies eerst je eigen wachtwoord
-              </button>
+              </Button>
             )}
             <button
               type="button"
               onClick={dismissWelcome}
-              className="ios-pressable rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-slate-50 min-h-11"
+              className="ios-pressable rounded-xl border border-slate-200 bg-surface-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-surface-soft-hover min-h-11"
             >
               Aan de slag
             </button>
@@ -303,7 +300,7 @@ export function DashboardView({ notes = [],
           text={nextShift ? serviceNumberOf(nextShift) : '—'}
           // De subregel ís hier de boodschap (wanneer rijd ik?) — dus een
           // maat groter dan de standaard tegel-subtekst.
-          subClassName="text-[14px] font-semibold text-slate-600"
+          subClassName="text-sm font-semibold text-slate-600"
           sub={
             nextShift
               ? `${relativeDay(nextShift.date)} · ${formatShortDay(nextShift.date)}`
@@ -355,7 +352,7 @@ export function DashboardView({ notes = [],
                 <Clock size={16} />
               </span>
               <div>
-                <p className="text-[13.5px] font-semibold text-slate-800">Geen komende diensten</p>
+                <p className="text-[13px] font-semibold text-slate-800">Geen komende diensten</p>
                 <p className="text-xs font-normal text-slate-500">Er staat op dit moment niets ingepland.</p>
               </div>
             </div>
@@ -389,7 +386,7 @@ export function DashboardView({ notes = [],
                 <MapPin size={16} />
               </span>
               <div>
-                <p className="text-[13.5px] font-semibold text-slate-800">Vrije baan</p>
+                <p className="text-[13px] font-semibold text-slate-800">Vrije baan</p>
                 <p className="text-xs font-normal text-slate-500">Geen omleidingen op het netwerk.</p>
               </div>
             </div>
@@ -438,7 +435,7 @@ export function DashboardView({ notes = [],
         {openDiversion && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-surface-soft px-2.5 py-1 text-[11px] font-semibold text-slate-600">
                 {lineLabel(openDiversion.line)}
               </span>
             </div>

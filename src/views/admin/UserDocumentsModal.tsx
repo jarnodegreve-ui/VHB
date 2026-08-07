@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileText, Trash2, Upload, X } from 'lucide-react';
-import { createPortal } from 'react-dom';
-import { AnimatePresence, motion } from 'motion/react';
 import type { User } from '../../types';
+import { Modal } from '../../components/Modal';
 import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
 import { Button, MicroLabel } from '../../components/primitives';
 import { formatDateHuman } from '../../lib/format';
@@ -75,18 +74,11 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
     }
   };
 
-  return createPortal(
-    <AnimatePresence>
-      <div
-        className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm"
-        style={{ paddingTop: 'max(1rem, env(safe-area-inset-top))', paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
-      >
-        <motion.div
-          initial={{ opacity: 0, scale: 0.95, y: 20 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.95, y: 20 }}
-          className="glass-modal rounded-3xl w-full max-w-lg max-h-[85dvh] flex flex-col overflow-hidden"
-        >
+  // Op de gedeelde Modal met `boven` (was een eigen portal op z-[120]) —
+  // zo krijgt hij ook ESC, focus-trap en scroll-lock.
+  return (
+    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={`Documenten — ${user.name}`} boven>
+      <div className="flex max-h-[85dvh] flex-col overflow-hidden">
           <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center shrink-0"><FileText size={20} /></div>
@@ -95,7 +87,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                 <MicroLabel className="mt-0.5">Alleen {user.name.split(' ')[0]} ziet deze bestanden.</MicroLabel>
               </div>
             </div>
-            <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:w-8 sm:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"><X size={16} /></button>
+            <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors"><X size={16} /></button>
           </div>
 
           <div className="p-6 border-b border-white/70 shrink-0 space-y-3">
@@ -137,16 +129,14 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                         <p className="mt-0.5 text-[11px] font-medium text-slate-400">Nog niet geopend</p>
                       )}
                     </div>
-                    <button type="button" onClick={() => doc.url && openPdfInNewTab(doc.url)} aria-label="Openen" className="ios-pressable shrink-0 w-9 h-9 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors"><Download size={15} /></button>
-                    <button type="button" onClick={() => void handleDelete(doc)} aria-label="Verwijderen" className="ios-pressable shrink-0 w-9 h-9 rounded-xl border border-slate-200 bg-white text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center transition-colors"><Trash2 size={15} /></button>
+                    <button type="button" onClick={() => doc.url && openPdfInNewTab(doc.url)} aria-label="Openen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-white text-slate-500 hover:bg-slate-50 flex items-center justify-center transition-colors"><Download size={15} /></button>
+                    <button type="button" onClick={() => void handleDelete(doc)} aria-label="Verwijderen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-white text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center transition-colors"><Trash2 size={15} /></button>
                   </div>
                 ))}
               </div>
             )}
           </div>
-        </motion.div>
       </div>
-    </AnimatePresence>,
-    document.body,
+    </Modal>
   );
 }

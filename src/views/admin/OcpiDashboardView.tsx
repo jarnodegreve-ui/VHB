@@ -5,7 +5,7 @@ import { busVoorLaadpunt } from '../../lib/laadplein';
 import { isoDate } from '../../lib/availability';
 import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
-import { StatCard } from '../../components/StatCard';
+import { OpsStat } from '../../components/ops';
 import { SkeletonTile } from '../../components/Skeleton';
 import { Badge, Button, MicroLabel, type BadgeTone } from '../../components/primitives';
 
@@ -305,31 +305,37 @@ export function OcpiDashboardView() {
         <div className="space-y-6">
           {/* KPI-rij — vier tegels die állemaal iets operationeels zeggen.
               "Locaties: 1" en "Connectoren: 24" stonden hier eerst, maar die
-              veranderen nooit; de status-badges-kaart is in de rij opgegaan. */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-            <StatCard
-              icon={<BatteryCharging size={20} className="text-blue-600 dark:text-blue-400" />}
+              veranderen nooit; de status-badges-kaart is in de rij opgegaan.
+              OpsStat i.p.v. StatCard (vaste regel): de vaste twee-regel-
+              labelzone houdt cijfers en subteksten op één lijn. */}
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            <OpsStat
+              icon={<BatteryCharging size={16} />}
+              tone={kpi.laden > 0 ? 'blue' : 'slate'}
               label="Aan de lader"
-              value={`${kpi.laden} / ${data.totals.evses}`}
-              subValue={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW nu` : 'geen vermogen nu'}
+              text={`${kpi.laden} / ${data.totals.evses}`}
+              sub={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW nu` : 'geen vermogen nu'}
             />
-            <StatCard
-              icon={<Zap size={20} className="text-emerald-600" />}
+            <OpsStat
+              icon={<Zap size={16} />}
+              tone="emerald"
               label="Beschikbaar"
-              value={String(kpi.beschikbaar)}
-              subValue="vrije laadpunten"
+              value={kpi.beschikbaar}
+              sub="vrije laadpunten"
             />
-            <StatCard
-              icon={<AlertTriangle size={20} className={kpi.afwijkend > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-400'} />}
+            <OpsStat
+              icon={<AlertTriangle size={16} />}
+              tone={kpi.afwijkend > 0 ? 'red' : 'slate'}
               label="Afwijkend"
-              value={String(kpi.afwijkend)}
-              subValue={kpi.afwijkend > 0 ? kpi.afwijkendTekst : 'alles operationeel'}
+              value={kpi.afwijkend}
+              sub={kpi.afwijkend > 0 ? kpi.afwijkendTekst : 'alles operationeel'}
             />
-            <StatCard
-              icon={<Gauge size={20} className="text-oker-600" />}
+            <OpsStat
+              icon={<Gauge size={16} />}
+              tone="oker"
               label="Vandaag geladen"
-              value={`${Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh`}
-              subValue={`30 d: ${kwh30} kWh · ${data.totals.sessions30d} sessies`}
+              text={`${Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh`}
+              sub={`30 d: ${kwh30} kWh · ${data.totals.sessions30d} sessies`}
             />
           </div>
 
@@ -713,7 +719,7 @@ export function OcpiDashboardView() {
                     type="button"
                     onClick={() => setAlleStoringen((v) => !v)}
                     aria-expanded={alleStoringen}
-                    className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-[12px] font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-white/5"
+                    className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-xs font-semibold text-slate-500 transition-colors hover:bg-slate-50 hover:text-slate-700 dark:hover:bg-white/5"
                   >
                     {alleStoringen ? 'Toon minder' : `Toon alle ${storingen.length} storingen`}
                   </button>

@@ -85,7 +85,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 <Phone size={18} />
               </a>
             ) : (
-              <p className="text-[11px] font-medium italic text-slate-400 shrink-0">Geen nummer</p>
+              <p className="text-[11px] font-medium text-slate-400 shrink-0">Geen nummer</p>
             )}
           </div>
         ))}
@@ -114,7 +114,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                   <MicroLabel>{roleLabel(selected.role)}</MicroLabel>
                 </div>
               </div>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:w-8 sm:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-white text-slate-400 hover:text-slate-700 hover:bg-slate-50 flex items-center justify-center transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -142,7 +142,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 </div>
               </>
             ) : (
-              <p className="mt-5 rounded-2xl bg-slate-50/80 px-4 py-3.5 text-sm font-medium italic text-slate-400">Geen telefoonnummer bekend.</p>
+              <p className="mt-5 rounded-2xl bg-slate-50/80 px-4 py-3.5 text-sm font-medium text-slate-400">Geen telefoonnummer bekend.</p>
             )}
           </div>
         )}
