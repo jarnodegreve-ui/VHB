@@ -12,7 +12,7 @@
     },
     {
       "path": "/api/cron/ocpi-sync?parts=all",
-      "schedule": "*/30 * * * *"
+      "schedule": "*/15 * * * *"
     },
     {
       "path": "/api/cron/week-rapport",
