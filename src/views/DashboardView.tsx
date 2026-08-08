@@ -442,7 +442,7 @@ export function DashboardView({ notes = [],
             </div>
             <div className="surface-muted rounded-xl p-4">
               <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
-              <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
+              <p className="mt-1.5 text-sm font-mono font-semibold text-slate-800 tabular-nums">
                 {formatDateHuman(openDiversion.startDate)}
                 {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
               </p>

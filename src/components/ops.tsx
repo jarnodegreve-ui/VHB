@@ -12,15 +12,17 @@ import { cn } from '../lib/ui';
  * zodat beide schermen niet uit elkaar groeien.
  */
 export const STAT_TONES = {
-  emerald: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400',
-  red: 'bg-red-500/12 text-red-600 dark:text-red-400',
-  amber: 'bg-amber-500/12 text-amber-600 dark:text-amber-400',
+  // In donker een tikje meer vulling (…/18 i.p.v. /12): 12%-alpha op
+  // near-black werd modderig — een signaal hoort daar juist te dragen.
+  emerald: 'bg-emerald-500/12 text-emerald-600 dark:bg-emerald-500/18 dark:text-emerald-400',
+  red: 'bg-red-500/12 text-red-600 dark:bg-red-500/18 dark:text-red-400',
+  amber: 'bg-amber-500/12 text-amber-600 dark:bg-amber-500/18 dark:text-amber-400',
   // Ziekte volgt de statuskleurtaal (lib/statusColors): rose, niet amber —
   // anders betekende ziek op de tegel iets anders dan in de rijen eronder.
-  rose: 'bg-rose-500/12 text-rose-600 dark:text-rose-400',
-  oker: 'bg-oker-500/15 text-oker-600 dark:text-oker-400',
-  blue: 'bg-blue-500/12 text-blue-600 dark:text-blue-400',
-  slate: 'bg-slate-500/12 text-slate-600 dark:text-slate-300',
+  rose: 'bg-rose-500/12 text-rose-600 dark:bg-rose-500/18 dark:text-rose-400',
+  oker: 'bg-oker-500/15 text-oker-600 dark:bg-oker-500/20 dark:text-oker-400',
+  blue: 'bg-blue-500/12 text-blue-600 dark:bg-blue-500/18 dark:text-blue-400',
+  slate: 'bg-slate-500/12 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300',
 } as const;
 
 export type StatTone = keyof typeof STAT_TONES;
@@ -77,7 +79,9 @@ export function OpsStat({
           (melding Jarno). Nu start elk cijfer en elke subtekst op exact
           dezelfde lijn. */}
       <p className="mt-2.5 text-xs leading-4 min-h-8 font-medium text-slate-500">{label}</p>
-      <p className="mt-0.5 text-2xl leading-8 font-bold tabular-nums tracking-[-0.02em] text-slate-900">
+      {/* Mono: de cijfers zijn het instrumentpaneel — zelfde accent als
+          dienstnummers en tijden. */}
+      <p className="mt-0.5 text-2xl leading-8 font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-sm font-semibold text-slate-400">{suffix}</span>}
       </p>
@@ -101,7 +105,7 @@ export function OpsStat({
             <div
               key={`${l.left}-${l.right ?? ''}`}
               className={cn(
-                'flex items-baseline justify-between gap-3 text-2xs font-medium tabular-nums',
+                'flex items-baseline justify-between gap-3 text-2xs font-mono font-medium tabular-nums',
                 l.done ? 'text-slate-400' : 'text-slate-600',
               )}
             >
@@ -232,7 +236,7 @@ export function OpsRow({
     <button
       type="button"
       onClick={onClick}
-      className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 text-left transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:shadow-sm"
+      className="group flex w-full items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 sm:pointer-fine:py-2 text-left transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:shadow-sm"
     >
       <span className={cn('inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
         {icon}
