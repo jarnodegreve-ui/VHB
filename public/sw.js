@@ -63,8 +63,12 @@ const PLANNING_API = '/api/planning';
 const RITBLAADJE_PDF_MARKER = '/ritblaadjes/';
 
 self.addEventListener('install', (event) => {
-  // Skip waiting zodat een nieuwe SW direct actief wordt
-  self.skipWaiting();
+  // GEEN automatische skipWaiting meer: sinds de build-stempel is er bij
+  // élke deploy een nieuwe SW, en skipWaiting + de controllerchange-reload
+  // in index.html herlaadde de app dan hard — ook midden in een half
+  // ingevuld verlof- of ruilformulier. De nieuwe SW wacht nu netjes tot de
+  // gebruiker via de "Vernieuw"-knop toestemming geeft (message
+  // SKIP_WAITING hieronder) of tot alle vensters dicht zijn.
 });
 
 self.addEventListener('activate', (event) => {
@@ -114,6 +118,11 @@ function trimAssetCache(cache) {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'GET_VERSION' && event.ports && event.ports[0]) {
     event.ports[0].postMessage({ version: CACHE_NAME });
+  }
+  // De gebruiker koos "Vernieuw" in de update-toast: nú pas activeren.
+  // De controllerchange-listener in index.html doet daarna de herlaad.
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
   }
 });
 

@@ -411,6 +411,48 @@ export default function App() {
     }
   }, []);
 
+  // Nieuwe versie klaar: de SW blijft wachten (geen auto-skipWaiting meer,
+  // zie public/sw.js) — wij melden het met een "Vernieuw"-actie. Pas na die
+  // klik activeert de nieuwe SW en herlaadt index.html de app; een deploy
+  // gooit dus nooit meer een half ingevuld formulier weg. De melding komt
+  // terug bij elke terugkeer naar de app zolang er een update klaarstaat
+  // (de toast-dedupe voorkomt stapelen terwijl hij al in beeld staat).
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    let gestopt = false;
+    const meldUpdate = (reg: ServiceWorkerRegistration) => {
+      const wachtend = reg.waiting;
+      // Alleen bij een échte vervanging: zonder controller is dit de eerste
+      // installatie en valt er niets te vernieuwen.
+      if (!wachtend || !navigator.serviceWorker.controller || gestopt) return;
+      showToast('Er staat een nieuwe versie van het portaal klaar.', 'info', {
+        label: 'Vernieuw',
+        run: () => wachtend.postMessage({ type: 'SKIP_WAITING' }),
+      });
+    };
+    let registratie: ServiceWorkerRegistration | null = null;
+    const bijZichtbaar = () => {
+      if (document.visibilityState === 'visible' && registratie) meldUpdate(registratie);
+    };
+    navigator.serviceWorker.getRegistration().then((reg) => {
+      if (!reg || gestopt) return;
+      registratie = reg;
+      meldUpdate(reg);
+      reg.addEventListener('updatefound', () => {
+        const nieuwe = reg.installing;
+        nieuwe?.addEventListener('statechange', () => {
+          if (nieuwe.state === 'installed') meldUpdate(reg);
+        });
+      });
+      document.addEventListener('visibilitychange', bijZichtbaar);
+    });
+    return () => {
+      gestopt = true;
+      document.removeEventListener('visibilitychange', bijZichtbaar);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Dispatch: zonder eigen keuze krijgt een planner/admin de donkere
   // control-room als standaard; chauffeurs blijven licht. Niet persisteren —
   // pas de toggle maakt er een eigen keuze van (en die wint dan altijd).
@@ -2230,7 +2272,13 @@ export default function App() {
           )}
         </nav>
 
-        <div className="shrink-0 p-3 border-t fine-divider space-y-0.5">
+        {/* Safe-area onderaan: als mobiele "Meer"-sheet valt de onderrij
+            ("Uitloggen") anders deels in de home-indicator-zone van de
+            iPhone — tikken triggerde daar makkelijk de swipe-gesture. */}
+        <div
+          className="shrink-0 p-3 border-t fine-divider space-y-0.5"
+          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
+        >
           {/* User profile card */}
           <div className="flex items-center gap-2.5 px-3 py-2 mb-1.5 rounded-xl bg-slate-100/60">
             <div className="w-8 h-8 rounded-lg bg-oker-100 flex items-center justify-center text-oker-700 shrink-0 text-2xs font-bold">
