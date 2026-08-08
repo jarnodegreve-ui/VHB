@@ -20,7 +20,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { EXPIRY_SOORT_LABELS } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
 import type {
   ActivityLogEntry,
   Diversion,
@@ -493,10 +493,10 @@ export function PlannerDashboardWidgets({
       !busyNameKeys.has(nameKey(u.name)))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Alleen de "vandaag (…)"-wrapper is eigen; het label zelf komt uit de
+  // gedeelde formatShortDay (was hier woordelijk herbouwd).
   const formatDay = (iso: string) => {
-    const label = new Date(`${iso}T00:00:00`).toLocaleDateString('nl-BE', {
-      weekday: 'short', day: 'numeric', month: 'short',
-    });
+    const label = formatShortDay(iso);
     return iso === today ? `vandaag (${label})` : label;
   };
 

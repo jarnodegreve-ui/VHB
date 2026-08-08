@@ -146,7 +146,7 @@ export function InstallPrompt() {
             <button
               onClick={() => dismiss(true)}
               aria-label="Niet nu"
-              className="shrink-0 rounded-lg p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+              className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
             >
               <X size={16} />
             </button>

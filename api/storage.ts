@@ -1596,8 +1596,12 @@ export const getUpdateReadCounts = async (
   allowedUserIds?: Set<string>,
 ): Promise<Record<string, number>> => {
   const client = requireDb();
+  // .order() verplicht bij paginering: zonder een stabiele sortering is de
+  // PostgREST-volgorde ongedefinieerd en kunnen rijen bij >1.000 records
+  // (±50 updates × 20 chauffeurs) dubbel of niet in een pagina belanden —
+  // dan klopt de "N gelezen"-teller stil niet meer.
   const rows = await paginatedFetch((from, to) =>
-    client.from('update_reads').select('update_id, user_id').range(from, to),
+    client.from('update_reads').select('update_id, user_id').order('update_id').range(from, to),
   );
   const counts: Record<string, number> = {};
   for (const row of rows) {

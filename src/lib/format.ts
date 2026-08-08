@@ -70,6 +70,26 @@ export function formatShortDay(iso: string | undefined | null): string {
   }
 }
 
+/** Bestandsgrootte kort: 'B' / 'KB' / 'MB'. Eén bron — stond als
+ *  prettySize/formatSize 3× (bijna-)identiek in Documenten, Gebruiker-
+ *  documenten en Ritbladen. null/0 → lege string. */
+export function prettySize(bytes: number | null | undefined): string {
+  if (!bytes) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** 'YYYY-MM-DD' → '4 mrt 2026' — de notatie voor updates/nieuws, gedeeld door
+ *  de chauffeurs- en de beheerkant (stond er 2× woordelijk). */
+export function formatUpdateDate(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  return Number.isNaN(d.getTime())
+    ? String(iso)
+    : d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 /** Nederlandse maandnamen (index 0 = januari). Eén bron: stond eerder 4×
  *  woordelijk gedupliceerd in views. */
 export const MONTH_NAMES = [

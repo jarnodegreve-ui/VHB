@@ -12,7 +12,7 @@ import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
-import { Button } from '../components/primitives';
+import { Badge, Button } from '../components/primitives';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -436,9 +436,7 @@ export function DashboardView({ notes = [],
         {openDiversion && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-slate-200 bg-surface-soft px-2.5 py-1 text-2xs font-semibold text-slate-600">
-                {lineLabel(openDiversion.line)}
-              </span>
+              <Badge tone="slate">{lineLabel(openDiversion.line)}</Badge>
             </div>
             <div className="surface-muted rounded-xl p-4">
               <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>

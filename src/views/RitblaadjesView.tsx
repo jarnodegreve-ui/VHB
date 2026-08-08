@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Download, FileText, Trash2, Upload } from 'lucide-react';
 import type { User } from '../types';
 import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../lib/ui';
+import { prettySize } from '../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Skeleton } from '../components/Skeleton';
@@ -51,12 +52,6 @@ const formatSyncedAt = (iso: string | null) => {
   }
 };
 
-const formatSize = (bytes: number | null) => {
-  if (!bytes) return '';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-};
 
 const formatUploadedAt = (iso: string) => {
   try {
@@ -277,7 +272,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                   <h4 className="mt-1 text-lg font-semibold text-slate-900 tracking-tight break-all">{current.filename}</h4>
                   <p className="mt-1 text-xs font-medium text-slate-500">
                     Geüpload {current.uploadedBy ? `door ${current.uploadedBy} ` : ''}op {formatUploadedAt(current.uploadedAt)}
-                    {current.sizeBytes ? ` · ${formatSize(current.sizeBytes)}` : ''}
+                    {current.sizeBytes ? ` · ${prettySize(current.sizeBytes)}` : ''}
                   </p>
                   {formatSyncedAt(syncedAt) && (
                     <p className="mt-0.5 text-2xs font-medium text-slate-400">

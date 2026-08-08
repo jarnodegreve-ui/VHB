@@ -5,7 +5,7 @@ import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, MicroLabel } from '../components/primitives';
 import { SkeletonRow } from '../components/Skeleton';
-import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
 
 export type UserDocument = {
   id: string;
@@ -18,9 +18,6 @@ export type UserDocument = {
   url: string | null;
   openedAt?: string | null;
 };
-
-const prettySize = (bytes: number | null) =>
-  bytes == null ? '' : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 /** Eigen documenten voor de chauffeur (attesten, reglement, loonbrieven). */
 export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSeen?: () => void }) {

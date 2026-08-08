@@ -92,3 +92,17 @@ pad zonder iets te veranderen:
 4. Controleer `GET /api/health/schema` + één view. Klaar — noteer de datum.
 
 Laatste oefening: _nog niet uitgevoerd_ (vul aan na de eerste keer).
+
+## Break-glass: wachtwoord resetten als het portaal plat ligt
+
+Normaal reset je een wachtwoord in **Gebruikersbeheer** ("Wachtwoord
+resetten"). Ligt het portaal zelf plat, dan kan het rechtstreeks tegen
+Supabase met `scripts/reset-password.mjs`:
+
+```
+SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… TARGET_EMAIL=iemand@vhb.be \
+  NEW_PASSWORD=… node scripts/reset-password.mjs
+```
+
+De service-role-key staat in Vercel (Production-env). Gebruik een `.env` of een
+subshell — nooit echte secrets in je shell-history.

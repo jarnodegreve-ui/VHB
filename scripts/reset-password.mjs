@@ -1,3 +1,12 @@
+// BREAK-GLASS: wachtwoord van één gebruiker resetten buiten het portaal om,
+// rechtstreeks via de Supabase service-role-key. Normaal doe je dit in
+// Gebruikersbeheer (knop "Wachtwoord resetten") of via /api/admin/users/
+// reset-password — dit script is de noodklep als het portaal zelf plat ligt.
+// Draaien:
+//   SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… TARGET_EMAIL=… NEW_PASSWORD=… \
+//     node scripts/reset-password.mjs
+// Zie docs/RESTORE.md. Nooit met echte secrets in shell-history — gebruik een
+// .env of exporteer ze in een subshell.
 import { createClient } from '@supabase/supabase-js';
 
 const SUPABASE_URL = process.env.SUPABASE_URL;

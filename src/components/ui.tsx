@@ -158,7 +158,9 @@ export function ConfirmationModal({
               onConfirm();
               onClose();
             }}
-            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'text-white bg-red-600 hover:bg-red-700 shadow-red-600/20' : 'text-slate-950 bg-oker-500 hover:bg-oker-400 shadow-oker-500/20')}
+            /* warning = de semantische amber-kleur, net als het icoon erboven —
+               niet het merk-oker (dat mengde twee talen in één dialoog). */
+            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-white transition-all shadow-lg', variant === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20')}
           >
             {confirmText}
           </button>

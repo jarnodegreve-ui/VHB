@@ -4,14 +4,11 @@ import type { User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
 import { Button, MicroLabel } from '../../components/primitives';
-import { formatDateHuman } from '../../lib/format';
+import { formatDateHuman, prettySize } from '../../lib/format';
 import type { UserDocument } from '../DocumentsView';
 
 const MAX_MB = 15;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
-
-const prettySize = (bytes: number | null) =>
-  bytes == null ? '' : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 /** Documenten van één gebruiker beheren (planner/admin): lijst, upload, verwijderen. */
 export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () => void }) {

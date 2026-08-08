@@ -413,7 +413,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-slate-900 text-white rounded-2xl shadow-lg shadow-slate-900/20">
+          <div className="p-3 bg-slate-500/12 text-slate-600 dark:text-slate-300 rounded-2xl">
             <DownloadCloud size={24} />
           </div>
           <div className="flex-1">
@@ -430,7 +430,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-8 rounded-3xl border-2 border-red-100">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-red-500 text-white rounded-2xl shadow-lg shadow-red-500/20">
+          <div className="p-3 bg-red-500/12 text-red-600 dark:text-red-400 rounded-2xl">
             <UploadCloud size={24} />
           </div>
           <div className="flex-1">
@@ -454,7 +454,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-red-500 text-white rounded-2xl shadow-lg shadow-red-500/20">
+          <div className="p-3 bg-red-500/12 text-red-600 dark:text-red-400 rounded-2xl">
             <Bug size={24} />
           </div>
           <div className="flex-1 min-w-0">
@@ -488,7 +488,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-8 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-oker-500 text-slate-950 rounded-2xl shadow-lg shadow-oker-500/20">
+          <div className="p-3 bg-oker-500/15 text-oker-600 dark:text-oker-400 rounded-2xl">
             <FlaskConical size={24} />
           </div>
           <div className="flex-1">
@@ -510,7 +510,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="bg-oker-50 p-8 rounded-3xl border border-oker-100">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-oker-500 text-slate-950 rounded-2xl shadow-lg shadow-oker-500/20">
+          <div className="p-3 bg-oker-500/15 text-oker-600 dark:text-oker-400 rounded-2xl">
             <Activity size={24} />
           </div>
           <div>

@@ -58,8 +58,9 @@
   --font-display: "Manrope", "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
 
   /* Gewichten getemperd: `font-black` rendert als 800 i.p.v. 900. Dat
-     kalmeert alle koppen/labels in één keer zonder honderden class-edits. */
-  --font-weight-extrabold: 750;
+     kalmeert alle koppen/labels in één keer zonder honderden class-edits.
+     (--font-weight-extrabold was ongebruikt — `font-extrabold` komt nergens
+     voor — en is verwijderd.) */
   --font-weight-black: 800;
 
   /* === Typografische schaal ===
