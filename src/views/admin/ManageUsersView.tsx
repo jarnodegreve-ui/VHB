@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, BellOff, FolderOpen, History, Info, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
+import { Bell, BellOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
@@ -72,6 +72,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [showBroadcast, setShowBroadcast] = useState(false);
   const [newUser, setNewUser] = useState({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
+  // Uitrol-filter: toon alleen wie nog nooit inlogde (idee 47).
+  const [alleenNooitIn, setAlleenNooitIn] = useState(false);
   // Naam-zoekveld: met 42 accounts is scrollen traag; zoeken is de kortste weg.
   const [userSearch, setUserSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -92,6 +94,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const actieveUsers = users.filter((u) => u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder');
   const pushTotaal = actieveUsers.length;
   const pushMetAan = actieveUsers.filter((u) => pushUserIds.has(String(u.id))).length;
+  // Adoptie-zicht voor de uitrol (idee 47): hoeveel actieve chauffeurs hebben
+  // ooit ingelogd? Wie nooit inlogde bereik je met niets wat het portaal stuurt
+  // — dat is precies wie je nog persoonlijk moet meekrijgen.
+  const actieveChauffeurs = actieveUsers.filter((u) => u.role === 'chauffeur');
+  const chauffeursOoitIn = actieveChauffeurs.filter((u) => Boolean(u.lastLogin)).length;
+  const nooitIngelogd = actieveChauffeurs.length - chauffeursOoitIn;
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
@@ -104,6 +112,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       return true;
     })
     .filter((u) => roleFilter === 'all' || u.role === roleFilter)
+    .filter((u) => !alleenNooitIn || (u.role === 'chauffeur' && u.isActive !== false && !u.lastLogin))
     .filter((u) => {
       const q = userSearch.trim().toLowerCase();
       if (!q) return true;
@@ -419,6 +428,11 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} icon={<Bell size={11} />}>
                   {pushMetAan} van {pushTotaal} met meldingen
                 </Badge>
+                {/* Adoptie: hoeveel chauffeurs logden ooit in? Rood zolang er
+                    nog een groep is die je persoonlijk moet meekrijgen. */}
+                <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} icon={<LogIn size={11} />}>
+                  {chauffeursOoitIn} van {actieveChauffeurs.length} chauffeurs ooit ingelogd
+                </Badge>
               </div>
             )}
           />
@@ -438,6 +452,19 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               aria-label="Zoek gebruiker"
               className="control-input w-full sm:max-w-xs rounded-2xl px-4 py-2.5 text-base sm:text-sm font-medium outline-none"
             />
+            {/* Snelfilter voor de uitrol: wie moet ik nog persoonlijk
+                meekrijgen? Alleen tonen als er zo iemand is. */}
+            {nooitIngelogd > 0 && (
+              <button
+                type="button"
+                onClick={() => setAlleenNooitIn((v) => !v)}
+                aria-pressed={alleenNooitIn}
+                className={segItemClass(alleenNooitIn, 'self-start inline-flex items-center gap-1.5 rounded-2xl')}
+              >
+                <LogIn size={13} />
+                Nog nooit ingelogd ({nooitIngelogd})
+              </button>
+            )}
           </div>
         </div>
 

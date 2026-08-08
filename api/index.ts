@@ -18,7 +18,7 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 // interne sleutels (bv. een vroegere __vakantieperiodes__) de dag-type-lijst niet.
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
-import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
+import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
@@ -2289,6 +2289,23 @@ app.get("/api/cron/error-digest", async (req, res) => {
             body: `Je ${e.label.toLowerCase()} is geldig tot ${e.validUntil}. Regel tijdig de vernieuwing en geef het door aan de planning.`,
             url: "/",
           });
+          // Óók per e-mail naar de chauffeur zelf (idee 46): push bereikt maar
+          // een handvol chauffeurs, mail wél. Best-effort, mag de cron niet
+          // laten vallen. Eén mijlpaal per dag ⇒ vanzelf één mail per mijlpaal.
+          const mailAdres = String((actief.get(e.userId) as any)?.email ?? "").trim();
+          if (mailAdres) {
+            try {
+              await sendExpiryReminderEmail({
+                to: mailAdres,
+                name: e.naam,
+                soortLabel: e.label,
+                validUntil: e.validUntil,
+                dagen: e.dagen,
+              });
+            } catch (mailErr: any) {
+              console.error("[error-digest] vervaldata-mail mislukt:", mailErr?.message ?? mailErr);
+            }
+          }
         }
       }
       const teMelden = rijen.filter((e) => e.dagen <= 60);

@@ -231,3 +231,70 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
     context: `welcome:${ctx.to}`,
   });
 };
+
+// --- Vervaldata-herinnering (Code 95 / medische schifting) ---
+
+/**
+ * Herinnert de chauffeur zélf per e-mail dat een document bijna verloopt.
+ * De push op de mijlpalen (90/30/7/0 dagen) bereikt alleen wie meldingen aan
+ * heeft — dat zijn er nauwelijks — dus dit is het kanaal dat wél aankomt.
+ * De planner ziet de vervaldata sowieso al in het ochtenddigest.
+ */
+export const sendExpiryReminderEmail = async (ctx: {
+  to: string;
+  name: string;
+  soortLabel: string;
+  validUntil: string;
+  dagen: number;
+}) => {
+  const url = portalUrl();
+  const wanneer =
+    ctx.dagen <= 0
+      ? "verloopt vandaag"
+      : ctx.dagen === 1
+        ? "verloopt morgen"
+        : `verloopt over ${ctx.dagen} dagen`;
+  const dringend = ctx.dagen <= 7;
+  const bannerColor = dringend ? "#C2410C" : "#0D0D0F";
+  const accent = dringend ? "#C2410C" : "#E8A33D";
+
+  const html = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
+      <div style="background-color: ${bannerColor}; color: white; padding: 22px 30px; text-align: center;">
+        <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: ${dringend ? "#FED7AA" : "#E8A33D"};">HERINNERING</p>
+        <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">${escapeHtml(ctx.soortLabel)} ${escapeHtml(wanneer)}</h1>
+      </div>
+      <div style="padding: 30px;">
+        <p style="color: #1e293b; font-size: 16px; margin-top: 0;">Hallo ${escapeHtml(ctx.name)},</p>
+        <p style="color: #475569; line-height: 1.6;">
+          Je <strong>${escapeHtml(ctx.soortLabel.toLowerCase())}</strong> is geldig tot
+          <strong>${escapeHtml(ctx.validUntil)}</strong>. Regel de vernieuwing tijdig en
+          geef de nieuwe datum door aan de planning, dan blijf je zonder onderbreking inzetbaar.
+        </p>
+        <div style="margin-top: 30px; text-align: center;">
+          <a href="${url}" style="background-color: ${accent}; color: ${dringend ? "white" : "#0D0D0F"}; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Open het portaal</a>
+        </div>
+      </div>
+      <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">
+        Automatisch bericht van het VHB Portaal — niet beantwoorden.
+      </div>
+    </div>
+  `;
+
+  const text = [
+    `Hallo ${ctx.name},`,
+    "",
+    `Je ${ctx.soortLabel.toLowerCase()} ${wanneer} (geldig tot ${ctx.validUntil}).`,
+    "Regel de vernieuwing tijdig en geef de nieuwe datum door aan de planning.",
+    "",
+    `Portaal: ${url}`,
+  ].join("\n");
+
+  return sendEmail({
+    to: [ctx.to],
+    subject: `Herinnering: je ${ctx.soortLabel.toLowerCase()} ${wanneer}`,
+    text,
+    html,
+    context: `expiry:${ctx.to}:${ctx.dagen}`,
+  });
+};
