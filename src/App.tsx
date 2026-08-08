@@ -287,7 +287,13 @@ export default function App() {
   const [uitlogMelding, setUitlogMelding] = useState<'sessie' | 'account' | ''>('');
   // Dubbele-init-guard: bootstrap én het INITIAL_SESSION/SIGNED_IN-event
   // proberen allebei te initialiseren; per gebruiker doen we het één keer.
+  // `initialized` = klaar (blijft na succes); `initializing` = nú bezig, en
+  // wordt SYNCHROON bij binnenkomst gezet. Zonder die tweede vlag passeerden
+  // bij een koude start beide aanroepers de check vóór de vlag ná de awaits
+  // gezet was → alles dubbel gefetcht (toestel-registratie, profiel, ±10
+  // loadAppData-calls, aanwezigheids-ping).
   const initializedUserIdRef = useRef<string | null>(null);
+  const initializingUserIdRef = useRef<string | null>(null);
   const setRecoveryMode = (v: boolean) => {
     isPasswordRecoveryRef.current = v;
     setIsPasswordRecovery(v);
@@ -673,6 +679,7 @@ export default function App() {
         setPushEnabled(false);
         setDeviceBlocked(null);
         initializedUserIdRef.current = null;
+        initializingUserIdRef.current = null;
         loadedCollectionsRef.current.clear();
         setUsers([]);
         setShifts([]);
@@ -811,6 +818,7 @@ export default function App() {
     setCurrentUser(null);
     setAuthReady(true);
     initializedUserIdRef.current = null;
+    initializingUserIdRef.current = null;
   };
 
   /** Verlopen token stil vernieuwen. Supabase ververst zelf op een timer,
@@ -844,7 +852,18 @@ export default function App() {
     return refreshPromiseRef.current;
   };
 
-  const apiFetch = async (url: string, init: RequestInit = {}, accessToken = session?.access_token, alGeprobeerd = false) => {
+  // Twee aparte herkansings-vlaggen i.p.v. één: een 5xx/netwerk-retry en een
+  // 401-token-refresh zijn losse gebeurtenissen. Met één gedeelde vlag sloeg
+  // een GET die eerst 5xx kreeg (retry-vlag gezet) en daarna 401 antwoordde
+  // de stille token-refresh over en logde de gebruiker onnodig uit — precies
+  // de deploy-hik-plus-verlopen-token-samenloop.
+  const apiFetch = async (
+    url: string,
+    init: RequestInit = {},
+    accessToken = session?.access_token,
+    netwerkAlGeprobeerd = false,
+    authAlGeprobeerd = false,
+  ) => {
     const headers = new Headers(init.headers || {});
     if (!headers.has('Content-Type') && init.body) {
       headers.set('Content-Type', 'application/json');
@@ -867,13 +886,13 @@ export default function App() {
     try {
       response = await fetch(url, { ...init, headers });
     } catch (netwerkfout) {
-      if (!isLezen || alGeprobeerd) throw netwerkfout;
+      if (!isLezen || netwerkAlGeprobeerd) throw netwerkfout;
       await new Promise((r) => window.setTimeout(r, 600));
-      return apiFetch(url, init, accessToken, true);
+      return apiFetch(url, init, accessToken, true, authAlGeprobeerd);
     }
-    if (response.status >= 500 && isLezen && !alGeprobeerd) {
+    if (response.status >= 500 && isLezen && !netwerkAlGeprobeerd) {
       await new Promise((r) => window.setTimeout(r, 600));
-      return apiFetch(url, init, accessToken, true);
+      return apiFetch(url, init, accessToken, true, authAlGeprobeerd);
     }
     // 401 = sessie ongeldig/verlopen. Eerst stil vernieuwen en één keer
     // opnieuw proberen; pas als dát faalt is de sessie écht op en volgt een
@@ -881,9 +900,9 @@ export default function App() {
     // "onvoldoende rechten"-403 is enkel een fout op die actie en mag de
     // gebruiker niet uitloggen.
     if (response.status === 401) {
-      if (!alGeprobeerd) {
+      if (!authAlGeprobeerd) {
         const versToken = await vernieuwSessie();
-        if (versToken) return apiFetch(url, init, versToken, true);
+        if (versToken) return apiFetch(url, init, versToken, netwerkAlGeprobeerd, true);
       }
       void forceSignOut('Je sessie is verlopen. Log opnieuw in.');
       throw new Error('Je sessie is verlopen.');
@@ -983,7 +1002,10 @@ export default function App() {
   const initializeAuthenticatedApp = async (accessToken: string, authUserId?: string) => {
     // Progressieve boot: alleen het profiel (één snelle call) blokkeert de
     // eerste render; alle overige data streamt op de achtergrond binnen.
-    if (authUserId && initializedUserIdRef.current === authUserId) return;
+    if (authUserId && (initializedUserIdRef.current === authUserId || initializingUserIdRef.current === authUserId)) return;
+    // Synchroon markeren dat we bezig zijn — vóór de eerste await, zodat een
+    // vrijwel gelijktijdige tweede aanroeper meteen terugkeert.
+    if (authUserId) initializingUserIdRef.current = authUserId;
     try {
       // Toestel-whitelist vóór al het andere: op een niet-goedgekeurd toestel
       // zou elke volgende call toch 403 geven — toon meteen het wachtscherm.
@@ -991,7 +1013,8 @@ export default function App() {
       if (deviceStatus === 'pending' || deviceStatus === 'revoked') {
         setDeviceBlocked(deviceStatus);
         setIsInitialLoad(false);
-        return; // dedup-vlag bewust niet zetten → "Opnieuw controleren" kan her-initialiseren
+        initializingUserIdRef.current = null; // "Opnieuw controleren" moet opnieuw kunnen initialiseren
+        return; // dedup-vlag (initialized) bewust niet zetten
       }
       setDeviceBlocked(null);
       const appUser = await fetchCurrentUser(accessToken);
@@ -1014,7 +1037,7 @@ export default function App() {
       // Pas NA een geslaagd profiel de dedup-vlag zetten — anders blijft de
       // gebruiker bij een transiente /api/me-fout vasthangen op 'Profiel
       // laden…' (een volgend auth-event werd door de vlag kortgesloten).
-      if (authUserId) initializedUserIdRef.current = authUserId;
+      if (authUserId) { initializedUserIdRef.current = authUserId; initializingUserIdRef.current = null; }
       // Aanwezigheids-ping: wie de app opent met een nog geldige sessie logt
       // niet opnieuw in en was daardoor onzichtbaar in "Actieve gebruikers
       // per dag". De server dedupliceert per dag. Best-effort, fire-and-forget.
@@ -1025,7 +1048,7 @@ export default function App() {
       void loadAppData(appUser, accessToken);
     } catch (error) {
       console.error('Error initializing app:', error);
-      if (authUserId) initializedUserIdRef.current = null; // her-init toestaan bij een volgend auth-event
+      if (authUserId) { initializedUserIdRef.current = null; initializingUserIdRef.current = null; } // her-init toestaan bij een volgend auth-event
       setIsInitialLoad(false);
       showToast('Kon je profiel niet laden. Vernieuw de pagina of log opnieuw in.', 'error');
     }
@@ -1804,6 +1827,7 @@ export default function App() {
       setCurrentUser(null);
       setMonitoringUser(null);
       initializedUserIdRef.current = null;
+      initializingUserIdRef.current = null;
     }
   };
 
@@ -1917,6 +1941,7 @@ export default function App() {
                 if (status === 'approved' || status === null) {
                   setDeviceBlocked(null);
                   initializedUserIdRef.current = null;
+                  initializingUserIdRef.current = null;
                   void initializeAuthenticatedApp(session.access_token, session.user?.id);
                 } else {
                   setDeviceBlocked(status);
@@ -2102,7 +2127,7 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/20 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/20"
           >
             <div className="rounded-2xl border border-slate-200/80 bg-white/95 px-5 py-4 shadow-xl">
               <div className="flex items-center gap-4">
@@ -2116,7 +2141,10 @@ export default function App() {
           </motion.div>
         )}
       </AnimatePresence>
-      <div className="flex h-screen w-full bg-transparent text-slate-900 font-sans overflow-hidden">
+      {/* h-dvh i.p.v. h-screen (100vh): vóór installatie in een Safari-tab is
+          100vh de hoogte mét uitgeklapte toolbar, waardoor de onderrand achter
+          de balk viel. dvh volgt de zichtbare viewport. */}
+      <div className="flex h-dvh w-full bg-transparent text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
         {isSidebarOpen && (
@@ -2370,8 +2398,11 @@ export default function App() {
           }}
         >
           {/* Sticky topbar — full-width werkbalk met haarlijn-onderrand */}
-          <div className="sticky top-0 z-30 -mx-4 md:-mx-7 mb-5">
-            <header className={cn("topbar px-4 md:px-7", isScrolled && "topbar--scrolled")}>
+          {/* Negatieve marge = scroll-root-padding, óók de safe-area: met een
+              vaste -mx-4 stopte de sticky topbar + haarlijn in landscape met
+              notch ~30px vóór de schermrand (de inset is dan ~47px). */}
+          <div className="sticky top-0 z-30 -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
+            <header className={cn("topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7", isScrolled && "topbar--scrolled")}>
               <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 py-2.5 min-h-12">
                 <div className="flex items-center gap-2 min-w-0">
                   <button

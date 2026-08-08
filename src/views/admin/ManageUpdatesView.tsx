@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Bell, ChevronDown, Eye, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { notify } from '../../lib/ui';
+import { formatUpdateDate } from '../../lib/format';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
@@ -46,14 +47,6 @@ function Input({
     </div>
   );
 }
-
-/** "2026-03-04" → "4 mrt 2026" — zelfde notatie als de chauffeurskant. */
-const formatUpdateDate = (iso: string) => {
-  const d = new Date(`${iso}T00:00:00`);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
-};
 
 export function ManageUpdatesView({
   updates,
@@ -254,9 +247,9 @@ export function ManageUpdatesView({
                   <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                 </button>
                 <div className="flex shrink-0 items-center gap-0.5">
-                  <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<History size={14} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistoryUpdate(update)} />
-                  <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<Pencil size={14} />} aria-label="Bewerk" title="Bewerk" onClick={() => handleEdit(update)} />
-                  <Button variant="ghost" size="sm" className="h-9 w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Verwijder" title="Verwijder" disabled={deletingId === update.id} onClick={() => setConfirmDeleteId(update.id)} />
+                  <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<History size={14} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistoryUpdate(update)} />
+                  <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Pencil size={14} />} aria-label="Bewerk" title="Bewerk" onClick={() => handleEdit(update)} />
+                  <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Verwijder" title="Verwijder" disabled={deletingId === update.id} onClick={() => setConfirmDeleteId(update.id)} />
                 </div>
               </div>
               {open && (

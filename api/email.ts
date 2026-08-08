@@ -1,5 +1,15 @@
 import nodemailer from "nodemailer";
 
+/** Escape user-invoer vóór die in HTML-e-mails belandt (injectie-preventie).
+ *  Eén bron: index.ts importeert deze i.p.v. een eigen kopie. */
+export const escapeHtml = (value: unknown) =>
+  String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+
 interface SendEmailOptions {
   to: string[];
   subject: string;
@@ -134,9 +144,9 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
         <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">${config.subject}</h1>
       </div>
       <div style="padding: 30px;">
-        <p style="color: #1e293b; font-size: 16px; margin-top: 0;">Hallo ${ctx.recipientName},</p>
+        <p style="color: #1e293b; font-size: 16px; margin-top: 0;">Hallo ${escapeHtml(ctx.recipientName)},</p>
         <p style="color: #475569; line-height: 1.6;">
-          Je verlofaanvraag voor <strong>${period}</strong> (${ctx.typeLabel}) ${config.sentence} door ${ctx.decidedByName}.
+          Je verlofaanvraag voor <strong>${escapeHtml(period)}</strong> (${escapeHtml(ctx.typeLabel)}) ${config.sentence} door ${escapeHtml(ctx.decidedByName)}.
         </p>
         ${cancelledNote}
         <div style="margin-top: 30px; text-align: center;">
@@ -188,7 +198,7 @@ export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLi
         <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">VHB Portaal</h1>
       </div>
       <div style="padding: 30px;">
-        <p style="color: #1e293b; font-size: 16px; margin-top: 0;">Hallo ${ctx.name},</p>
+        <p style="color: #1e293b; font-size: 16px; margin-top: 0;">Hallo ${escapeHtml(ctx.name)},</p>
         <p style="color: #475569; line-height: 1.6;">
           Er is een account voor je aangemaakt op het VHB Portaal. Daar vind je je rooster,
           verlofaanvragen, dienstruilen en updates van de planning. Je logt in met dit e-mailadres.

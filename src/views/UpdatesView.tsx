@@ -3,16 +3,9 @@ import { ChevronRight, Clock, Info } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
 import { markUpdatesRead } from '../lib/updateReads';
+import { formatUpdateDate } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge } from '../components/primitives';
-
-/** "2026-03-04" → "4 mrt 2026"; onparseerbare waarden ongemoeid laten. */
-const formatUpdateDate = (iso: string) => {
-  const d = new Date(`${iso}T00:00:00`);
-  return Number.isNaN(d.getTime())
-    ? iso
-    : d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short', year: 'numeric' });
-};
 
 export function UpdatesView({ updates }: { updates: Update[] }) {
   const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);

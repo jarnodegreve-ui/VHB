@@ -238,8 +238,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 enterKeyHint="done"
                 className="control-input rounded-xl px-3 py-1.5 text-base font-semibold outline-none"
               />
-              <Button type="submit" variant="secondary" size="sm" className="h-9 w-9 justify-center" icon={<Check size={15} />} aria-label="Naam opslaan" />
-              <Button type="button" variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<X size={15} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
+              <Button type="submit" variant="secondary" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Check size={15} />} aria-label="Naam opslaan" />
+              <Button type="button" variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<X size={15} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
             </form>
           ) : (
             <>
@@ -257,18 +257,18 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         </div>
         {!isRenaming && (
           <div className="flex shrink-0 items-center gap-0.5">
-            <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<Pencil size={14} />} aria-label="Toestel hernoemen" title="Hernoemen"
+            <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Pencil size={14} />} aria-label="Toestel hernoemen" title="Hernoemen"
               onClick={() => { setRenaming(device); setRenameValue(device.name); }} />
             {device.status !== 'approved' && (
-              <Button variant="ghost" size="sm" className="h-9 w-9 justify-center text-emerald-600" icon={<ShieldCheck size={15} />} aria-label="Keur goed" title="Keur goed"
+              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-emerald-600" icon={<ShieldCheck size={15} />} aria-label="Keur goed" title="Keur goed"
                 disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'approve')} />
             )}
             {device.status === 'approved' && !isOwnCurrent(device) && (
-              <Button variant="ghost" size="sm" className="h-9 w-9 justify-center" icon={<ShieldAlert size={15} />} aria-label="Blokkeer" title="Blokkeer"
+              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<ShieldAlert size={15} />} aria-label="Blokkeer" title="Blokkeer"
                 disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'revoke')} />
             )}
             {!isOwnCurrent(device) && (
-              <Button variant="ghost" size="sm" className="h-9 w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Toestel schrappen" title="Schrappen"
+              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Toestel schrappen" title="Schrappen"
                 disabled={busyKey === keyOf(device)} onClick={() => setConfirmDelete(device)} />
             )}
           </div>

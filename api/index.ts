@@ -18,7 +18,7 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 // interne sleutels (bv. een vroegere __vakantieperiodes__) de dag-type-lijst niet.
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
 
-import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, isSmtpConfigured, type LeaveDecisionAction } from "./email.js";
+import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
@@ -1304,15 +1304,6 @@ const parseMatrixInput = (body: any) => {
   return { rows: parsePlanningMatrixXlsx(buffer) };
 };
 
-// Escape user-invoer vóór die in HTML-e-mails belandt (injectie-preventie).
-const escapeHtml = (value: unknown) =>
-  String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
     let rows;
@@ -2532,8 +2523,12 @@ app.post("/api/diversions/pdf", authenticate, requireRole("planner", "admin"), a
     const id = String(req.body?.id || "").trim();
     const filename = String(req.body?.filename || "").trim();
     const dataUrl = String(req.body?.dataUrl || "");
-    if (!id) {
-      return res.status(400).json({ error: "Diversion-id ontbreekt." });
+    // Strak formaat op het id: het wordt rechtstreeks de storage-key
+    // (`${id}.pdf`), dus zonder deze check kon een planner met `../iets` naar
+    // een afwijkende sleutel schrijven of een bestaand object overschrijven
+    // (path-traversal in de diversions-bucket).
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
+      return res.status(400).json({ error: "Ongeldig diversion-id." });
     }
     if (!filename || !filename.toLowerCase().endsWith(".pdf")) {
       return res.status(400).json({ error: "Geef een PDF-bestand met een .pdf extensie." });
@@ -3876,13 +3871,22 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       }
     }
 
-    // Domeinvalidatie op nieuwe records (álle rollen): alle afgeleide logica
-    // (bezetting, conflictdetectie, agenda-feed) vergelijkt datums als
-    // strings — één kapotte datum maakt een aanvraag daar stil onzichtbaar
-    // terwijl hij wél goedgekeurd kan worden.
+    // Domeinvalidatie (álle rollen, óók op gewijzigde bestaande records):
+    // alle afgeleide logica (bezetting, conflictdetectie, agenda-feed)
+    // vergelijkt datums als strings — één kapotte datum maakt een aanvraag
+    // daar stil onzichtbaar terwijl hij wél goedgekeurd blijft. Voorheen
+    // sloeg deze lus bestaande records over (`previousById.has → continue`),
+    // zodat een planner-save de periode van bestaand verlof onbewaakt kon
+    // verzetten. Ongewijzigde records overslaan blijft (idempotente echo's,
+    // en oude records met een verouderd formaat mogen niet retro-falen).
     const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+    const ongewijzigd = (a: any, b: any) =>
+      a && String(a.startDate) === String(b.startDate) &&
+      String(a.endDate) === String(b.endDate) &&
+      String(a.type) === String(b.type);
     for (const next of recordsToWrite) {
-      if (previousById.has(String(next.id))) continue;
+      const prev = previousById.get(String(next.id));
+      if (prev && ongewijzigd(prev, next)) continue;
       const start = String(next.startDate ?? "");
       const end = String(next.endDate ?? "");
       if (!ISO_DAY.test(start) || !ISO_DAY.test(end)) {
