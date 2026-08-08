@@ -56,7 +56,12 @@ function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
       {[1, 0.5].map((f) => (
         <div key={f} className="absolute inset-x-0" style={{ bottom: `${f * 100}%` }}>
           <div className="border-t border-slate-200/80 dark:border-white/10" />
-          <span className="absolute right-0 top-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500">
+          {/* Dekkend chipje op kaartkleur: zonder achtergrond liep het label
+              dwars door staven/curve en werd het onleesbaar. */}
+          <span
+            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500"
+            style={{ background: 'var(--tile-bg)' }}
+          >
             {fmt(top * f)} {eenheid}
           </span>
         </div>
@@ -520,7 +525,7 @@ export function OcpiDashboardView() {
                     return (
                       <div
                         role="img"
-                        aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${maandpiek} kW` : ''}`}
+                        aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${Math.round(maandpiek)} kW` : ''}`}
                         className="relative h-28"
                       >
                         <GridLijnen top={asTop} eenheid="kW" />
@@ -529,8 +534,15 @@ export function OcpiDashboardView() {
                         {maandpiek > 0 && (
                           <div className="absolute inset-x-0" style={{ bottom: `${Math.min(98, (maandpiek / asTop) * 100)}%` }} aria-hidden="true">
                             <div className="border-t border-dashed border-oker-500/70" />
-                            <span className="absolute left-0 top-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400">
-                              maandpiek {maandpiek} kW
+                            {/* Label BOVEN de lijn (daar is lege ruimte — de
+                                curve raakt de lijn van onderen), op een dekkend
+                                chipje en met z-10 zodat de SVG-curve en de
+                                piekstip er niet doorheen tekenen. */}
+                            <span
+                              className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400"
+                              style={{ background: 'var(--tile-bg)' }}
+                            >
+                              maandpiek {Math.round(maandpiek)} kW
                             </span>
                           </div>
                         )}
