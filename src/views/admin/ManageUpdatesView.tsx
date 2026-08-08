@@ -3,7 +3,7 @@ import { AlertTriangle, Bell, ChevronDown, Eye, History, Pencil, Trash2 } from '
 import type { Update } from '../../types';
 import { notify } from '../../lib/ui';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
-import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -273,9 +273,10 @@ export function ManageUpdatesView({
             </div>
             );
           }) : (
-            <div className="rounded-3xl border border-white/70 bg-white/45 p-6 text-sm font-medium text-slate-500">
-              Er zijn nog geen updates gepubliceerd.
-            </div>
+            <EmptyState
+              title="Nog geen updates"
+              message="Publiceer hierboven je eerste nieuwsbericht of veiligheidsmelding — chauffeurs zien het meteen op hun dashboard."
+            />
           )}
         </div>
       </div>

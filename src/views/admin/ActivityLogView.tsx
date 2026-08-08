@@ -335,7 +335,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         </div>
       </section>
       <Modal open={showDailyModal} onClose={() => setShowDailyModal(false)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
-        <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+        <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
           <div className="min-w-0">
             <h4 className="text-lg font-bold tracking-tight truncate">Actieve gebruikers per dag</h4>
             <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Klik op een dag voor de namen</p>
@@ -357,7 +357,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
       <Modal open={Boolean(openDayData)} onClose={() => setOpenDay(null)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
         {openDayData && (
           <>
-            <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+            <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
               <div className="min-w-0">
                 <h4 className="text-lg font-bold tracking-tight truncate capitalize">
                   {new Date(`${openDayData.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })}

@@ -74,6 +74,46 @@ export function AdminSubsectionHeader({
   );
 }
 
+/**
+ * Vaste kop voor een Modal: eyebrow (optioneel), titel, beschrijving
+ * (optioneel) en een optionele sluitknop rechts. Eén padding (`p-6 md:p-7`),
+ * één titelgrootte (`text-lg`) en één hairline — de view-modals dreven eerder
+ * uiteen (p-6/p-8, text-lg/text-xl, `border-slate-200/70` vs een in light
+ * onzichtbare `border-white/70`). Gebruik binnen een `flex flex-col`-modal
+ * met `!p-0`; de body eronder krijgt zijn eigen padding.
+ */
+export function ModalHeader({
+  eyebrow,
+  title,
+  description,
+  onClose,
+}: {
+  eyebrow?: string;
+  title: string;
+  description?: React.ReactNode;
+  onClose?: () => void;
+}) {
+  return (
+    <div className="flex items-start justify-between gap-3 p-6 md:p-7 border-b border-slate-200/70 shrink-0">
+      <div className="min-w-0">
+        {eyebrow ? <p className="text-2xs font-medium uppercase tracking-[0.08em] text-oker-600">{eyebrow}</p> : null}
+        <h4 className={cn('text-lg font-bold tracking-tight text-slate-900', eyebrow && 'mt-1.5')}>{title}</h4>
+        {description ? <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500">{description}</p> : null}
+      </div>
+      {onClose ? (
+        <button
+          type="button"
+          aria-label="Sluiten"
+          onClick={onClose}
+          className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors"
+        >
+          <X size={18} />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
 export function ConfirmationModal({
   isOpen,
   onClose,

@@ -4,7 +4,7 @@ import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
@@ -425,7 +425,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="glass-segmented inline-flex rounded-2xl p-1 self-start">
               {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-                <button key={role} onClick={() => setRoleFilter(role)} className={cn('px-3.5 py-2 rounded-xl text-xs font-semibold capitalize transition-all', roleFilter === role ? 'glass-chip text-oker-600 shadow-sm' : 'text-slate-500 hover:text-slate-700')}>
+                <button key={role} onClick={() => setRoleFilter(role)} className={segItemClass(roleFilter === role, 'capitalize')}>
                   {role === 'all' ? 'Alles' : role}
                 </button>
               ))}

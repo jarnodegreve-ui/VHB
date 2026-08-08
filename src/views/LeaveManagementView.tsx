@@ -4,7 +4,7 @@ import { AlertTriangle, Check, ChevronDown, ChevronLeft, ChevronRight, ChevronRi
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
-import { ConfirmationModal, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
 import { verlofBalans, daysBetween } from '../lib/leaveBalance';
@@ -621,7 +621,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing (verbeterronde 29/07 #3). */}
       <Modal open={showRequestModal} onClose={() => setShowRequestModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
-              <div className="p-8 border-b border-white/70 flex items-center justify-between shrink-0"><h4 className="text-lg font-bold tracking-tight">Verlof aanvragen</h4><button aria-label="Sluiten" onClick={() => setShowRequestModal(false)} className="p-2 text-slate-400 hover:bg-surface-soft-hover rounded-xl"><X size={24} /></button></div>
+              <ModalHeader title="Verlof aanvragen" onClose={() => setShowRequestModal(false)} />
               <form onSubmit={handleRequestLeave} className="p-8 space-y-5 overflow-y-auto flex-1">
                 {/* Alleen planner/admin: verlof registreren dat een chauffeur
                     mondeling of telefonisch doorgaf. Kiest de planner een

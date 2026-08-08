@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Bus, Calendar, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
-import { cn, notify } from '../../lib/ui';
+import { notify } from '../../lib/ui';
 import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, segItemClass, TableShell, Td, Th } from '../../components/primitives';
 import { OpsStat } from '../../components/ops';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -147,10 +147,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             <button
               key={option.key}
               onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
-              className={cn(
-                'rounded-xl px-4 py-2 text-xs font-semibold transition-all',
-                filter === option.key ? 'bg-surface-white text-oker-700 shadow-sm' : 'text-slate-500 hover:text-slate-800'
-              )}
+              className={segItemClass(filter === option.key)}
             >
               {option.label}
             </button>

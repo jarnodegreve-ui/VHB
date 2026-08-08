@@ -440,7 +440,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             description="Bouw de planning opnieuw op uit de laatst geïmporteerde matrix, of wis de planning volledig wanneer een nieuwe later volgt."
           />
           <div className="mt-5 space-y-4">
-            <div className="rounded-3xl border border-white/70 bg-white/45 p-5">
+            <div className="surface-card rounded-3xl p-5">
               <MicroLabel>Opnieuw opbouwen</MicroLabel>
               <p className="mt-2 text-sm font-medium text-slate-500">
                 Bouwt de planning opnieuw op uit de matrix die al in het portaal staat — je hoeft je Excel niet opnieuw te uploaden. Gebruik dit nadat je in het Dienstoverzicht iets wijzigde (tijden, loopnummers): die aanpassingen komen zo bij de chauffeurs terecht.
@@ -493,7 +493,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           {history.length > 0 ? history.slice(0, 8).map((entry) => {
             const hasIssues = entry.unknownCodes.length > 0 || entry.unmatchedDrivers.length > 0;
             return (
-              <div key={entry.id} className="rounded-3xl border border-white/70 bg-white/45 p-5">
+              <div key={entry.id} className="surface-card rounded-3xl p-5">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <div className="flex items-center gap-2">
@@ -761,7 +761,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </div>
 
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-3xl border border-white/70 bg-white/50 p-5">
+                  <div className="surface-card rounded-3xl p-5">
                     <MicroLabel>Importbereik</MicroLabel>
                     <p className="mt-2 text-lg font-black text-slate-900 tabular-nums">
                       {matrixPreview.startDate
@@ -773,7 +773,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </p>
                   </div>
 
-                  <div className="rounded-3xl border border-white/70 bg-white/50 p-5">
+                  <div className="surface-card rounded-3xl p-5">
                     <MicroLabel>Impact op actieve planning</MicroLabel>
                     <p className="mt-2 text-lg font-black text-slate-900 tabular-nums">
                       {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels geraakt
@@ -850,7 +850,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 )}
 
                 {matrixPreview.perDriver.length > 0 && (
-                  <div className="rounded-3xl border border-white/70 bg-white/55 p-5">
+                  <div className="surface-card rounded-3xl p-5">
                     <div className="flex items-center justify-between gap-3">
                       <MicroLabel className="text-slate-600">Per-chauffeur breakdown</MicroLabel>
                       <Badge tone="slate" className="tabular-nums">{matrixPreview.perDriver.length} chauffeurs</Badge>
