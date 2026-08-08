@@ -1033,7 +1033,11 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
     // van een gereden dag geen fantoom-gat maken — die dag ís gereden (door
     // een invaller die nooit in de matrix is bijgewerkt), en de dekking is
     // een vooruitkijk-instrument, geen historiek.
-    const vandaagIso = new Date().toLocaleDateString("en-CA");
+    // brusselsDay, niet de kale UTC-dag: tussen 00:00 en 02:00 Brusselse
+    // (zomer)tijd is de UTC-dag nog gisteren — dan gold een gereden dag als
+    // "vandaag of later" en maakte een laat ziektebriefje alsnog het
+    // fantoom-gat dat dit blok juist moet voorkomen.
+    const vandaagIso = brusselsDay(new Date().toISOString());
     const approvedLeaveAll = (leaveAll as any[]).filter((l) => l?.status === "approved");
     const chauffeursVoorNaam = (usersForLeave as any[]).filter((u) => u?.role === "chauffeur");
     const idByNameToken = nameIdIndex(chauffeursVoorNaam);
@@ -2885,8 +2889,12 @@ const reapplyApprovedSwaps = async (
   shifts: Array<{ date: string; line: string; driverId: string }>,
   bereik?: { van: string | null; tot: string | null },
 ) => {
+  // Ook 'completed': een voltooide ruil is gereden zoals gewisseld (zelfde
+  // regel als de maandplanning-weergave). Zonder 'completed' draaide een
+  // heropbouw die wissel stil terug en spraken rooster en maandplanning
+  // elkaar tegen.
   const approved = (await getSwapsData())
-    .filter((sw) => sw.status === "approved")
+    .filter((sw) => sw.status === "approved" || sw.status === "completed")
     .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
   // Alleen ruilen binnen het geïmporteerde bereik meetellen. Zonder deze filter
   // telde élke historische ruil buiten het bereik als "niet toepasbaar", zodat
@@ -3635,7 +3643,10 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
       const d = new Date(`${v}T00:00:00`);
       return Number.isFinite(d.getTime()) && d.toLocaleDateString("en-CA") === v ? v : null;
     };
-    const todayLocal = new Date().toLocaleDateString("en-CA"); // yyyy-mm-dd, lokale dag
+    // brusselsDay, niet de UTC-dag: een ziekmelding zonder expliciete datum
+    // om 00:30 Brusselse tijd hoort op vandáág te landen — met de UTC-dag
+    // belandde ze op gisteren en bleef de dienst van vandaag ingevuld staan.
+    const todayLocal = brusselsDay(new Date().toISOString()); // yyyy-mm-dd, Brusselse dag
     if (req.body?.startDate != null && !isoDay(req.body.startDate)) {
       return res.status(400).json({ error: "Ongeldige startdatum." });
     }
@@ -3850,6 +3861,18 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
       // een bewuste verwijdering door een vertrouwde rol.
       for (const [id] of previousById) {
         if (!payloadLeaveIds.has(String(id))) leaveIdsToDelete.push(String(id));
+      }
+    }
+
+    // State-machine (zelfde regel als de PATCH-route en de swaps-array-route):
+    // een afgewezen of geannuleerde aanvraag is een eindstation. Zonder deze
+    // guard kon een planner-save (of stale client) rejected → approved zetten,
+    // mét goedkeuringsmail, zonder dat iemand het als heropening herkende.
+    // approved → cancelled blijft toegestaan ("Verlof annuleren").
+    for (const next of recordsToWrite) {
+      const prev = previousById.get(String(next.id));
+      if (prev && String(next.status) !== String(prev.status) && ["rejected", "cancelled"].includes(String(prev.status))) {
+        return res.status(409).json({ error: "Deze verlofaanvraag is al afgehandeld en kan niet meer van status veranderen." });
       }
     }
 
