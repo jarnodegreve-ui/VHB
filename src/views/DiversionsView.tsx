@@ -82,7 +82,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
       />
 
       {lastSyncedAt && (
-        <p className="-mt-2 text-[11px] font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+        <p className="-mt-2 text-2xs font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
       )}
 
       <div className="space-y-2">

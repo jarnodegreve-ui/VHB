@@ -10,7 +10,7 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
       onClick={onClick}
       aria-current={active ? 'page' : undefined}
       className={cn(
-        "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-[13px] transition-colors duration-150",
+        "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-150",
         active
           ? "bg-oker-50/80 text-slate-900 font-semibold"
           : "text-slate-600 hover:bg-slate-100/70 hover:text-slate-900 font-medium"
@@ -34,7 +34,7 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
           regelhoogte 1 werd de staart van g/j/p afgeknipt ("Planningscodes"). */}
       <span className="flex-1 leading-5 truncate">{label}</span>
       {badge !== undefined && badge > 0 && (
-        <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-[11px] font-bold bg-oker-500 text-slate-950 rounded-full">
+        <span className="ml-auto inline-flex items-center justify-center min-w-[19px] h-[19px] px-1.5 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
           {badge}
         </span>
       )}
@@ -65,7 +65,7 @@ export function NavSection({ title, count, active = false, children }: { title: 
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        className="group flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-600 transition-colors"
+        className="group flex w-full items-center gap-1.5 rounded-lg px-3 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-600 transition-colors"
       >
         <ChevronRight size={12} className={cn('shrink-0 transition-transform duration-200', expanded && 'rotate-90')} />
         <span className="flex-1 text-left">{title}</span>
@@ -73,5 +73,16 @@ export function NavSection({ title, count, active = false, children }: { title: 
       </button>
       {expanded && <div className="mt-0.5 space-y-0.5">{children}</div>}
     </div>
+  );
+}
+
+/** Subgroep-kopje bínnen een NavSection (bv. Planning / Mensen / Communicatie
+ *  in "Beheer"): geen knop, alleen een rustige tussentitel die de lange lijst
+ *  in leesbare blokken deelt. */
+export function NavSubLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="px-3 pt-2.5 pb-0.5 text-2xs font-medium uppercase tracking-[0.08em] text-slate-400 select-none">
+      {children}
+    </p>
   );
 }

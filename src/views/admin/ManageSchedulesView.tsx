@@ -293,7 +293,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             <div className="mt-5 rounded-3xl border border-oker-100 bg-oker-50/80 p-5 text-sm">
               <p className="font-bold text-oker-800">Importvolgorde</p>
               <ol className="mt-3 list-decimal space-y-2 pl-5 text-oker-700">
-                <li>Upload het hele <code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab automatisch.</li>
+                <li>Upload het hele <code className="rounded bg-surface-row px-1.5 py-0.5 text-2xs">.xls</code>/<code className="rounded bg-surface-row px-1.5 py-0.5 text-2xs">.xlsx</code>-bestand. De server leest de praktijk-tab automatisch.</li>
                 <li>Controleer in de preview: dagen, diensten, onbekende codes, niet-gematchte chauffeurs en services zonder uren.</li>
               </ol>
             </div>
@@ -401,7 +401,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <MicroLabel className="text-emerald-700">Primair</MicroLabel>
                   <h4 className="mt-2 text-base font-bold tracking-tight text-slate-900">Excel-matrix uploaden</h4>
                   <p className="mt-2 text-sm font-medium text-slate-600">
-                    Upload je originele <code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xls</code>/<code className="rounded bg-surface-row px-1.5 py-0.5 text-[11px]">.xlsx</code>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
+                    Upload je originele <code className="rounded bg-surface-row px-1.5 py-0.5 text-2xs">.xls</code>/<code className="rounded bg-surface-row px-1.5 py-0.5 text-2xs">.xlsx</code>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
                   </p>
                   {pendingMatrixFilename && (
                     <MicroLabel className="mt-2 text-emerald-700">
@@ -413,7 +413,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               </div>
               <label
                 className={cn(
-                  "ios-pressable mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold transition-all",
+                  "ios-pressable mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all",
                   isMatrixImporting ? "cursor-not-allowed bg-slate-200 text-slate-400" : "btn-primary"
                 )}
               >
@@ -625,7 +625,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
                 {[...byDate.entries()].map(([date, daysShifts]) => (
                   <div key={date}>
-                    <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 mb-1.5">
+                    <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 mb-1.5">
                       {new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: '2-digit', month: 'long' })}
                       <span className="ml-2 text-slate-400">· {daysShifts.length}</span>
                     </div>
@@ -855,7 +855,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       <MicroLabel className="text-slate-600">Per-chauffeur breakdown</MicroLabel>
                       <Badge tone="slate" className="tabular-nums">{matrixPreview.perDriver.length} chauffeurs</Badge>
                     </div>
-                    <p className="mt-1 text-[11px] font-medium text-slate-500">
+                    <p className="mt-1 text-2xs font-medium text-slate-500">
                       Stille gaten worden hier zichtbaar: een chauffeur met dagen-met-code maar nul diensten betekent ofwel allemaal afwezigheden, ofwel een service zonder geldige uren.
                     </p>
                     <div className="mt-4 overflow-x-auto">

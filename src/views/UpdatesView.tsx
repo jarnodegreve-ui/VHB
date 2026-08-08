@@ -66,7 +66,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 <div className="flex flex-wrap gap-2">
                   {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                 </div>
-                <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-400 tabular-nums">
+                <div className="flex items-center gap-1.5 text-2xs font-medium text-slate-400 tabular-nums">
                   <Clock size={12} className="text-slate-300" />
                   {formatUpdateDate(update.date)}
                 </div>

@@ -85,7 +85,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 <Phone size={18} />
               </a>
             ) : (
-              <p className="text-[11px] font-medium text-slate-400 shrink-0">Geen nummer</p>
+              <p className="text-2xs font-medium text-slate-400 shrink-0">Geen nummer</p>
             )}
           </div>
         ))}

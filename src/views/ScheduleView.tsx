@@ -219,7 +219,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </div>
         {lastSyncedAt && (
-          <p className="text-[11px] font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+          <p className="text-2xs font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
         )}
       </div>
 
@@ -456,7 +456,7 @@ function MonthCalendar({
         </MicroLabel>
         <p className="mt-0.5 text-sm font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
         {selectedTypedag && (
-          <p className={cn('mt-0.5 text-[11px] font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+          <p className={cn('mt-0.5 text-2xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
             {selectedTypedag.titel}
           </p>
         )}
@@ -495,7 +495,7 @@ function MonthCalendar({
                       {s.startTime} – {s.endTime}
                     </span>
                     {s.loopnr && (
-                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
                         loop {s.loopnr}
                       </span>
                     )}
@@ -589,7 +589,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                       <Badge tone={pill.tone}>{pill.label}</Badge>
                       <span className="text-lg font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
-                        <span className="text-[11px] font-medium text-slate-400">
+                        <span className="text-2xs font-medium text-slate-400">
                           ({g.segments.length} blokken)
                         </span>
                       )}
@@ -604,7 +604,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                             {s.startTime} – {s.endTime}
                           </span>
                           {s.loopnr && (
-                            <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                            <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
                               loop {s.loopnr}
                             </span>
                           )}
@@ -660,7 +660,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                       <Badge tone="red" icon={<AlertTriangle size={10} />}>
                         Verlof-conflict
                       </Badge>
-                      <p className="text-[11px] font-medium text-red-600 mt-1">Je hebt hier verlof — bel de planner.</p>
+                      <p className="text-2xs font-medium text-red-600 mt-1">Je hebt hier verlof — bel de planner.</p>
                     </div>
                   )}
                   {g.openSwap && (
@@ -684,7 +684,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                       {s.startTime} – {s.endTime}
                     </span>
                     {s.loopnr && (
-                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
                         loop {s.loopnr}
                       </span>
                     )}

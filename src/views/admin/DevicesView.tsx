@@ -247,11 +247,11 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 className={`h-2 w-2 shrink-0 rounded-full ${device.status === 'approved' ? 'bg-emerald-500' : device.status === 'pending' ? 'bg-amber-500' : 'bg-red-500'}`}
                 title={STATUS_BADGE[device.status].label}
               />
-              <p className="truncate text-[13px] font-semibold text-slate-800">{device.name}</p>
+              <p className="truncate text-sm font-semibold text-slate-800">{device.name}</p>
               {device.status === 'revoked' && <Badge tone="red">Geblokkeerd</Badge>}
               {device.status === 'pending' && <Badge tone="amber">Wacht</Badge>}
               {isOwnCurrent(device) && <Badge tone="blue">Dit toestel</Badge>}
-              <span className="hidden md:inline shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">gezien {formatDateHuman(device.lastSeenAt)}</span>
+              <span className="hidden md:inline shrink-0 text-2xs font-medium text-slate-400 tabular-nums">gezien {formatDateHuman(device.lastSeenAt)}</span>
             </>
           )}
         </div>
@@ -351,8 +351,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                     className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-soft-hover transition-colors"
                   >
                     <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="truncate text-[13px] font-bold tracking-tight text-slate-800">{userName(userId)}</span>
-                      <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
+                      <span className="truncate text-sm font-bold tracking-tight text-slate-800">{userName(userId)}</span>
+                      <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
                       {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
                     </div>
                     <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />

@@ -76,12 +76,12 @@ export function OpsStat({
           anders naar verschillende hoogtes — de hele strip oogde rommelig
           (melding Jarno). Nu start elk cijfer en elke subtekst op exact
           dezelfde lijn. */}
-      <p className="mt-2.5 text-[11px] leading-4 min-h-8 font-semibold uppercase tracking-[0.08em] text-slate-500">{label}</p>
-      <p className="mt-0.5 text-[24px] leading-8 font-black tabular-nums tracking-[-0.02em] text-slate-900">
+      <p className="mt-2.5 text-xs leading-4 min-h-8 font-medium text-slate-500">{label}</p>
+      <p className="mt-0.5 text-2xl leading-8 font-bold tabular-nums tracking-[-0.02em] text-slate-900">
         {text ?? <CountUp value={value ?? 0} />}
         {suffix && <span className="text-sm font-semibold text-slate-400">{suffix}</span>}
       </p>
-      <p className={cn('mt-0.5 text-[11px] font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
+      <p className={cn('mt-0.5 text-2xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
         <div className="mt-2 h-1.5 rounded-full bg-surface-muted overflow-hidden">
           <div
@@ -91,7 +91,7 @@ export function OpsStat({
         </div>
       )}
       {note && (
-        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-[11px] font-medium leading-snug text-oker-800 dark:text-oker-300">
+        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-2xs font-medium leading-snug text-oker-800 dark:text-oker-300">
           {note}
         </p>
       )}
@@ -101,7 +101,7 @@ export function OpsStat({
             <div
               key={`${l.left}-${l.right ?? ''}`}
               className={cn(
-                'flex items-baseline justify-between gap-3 text-[11px] font-medium tabular-nums',
+                'flex items-baseline justify-between gap-3 text-2xs font-medium tabular-nums',
                 l.done ? 'text-slate-400' : 'text-slate-600',
               )}
             >
@@ -189,10 +189,10 @@ export function OpsPanel({
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600 dark:text-slate-300">
             {icon}
           </span>
-          <h3 className="text-[13px] font-bold tracking-tight text-slate-900">{title}</h3>
+          <h3 className="text-sm font-semibold tracking-tight text-slate-900">{title}</h3>
         </div>
         {aside && (
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{aside}</span>
+          <span className="text-xs font-medium text-slate-500">{aside}</span>
         )}
       </div>
       {children}
@@ -238,11 +238,11 @@ export function OpsRow({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-semibold text-slate-800">{primary}</span>
+        <span className="block truncate text-sm font-medium text-slate-800">{primary}</span>
         {secondary && <span className="mt-px block truncate text-xs font-normal text-slate-500">{secondary}</span>}
       </span>
       {trailing}
-      {meta && <span className="shrink-0 text-[11px] font-medium text-slate-400">{meta}</span>}
+      {meta && <span className="shrink-0 text-2xs font-medium text-slate-400">{meta}</span>}
       <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
     </button>
   );
@@ -277,7 +277,7 @@ export function QuickAction({
         {icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[13px] font-bold tracking-tight text-slate-900">{label}</span>
+        <span className="block truncate text-sm font-semibold tracking-tight text-slate-900">{label}</span>
         <span className="block truncate text-xs font-medium text-slate-500">{sub}</span>
       </span>
       <ArrowUpRight size={15} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />

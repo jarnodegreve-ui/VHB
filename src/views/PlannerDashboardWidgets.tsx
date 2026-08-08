@@ -510,10 +510,10 @@ export function PlannerDashboardWidgets({
       {/* === Operationele header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-[22px] md:text-[26px] font-bold tracking-[-0.02em] text-slate-900">
+          <h1 className="text-xl md:text-2xl font-bold tracking-[-0.02em] text-slate-900">
             {greeting}, <span className="text-oker-600">{firstName}</span>
           </h1>
-          <p className="mt-0.5 text-[13px] font-normal text-slate-500">
+          <p className="mt-0.5 text-sm font-normal text-slate-500">
             Actuele status op{' '}
             {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
@@ -528,18 +528,14 @@ export function PlannerDashboardWidgets({
               : 'border-emerald-100 bg-emerald-50',
           )}
         >
-          <span className="relative flex h-2 w-2">
-            <span className={cn(
-              'absolute inline-flex h-full w-full animate-ping rounded-full opacity-60',
-              needsAttention ? 'bg-amber-500' : 'bg-emerald-500',
-            )} />
-            <span className={cn(
-              'relative inline-flex h-2 w-2 rounded-full',
-              needsAttention ? 'bg-amber-500' : 'bg-emerald-500',
-            )} />
-          </span>
+          {/* Statische stip — permanente beweging voor "alles is normaal"
+              maakt van rust een alarm. */}
           <span className={cn(
-            'text-[11px] font-semibold',
+            'inline-flex h-2 w-2 rounded-full',
+            needsAttention ? 'bg-amber-500' : 'bg-emerald-500',
+          )} />
+          <span className={cn(
+            'text-2xs font-semibold',
             needsAttention ? 'text-amber-700' : 'text-emerald-700',
           )}>
             {needsAttention ? 'Open taken' : 'Operationeel'}
@@ -562,7 +558,7 @@ export function PlannerDashboardWidgets({
               setSickError('');
               setShowSickModal(true);
             }}
-            className="ios-pressable relative inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-[11px] font-semibold text-amber-700 transition-colors hover:bg-amber-100 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+            className="ios-pressable relative inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-2xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
           >
             <AlertTriangle size={12} className="text-amber-600" />
             Ziek melden
@@ -583,7 +579,9 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Bus size={16} />}
-          tone="emerald"
+          // Oker = er rijdt nú iemand (het enige merk-accent in de strip);
+          // een lege ochtend is rusttoestand en blijft slate.
+          tone={driversDrivingNow > 0 ? 'oker' : 'slate'}
           label="Chauffeurs actief"
           value={driversDrivingNow}
           sub="nu aan het rijden"
@@ -602,7 +600,7 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<UserCheck size={16} />}
-          tone="emerald"
+          tone="slate"
           label="Beschikbaar"
           value={availableToday.length}
           sub="vrij en inzetbaar vandaag"
@@ -622,7 +620,7 @@ export function PlannerDashboardWidgets({
         <OpsStat
           className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
           icon={<Inbox size={16} />}
-          tone={openTasks > 0 ? 'amber' : 'emerald'}
+          tone={openTasks > 0 ? 'amber' : 'slate'}
           label="Aanvragen"
           value={openTasks}
           sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
@@ -786,7 +784,7 @@ export function PlannerDashboardWidgets({
                   <CheckCircle2 size={16} />
                 </span>
                 <div>
-                  <p className="text-[13px] font-semibold text-slate-800">Alles ok</p>
+                  <p className="text-sm font-semibold text-slate-800">Alles ok</p>
                   <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
                 </div>
               </div>
@@ -864,7 +862,7 @@ export function PlannerDashboardWidgets({
                   <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-slate-800">{u.name}</span>
-                    <span className="block text-[11px] font-medium text-slate-500 tabular-nums">
+                    <span className="block text-2xs font-medium text-slate-500 tabular-nums">
                       {u.phone || 'geen nummer bekend'}
                     </span>
                   </span>
@@ -907,7 +905,7 @@ export function PlannerDashboardWidgets({
             {todayAbsent.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5">
                 <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{a.name}</span>
-                <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-surface-muted text-slate-600')}>{a.label}</span>
+                <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-2xs font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-surface-muted text-slate-600')}>{a.label}</span>
               </li>
             ))}
           </ul>
@@ -960,7 +958,7 @@ export function PlannerDashboardWidgets({
             </span>
             <div className="min-w-0">
               <h4 className="text-lg font-bold tracking-tight truncate">Ziekmelding registreren</h4>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">meteen onbeschikbaar</p>
+              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">meteen onbeschikbaar</p>
             </div>
           </div>
           <button
@@ -989,7 +987,7 @@ export function PlannerDashboardWidgets({
           className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
+            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
             <select
               aria-label="Chauffeur"
               value={sickForm.userId}
@@ -1005,7 +1003,7 @@ export function PlannerDashboardWidgets({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
+              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
               <input
                 type="date"
                 aria-label="Startdatum ziekmelding"
@@ -1015,7 +1013,7 @@ export function PlannerDashboardWidgets({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
+              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
               <input
                 type="date"
                 aria-label="Einddatum ziekmelding"
@@ -1027,7 +1025,7 @@ export function PlannerDashboardWidgets({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
+            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
             <textarea
               aria-label="Opmerking ziekmelding"
               value={sickForm.comment}
@@ -1039,7 +1037,7 @@ export function PlannerDashboardWidgets({
           {sickError && (
             <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{sickError}</p>
           )}
-          <p className="text-[11px] font-medium text-slate-500">
+          <p className="text-2xs font-medium text-slate-500">
             De dag(en) komen meteen als onbeschikbaar in de planning; de andere planners krijgen een melding.
           </p>
           <Button type="submit" variant="primary" size="lg" full disabled={isSubmittingSick}>
@@ -1088,7 +1086,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                 flex-wrap: bij één of twee blokken staat het op één regel zoals
                 voorheen, bij drie wijkt het netjes uit naar een tweede regel
                 in plaats van tegen de dienstchip te duwen. */}
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] font-medium text-slate-500 tabular-nums">
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs font-medium text-slate-500 tabular-nums">
               {d.segs.map((seg, i) => (
                 <Fragment key={seg}>
                   {i > 0 && <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-slate-300" />}
@@ -1114,7 +1112,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                 tweede regel (rijhoogte 59 → 75 px). Marges en geen transform:
                 een extra compositing-laag geeft in Safari rasterrandjes. */}
             {d.remaining && (
-              <span className={cn('-ml-2 whitespace-nowrap pr-2 text-[11px] font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
+              <span className={cn('-ml-2 whitespace-nowrap pr-2 text-2xs font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
                 {d.remaining}
               </span>
             )}
@@ -1154,7 +1152,7 @@ function DashboardListModal({
           </span>
           <div className="min-w-0">
             <h4 className="text-lg font-bold tracking-tight truncate">{title}</h4>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{subtitle}</p>
+            <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">{subtitle}</p>
           </div>
         </div>
         <button
@@ -1203,10 +1201,10 @@ function FeedRow({ entry }: { entry: ActivityLogEntry }) {
             "Systeem (cron) · 16 fouten gemeld aan 1 on…"). Nog steeds begrensd,
             zodat één lange regel de zes feed-items niet uit elkaar duwt; wie
             het volledige verhaal wil, klikt door naar de log. */}
-        <p className="line-clamp-2 text-[13px] font-medium leading-snug text-slate-700">
+        <p className="line-clamp-2 text-sm font-medium leading-snug text-slate-700">
           <span className="font-semibold text-slate-900">{entry.actorName}</span> · {entry.details || entry.action}
         </p>
-        <p className="text-[11px] font-normal text-slate-400">{relTime(entry.createdAt)}</p>
+        <p className="text-2xs font-normal text-slate-400">{relTime(entry.createdAt)}</p>
       </div>
     </div>
   );

@@ -288,7 +288,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 <label
                   htmlFor="services-upload"
                   className={cn(
-                    'control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-all hover:text-slate-900',
+                    'control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900',
                     isImporting && 'cursor-not-allowed opacity-50'
                   )}
                   title="Importeer vanuit Excel"

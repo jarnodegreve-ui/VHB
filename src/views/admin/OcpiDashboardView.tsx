@@ -34,6 +34,37 @@ function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { lab
   );
 }
 
+/** Kleinste "mooie" as-top ≥ max (1/1.5/2/2.5/3/4/5/6/8 × 10^n): zo staan de
+ *  gridlijnen op ronde getallen en betekent dezelfde staafhoogte niet elke
+ *  dag iets anders (de schaal was voorheen data-relatief). */
+function mooiMax(max: number): number {
+  if (!Number.isFinite(max) || max <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(max)));
+  for (const f of [1, 1.5, 2, 2.5, 3, 4, 5, 6, 8, 10]) {
+    if (max <= f * p) return f * p;
+  }
+  return 10 * p;
+}
+
+/** Hairline-gridlijnen mét waarde-labels achter een grafiek — het verschil
+ *  tussen "een blokje" en een afleesbaar instrument. Render in een
+ *  `relative` wrapper; de labels hangen nét onder hun lijn. */
+function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
+  const fmt = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
+  return (
+    <div className="pointer-events-none absolute inset-0" aria-hidden="true">
+      {[1, 0.5].map((f) => (
+        <div key={f} className="absolute inset-x-0" style={{ bottom: `${f * 100}%` }}>
+          <div className="border-t border-slate-200/80 dark:border-white/10" />
+          <span className="absolute right-0 top-0.5 text-[10px] font-medium tabular-nums leading-none text-slate-400 dark:text-slate-500">
+            {fmt(top * f)} {eenheid}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 type Connector = { id: string; standard?: string; power_type?: string; max_electric_power?: number };
 type Evse = { uid: string; evse_id?: string; status?: string; physical_reference?: string | null; connectors: Connector[] };
 
@@ -253,6 +284,10 @@ export function OcpiDashboardView() {
     const piekDagLabel = piek.key ? new Date(`${piek.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
     return { modus: 'dagen' as const, staven, maxKw, piekKw: piek.kw, piekTs: piek.ts, piekWanneer: piek.key ? `op ${piekDagLabel}` : '' };
   }, [data?.powerCurve, data?.powerDays, vermogenTermijn, smalScherm]);
+  // De hoogste dágpiek van de laatste ±31 dagen — hét capaciteitstarief-getal.
+  // In de 24u-grafiek staat hij als gestippelde referentielijn: zo zie je in
+  // één oogopslag of de curve van vandaag de maandpiek nadert.
+  const maandpiek = useMemo(() => Math.max(0, ...(data?.powerDays ?? []).map((d) => d.kw)), [data?.powerDays]);
   // Tik-selectie op de grafiekstaven: op een telefoon is er geen hover-title,
   // dus een tik op een staaf toont de details in de samenvattingsregel.
   const [gekozenDag, setGekozenDag] = useState<string | null>(null);
@@ -338,7 +373,7 @@ export function OcpiDashboardView() {
             />
             <OpsStat
               icon={<Zap size={16} />}
-              tone="emerald"
+              tone="slate"
               label="Beschikbaar"
               value={kpi.beschikbaar}
               sub="vrije laadpunten"
@@ -352,7 +387,7 @@ export function OcpiDashboardView() {
             />
             <OpsStat
               icon={<Gauge size={16} />}
-              tone="oker"
+              tone="slate"
               label="Vandaag geladen"
               text={`${Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh`}
               sub={`30 d: ${kwh30} kWh · ${data.totals.sessions30d} sessies`}
@@ -387,32 +422,40 @@ export function OcpiDashboardView() {
                     komen in de samenvattingsregel eronder. Kleuren zonder
                     opacity-tinten (contrast ≥ 3:1) en oker betekent in beide
                     grafieken hetzelfde: de piek. */}
-                <div
-                  role="img"
-                  aria-label={`Verbruik per dag: totaal ${Math.round(grafiek.totaal)} kWh, gemiddeld ${grafiek.gemiddeld} kWh per laaddag, piek ${Math.round(grafiek.piek)} kWh`}
-                  className="flex h-24 items-end gap-[3px]"
-                >
-                  {grafiek.dagen.map((d) => {
-                    const gekozen = gekozenDag === d.date;
-                    const isPiek = d.kwh > 0 && d.kwh === grafiek.piek;
-                    return (
-                      <button
-                        key={d.date}
-                        type="button"
-                        tabIndex={-1}
-                        aria-hidden="true"
-                        onClick={() => setGekozenDag(gekozen ? null : d.date)}
-                        title={`${d.date.slice(5)} · ${d.kwh} kWh · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
-                        className="flex h-full flex-1 cursor-pointer flex-col justify-end"
-                      >
-                        <div
-                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
-                          style={{ height: d.kwh > 0 ? `${Math.max(4, Math.round((d.kwh / grafiek.max) * 100))}%` : '2px' }}
-                        />
-                      </button>
-                    );
-                  })}
-                </div>
+                {(() => {
+                  const asTop = mooiMax(grafiek.max);
+                  return (
+                    <div
+                      role="img"
+                      aria-label={`Verbruik per dag: totaal ${Math.round(grafiek.totaal)} kWh, gemiddeld ${grafiek.gemiddeld} kWh per laaddag, piek ${Math.round(grafiek.piek)} kWh`}
+                      className="relative h-28"
+                    >
+                      <GridLijnen top={asTop} eenheid="kWh" />
+                      <div className="flex h-full items-end gap-[3px]">
+                        {grafiek.dagen.map((d) => {
+                          const gekozen = gekozenDag === d.date;
+                          const isPiek = d.kwh > 0 && d.kwh === grafiek.piek;
+                          return (
+                            <button
+                              key={d.date}
+                              type="button"
+                              tabIndex={-1}
+                              aria-hidden="true"
+                              onClick={() => setGekozenDag(gekozen ? null : d.date)}
+                              title={`${d.date.slice(5)} · ${d.kwh} kWh · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
+                              className="flex h-full flex-1 cursor-pointer flex-col justify-end"
+                            >
+                              <div
+                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
+                                style={{ height: d.kwh > 0 ? `${Math.max(3, Math.round((d.kwh / asTop) * 100))}%` : '2px' }}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                   {grafiek.dagen.map((d) => (
                     <span key={d.date} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
@@ -423,11 +466,11 @@ export function OcpiDashboardView() {
                 {(() => {
                   const dag = grafiek.dagen.find((d) => d.date === gekozenDag);
                   return dag ? (
-                    <p className="mt-2 min-h-4 truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                    <p className="mt-2 min-h-4 truncate text-2xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">
                       {new Date(`${dag.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · {dag.kwh} kWh · {dag.sessions} sessie{dag.sessions === 1 ? '' : 's'}
                     </p>
                   ) : (
-                    <p className="mt-2 min-h-4 truncate text-[11px] font-medium tabular-nums text-slate-500">
+                    <p className="mt-2 min-h-4 truncate text-2xs font-medium tabular-nums text-slate-500">
                       totaal {Math.round(grafiek.totaal)} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {Math.round(grafiek.piek)} kWh
                     </p>
                   );
@@ -453,34 +496,110 @@ export function OcpiDashboardView() {
               <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elke 30 min).</p>
             ) : (
               <>
-                <div
-                  role="img"
-                  aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}`}
-                  className={cn('flex h-24 items-end', vermogen.modus === 'slots' ? 'gap-[2px]' : 'gap-[3px]')}
-                >
-                  {vermogen.staven.map((st) => {
-                    const gekozen = gekozenSlot === st.key;
-                    const kop = vermogen.modus === 'slots'
-                      ? uurLabel(st.key)
-                      : new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' });
+                {(() => {
+                  // 24u: één doorlopende step-lijn i.p.v. 48 losse staafjes —
+                  // een vermogenscurve ís een curve. De schaal neemt de
+                  // maandpiek mee zodat de referentielijn altijd in beeld is.
+                  const asTop = mooiMax(Math.max(vermogen.maxKw, vermogen.modus === 'slots' ? maandpiek : 0));
+                  const kopVan = (key: string) => (vermogen.modus === 'slots'
+                    ? uurLabel(key)
+                    : new Date(`${key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' }));
+                  if (vermogen.modus === 'slots' && vermogen.staven.length > 1) {
+                    const n = vermogen.staven.length;
+                    const w = 100 / n;
+                    const y = (kw: number) => 100 - Math.min(98, Math.max(kw > 0 ? 2 : 0.5, (kw / asTop) * 100));
+                    let lijn = `M 0 ${y(vermogen.staven[0].kw).toFixed(2)}`;
+                    vermogen.staven.forEach((st, i) => {
+                      lijn += ` H ${((i + 1) * w).toFixed(2)}`;
+                      const volgende = vermogen.staven[i + 1];
+                      if (volgende) lijn += ` V ${y(volgende.kw).toFixed(2)}`;
+                    });
+                    const vlak = `${lijn} V 100 H 0 Z`;
+                    const piekIndex = vermogen.staven.findIndex((st) => st.isPiek);
+                    const gekozenIndex = vermogen.staven.findIndex((st) => st.key === gekozenSlot);
                     return (
-                      <button
-                        key={st.key}
-                        type="button"
-                        tabIndex={-1}
-                        aria-hidden="true"
-                        onClick={() => setGekozenSlot(gekozen ? null : st.key)}
-                        title={`${kop} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
-                        className="flex h-full flex-1 cursor-pointer flex-col justify-end"
+                      <div
+                        role="img"
+                        aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${maandpiek} kW` : ''}`}
+                        className="relative h-28"
                       >
-                        <div
-                          className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
-                          style={{ height: st.kw > 0 ? `${Math.max(4, Math.round((st.kw / vermogen.maxKw) * 100))}%` : '2px' }}
-                        />
-                      </button>
+                        <GridLijnen top={asTop} eenheid="kW" />
+                        {/* Maandpiek-referentie: gestippeld, oker — de norm
+                            waartegen de curve van vandaag gelezen wordt. */}
+                        {maandpiek > 0 && (
+                          <div className="absolute inset-x-0" style={{ bottom: `${Math.min(98, (maandpiek / asTop) * 100)}%` }} aria-hidden="true">
+                            <div className="border-t border-dashed border-oker-500/70" />
+                            <span className="absolute left-0 top-0.5 text-[10px] font-medium tabular-nums leading-none text-oker-700 dark:text-oker-400">
+                              maandpiek {maandpiek} kW
+                            </span>
+                          </div>
+                        )}
+                        <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
+                          <path d={vlak} className="fill-slate-500/12 dark:fill-slate-400/15" />
+                          <path d={lijn} fill="none" vectorEffect="non-scaling-stroke" strokeWidth={1.5} className="stroke-slate-600 dark:stroke-slate-300" />
+                          {piekIndex >= 0 && (
+                            <circle
+                              cx={(piekIndex + 0.5) * w}
+                              cy={y(vermogen.staven[piekIndex].kw)}
+                              r={2.2}
+                              vectorEffect="non-scaling-stroke"
+                              className="fill-oker-500 stroke-white dark:stroke-slate-900"
+                              strokeWidth={1}
+                            />
+                          )}
+                          {gekozenIndex >= 0 && (
+                            <rect x={gekozenIndex * w} y={0} width={w} height={100} className="fill-slate-900/10 dark:fill-white/10" />
+                          )}
+                        </svg>
+                        {/* Onzichtbare tik-vlakken bovenop de curve: zelfde
+                            tap-selectie als de staafvariant. */}
+                        <div className="absolute inset-0 flex">
+                          {vermogen.staven.map((st) => (
+                            <button
+                              key={st.key}
+                              type="button"
+                              tabIndex={-1}
+                              aria-hidden="true"
+                              onClick={() => setGekozenSlot(gekozenSlot === st.key ? null : st.key)}
+                              title={`${kopVan(st.key)} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
+                              className="h-full flex-1 cursor-pointer"
+                            />
+                          ))}
+                        </div>
+                      </div>
                     );
-                  })}
-                </div>
+                  }
+                  return (
+                    <div
+                      role="img"
+                      aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}`}
+                      className="relative h-28"
+                    >
+                      <GridLijnen top={asTop} eenheid="kW" />
+                      <div className="flex h-full items-end gap-[3px]">
+                        {vermogen.staven.map((st) => {
+                          const gekozen = gekozenSlot === st.key;
+                          return (
+                            <button
+                              key={st.key}
+                              type="button"
+                              tabIndex={-1}
+                              aria-hidden="true"
+                              onClick={() => setGekozenSlot(gekozen ? null : st.key)}
+                              title={`${kopVan(st.key)} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
+                              className="flex h-full flex-1 cursor-pointer flex-col justify-end"
+                            >
+                              <div
+                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
+                                style={{ height: st.kw > 0 ? `${Math.max(3, Math.round((st.kw / asTop) * 100))}%` : '2px' }}
+                              />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
                 {/* Vaste opbouw, identiek aan de verbruikskaart ernaast: één
                     as-regel (min-h-4) en één samenvattingsregel (mt-2 min-h-4)
                     — zo liggen grafiekbodem, as en tekst in beide kaarten op
@@ -504,13 +623,13 @@ export function OcpiDashboardView() {
                       ? uurLabel(st.key)
                       : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel(st.ts || st.key)}`;
                     return (
-                      <p className="mt-2 min-h-4 truncate text-[11px] font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                      <p className="mt-2 min-h-4 truncate text-2xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">
                         {kop} · {st.kw} kW · {st.charging} sessie{st.charging === 1 ? '' : 's'}
                       </p>
                     );
                   }
                   return (
-                    <p className="mt-2 min-h-4 truncate text-[11px] font-medium tabular-nums text-slate-500">
+                    <p className="mt-2 min-h-4 truncate text-2xs font-medium tabular-nums text-slate-500">
                       {vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}${vermogen.modus === 'dagen' && vermogen.piekTs ? ` om ${uurLabel(vermogen.piekTs)}` : ''}` : 'nog geen vermogen gemeten'}
                     </p>
                   );
@@ -536,7 +655,7 @@ export function OcpiDashboardView() {
               const conn = gekozenPunt.connectors[0];
               const rij = (label: string, waarde: string) => (
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-b-0">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</span>
+                  <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</span>
                   <span className="text-sm font-semibold tabular-nums text-slate-800">{waarde}</span>
                 </div>
               );
@@ -600,7 +719,7 @@ export function OcpiDashboardView() {
                             <Badge tone={st.vol ? 'emerald' : 'blue'} className="shrink-0 tabular-nums">{st.soc}%</Badge>
                           )}
                         </div>
-                        <p className="mt-0.5 text-[11px] text-slate-500">
+                        <p className="mt-0.5 text-2xs text-slate-500">
                           sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString() : '—'}
                           {typeof s.kwh === 'number' ? ` · ${s.kwh} kWh geladen` : ''}
                         </p>
@@ -631,7 +750,7 @@ export function OcpiDashboardView() {
                         <h3 className="text-base font-bold text-slate-800">{loc.name ?? loc.id}</h3>
                         {loc.city && <p className="text-xs text-slate-500">{loc.city}</p>}
                       </div>
-                      <span className="text-[11px] text-slate-400">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>
+                      <span className="text-2xs text-slate-400">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>
                     </div>
                     {loc.evses.length === 0 ? (
                       <p className="text-sm text-slate-500">Geen laadpunten.</p>
@@ -651,7 +770,7 @@ export function OcpiDashboardView() {
                             <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
                               <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
                                 <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
-                                <span className="text-[11px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
+                                <span className="text-2xs font-medium tabular-nums text-slate-500 dark:text-slate-400">
                                   {laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}
                                 </span>
                               </div>
@@ -684,7 +803,7 @@ export function OcpiDashboardView() {
                                         <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
                                         {/* Busnummer is dé operationele sleutel van dit
                                             scherm — niet in de zwakste tint zetten. */}
-                                        <span className="w-14 shrink-0 text-[11px] font-medium tabular-nums text-slate-600 dark:text-slate-300">
+                                        <span className="w-14 shrink-0 text-2xs font-medium tabular-nums text-slate-600 dark:text-slate-300">
                                           {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
                                         </span>
                                         {s.soc !== null && (
@@ -732,7 +851,7 @@ export function OcpiDashboardView() {
                         {/* Op mobiel twee regels toestaan: truncate sneed
                             precies de reden en het tijdstip weg — de kern van
                             de melding. */}
-                        <p className="min-w-0 text-[13px] font-medium text-slate-700 max-sm:line-clamp-2 sm:truncate">
+                        <p className="min-w-0 text-sm font-medium text-slate-700 max-sm:line-clamp-2 sm:truncate">
                           <span className="font-semibold text-slate-800">{nummer ? `Laadpunt ${nummer}` : 'Onbekend laadpunt'}{bus ? ` · bus ${bus}` : ''}</span>
                           <span className="text-slate-500">
                             {' — '}

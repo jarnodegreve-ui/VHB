@@ -248,9 +248,9 @@ export function ManageUpdatesView({
                   aria-expanded={open}
                   className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
                 >
-                  <span className="min-w-0 truncate text-[13px] font-bold tracking-tight text-slate-800">{update.title}</span>
+                  <span className="min-w-0 truncate text-sm font-bold tracking-tight text-slate-800">{update.title}</span>
                   {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
-                  <span className="shrink-0 text-[11px] font-medium text-slate-400 tabular-nums">{formatUpdateDate(update.date)}</span>
+                  <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">{formatUpdateDate(update.date)}</span>
                   <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                 </button>
                 <div className="flex shrink-0 items-center gap-0.5">
@@ -262,7 +262,7 @@ export function ManageUpdatesView({
               {open && (
                 <div className="px-4 pb-4 pt-0.5">
                   {update.isUrgent && totalChauffeurs > 0 && (
-                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-[11px] font-semibold text-slate-500 tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
+                    <span className="mb-2 inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-2xs font-semibold text-slate-500 tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
                       <Eye size={12} />
                       {readCounts[update.id] ?? 0}/{totalChauffeurs} gelezen
                     </span>

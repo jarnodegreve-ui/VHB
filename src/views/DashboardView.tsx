@@ -234,17 +234,17 @@ export function DashboardView({ notes = [],
               Aan de slag
             </button>
           </div>
-          <p className="text-[11px] font-medium text-slate-400">Kreeg je een tijdelijk wachtwoord van de planning? Kies dan nu meteen een eigen wachtwoord.</p>
+          <p className="text-2xs font-medium text-slate-400">Kreeg je een tijdelijk wachtwoord van de planning? Kies dan nu meteen een eigen wachtwoord.</p>
         </div>
       )}
 
       {/* === Persoonlijke header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-[22px] md:text-[26px] font-bold tracking-[-0.02em] text-slate-900">
+          <h1 className="text-xl md:text-2xl font-bold tracking-[-0.02em] text-slate-900">
             {greeting}, <span className="text-oker-600">{firstName}</span>
           </h1>
-          <p className="mt-0.5 text-[13px] font-normal text-slate-500">
+          <p className="mt-0.5 text-sm font-normal text-slate-500">
             {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
@@ -255,11 +255,10 @@ export function DashboardView({ notes = [],
             needsAttention ? 'border-amber-200 bg-amber-50' : 'border-emerald-100 bg-emerald-50',
           )}
         >
-          <span className="relative flex h-2 w-2">
-            <span className={cn('absolute inline-flex h-full w-full animate-ping rounded-full opacity-60', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
-            <span className={cn('relative inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
-          </span>
-          <span className={cn('text-[11px] font-semibold', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
+          {/* Statische stip — permanente beweging voor "alles is normaal"
+              maakt van rust een alarm. */}
+          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
+          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
             {needsAttention
               ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
               : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
@@ -275,7 +274,9 @@ export function DashboardView({ notes = [],
         <OpsStat
           icon={<Clock size={16} />}
           className={todayLines.length > 1 ? 'md:col-span-2 xl:col-span-2' : undefined}
-          tone={todaysShift ? 'emerald' : 'slate'}
+          // Kleur alleen als er nú iets gebeurt (oker = lopende dienst);
+          // een gewone geplande dag is rusttoestand en blijft slate.
+          tone={todayLines.some((l) => l.active) ? 'oker' : 'slate'}
           label="Vandaag"
           // Dienstnummer als kop, de blokken eronder: geen herhaling van
           // dezelfde tijd in groot én klein.
@@ -295,7 +296,7 @@ export function DashboardView({ notes = [],
             de blokken/uren staan in "Komende diensten" en het rooster. */}
         <OpsStat
           icon={<Calendar size={16} />}
-          tone={nextShift ? 'oker' : 'slate'}
+          tone="slate"
           label="Volgende dienst"
           text={nextShift ? serviceNumberOf(nextShift) : '—'}
           // De subregel ís hier de boodschap (wanneer rijd ik?) — dus een
@@ -310,7 +311,7 @@ export function DashboardView({ notes = [],
         />
         <OpsStat
           icon={<Plane size={16} />}
-          tone="blue"
+          tone="slate"
           label="Verlofsaldo"
           value={balans.betaaldResterend}
           suffix={` / ${balans.betaaldBudget}`}
@@ -352,7 +353,7 @@ export function DashboardView({ notes = [],
                 <Clock size={16} />
               </span>
               <div>
-                <p className="text-[13px] font-semibold text-slate-800">Geen komende diensten</p>
+                <p className="text-sm font-semibold text-slate-800">Geen komende diensten</p>
                 <p className="text-xs font-normal text-slate-500">Er staat op dit moment niets ingepland.</p>
               </div>
             </div>
@@ -386,7 +387,7 @@ export function DashboardView({ notes = [],
                 <MapPin size={16} />
               </span>
               <div>
-                <p className="text-[13px] font-semibold text-slate-800">Vrije baan</p>
+                <p className="text-sm font-semibold text-slate-800">Vrije baan</p>
                 <p className="text-xs font-normal text-slate-500">Geen omleidingen op het netwerk.</p>
               </div>
             </div>
@@ -416,7 +417,7 @@ export function DashboardView({ notes = [],
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
           <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />
           <QuickAction icon={<FileText size={16} />} label="Ritbladen" sub="Actuele rit-info" onClick={() => onNavigate('ritblaadjes')} />
-          <QuickAction icon={<Users size={16} />} label="Maandrooster" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />
+          <QuickAction icon={<Users size={16} />} label="Maandplanning" sub="Wie rijdt wanneer" onClick={() => onNavigate('bezetting')} />
         </div>
       )}
 
@@ -435,19 +436,19 @@ export function DashboardView({ notes = [],
         {openDiversion && (
           <div className="space-y-5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center rounded-full border border-slate-200 bg-surface-soft px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+              <span className="inline-flex items-center rounded-full border border-slate-200 bg-surface-soft px-2.5 py-1 text-2xs font-semibold text-slate-600">
                 {lineLabel(openDiversion.line)}
               </span>
             </div>
             <div className="surface-muted rounded-xl p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
+              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
               <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
                 {formatDateHuman(openDiversion.startDate)}
                 {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
               </p>
             </div>
             <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
+              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
               <p className="mt-2 whitespace-pre-wrap text-sm font-normal leading-relaxed text-slate-700">
                 {openDiversion.description}
               </p>

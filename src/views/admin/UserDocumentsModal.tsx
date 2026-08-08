@@ -122,11 +122,11 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                       {/* Leesbevestiging: gezet zodra de chauffeur het document
                           voor het eerst opent. */}
                       {doc.openedAt ? (
-                        <p className="mt-0.5 flex items-center gap-1 text-[11px] font-semibold text-emerald-600">
+                        <p className="mt-0.5 flex items-center gap-1 text-2xs font-semibold text-emerald-600">
                           <CheckCircle2 size={11} /> Geopend {formatDateHuman(doc.openedAt)}
                         </p>
                       ) : (
-                        <p className="mt-0.5 text-[11px] font-medium text-slate-400">Nog niet geopend</p>
+                        <p className="mt-0.5 text-2xs font-medium text-slate-400">Nog niet geopend</p>
                       )}
                     </div>
                     <button type="button" onClick={() => doc.url && openPdfInNewTab(doc.url)} aria-label="Openen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors"><Download size={15} /></button>

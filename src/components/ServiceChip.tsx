@@ -33,7 +33,7 @@ export function ServiceChip({
     >
       {nummer}
       {loopnr?.trim() && (
-        <span className="font-semibold text-[11px] opacity-70">loop {loopnr.trim()}</span>
+        <span className="font-semibold text-2xs opacity-70">loop {loopnr.trim()}</span>
       )}
     </span>
   );

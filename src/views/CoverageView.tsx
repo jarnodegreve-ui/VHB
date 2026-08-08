@@ -301,7 +301,7 @@ export function CoverageView() {
                                   type="button"
                                   onClick={() => toggleService(i, svc)}
                                   className={cn(
-                                    'rounded-lg px-2 py-1 text-[11px] font-semibold tabular-nums ring-1 transition-colors',
+                                    'rounded-lg px-2 py-1 text-2xs font-semibold tabular-nums ring-1 transition-colors',
                                     on ? 'bg-oker-100 text-oker-700 ring-oker-300' : 'bg-surface-white text-slate-400 ring-slate-200 hover:text-slate-600 hover:ring-slate-300',
                                   )}
                                 >
@@ -359,7 +359,7 @@ export function CoverageView() {
                     {overrides.map((o, i) => (
                       <div key={i} className="flex flex-wrap items-center gap-2">
                         <input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
-                        <span className="text-[11px] font-bold text-slate-400">t/m</span>
+                        <span className="text-2xs font-bold text-slate-400">t/m</span>
                         <input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
                         <span className="text-slate-400 font-semibold">→</span>
                         <select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" className="control-input rounded-xl px-2 py-2 text-sm font-bold outline-none">
@@ -373,7 +373,7 @@ export function CoverageView() {
                 )}
               </div>
 
-              <p className="text-[11px] font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
+              <p className="text-2xs font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
             </>
           )}
         </div>
@@ -388,7 +388,7 @@ export function CoverageView() {
             <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn ingevuld</span>
           )}
         </div>
-        <label className="flex items-center gap-2 text-[11px] font-bold text-slate-500 cursor-pointer select-none">
+        <label className="flex items-center gap-2 text-2xs font-bold text-slate-500 cursor-pointer select-none">
           <input type="checkbox" checked={onlyGaps} onChange={(e) => setOnlyGaps(e.target.checked)} className="accent-oker-500" />
           Alleen dagen met gaten
         </label>
@@ -457,7 +457,7 @@ export function CoverageView() {
                             type="button"
                             onClick={() => setPick({ date: d.date, code: svc })}
                             title="Klik om te zien wie vrij is"
-                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-[11px] font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer dark:text-red-300"
+                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-2xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer dark:text-red-300"
                           >
                             <span className="tabular-nums">{svc}</span>
                             {info && (
@@ -510,7 +510,7 @@ export function CoverageView() {
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-[11px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof die dag. De planner wijst de dienst toe in de planning.</p>
+                <p className="mt-3 text-2xs font-medium text-slate-400">"Vrij" = geen dienst en geen verlof die dag. De planner wijst de dienst toe in de planning.</p>
               </div>
             )}
           </div>

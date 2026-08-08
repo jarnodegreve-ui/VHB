@@ -20,12 +20,12 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
     <div className={cn('rounded-3xl border border-slate-100 bg-white/55 p-5 space-y-4', compact && 'p-4 space-y-3')}>
       <div className="flex items-baseline justify-between gap-3">
         <h5 className={cn('font-bold text-slate-700 tracking-tight', compact ? 'text-sm' : 'text-base')}>Verlofbalans</h5>
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{year}</span>
+        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{year}</span>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Betaald verlof</span>
+          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Betaald verlof</span>
           <span className={cn('text-xs font-bold', overBudget ? 'text-red-500' : 'text-slate-600')}>
             <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.betaaldGebruikt}</span>
             <span className="text-slate-400"> / {balance.betaaldBudget} dagen</span>
@@ -37,7 +37,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
             style={{ width: `${Math.max(2, percentage)}%` }}
           />
         </div>
-        <p className="text-[11px] font-medium text-slate-400">
+        <p className="text-2xs font-medium text-slate-400">
           {overBudget
             ? `${balance.betaaldGebruikt - balance.betaaldBudget} dagen boven budget.`
             : `${balance.betaaldResterend} ${balance.betaaldResterend === 1 ? 'dag' : 'dagen'} resterend.`}
@@ -45,7 +45,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
       </div>
 
       <div className="flex items-baseline justify-between gap-3 pt-2 border-t border-slate-100">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">Klein verlet</span>
+        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Klein verlet</span>
         <span className="text-xs font-bold text-slate-600">
           <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.kleinVerletDagen}</span>
           <span className="text-slate-400"> {balance.kleinVerletDagen === 1 ? 'dag' : 'dagen'}</span>

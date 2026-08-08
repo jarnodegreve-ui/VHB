@@ -406,19 +406,19 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <button
                     type="button"
                     onClick={goToCurrentMonth}
-                    className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-surface-white text-[11px] font-semibold text-slate-500 hover:text-slate-800 hover:bg-surface-soft-hover transition-colors"
+                    className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-surface-white text-2xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-surface-soft-hover transition-colors"
                   >
                     Vandaag
                   </button>
                 )}
               </div>
               <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Voldoende</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em]">Krap</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-xs font-medium text-slate-500">Voldoende</span></div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-xs font-medium text-slate-500">Krap</span></div>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
-              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em] mb-2">{d}</div>)}
+              {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => <div key={d} className="text-center text-2xs font-semibold text-slate-500 uppercase tracking-[0.08em] mb-2">{d}</div>)}
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -462,16 +462,16 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         <div className="w-10 h-10 bg-surface-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
                         <div>
                           <p className="font-semibold text-slate-800 text-sm">{requester?.name}</p>
-                          <p className="text-[11px] font-bold text-slate-400 uppercase tracking-[0.08em]">{formatLeaveType(req.type)}</p>
+                          <p className="text-2xs font-bold text-slate-400 uppercase tracking-[0.08em]">{formatLeaveType(req.type)}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
-                        <span className="text-[11px] font-medium text-slate-400 tabular-nums">{req.startDate} – {req.endDate}</span>
+                        <span className="text-2xs font-medium text-slate-400 tabular-nums">{req.startDate} – {req.endDate}</span>
                         {isPlanner && (
                           <button
                             type="button"
                             onClick={() => handleCancel(req.id)}
-                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-surface-white text-[11px] font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-surface-white text-2xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
                           >
                             Annuleren
                           </button>
@@ -520,7 +520,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     <button
                       type="button"
                       onClick={() => setSelectedPendingIds(allSelected ? new Set() : new Set(plannerPending.map((r) => r.id)))}
-                      className="text-[11px] font-semibold text-slate-500 hover:text-oker-700 transition-colors"
+                      className="text-2xs font-semibold text-slate-500 hover:text-oker-700 transition-colors"
                     >
                       {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
                     </button>
@@ -546,7 +546,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       <div
                         key={req.id}
                         className={cn(
-                          'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-all hover:bg-surface-row-hover hover:ring-slate-300/80 hover:shadow-sm',
+                          'group flex items-center gap-3 rounded-xl bg-surface-row ring-1 ring-hairline px-3.5 py-2.5 transition-all hover:bg-surface-row-hover hover:ring-hairline-strong hover:shadow-sm',
                           isSelected && 'ring-2 ring-oker-400/50',
                         )}
                       >
@@ -564,7 +564,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         >
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-2">
-                              <span className="truncate text-[13px] font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
+                              <span className="truncate text-sm font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
                               {conflictShifts.length > 0 && (
                                 <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
                                   <AlertTriangle size={13} className="shrink-0 text-red-500" />
@@ -581,7 +581,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     );
                   }) : (
                     <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3.5">
-                      <p className="text-[13px] font-semibold text-slate-800">Alles beoordeeld</p>
+                      <p className="text-sm font-semibold text-slate-800">Alles beoordeeld</p>
                       <p className="text-xs font-normal text-slate-500">Geen openstaande verlofaanvragen.</p>
                     </div>
                   )}
@@ -646,7 +646,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         ))}
                     </select>
                     {namensIemandAnders && (
-                      <p className="text-[11px] font-medium text-oker-700 dark:text-oker-600">
+                      <p className="text-2xs font-medium text-oker-700 dark:text-oker-600">
                         Wordt meteen als goedgekeurd verlof vastgelegd — je hoeft het daarna niet nog eens te beoordelen.
                       </p>
                     )}
@@ -654,7 +654,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 )}
 
                 <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
                       ? 'Klik op de startdatum.'
@@ -686,7 +686,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </div>
                   <div className="grid grid-cols-7 gap-1">
                     {['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'].map((d) => (
-                      <div key={d} className="text-center text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em] py-1">{d}</div>
+                      <div key={d} className="text-center text-2xs font-semibold text-slate-500 uppercase tracking-[0.08em] py-1">{d}</div>
                     ))}
                     {calendarDays.map((day, i) => {
                       if (day === null) return <div key={`m-empty-${i}`} />;
@@ -719,14 +719,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {/* tabIndex -1: puur weergavevelden — focus zou op iOS alleen maar inzoomen */}
-                  <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly tabIndex={-1} aria-label="Startdatum" value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
-                  <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly tabIndex={-1} aria-label="Einddatum" value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly tabIndex={-1} aria-label="Startdatum" value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly tabIndex={-1} aria-label="Einddatum" value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
                 </div>
                 <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-surface-soft-hover">
                   Periode wissen
                 </button>
-                <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select aria-label="Type verlof" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-surface-field"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
-                <div className="space-y-2"><label className="text-[11px] font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea aria-label="Opmerking" value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
+                <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select aria-label="Type verlof" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-surface-field"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
+                <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea aria-label="Opmerking" value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
 
                 {/* Live impact-preview: budget + shift-conflicten */}
                 {requestPreview && (
@@ -747,7 +747,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             {requestPreview.gebruikt + requestPreview.requestedDays} / {requestPreview.budget}
                           </span>
                         </div>
-                        <p className="mt-1 text-[11px] font-medium opacity-90">
+                        <p className="mt-1 text-2xs font-medium opacity-90">
                           {requestPreview.wouldExceed
                             ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven je jaarbudget. Planner moet beoordelen.`
                             : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze aanvraag.`}
@@ -765,7 +765,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             {requestPreview.conflictingShifts.length === 1 ? 'dienst staat' : 'diensten staan'} al ingepland in deze periode
                           </span>
                         </div>
-                        <p className="mt-1 text-[11px] font-medium opacity-90">
+                        <p className="mt-1 text-2xs font-medium opacity-90">
                           De planner herverdeelt deze bij goedkeuring.
                         </p>
                       </div>
@@ -905,7 +905,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       </div>
                     ))}
                     {conflictShifts.length > 5 && (
-                      <p className="text-[11px] font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
+                      <p className="text-2xs font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
                     )}
                   </div>
                   <p className="mt-2 text-xs font-normal text-slate-500">Bij goedkeuring moeten deze diensten herverdeeld worden.</p>
@@ -981,8 +981,8 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                 className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
               >
                 <div className="min-w-0 flex items-baseline gap-2.5">
-                  <span className="text-[13px] font-bold tracking-tight text-slate-800 whitespace-nowrap">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</span>
-                  <span className="text-[11px] font-medium text-slate-400 truncate">{formatLeaveType(req.type)}</span>
+                  <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</span>
+                  <span className="text-2xs font-medium text-slate-400 truncate">{formatLeaveType(req.type)}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {fresh && <Badge tone="oker">Nieuw</Badge>}
@@ -992,7 +992,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
               </button>
               {open && (
                 <div className="px-4 pb-4 pt-0.5">
-                  <p className="text-[11px] font-medium text-slate-400">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
+                  <p className="text-2xs font-medium text-slate-400">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
                   {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
                   {onCancel && req.status === 'approved' && (
                     <Button variant="danger" size="sm" full className="mt-3" onClick={() => onCancel(req.id)}>

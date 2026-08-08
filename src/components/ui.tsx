@@ -8,20 +8,16 @@ import { Skeleton, SkeletonRow } from './Skeleton';
 
 export function PageShell({
   children,
-  width = '4xl',
   className,
 }: {
   children: React.ReactNode;
+  /** @deprecated Eén canvasbreedte voor de hele app — de prop wordt
+   *  genegeerd. Bij het navigeren verspringt het frame zo nooit meer
+   *  (voorheen 3xl/4xl/5xl/6xl door elkaar). */
   width?: '3xl' | '4xl' | '5xl' | '6xl';
   className?: string;
 }) {
-  const widthClass = {
-    '3xl': 'max-w-3xl',
-    '4xl': 'max-w-4xl',
-    '5xl': 'max-w-5xl',
-    '6xl': 'max-w-6xl',
-  }[width];
-  return <div className={cn(widthClass, 'mx-auto space-y-6 md:space-y-8', className)}>{children}</div>;
+  return <div className={cn('max-w-[1200px] mx-auto space-y-6 md:space-y-8', className)}>{children}</div>;
 }
 
 export function PageHeader({
@@ -39,13 +35,15 @@ export function PageHeader({
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
         {eyebrow ? (
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p>
+          <p className="text-2xs font-medium uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p>
         ) : null}
-        <h3 className={cn('section-title font-black tracking-[-0.02em] text-slate-900 leading-[1.1] text-[26px] md:text-[30px]', eyebrow && 'mt-1.5')}>
+        {/* text-2xl/3xl + bold (geen black): de kop wint het van de rest door
+            máát, niet door extra gewicht — dat houdt de pagina rustig. */}
+        <h3 className={cn('section-title font-bold tracking-[-0.02em] text-slate-900 leading-[1.1] text-2xl md:text-3xl', eyebrow && 'mt-1.5')}>
           {title}
         </h3>
         {description ? (
-          <p className="mt-2 text-sm md:text-[15px] font-normal leading-relaxed text-slate-500">{description}</p>
+          <p className="mt-2 text-sm font-normal leading-relaxed text-slate-500">{description}</p>
         ) : null}
       </div>
       {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
@@ -67,7 +65,7 @@ export function AdminSubsectionHeader({
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
-        {eyebrow ? <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p> : null}
+        {eyebrow ? <p className="text-2xs font-medium uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p> : null}
         <h3 className="mt-1.5 text-lg font-bold tracking-tight text-slate-900 md:text-xl">{title}</h3>
         {description ? <p className="mt-1 text-sm font-normal text-slate-500">{description}</p> : null}
       </div>
@@ -229,11 +227,11 @@ export function CredentialsModal({
         </div>
         <div className="p-6 md:p-7 space-y-3 overflow-y-auto flex-1">
           <div className="surface-muted rounded-xl p-4">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">E-mailadres</p>
+            <p className="text-xs font-medium text-slate-500">E-mailadres</p>
             <p className="mt-1.5 font-semibold text-slate-800 break-all">{email}</p>
           </div>
           <div className="surface-muted rounded-xl p-4">
-            <p className="text-[11px] font-semibold text-slate-500 uppercase tracking-[0.08em]">Tijdelijk wachtwoord</p>
+            <p className="text-xs font-medium text-slate-500">Tijdelijk wachtwoord</p>
             <p className="mt-1.5 font-mono font-semibold text-slate-800">{password}</p>
           </div>
           <div className="flex gap-2.5 pt-2">

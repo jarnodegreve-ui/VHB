@@ -408,8 +408,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
                     >
                       <div className="min-w-0 flex items-baseline gap-2.5">
-                        <span className="text-[13px] font-bold tracking-tight text-slate-800 whitespace-nowrap">Dienst {info.line}</span>
-                        <span className="text-[11px] font-medium text-slate-400 capitalize truncate">{formatDateHuman(info.date)}</span>
+                        <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap">Dienst {info.line}</span>
+                        <span className="text-2xs font-medium text-slate-400 capitalize truncate">{formatDateHuman(info.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <StatusBadge status={swap.status} />
@@ -585,7 +585,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="min-w-0">
                                 <span className="block font-semibold text-slate-800">{requester?.name}</span>
                                 {swap.targetDriverId && (
-                                  <span className="block text-[11px] font-medium text-slate-400">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
+                                  <span className="block text-2xs font-medium text-slate-400">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
                                 )}
                               </span>
                               <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
@@ -597,7 +597,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
-                              <span className="block text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
+                              <span className="block text-2xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
                           </Td>
                           <Td><StatusBadge status={swap.status} /></Td>
@@ -659,7 +659,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           {isTakeoverSwap(swap) ? (
                             <div className="mt-1"><TakeoverBadge compact /></div>
                           ) : returnLabel(swap) && (
-                            <p className="text-[11px] font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
+                            <p className="text-2xs font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
                         </div>
                         <StatusBadge status={swap.status} className="shrink-0" />
@@ -731,7 +731,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     <h4 className="text-lg font-bold tracking-tight truncate">
                       {wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Hoe wil je ruilen?'}
                     </h4>
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Stap {wizardStep} van 3</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Stap {wizardStep} van 3</p>
                   </div>
                 </div>
                 <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="inline-flex h-11 w-11 items-center justify-center text-slate-400 hover:bg-surface-soft-hover rounded-xl shrink-0"><X size={22} /></button>
@@ -825,7 +825,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {freeForDate && freeCount === 0 && !showBusyColleagues && (
                           <p className="text-xs font-medium text-slate-400 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
                         )}
-                        <p className="text-[11px] font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
+                        <p className="text-2xs font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
                       </>
                     )}
                   </>
@@ -986,7 +986,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       >
                         {isSubmitting ? 'Versturen…' : isTakeover ? 'Vraag om over te nemen' : 'Ruilverzoek versturen'}
                       </Button>
-                      <p className="text-[11px] font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
+                      <p className="text-2xs font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
                     </>
                   );
                 })()}
