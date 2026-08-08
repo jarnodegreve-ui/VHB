@@ -132,7 +132,7 @@ type Dashboard = {
   locations: DashLocation[];
   activeSessions: ActiveSession[];
   kwhPerDay: Array<{ date: string; kwh: number; sessions: number }>;
-  /** Ruwe 30-min-slots van de laatste 24 uur. */
+  /** Ruwe kwartier-slots van de laatste 24 uur (capaciteitstarief-maat). */
   powerCurve: Array<{ ts: string; kw: number; charging: number }>;
   /** Dágpieken (Brusselse kalenderdag) van de laatste 31 dagen — server-side
    *  bepaald zodat de dag-grens niet verschuift tussen UTC en lokaal. */
@@ -246,7 +246,7 @@ export function OcpiDashboardView() {
   // grafiektermijn — de tegel zei "30 d" maar toonde het termijn-totaal.
   const kwh30 = useMemo(() => Math.round((data?.kwhPerDay ?? []).reduce((a, d) => a + d.kwh, 0)), [data?.kwhPerDay]);
 
-  // Vermogen: 24u = de 30-min-slots (op mobiel samengevoegd per uur);
+  // Vermogen: 24u = de kwartier-slots (op mobiel samengevoegd per uur);
   // 7d/maand = één staaf per dag met de server-side bepaalde dágpiek.
   const vermogen = useMemo(() => {
     if (vermogenTermijn === '24u') {
@@ -485,7 +485,7 @@ export function OcpiDashboardView() {
           </div>
 
           {/* Vermogen — de kwartierpiek bepaalt in België het capaciteits-
-              tarief. 24u toont de ruwe 30-min-slots; 7d/maand tonen per dag
+              tarief. 24u toont de ruwe kwartier-slots; 7d/maand tonen per dag
               de dágpiek en wanneer die viel. Gevoed door de sync-snapshots. */}
           <div className="surface-card p-6 rounded-3xl">
             <div className="mb-4 flex items-center justify-between gap-3">
@@ -498,7 +498,7 @@ export function OcpiDashboardView() {
               />
             </div>
             {vermogen.staven.length === 0 ? (
-              <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elke 30 min).</p>
+              <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elk kwartier).</p>
             ) : (
               <>
                 {(() => {

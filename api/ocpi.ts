@@ -622,20 +622,23 @@ const perEvseNieuwste = <T extends { evse_uid?: unknown; start_date_time?: unkno
 
 /**
  * Vermogens-snapshot voor de piekbewaking: som van het actuele vermogen over
- * alle ACTIVE-sessies, weggeschreven op de 30-minuten-slotgrens (afgerond —
+ * alle ACTIVE-sessies, weggeschreven op de KWARTIER-slotgrens (afgerond —
  * vereiste van de SQL-review: zonder afronding vuurt ON CONFLICT nooit en
- * stapelen dubbele syncs binnen één slot als losse rijen). Binnen één slot
+ * stapelen dubbele syncs binnen één slot als losse rijen). 15 min i.p.v. 30
+ * (verzoek Jarno 09-08): het Belgische capaciteitstarief rekent op de
+ * kwartierpiek, dus dit is de maat die er echt toe doet — de cron in
+ * vercel.json draait daarom óók per kwartier. Oude 30-min-rijen blijven
+ * gewoon staan (elke :00/:30 is ook een kwartiergrens). Binnen één slot
  * wint de hoogste meting: een handmatige sync mocht de cron-piek niet
- * overschrijven — dat is precies het getal waar het capaciteitstarief om
- * draait. Retentie: 35 dagen. Best-effort — een falende snapshot mag de
- * sync zelf nooit breken.
+ * overschrijven. Retentie: 35 dagen. Best-effort — een falende snapshot mag
+ * de sync zelf nooit breken.
  */
 const schrijfVermogensSnapshot = async (): Promise<void> => {
   if (!db) return;
   const { data } = await db.from("ocpi_sessions").select("raw,evse_uid,start_date_time").eq("status", "ACTIVE");
   const sessies = perEvseNieuwste((data ?? []) as any[]);
   const totaal = Math.round(sessies.reduce((a, r) => a + (dimensiesUitRaw(r.raw).powerKw ?? 0), 0) * 10) / 10;
-  const slotMs = 30 * 60 * 1000;
+  const slotMs = 15 * 60 * 1000;
   const slot = new Date(Math.floor(Date.now() / slotMs) * slotMs).toISOString();
   const { data: bestaand } = await db.from("ocpi_power_snapshots").select("total_power_kw").eq("ts", slot).maybeSingle();
   if (!bestaand || Number(bestaand.total_power_kw) < totaal) {
@@ -880,11 +883,11 @@ export const mountOcpiRoutes = (app: express.Express) => {
         // 30-dagen-grafiek anders nooit iets toont. Gepagineerd: een maand kan
         // over de 1.000-rijen-cap van PostgREST heen.
         selectAlles((van, tot) => db!.from("ocpi_sessions").select("start_date_time,kwh").gte("start_date_time", since30).order("start_date_time", { ascending: true }).range(van, tot)),
-        // Vermogens-snapshots van de laatste 31 dagen, gepagineerd (48 slots
-        // per dag ≈ 1.500 rijen — boven de 1.000-rijen-cap, die anders stil de
-        // nieuwste rijen liet vallen). Rollend venster; de server splitst ze
-        // hieronder in 24u-slots + dágpieken zodat de client geen ~90 KB aan
-        // ruwe slots hoeft te slikken.
+        // Vermogens-snapshots van de laatste 31 dagen, gepagineerd (96
+        // kwartier-slots per dag ≈ 3.000 rijen — ruim boven de 1.000-rijen-cap,
+        // die anders stil de nieuwste rijen liet vallen). Rollend venster; de
+        // server splitst ze hieronder in 24u-slots + dágpieken zodat de client
+        // geen ruwe slots hoeft te slikken.
         selectAlles((van, tot) => db!.from("ocpi_power_snapshots").select("ts,total_power_kw,charging").gte("ts", new Date(Date.now() - 31 * 24 * 3600 * 1000).toISOString()).order("ts", { ascending: true }).range(van, tot)),
         // Sessies van de laatste 7 dagen mét raw: ChargEye stuurt per sessie
         // een technicalFailClassification mee ("OK" of bv. HANDSHAKE_FAIL) —
@@ -928,7 +931,7 @@ export const mountOcpiRoutes = (app: express.Express) => {
       sessieStoringen.sort((a, b) => String(b.wanneer ?? "").localeCompare(String(a.wanneer ?? "")));
       const storingen = [...laadpuntStoringen, ...sessieStoringen].slice(0, 100);
 
-      // 24u aan ruwe 30-min-slots voor de fijne grafiek…
+      // 24u aan ruwe kwartier-slots voor de fijne grafiek…
       const sinds24u = Date.now() - 24 * 3600 * 1000;
       const powerCurve = powerRows
         .filter((r) => new Date(String(r.ts)).getTime() >= sinds24u)
