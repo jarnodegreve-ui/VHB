@@ -52,4 +52,19 @@ describe('symbolicateTopFrame', () => {
     expect(await symbolicateTopFrame('Error: iets\n    at eval (eval:1:1)')).toBeNull();
     expect(await symbolicateTopFrame(undefined)).toBeNull();
   });
+
+  it('fetcht NOOIT naar een vreemde host (SSRF-slot: de stack is aanvallers-input)', async () => {
+    const fetchMock = vi.fn(async () => new Response(buildMap(), { status: 200 }));
+    vi.stubGlobal('fetch', fetchMock);
+    const vreemd = [
+      'https://evil.example.com/assets/x.js:1:1',
+      'http://vhbportaal.com/assets/x.js:1:1', // geen https
+      'https://169.254.169.254/assets/x.js:1:1',
+      'https://niet-vhb.vercel.app/assets/x.js:1:1',
+    ];
+    for (const frame of vreemd) {
+      expect(await symbolicateTopFrame(`x (${frame})`)).toBeNull();
+    }
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 });

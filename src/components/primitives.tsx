@@ -20,7 +20,9 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   ghost: 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/70',
   success: 'bg-emerald-700 text-white hover:bg-emerald-800 shadow-lg shadow-emerald-700/20',
   danger: 'bg-white/90 border border-red-200 text-red-600 hover:bg-red-50',
-  dangerSolid: 'bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20',
+  // red-600 als basis: wit op red-500 haalt maar ~3,8:1 — onder AA voor
+  // 13-14px tekst, uitgerekend op de "Verwijderen"-knoppen.
+  dangerSolid: 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {

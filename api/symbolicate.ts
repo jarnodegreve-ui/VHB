@@ -12,6 +12,28 @@ import { SourceMapConsumer } from "source-map-js";
 const FRAME_RE = /(https?:\/\/[^\s)]+\/assets\/[^\s):]+\.js):(\d+):(\d+)/g;
 const MAX_MAP_BYTES = 15 * 1024 * 1024; // ruim boven onze grootste bundel-map
 
+/** SSRF-slot: de stack komt van een ongeauthenticeerde client (POST
+ *  /api/client-errors) en werd hier server-side gefetcht — zonder deze check
+ *  was elke `https://<wat-dan-ook>/assets/x.js:1:1` in een stack een blinde
+ *  outbound-fetch-primitive (incl. interne hosts) vanuit de digest-cron.
+ *  Alleen onze eigen deploy-hosts, alleen https, en géén redirects volgen
+ *  (zelfde regel als api/ocpi.ts). */
+const eigenDeployHost = (jsUrl: string): boolean => {
+  try {
+    const u = new URL(jsUrl);
+    if (u.protocol !== "https:") return false;
+    const host = u.hostname.toLowerCase();
+    if (host === "vhbportaal.com" || host === "www.vhbportaal.com") return true;
+    // Eigen Vercel-previews (vhb-portaal-<hash>.vercel.app); VERCEL_URL dekt
+    // de actuele deployment ook als het projectvoorvoegsel ooit wijzigt.
+    const vercelUrl = String(process.env.VERCEL_URL ?? "").toLowerCase();
+    if (vercelUrl && host === vercelUrl) return true;
+    return host.endsWith(".vercel.app") && host.startsWith("vhb-portaal");
+  } catch {
+    return false;
+  }
+};
+
 // Cache per warme lambda: dezelfde digest-run raakt vaak dezelfde bundel.
 const consumerCache = new Map<string, SourceMapConsumer | null>();
 
@@ -19,7 +41,11 @@ const loadConsumer = async (jsUrl: string): Promise<SourceMapConsumer | null> =>
   if (consumerCache.has(jsUrl)) return consumerCache.get(jsUrl) ?? null;
   let consumer: SourceMapConsumer | null = null;
   try {
-    const res = await fetch(`${jsUrl}.map`, { signal: AbortSignal.timeout(4000) });
+    if (!eigenDeployHost(jsUrl)) {
+      consumerCache.set(jsUrl, null);
+      return null;
+    }
+    const res = await fetch(`${jsUrl}.map`, { signal: AbortSignal.timeout(4000), redirect: "manual" });
     if (res.ok) {
       const text = await res.text();
       if (text.length <= MAX_MAP_BYTES) {
