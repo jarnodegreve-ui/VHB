@@ -88,12 +88,12 @@ export function ToastStack({
                   <ToneIcon size={15} strokeWidth={2} />
                 </div>
                 <div className="min-w-0 flex-1 pt-1">
-                  <p className="text-[13px] font-medium leading-snug text-slate-800">{toast.message}</p>
+                  <p className="text-sm font-medium leading-snug text-slate-800">{toast.message}</p>
                   {toast.action && (
                     <button
                       type="button"
                       onClick={() => { toast.action!.run(); onDismiss(toast.id); }}
-                      className="ios-pressable mt-1.5 -ml-1 rounded-lg px-1 py-0.5 text-[13px] font-semibold text-oker-700 underline-offset-2 hover:underline dark:text-oker-500"
+                      className="ios-pressable mt-1.5 -ml-1 rounded-lg px-1 py-0.5 text-sm font-semibold text-oker-700 underline-offset-2 hover:underline dark:text-oker-500"
                     >
                       {toast.action.label}
                     </button>

@@ -67,7 +67,7 @@ export function CalendarSubscribeModal({
 
         {/* Abonneren */}
         <div className="mt-5">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Abonneren (blijft up-to-date)</div>
+          <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Abonneren (blijft up-to-date)</div>
 
           {loading ? (
             <div className="mt-3 flex items-center gap-3 text-slate-500">
@@ -115,7 +115,7 @@ export function CalendarSubscribeModal({
                 Plak deze link in je agenda-app als <span className="font-bold text-slate-500">abonnement</span> (niet als import).
                 Wijzigingen in je rooster verschijnen daarna vanzelf, meestal binnen een uur.
               </p>
-              <div className="mt-2 flex items-start gap-1.5 text-[11px] font-medium text-slate-400">
+              <div className="mt-2 flex items-start gap-1.5 text-2xs font-medium text-slate-400">
                 <ShieldCheck size={13} className="text-slate-400 mt-0.5 shrink-0" />
                 <span>Deze link is persoonlijk — deel 'm niet, hij toont jouw diensten.</span>
               </div>
@@ -125,7 +125,7 @@ export function CalendarSubscribeModal({
 
         {/* Eenmalig downloaden */}
         <div className="mt-5 pt-4 border-t border-slate-100">
-          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Of eenmalig</div>
+          <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Of eenmalig</div>
           <button
             type="button"
             onClick={() => { onDownload(); onClose(); }}

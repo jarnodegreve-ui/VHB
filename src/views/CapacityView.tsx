@@ -280,7 +280,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <table className="w-full text-left border-collapse">
                 <thead>
                   <tr>
-                    <th className="mp-sticky sticky left-0 top-0 z-30 bg-surface-muted px-4 py-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
+                    <th className="mp-sticky sticky left-0 top-0 z-30 bg-surface-muted px-4 py-3 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 min-w-[180px] border-b-2 border-slate-300 border-r-2 border-slate-300">Chauffeur</th>
                     {visibleDates.map((iso) => {
                       const h = dayHeader(iso);
                       const today = iso === todayIso;
@@ -297,7 +297,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
                           )}
                         >
-                          <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
+                          <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
                           <div className="mt-0.5 h-3 text-[10px] font-bold leading-3">
                             {td && (
@@ -325,7 +325,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
                           <td className="mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2 bg-slate-100/90">
-                            <div className="inline-flex items-center px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">
+                            <div className="inline-flex items-center px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">
                               {section}
                             </div>
                           </td>
@@ -358,7 +358,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <span className="inline-flex items-center gap-1.5">
                             {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500" aria-hidden />}
                             {drv.name}
-                            {isOwn && <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                            {isOwn && <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
                           </span>
                         </td>
                         {visibleDates.map((iso) => {
@@ -380,7 +380,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                 <button
                                   type="button"
                                   onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
-                                  className={cn('relative flex h-7 w-full items-center justify-center px-1 text-[11px] tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
+                                  className={cn('relative flex h-7 w-full items-center justify-center px-1 text-2xs tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
                                   title={`${KIND_LABEL[cell.kind]} · ${cell.code}${notes.has(noteKey(String(drv.id), iso)) ? ' · notitie' : ''} — klik voor details`}
                                 >
                                   {cell.code}
@@ -414,14 +414,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               return (
                 <Fragment key={drv.id}>
                 {showHeader && (
-                  <div className="bg-slate-100/80 px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">{section}</div>
+                  <div className="bg-slate-100/80 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{section}</div>
                 )}
                 <div className={cn('p-4', isOwn && 'bg-oker-50')}>
                   <div className="flex items-baseline justify-between gap-2">
                     <div className={cn('text-sm font-semibold truncate inline-flex items-center gap-1.5', isOwn ? 'text-oker-800' : 'text-slate-800')}>
                       {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" aria-hidden />}
                       {drv.name}
-                      {isOwn && <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                      {isOwn && <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
                     </div>
                     <MicroLabel className="shrink-0 tabular-nums">{entries.length}</MicroLabel>
                   </div>
@@ -444,7 +444,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             className="w-full flex items-center gap-3 rounded-xl px-2 py-2.5 min-h-11 text-left active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
                           >
                             <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
-                            <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
+                            <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
                             <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">{summary}</span>
                           </button>
                         );
@@ -462,13 +462,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             <MicroLabel className="text-slate-500">Legende</MicroLabel>
             {codeLegend.serviceExample && (
               <div className="flex items-center gap-2">
-                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold tabular-nums', KIND_CLS.service)}>{codeLegend.serviceExample}</span>
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums', KIND_CLS.service)}>{codeLegend.serviceExample}</span>
                 <span className="font-medium text-slate-600">Dienst</span>
               </div>
             )}
             {codeLegend.entries.map((e) => (
               <div key={e.code} className="flex items-center gap-2">
-                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-[11px] font-semibold', KIND_CLS[e.kind])}>{e.code}</span>
+                <span className={cn('inline-block rounded-md px-1.5 py-0.5 text-2xs font-semibold', KIND_CLS[e.kind])}>{e.code}</span>
                 <span className="font-medium text-slate-600">{e.meaning}</span>
               </div>
             ))}

@@ -15,7 +15,6 @@ import {
   FileText,
   FolderOpen,
   Plus,
-  Settings,
   Users,
   RotateCcw,
   Menu,
@@ -35,7 +34,11 @@ import {
   BellOff,
   RefreshCw,
   WifiOff,
-  Zap
+  Zap,
+  CalendarCog,
+  Hash,
+  ClipboardList,
+  HeartPulse
 } from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
@@ -54,7 +57,7 @@ import { ViewLoader } from './components/ui';
 import { Button } from './components/primitives';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
-import { NavItem, NavSection } from './components/Navigation';
+import { NavItem, NavSection, NavSubLabel } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
@@ -1750,7 +1753,7 @@ export default function App() {
         <BrandLogo tone="donker" className="h-20 w-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
-          <span className="text-[13px] font-medium">Sessie laden…</span>
+          <span className="text-sm font-medium">Sessie laden…</span>
         </div>
       </div>
     );
@@ -1888,7 +1891,7 @@ export default function App() {
           <BrandLogo tone="donker" className="h-20 w-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
-            <span className="text-[13px] font-medium">Profiel laden…</span>
+            <span className="text-sm font-medium">Profiel laden…</span>
           </div>
           <button
             type="button"
@@ -2002,7 +2005,7 @@ export default function App() {
               <p className="mt-1 text-xs text-slate-500">
                 Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee.
               </p>
-              <label htmlFor="probleem-tekst" className="mt-4 block text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+              <label htmlFor="probleem-tekst" className="mt-4 block text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">
                 Wat ging er mis?
               </label>
               <textarea
@@ -2045,7 +2048,7 @@ export default function App() {
               <div className="flex items-center gap-4">
                 <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Bezig</p>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Bezig</p>
                   <p className="text-sm font-semibold text-slate-800">Gegevens verwerken...</p>
                 </div>
               </div>
@@ -2102,7 +2105,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 min-h-0 px-3 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
-          {isPlanner && <div className="mb-1 px-3 pt-0.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400">Algemeen</div>}
+          {isPlanner && <div className="mb-1 px-3 pt-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Algemeen</div>}
           <NavItem
             icon={<LayoutDashboard size={18} />}
             label="Dashboard"
@@ -2162,9 +2165,11 @@ export default function App() {
             active={currentView === 'contacten'}
             onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }}
           />
+          {/* "Maandplanning" — zelfde term als de paginatitel; de nav zei
+              eerst "Maandrooster" en dat waren twee namen voor één scherm. */}
           <NavItem
             icon={<Users size={18} />}
-            label="Maandrooster"
+            label="Maandplanning"
             active={currentView === 'bezetting'}
             onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
           />
@@ -2175,14 +2180,20 @@ export default function App() {
               count={10}
               active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'vervaldata', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
             >
-              <NavItem icon={<Settings size={18} />} label="Beheer roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
+              {/* Drie subgroepen + uniek icoon per item: Settings/Bus stonden
+                  elk 2× in deze lijst en dat sloopte de scanbaarheid van juist
+                  de langste sectie. */}
+              <NavSubLabel>Planning</NavSubLabel>
+              <NavItem icon={<CalendarCog size={18} />} label="Beheer roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
               <NavItem icon={<FileText size={18} />} label="Planningsoverzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Settings size={18} />} label="Planningscodes" active={currentView === 'planning-codes'} onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Hash size={18} />} label="Planningscodes" active={currentView === 'planning-codes'} onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Bus size={18} />} label="Beheer dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<ClipboardList size={18} />} label="Beheer dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
               <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
+              <NavSubLabel>Mensen</NavSubLabel>
               <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
               <NavItem icon={<IdCard size={18} />} label="Vervaldata" active={currentView === 'vervaldata'} onClick={() => { setCurrentView('vervaldata'); setIsSidebarOpen(false); }} />
+              <NavSubLabel>Communicatie</NavSubLabel>
               <NavItem icon={<Plus size={18} />} label="Beheer updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
               <NavItem icon={<MapIcon size={18} />} label="Beheer omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
             </NavSection>
@@ -2194,7 +2205,7 @@ export default function App() {
               <NavItem icon={<Smartphone size={18} />} label="Toestellen" active={currentView === 'toestellen'} onClick={() => { setCurrentView('toestellen'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Activity size={18} />} label="Activiteit" active={currentView === 'activiteit'} onClick={() => { setCurrentView('activiteit'); setIsSidebarOpen(false); }} />
               <NavItem icon={<Zap size={18} />} label="Laadpalen (OCPI)" active={currentView === 'ocpi-monitoring'} onClick={() => { setCurrentView('ocpi-monitoring'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Activity size={18} />} label="Systeemstatus" active={currentView === 'beheer-debug'} onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<HeartPulse size={18} />} label="Systeemstatus" active={currentView === 'beheer-debug'} onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} />
             </NavSection>
           )}
         </nav>
@@ -2202,17 +2213,17 @@ export default function App() {
         <div className="shrink-0 p-3 border-t fine-divider space-y-0.5">
           {/* User profile card */}
           <div className="flex items-center gap-2.5 px-3 py-2 mb-1.5 rounded-xl bg-slate-100/60">
-            <div className="w-8 h-8 rounded-lg bg-oker-100 flex items-center justify-center text-oker-700 shrink-0 text-[11px] font-bold">
+            <div className="w-8 h-8 rounded-lg bg-oker-100 flex items-center justify-center text-oker-700 shrink-0 text-2xs font-bold">
               {userInitials}
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-semibold text-slate-800 truncate leading-tight">{currentUser.name}</p>
-              <p className="text-[11px] text-slate-500 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
+              <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{currentUser.name}</p>
+              <p className="text-2xs text-slate-500 font-medium capitalize">{currentUser.role}</p>
             </div>
           </div>
           <button
             onClick={toggleTheme}
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm"
           >
             <span className="text-slate-400 shrink-0">
               {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
@@ -2222,7 +2233,7 @@ export default function App() {
           {pushPublicKey && isPushSupported() && (
             <button
               onClick={togglePush}
-              className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
+              className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm"
             >
               <span className="text-slate-400 shrink-0">
                 {pushEnabled ? <BellOff size={16} /> : <BellRing size={16} />}
@@ -2232,7 +2243,7 @@ export default function App() {
           )}
           <button
             onClick={() => setShowChangePassword(true)}
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm"
           >
             <span className="text-slate-400 shrink-0">
               <KeyRound size={16} />
@@ -2242,7 +2253,7 @@ export default function App() {
           <button
             onClick={() => { setProbleemTekst(''); setProbleemVerstuurd(false); setShowProbleemMelder(true); setIsSidebarOpen(false); }}
             aria-haspopup="dialog"
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-surface-soft-hover rounded-xl transition-colors duration-150 font-medium text-[13px]"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-surface-soft-hover rounded-xl transition-colors duration-150 font-medium text-sm"
           >
             <span className="text-slate-400 shrink-0">
               <LifeBuoy size={16} />
@@ -2251,7 +2262,7 @@ export default function App() {
           </button>
           <button
             onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-xl transition-colors duration-150 font-medium text-[13px]"
+            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-xl transition-colors duration-150 font-medium text-sm"
           >
             <span className="text-slate-400 shrink-0">
               <LogOut size={16} />
@@ -2293,7 +2304,7 @@ export default function App() {
           {/* Sticky topbar — full-width werkbalk met haarlijn-onderrand */}
           <div className="sticky top-0 z-30 -mx-4 md:-mx-7 mb-5">
             <header className={cn("topbar px-4 md:px-7", isScrolled && "topbar--scrolled")}>
-              <div className="mx-auto flex w-full max-w-[1360px] items-center justify-between gap-3 py-2.5">
+              <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 py-2.5 min-h-12">
                 <div className="flex items-center gap-2 min-w-0">
                   <button
                     onClick={() => setIsSidebarOpen(true)}
@@ -2302,33 +2313,20 @@ export default function App() {
                   >
                     <Menu size={18} />
                   </button>
-                  <div className="min-w-0">
-                    <h2 className="text-[15px] font-bold tracking-tight text-slate-900 leading-tight truncate">
-                      {currentMeta.title}
-                    </h2>
-                    {currentMeta.subtitle && (
-                      <p className="hidden md:block text-[11px] font-normal text-slate-500 mt-px max-w-xl truncate">{currentMeta.subtitle}</p>
-                    )}
-                  </div>
+                  {/* Topbar is puur context: alleen de compacte titel. De
+                      subtitel dupliceerde de PageHeader-description eronder,
+                      en het identiteitsblok stond al in de sidebar-footer —
+                      dubbele titeling boven de vouw is weg. */}
+                  <h2 className="text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate">
+                    {currentMeta.title}
+                  </h2>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {/* Zoekknop bewust weg (Jarno: "vrij zinloos") — het
                       command palette blijft bereikbaar via ⌘K. */}
-                  {/* Gekoppeld aan navigator.onLine — een hardcoded groene pill
-                      toonde bij een uitval doodleuk "Online". */}
-                  <div className={`hidden lg:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border ${isOnline ? 'bg-emerald-50/80 border-emerald-100' : 'bg-red-50/80 border-red-100'}`}>
-                    <div className={`h-1.5 w-1.5 rounded-full ${isOnline ? 'bg-emerald-500' : 'bg-red-500'}`} />
-                    <p className={`text-[11px] font-semibold ${isOnline ? 'text-emerald-700' : 'text-red-600'}`}>{isOnline ? 'Online' : 'Offline'}</p>
-                  </div>
-                  <div className="hidden sm:flex items-center gap-2.5 pl-3 border-l border-slate-200/80">
-                    <div className="w-8 h-8 bg-oker-100 rounded-lg flex items-center justify-center text-oker-700 text-[11px] font-bold">
-                      {userInitials}
-                    </div>
-                    <div className="text-left">
-                      <p className="text-[13px] font-semibold text-slate-800 leading-tight">{currentUser.name}</p>
-                      <p className="text-[11px] text-slate-400 font-medium uppercase tracking-[0.08em]">{currentUser.role}</p>
-                    </div>
-                  </div>
+                  {/* Geen permanente "Online"-pill meer: rust is de standaard.
+                      Alleen een storing verdient een signaal — de offline-
+                      banner hieronder dekt dat op elk formaat. */}
                 </div>
               </div>
             </header>
@@ -2337,8 +2335,8 @@ export default function App() {
               dus op de iPhone — hét toestel — was een uitval onzichtbaar en
               keek je zonder het te weten naar verouderde data. */}
           {!isOnline && (
-            <div className="mx-auto w-full max-w-[1360px]">
-              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-[13px] font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300">
+            <div className="mx-auto w-full max-w-[1200px]">
+              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300">
                 <WifiOff size={14} className="shrink-0" />
                 <span>
                   Offline — wijzigingen komen niet door
@@ -2351,7 +2349,7 @@ export default function App() {
               animatie op de hele view (mode="wait" = exit + enter, ~0.56s op
               een grote DOM) veroorzaakte hapering bij het wisselen van pagina's
               op tragere Windows-pc's. Instant = sneller en jank-vrij. */}
-          <div className="mx-auto w-full max-w-[1360px]">
+          <div className="mx-auto w-full max-w-[1200px]">
               {resolvedCurrentView === 'dashboard' && (
                 isPlanner ? (
                   /* Planner/admin: Operations Center — één operationele cockpit

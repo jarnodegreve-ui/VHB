@@ -195,7 +195,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   <Badge tone="slate">Lijn {div.line}</Badge>
                   {expired && <Badge tone="slate">Verlopen</Badge>}
                 </div>
-                <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium tabular-nums">
+                <div className="flex items-center gap-2 text-2xs text-slate-500 font-medium tabular-nums">
                   <Calendar size={12} className="text-oker-400" />
                   {div.startDate} {div.endDate ? `t/m ${div.endDate}` : '(Geen einddatum)'}
                 </div>
@@ -333,7 +333,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     />
                     <label
                       htmlFor="pdf-upload"
-                      className="ios-pressable control-button-soft inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-all hover:text-slate-900"
+                      className="ios-pressable control-button-soft inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900"
                     >
                       <Upload size={16} />
                       <span className="truncate">

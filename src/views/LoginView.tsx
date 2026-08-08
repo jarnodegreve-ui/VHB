@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { motion, AnimatePresence, useMotionValue, useSpring, useTransform } from 'motion/react';
+import React, { useEffect, useState } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/primitives';
 import { supabase } from '../lib/supabase';
@@ -10,14 +10,12 @@ import { BrandLogo } from '../components/BrandLogo';
 type Mode = 'login' | 'forgot';
 
 /**
- * Login-scherm — light variant.
+ * Login-scherm — bewust doodstil: carbon-achtergrond, logo, twee velden,
+ * één amber knop. Tilt-parallax, ademende focus-glow en de auth-leverancier-
+ * badge zijn er in de verfijningsronde van 08-08 uit — het visitekaartje
+ * zegt "wij twijfelen niet", stilte is hier de luxe.
  *
- * Lichte achtergrond met subtiele oker vignet, gecentreerde single-column
- * layout. VHB PORTAAL wordmark boven de form-card. Card gebruikt .panel.
- *
- * Login is altijd licht, los van de globale theme-toggle in de portal.
- * Tilt-parallax blijft op muis, uit op touch.
- * prefers-reduced-motion zet animaties uit (border + breathing wordmark).
+ * Login is altijd carbon-donker, los van de globale theme-toggle.
  */
 export function LoginView({
   onLogin,
@@ -160,44 +158,10 @@ export function LoginView({
       ? { title: 'Wachtwoord vergeten', description: 'Vul je e-mail in — we sturen een reset-link.' }
       : { title: 'Inloggen', description: 'Meld je aan om verder te gaan.' };
 
-  // === Tilt-parallax voor het form-card ===
-  // Alleen op muis. Op touch zou de kaart rondtollen tijdens scroll.
-  const cardRef = useRef<HTMLDivElement>(null);
-  const mouseX = useMotionValue(0);
-  const mouseY = useMotionValue(0);
-  const rotateX = useSpring(useTransform(mouseY, [-0.5, 0.5], [3, -3]), {
-    stiffness: 120,
-    damping: 18,
-    mass: 0.5,
-  });
-  const rotateY = useSpring(useTransform(mouseX, [-0.5, 0.5], [-3, 3]), {
-    stiffness: 120,
-    damping: 18,
-    mass: 0.5,
-  });
-
-  const handleCardMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (e.pointerType !== 'mouse') return;
-    const node = cardRef.current;
-    if (!node) return;
-    const r = node.getBoundingClientRect();
-    const px = (e.clientX - r.left) / r.width - 0.5;
-    const py = (e.clientY - r.top) / r.height - 0.5;
-    mouseX.set(px);
-    mouseY.set(py);
-  };
-  const handleCardLeave = () => {
-    mouseX.set(0);
-    mouseY.set(0);
-  };
-
   return (
     <div className="min-h-screen relative overflow-hidden login-bg-dark">
       {/* Centrale wordmark + form-card, vertikaal gecentreerd. */}
-      <main
-        className="min-h-screen flex flex-col items-center justify-center px-6 py-12"
-        style={{ perspective: '1200px' }}
-      >
+      <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
         {/* Officieel VHB-logo boven het card. Login is donker (carbon), dus
             de reverse-variant (witte tekst + oker bus). */}
         <motion.div
@@ -210,20 +174,14 @@ export function LoginView({
           <BrandLogo tone="donker" className="h-16 sm:h-20 w-auto select-none" />
         </motion.div>
 
-        {/* Form-card met tilt-parallax + roterende oker-iridescent border */}
+        {/* Stille form-card: één zachte entrance-fade, verder niets. */}
         <motion.div
-          initial={{ opacity: 0, y: 14, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.55, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
-          style={{ rotateX, rotateY, transformStyle: 'preserve-3d' }}
-          className="w-full max-w-[440px] will-change-transform"
+          className="w-full max-w-[440px]"
         >
-          <div
-            ref={cardRef}
-            onPointerMove={handleCardMove}
-            onPointerLeave={handleCardLeave}
-            className="panel-login-dark relative w-full rounded-3xl p-7 sm:p-9"
-          >
+          <div className="panel-login-dark relative w-full rounded-3xl p-7 sm:p-9">
             <AnimatePresence mode="wait">
                 <motion.div
                   key={`${mode}-${recoveryMode}`}
@@ -247,7 +205,7 @@ export function LoginView({
               {uitlogReden && !recoveryMode && (
                 <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-oker-500/25 bg-oker-500/12 px-4 py-3">
                   <ShieldCheck size={15} className="mt-px shrink-0 text-oker-400" />
-                  <p className="text-[13px] font-medium leading-relaxed text-oker-100">{uitlogReden}</p>
+                  <p className="text-sm font-medium leading-relaxed text-oker-100">{uitlogReden}</p>
                 </div>
               )}
 
@@ -333,7 +291,7 @@ export function LoginView({
                           setMode('forgot');
                           resetFeedback();
                         }}
-                        className="-my-2 inline-flex min-h-11 items-center text-[11px] font-bold uppercase tracking-[0.08em] text-oker-600 hover:text-oker-700 transition-colors"
+                        className="-my-2 inline-flex min-h-11 items-center text-2xs font-bold uppercase tracking-[0.08em] text-oker-600 hover:text-oker-700 transition-colors"
                       >
                         Vergeten?
                       </button>
@@ -344,11 +302,6 @@ export function LoginView({
                 </form>
               )}
 
-            {/* Trust badge */}
-            <div className="mt-7 pt-5 border-t border-white/10 flex items-center justify-center gap-1.5 text-[11px] font-medium uppercase tracking-[0.08em] text-slate-400">
-              <ShieldCheck size={11} className="text-emerald-500" />
-              Beveiligd via Supabase Auth
-            </div>
           </div>{/* /panel */}
         </motion.div>
       </main>
@@ -360,7 +313,7 @@ export function LoginView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-[11px] font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6 space-y-1"
+        className="absolute inset-x-0 bottom-0 text-2xs font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6 space-y-1"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <div>Intern gebruik</div>
@@ -412,7 +365,7 @@ function FieldInput({
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between px-1 min-h-[14px]">
-        <label className="block text-[11px] font-semibold text-slate-300 uppercase tracking-[0.08em]">{label}</label>
+        <label className="block text-xs font-medium text-slate-300">{label}</label>
         <div className="flex items-center gap-3">
           <AnimatePresence>
             {showCapsWarning && (
@@ -421,7 +374,7 @@ function FieldInput({
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 6 }}
                 transition={{ duration: 0.18 }}
-                className="inline-flex items-center gap-1 text-[11px] font-bold uppercase tracking-[0.08em] text-amber-600"
+                className="inline-flex items-center gap-1 text-2xs font-bold uppercase tracking-[0.08em] text-amber-600"
                 title="Caps Lock staat aan"
               >
                 <ArrowUp size={10} strokeWidth={3} />
@@ -432,7 +385,10 @@ function FieldInput({
           {rightSlot}
         </div>
       </div>
-      <div className={`relative rounded-2xl transition-shadow ${focused ? 'field-glow' : ''}`}>
+      {/* Geen field-glow meer: de focus-rand van control-input-dark volstaat —
+          een ademende gloed op een pro-tool-login was juist het soort truc
+          dat we kwijt wilden. */}
+      <div className="relative rounded-2xl">
         <div
           className={`absolute left-4 top-1/2 -translate-y-1/2 transition-colors pointer-events-none ${
             focused ? 'text-oker-500' : 'text-slate-400'

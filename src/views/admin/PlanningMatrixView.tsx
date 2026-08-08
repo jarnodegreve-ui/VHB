@@ -397,11 +397,11 @@ export function PlanningMatrixView({
                   <p className="text-sm font-semibold text-slate-800 tabular-nums">
                     {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
-                  <div className="mt-1.5 flex items-center justify-between text-[11px] font-medium text-slate-400 tabular-nums">
+                  <div className="mt-1.5 flex items-center justify-between text-2xs font-medium text-slate-400 tabular-nums">
                     <span>Dagtype {row.day_type || '-'}</span>
                     <span>{assignmentCount} codes</span>
                   </div>
-                  <div className="mt-0.5 flex items-center justify-between text-[11px] font-medium text-slate-400 tabular-nums">
+                  <div className="mt-0.5 flex items-center justify-between text-2xs font-medium text-slate-400 tabular-nums">
                     <span>{generatedServices} diensten</span>
                     {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
                       ? <span className="font-semibold text-amber-700">controle nodig</span>

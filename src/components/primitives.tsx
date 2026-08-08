@@ -25,7 +25,7 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
   sm: 'gap-1.5 rounded-lg px-3 py-2 text-xs',
-  md: 'gap-2 rounded-xl px-4 py-2.5 text-[13px] min-h-11',
+  md: 'gap-2 rounded-xl px-4 py-2.5 text-sm min-h-11',
   lg: 'gap-2 rounded-xl px-5 py-3 text-sm min-h-12',
 };
 
@@ -86,7 +86,7 @@ export function Badge({
 }) {
   const t = BADGE_TONES[tone];
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold', t.chip, className)}>
+    <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium', t.chip, className)}>
       {dot && <span className={cn('h-1.5 w-1.5 rounded-full', t.dot)} />}
       {icon}
       {children}
@@ -110,10 +110,13 @@ export function StatusBadge({ status, className }: { status: string; className?:
 
 // === MicroLabel ===
 
-/** Het uppercase micro-label (sectiekopjes, veld-labels boven waarden). */
+/** Het uppercase micro-label — ALLEEN voor sectie-eyebrows (paneelkopjes,
+ *  eyebrow boven een PageHeader). Veldlabels en tabelkoppen zijn sentence-
+ *  case (zie Th); als álles een eyebrow is, is niets het meer.
+ *  slate-500 (niet -400): -400 haalt op wit maar ~2,8:1 contrast. */
 export function MicroLabel({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <p className={cn('text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400', className)}>
+    <p className={cn('text-2xs font-medium uppercase tracking-[0.08em] text-slate-500', className)}>
       {children}
     </p>
   );
@@ -131,13 +134,14 @@ export function TableShell({ className, children }: { className?: string; childr
 }
 
 export function Th({ className, children, title }: { className?: string; children?: ReactNode; title?: string }) {
+  // Sentence-case, geen caps: tabelkoppen zijn leestekst, geen eyebrow.
   return (
-    <th title={title} className={cn('px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-slate-400 whitespace-nowrap', className)}>
+    <th title={title} className={cn('px-4 py-3 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
       {children}
     </th>
   );
 }
 
 export function Td({ className, children }: { className?: string; children?: ReactNode }) {
-  return <td className={cn('px-4 py-3 text-[13px] text-slate-700', className)}>{children}</td>;
+  return <td className={cn('px-4 py-3 text-sm text-slate-700', className)}>{children}</td>;
 }

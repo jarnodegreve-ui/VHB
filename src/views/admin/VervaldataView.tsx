@@ -256,7 +256,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                   >
                     <div className="min-w-0 flex-1 basis-44 md:flex-none md:basis-auto">
                       <p className={cn('truncate text-sm font-semibold', eerste < 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-800')}>{user.name}</p>
-                      <p className="text-[11px] font-medium tabular-nums text-slate-500">
+                      <p className="text-2xs font-medium tabular-nums text-slate-500">
                         {eerste < 0
                           ? `al ${Math.abs(eerste)} ${Math.abs(eerste) === 1 ? 'dag' : 'dagen'} verlopen`
                           : eerste === 0
@@ -315,7 +315,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                     {/* Zelfde kolomraster als de lijst hierboven, zodat beide
                         blokken één tabel lijken; "Invullen" staat in de eerste
                         documentkolom en dus recht onder de pillen. */}
-                    <span className="shrink-0 text-[11px] font-semibold text-oker-700 dark:text-oker-600">Invullen</span>
+                    <span className="shrink-0 text-2xs font-semibold text-oker-700 dark:text-oker-600">Invullen</span>
                   </button>
                 ))}
               </div>

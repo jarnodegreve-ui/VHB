@@ -237,7 +237,7 @@ export function ServicesView({ services }: { services: Service[] }) {
 function LoopChip({ loopnr }: { loopnr?: string }) {
   if (!loopnr?.trim()) return null;
   return (
-    <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-[11px] font-semibold tabular-nums text-slate-600">
+    <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
       loop {loopnr.trim()}
     </span>
   );

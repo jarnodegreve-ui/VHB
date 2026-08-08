@@ -114,7 +114,7 @@ export function OcpiCard() {
             </div>
           </div>
           {lastSync && (
-            <p className="mt-2 text-[11px] text-slate-500">Laatste sync: {lastSync}</p>
+            <p className="mt-2 text-2xs text-slate-500">Laatste sync: {lastSync}</p>
           )}
 
           <div className="mt-5 space-y-3">
@@ -155,7 +155,7 @@ export function OcpiCard() {
                 {status.endpoints.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {status.endpoints.map((e) => (
-                      <span key={`${e.identifier}:${e.role}`} className="text-[11px] font-mono px-2 py-1 rounded-lg bg-surface-muted text-slate-600">
+                      <span key={`${e.identifier}:${e.role}`} className="text-2xs font-mono px-2 py-1 rounded-lg bg-surface-muted text-slate-600">
                         {e.identifier}{e.role ? `:${e.role.toLowerCase()}` : ''}
                       </span>
                     ))}
@@ -168,7 +168,7 @@ export function OcpiCard() {
           {!isLoading && status && !status.configured && (
             <div className="mt-4">
               <MicroLabel className="mb-2 text-slate-500">Eerst instellen</MicroLabel>
-              <p className="text-[11px] text-slate-500 leading-relaxed">
+              <p className="text-2xs text-slate-500 leading-relaxed">
                 Draai <span className="font-mono">supabase/ocpi_registration.sql</span>, zet de <span className="font-mono">OCPI_*</span>-env-vars
                 in Vercel (incl. Token A uit ChargEye) en redeploy. Daarna is deze knop actief.
               </p>

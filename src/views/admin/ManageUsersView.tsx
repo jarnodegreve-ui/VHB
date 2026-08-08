@@ -390,7 +390,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         description="Beheer medewerkers, rollen en accountacties vanuit beheershell."
         actions={(
           <>
-            <label className={cn('control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-[13px] font-semibold text-slate-700 transition-all hover:text-slate-900', isImporting && 'cursor-not-allowed opacity-50')}>
+            <label className={cn('control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900', isImporting && 'cursor-not-allowed opacity-50')}>
               <Upload size={16} />
               {isImporting ? 'Bezig…' : 'Excel importeren'}
               <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
@@ -444,13 +444,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         <div className="rounded-3xl border border-oker-100 bg-oker-50/80 p-5 text-sm">
           <MicroLabel className="text-oker-700">Bronimport</MicroLabel>
           <p className="mt-3 font-bold tracking-tight text-oker-800">Excel Instructies</p>
-          <p className="mt-2 text-[13px] text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-semibold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-semibold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
+          <p className="mt-2 text-sm text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-semibold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-semibold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
         </div>
       </div>
 
       {selectedIds.size > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-oker-200/70 bg-oker-500/10 px-4 py-2.5">
-          <span className="text-[13px] font-semibold text-slate-700">{selectedIds.size} geselecteerd</span>
+          <span className="text-sm font-semibold text-slate-700">{selectedIds.size} geselecteerd</span>
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="secondary" size="sm" icon={<Pause size={15} />} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
             <Button variant="secondary" size="sm" icon={<Play size={15} />} onClick={() => bulkSetActive(true)}>Activeren</Button>
@@ -563,8 +563,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="p-3 bg-surface-soft rounded-2xl"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-[13px] font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></div>
-                <div className="p-3 bg-surface-soft rounded-2xl"><MicroLabel>Sessies</MicroLabel><p className="mt-1 text-[13px] font-semibold text-slate-700 tabular-nums">{u.activeSessions || 0}</p></div>
+                <div className="p-3 bg-surface-soft rounded-2xl"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></div>
+                <div className="p-3 bg-surface-soft rounded-2xl"><MicroLabel>Sessies</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.activeSessions || 0}</p></div>
               </div>
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setEditingUser(u)}>Bewerken</Button>
@@ -623,7 +623,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 {editingUser.role === 'chauffeur' && (
                   <div className="space-y-1.5"><MicroLabel>Sectie (Maandplanning)</MicroLabel><select aria-label="Sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></select></div>
                 )}
-                <div className="space-y-1.5"><MicroLabel>In dienst sinds</MicroLabel><input type="date" aria-label="In dienst sinds" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" /><p className="text-[11px] text-slate-400 font-medium px-1">Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning.</p></div>
+                <div className="space-y-1.5"><MicroLabel>In dienst sinds</MicroLabel><input type="date" aria-label="In dienst sinds" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" /><p className="text-2xs text-slate-400 font-medium px-1">Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning.</p></div>
                 <div className="space-y-1.5 sm:col-span-2">
                   <MicroLabel>Verlofbudget (dagen)</MicroLabel>
                   <input
@@ -637,7 +637,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium"
                     placeholder="Leeg = standaard (24 dagen)"
                   />
-                  <p className="text-[11px] text-slate-400 font-medium px-1">Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).</p>
+                  <p className="text-2xs text-slate-400 font-medium px-1">Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).</p>
                 </div>
                 {editingUser.role === 'chauffeur' && (
                   <div className="space-y-1.5 sm:col-span-2">
@@ -645,7 +645,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     <div className="grid gap-3 sm:grid-cols-3">
                       {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
                         <div key={soort} className="space-y-1">
-                          <p className="px-1 text-[11px] font-medium text-slate-500">{label}</p>
+                          <p className="px-1 text-2xs font-medium text-slate-500">{label}</p>
                           <input
                             type="date"
                             aria-label={`${label} geldig tot`}
@@ -656,25 +656,25 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                         </div>
                       ))}
                     </div>
-                    <p className="text-[11px] text-slate-400 font-medium px-1">Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.</p>
+                    <p className="text-2xs text-slate-400 font-medium px-1">Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.</p>
                   </div>
                 )}
               </div>
               <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
-                <div><p className="text-sm font-semibold text-slate-700">Account Actief</p><p className="text-[11px] text-slate-400">Inactieve gebruikers kunnen niet inloggen.</p></div>
+                <div><p className="text-sm font-semibold text-slate-700">Account Actief</p><p className="text-2xs text-slate-400">Inactieve gebruikers kunnen niet inloggen.</p></div>
                 <button type="button" onClick={() => setEditingUser({ ...editingUser, isActive: editingUser.isActive === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.isActive !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-surface-white rounded-full transition-all', editingUser.isActive !== false ? 'left-7' : 'left-1')} /></button>
               </div>
               <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
-                <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-[11px] text-slate-400">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
+                <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-2xs text-slate-400">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <button type="button" onClick={() => setEditingUser({ ...editingUser, showInContacts: editingUser.showInContacts === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.showInContacts !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-surface-white rounded-full transition-all', editingUser.showInContacts !== false ? 'left-7' : 'left-1')} /></button>
               </div>
               {editingUser.role === 'admin' && (
                 <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
-                  <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-[11px] text-slate-400">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
+                  <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-2xs text-slate-400">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
                   <button type="button" onClick={() => setEditingUser({ ...editingUser, wantsSystemMail: editingUser.wantsSystemMail === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.wantsSystemMail !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-surface-white rounded-full transition-all', editingUser.wantsSystemMail !== false ? 'left-7' : 'left-1')} /></button>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-[13px] font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
+              <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
               <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
             </form>
           </>
@@ -739,7 +739,7 @@ function RowMenuItem({ icon, label, onClick, disabled = false, tone = 'default' 
       onClick={onClick}
       disabled={disabled}
       className={cn(
-        'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-[13px] font-semibold transition-colors min-h-11',
+        'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors min-h-11',
         tone === 'danger'
           ? 'text-red-600 hover:bg-red-50'
           : 'text-slate-700 hover:bg-slate-100/70 dark:text-slate-200 dark:hover:bg-white/5',
