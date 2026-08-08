@@ -31,8 +31,10 @@
          updateViaCache:'none' + een update-check bij elke terugkeer naar de
          app: een standalone PWA die uit de app-switcher wordt hervat doet
          géén navigatie-fetch en bleef daardoor op een oude bundel hangen tot
-         de gebruiker forceer-afsloot. De sw doet skipWaiting+clients.claim,
-         dus zodra de nieuwe versie geactiveerd is herladen we één keer. -->
+         de gebruiker forceer-afsloot. De nieuwe SW blijft WACHTEN (geen
+         auto-skipWaiting meer): de app toont een "Vernieuw"-toast en pas
+         na die klik activeert de SW en herlaadt de controllerchange-listener
+         hieronder één keer — nooit meer midden in een formulier. -->
     <script>
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {

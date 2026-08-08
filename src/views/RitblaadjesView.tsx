@@ -79,6 +79,11 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);
   const [fromCache, setFromCache] = useState(false);
+  // Op een touch-toestel (iPhone) rendert WKWebView een PDF in een <iframe>
+  // als één niet-scrolbare eerste pagina — een chauffeur zag van een
+  // meerpaginas ritblad dus stilzwijgend maar de helft. Daar tonen we een
+  // open-kaart i.p.v. de iframe.
+  const [touchToestel] = useState(() => typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const canEdit = currentUser.role === 'admin';
@@ -312,7 +317,24 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
           </div>
 
           <div className="surface-card rounded-3xl overflow-hidden">
-            {current.url ? (
+            {current.url && touchToestel ? (
+              /* Grote open-kaart: opent het vólledige PDF via openPdfInNewTab
+                 (met standalone-fallback) — de iframe-preview toont op iOS
+                 alleen pagina 1, zonder enige hint dat er meer is. */
+              <button
+                type="button"
+                onClick={() => openPdfInNewTab(current.url!)}
+                className="ios-pressable flex w-full flex-col items-center justify-center gap-3 px-8 py-14 text-center"
+              >
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-600 dark:text-oker-400">
+                  <FileText size={22} />
+                </span>
+                <span className="text-base font-semibold text-slate-800">Bekijk ritblad</span>
+                <span className="max-w-sm text-sm font-normal leading-relaxed text-slate-500">
+                  Opent het volledige document — alle pagina's, met knijp-zoom.
+                </span>
+              </button>
+            ) : current.url ? (
               <iframe
                 src={current.url}
                 title="Ritblad-voorbeeld"
@@ -327,9 +349,11 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
             )}
           </div>
 
-          <p className="text-xs font-medium text-slate-400 text-center">
-            Werkt de preview niet op je toestel? Gebruik de <span className="text-slate-600 font-semibold">Download</span>-knop om het bestand lokaal te openen.
-          </p>
+          {!touchToestel && (
+            <p className="text-xs font-medium text-slate-400 text-center">
+              Werkt de preview niet op je toestel? Gebruik de <span className="text-slate-600 font-semibold">Download</span>-knop om het bestand lokaal te openen.
+            </p>
+          )}
         </div>
       )}
 
