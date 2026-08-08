@@ -392,6 +392,9 @@ export default function App() {
   // Initialize theme from localStorage. Eerste-bezoek default = LIGHT
   // (geen system-preference fallback meer — gebruikers die dark willen
   // klikken zelf de toggle).
+  // themaGekozenRef: heeft de gebruiker ooit zelf een thema gekozen? Zo niet,
+  // mag de rol-standaard hieronder (dispatch: planner = donker) hem invullen.
+  const themaGekozenRef = useRef(false);
   useEffect(() => {
     let stored: string | null = null;
     try {
@@ -399,6 +402,7 @@ export default function App() {
     } catch {
       // localStorage geblokkeerd (privacy-modus) — val terug op licht.
     }
+    themaGekozenRef.current = stored === 'dark' || stored === 'light';
     const initial: 'light' | 'dark' = stored === 'dark' || stored === 'light' ? stored : 'light';
     setTheme(initial);
     if (typeof document !== 'undefined') {
@@ -406,6 +410,20 @@ export default function App() {
       applyThemeColorMeta(initial === 'dark');
     }
   }, []);
+
+  // Dispatch: zonder eigen keuze krijgt een planner/admin de donkere
+  // control-room als standaard; chauffeurs blijven licht. Niet persisteren —
+  // pas de toggle maakt er een eigen keuze van (en die wint dan altijd).
+  useEffect(() => {
+    if (themaGekozenRef.current || !currentUser) return;
+    const donker = currentUser.role === 'planner' || currentUser.role === 'admin';
+    setTheme(donker ? 'dark' : 'light');
+    if (typeof document !== 'undefined') {
+      document.documentElement.classList.toggle('dark', donker);
+      applyThemeColorMeta(donker);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.id]);
 
   // Push-notificaties: key=null betekent dat de server geen VAPID-keys heeft
   // (feature uit) — de knop verschijnt dan niet.
@@ -2077,7 +2095,9 @@ export default function App() {
           "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
-        style={{ transitionTimingFunction: 'cubic-bezier(0.34, 1.28, 0.64, 1)' }}
+        // Zachte uitloop zonder overshoot — de bounce voelde gedateerd en
+        // botste met de verder stille motion-taal.
+        style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)' }}
       >
         <div className="shrink-0 px-5 pt-5 pb-4 flex items-center justify-center relative text-center">
           {/* Géén transform/transition-all op de logoknop: Safari rastert een

@@ -56,7 +56,7 @@ function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
       {[1, 0.5].map((f) => (
         <div key={f} className="absolute inset-x-0" style={{ bottom: `${f * 100}%` }}>
           <div className="border-t border-slate-200/80 dark:border-white/10" />
-          <span className="absolute right-0 top-0.5 text-[10px] font-medium tabular-nums leading-none text-slate-400 dark:text-slate-500">
+          <span className="absolute right-0 top-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500">
             {fmt(top * f)} {eenheid}
           </span>
         </div>
@@ -458,7 +458,7 @@ export function OcpiDashboardView() {
                 })()}
                 <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                   {grafiek.dagen.map((d) => (
-                    <span key={d.date} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400">
+                    <span key={d.date} className="flex-1 text-center text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
                       {grafiek.dagen.length <= 7 ? WEEKDAG_KORT[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
                     </span>
                   ))}
@@ -466,11 +466,11 @@ export function OcpiDashboardView() {
                 {(() => {
                   const dag = grafiek.dagen.find((d) => d.date === gekozenDag);
                   return dag ? (
-                    <p className="mt-2 min-h-4 truncate text-2xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                    <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
                       {new Date(`${dag.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · {dag.kwh} kWh · {dag.sessions} sessie{dag.sessions === 1 ? '' : 's'}
                     </p>
                   ) : (
-                    <p className="mt-2 min-h-4 truncate text-2xs font-medium tabular-nums text-slate-500">
+                    <p className="mt-2 min-h-4 truncate text-2xs font-medium font-mono tabular-nums text-slate-500">
                       totaal {Math.round(grafiek.totaal)} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {Math.round(grafiek.piek)} kWh
                     </p>
                   );
@@ -529,7 +529,7 @@ export function OcpiDashboardView() {
                         {maandpiek > 0 && (
                           <div className="absolute inset-x-0" style={{ bottom: `${Math.min(98, (maandpiek / asTop) * 100)}%` }} aria-hidden="true">
                             <div className="border-t border-dashed border-oker-500/70" />
-                            <span className="absolute left-0 top-0.5 text-[10px] font-medium tabular-nums leading-none text-oker-700 dark:text-oker-400">
+                            <span className="absolute left-0 top-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400">
                               maandpiek {maandpiek} kW
                             </span>
                           </div>
@@ -607,11 +607,11 @@ export function OcpiDashboardView() {
                 {vermogen.modus === 'dagen' ? (
                   <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                     {vermogen.staven.map((st) => (
-                      <span key={st.key} className="flex-1 text-center text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
+                      <span key={st.key} className="flex-1 text-center text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-1 flex min-h-4 justify-between text-[10px] font-medium tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
+                  <div className="mt-1 flex min-h-4 justify-between text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
                     <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
                     <span>nu</span>
                   </div>
@@ -623,13 +623,13 @@ export function OcpiDashboardView() {
                       ? uurLabel(st.key)
                       : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel(st.ts || st.key)}`;
                     return (
-                      <p className="mt-2 min-h-4 truncate text-2xs font-semibold tabular-nums text-slate-700 dark:text-slate-200">
+                      <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
                         {kop} · {st.kw} kW · {st.charging} sessie{st.charging === 1 ? '' : 's'}
                       </p>
                     );
                   }
                   return (
-                    <p className="mt-2 min-h-4 truncate text-2xs font-medium tabular-nums text-slate-500">
+                    <p className="mt-2 min-h-4 truncate text-2xs font-medium font-mono tabular-nums text-slate-500">
                       {vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}${vermogen.modus === 'dagen' && vermogen.piekTs ? ` om ${uurLabel(vermogen.piekTs)}` : ''}` : 'nog geen vermogen gemeten'}
                     </p>
                   );
@@ -656,7 +656,7 @@ export function OcpiDashboardView() {
               const rij = (label: string, waarde: string) => (
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-b-0">
                   <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</span>
-                  <span className="text-sm font-semibold tabular-nums text-slate-800">{waarde}</span>
+                  <span className="text-sm font-semibold font-mono tabular-nums text-slate-800">{waarde}</span>
                 </div>
               );
               return (
@@ -716,7 +716,7 @@ export function OcpiDashboardView() {
                             Laadpunt {nummer}{bus ? ` · bus ${bus}` : ''}
                           </span>
                           {st.soc !== null && (
-                            <Badge tone={st.vol ? 'emerald' : 'blue'} className="shrink-0 tabular-nums">{st.soc}%</Badge>
+                            <Badge tone={st.vol ? 'emerald' : 'blue'} className="shrink-0 font-mono tabular-nums">{st.soc}%</Badge>
                           )}
                         </div>
                         <p className="mt-0.5 text-2xs text-slate-500">
@@ -770,7 +770,7 @@ export function OcpiDashboardView() {
                             <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
                               <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
                                 <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
-                                <span className="text-2xs font-medium tabular-nums text-slate-500 dark:text-slate-400">
+                                <span className="text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
                                   {laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}
                                 </span>
                               </div>
@@ -800,14 +800,14 @@ export function OcpiDashboardView() {
                                           zijn pil ("61%" werd "6") en schoof
                                           hij ín de statuspil ernaast. */}
                                       <span className="flex shrink-0 items-center gap-1.5">
-                                        <span className="w-11 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
+                                        <span className="w-11 shrink-0 text-sm font-semibold font-mono tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
                                         {/* Busnummer is dé operationele sleutel van dit
                                             scherm — niet in de zwakste tint zetten. */}
-                                        <span className="w-14 shrink-0 text-2xs font-medium tabular-nums text-slate-600 dark:text-slate-300">
+                                        <span className="w-14 shrink-0 text-2xs font-medium font-mono tabular-nums text-slate-600 dark:text-slate-300">
                                           {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
                                         </span>
                                         {s.soc !== null && (
-                                          <Badge tone={s.vol ? 'emerald' : 'blue'} className="shrink-0 tabular-nums">{s.soc}%</Badge>
+                                          <Badge tone={s.vol ? 'emerald' : 'blue'} className="shrink-0 font-mono tabular-nums">{s.soc}%</Badge>
                                         )}
                                       </span>
                                       {/* Vol = groen, ook al staat de paal

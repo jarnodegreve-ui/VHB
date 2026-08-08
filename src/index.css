@@ -73,6 +73,12 @@
   --text-sm: 0.8125rem;
   --text-sm--line-height: 1.25rem;
 
+  /* === Dispatch: monospace-accent ===
+     Voor operationele nummers — dienst- en loopnummers, tijden, kW/kWh,
+     as-labels. Systeem-monostack (0 bytes download, scherp op Apple);
+     `font-mono` is dus overal het "instrument"-signaal. */
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+
   /* Strakkere radius-schaal (pro-tool i.p.v. bento): xl 10 · 2xl 14 · 3xl 18.
      Alle kaarten/inputs verwijzen naar deze tokens. */
   --radius-xl: 0.625rem;
@@ -159,9 +165,12 @@
   --border-default: #E4E6E8;
 }
 
+/* Dispatch-ladder: donker is ontwórpen, niet afgeleid — oppervlakken
+   near-opaque (crisper dan de oude alpha-mengsels) en hairlines een
+   fractie helderder zodat rijen en kaarten definitie houden op carbon. */
 html.dark {
-  --tile-bg: rgba(23, 24, 26, 0.92);
-  --tile-border: 1px solid rgba(255, 255, 255, 0.07);
+  --tile-bg: rgba(23, 24, 26, 0.95);
+  --tile-border: 1px solid rgba(255, 255, 255, 0.09);
   --tile-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
     0 8px 24px rgba(0, 0, 0, 0.4);
@@ -604,8 +613,8 @@ html.dark {
  * sterkere edge-lit highlights. */
 
 :where(.dark) .panel {
-  background: rgba(21, 22, 25, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  background: rgba(21, 22, 25, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.09);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
     0 8px 24px rgba(0, 0, 0, 0.4);
@@ -627,8 +636,8 @@ html.dark {
 }
 
 :where(.dark) .surface-card {
-  background: rgba(23, 24, 26, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(23, 24, 26, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
     0 6px 20px rgba(0, 0, 0, 0.35);

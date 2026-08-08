@@ -862,7 +862,7 @@ export function PlannerDashboardWidgets({
                   <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-semibold text-slate-800">{u.name}</span>
-                    <span className="block text-2xs font-medium text-slate-500 tabular-nums">
+                    <span className="block text-2xs font-mono font-medium text-slate-500 tabular-nums">
                       {u.phone || 'geen nummer bekend'}
                     </span>
                   </span>
@@ -1086,7 +1086,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                 flex-wrap: bij één of twee blokken staat het op één regel zoals
                 voorheen, bij drie wijkt het netjes uit naar een tweede regel
                 in plaats van tegen de dienstchip te duwen. */}
-            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs font-medium text-slate-500 tabular-nums">
+            <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-2xs font-mono font-medium text-slate-500 tabular-nums">
               {d.segs.map((seg, i) => (
                 <Fragment key={seg}>
                   {i > 0 && <span aria-hidden className="h-1 w-1 shrink-0 rounded-full bg-slate-300" />}
@@ -1112,7 +1112,7 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                 tweede regel (rijhoogte 59 → 75 px). Marges en geen transform:
                 een extra compositing-laag geeft in Safari rasterrandjes. */}
             {d.remaining && (
-              <span className={cn('-ml-2 whitespace-nowrap pr-2 text-2xs font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
+              <span className={cn('-ml-2 whitespace-nowrap pr-2 text-2xs font-mono font-semibold tabular-nums', AFTEL_TOON[d.remainingTone ?? 'bezig'])}>
                 {d.remaining}
               </span>
             )}

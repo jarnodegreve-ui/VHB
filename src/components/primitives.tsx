@@ -136,12 +136,14 @@ export function TableShell({ className, children }: { className?: string; childr
 export function Th({ className, children, title }: { className?: string; children?: ReactNode; title?: string }) {
   // Sentence-case, geen caps: tabelkoppen zijn leestekst, geen eyebrow.
   return (
-    <th title={title} className={cn('px-4 py-3 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
+    <th title={title} className={cn('px-4 py-3 sm:pointer-fine:py-2.5 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
       {children}
     </th>
   );
 }
 
 export function Td({ className, children }: { className?: string; children?: ReactNode }) {
-  return <td className={cn('px-4 py-3 text-sm text-slate-700', className)}>{children}</td>;
+  // Compacter op desktop-met-muis (dispatch-dichtheid); op touch blijft de
+  // rij hoog genoeg als raakvlak.
+  return <td className={cn('px-4 py-3 sm:pointer-fine:py-2.5 text-sm text-slate-700', className)}>{children}</td>;
 }
