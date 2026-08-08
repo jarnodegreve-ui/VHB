@@ -124,6 +124,23 @@ export function MicroLabel({ className, children }: { className?: string; childr
   );
 }
 
+// === Segmented control ===
+
+/**
+ * Eén dialect voor het segmented-control-patroon (sorteer-/filterschakelaars
+ * op een `glass-segmented`-rail). Er waren er drie — amber-gevuld, glass-chip
+ * en witte chip; dit is de amber-gevulde (de recentste, o.a. ScheduleView en
+ * OCPI). `segItemClass(actief)` geeft de knop-klassen; de rail zelf blijft
+ * `glass-segmented … p-1` bij de aanroeper (verschillende radius/breedte).
+ */
+export function segItemClass(actief: boolean, className?: string) {
+  return cn(
+    'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
+    actief ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
+    className,
+  );
+}
+
 // === Tabel-primitieven ===
 
 /** Wrapper: kaart-oppervlak + horizontale scroll op smal scherm. */

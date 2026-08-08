@@ -79,7 +79,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
   return (
     <Modal open onClose={onClose} maxWidth="lg" ariaLabel={`Documenten — ${user.name}`} boven>
       <div className="flex max-h-[85dvh] flex-col overflow-hidden">
-          <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
+          <div className="p-6 border-b border-slate-200/70 flex items-center justify-between shrink-0">
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center shrink-0"><FileText size={20} /></div>
               <div className="min-w-0">
@@ -90,7 +90,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors"><X size={16} /></button>
           </div>
 
-          <div className="p-6 border-b border-white/70 shrink-0 space-y-3">
+          <div className="p-6 border-b border-slate-200/70 shrink-0 space-y-3">
             <div className="space-y-1.5">
               <MicroLabel>Categorie (optioneel)</MicroLabel>
               <input

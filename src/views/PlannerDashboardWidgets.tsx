@@ -951,7 +951,7 @@ export function PlannerDashboardWidgets({
         maxWidth="sm"
         className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0"
       >
-        <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+        <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
               <AlertTriangle size={17} />
@@ -1145,7 +1145,7 @@ function DashboardListModal({
 }) {
   return (
     <Modal open={open} onClose={onClose} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
-      <div className="px-6 py-5 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+      <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
         <div className="flex items-center gap-3 min-w-0">
           <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconClassName)}>
             {icon}

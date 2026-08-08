@@ -710,7 +710,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
       <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
-              <div className="px-6 py-5 md:px-8 border-b border-white/70 flex items-center justify-between shrink-0 gap-3">
+              <div className="px-6 py-5 md:px-8 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
                 <div className="flex items-center gap-3 min-w-0">
                   {/* 44x44 op beide headerknoppen: dit zijn de enige twee
                       uitwegen uit een driestapswizard op een telefoon. Ze
