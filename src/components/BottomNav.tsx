@@ -80,7 +80,7 @@ export function BottomNav({
       className={cn(
         // left/right respecteren de safe-area (landscape/notch) — iOS negeert
         // de portrait-lock uit het manifest, dus landscape kán voorkomen.
-        'md:hidden fixed left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] z-40 rounded-2xl px-2 py-2 transition-all duration-300',
+        'md:hidden fixed left-[max(0.5rem,env(safe-area-inset-left))] right-[max(0.5rem,env(safe-area-inset-right))] z-40 rounded-2xl px-1.5 py-2 transition-all duration-300',
         // Opaak oppervlak + schaduw in index.css (.bottom-dock): blur jankt op
         // een fixed balk, en doorschijnend-zonder-blur liet de content er
         // rommelig doorheen schemeren.
@@ -96,11 +96,17 @@ export function BottomNav({
       }}
       aria-label="Hoofdnavigatie"
     >
-      <ul className="flex items-center justify-around gap-1">
+      {/* flex-auto + min-w-0 (niet flex-1): tabs krijgen ruimte naar de
+          breedte van hun label, maar mógen krimpen. Met flex-1 zonder
+          min-w-0 duwde "Vervaldata"/"Omleidingen" op smalle toestellen
+          (Galaxy Fold 280, oude iPhones 320, Androids 360) de "Meer"-tab
+          deels of volledig buiten de kaart. Nu leveren de breedste labels
+          het eerst in (ellipsis) en blijft elke tab zichtbaar en tikbaar. */}
+      <ul className="flex items-center justify-around">
         {slots.map((slot) => {
           const isActive = currentView === slot.view;
           return (
-            <li key={slot.view} className="flex-1">
+            <li key={slot.view} className="flex-auto min-w-0">
               <button
                 onClick={() => onSelect(slot.view)}
                 aria-current={isActive ? 'page' : undefined}
@@ -109,7 +115,7 @@ export function BottomNav({
                   // Hover alleen op een echte muis (pointer-fine): op touch
                   // blijft :hover na een tik plakken, waardoor een inactieve
                   // tab er permanent "half actief" uitzag.
-                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-[10px] transition-colors',
+                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors',
                   isActive ? 'text-oker-700' : 'text-slate-400 pointer-fine:hover:text-slate-700',
                 )}
               >
@@ -117,34 +123,40 @@ export function BottomNav({
                   <motion.span
                     layoutId="bottom-nav-active"
                     transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
-                    className="absolute inset-0 rounded-[10px] bg-oker-100"
+                    className="absolute inset-0 rounded-lg bg-oker-100"
                   />
                 )}
-                <span className="relative z-10">{slot.icon}</span>
-                <span className="relative z-10 text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-1">
+                {/* Badge aan het icoon verankerd, niet aan de tab-rand: op een
+                    smalle tab zweefde hij anders óp het icoon of erbuiten. */}
+                <span className="relative z-10">
+                  {slot.icon}
+                  {slot.badge !== undefined && slot.badge > 0 && (
+                    <span className="absolute -top-1.5 -right-3 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
+                      {slot.badge > 9 ? '9+' : slot.badge}
+                    </span>
+                  )}
+                </span>
+                <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-0.5">
                   {slot.label}
                 </span>
-                {slot.badge !== undefined && slot.badge > 0 && (
-                  <span className="absolute top-0.5 right-2 z-10 inline-flex items-center justify-center min-w-[16px] h-4 px-1 text-2xs font-bold bg-oker-500 text-slate-950 rounded-full">
-                    {slot.badge > 9 ? '9+' : slot.badge}
-                  </span>
-                )}
               </button>
             </li>
           );
         })}
         {onMore && (
-          <li className="flex-1">
+          <li className="flex-auto min-w-0">
             <button
               onClick={onMore}
               aria-label="Meer"
-              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-[10px] transition-colors text-slate-400 pointer-fine:hover:text-slate-700"
+              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors text-slate-400 pointer-fine:hover:text-slate-700"
             >
-              <span className="relative z-10"><Menu size={18} /></span>
-              <span className="relative z-10 text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-1">Meer</span>
-              {moreDot && (
-                <span className="absolute top-1 right-3 z-10 h-2 w-2 rounded-full bg-oker-500" aria-label="Nieuwe melding in het menu" />
-              )}
+              <span className="relative z-10">
+                <Menu size={18} />
+                {moreDot && (
+                  <span className="absolute -top-0.5 -right-1.5 h-2 w-2 rounded-full bg-oker-500" aria-label="Nieuwe melding in het menu" />
+                )}
+              </span>
+              <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-0.5">Meer</span>
             </button>
           </li>
         )}
