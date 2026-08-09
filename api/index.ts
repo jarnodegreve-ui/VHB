@@ -3186,8 +3186,18 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     }
 
     if (req.appUser?.role !== "chauffeur") {
-      for (const [id] of previousById) {
-        if (!newById.has(String(id))) swapIdsToDelete.push(String(id));
+      for (const [id, prev] of previousById) {
+        if (newById.has(String(id))) continue;
+        // Doorgevoerde ruilen (approved/completed) zitten in de heropbouw-
+        // replay: verwijderen draait níéts terug in de planning, maar laat de
+        // wissel bij de eerstvolgende Excel-import wél stil verdwijnen — het
+        // rooster springt dan onaangekondigd terug. Alleen een admin mag dat
+        // (bewust); een planner draait een ruil terug via status 'cancelled',
+        // dan wordt de planning netjes mee teruggedraaid.
+        if (req.appUser?.role !== "admin" && (prev.status === "approved" || prev.status === "completed")) {
+          return res.status(403).json({ error: "Een doorgevoerde ruil kan niet verwijderd worden. Annuleer hem in plaats daarvan — dan wordt de planning mee teruggedraaid." });
+        }
+        swapIdsToDelete.push(String(id));
       }
     }
 
@@ -3354,6 +3364,13 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             targetDriverId: prev.targetDriverId,
             returnDate: prev.returnDate,
             returnCode: prev.returnCode,
+            // Ook reason en createdAt liggen vast: de reden draagt bij een
+            // handmatige admin-wissel de attributie ("Handmatige wissel door
+            // …") — herschrijfbaar laten zou een planner de zichtbare
+            // uitvoerder laten wegpoetsen. Het chauffeur-pad bevroor deze
+            // velden al (immutable-lijst in de accepteer-tak).
+            reason: prev.reason,
+            createdAt: prev.createdAt,
           }
         : {};
       finalRecords.push({
