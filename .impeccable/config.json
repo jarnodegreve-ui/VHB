@@ -8,6 +8,15 @@
         "value": "inter",
         "createdAt": "2026-08-09T19:46:21.296Z",
         "reason": "Inter is de bindende VHB-huisstijl (CLAUDE.md: Manrope koppen / Inter body, keuze Jarno)"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/index.css"
+        ],
+        "createdAt": "2026-08-09T20:19:04.122Z",
+        "reason": "Blanket-override-tabel: detector ziet de bijbehorende achtergrond niet; .hover:text-slate-950 = bindende huisstijl (VHB Black op amber, nooit wit — CLAUDE.md). Bekend terugkerend vals-positief."
       }
     ]
   }
