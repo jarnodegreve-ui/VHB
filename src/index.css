@@ -352,6 +352,19 @@ html.dark {
     }
   }
 
+  /* Mobiele bottom-nav ("dock"). Bewust volledig opaak: backdrop-blur op een
+     fixed balk hersampelt de scrollende content elke frame (jank op oudere
+     toestellen), en een doorschijnende balk zónder blur laat de content er
+     rommelig doorheen schemeren — precies wat we hier vermijden. De inzet-
+     highlight bovenaan geeft de donkere variant zijn opgetilde rand. */
+  .bottom-dock {
+    background: #ffffff;
+    border: 1px solid rgba(228, 230, 232, 0.9);
+    box-shadow:
+      0 1px 2px rgba(13, 13, 15, 0.05),
+      0 12px 32px rgba(13, 13, 15, 0.14);
+  }
+
   .surface-table {
     background: rgba(255, 255, 255, 0.92);
     border: 1px solid rgba(228, 230, 232, 0.85);
@@ -642,6 +655,18 @@ html.dark {
   box-shadow:
     0 1px 2px rgba(0, 0, 0, 0.3),
     0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* Dock: iets lichter dan het canvas (opgetild), volledig opaak, met een
+   subtiele inzet-highlight als bovenrand — een 1px-border alleen verzuipt
+   op een zwart canvas. Diepere schaduw dan .surface-card: de balk zweeft. */
+:where(.dark) .bottom-dock {
+  background: #1B1C1F;
+  border-color: rgba(255, 255, 255, 0.10);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 1px 2px rgba(0, 0, 0, 0.4),
+    0 12px 32px rgba(0, 0, 0, 0.55);
 }
 
 :where(.dark) .surface-card-hover:hover {
