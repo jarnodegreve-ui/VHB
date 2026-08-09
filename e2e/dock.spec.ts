@@ -8,7 +8,7 @@ import { test, expect, type Page } from '@playwright/test';
  * gangbare testmaten onzichtbaar bleef.
  *
  * Bewaakt per profiel × rol: geen tab buiten de kaart, touch-hoogte ≥44px,
- * geen afgekapte labels op ≥320px (op 280px zijn labels bewust sr-only),
+ * geen afgekapte labels op >=340px (daaronder bewust icoon-only, labels sr-only),
  * dock verborgen op ≥768px (daar neemt de sidebar het over).
  */
 
@@ -91,7 +91,7 @@ for (const rol of ['planner', 'chauffeur'] as const) {
           const r = b.getBoundingClientRect();
           if (r.right > navR.right + 1 || r.left < navR.left - 1) geclipt.push(tekst);
           const labelSpan = (Array.from(b.children) as HTMLElement[]).filter((el) => el.tagName === 'SPAN' && !el.querySelector('svg')).pop();
-          // sr-only labels (icoon-only-modus <300px) zijn bewust 1px breed.
+          // sr-only labels (icoon-only-modus <340px) zijn bewust 1px breed.
           if (labelSpan && labelSpan.offsetWidth > 2 && labelSpan.scrollWidth > labelSpan.clientWidth + 1) afgekapt.push(tekst);
         }
         const badge = nav.querySelector('button [class*="rounded-full"][class*="bg-oker-500"]');

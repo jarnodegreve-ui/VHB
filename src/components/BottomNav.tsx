@@ -136,7 +136,7 @@ export function BottomNav({
                     </span>
                   )}
                 </span>
-                <span className="relative z-10 max-[299px]:sr-only text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-0.5">
+                <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-0.5">
                   {slot.label}
                 </span>
               </button>
@@ -156,7 +156,7 @@ export function BottomNav({
                   <span className="absolute -top-0.5 -right-1.5 h-2 w-2 rounded-full bg-oker-500" aria-label="Nieuwe melding in het menu" />
                 )}
               </span>
-              <span className="relative z-10 max-[299px]:sr-only text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-0.5">Meer</span>
+              <span className="relative z-10 max-[339px]:sr-only text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-0.5">Meer</span>
             </button>
           </li>
         )}
