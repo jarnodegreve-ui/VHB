@@ -2,7 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { SkeletonRow } from '../components/Skeleton';
 import { Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
@@ -15,6 +15,10 @@ import { MONTH_NAMES } from '../lib/format';
 
 const WEEKDAY_LETTERS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 const WEEKDAY_SHORT = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
+
+/** Vaste redenen voor een handmatige dienstwissel; bij 'Andere correctie' is
+ *  de vrije toelichting verplicht (de server eist altijd een reden). */
+const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Andere correctie'] as const;
 
 /**
  * Maandplanning — read-only weergave van de planning-matrix (chauffeur ×
@@ -85,6 +89,57 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     }
   };
 
+  // Handmatige dienstwissel — alleen voor admins zichtbaar (server dwingt de
+  // rol óók af via requireRole). 'reloadTick' herlaadt de maand na een wissel,
+  // zodat de dienst meteen bij de nieuwe chauffeur staat.
+  const isAdmin = currentUser.role === 'admin';
+  const [wisselNaar, setWisselNaar] = useState('');
+  const [wisselReden, setWisselReden] = useState<string>(WISSEL_REDENEN[0]);
+  const [wisselToelichting, setWisselToelichting] = useState('');
+  const [wisselBevestigen, setWisselBevestigen] = useState(false);
+  const [isWisselen, setIsWisselen] = useState(false);
+  const [reloadTick, setReloadTick] = useState(0);
+
+  // Vers formulier per geopende cel — restjes van een vorige cel mogen nooit
+  // stil in een bevestiging belanden.
+  useEffect(() => {
+    setWisselNaar('');
+    setWisselReden(WISSEL_REDENEN[0]);
+    setWisselToelichting('');
+  }, [selected?.driverId, selected?.iso]);
+
+  const wisselRedenTekst = wisselReden === 'Andere correctie'
+    ? wisselToelichting.trim()
+    : (wisselToelichting.trim() ? `${wisselReden} — ${wisselToelichting.trim()}` : wisselReden);
+  const wisselKlaar = !!wisselNaar && !!wisselRedenTekst;
+
+  const uitvoerenWissel = async () => {
+    if (!selected || !wisselKlaar || isWisselen) return;
+    setIsWisselen(true);
+    try {
+      const res = await fetch('/api/admin/shift-swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({
+          date: selected.iso,
+          line: selected.cell.code,
+          fromDriverId: selected.driverId,
+          toDriverId: wisselNaar,
+          reason: wisselRedenTekst,
+        }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) { notify(body.error || 'Dienstwissel is mislukt.', 'error'); return; }
+      notify(`Dienst ${selected.cell.code} overgezet — beide chauffeurs krijgen een melding.`, 'success');
+      setSelected(null);
+      setReloadTick((t) => t + 1);
+    } catch {
+      notify('Dienstwissel is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setIsWisselen(false);
+    }
+  };
+
   const monthParam = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
   const todayIso = isoDate(new Date());
 
@@ -97,7 +152,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       .catch((e) => { if (!cancelled) setError(e?.message || 'Kon de maandplanning niet laden.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [monthParam]);
+  }, [monthParam, reloadTick]);
 
   const dates = data?.dates ?? [];
   const drivers = data?.drivers ?? [];
@@ -538,9 +593,71 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 {selected.cell.kind === 'unknown' && ' — staat (nog) niet in het dienstoverzicht of de planningscodes.'}
               </p>
             )}
+
+            {/* Handmatige dienstwissel — alleen admins, alleen op een dienst-cel.
+                Voor ziekte, een mondeling afgesproken ruil of een andere
+                correctie; de gewone ruil-flow blijft de normale weg. */}
+            {isAdmin && selected.cell.kind === 'service' && (
+              <div className="mt-6 border-t border-slate-200/70 pt-5 space-y-3">
+                <MicroLabel>Dienstwissel (admin)</MicroLabel>
+                <p className="text-xs font-medium text-slate-500 leading-relaxed">
+                  Zet dienst <span className="font-semibold text-slate-700 tabular-nums">{selected.cell.code}</span> op {formatDateLong(selected.iso)} over van{' '}
+                  <span className="font-semibold text-slate-700">{selected.driverName}</span> naar een andere chauffeur.
+                </p>
+                <div className="space-y-2">
+                  <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1" htmlFor="wissel-naar">Nieuwe chauffeur</label>
+                  <select
+                    id="wissel-naar"
+                    value={wisselNaar}
+                    onChange={(e) => setWisselNaar(e.target.value)}
+                    className="control-input w-full px-3.5 py-2.5 rounded-2xl font-semibold text-base sm:text-sm outline-none bg-surface-field"
+                  >
+                    <option value="">Kies een chauffeur…</option>
+                    {drivers.filter((d) => String(d.id) !== selected.driverId).map((d) => (
+                      <option key={d.id} value={String(d.id)}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1" htmlFor="wissel-reden">Reden</label>
+                  <select
+                    id="wissel-reden"
+                    value={wisselReden}
+                    onChange={(e) => setWisselReden(e.target.value)}
+                    className="control-input w-full px-3.5 py-2.5 rounded-2xl font-semibold text-base sm:text-sm outline-none bg-surface-field"
+                  >
+                    {WISSEL_REDENEN.map((r) => <option key={r} value={r}>{r}</option>)}
+                  </select>
+                  <input
+                    type="text"
+                    value={wisselToelichting}
+                    onChange={(e) => setWisselToelichting(e.target.value)}
+                    maxLength={200}
+                    placeholder={wisselReden === 'Andere correctie' ? 'Omschrijf de correctie (verplicht)' : 'Toelichting (optioneel)'}
+                    className="control-input w-full px-3.5 py-2.5 rounded-2xl text-base sm:text-sm font-medium outline-none"
+                  />
+                </div>
+                <Button variant="primary" size="sm" full disabled={!wisselKlaar || isWisselen} onClick={() => setWisselBevestigen(true)}>
+                  {isWisselen ? 'Doorvoeren…' : 'Dienst overzetten…'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Modal>
+
+      <ConfirmationModal
+        isOpen={wisselBevestigen}
+        onClose={() => setWisselBevestigen(false)}
+        onConfirm={() => void uitvoerenWissel()}
+        title="Dienstwissel doorvoeren?"
+        message={selected
+          ? `Dienst ${selected.cell.code} op ${formatDateLong(selected.iso)} gaat van ${selected.driverName} naar ${drivers.find((d) => String(d.id) === wisselNaar)?.name ?? '—'}. Reden: ${wisselRedenTekst}. De planning wordt meteen bijgewerkt en beide chauffeurs krijgen een melding.`
+          : ''}
+        confirmText="Doorvoeren"
+        cancelText="Annuleren"
+        variant="warning"
+      />
     </PageShell>
   );
 }

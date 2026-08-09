@@ -148,6 +148,24 @@ export const getShiftById = async (id: string): Promise<{ id: string; driverId: 
   };
 };
 
+/**
+ * Alle planning-rijen van één dag — voor de handmatige admin-dienstwissel:
+ * eigendoms-check (staat de dienst nog op de huidige chauffeur?) en
+ * conflict-check (heeft de nieuwe chauffeur die dag al een dienst?).
+ */
+export const getShiftsOnDate = async (date: string): Promise<Array<{ id: string; driverId: string; date: string; line: string }>> => {
+  const client = requireDb();
+  const rows = await paginatedFetch((from, to) =>
+    client.from('planning').select('id, driverId, date, line').eq('date', date).order('id', { ascending: true }).range(from, to),
+  );
+  return rows.map((r: any) => ({
+    id: String(r.id),
+    driverId: String(r.driverId ?? ''),
+    date: String(r.date ?? ''),
+    line: String(r.line ?? ''),
+  }));
+};
+
 /** Volledige planning wissen — alleen voor de expliciete admin-actie. */
 export const clearPlanningData = async () => {
   const client = requireDb();

@@ -80,6 +80,7 @@ import {
   updateUserSessionMeta,
   bumpActiveSessions,
   getShiftById,
+  getShiftsOnDate,
   savePlanningMatrixHistoryEntry,
   saveServicesData,
   saveSwapsData,
@@ -3615,6 +3616,116 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
   } catch (err: any) {
     console.error("Beslissing opslaan is mislukt", err);
     res.status(500).json({ error: "Beslissing opslaan is mislukt" });
+  }
+});
+
+// --- Handmatige dienstwissel door een admin ---------------------------------
+//
+// Voor uitzonderlijke situaties (ziekte, mondeling afgesproken ruil, andere
+// correctie): een admin zet een ingeplande dienst rechtstreeks op naam van een
+// andere chauffeur, zonder de aanvraag/acceptatie-flow. Bewust géén eigen
+// tabel: de wissel wordt opgeslagen als direct goedgekeurde 'overname' in
+// swaps — daardoor liften de heropbouw-replay (reapplyApprovedSwaps), de
+// maandplanning-overlay en de ruil-historiek gratis mee en kan een volgende
+// Excel-import de wissel niet stil terugdraaien.
+app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const date = String(req.body?.date ?? "").trim();
+    const line = String(req.body?.line ?? "").trim();
+    const fromDriverId = String(req.body?.fromDriverId ?? "").trim();
+    const toDriverId = String(req.body?.toDriverId ?? "").trim();
+    const reason = String(req.body?.reason ?? "").trim();
+
+    if (!ISO_DAY_RE.test(date)) return res.status(400).json({ error: "Ongeldige datum (JJJJ-MM-DD verwacht)." });
+    if (!line) return res.status(400).json({ error: "Geen dienstnummer meegegeven." });
+    if (!fromDriverId || !toDriverId) return res.status(400).json({ error: "Kies de huidige én de nieuwe chauffeur." });
+    if (fromDriverId === toDriverId) return res.status(400).json({ error: "De nieuwe chauffeur is dezelfde als de huidige — er valt niets te wisselen." });
+    if (!reason) return res.status(400).json({ error: "Geef een reden op voor de wissel." });
+    if (reason.length > 280) return res.status(400).json({ error: "De reden is te lang (maximaal 280 tekens)." });
+
+    const users = await getUsersData();
+    const fromUser = users.find((u) => String(u.id) === fromDriverId);
+    const toUser = users.find((u) => String(u.id) === toDriverId);
+    if (!fromUser) return res.status(400).json({ error: "De huidige chauffeur bestaat niet (meer)." });
+    if (!toUser || toUser.isActive === false) return res.status(400).json({ error: "De gekozen chauffeur bestaat niet (meer) of is inactief." });
+
+    // Eigendom: de dienst moet op dit moment écht op naam van de huidige
+    // chauffeur staan (zelfde principe als staleApprovalError — tussen openen
+    // van het scherm en bevestigen kan de planning gewijzigd zijn).
+    const dayRows = await getShiftsOnDate(date);
+    const ownRows = dayRows.filter((r) => String(r.line) === line && String(r.driverId) === fromDriverId);
+    if (ownRows.length === 0) {
+      return res.status(409).json({ error: `Dienst ${line} op ${date} staat niet (meer) op naam van ${fromUser.name} — de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
+    }
+
+    // Planningsconflict: de nieuwe chauffeur rijdt die dag al een dienst.
+    const conflictRow = dayRows.find((r) => String(r.driverId) === toDriverId);
+    if (conflictRow) {
+      return res.status(409).json({ error: `${toUser.name} rijdt op ${date} al dienst ${conflictRow.line} — deze wissel zou een dubbele inplanning geven. Zet die dienst eerst weg of kies iemand anders.` });
+    }
+
+    // Afwezigheid: wie ziek of met verlof gemeld is, krijgt geen dienst
+    // toegeschoven (zelfde check als bij het goedkeuren van een ruil).
+    const afwFout = await ruilAfwezigheidsFout({ requesterId: fromDriverId, targetDriverId: toDriverId, swapType: "overname", shiftDate: date });
+    if (afwFout) return res.status(409).json({ error: afwFout });
+
+    // Een openstaande ruilaanvraag op dezelfde dienst zou door deze wissel
+    // stale worden (en bij goedkeuring niets meer verplaatsen) — eerst afhandelen.
+    const allSwaps = await getSwapsData();
+    const openSwap = allSwaps.find((s) =>
+      (s.status === "pending" || s.status === "accepted") &&
+      ((String(s.shiftDate ?? "") === date && String(s.shiftLine ?? "") === line) ||
+        ownRows.some((r) => String(r.id) === String(s.shiftId))));
+    if (openSwap) {
+      return res.status(409).json({ error: "Voor deze dienst loopt nog een ruilaanvraag. Handel die eerst af (goedkeuren, afwijzen of laten intrekken) en probeer daarna opnieuw." });
+    }
+
+    const nu = new Date().toISOString();
+    const swap = {
+      id: crypto.randomUUID(),
+      shiftId: String(ownRows[0].id),
+      requesterId: fromDriverId,
+      targetDriverId: toDriverId,
+      status: "approved" as const,
+      createdAt: nu,
+      decidedAt: nu,
+      swapType: "overname" as const,
+      shiftDate: date,
+      shiftLine: line,
+      reason: `Handmatige wissel door ${req.appUser?.name ?? "admin"} — ${reason}`,
+    };
+
+    // Doorvoer VÓÓR het opslaan (zelfde volgorde en motivatie als bij het
+    // goedkeuren van een ruil): mislukt de verplaatsing, dan bestaat er ook
+    // geen swap-record dat de replay later alsnog zou toepassen.
+    const carryResult = await applySwapToPlanning(swap);
+    if (!carryResult || carryResult.offeredMoved === 0) {
+      return res.status(409).json({ error: "De dienst kon niet verplaatst worden — de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw." });
+    }
+    await saveSwapsData([swap], []);
+
+    const carry = describeSwapCarry(swap, carryResult, "doorgevoerd");
+    await logActivity(
+      req,
+      "swaps",
+      "Dienst handmatig overgezet",
+      `${fromUser.name} → ${toUser.name} — dienst ${line} op ${date}. Reden: ${reason}. ${carry}`,
+      { type: "swap", id: swap.id },
+    );
+
+    await sendPushToUsers([fromDriverId, toDriverId], {
+      title: "Planning aangepast",
+      body: `Dienst ${line} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
+      url: "/",
+    });
+
+    // Verse collectie-revisie zodat een volgende array-save van dezelfde
+    // client geen vals 409 krijgt (zelfde patroon als PATCH /api/swaps/:id).
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
+    res.json({ success: true, swap, carry });
+  } catch (err) {
+    console.error("Handmatige dienstwissel is mislukt.", err);
+    res.status(500).json({ error: "Handmatige dienstwissel is mislukt." });
   }
 });
 
