@@ -1,0 +1,14 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-08-09T19:46:21.296Z",
+        "reason": "Inter is de bindende VHB-huisstijl (CLAUDE.md: Manrope koppen / Inter body, keuze Jarno)"
+      }
+    ]
+  }
+}
