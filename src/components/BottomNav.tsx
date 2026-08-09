@@ -81,9 +81,10 @@ export function BottomNav({
         // left/right respecteren de safe-area (landscape/notch) — iOS negeert
         // de portrait-lock uit het manifest, dus landscape kán voorkomen.
         'md:hidden fixed bottom-3 left-[max(0.75rem,env(safe-area-inset-left))] right-[max(0.75rem,env(safe-area-inset-right))] z-40 rounded-2xl px-2 py-2 transition-all duration-300',
-        // Near-opaque zonder backdrop-blur: een fixed balk met blur hersampelt
-        // de scrollende content elke frame (jank op oudere toestellen).
-        'bg-white/95 border border-slate-200/80 shadow-[0_8px_28px_rgba(13,13,15,0.12)]',
+        // Opaak oppervlak + schaduw in index.css (.bottom-dock): blur jankt op
+        // een fixed balk, en doorschijnend-zonder-blur liet de content er
+        // rommelig doorheen schemeren.
+        'bottom-dock',
         hidden && 'pointer-events-none opacity-0 translate-y-4',
       )}
       aria-hidden={hidden || undefined}
@@ -102,15 +103,18 @@ export function BottomNav({
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={slot.label}
                 className={cn(
-                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-xl transition-colors',
-                  isActive ? 'text-oker-700' : 'text-slate-400 hover:text-slate-700',
+                  // Hover alleen op een echte muis (pointer-fine): op touch
+                  // blijft :hover na een tik plakken, waardoor een inactieve
+                  // tab er permanent "half actief" uitzag.
+                  'relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-[10px] transition-colors',
+                  isActive ? 'text-oker-700' : 'text-slate-400 pointer-fine:hover:text-slate-700',
                 )}
               >
                 {isActive && (
                   <motion.span
                     layoutId="bottom-nav-active"
                     transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
-                    className="absolute inset-0 rounded-xl bg-oker-100"
+                    className="absolute inset-0 rounded-[10px] bg-oker-100"
                   />
                 )}
                 <span className="relative z-10">{slot.icon}</span>
@@ -131,7 +135,7 @@ export function BottomNav({
             <button
               onClick={onMore}
               aria-label="Meer"
-              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-xl transition-colors text-slate-400 hover:text-slate-700"
+              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1.5 rounded-[10px] transition-colors text-slate-400 pointer-fine:hover:text-slate-700"
             >
               <span className="relative z-10"><Menu size={20} /></span>
               <span className="relative z-10 text-2xs font-semibold tracking-tight leading-tight truncate max-w-full px-1">Meer</span>
