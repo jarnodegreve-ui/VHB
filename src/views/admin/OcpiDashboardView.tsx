@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
@@ -246,20 +246,13 @@ export function OcpiDashboardView() {
   // grafiektermijn — de tegel zei "30 d" maar toonde het termijn-totaal.
   const kwh30 = useMemo(() => Math.round((data?.kwhPerDay ?? []).reduce((a, d) => a + d.kwh, 0)), [data?.kwhPerDay]);
 
-  // Vermogen: 24u = de kwartier-slots (op mobiel samengevoegd per uur);
+  // Vermogen: 24u = de ruwe kwartier-slots op élk scherm — op de telefoon
+  // is de step-lijn als lijn prima leesbaar, en de veeg-selectie (zie
+  // kiesSlotOpX) maakt elk kwartier aanwijsbaar zonder 96 mini-tikvlakken.
   // 7d/maand = één staaf per dag met de server-side bepaalde dágpiek.
   const vermogen = useMemo(() => {
     if (vermogenTermijn === '24u') {
-      let punten = (data?.powerCurve ?? []).map((pt) => ({ ts: pt.ts, kw: pt.kw, charging: pt.charging }));
-      if (smalScherm) {
-        const perUur = new Map<string, { ts: string; kw: number; charging: number }>();
-        for (const pt of punten) {
-          const uur = pt.ts.slice(0, 13);
-          const cur = perUur.get(uur);
-          if (!cur || pt.kw > cur.kw) perUur.set(uur, pt);
-        }
-        punten = [...perUur.values()].sort((a, b) => a.ts.localeCompare(b.ts));
-      }
+      const punten = (data?.powerCurve ?? []).map((pt) => ({ ts: pt.ts, kw: pt.kw, charging: pt.charging }));
       const maxKw = Math.max(1, ...punten.map((pt) => pt.kw));
       const piek = punten.reduce((best, pt) => (pt.kw > best.kw ? pt : best), { ts: '', kw: 0, charging: 0 });
       const staven = punten.map((pt) => ({ key: pt.ts, ts: pt.ts, kw: pt.kw, charging: pt.charging, isPiek: pt.ts === piek.ts && pt.kw > 0, asLabel: '' }));
@@ -297,6 +290,23 @@ export function OcpiDashboardView() {
   // dus een tik op een staaf toont de details in de samenvattingsregel.
   const [gekozenDag, setGekozenDag] = useState<string | null>(null);
   const [gekozenSlot, setGekozenSlot] = useState<string | null>(null);
+
+  // Veeg-selectie (touch) over de 24u-curve: sleep met je vinger en de
+  // uitlezing eronder springt per kwartier mee (à la de iOS-batterijgrafiek).
+  // touch-action: pan-y op de container laat verticaal scrollen met rust;
+  // horizontale bewegingen komen hier binnen. De vlag onderdrukt de click
+  // van het onderliggende tik-vlak, anders zou die de net gekozen selectie
+  // meteen weer omschakelen.
+  const scrubActief = useRef(false);
+  const scrubStart = useRef<{ slotVooraf: string | null; bewogen: boolean; x: number }>({ slotVooraf: null, bewogen: false, x: 0 });
+  const kiesSlotOpX = (clientX: number, el: HTMLElement, staven: Array<{ key: string }>) => {
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || staven.length === 0) return null;
+    const frac = Math.min(0.999, Math.max(0, (clientX - r.left) / r.width));
+    const slot = staven[Math.floor(frac * staven.length)];
+    setGekozenSlot(slot.key);
+    return slot.key;
+  };
   // Detail-popup per laadpunt (tik op een rij): daar wonen de technische
   // gegevens zoals het maximale vermogen — die stonden inline maar zijn
   // dagelijks ruis (verzoek Jarno 05-08).
@@ -526,7 +536,30 @@ export function OcpiDashboardView() {
                       <div
                         role="img"
                         aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${Math.round(maandpiek)} kW` : ''}`}
-                        className="relative h-28"
+                        className="relative h-28 touch-pan-y"
+                        onPointerDown={(e) => {
+                          if (e.pointerType !== 'touch') return;
+                          scrubActief.current = true;
+                          scrubStart.current = { slotVooraf: gekozenSlot, bewogen: false, x: e.clientX };
+                          kiesSlotOpX(e.clientX, e.currentTarget, vermogen.staven);
+                        }}
+                        onPointerMove={(e) => {
+                          if (e.pointerType !== 'touch' || !scrubActief.current) return;
+                          if (Math.abs(e.clientX - scrubStart.current.x) > 6) scrubStart.current.bewogen = true;
+                          kiesSlotOpX(e.clientX, e.currentTarget, vermogen.staven);
+                        }}
+                        onPointerUp={(e) => {
+                          if (e.pointerType !== 'touch') return;
+                          // Korte tik (geen veeg) op het al gekozen kwartier =
+                          // deselecteren — zelfde toggle als de muis-klik.
+                          if (!scrubStart.current.bewogen) {
+                            const slot = kiesSlotOpX(e.clientX, e.currentTarget, vermogen.staven);
+                            if (slot && slot === scrubStart.current.slotVooraf) setGekozenSlot(null);
+                          }
+                          // Ná de click-afhandeling van het tik-vlak weer vrijgeven.
+                          window.setTimeout(() => { scrubActief.current = false; }, 50);
+                        }}
+                        onPointerCancel={() => { window.setTimeout(() => { scrubActief.current = false; }, 50); }}
                       >
                         <GridLijnen top={asTop} eenheid="kW" />
                         {/* Maandpiek-referentie: gestippeld, oker — de norm
@@ -572,7 +605,11 @@ export function OcpiDashboardView() {
                               type="button"
                               tabIndex={-1}
                               aria-hidden="true"
-                              onClick={() => setGekozenSlot(gekozenSlot === st.key ? null : st.key)}
+                              onClick={() => {
+                                // Touch is al door de veeg-selectie afgehandeld.
+                                if (scrubActief.current) return;
+                                setGekozenSlot(gekozenSlot === st.key ? null : st.key);
+                              }}
                               title={`${kopVan(st.key)} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
                               className="h-full flex-1 cursor-pointer"
                             />
