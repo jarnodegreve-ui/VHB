@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
@@ -298,14 +298,53 @@ export function OcpiDashboardView() {
   // van het onderliggende tik-vlak, anders zou die de net gekozen selectie
   // meteen weer omschakelen.
   const scrubActief = useRef(false);
-  const scrubStart = useRef<{ slotVooraf: string | null; bewogen: boolean; x: number }>({ slotVooraf: null, bewogen: false, x: 0 });
-  const kiesSlotOpX = (clientX: number, el: HTMLElement, staven: Array<{ key: string }>) => {
-    const r = el.getBoundingClientRect();
-    if (r.width <= 0 || staven.length === 0) return null;
-    const frac = Math.min(0.999, Math.max(0, (clientX - r.left) / r.width));
-    const slot = staven[Math.floor(frac * staven.length)];
-    setGekozenSlot(slot.key);
-    return slot.key;
+  const scrubStart = useRef<{ vooraf: string | null; bewogen: boolean; x: number }>({ vooraf: null, bewogen: false, x: 0 });
+  /**
+   * Handlers voor één grafiekvlak. Werkt op elke reeks even brede vakken, dus
+   * naast de 24u-curve ook op de dag-staven: bij 31 dagen op een telefoon is
+   * een staaf ~10 px en tik je anders altijd de buurdag aan. Eén gedeelde ref
+   * volstaat — er is maar één vinger tegelijk in één grafiek.
+   */
+  const scrubHandlers = (items: Array<{ key: string }>, huidig: string | null, zet: (key: string | null) => void) => {
+    const kiesOpX = (clientX: number, el: HTMLElement) => {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 0 || items.length === 0) return null;
+      const frac = Math.min(0.999, Math.max(0, (clientX - r.left) / r.width));
+      const key = items[Math.floor(frac * items.length)].key;
+      zet(key);
+      return key;
+    };
+    return {
+      onPointerDown: (e: ReactPointerEvent<HTMLElement>) => {
+        if (e.pointerType !== 'touch') return;
+        scrubActief.current = true;
+        scrubStart.current = { vooraf: huidig, bewogen: false, x: e.clientX };
+        kiesOpX(e.clientX, e.currentTarget);
+      },
+      onPointerMove: (e: ReactPointerEvent<HTMLElement>) => {
+        if (e.pointerType !== 'touch' || !scrubActief.current) return;
+        if (Math.abs(e.clientX - scrubStart.current.x) > 6) scrubStart.current.bewogen = true;
+        kiesOpX(e.clientX, e.currentTarget);
+      },
+      onPointerUp: (e: ReactPointerEvent<HTMLElement>) => {
+        if (e.pointerType !== 'touch') return;
+        // Korte tik (geen veeg) op het al gekozen vak = deselecteren — zelfde
+        // toggle als de muis-klik.
+        if (!scrubStart.current.bewogen) {
+          const key = kiesOpX(e.clientX, e.currentTarget);
+          if (key && key === scrubStart.current.vooraf) zet(null);
+        }
+        // Ná de click-afhandeling van het tik-vlak weer vrijgeven.
+        window.setTimeout(() => { scrubActief.current = false; }, 50);
+      },
+      onPointerCancel: () => {
+        // De browser claimt de gesture (verticaal scrollen na een aanraking op
+        // de grafiek). Wat de vinger onderweg aanwees was dan geen keuze: zet
+        // de selectie terug zoals ze vóór de aanraking stond.
+        zet(scrubStart.current.vooraf);
+        window.setTimeout(() => { scrubActief.current = false; }, 50);
+      },
+    };
   };
   // Detail-popup per laadpunt (tik op een rij): daar wonen de technische
   // gegevens zoals het maximale vermogen — die stonden inline maar zijn
@@ -443,7 +482,8 @@ export function OcpiDashboardView() {
                     <div
                       role="img"
                       aria-label={`Verbruik per dag: totaal ${Math.round(grafiek.totaal)} kWh, gemiddeld ${grafiek.gemiddeld} kWh per laaddag, piek ${Math.round(grafiek.piek)} kWh`}
-                      className="relative h-28"
+                      className="relative h-28 touch-pan-y"
+                      {...scrubHandlers(grafiek.dagen.map((d) => ({ key: d.date })), gekozenDag, setGekozenDag)}
                     >
                       <GridLijnen top={asTop} eenheid="kWh" />
                       <div className="flex h-full items-end gap-[3px]">
@@ -456,7 +496,7 @@ export function OcpiDashboardView() {
                               type="button"
                               tabIndex={-1}
                               aria-hidden="true"
-                              onClick={() => setGekozenDag(gekozen ? null : d.date)}
+                              onClick={() => { if (scrubActief.current) return; setGekozenDag(gekozen ? null : d.date); }}
                               title={`${d.date.slice(5)} · ${d.kwh} kWh · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
@@ -537,36 +577,7 @@ export function OcpiDashboardView() {
                         role="img"
                         aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${Math.round(maandpiek)} kW` : ''}`}
                         className="relative h-28 touch-pan-y"
-                        onPointerDown={(e) => {
-                          if (e.pointerType !== 'touch') return;
-                          scrubActief.current = true;
-                          scrubStart.current = { slotVooraf: gekozenSlot, bewogen: false, x: e.clientX };
-                          kiesSlotOpX(e.clientX, e.currentTarget, vermogen.staven);
-                        }}
-                        onPointerMove={(e) => {
-                          if (e.pointerType !== 'touch' || !scrubActief.current) return;
-                          if (Math.abs(e.clientX - scrubStart.current.x) > 6) scrubStart.current.bewogen = true;
-                          kiesSlotOpX(e.clientX, e.currentTarget, vermogen.staven);
-                        }}
-                        onPointerUp={(e) => {
-                          if (e.pointerType !== 'touch') return;
-                          // Korte tik (geen veeg) op het al gekozen kwartier =
-                          // deselecteren — zelfde toggle als de muis-klik.
-                          if (!scrubStart.current.bewogen) {
-                            const slot = kiesSlotOpX(e.clientX, e.currentTarget, vermogen.staven);
-                            if (slot && slot === scrubStart.current.slotVooraf) setGekozenSlot(null);
-                          }
-                          // Ná de click-afhandeling van het tik-vlak weer vrijgeven.
-                          window.setTimeout(() => { scrubActief.current = false; }, 50);
-                        }}
-                        onPointerCancel={() => {
-                          // De browser claimt de gesture (verticaal scrollen na
-                          // een aanraking op de grafiek). Wat de vinger onderweg
-                          // aanwees was dan geen keuze: zet de selectie terug
-                          // zoals ze vóór de aanraking stond.
-                          setGekozenSlot(scrubStart.current.slotVooraf);
-                          window.setTimeout(() => { scrubActief.current = false; }, 50);
-                        }}
+                        {...scrubHandlers(vermogen.staven, gekozenSlot, setGekozenSlot)}
                       >
                         <GridLijnen top={asTop} eenheid="kW" />
                         {/* Maandpiek-referentie: gestippeld, oker — de norm
@@ -629,7 +640,8 @@ export function OcpiDashboardView() {
                     <div
                       role="img"
                       aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}`}
-                      className="relative h-28"
+                      className="relative h-28 touch-pan-y"
+                      {...scrubHandlers(vermogen.staven, gekozenSlot, setGekozenSlot)}
                     >
                       <GridLijnen top={asTop} eenheid="kW" />
                       <div className="flex h-full items-end gap-[3px]">
@@ -641,7 +653,7 @@ export function OcpiDashboardView() {
                               type="button"
                               tabIndex={-1}
                               aria-hidden="true"
-                              onClick={() => setGekozenSlot(gekozen ? null : st.key)}
+                              onClick={() => { if (scrubActief.current) return; setGekozenSlot(gekozen ? null : st.key); }}
                               title={`${kopVan(st.key)} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
@@ -730,7 +742,7 @@ export function OcpiDashboardView() {
                         type="button"
                         onClick={() => setGekozenPunt(null)}
                         aria-label="Sluiten"
-                        className="ios-pressable flex h-8 w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10"
+                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10"
                       >
                         <X size={16} />
                       </button>

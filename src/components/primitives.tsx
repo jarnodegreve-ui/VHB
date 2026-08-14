@@ -26,7 +26,11 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
-  sm: 'gap-1.5 rounded-lg px-3 py-2 text-xs',
+  // min-h-11 ook op sm: de compacte maat mag optisch klein blijven, maar niet
+  // ónder het 44px-aanraakminimum zakken (handschoenen, buiten). Op een fijne
+  // pointer (muis) krimpt hij naar de oorspronkelijke 32px, zoals de rest van
+  // de app dat met sm:pointer-fine: doet.
+  sm: 'gap-1.5 rounded-lg px-3 py-2 text-xs min-h-11 sm:pointer-fine:min-h-8',
   md: 'gap-2 rounded-xl px-4 py-2.5 text-sm min-h-11',
   lg: 'gap-2 rounded-xl px-5 py-3 text-sm min-h-12',
 };
