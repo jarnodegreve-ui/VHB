@@ -823,7 +823,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // opnieuw op als bevinding. De maskering terugzetten is klein werk: de
     // implementatie staat in commit f2a9b33 (helpers: HEALTH_CODES /
     // isHealthCode, hier: één ternary op de cel).
-    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[] }>> = {};
+    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string }>> = {};
     for (const row of monthRows) {
       const date = String(row.source_date);
       const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? row.assignments : {};
@@ -920,7 +920,17 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       for (const date of dates) {
         if (start <= date && date <= eind) {
           if (!cells[id]) cells[id] = {};
-          cells[id][date] = { code, kind: cel.kind, label: cel.label, segments: [] };
+          // De dienst die deze afwezigheid overdekt, blijft meegestuurd:
+          // ziek melden verwijdert de planning-rij niet, dus de dienst staat
+          // nog op naam van deze chauffeur en moet herverdeeld worden. Zonder
+          // dit veld was juist het hoofdscenario (ziekte) onbereikbaar in de
+          // maandplanning — de cel toonde "ziek" en de dienstwissel-actie
+          // hangt aan een dienst-cel.
+          const overdekt = cells[id][date];
+          cells[id][date] = {
+            code, kind: cel.kind, label: cel.label, segments: [],
+            ...(overdekt?.kind === "service" ? { hiddenService: overdekt.code } : {}),
+          };
         }
       }
     }

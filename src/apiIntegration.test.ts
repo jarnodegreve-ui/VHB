@@ -2034,6 +2034,19 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(res.json.cells['4']['2026-07-15']).toMatchObject({ kind: 'service' });
   });
 
+  it('de overdekte dienst blijft meegestuurd, zodat een admin hem kan overzetten', async () => {
+    // Ziek melden haalt de dienst niet uit de planning: de zieke chauffeur
+    // stáát er nog op. Zonder hiddenService was juist het hoofdscenario
+    // (ziekte) onbereikbaar in de maandplanning — de cel toont "ziek" en de
+    // wissel-actie hangt aan een dienst.
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', hiddenService: '12' });
+    // Een afwezigheidsdag zónder dienst eronder krijgt het veld niet.
+    mem.leave.push({ id: 'l-bv2', userId: '4', startDate: '2026-07-16', endDate: '2026-07-16', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-07-10T06:00:00Z', decidedAt: '2026-07-11T06:00:00Z' });
+    const res2 = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res2.json.cells['4']['2026-07-16'].hiddenService).toBeUndefined();
+  });
+
   it('ook een naderhand goedgekeurd verlof overschrijft de cel', async () => {
     mem.leave.push({ id: 'l-bv', userId: '4', startDate: '2026-07-15', endDate: '2026-07-16', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-07-10T06:00:00Z', decidedAt: '2026-07-11T06:00:00Z' });
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });

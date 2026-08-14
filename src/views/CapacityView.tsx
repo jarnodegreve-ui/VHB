@@ -113,8 +113,17 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     : (wisselToelichting.trim() ? `${wisselReden} — ${wisselToelichting.trim()}` : wisselReden);
   const wisselKlaar = !!wisselNaar && !!wisselRedenTekst;
 
+  // Welke dienst is hier over te zetten? Een dienst-cel spreekt voor zich;
+  // op een afwezigheidscel (ziek/bv/kv) is dat de dienst die eronder ligt —
+  // ziek melden haalt de dienst niet uit de planning, dus die moet juist dán
+  // herverdeeld worden. Zonder dit was het hoofdscenario onbereikbaar.
+  const wisselDienst = selected
+    ? (selected.cell.kind === 'service' ? selected.cell.code : (selected.cell.hiddenService ?? null))
+    : null;
+  const wisselNaAfwezigheid = !!wisselDienst && selected?.cell.kind !== 'service';
+
   const uitvoerenWissel = async () => {
-    if (!selected || !wisselKlaar || isWisselen) return;
+    if (!selected || !wisselDienst || !wisselKlaar || isWisselen) return;
     setIsWisselen(true);
     try {
       const res = await fetch('/api/admin/shift-swap', {
@@ -122,7 +131,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({
           date: selected.iso,
-          line: selected.cell.code,
+          line: wisselDienst,
           fromDriverId: selected.driverId,
           toDriverId: wisselNaar,
           reason: wisselRedenTekst,
@@ -130,7 +139,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       });
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) { notify(body.error || 'Dienstwissel is mislukt.', 'error'); return; }
-      notify(`Dienst ${selected.cell.code} overgezet — beide chauffeurs krijgen een melding.`, 'success');
+      notify(`Dienst ${wisselDienst} overgezet — beide chauffeurs krijgen een melding.`, 'success');
       setSelected(null);
       setReloadTick((t) => t + 1);
     } catch {
@@ -594,14 +603,21 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               </p>
             )}
 
-            {/* Handmatige dienstwissel — alleen admins, alleen op een dienst-cel.
-                Voor ziekte, een mondeling afgesproken ruil of een andere
-                correctie; de gewone ruil-flow blijft de normale weg. */}
-            {isAdmin && selected.cell.kind === 'service' && (
+            {/* Handmatige dienstwissel — alleen admins, op een dienst-cel én op
+                een afwezigheidscel waar nog een dienst onder ligt (ziekte is
+                juist hét scenario). Voor ziekte, een mondeling afgesproken ruil
+                of een andere correctie; de gewone ruil-flow blijft de normale weg. */}
+            {isAdmin && wisselDienst && (
               <div className="mt-6 border-t border-slate-200/70 pt-5 space-y-3">
                 <MicroLabel>Dienstwissel (admin)</MicroLabel>
+                {wisselNaAfwezigheid && (
+                  <p className="rounded-2xl bg-oker-50/70 px-3.5 py-2.5 text-xs font-medium text-slate-700 leading-relaxed">
+                    {selected.driverName} staat op {selected.cell.label.toLowerCase()}, maar dienst{' '}
+                    <span className="font-semibold tabular-nums">{wisselDienst}</span> staat nog op naam — zet hem hieronder over.
+                  </p>
+                )}
                 <p className="text-xs font-medium text-slate-500 leading-relaxed">
-                  Zet dienst <span className="font-semibold text-slate-700 tabular-nums">{selected.cell.code}</span> op {formatDateLong(selected.iso)} over van{' '}
+                  Zet dienst <span className="font-semibold text-slate-700 tabular-nums">{wisselDienst}</span> op {formatDateLong(selected.iso)} over van{' '}
                   <span className="font-semibold text-slate-700">{selected.driverName}</span> naar een andere chauffeur.
                 </p>
                 <div className="space-y-2">
@@ -651,8 +667,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         onClose={() => setWisselBevestigen(false)}
         onConfirm={() => void uitvoerenWissel()}
         title="Dienstwissel doorvoeren?"
-        message={selected
-          ? `Dienst ${selected.cell.code} op ${formatDateLong(selected.iso)} gaat van ${selected.driverName} naar ${drivers.find((d) => String(d.id) === wisselNaar)?.name ?? '—'}. Reden: ${wisselRedenTekst}. De planning wordt meteen bijgewerkt en beide chauffeurs krijgen een melding.`
+        message={selected && wisselDienst
+          ? `Dienst ${wisselDienst} op ${formatDateLong(selected.iso)} gaat van ${selected.driverName} naar ${drivers.find((d) => String(d.id) === wisselNaar)?.name ?? '—'}. Reden: ${wisselRedenTekst}. De planning wordt meteen bijgewerkt en beide chauffeurs krijgen een melding.`
           : ''}
         confirmText="Doorvoeren"
         cancelText="Annuleren"

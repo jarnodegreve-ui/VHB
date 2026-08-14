@@ -559,7 +559,14 @@ export function OcpiDashboardView() {
                           // Ná de click-afhandeling van het tik-vlak weer vrijgeven.
                           window.setTimeout(() => { scrubActief.current = false; }, 50);
                         }}
-                        onPointerCancel={() => { window.setTimeout(() => { scrubActief.current = false; }, 50); }}
+                        onPointerCancel={() => {
+                          // De browser claimt de gesture (verticaal scrollen na
+                          // een aanraking op de grafiek). Wat de vinger onderweg
+                          // aanwees was dan geen keuze: zet de selectie terug
+                          // zoals ze vóór de aanraking stond.
+                          setGekozenSlot(scrubStart.current.slotVooraf);
+                          window.setTimeout(() => { scrubActief.current = false; }, 50);
+                        }}
                       >
                         <GridLijnen top={asTop} eenheid="kW" />
                         {/* Maandpiek-referentie: gestippeld, oker — de norm
