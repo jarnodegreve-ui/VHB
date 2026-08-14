@@ -99,6 +99,19 @@ export const toDatabaseUser = (user: AppUser) => ({
   startdate: user.startDate?.trim() || null,
 });
 
+/**
+ * Voorvoegsel van de reden bij een handmatige admin-dienstwissel. Eén bron:
+ * de route schrijft ermee, de maandplanning herkent er de wissel aan (zodat
+ * de cel gemerkt kan worden als "afwijkend van de Excel"). Bewust géén extra
+ * kolom op swaps — de reden is sinds de verharding onveranderlijk zodra de
+ * ruil 'pending' verlaat, en een handmatige wissel wordt direct goedgekeurd
+ * aangemaakt.
+ */
+export const HANDMATIGE_WISSEL_PREFIX = "Handmatige wissel door ";
+
+export const isHandmatigeWissel = (swap: { reason?: unknown } | null | undefined) =>
+  String(swap?.reason ?? "").startsWith(HANDMATIGE_WISSEL_PREFIX);
+
 /** Onbekende/ontbrekende waarden vallen terug op de klassieke 1-op-1 ruil. */
 export const normalizeSwapType = (value: unknown): SwapType =>
   String(value ?? "").trim().toLowerCase() === "overname" ? "overname" : "ruil";

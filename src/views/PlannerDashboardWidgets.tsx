@@ -15,12 +15,13 @@ import {
   Settings,
   CheckCircle2,
   UserCheck,
+  UserX,
   Users,
   Smartphone,
   X,
   Zap,
 } from 'lucide-react';
-import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
 import type {
   ActivityLogEntry,
   Diversion,
@@ -34,7 +35,7 @@ import type {
 } from '../types';
 import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
-import { isoDate } from '../lib/availability';
+import { isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
@@ -45,7 +46,7 @@ import { PreviewToggle } from '../components/PreviewToggle';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
 import { Button } from '../components/primitives';
-import { cn, getSupabaseAuthHeaders, telHref } from '../lib/ui';
+import { cn, getSupabaseAuthHeaders, notify, telHref } from '../lib/ui';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -68,6 +69,7 @@ export function PlannerDashboardWidgets({
   coverageDays,
   onNavigate,
   onSickReport,
+  onShiftSwapped,
   isInitialLoad = false,
   canPreview = false,
   previewActive = false,
@@ -88,6 +90,8 @@ export function PlannerDashboardWidgets({
   /** Ziekmelding registreren — woont hier i.p.v. in de verlofview, zie de
    *  toelichting bij LeaveManagementView. */
   onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>;
+  /** Ververst planning + verlof na een dienstwissel vanuit de ziekmeld-flow. */
+  onShiftSwapped?: () => Promise<void> | void;
   isInitialLoad?: boolean;
   /** Admin-only: toon de 'bekijk als chauffeur'-schakelaar. */
   canPreview?: boolean;
@@ -212,10 +216,19 @@ export function PlannerDashboardWidgets({
   // een eigen .focus() hier vocht daarmee en kon op een tussenliggende
   // renderstap de verkeerde knop pakken.
   const sickTriggerRef = useRef<HTMLButtonElement | null>(null);
-  const closeSickModal = () => setShowSickModal(false);
   const [sickForm, setSickForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
   const [isSubmittingSick, setIsSubmittingSick] = useState(false);
   const [sickError, setSickError] = useState('');
+  // Stap 2 van de ziekmelding: de diensten die door de melding onbemand
+  // achterblijven, meteen kunnen overzetten. Dít is de volgorde waarin het
+  // echt gebeurt (chauffeur belt → registreren → wie rijdt het dan?), en het
+  // scheelt een schermwissel op het drukste moment. De wissel zelf is
+  // admin-only (POST /api/admin/shift-swap), planners zien alleen de lijst.
+  const [ziekVervolg, setZiekVervolg] = useState<{ naam: string; diensten: OpenstaandeDienst[] } | null>(null);
+  const [vervangerPerDienst, setVervangerPerDienst] = useState<Record<string, string>>({});
+  const [wisselBezig, setWisselBezig] = useState<string | null>(null);
+  const [afgehandeld, setAfgehandeld] = useState<Record<string, string>>({});
+  const closeSickModal = () => { setShowSickModal(false); setZiekVervolg(null); setVervangerPerDienst({}); setAfgehandeld({}); };
 
   // LET OP: geen hooks meer onder deze regel — de skeleton-return hieronder
   // betekent dat álle hooks vóór dit punt moeten staan (React #310).
@@ -336,13 +349,50 @@ export function PlannerDashboardWidgets({
     .map((e) => ({ ...e, dagen: Math.round((Date.parse(e.validUntil) - Date.parse(today)) / 86400000) }))
     .filter((e) => Number.isFinite(e.dagen) && e.dagen <= 30)
     .sort((a, b) => a.dagen - b.dagen);
+  // Diensten die nog op naam staan van iemand die die dag afwezig gemeld is.
+  // Ziek melden haalt de dienst niet uit de planning — zonder dit signaal zag
+  // je zo'n gat alleen door in de maandplanning de juiste cel aan te klikken.
+  // Alleen vandaag en verder: gisteren valt niets meer te herverdelen.
+  // (Geen useMemo: alle hooks moeten vóór de skeleton-return staan — zie de
+  //  waarschuwing daar. De lijst is klein en de berekening lineair.)
+  const teHerverdelen = openstaandeDienstenVanAfwezigen(shifts, leaveRequests, today);
+
+  /** Dienst uit de ziekmeld-vervolgstap overzetten naar de gekozen collega. */
+  const zetDienstOver = async (d: OpenstaandeDienst) => {
+    const naarId = vervangerPerDienst[d.id];
+    if (!naarId || wisselBezig) return;
+    setWisselBezig(d.id);
+    try {
+      const res = await fetch('/api/admin/shift-swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({
+          date: d.date,
+          line: serviceNumberOf(d),
+          fromDriverId: String(d.driverId),
+          toDriverId: naarId,
+          reason: d.reden,
+        }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) { notify(body.error || 'Overzetten is mislukt.', 'error'); return; }
+      setAfgehandeld((cur) => ({ ...cur, [d.id]: userNameById(naarId) }));
+      await onShiftSwapped?.();
+    } catch {
+      notify('Overzetten is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setWisselBezig(null);
+    }
+  };
+
   const attentionCount =
-    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks + vervalTaken.length;
+    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks + vervalTaken.length + teHerverdelen.length;
   const needsAttention = attentionCount > 0;
   // Het paneel toont per soort een top-N (3 dekkingsdagen, 4 verlof, 4 ruil,
   // 3 toestellen); dit is wat daarbuiten valt, zodat de teller in de kop
   // eerlijk blijft.
   const hiddenAttentionCount =
+    Math.max(0, teHerverdelen.length - 4) +
     Math.max(0, vervalTaken.length - 3) +
     Math.max(0, gapDays.length - 3) +
     Math.max(0, pendingLeave.length - 4) +
@@ -722,6 +772,17 @@ export function PlannerDashboardWidgets({
               />
               </Fragment>
             ))}
+            {teHerverdelen.slice(0, 4).map((s) => (
+              <Fragment key={`herverdeel:${s.id}`}>
+              <OpsRow
+                tone="red"
+                icon={<UserX size={15} />}
+                primary={`Dienst ${serviceNumberOf(s)} nog niet herverdeeld — ${formatDay(s.date)}`}
+                secondary={`${userNameById(String(s.driverId))} is ${s.reden.toLowerCase()} maar staat nog ingepland`}
+                onClick={() => onNavigate('bezetting')}
+              />
+              </Fragment>
+            ))}
             {gapDays.slice(0, 3).map((d) => (
               <Fragment key={d.date}>
               <OpsRow
@@ -957,8 +1018,12 @@ export function PlannerDashboardWidgets({
               <AlertTriangle size={17} />
             </span>
             <div className="min-w-0">
-              <h4 className="text-lg font-bold tracking-tight truncate">Ziekmelding registreren</h4>
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">meteen onbeschikbaar</p>
+              <h4 className="text-lg font-bold tracking-tight truncate">
+                {ziekVervolg ? 'Wie neemt de dienst over?' : 'Ziekmelding registreren'}
+              </h4>
+              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+                {ziekVervolg ? 'ziekmelding geregistreerd' : 'meteen onbeschikbaar'}
+              </p>
             </div>
           </div>
           <button
@@ -970,6 +1035,60 @@ export function PlannerDashboardWidgets({
             <X size={18} />
           </button>
         </div>
+        {ziekVervolg ? (
+          <div className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1">
+            <p className="text-sm font-medium text-slate-600 leading-relaxed">
+              {ziekVervolg.naam} is afgemeld, maar {ziekVervolg.diensten.length === 1 ? 'deze dienst staat' : 'deze diensten staan'} nog op naam.
+              {isAdmin ? ' Zet hem meteen over.' : ' Een admin kan ze overzetten in de Maandplanning.'}
+            </p>
+            <div className="space-y-3">
+              {ziekVervolg.diensten.map((d) => {
+                const klaar = afgehandeld[d.id];
+                return (
+                  <div key={d.id} className="rounded-2xl bg-surface-soft px-3.5 py-3 space-y-2.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <span className="text-sm font-semibold text-slate-800 tabular-nums">
+                        Dienst {serviceNumberOf(d)}
+                      </span>
+                      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">{formatDay(d.date)}</span>
+                    </div>
+                    {klaar ? (
+                      <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                        <CheckCircle2 size={14} /> Overgezet naar {klaar}
+                      </p>
+                    ) : isAdmin ? (
+                      <div className="flex flex-col gap-2 sm:flex-row">
+                        <select
+                          aria-label={`Vervanger voor dienst ${serviceNumberOf(d)} op ${d.date}`}
+                          value={vervangerPerDienst[d.id] ?? ''}
+                          onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [d.id]: e.target.value }))}
+                          className="control-input min-w-0 flex-1 rounded-2xl px-3.5 py-2.5 text-base sm:text-sm font-semibold outline-none bg-surface-field"
+                        >
+                          <option value="">Kies een chauffeur…</option>
+                          {users
+                            .filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(d.driverId))
+                            .sort((a, b) => a.name.localeCompare(b.name))
+                            .map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}
+                        </select>
+                        <Button
+                          variant="primary"
+                          size="md"
+                          disabled={!vervangerPerDienst[d.id] || wisselBezig === d.id}
+                          onClick={() => void zetDienstOver(d)}
+                        >
+                          {wisselBezig === d.id ? 'Bezig…' : 'Zet over'}
+                        </Button>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+            <Button variant="secondary" size="lg" full onClick={closeSickModal}>
+              {Object.keys(afgehandeld).length === ziekVervolg.diensten.length ? 'Klaar' : 'Later doen'}
+            </Button>
+          </div>
+        ) : (
         <form
           onSubmit={async (e) => {
             e.preventDefault();
@@ -982,7 +1101,19 @@ export function PlannerDashboardWidgets({
             setIsSubmittingSick(true);
             const ok = await onSickReport({ userId: sickForm.userId, startDate, endDate, comment: sickForm.comment })
               .finally(() => setIsSubmittingSick(false));
-            if (ok) closeSickModal();
+            if (!ok) return;
+            // Blijven de diensten van deze chauffeur in die periode open staan?
+            // Dan meteen doorschakelen naar het herverdelen; zo niet, sluiten.
+            const open = openstaandeDienstenVanAfwezigen(
+              shifts,
+              // De verse leave-lijst is nog onderweg; reken met de zojuist
+              // geregistreerde periode zodat stap 2 niet één render te laat komt.
+              [{ id: 'net-gemeld', userId: sickForm.userId, startDate, endDate, type: 'ziekte', status: 'approved', createdAt: '' } as LeaveRequest],
+              today,
+              { driverId: sickForm.userId, totIso: endDate },
+            );
+            if (open.length === 0) { closeSickModal(); return; }
+            setZiekVervolg({ naam: userNameById(sickForm.userId), diensten: open });
           }}
           className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
@@ -1044,6 +1175,7 @@ export function PlannerDashboardWidgets({
             {isSubmittingSick ? 'Registreren…' : 'Ziekmelding registreren'}
           </Button>
         </form>
+        )}
       </Modal>
     </section>
   );

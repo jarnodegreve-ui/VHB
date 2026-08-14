@@ -1,4 +1,6 @@
 import { apiFetch } from './api';
+import { LEAVE_TYPE_LABELS } from './format';
+import type { LeaveRequest, Shift } from '../types';
 
 /**
  * Beschikbaarheid per dag — opgehaald van /api/availability. De server
@@ -63,3 +65,36 @@ export const addDays = (d: Date, n: number): Date => {
   out.setDate(out.getDate() + n);
   return out;
 };
+
+/**
+ * Diensten die nog op naam staan van een chauffeur die die dag goedgekeurd
+ * afwezig is. Ziek melden (of verlof goedkeuren) haalt de dienst niet uit de
+ * planning — die moet iemand anders rijden. Eén bron voor het dashboard-
+ * signaal en de vervolgstap van de ziekmelding.
+ *
+ * `vanafIso` kapt het verleden af: een dienst van gisteren valt niet meer te
+ * herverdelen. Geeft de dienst mét de reden van afwezigheid terug, oplopend
+ * op datum.
+ */
+export type OpenstaandeDienst = Shift & { reden: string; redenType: LeaveRequest['type'] };
+
+export function openstaandeDienstenVanAfwezigen(
+  shifts: Shift[],
+  leave: LeaveRequest[],
+  vanafIso: string,
+  opts?: { driverId?: string; totIso?: string },
+): OpenstaandeDienst[] {
+  const afwezig = leave.filter((l) => l.status === 'approved');
+  const uit: OpenstaandeDienst[] = [];
+  for (const s of shifts) {
+    if (s.date < vanafIso) continue;
+    if (opts?.totIso && s.date > opts.totIso) continue;
+    if (opts?.driverId && String(s.driverId) !== String(opts.driverId)) continue;
+    const reden = afwezig.find(
+      (l) => String(l.userId) === String(s.driverId) && l.startDate <= s.date && l.endDate >= s.date,
+    );
+    if (!reden) continue;
+    uit.push({ ...s, reden: LEAVE_TYPE_LABELS[reden.type] ?? 'Afwezig', redenType: reden.type });
+  }
+  return uit.sort((a, b) => a.date.localeCompare(b.date) || String(a.line).localeCompare(String(b.line)));
+}

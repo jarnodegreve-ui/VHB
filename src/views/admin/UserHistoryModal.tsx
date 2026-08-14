@@ -148,19 +148,31 @@ export function UserHistoryModal({
               {userSwaps.map((s) => {
                 const isRequester = s.requesterId === user.id;
                 const counterpartId = isRequester ? s.targetDriverId : s.requesterId;
+                // Een handmatige admin-wissel draagt dat in zijn reden ("Handmatige
+                // wissel door … — Ziekte"): dat is precies wat je bij een discussie
+                // over "wie moest hoe vaak inspringen" wil kunnen teruglezen.
+                const handmatig = (s.reason || '').startsWith('Handmatige wissel door');
                 return (
-                  <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/55">
-                    <div className="min-w-0 flex items-center gap-2 text-sm">
-                      <RotateCcw size={14} className="text-slate-400 shrink-0" />
-                      <span className="font-medium text-slate-500">
-                        {isRequester ? 'Aan' : 'Van'}
+                  <div key={s.id} className="p-3 rounded-2xl border border-slate-100 bg-white/55 space-y-1.5">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="min-w-0 flex items-center gap-2 text-sm">
+                        <RotateCcw size={14} className="text-slate-400 shrink-0" />
+                        <span className="font-medium text-slate-500">{isRequester ? 'Aan' : 'Van'}</span>
+                        <span className="font-semibold text-slate-800 truncate">{userName(counterpartId)}</span>
+                      </div>
+                      <span className={cn('px-3 py-1 rounded-full text-2xs font-semibold uppercase tracking-[0.08em] shrink-0', SWAP_STATUS_STYLES[s.status])}>
+                        {SWAP_STATUS_LABELS[s.status]}
                       </span>
-                      <span className="font-semibold text-slate-800 truncate">{userName(counterpartId)}</span>
-                      <span className="text-xs text-slate-400 shrink-0">· {s.createdAt.slice(0, 10)}</span>
                     </div>
-                    <span className={cn('px-3 py-1 rounded-full text-2xs font-semibold uppercase tracking-[0.08em] shrink-0', SWAP_STATUS_STYLES[s.status])}>
-                      {SWAP_STATUS_LABELS[s.status]}
-                    </span>
+                    <p className="text-xs font-medium text-slate-500 tabular-nums">
+                      {s.shiftLine ? `Dienst ${s.shiftLine}` : 'Dienst onbekend'}
+                      {s.shiftDate ? ` op ${s.shiftDate}` : ''}
+                      {handmatig ? ' · handmatig overgezet' : ''}
+                      {` · aangevraagd ${s.createdAt.slice(0, 10)}`}
+                    </p>
+                    {s.reason && (
+                      <p className="text-xs font-normal italic text-slate-400 line-clamp-2">"{s.reason}"</p>
+                    )}
                   </div>
                 );
               })}

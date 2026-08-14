@@ -2047,6 +2047,27 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(res2.json.cells['4']['2026-07-16'].hiddenService).toBeUndefined();
   });
 
+  it('markeert gewisselde cellen met de swap-herkomst', async () => {
+    // Een doorgevoerde wissel verplaatst de cel; de maandplanning moet erbij
+    // zeggen dat die afwijkt van de Excel (merkteken + terugdraai-knop).
+    mem.leave = [];
+    mem.swaps = [{
+      id: 's-merk', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'approved',
+      reason: 'Handmatige wissel door Admin E2E — Ziekte', createdAt: '2026-07-14T08:00:00Z',
+      decidedAt: '2026-07-14T09:00:00Z', shiftDate: '2026-07-15', shiftLine: '12', swapType: 'overname',
+    }];
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    // De dienst staat nu bij chauffeur 4, mét herkomst.
+    expect(res.json.cells['4']['2026-07-15']).toMatchObject({
+      code: '12', swapId: 's-merk', swapManual: true, swapFrom: 'Chauffeur A',
+    });
+    // Een gewone ruil (geen handmatige wissel) is wél gemerkt maar niet 'manual'.
+    mem.swaps = [{ ...mem.swaps[0], id: 's-ruil', reason: 'Ik heb een afspraak' }];
+    const res2 = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res2.json.cells['4']['2026-07-15']).toMatchObject({ swapId: 's-ruil', swapManual: false });
+  });
+
   it('ook een naderhand goedgekeurd verlof overschrijft de cel', async () => {
     mem.leave.push({ id: 'l-bv', userId: '4', startDate: '2026-07-15', endDate: '2026-07-16', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-07-10T06:00:00Z', decidedAt: '2026-07-11T06:00:00Z' });
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });

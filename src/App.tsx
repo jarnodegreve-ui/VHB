@@ -2467,6 +2467,17 @@ export default function App() {
                     coverageDays={coverageDays}
                     onNavigate={(view) => setCurrentView(view)}
                     onSickReport={reportSick}
+                    onShiftSwapped={async () => {
+                      // Wissel vanuit de ziekmeld-flow: planning, ruilen en
+                      // dekking meteen mee verversen zodat het dashboard niet
+                      // een oude "nog te herverdelen"-rij blijft tonen.
+                      await Promise.all([
+                        // Planner/admin-scherm: altijd de volledige planning.
+                        fetchPlanning(undefined, undefined, { silent: true }),
+                        fetchSwaps(),
+                        refreshCoverageGaps(),
+                      ]);
+                    }}
                     isInitialLoad={isInitialLoad}
                     canPreview={isRealAdmin}
                     previewActive={previewChauffeur}

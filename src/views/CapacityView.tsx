@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight, Clock, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, RotateCcw, Search, TriangleAlert, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -148,6 +148,32 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     }
   };
 
+  // Wissel terugdraaien: de ruil annuleren draait de planning mee terug
+  // (revertSwapFromPlanning server-side) — dat is de nette weg, en scheelt
+  // de omweg via het Dienstruil-scherm om de juiste aanvraag op te zoeken.
+  const [terugdraaien, setTerugdraaien] = useState(false);
+  const [isTerugdraaien, setIsTerugdraaien] = useState(false);
+  const uitvoerenTerugdraai = async () => {
+    if (!selected?.cell.swapId || isTerugdraaien) return;
+    setIsTerugdraaien(true);
+    try {
+      const res = await fetch(`/api/swaps/${encodeURIComponent(selected.cell.swapId)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({ status: 'cancelled', ifStatus: 'approved' }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) { notify(body.error || 'Terugdraaien is mislukt.', 'error'); return; }
+      notify('Wissel teruggedraaid — de dienst staat weer op de oorspronkelijke chauffeur.', 'success');
+      setSelected(null);
+      setReloadTick((t) => t + 1);
+    } catch {
+      notify('Terugdraaien is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setIsTerugdraaien(false);
+    }
+  };
+
   const monthParam = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
   const todayIso = isoDate(new Date());
 
@@ -259,6 +285,23 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const showSections = drivers.some((d) => !!d.section);
   const sectionOf = (d: { section?: string | null }) => (d.section || 'Overige');
 
+  /** Tooltip van een cel: type, code en wat er aan de hand is. */
+  const celTitel = (cell: MonthCell, heeftNotitie: boolean) => [
+    `${KIND_LABEL[cell.kind]} · ${cell.code}`,
+    cell.hiddenService ? `dienst ${cell.hiddenService} nog niet herverdeeld` : '',
+    cell.swapId ? (cell.swapManual ? `handmatig overgezet van ${cell.swapFrom || 'een collega'}` : `geruild met ${cell.swapFrom || 'een collega'}`) : '',
+    heeftNotitie ? 'notitie' : '',
+  ].filter(Boolean).join(' · ') + ' — klik voor details';
+
+  // Zoeken op chauffeur: bij 39 namen scroll je anders het halve scherm door
+  // om één iemand te vinden (zelfde patroon als Contacten/Gebruikersbeheer).
+  const [zoek, setZoek] = useState('');
+  const zoekTerm = zoek.trim().toLowerCase();
+  const zichtbareDrivers = useMemo(
+    () => (zoekTerm ? drivers.filter((d) => d.name.toLowerCase().includes(zoekTerm)) : drivers),
+    [drivers, zoekTerm],
+  );
+
   // Legende: de codes die in de héle maand voorkomen, elk met hun betekenis.
   // Data-gedreven (geen hardgecodeerde codes) → toont "BV = Verlof", "ziek =
   // Afwezig", "tk = Tijdskrediet"… precies zoals ze geïmporteerd zijn. Betekenis
@@ -294,7 +337,18 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         title="Maandplanning"
         description="Wie rijdt welke dienst, zoals het overzicht in het chauffeurslokaal."
         actions={(
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="relative">
+              <span className="sr-only">Zoek chauffeur</span>
+              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={zoek}
+                onChange={(e) => setZoek(e.target.value)}
+                placeholder="Zoek chauffeur…"
+                className="control-input h-11 sm:pointer-fine:h-9 w-full sm:w-52 rounded-xl pl-9 pr-3 text-base sm:text-sm font-medium outline-none"
+              />
+            </label>
             <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
               <ChevronLeft size={18} />
             </button>
@@ -366,12 +420,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   </tr>
                 </thead>
                 <tbody>
-                  {drivers.map((drv, i) => {
+                  {zichtbareDrivers.map((drv, i) => {
                     const row = cells[drv.id] || {};
                     const isOwn = ownId && drv.id === ownId;
                     const rowBg = isOwn ? 'bg-oker-50' : 'bg-surface-white';
                     const section = sectionOf(drv);
-                    const showHeader = showSections && (i === 0 || sectionOf(drivers[i - 1]) !== section);
+                    const showHeader = showSections && (i === 0 || sectionOf(zichtbareDrivers[i - 1]) !== section);
                     return (
                       <Fragment key={drv.id}>
                       {showHeader && (
@@ -436,10 +490,21 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                 <button
                                   type="button"
                                   onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
-                                  className={cn('relative flex h-7 w-full items-center justify-center px-1 text-2xs tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70', KIND_TEXT[cell.kind])}
-                                  title={`${KIND_LABEL[cell.kind]} · ${cell.code}${notes.has(noteKey(String(drv.id), iso)) ? ' · notitie' : ''} — klik voor details`}
+                                  className={cn(
+                                    'relative flex h-7 w-full items-center justify-center px-1 text-2xs tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70',
+                                    KIND_TEXT[cell.kind],
+                                    // Gewisselde cel: stippellijn onderaan — de
+                                    // planning wijkt hier af van de Excel.
+                                    cell.swapId && 'border-b border-dashed border-oker-500/80',
+                                  )}
+                                  title={celTitel(cell, notes.has(noteKey(String(drv.id), iso)))}
                                 >
                                   {cell.code}
+                                  {/* Dienst staat nog open onder een afwezigheid:
+                                      dít is het werk dat wacht. */}
+                                  {cell.hiddenService && (
+                                    <TriangleAlert size={9} className="absolute left-0.5 top-0.5 text-amber-600 dark:text-amber-400" aria-label="dienst nog niet herverdeeld" />
+                                  )}
                                   {notes.has(noteKey(String(drv.id), iso)) && (
                                     <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-oker-500" aria-label="notitie aanwezig" />
                                   )}
@@ -466,7 +531,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               const entries = visibleDates.filter((iso) => row[iso]).map((iso) => ({ iso, cell: row[iso] }));
               const isOwn = ownId && drv.id === ownId;
               const section = sectionOf(drv);
-              const showHeader = showSections && (i === 0 || sectionOf(drivers[i - 1]) !== section);
+              const showHeader = showSections && (i === 0 || sectionOf(zichtbareDrivers[i - 1]) !== section);
               return (
                 <Fragment key={drv.id}>
                 {showHeader && (
@@ -500,8 +565,17 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             className="w-full flex items-center gap-3 rounded-xl px-2 py-2.5 min-h-11 text-left active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
                           >
                             <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
-                            <span className={cn('shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[cell.kind])}>{cell.code}</span>
-                            <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">{summary}</span>
+                            <span className={cn(
+                              'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-black/5',
+                              KIND_CLS[cell.kind],
+                              cell.swapId && 'border-b border-dashed border-oker-500/80',
+                            )}>{cell.code}</span>
+                            <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">
+                              {cell.hiddenService ? `dienst ${cell.hiddenService} open` : summary}
+                            </span>
+                            {cell.hiddenService && (
+                              <TriangleAlert size={13} className="shrink-0 text-amber-600 dark:text-amber-400" aria-label="dienst nog niet herverdeeld" />
+                            )}
                           </button>
                         );
                       })}
@@ -528,6 +602,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <span className="font-medium text-slate-600">{e.meaning}</span>
               </div>
             ))}
+            <div className="flex items-center gap-2">
+              <TriangleAlert size={13} className="text-amber-600 dark:text-amber-400" />
+              <span className="font-medium text-slate-600">Dienst nog niet herverdeeld</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="inline-block w-6 border-b border-dashed border-oker-500/80" aria-hidden />
+              <span className="font-medium text-slate-600">Geruild of overgezet</span>
+            </div>
             <span className="font-medium text-slate-400">Leeg = niets gepland</span>
           </div>
         </>
@@ -550,6 +632,23 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <span className={cn('inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[selected.cell.kind])}>{selected.cell.code}</span>
               <span className="text-sm font-semibold text-slate-700">{selected.cell.label}</span>
             </div>
+
+            {/* Herkomst van deze cel: hij wijkt af van de geïmporteerde Excel.
+                Planners/admins kunnen de wissel hier meteen terugdraaien — dat
+                annuleert de ruil én zet de planning terug. */}
+            {selected.cell.swapId && (
+              <div className="mt-4 rounded-2xl bg-surface-soft px-3.5 py-3 space-y-2.5">
+                <p className="text-xs font-medium text-slate-600 leading-relaxed">
+                  {selected.cell.swapManual ? 'Handmatig overgezet' : 'Geruild'}
+                  {selected.cell.swapFrom ? <> van <span className="font-semibold text-slate-700">{selected.cell.swapFrom}</span></> : null}.
+                </p>
+                {canEditNotes && (
+                  <Button variant="secondary" size="sm" full icon={<RotateCcw size={14} />} disabled={isTerugdraaien} onClick={() => setTerugdraaien(true)}>
+                    {isTerugdraaien ? 'Terugdraaien…' : 'Wissel terugdraaien'}
+                  </Button>
+                )}
+              </div>
+            )}
 
             {(notes.has(noteKey(selected.driverId, selected.iso)) || canEditNotes) && (
               <div className="mt-5 space-y-2">
@@ -663,6 +762,19 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           ? `Dienst ${wisselDienst} op ${formatDateLong(selected.iso)} gaat van ${selected.driverName} naar ${drivers.find((d) => String(d.id) === wisselNaar)?.name ?? '—'}. Reden: ${wisselRedenTekst}. De planning wordt meteen bijgewerkt en beide chauffeurs krijgen een melding.`
           : ''}
         confirmText="Doorvoeren"
+        cancelText="Annuleren"
+        variant="warning"
+      />
+
+      <ConfirmationModal
+        isOpen={terugdraaien}
+        onClose={() => setTerugdraaien(false)}
+        onConfirm={() => void uitvoerenTerugdraai()}
+        title="Wissel terugdraaien?"
+        message={selected
+          ? `Dienst ${selected.cell.code} op ${formatDateLong(selected.iso)} gaat terug naar ${selected.cell.swapFrom || 'de oorspronkelijke chauffeur'}. Beide chauffeurs krijgen een melding.`
+          : ''}
+        confirmText="Terugdraaien"
         cancelText="Annuleren"
         variant="warning"
       />
