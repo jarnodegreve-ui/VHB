@@ -89,11 +89,15 @@ export function ToastStack({
                 </div>
                 <div className="min-w-0 flex-1 pt-1">
                   <p className="text-sm font-medium leading-snug text-slate-800">{toast.message}</p>
+                  {/* Dit is dé knop van de uitrol-flow ("Vernieuw"): op een
+                      telefoon, buiten, met handschoenen moet hij raakbaar zijn.
+                      min-h-11 met negatieve marge zodat het raakvlak groeit
+                      zonder de toast hoger te maken. */}
                   {toast.action && (
                     <button
                       type="button"
                       onClick={() => { toast.action!.run(); onDismiss(toast.id); }}
-                      className="ios-pressable mt-1.5 -ml-1 rounded-lg px-1 py-0.5 text-sm font-semibold text-oker-700 underline-offset-2 hover:underline dark:text-oker-500"
+                      className="ios-pressable -mx-2 -my-1 mt-0.5 inline-flex min-h-11 items-center rounded-lg px-2 py-1 text-sm font-semibold text-oker-700 underline-offset-2 hover:underline dark:text-oker-500 sm:pointer-fine:min-h-0 sm:pointer-fine:mt-1.5"
                     >
                       {toast.action.label}
                     </button>
@@ -101,7 +105,7 @@ export function ToastStack({
                 </div>
                 <button
                   onClick={() => onDismiss(toast.id)}
-                  className="shrink-0 rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  className="-m-1.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 sm:pointer-fine:-m-0 sm:pointer-fine:h-7 sm:pointer-fine:w-7"
                   aria-label="Sluit melding"
                 >
                   <X size={15} />

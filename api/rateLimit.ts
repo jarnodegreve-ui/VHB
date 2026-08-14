@@ -87,7 +87,7 @@ function warnSharedStoreDown(reason: string) {
 /** True zolang de gedeelde store recent faalde: dan gelden strengere lokale
  *  limieten, zodat het wegvallen van de globale limiet niet de facto een
  *  ruimere limiet oplevert. */
-export const sharedStoreDegraded = () => hasSharedStore() && Date.now() < storeDownUntil;
+const sharedStoreDegraded = () => hasSharedStore() && Date.now() < storeDownUntil;
 
 /**
  * Fixed-window teller in Redis: INCR + (bij de eerste hit) EXPIRE.

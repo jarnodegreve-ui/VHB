@@ -156,6 +156,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     getShiftById: async (id: string) =>
       mem.planning.find((s: any) => String(s.id) === String(id)) ?? null,
+    getShiftsOnDate: async (date: string) =>
+      mem.planning.filter((s: any) => String(s.date) === String(date)),
     // Planning-doorvoer: zelfde semantiek als de echte DB-functies, maar op
     // mem.planning — zodat de integratietests het effect van approve/cancel
     // op de planning kunnen asserten.
@@ -199,8 +201,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     saveDiversionsData: async (data: any[]) => { mem.diversions = data; },
     getPlanningCodesData: async () => mem.planningCodes,
     savePlanningCodesData: async (data: any[]) => { mem.planningCodes = data; },
-    logActivity: async (_req: any, domain: string, action: string, message: string) => {
-      mem.activity.push({ domain, action, message });
+    logActivity: async (_req: any, domain: string, action: string, message: string, entity?: { type?: string; id?: string }) => {
+      mem.activity.push({ domain, action, message, entityType: entity?.type, entityId: entity?.id });
     },
     getActivityLog: async (opts?: { sinceIso?: string | null; max?: number }) => {
     // Mock respecteert de opts — anders kan de #249-regressie ("UI beloofde
@@ -2032,6 +2034,19 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(res.json.cells['4']['2026-07-15']).toMatchObject({ kind: 'service' });
   });
 
+  it('de overdekte dienst blijft meegestuurd, zodat een admin hem kan overzetten', async () => {
+    // Ziek melden haalt de dienst niet uit de planning: de zieke chauffeur
+    // stáát er nog op. Zonder hiddenService was juist het hoofdscenario
+    // (ziekte) onbereikbaar in de maandplanning — de cel toont "ziek" en de
+    // wissel-actie hangt aan een dienst.
+    const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res.json.cells['3']['2026-07-15']).toMatchObject({ code: 'ziek', hiddenService: '12' });
+    // Een afwezigheidsdag zónder dienst eronder krijgt het veld niet.
+    mem.leave.push({ id: 'l-bv2', userId: '4', startDate: '2026-07-16', endDate: '2026-07-16', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-07-10T06:00:00Z', decidedAt: '2026-07-11T06:00:00Z' });
+    const res2 = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
+    expect(res2.json.cells['4']['2026-07-16'].hiddenService).toBeUndefined();
+  });
+
   it('ook een naderhand goedgekeurd verlof overschrijft de cel', async () => {
     mem.leave.push({ id: 'l-bv', userId: '4', startDate: '2026-07-15', endDate: '2026-07-16', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-07-10T06:00:00Z', decidedAt: '2026-07-11T06:00:00Z' });
     const res = await api('GET', '/api/month-planning?month=2026-07', { token: 'tok-planner' });
@@ -2290,6 +2305,75 @@ describe('dienstruil — terugdraaien, bevriezen en tegenprestatie-validatie', (
     const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, geldig] });
     expect(res.status).toBe(200);
     expect(mem.swaps.find((s: any) => s.id === 's-ok')).toBeTruthy();
+  });
+});
+
+describe('handmatige dienstwissel — gates uit de controle-ronde', () => {
+  const wissel = (body: Record<string, unknown>, token = 'tok-admin') =>
+    api('POST', '/api/admin/shift-swap', { token, body: { reason: 'Ziekte', ...body } });
+
+  it('weigert de wissel als de dienst de TEGENPRESTATIE van een open ruil is', async () => {
+    // s-2: chauffeur 4 biedt sh-b aan en vraagt dienst 12 op 03/07 terug.
+    // Zet die terugruil-dienst in de planning op naam van chauffeur 3.
+    mem.planning.push({ id: 'sh-terug', driverId: '3', date: '2026-07-03', line: '12' });
+    const res = await wissel({ date: '2026-07-03', line: '12', fromDriverId: '3', toDriverId: '2' });
+    expect(res.status).toBe(409);
+    expect(String(res.json?.error)).toContain('ruilaanvraag');
+    // Niets verplaatst.
+    expect(mem.planning.find((r: any) => r.id === 'sh-terug')?.driverId).toBe('3');
+  });
+
+  it('matcht de dienstcode genormaliseerd (rauwe matrixcode vs. canoniek nummer)', async () => {
+    mem.planning.push({ id: 'sh-r12', driverId: '3', date: '2026-07-20', line: 'r12' });
+    // De maandplanning-cel stuurt de rúwe schrijfwijze mee.
+    const res = await wissel({ date: '2026-07-20', line: 'R12', fromDriverId: '3', toDriverId: '4' });
+    expect(res.status).toBe(200);
+    expect(mem.planning.find((r: any) => r.id === 'sh-r12')?.driverId).toBe('4');
+    // De swap bewaart de canonieke schrijfwijze, zodat de replay hem terugvindt.
+    expect(mem.swaps.find((s: any) => s.shiftDate === '2026-07-20')?.shiftLine).toBe('r12');
+  });
+});
+
+describe('dienstruil — dubbele inplanning bij goedkeuren', () => {
+  it('weigert goedkeuring als de collega intussen zelf een dienst heeft die dag', async () => {
+    // s-1: chauffeur 3 biedt sh-a (01/07, dienst 12) aan chauffeur 4, tegen een
+    // vrije dag. Chauffeur 4 krijgt intussen zelf een dienst op 01/07.
+    mem.swaps = mem.swaps.map((s: any) => (s.id === 's-1' ? { ...s, shiftDate: '2026-07-01', shiftLine: '12' } : s));
+    mem.planning.push({ id: 'sh-nieuw', driverId: '4', date: '2026-07-01', line: '15' });
+    const accept = await api('PATCH', '/api/swaps/s-1', { token: 'tok-b', body: { status: 'accepted', ifStatus: 'pending' } });
+    expect(accept.status).toBe(200);
+    const approve = await api('PATCH', '/api/swaps/s-1', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(approve.status).toBe(409);
+    expect(String(approve.json?.error)).toContain('dubbele inplanning');
+    // De dienst is niet verhuisd.
+    expect(mem.planning.find((r: any) => r.id === 'sh-a')?.driverId).toBe('3');
+  });
+
+  it('laat een 1-op-1 ruil op dezelfde dag gewoon door (terugruil telt niet mee)', async () => {
+    // Chauffeur 3 (dienst 12) en chauffeur 4 (dienst 14) ruilen op 01/07.
+    mem.planning = [
+      { id: 'sh-a', driverId: '3', date: '2026-07-01', line: '12' },
+      { id: 'sh-x', driverId: '4', date: '2026-07-01', line: '14' },
+    ];
+    mem.swaps = [
+      { id: 's-zelfde-dag', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', returnDate: '2026-07-01', returnCode: '14' },
+    ];
+    const res = await api('PATCH', '/api/swaps/s-zelfde-dag', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(res.status).toBe(200);
+    expect(mem.planning.find((r: any) => r.id === 'sh-a')?.driverId).toBe('4');
+    expect(mem.planning.find((r: any) => r.id === 'sh-x')?.driverId).toBe('3');
+  });
+});
+
+describe('dienstruil — verwijderen laat een auditspoor na', () => {
+  it('logt een verwijderde ruil in het activiteitenlog', async () => {
+    const voor = mem.activity.length;
+    // Planner schrijft de volledige lijst terug zónder s-1 (= verwijdering).
+    const res = await api('POST', '/api/swaps', { token: 'tok-planner', body: mem.swaps.filter((s: any) => s.id !== 's-1') });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-1')).toBeFalsy();
+    const nieuw = mem.activity.slice(voor);
+    expect(nieuw.some((a: any) => String(a.action) === 'Dienstruil verwijderd' && String(a.entityId) === 's-1')).toBe(true);
   });
 });
 

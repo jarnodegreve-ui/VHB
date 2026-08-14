@@ -464,7 +464,7 @@ function SubmitButton({ loading, children }: { loading: boolean; children: React
     // nooit wit op amber — contrast 2,2:1). De login-CTA blijft bewust een
     // maat groter (15px bold) dan de standaard lg-knop: hero-knop op het
     // meest bekeken scherm.
-    <Button type="submit" variant="primary" size="lg" full disabled={loading} className="group mt-2 py-3.5 text-[15px] font-bold">
+    <Button type="submit" variant="primary" size="lg" full disabled={loading} className="group mt-2 py-3.5 text-base font-bold">
       <span>{loading ? 'Even geduld…' : children}</span>
       {!loading && (
         <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />

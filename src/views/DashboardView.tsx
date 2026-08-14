@@ -4,7 +4,7 @@ import { activeDiversions } from '../lib/diversions';
 import type { Diversion, LeaveRequest, Shift, User, View } from '../types';
 import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
-import { formatDateHuman, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
+import { formatDateHuman, formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
 import { hasShiftEnded, isShiftActiveAt } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
@@ -245,7 +245,7 @@ export function DashboardView({ notes = [],
             {greeting}, <span className="text-oker-600">{firstName}</span>
           </h1>
           <p className="mt-0.5 text-sm font-normal text-slate-500">
-            {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
+            {formatDayLong(isoDate(now))} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>

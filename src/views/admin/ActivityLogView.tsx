@@ -4,6 +4,7 @@ import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob, getSupabaseAuthHeaders } from '../../lib/ui';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
+import { formatDayLong } from '../../lib/format';
 import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 
@@ -360,7 +361,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
               <div className="min-w-0">
                 <h4 className="text-lg font-bold tracking-tight truncate capitalize">
-                  {new Date(`${openDayData.day}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })}
+                  {formatDayLong(openDayData.day)}
                 </h4>
                 <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">{openDayData.count} {openDayData.count === 1 ? 'actieve gebruiker' : 'actieve gebruikers'}</p>
               </div>

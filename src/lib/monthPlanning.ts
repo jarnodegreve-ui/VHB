@@ -14,6 +14,10 @@ export type MonthCell = {
   label: string;
   /** uren-segmenten "HH:MM - HH:MM" (enkel bij diensten, anders leeg) */
   segments: string[];
+  /** Dienstcode die door een afwezigheids-overlay (ziek/bv/kv) overdekt wordt.
+   *  Ziek melden haalt de dienst niet uit de planning — hij staat nog op naam
+   *  van deze chauffeur en moet herverdeeld worden. */
+  hiddenService?: string;
 };
 
 export type MonthPlanning = {

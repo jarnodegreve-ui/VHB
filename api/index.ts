@@ -823,7 +823,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // opnieuw op als bevinding. De maskering terugzetten is klein werk: de
     // implementatie staat in commit f2a9b33 (helpers: HEALTH_CODES /
     // isHealthCode, hier: één ternary op de cel).
-    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[] }>> = {};
+    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string }>> = {};
     for (const row of monthRows) {
       const date = String(row.source_date);
       const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? row.assignments : {};
@@ -920,7 +920,17 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
       for (const date of dates) {
         if (start <= date && date <= eind) {
           if (!cells[id]) cells[id] = {};
-          cells[id][date] = { code, kind: cel.kind, label: cel.label, segments: [] };
+          // De dienst die deze afwezigheid overdekt, blijft meegestuurd:
+          // ziek melden verwijdert de planning-rij niet, dus de dienst staat
+          // nog op naam van deze chauffeur en moet herverdeeld worden. Zonder
+          // dit veld was juist het hoofdscenario (ziekte) onbereikbaar in de
+          // maandplanning — de cel toonde "ziek" en de dienstwissel-actie
+          // hangt aan een dienst-cel.
+          const overdekt = cells[id][date];
+          cells[id][date] = {
+            code, kind: cel.kind, label: cel.label, segments: [],
+            ...(overdekt?.kind === "service" ? { hiddenService: overdekt.code } : {}),
+          };
         }
       }
     }
@@ -2893,6 +2903,41 @@ const ruilAfwezigheidsFout = async (swap: {
   return null;
 };
 
+/** Dubbele inplanning bij het goedkeuren van een ruil: de collega mag op de
+ *  dienstdag niet al een ándere dienst hebben. De overname-voorwaarde werd tot
+ *  nu alleen bij het indienen getoetst (isTakeoverCode op de matrix); tussen
+ *  accepteren en goedkeuren kan de collega intussen een dienst gekregen hebben
+ *  — bijvoorbeeld via de handmatige admin-wissel, die zélf wél op conflicten
+ *  controleert. Dan leverde de goedkeuring stil een dubbel ingeplande dag op.
+ *
+ *  Twee rijen tellen bewust NIET mee: de terugruil-dienst bij een 1-op-1 ruil
+ *  op dezelfde dag (die verhuist in dezelfde beweging naar de aanvrager) en de
+ *  aangeboden dienst zelf (al doorgevoerd → herhaling blijft idempotent). */
+const dubbeleInplanningFout = async (swap: {
+  targetDriverId?: unknown; shiftDate?: unknown; shiftLine?: unknown;
+  returnDate?: unknown; returnCode?: unknown; swapType?: unknown;
+}): Promise<string | null> => {
+  const targetId = String(swap.targetDriverId ?? "").trim();
+  const dienstDag = String(swap.shiftDate ?? "").trim();
+  // Legacy-ruil zonder dienst-info: niets te controleren (de doorvoer slaat
+  // die sowieso over, met een waarschuwing in de log).
+  if (!targetId || !ISO_DAY_RE.test(dienstDag)) return null;
+  const terugCode = normalizeSwapType(swap.swapType) === "overname" ? "" : String(swap.returnCode ?? "").trim();
+  const terugDag = String(swap.returnDate ?? "").trim();
+  const aangeboden = toLookupToken(String(swap.shiftLine ?? ""));
+  const rijen = await getShiftsOnDate(dienstDag);
+  const bezet = rijen.filter((r) => {
+    if (String(r.driverId) !== targetId) return false;
+    const lijnToken = toLookupToken(r.line);
+    if (aangeboden && lijnToken === aangeboden) return false;
+    if (terugCode && terugDag === dienstDag && lijnToken === toLookupToken(terugCode)) return false;
+    return true;
+  });
+  if (bezet.length === 0) return null;
+  const naam = (await getUsersData()).find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
+  return `${naam} rijdt op ${dienstDag} al dienst ${bezet[0].line} — deze ruil zou een dubbele inplanning geven. Zet die dienst eerst weg.`;
+};
+
 /** Heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op een vers
  *  gegenereerde planning. De matrix (Excel) kent de ruilen immers niet —
  *  zonder deze stap veegde elke import/heropbouw alle doorgevoerde wissels
@@ -3215,6 +3260,9 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       // goedkeuren opnieuw toetsen, op de ópgeslagen voorwaarden.
       const afwFout = await ruilAfwezigheidsFout(prev ?? next);
       if (afwFout) return res.status(409).json({ error: afwFout });
+      // …en de collega kan intussen een dienst gekregen hebben.
+      const dubbelFout = await dubbeleInplanningFout(prev ?? next);
+      if (dubbelFout) return res.status(409).json({ error: dubbelFout });
     }
 
     // State-machine: een afgehandelde ruil (geweigerd/geannuleerd/voltooid) kan
@@ -3410,6 +3458,21 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // recordsToWrite zodat een niet-weggeschreven echo geen spookmelding geeft.
     const usersForLog = await getUsersData();
     const userName = (id: string) => usersForLog.find((u) => String(u.id) === String(id))?.name || `Onbekende gebruiker (${id})`;
+
+    // Verwijderde ruilen laten anders geen enkel spoor na: een intrekking door
+    // de aanvrager is legitiem, maar een staflid dat een geaccepteerde aanvraag
+    // stil weggooit hoort zichtbaar te zijn (verlof logt dit al wél).
+    for (const id of swapIdsToDelete) {
+      const weg = previousById.get(String(id));
+      if (!weg) continue;
+      await logActivity(
+        req,
+        "swaps",
+        "Dienstruil verwijderd",
+        `${userName(String(weg.requesterId))} — dienstruil verwijderd (status ${weg.status}).`,
+        { type: "swap", id: String(id) },
+      );
+    }
     for (const next of finalRecords) {
       const prev = previousById.get(String(next.id));
       if (!prev) {
@@ -3562,6 +3625,8 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       // sinds het indienen, mag de dienst niet alsnog toegeschoven krijgen.
       const afwFout = await ruilAfwezigheidsFout(current);
       if (afwFout) return res.status(409).json({ error: afwFout });
+      const dubbelFout = await dubbeleInplanningFout(current);
+      if (dubbelFout) return res.status(409).json({ error: dubbelFout });
     }
 
     // Planning-doorvoer VÓÓR de statuswijziging. movePlanningRows filtert op
@@ -3670,10 +3735,18 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     // chauffeur staan (zelfde principe als staleApprovalError — tussen openen
     // van het scherm en bevestigen kan de planning gewijzigd zijn).
     const dayRows = await getShiftsOnDate(date);
-    const ownRows = dayRows.filter((r) => String(r.line) === line && String(r.driverId) === fromDriverId);
+    // Genormaliseerd vergelijken: de maandplanning-cel stuurt de rúwe
+    // Excel-code mee ("R12"), planning.line bevat het canonieke
+    // dienstnummer ("r12"). Exact vergelijken liet zulke diensten altijd
+    // op 409 stranden.
+    const lineToken = toLookupToken(line);
+    const ownRows = dayRows.filter((r) => toLookupToken(r.line) === lineToken && String(r.driverId) === fromDriverId);
     if (ownRows.length === 0) {
       return res.status(409).json({ error: `Dienst ${line} op ${date} staat niet (meer) op naam van ${fromUser.name} — de planning is intussen gewijzigd. Vernieuw de pagina en probeer opnieuw.` });
     }
+    // Vanaf hier de schrijfwijze uit de planning zelf: die gaat de swap in en
+    // stuurt de doorvoer (movePlanningRows matcht exact op line).
+    const dienstLine = String(ownRows[0].line);
 
     // Planningsconflict: de nieuwe chauffeur rijdt die dag al een dienst.
     const conflictRow = dayRows.find((r) => String(r.driverId) === toDriverId);
@@ -3687,11 +3760,18 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     if (afwFout) return res.status(409).json({ error: afwFout });
 
     // Een openstaande ruilaanvraag op dezelfde dienst zou door deze wissel
-    // stale worden (en bij goedkeuring niets meer verplaatsen) — eerst afhandelen.
+    // stale worden (en bij goedkeuring niets meer verplaatsen) — eerst
+    // afhandelen. Beide kanten van een 1-op-1 ruil tellen: staat deze dienst
+    // als TEGENPRESTATIE in een open ruil, dan verhuist bij goedkeuring wel de
+    // aangeboden dienst maar niet de terugruil — de aanvrager levert dan in
+    // zonder iets terug te krijgen, en de replay reproduceert die halve staat.
     const allSwaps = await getSwapsData();
+    const zelfdeDienst = (d?: unknown, l?: unknown) =>
+      String(d ?? "") === date && !!String(l ?? "").trim() && toLookupToken(String(l ?? "")) === lineToken;
     const openSwap = allSwaps.find((s) =>
       (s.status === "pending" || s.status === "accepted") &&
-      ((String(s.shiftDate ?? "") === date && String(s.shiftLine ?? "") === line) ||
+      (zelfdeDienst(s.shiftDate, s.shiftLine) ||
+        zelfdeDienst(s.returnDate, s.returnCode) ||
         ownRows.some((r) => String(r.id) === String(s.shiftId))));
     if (openSwap) {
       return res.status(409).json({ error: "Voor deze dienst loopt nog een ruilaanvraag. Handel die eerst af (goedkeuren, afwijzen of laten intrekken) en probeer daarna opnieuw." });
@@ -3708,7 +3788,7 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
       decidedAt: nu,
       swapType: "overname" as const,
       shiftDate: date,
-      shiftLine: line,
+      shiftLine: dienstLine,
       reason: `Handmatige wissel door ${req.appUser?.name ?? "admin"} — ${reason}`,
     };
 
@@ -3726,13 +3806,13 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
       req,
       "swaps",
       "Dienst handmatig overgezet",
-      `${fromUser.name} → ${toUser.name} — dienst ${line} op ${date}. Reden: ${reason}. ${carry}`,
+      `${fromUser.name} → ${toUser.name} — dienst ${dienstLine} op ${date}. Reden: ${reason}. ${carry}`,
       { type: "swap", id: swap.id },
     );
 
     await sendPushToUsers([fromDriverId, toDriverId], {
       title: "Planning aangepast",
-      body: `Dienst ${line} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
+      body: `Dienst ${dienstLine} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
       url: "/",
     });
 

@@ -1201,7 +1201,7 @@ export const saveServicesData = async (data: any) => {
 
 // --- Back-ups (Supabase Storage) ---
 
-export const BACKUPS_BUCKET = "backups";
+const BACKUPS_BUCKET = "backups";
 const BACKUP_RETENTION_DAYS = 30;
 
 /** Slaat een back-up-JSON op in de (private) backups-bucket en ruimt

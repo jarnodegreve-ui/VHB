@@ -101,7 +101,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                   <MapPin size={17} />
                 </div>
                 <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <h4 className="font-bold text-[15px] text-slate-800 tracking-tight leading-snug">{div.title}</h4>
+                  <h4 className="font-bold text-base text-slate-800 tracking-tight leading-snug">{div.title}</h4>
                   <Badge tone="slate">{div.line}</Badge>
                   {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
                 </div>

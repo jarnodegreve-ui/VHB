@@ -296,7 +296,7 @@ export function CommandPalette({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Zoek scherm of actie…"
-                className="no-focus-ring flex-1 bg-transparent outline-none text-[15px] text-slate-900 placeholder:text-slate-400"
+                className="no-focus-ring flex-1 bg-transparent outline-none text-base text-slate-900 placeholder:text-slate-400"
               />
               <kbd className="hidden sm:inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                 esc

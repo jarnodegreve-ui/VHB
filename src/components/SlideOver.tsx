@@ -46,13 +46,20 @@ export function SlideOver({
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
-  // Body-scroll-lock: bewaar en herstel de bestaande overflow-waarde.
+  // Scroll-lock — zelfde reden als in Modal.tsx: de app scrolt niet op <body>
+  // maar in [data-scroll-root] (App.tsx), dus alleen body locken was een no-op
+  // en de pagina rubberbandde achter het paneel mee. Beide locken: body als
+  // vangnet (print, login), de echte scroll-root voor de app zelf.
   useEffect(() => {
     if (!open) return;
-    const previous = document.body.style.overflow;
+    const scrollRoot = document.querySelector<HTMLElement>('[data-scroll-root]');
+    const previousBody = document.body.style.overflow;
+    const previousRoot = scrollRoot?.style.overflow ?? '';
     document.body.style.overflow = 'hidden';
+    if (scrollRoot) scrollRoot.style.overflow = 'hidden';
     return () => {
-      document.body.style.overflow = previous;
+      document.body.style.overflow = previousBody;
+      if (scrollRoot) scrollRoot.style.overflow = previousRoot;
     };
   }, [open]);
 
@@ -137,10 +144,16 @@ export function SlideOver({
               widthClass,
             )}
           >
-            <div className="flex items-start gap-3 border-b border-slate-200/70 p-5">
+            {/* Landscape: iOS negeert de portrait-lock uit het manifest, dus
+                header, inhoud en footer respecteren de zij-insets — anders valt
+                het sluitkruis deels achter de notch-hoek. */}
+            <div
+              className="flex items-start gap-3 border-b border-slate-200/70 p-5"
+              style={{ paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
+            >
               {icon}
               <div className="min-w-0 flex-1">
-                <h2 className="text-[15px] font-bold tracking-tight text-slate-900 truncate">
+                <h2 className="text-base font-bold tracking-tight text-slate-900 truncate">
                   {title}
                 </h2>
                 {subtitle && (
@@ -151,18 +164,28 @@ export function SlideOver({
                 type="button"
                 onClick={onClose}
                 aria-label="Sluiten"
-                className="-m-2 shrink-0 rounded-lg p-3.5 sm:-m-1 sm:p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                className="-m-1 shrink-0 rounded-lg p-3.5 sm:pointer-fine:-m-1 sm:pointer-fine:p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">{children}</div>
+            {/* overscroll-contain: aan het einde van de inhoud mag de pagina
+                erachter niet meescrollen (zelfde fix als in Modal.tsx). */}
+            <div
+              className="flex-1 overflow-y-auto overscroll-contain p-5"
+              style={{ paddingRight: 'max(1.25rem, env(safe-area-inset-right))' }}
+            >
+              {children}
+            </div>
 
             {footer && (
               <div
                 className="border-t border-slate-200/70 p-4"
-                style={{ paddingBottom: 'max(1rem, env(safe-area-inset-bottom))' }}
+                style={{
+                  paddingBottom: 'max(1rem, env(safe-area-inset-bottom))',
+                  paddingRight: 'max(1rem, env(safe-area-inset-right))',
+                }}
               >
                 {footer}
               </div>
