@@ -2110,6 +2110,56 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(dag16.uitval).toBeUndefined();
   });
 
+  it('een herverdeelde dienst verdwijnt uit de dekking (melding Jarno 14-08)', async () => {
+    // De matrix blijft de zieke chauffeur tonen — dat is een momentopname van
+    // de Excel. Is de dienst intussen overgenomen, dan is hij gewoon gedekt;
+    // zonder deze overlay bleef hij als gat staan mét de naam van de zieke,
+    // ook nadat de admin hem had overgezet.
+    mem.planningMatrix = [
+      { id: 'm-w1', source_date: '2030-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' },
+    ];
+    mem.leave = [
+      { id: 'l-w', userId: '3', startDate: '2030-07-15', endDate: '2030-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-15T06:00:00Z', decidedAt: '2030-07-15T06:00:00Z' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+
+    // Vóór de wissel: dienst 12 is een gat.
+    const voor = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-15', { token: 'tok-planner' });
+    expect(voor.json.days[0].missing).toEqual(['12']);
+
+    // Admin zet dienst 12 over naar chauffeur 4 (niet afwezig).
+    mem.swaps = [{
+      id: 's-dekking', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved',
+      reason: 'Handmatige wissel door Admin E2E — Ziekte', createdAt: '2030-07-14T08:00:00Z',
+      decidedAt: '2030-07-14T09:00:00Z', shiftDate: '2030-07-15', shiftLine: '12', swapType: 'overname',
+    }];
+    const na = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-15', { token: 'tok-planner' });
+    expect(na.json.days[0].missing).toEqual([]);
+    expect(na.json.days[0].covered).toBe(2);
+    expect(na.json.days[0].uitval).toBeUndefined();
+  });
+
+  it('een dienst die is overgezet naar iemand die zélf afwezig is, blijft een gat', async () => {
+    mem.planningMatrix = [
+      { id: 'm-w2', source_date: '2030-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    // Beide chauffeurs afwezig: de oorspronkelijke én de overnemer.
+    mem.leave = [
+      { id: 'l-w1', userId: '3', startDate: '2030-07-15', endDate: '2030-07-15', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-15T06:00:00Z', decidedAt: '2030-07-15T06:00:00Z' },
+      { id: 'l-w2', userId: '4', startDate: '2030-07-15', endDate: '2030-07-15', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2030-07-10T06:00:00Z', decidedAt: '2030-07-11T06:00:00Z' },
+    ];
+    mem.coverageExpectations = { week: ['12'] };
+    mem.swaps = [{
+      id: 's-dekking2', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved',
+      reason: '', createdAt: '2030-07-14T08:00:00Z', decidedAt: '2030-07-14T09:00:00Z',
+      shiftDate: '2030-07-15', shiftLine: '12', swapType: 'overname',
+    }];
+    const res = await api('GET', '/api/coverage-gaps?from=2030-07-15&to=2030-07-15', { token: 'tok-planner' });
+    expect(res.json.days[0].missing).toEqual(['12']);
+    // …en de tegel noemt de nieuwe eigenaar, niet de oorspronkelijke zieke.
+    expect(res.json.days[0].uitval['12']).toMatchObject({ name: 'Chauffeur B', reason: 'verlof' });
+  });
+
   it('een gereden (historische) dag wordt niet met terugwerkende kracht een gat', async () => {
     // Een achteraf ingevoerd ziektebriefje voor 15 juli (verleden): die dag ís
     // gereden — door een invaller die nooit in de matrix is bijgewerkt. De
