@@ -20,7 +20,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay } from '../lib/format';
 import type {
   ActivityLogEntry,
   Diversion,
@@ -515,7 +515,7 @@ export function PlannerDashboardWidgets({
           </h1>
           <p className="mt-0.5 text-sm font-normal text-slate-500">
             Actuele status op{' '}
-            {now.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' })} ·{' '}
+            {formatDayLong(isoDate(now))} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>

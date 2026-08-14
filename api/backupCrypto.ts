@@ -16,7 +16,7 @@ import { createCipheriv, createDecipheriv, pbkdf2Sync, randomBytes } from "node:
  * -iter 200000` verwacht.
  */
 const OPENSSL_MAGIC = Buffer.from("Salted__", "ascii");
-export const PBKDF2_ITERATIES = 200_000;
+const PBKDF2_ITERATIES = 200_000;
 
 const deriveKeyIv = (passphrase: string, salt: Buffer) => {
   const keyIv = pbkdf2Sync(passphrase, salt, PBKDF2_ITERATIES, 48, "sha256");

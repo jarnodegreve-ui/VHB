@@ -3,6 +3,7 @@ import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
 import { isoDate } from '../../lib/availability';
+import { WEEKDAY_SHORT_SUN } from '../../lib/format';
 import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { OpsStat } from '../../components/ops';
@@ -204,10 +205,10 @@ export function OcpiDashboardView() {
   const [vermogenTermijn, setVermogenTermijn] = useState<'24u' | '7d' | 'maand'>('24u');
   const uurLabel = (ts: string) => new Date(ts).toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
   const maandStart = () => { const nu = new Date(); return `${nu.getFullYear()}-${String(nu.getMonth() + 1).padStart(2, '0')}-01`; };
-  const WEEKDAG_KORT = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 
-  // Op een smal scherm (telefoon) zijn 48 slot-staven van ~4 px geen
-  // raakvlak; dan voegen we de 24u-reeks samen tot uur-staven (piek per uur).
+  // Smal scherm (telefoon): dunt de maand-aslabels uit tot elke tweede maandag,
+  // anders lopen de datums in elkaar. De 24u-reeks wordt níét meer samengevoegd
+  // tot uur-staven — sinds de veeg-selectie is elk kwartier gewoon aanwijsbaar.
   const [smalScherm, setSmalScherm] = useState(() => typeof window !== 'undefined' && window.matchMedia('(max-width: 640px)').matches);
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 640px)');
@@ -272,7 +273,7 @@ export function OcpiDashboardView() {
           // Maand-as: alleen (op smal scherm elke twééde) maandag een dagnummer
           // — 31 labels van twee cijfers passen niet op 320 px.
           asLabel: vermogenTermijn === '7d'
-            ? WEEKDAG_KORT[dow]
+            ? WEEKDAY_SHORT_SUN[dow]
             : dow === 1 && (!smalScherm || maandagTeller % 2 === 1) ? String(Number(d.date.slice(8))) : '',
         };
       });
@@ -514,7 +515,7 @@ export function OcpiDashboardView() {
                 <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                   {grafiek.dagen.map((d) => (
                     <span key={d.date} className="flex-1 text-center text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
-                      {grafiek.dagen.length <= 7 ? WEEKDAG_KORT[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
+                      {grafiek.dagen.length <= 7 ? WEEKDAY_SHORT_SUN[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
                     </span>
                   ))}
                 </div>

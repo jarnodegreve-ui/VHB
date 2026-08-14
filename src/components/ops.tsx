@@ -11,7 +11,7 @@ import { cn } from '../lib/ui';
  * bestaan alleen nog op het chauffeursdashboard (planner-kant weg, 03-08),
  * zodat beide schermen niet uit elkaar groeien.
  */
-export const STAT_TONES = {
+const STAT_TONES = {
   // In donker een tikje meer vulling (…/18 i.p.v. /12): 12%-alpha op
   // near-black werd modderig — een signaal hoort daar juist te dragen.
   emerald: 'bg-emerald-500/12 text-emerald-600 dark:bg-emerald-500/18 dark:text-emerald-400',
@@ -25,7 +25,7 @@ export const STAT_TONES = {
   slate: 'bg-slate-500/12 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300',
 } as const;
 
-export type StatTone = keyof typeof STAT_TONES;
+type StatTone = keyof typeof STAT_TONES;
 
 /** Compacte KPI voor de status-strip. `value` (getal) animeert via CountUp. */
 export function OpsStat({

@@ -17,7 +17,7 @@
  * paasvakantie schuiven met Pasen mee).
  */
 
-export type Typedag = 'schooldag' | 'vakantiedag' | 'zaterdag' | 'zon-feestdag';
+type Typedag = 'schooldag' | 'vakantiedag' | 'zaterdag' | 'zon-feestdag';
 
 /** Gauss-computus: paaszondag voor een gegeven jaar (westerse kalender). */
 const paaszondag = (jaar: number): Date => {

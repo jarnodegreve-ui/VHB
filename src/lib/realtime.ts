@@ -17,7 +17,7 @@ import { supabase } from './supabase';
  * Debouncing: meerdere events binnen 400ms triggeren één refetch per
  * tabel, niet één per event (anders bij bulk-approve = N refetches).
  */
-export type RealtimeRefetchers = {
+type RealtimeRefetchers = {
   refetchLeave: () => void | Promise<void>;
   refetchSwaps: () => void | Promise<void>;
   refetchDiversions: () => void | Promise<void>;

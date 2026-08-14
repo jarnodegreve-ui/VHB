@@ -11,10 +11,9 @@ import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
 import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
 import type { User } from '../types';
-import { MONTH_NAMES } from '../lib/format';
+import { formatDayLong, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../lib/format';
 
 const WEEKDAY_LETTERS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
-const WEEKDAY_SHORT = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 
 /** Vaste redenen voor een handmatige dienstwissel; bij 'Andere correctie' is
  *  de vrije toelichting verplicht (de server eist altijd een reden). */
@@ -249,14 +248,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     };
   };
 
-  const formatDateLong = (iso: string) => {
-    const d = new Date(`${iso}T00:00:00`);
-    try {
-      return d.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
-    } catch {
-      return iso;
-    }
-  };
+  const formatDateLong = formatDayLong;
 
   const hasData = dates.length > 0 && drivers.length > 0;
 
@@ -495,7 +487,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     <div className="mt-2">
                       {entries.map(({ iso, cell }) => {
                         const d = new Date(`${iso}T00:00:00`);
-                        const wd = WEEKDAY_SHORT[(d.getDay() + 6) % 7];
+                        const wd = WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7];
                         const today = iso === todayIso;
                         const summary = cell.kind === 'service'
                           ? (cell.segments.length ? cell.segments.join(' · ') : 'Dienst')

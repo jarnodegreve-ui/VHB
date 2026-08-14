@@ -70,6 +70,29 @@ export function formatShortDay(iso: string | undefined | null): string {
   }
 }
 
+/** Volledig dag-label 'vrijdag 18 juli' uit een 'YYYY-MM-DD'-string — voor
+ *  koppen en detailvensters, waar de korte vorm te krap aanvoelt. Stond vijf
+ *  keer los uitgeschreven (maandplanning, beide dashboards, activiteitenlog,
+ *  rooster) terwijl dit bestand belooft de enige plek te zijn die over
+ *  datumweergave beslist. */
+export function formatDayLong(iso: string | undefined | null): string {
+  if (!iso) return '';
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  try {
+    return d.toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' });
+  } catch {
+    return String(iso);
+  }
+}
+
+/** Weekdag-afkortingen, maandag eerst (index 0 = ma) — voor eigen
+ *  dag-rasters. Zondag-eerst (JS getDay()) gaat via WEEKDAY_SHORT_SUN. */
+export const WEEKDAY_SHORT_MON = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
+
+/** Weekdag-afkortingen in JS-volgorde (index = Date#getDay(), 0 = zo). */
+export const WEEKDAY_SHORT_SUN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
+
 /** Bestandsgrootte kort: 'B' / 'KB' / 'MB'. Eén bron — stond als
  *  prettySize/formatSize 3× (bijna-)identiek in Documenten, Gebruiker-
  *  documenten en Ritbladen. null/0 → lege string. */

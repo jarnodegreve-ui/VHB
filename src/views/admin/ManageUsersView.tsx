@@ -11,7 +11,7 @@ import { UserDocumentsModal } from './UserDocumentsModal';
 import { BroadcastDocumentModal } from './BroadcastDocumentModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
-export type UserDraft = User & { password?: string };
+type UserDraft = User & { password?: string };
 
 /** Rol → badge-tint (presentatie, geen logica). */
 const ROLE_BADGE_TONE = { admin: 'oker', planner: 'blue', chauffeur: 'slate' } as const;
