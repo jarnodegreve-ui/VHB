@@ -1032,12 +1032,13 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
     if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
       return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
     }
-    const [stored, rows, usersForLeave, leaveAll] = await Promise.all([
+    const [stored, rows, usersForLeave, leaveAll, swapsAll] = await Promise.all([
       getCoverageExpectations(),
       getPlanningMatrixRows(),
       getUsersData(),
       // Alleen afwezigheid die het gevraagde bereik nog raakt.
       getLeaveData({ endOnOrAfter: from }),
+      getSwapsData(),
     ]);
     // Zelfde weekdag-toewijzing + uitzonderingen als bij het instellen, zodat
     // het dag-type per dag consistent bepaald wordt.
@@ -1062,6 +1063,29 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
     const idByNameToken = nameIdIndex(chauffeursVoorNaam);
     const userNameById = new Map<string, string>(chauffeursVoorNaam.map((u) => [String(u.id), String(u.name ?? "")]));
     const UITVAL_REDEN: Record<string, string> = { ziekte: "ziek", betaald_verlof: "verlof", klein_verlet: "klein verlet" };
+
+    // Doorgevoerde ruilen en handmatige wissels: de matrix is een momentopname
+    // van de Excel en kent ze niet, maar de dienst is wél overgenomen. Zonder
+    // deze overlay bleef een dienst die net herverdeeld was als gat staan —
+    // mét de naam van de zieke erbij (melding Jarno 14-08). Zelfde principe en
+    // volgorde (decidedAt, zodat een ketting A→B→C bij C uitkomt) als de
+    // overlay in /api/month-planning.
+    const nieuweEigenaarPerDienst = new Map<string, string>();
+    const sleutel = (date: string, code: string) => `${date}|${normalizeCode(code)}`;
+    for (const sw of (swapsAll as any[])
+      .filter((s) => s?.status === "approved" || s?.status === "completed")
+      .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")))) {
+      const dienstDag = String(sw.shiftDate ?? "");
+      const dienstCode = String(sw.shiftLine ?? "").trim();
+      const naar = String(sw.targetDriverId ?? "");
+      if (dienstDag && dienstCode && naar) nieuweEigenaarPerDienst.set(sleutel(dienstDag, dienstCode), naar);
+      // Bij een 1-op-1 ruil gaat de tegenprestatie de andere kant op.
+      const terugDag = String(sw.returnDate ?? "");
+      const terugCode = String(sw.returnCode ?? "").trim();
+      if (normalizeSwapType(sw.swapType) !== "overname" && terugDag && terugCode && terugCode.toLowerCase() !== "vrij") {
+        nieuweEigenaarPerDienst.set(sleutel(terugDag, terugCode), String(sw.requesterId ?? ""));
+      }
+    }
     const inRange = rows
       .filter((r: any) => {
         const d = String(r.source_date ?? "");
@@ -1084,7 +1108,10 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       const historisch = date < vandaagIso;
       for (const [naam, v] of entries) {
         const token = toLookupToken(String(naam));
-        const id = idByNameToken.get(token) ?? idByNameToken.get(sortedNameToken(String(naam)));
+        const matrixId = idByNameToken.get(token) ?? idByNameToken.get(sortedNameToken(String(naam)));
+        // Is deze dienst intussen overgenomen? Dan bepaalt de níéuwe eigenaar
+        // of hij gedekt is — niet de chauffeur die nog in de Excel staat.
+        const id = nieuweEigenaarPerDienst.get(sleutel(date, String(v))) ?? matrixId;
         const afwezig = !historisch && id ? afwezigOp(approvedLeaveAll, id, date) : null;
         if (id && afwezig) {
           uitvalByCode.set(normalizeCode(String(v)), {
