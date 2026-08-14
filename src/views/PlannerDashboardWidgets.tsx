@@ -356,6 +356,19 @@ export function PlannerDashboardWidgets({
   // (Geen useMemo: alle hooks moeten vóór de skeleton-return staan — zie de
   //  waarschuwing daar. De lijst is klein en de berekening lineair.)
   const teHerverdelen = openstaandeDienstenVanAfwezigen(shifts, leaveRequests, today);
+  // Per chauffeur groeperen i.p.v. één rij per dienst: bij een langere ziekte
+  // zijn dat er al gauw acht, terwijl de lijst er maar vier toonde. Je loste er
+  // vier op, de volgende vier schoven door, en het leek alsof de melding bleef
+  // hangen (melding Jarno 14-08). Nu staat het totaal meteen in de rij.
+  const herverdeelPerChauffeur = Array.from(
+    teHerverdelen.reduce((map, s) => {
+      const key = String(s.driverId);
+      const groep = map.get(key) ?? { driverId: key, reden: s.reden, diensten: [] as typeof teHerverdelen };
+      groep.diensten.push(s);
+      map.set(key, groep);
+      return map;
+    }, new Map<string, { driverId: string; reden: string; diensten: typeof teHerverdelen }>()).values(),
+  );
 
   /** Dienst uit de ziekmeld-vervolgstap overzetten naar de gekozen collega. */
   const zetDienstOver = async (d: OpenstaandeDienst) => {
@@ -392,7 +405,10 @@ export function PlannerDashboardWidgets({
   // 3 toestellen); dit is wat daarbuiten valt, zodat de teller in de kop
   // eerlijk blijft.
   const hiddenAttentionCount =
-    Math.max(0, teHerverdelen.length - 4) +
+    // Rijen zijn per chauffeur; wat niet getoond wordt is het werk van de
+    // chauffeurs buiten de top-3 (niet de diensten binnen een getoonde rij —
+    // die staan er met hun totaal bij).
+    herverdeelPerChauffeur.slice(3).reduce((n, g) => n + g.diensten.length, 0) +
     Math.max(0, vervalTaken.length - 3) +
     Math.max(0, gapDays.length - 3) +
     Math.max(0, pendingLeave.length - 4) +
@@ -772,13 +788,13 @@ export function PlannerDashboardWidgets({
               />
               </Fragment>
             ))}
-            {teHerverdelen.slice(0, 4).map((s) => (
-              <Fragment key={`herverdeel:${s.id}`}>
+            {herverdeelPerChauffeur.slice(0, 3).map((g) => (
+              <Fragment key={`herverdeel:${g.driverId}`}>
               <OpsRow
                 tone="red"
                 icon={<UserX size={15} />}
-                primary={`Dienst ${serviceNumberOf(s)} nog niet herverdeeld — ${formatDay(s.date)}`}
-                secondary={`${userNameById(String(s.driverId))} is ${s.reden.toLowerCase()} maar staat nog ingepland`}
+                primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld — ${userNameById(g.driverId)}`}
+                secondary={`${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDay(s.date)} (${serviceNumberOf(s)})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`}
                 onClick={() => onNavigate('bezetting')}
               />
               </Fragment>
@@ -1038,9 +1054,22 @@ export function PlannerDashboardWidgets({
         {ziekVervolg ? (
           <div className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1">
             <p className="text-sm font-medium text-slate-600 leading-relaxed">
-              {ziekVervolg.naam} is afgemeld, maar {ziekVervolg.diensten.length === 1 ? 'deze dienst staat' : 'deze diensten staan'} nog op naam.
-              {isAdmin ? ' Zet hem meteen over.' : ' Een admin kan ze overzetten in de Maandplanning.'}
+              {ziekVervolg.naam} is afgemeld, maar {ziekVervolg.diensten.length === 1
+                ? 'deze dienst staat'
+                : `deze ${ziekVervolg.diensten.length} diensten staan`} nog op naam.
+              {isAdmin ? ' Zet ze meteen over.' : ' Een admin kan ze overzetten in de Maandplanning.'}
             </p>
+            {/* Voortgang expliciet: bij een langere ziekte staat de lijst vol en
+                scrol je makkelijk over de laatste heen — dan lijkt het klaar
+                terwijl er nog diensten open staan (melding Jarno 14-08). */}
+            {isAdmin && (
+              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">
+                {Object.keys(afgehandeld).length} van {ziekVervolg.diensten.length} overgezet
+                {Object.keys(afgehandeld).length < ziekVervolg.diensten.length
+                  ? ` · nog ${ziekVervolg.diensten.length - Object.keys(afgehandeld).length} te doen`
+                  : ' · alles rond'}
+              </p>
+            )}
             <div className="space-y-3">
               {ziekVervolg.diensten.map((d) => {
                 const klaar = afgehandeld[d.id];
@@ -1084,8 +1113,15 @@ export function PlannerDashboardWidgets({
                 );
               })}
             </div>
-            <Button variant="secondary" size="lg" full onClick={closeSickModal}>
-              {Object.keys(afgehandeld).length === ziekVervolg.diensten.length ? 'Klaar' : 'Later doen'}
+            <Button
+              variant={Object.keys(afgehandeld).length === ziekVervolg.diensten.length ? 'primary' : 'secondary'}
+              size="lg"
+              full
+              onClick={closeSickModal}
+            >
+              {Object.keys(afgehandeld).length === ziekVervolg.diensten.length
+                ? 'Klaar'
+                : `Later doen (${ziekVervolg.diensten.length - Object.keys(afgehandeld).length} blijven open)`}
             </Button>
           </div>
         ) : (
