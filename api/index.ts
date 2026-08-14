@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -823,7 +823,7 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // opnieuw op als bevinding. De maskering terugzetten is klein werk: de
     // implementatie staat in commit f2a9b33 (helpers: HEALTH_CODES /
     // isHealthCode, hier: één ternary op de cel).
-    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string }>> = {};
+    const cells: Record<string, Record<string, { code: string; kind: string; label: string; segments: string[]; hiddenService?: string ; swapId?: string; swapManual?: boolean; swapFrom?: string }>> = {};
     for (const row of monthRows) {
       const date = String(row.source_date);
       const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments) ? row.assignments : {};
@@ -852,31 +852,39 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // verwerkt, dan matcht dat niet meer en blijft alles staan. 'completed'
     // telt mee: ook een voltooide ruil is gereden zoals gewisseld.
     const dateSet = new Set(dates);
-    const wisselCel = (date: string, vanId: string, naarId: string, verwachtCode: string) => {
+    // `merk` reist mee met de verplaatste cel: zo ziet de maandplanning welke
+    // cellen afwijken van de geïmporteerde Excel, wie de dienst afstond en —
+    // bij een handmatige admin-wissel — met welke swap je hem kan terugdraaien.
+    const wisselCel = (
+      date: string, vanId: string, naarId: string, verwachtCode: string,
+      merk?: { swapId: string; swapManual: boolean; swapFrom: string },
+    ) => {
       const vanCel = cells[vanId]?.[date];
       if (!vanCel || toLookupToken(vanCel.code) !== toLookupToken(verwachtCode)) return;
       const naarCel = cells[naarId]?.[date];
       if (!cells[naarId]) cells[naarId] = {};
-      cells[naarId][date] = vanCel;
+      cells[naarId][date] = merk ? { ...vanCel, ...merk } : vanCel;
       if (naarCel) cells[vanId][date] = naarCel;
       else delete cells[vanId][date];
     };
     const doorgevoerdeRuilen = (swaps as any[])
       .filter((sw) => sw?.status === "approved" || sw?.status === "completed")
       .sort((a, b) => String(a.decidedAt ?? "").localeCompare(String(b.decidedAt ?? "")));
+    const naamVanId = (id: string) => chauffeurs.find((c: any) => String(c.id) === id)?.name ?? "";
     for (const sw of doorgevoerdeRuilen) {
       const van = String(sw.requesterId ?? "");
       const naar = String(sw.targetDriverId ?? "");
       if (!chauffeurIds.has(van) || !chauffeurIds.has(naar)) continue;
       const dienstDag = String(sw.shiftDate ?? "");
       const dienstCode = String(sw.shiftLine ?? "").trim();
+      const merk = { swapId: String(sw.id), swapManual: isHandmatigeWissel(sw), swapFrom: naamVanId(van) };
       // Zonder dienst-info (aanvraag van vóór de shift_info-migratie) valt er
       // niets veilig te wisselen.
-      if (dienstDag && dienstCode && dateSet.has(dienstDag)) wisselCel(dienstDag, van, naar, dienstCode);
+      if (dienstDag && dienstCode && dateSet.has(dienstDag)) wisselCel(dienstDag, van, naar, dienstCode, merk);
       const terugDag = String(sw.returnDate ?? "");
       const terugCode = String(sw.returnCode ?? "").trim();
       if (normalizeSwapType(sw.swapType) !== "overname" && terugDag && terugCode && terugCode.toLowerCase() !== "vrij" && dateSet.has(terugDag)) {
-        wisselCel(terugDag, naar, van, terugCode);
+        wisselCel(terugDag, naar, van, terugCode, { ...merk, swapFrom: naamVanId(naar) });
       }
     }
 
@@ -3789,7 +3797,7 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
       swapType: "overname" as const,
       shiftDate: date,
       shiftLine: dienstLine,
-      reason: `Handmatige wissel door ${req.appUser?.name ?? "admin"} — ${reason}`,
+      reason: `${HANDMATIGE_WISSEL_PREFIX}${req.appUser?.name ?? "admin"} — ${reason}`,
     };
 
     // Doorvoer VÓÓR het opslaan (zelfde volgorde en motivatie als bij het

@@ -18,6 +18,13 @@ export type MonthCell = {
    *  Ziek melden haalt de dienst niet uit de planning — hij staat nog op naam
    *  van deze chauffeur en moet herverdeeld worden. */
   hiddenService?: string;
+  /** Deze cel is hier terechtgekomen door een doorgevoerde ruil/wissel — de
+   *  planning wijkt dus af van de geïmporteerde Excel. */
+  swapId?: string;
+  /** true = handmatige wissel door een admin (i.p.v. een ruil tussen collega's). */
+  swapManual?: boolean;
+  /** Naam van de chauffeur die de dienst afstond. */
+  swapFrom?: string;
 };
 
 export type MonthPlanning = {
