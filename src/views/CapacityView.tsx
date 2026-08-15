@@ -492,10 +492,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                   onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
                                   className={cn(
                                     'relative flex h-7 w-full items-center justify-center px-1 text-2xs tabular-nums cursor-pointer transition-colors hover:bg-oker-100/70',
-                                    KIND_TEXT[cell.kind],
-                                    // Gewisselde cel: stippellijn onderaan — de
-                                    // planning wijkt hier af van de Excel.
-                                    cell.swapId && 'border-b border-dashed border-oker-500/80',
+                                    // Gewisselde cel in het rood (keuze Jarno
+                                    // 15-08): de planning wijkt hier af van de
+                                    // Excel — dat moet je in één oogopslag zien,
+                                    // zonder de cel aan te klikken.
+                                    cell.swapId
+                                      ? 'font-semibold text-red-600 dark:text-red-400 border-b border-dashed border-red-500/80'
+                                      : KIND_TEXT[cell.kind],
                                   )}
                                   title={celTitel(cell, notes.has(noteKey(String(drv.id), iso)))}
                                 >
@@ -567,8 +570,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
                             <span className={cn(
                               'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-black/5',
-                              KIND_CLS[cell.kind],
-                              cell.swapId && 'border-b border-dashed border-oker-500/80',
+                              // Zie het desktop-grid: gewisseld = rood.
+                              cell.swapId ? 'bg-red-50 text-red-600' : KIND_CLS[cell.kind],
                             )}>{cell.code}</span>
                             <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">
                               {cell.hiddenService ? `dienst ${cell.hiddenService} open` : summary}
@@ -607,7 +610,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <span className="font-medium text-slate-600">Dienst nog niet herverdeeld</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-block w-6 border-b border-dashed border-oker-500/80" aria-hidden />
+              <span className="inline-block rounded-md bg-red-50 px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-red-600 ring-1 ring-black/5">4102</span>
               <span className="font-medium text-slate-600">Geruild of overgezet</span>
             </div>
             <span className="font-medium text-slate-400">Leeg = niets gepland</span>
@@ -629,7 +632,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             </div>
 
             <div className="mt-4 flex items-center gap-2.5">
-              <span className={cn('inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-black/5', KIND_CLS[selected.cell.kind])}>{selected.cell.code}</span>
+              <span className={cn(
+                'inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-black/5',
+                selected.cell.swapId ? 'bg-red-50 text-red-600' : KIND_CLS[selected.cell.kind],
+              )}>{selected.cell.code}</span>
               <span className="text-sm font-semibold text-slate-700">{selected.cell.label}</span>
             </div>
 
