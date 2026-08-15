@@ -2,8 +2,9 @@ import { useMemo, useState } from 'react';
 import { Plus, Thermometer } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
+import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { daysBetween } from '../../lib/leaveBalance';
-import { formatDayLong, formatShortDay } from '../../lib/format';
+import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
@@ -26,6 +27,7 @@ export function ZiekteView({
   shifts,
   onSickReport,
   onSave,
+  onShiftSwapped,
 }: {
   user: User;
   users: User[];
@@ -33,9 +35,17 @@ export function ZiekteView({
   shifts: Shift[];
   onSickReport: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>;
   onSave: (requests: LeaveRequest[]) => Promise<boolean> | boolean;
+  /** Ververst planning + ruilen na een dienstwissel vanuit dit blad. */
+  onShiftSwapped?: () => Promise<void> | void;
 }) {
   const today = isoDate(new Date());
   const naamVan = (id: string) => users.find((u) => String(u.id) === String(id))?.name ?? 'Onbekend';
+  const isAdmin = user.role === 'admin';
+  const dagNa = (iso: string) => {
+    const d = new Date(`${iso}T00:00:00`);
+    d.setDate(d.getDate() + 1);
+    return isoDate(d);
+  };
 
   const ziektes = useMemo(
     () => leaveRequests.filter((r) => r.type === 'ziekte'),
@@ -54,12 +64,68 @@ export function ZiekteView({
 
   /** Diensten die binnen de ziekteperiode (vanaf vandaag) nog op naam staan —
    *  dát is het werk dat dit scherm zichtbaar moet maken. */
-  const openDienstenVan = (r: LeaveRequest) =>
-    shifts.filter((s) =>
-      String(s.driverId) === String(r.userId) &&
-      s.date >= (r.startDate > today ? r.startDate : today) &&
-      s.date <= r.endDate,
-    ).length;
+  const openDienstenLijst = (r: LeaveRequest) =>
+    shifts
+      .filter((s) =>
+        String(s.driverId) === String(r.userId) &&
+        s.date >= (r.startDate > today ? r.startDate : today) &&
+        s.date <= r.endDate,
+      )
+      .sort((a, b) => a.date.localeCompare(b.date));
+  const openDienstenVan = (r: LeaveRequest) => openDienstenLijst(r).length;
+
+  /** Ziektedagen per chauffeur dit jaar (goedgekeurde meldingen, afgekapt op
+   *  de jaargrens) — voor loonadministratie en verzuimgesprekken. */
+  const jaar = Number(today.slice(0, 4));
+  const clip = (iso: string, kant: 'start' | 'eind') => {
+    const grens = kant === 'start' ? `${jaar}-01-01` : `${jaar}-12-31`;
+    if (kant === 'start') return iso < grens ? grens : iso;
+    return iso > grens ? grens : iso;
+  };
+  const dagenDitJaar = useMemo(() => {
+    const per = new Map<string, number>();
+    for (const r of ziektes) {
+      if (r.status !== 'approved') continue;
+      if (r.endDate < `${jaar}-01-01` || r.startDate > `${jaar}-12-31`) continue;
+      const dagen = daysBetween(clip(r.startDate, 'start'), clip(r.endDate, 'eind'));
+      per.set(String(r.userId), (per.get(String(r.userId)) ?? 0) + dagen);
+    }
+    return [...per.entries()]
+      .map(([userId, dagen]) => ({ userId, dagen }))
+      .sort((a, b) => b.dagen - a.dagen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ziektes, jaar]);
+
+  // --- Herverdelen vanuit het detail (admin): zelfde wissel als overal -------
+  const [vervangerPerDienst, setVervangerPerDienst] = useState<Record<string, string>>({});
+  const [wisselBezig, setWisselBezig] = useState<string | null>(null);
+  const [overgezet, setOvergezet] = useState<Record<string, string>>({});
+  const zetOver = async (r: LeaveRequest, dienst: Shift) => {
+    const naarId = vervangerPerDienst[dienst.id];
+    if (!naarId || wisselBezig) return;
+    setWisselBezig(dienst.id);
+    try {
+      const res = await fetch('/api/admin/shift-swap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({
+          date: dienst.date,
+          line: serviceNumberOf(dienst),
+          fromDriverId: String(dienst.driverId),
+          toDriverId: naarId,
+          reason: 'Ziekte',
+        }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) { notify(body.error || 'Overzetten is mislukt.', 'error'); return; }
+      setOvergezet((cur) => ({ ...cur, [dienst.id]: naamVan(naarId) }));
+      await onShiftSwapped?.();
+    } catch {
+      notify('Overzetten is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setWisselBezig(null);
+    }
+  };
 
   // --- Ziek melden (zelfde flow als het dashboard: onSickReport) ------------
   const [meldOpen, setMeldOpen] = useState(false);
@@ -120,6 +186,11 @@ export function ZiekteView({
           <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">
             {formatShortDay(r.startDate)}{r.startDate !== r.endDate ? ` → ${formatShortDay(r.endDate)}` : ''}
             {' · '}{daysBetween(r.startDate, r.endDate)} {daysBetween(r.startDate, r.endDate) === 1 ? 'dag' : 'dagen'}
+            {/* Mensentaal bij lopende/komende periodes: wanneer is hij terug? */}
+            {r.status === 'approved' && r.startDate <= today && r.endDate >= today && (
+              ` · terug ${formatShortDay(dagNa(r.endDate))} · nog ${daysBetween(today, r.endDate)} ${daysBetween(today, r.endDate) === 1 ? 'dag' : 'dagen'}`
+            )}
+            {r.status === 'approved' && r.startDate > today && ` · start over ${daysBetween(today, r.startDate) - 1 || 1} ${daysBetween(today, r.startDate) - 1 === 1 ? 'dag' : 'dagen'}`}
             {r.comment ? ` · ${r.comment}` : ''}
           </span>
         </span>
@@ -165,6 +236,25 @@ export function ZiekteView({
           <Sectie titel="Nu ziek" items={nuZiek} leeg="Niemand ziek gemeld op dit moment." toonOpen />
           {aangekondigd.length > 0 && <Sectie titel="Aangekondigd" items={aangekondigd} leeg="" toonOpen />}
           <Sectie titel="Historiek" items={historiek} leeg="Nog geen afgelopen ziekteperiodes." />
+
+          {/* Ziektedagen per chauffeur dit jaar — voor loonadministratie en
+              verzuimgesprekken. Alleen chauffeurs met minstens één dag. */}
+          {dagenDitJaar.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-baseline justify-between px-1">
+                <MicroLabel className="text-slate-500">Ziektedagen in {jaar}</MicroLabel>
+                <MicroLabel className="tabular-nums">{dagenDitJaar.reduce((n, d) => n + d.dagen, 0)} totaal</MicroLabel>
+              </div>
+              <div className="surface-card rounded-2xl divide-y divide-slate-100">
+                {dagenDitJaar.map((d) => (
+                  <div key={d.userId} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+                    <span className="min-w-0 truncate text-sm font-medium text-slate-700">{naamVan(d.userId)}</span>
+                    <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-800">{d.dagen} {d.dagen === 1 ? 'dag' : 'dagen'}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -242,6 +332,51 @@ export function ZiekteView({
                 <p className="rounded-2xl bg-surface-soft px-3.5 py-3 text-sm font-medium text-slate-500">Deze melding is ingetrokken.</p>
               ) : (
                 <>
+                  {/* Diensten die in deze periode nog op naam staan: meteen
+                      herverdelen (admin), zonder omweg via de Maandplanning. */}
+                  {openDienstenLijst(detail).length > 0 && (
+                    <div className="space-y-2">
+                      <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">
+                        Nog op naam ({openDienstenLijst(detail).length})
+                      </label>
+                      <div className="space-y-2.5">
+                        {openDienstenLijst(detail).map((dienst) => {
+                          const klaar = overgezet[dienst.id];
+                          return (
+                            <div key={dienst.id} className="rounded-2xl bg-surface-soft px-3.5 py-3 space-y-2.5">
+                              <div className="flex items-center justify-between gap-3">
+                                <span className="text-sm font-semibold text-slate-800 tabular-nums">Dienst {serviceNumberOf(dienst)}</span>
+                                <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">{formatShortDay(dienst.date)}</span>
+                              </div>
+                              {klaar ? (
+                                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Overgezet naar {klaar}</p>
+                              ) : isAdmin ? (
+                                <div className="flex flex-col gap-2 sm:flex-row">
+                                  <select
+                                    aria-label={`Vervanger voor dienst ${serviceNumberOf(dienst)} op ${dienst.date}`}
+                                    value={vervangerPerDienst[dienst.id] ?? ''}
+                                    onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [dienst.id]: e.target.value }))}
+                                    className="control-input min-w-0 flex-1 rounded-2xl bg-surface-field px-3.5 py-2.5 text-base font-semibold outline-none sm:text-sm"
+                                  >
+                                    <option value="">Kies een chauffeur…</option>
+                                    {users
+                                      .filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId))
+                                      .sort((a, b) => a.name.localeCompare(b.name))
+                                      .map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}
+                                  </select>
+                                  <Button variant="primary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id} onClick={() => void zetOver(detail, dienst)}>
+                                    {wisselBezig === dienst.id ? 'Bezig…' : 'Zet over'}
+                                  </Button>
+                                </div>
+                              ) : (
+                                <p className="text-xs font-medium text-slate-500">Een admin kan deze dienst overzetten.</p>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                   <div className="space-y-1.5">
                     <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Ziek tot en met</label>
                     <div className="flex gap-2">

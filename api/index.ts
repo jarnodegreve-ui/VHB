@@ -81,6 +81,9 @@ import {
   bumpActiveSessions,
   getShiftById,
   getShiftsOnDate,
+  getServiceSegments,
+  saveMatrixRowAssignments,
+  insertPlanningRows,
   savePlanningMatrixHistoryEntry,
   saveServicesData,
   saveSwapsData,
@@ -3499,6 +3502,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       if (!prev || prev.status === next.status) continue;
       if (next.status === "approved") {
         const r = await applySwapToPlanning(next);
+        // Concurrency-vangnet: 0 verplaatste rijen mét dienst-info betekent
+        // dat de planning tussen de hercheck en de doorvoer nog wijzigde
+        // (bv. een gelijktijdige admin-wissel). Dan NIET half goedkeuren met
+        // enkel een logwaarschuwing — weigeren, zodat de planner met verse
+        // data opnieuw beoordeelt. r === null (legacy zonder dienst-info)
+        // houdt het oude waarschuw-gedrag.
+        if (r && r.offeredMoved === 0) {
+          return res.status(409).json({ error: "De planning is intussen gewijzigd — de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." });
+        }
         carryLogById.set(String(next.id), describeSwapCarry(next, r, "doorgevoerd"));
       } else if (prev.status === "approved" && (next.status === "cancelled" || next.status === "rejected")) {
         const r = await revertSwapFromPlanning(next);
@@ -3698,6 +3710,12 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
     let carry: string | undefined;
     if (status === "approved" && current.status !== "approved") {
       const r = await applySwapToPlanning(current);
+      // Zelfde concurrency-vangnet als de array-route: 0 verplaatste rijen
+      // mét dienst-info = planning wijzigde tussen check en doorvoer → 409
+      // i.p.v. half goedkeuren met een logwaarschuwing.
+      if (r && r.offeredMoved === 0) {
+        return res.status(409).json({ error: "De planning is intussen gewijzigd — de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." });
+      }
       carry = describeSwapCarry(current, r, "doorgevoerd");
     } else if (current.status === "approved" && (status === "cancelled" || status === "rejected")) {
       const r = await revertSwapFromPlanning(current);
@@ -3877,6 +3895,102 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
   } catch (err) {
     console.error("Handmatige dienstwissel is mislukt.", err);
     res.status(500).json({ error: "Handmatige dienstwissel is mislukt." });
+  }
+});
+
+// --- Onbemande dienst toewijzen (vanuit Dekking) ----------------------------
+//
+// Een gat in de dekking = een verwachte dienst die op die dag op níémand
+// staat. De dienstwissel kan daar niets mee (die verplaatst een bestaande
+// rij); tot nu kon zo'n gat alleen via een nieuwe Excel-upload gevuld worden.
+// Deze route schrijft de toewijzing in de planning-matrix (de bron waaruit
+// elke heropbouw genereert — zo overleeft ze "opnieuw opbouwen") én zet de
+// dienstblokken direct in de planning. Een nieuwe Excel-import vervangt de
+// matrix en dus ook deze toewijzing: bewust, de Excel is dan de waarheid en
+// het gat verschijnt gewoon weer in de dekking.
+app.post("/api/planning/assign-service", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const date = String(req.body?.date ?? "").trim();
+    const serviceNumber = String(req.body?.serviceNumber ?? "").trim();
+    const driverId = String(req.body?.driverId ?? "").trim();
+    if (!ISO_DAY_RE.test(date)) return res.status(400).json({ error: "Ongeldige datum (JJJJ-MM-DD verwacht)." });
+    if (!serviceNumber || !driverId) return res.status(400).json({ error: "Kies de dienst én de chauffeur." });
+
+    const [users, services, matrixRows, dayRows] = await Promise.all([
+      getUsersData(),
+      getServicesData(),
+      getPlanningMatrixRows(),
+      getShiftsOnDate(date),
+    ]);
+    const driver = users.find((u) => String(u.id) === driverId);
+    if (!driver || driver.isActive === false) return res.status(400).json({ error: "De gekozen chauffeur bestaat niet (meer) of is inactief." });
+
+    const dienstToken = toLookupToken(serviceNumber);
+    const service = (services as any[]).find((s) => toLookupToken(s.serviceNumber) === dienstToken);
+    if (!service) return res.status(400).json({ error: `Dienst ${serviceNumber} staat niet in het dienstoverzicht.` });
+    const segments = getServiceSegments(service);
+    if (segments.length === 0) return res.status(400).json({ error: `Dienst ${service.serviceNumber} heeft geen tijdsblokken in het dienstoverzicht — vul die eerst aan.` });
+
+    // De dienst moet écht onbemand zijn (tussen openen en klikken kan een
+    // collega hem al ingevuld hebben) en de chauffeur mag die dag niets rijden.
+    const alBemand = dayRows.find((r) => toLookupToken(r.line) === dienstToken);
+    if (alBemand) {
+      const naam = users.find((u) => String(u.id) === String(alBemand.driverId))?.name ?? "iemand";
+      return res.status(409).json({ error: `Dienst ${service.serviceNumber} is op ${date} intussen al ingevuld door ${naam} — vernieuw de pagina.` });
+    }
+    const heeftAl = dayRows.find((r) => String(r.driverId) === driverId);
+    if (heeftAl) return res.status(409).json({ error: `${driver.name} rijdt op ${date} al dienst ${heeftAl.line} — dubbele inplanning kan niet.` });
+    const afwFout = await ruilAfwezigheidsFout({ requesterId: "", targetDriverId: driverId, swapType: "overname", shiftDate: date });
+    if (afwFout) return res.status(409).json({ error: afwFout });
+
+    // Matrix-rij van die dag: sleutel is de chauffeursnáám zoals de Excel die
+    // schrijft — hergebruik een bestaande naamvariant van deze chauffeur als
+    // die er is (accenten/volgorde), anders de naam uit gebruikersbeheer.
+    const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
+    if (!matrixRow) return res.status(409).json({ error: `Er is geen geïmporteerde planning voor ${date} — importeer eerst de Excel.` });
+    const assignments: Record<string, string> = { ...(matrixRow.assignments ?? {}) };
+    const eigenToken = toLookupToken(driver.name);
+    const eigenSorted = sortedNameToken(driver.name);
+    const bestaandeKey = Object.keys(assignments).find((k) => toLookupToken(k) === eigenToken || sortedNameToken(k) === eigenSorted);
+    const huidigeCode = bestaandeKey ? String(assignments[bestaandeKey] ?? "").trim() : "";
+    // Alleen een lege cel of een overneembare code (vrij/bv/tk/ta) mag
+    // overschreven worden — zelfde regel als de overname bij dienstruil.
+    if (huidigeCode && !isTakeoverCode(huidigeCode)) {
+      return res.status(409).json({ error: `${driver.name} staat op ${date} al op '${huidigeCode}' in de planning — die cel kan niet stil overschreven worden.` });
+    }
+    assignments[bestaandeKey ?? driver.name] = String(service.serviceNumber);
+
+    const nieuweRijen = segments.map((segment: any) => ({
+      id: `${date}-${driver.id}-${service.serviceNumber}-${segment.segment}`,
+      date,
+      startTime: segment.startTime,
+      endTime: segment.endTime,
+      line: String(service.serviceNumber),
+      busNumber: "",
+      loopnr: segment.loopnr ?? "",
+      driverId: String(driver.id),
+    }));
+    // Eerst de matrix (de bron), dan de planning-rijen. Faalt de tweede stap,
+    // dan zet de eerstvolgende heropbouw de planning alsnog goed vanuit de
+    // matrix — nooit andersom een rij zonder bron.
+    await saveMatrixRowAssignments(String(matrixRow.id), assignments);
+    await insertPlanningRows(nieuweRijen as any);
+
+    await logActivity(
+      req,
+      "planning",
+      "Dienst toegewezen",
+      `Dienst ${service.serviceNumber} op ${date} toegewezen aan ${driver.name} (was onbemand). ${nieuweRijen.length} rij(en) toegevoegd; matrix bijgewerkt.`,
+    );
+    await sendPushToUsers([driverId], {
+      title: "Dienst toegewezen",
+      body: `Je rijdt dienst ${service.serviceNumber} op ${date}. Bekijk je rooster.`,
+      url: "/",
+    });
+    res.json({ success: true, rows: nieuweRijen.length });
+  } catch (err) {
+    console.error("Dienst toewijzen is mislukt.", err);
+    res.status(500).json({ error: "Dienst toewijzen is mislukt." });
   }
 });
 

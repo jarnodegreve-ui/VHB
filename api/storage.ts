@@ -166,6 +166,32 @@ export const getShiftsOnDate = async (date: string): Promise<Array<{ id: string;
   }));
 };
 
+/**
+ * Assignments van één matrix-rij vervangen — voor het toewijzen van een
+ * onbemande dienst vanuit Dekking. De matrix is de bron waaruit elke
+ * heropbouw de planning genereert: door dáár te schrijven overleeft de
+ * toewijzing "opnieuw opbouwen". Een nieuwe Excel-import vervangt de matrix
+ * en dus ook deze toewijzing — bewust: de nieuwe Excel is dan de waarheid en
+ * het gat verschijnt gewoon weer in de dekking.
+ */
+export const saveMatrixRowAssignments = async (rowId: string, assignments: Record<string, string>): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('planning_matrix_rows')
+    .update({ assignments })
+    .eq('id', String(rowId));
+  if (error) throw error;
+};
+
+/** Losse planning-rijen toevoegen (upsert op id) — de dienstblokken van een
+ *  zojuist toegewezen dienst, zonder de rest van de planning aan te raken. */
+export const insertPlanningRows = async (rows: ShiftRecord[]): Promise<void> => {
+  if (rows.length === 0) return;
+  const client = requireDb();
+  const { error } = await client.from('planning').upsert(rows);
+  if (error) throw error;
+};
+
 /** Volledige planning wissen — alleen voor de expliciete admin-actie. */
 export const clearPlanningData = async () => {
   const client = requireDb();

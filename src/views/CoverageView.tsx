@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, Plus } from 'lucide-react';
-import { cn } from '../lib/ui';
+import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
-import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { fetchAvailability } from '../lib/availability';
@@ -54,7 +54,10 @@ export function CoverageView() {
   const [onlyGaps, setOnlyGaps] = useState(true);
   // Klik op een ontbrekende dienst → wie is er vrij die dag?
   const [pick, setPick] = useState<{ date: string; code: string } | null>(null);
-  const [freeNames, setFreeNames] = useState<string[] | null>(null);
+  const [freeNames, setFreeNames] = useState<Array<{ id: string; name: string }> | null>(null);
+  // Toewijzen van het gat aan een vrije chauffeur (POST /api/planning/assign-service).
+  const [assignBusy, setAssignBusy] = useState<string | null>(null);
+  const [assignConfirm, setAssignConfirm] = useState<{ id: string; name: string } | null>(null);
   const [pickLoading, setPickLoading] = useState(false);
 
   const year = viewMonth.getFullYear();
@@ -90,6 +93,29 @@ export function CoverageView() {
 
   const refetchGaps = () => fetchCoverageGaps(from, to).then((res) => setGaps(Array.isArray(res?.days) ? res.days : [])).catch(() => {});
 
+  /** Wijs het gekozen gat toe aan een vrije chauffeur — de matrix én de
+   *  planning worden server-side bijgewerkt, daarna verdwijnt het gat hier. */
+  const wijsToe = async (kandidaat: { id: string; name: string }) => {
+    if (!pick || assignBusy) return;
+    setAssignBusy(kandidaat.id);
+    try {
+      const res = await fetch('/api/planning/assign-service', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({ date: pick.date, serviceNumber: pick.code, driverId: kandidaat.id }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) { notify(body.error || 'Toewijzen is mislukt.', 'error'); return; }
+      notify(`Dienst ${pick.code} toegewezen aan ${kandidaat.name} — de chauffeur krijgt een melding.`, 'success');
+      setPick(null);
+      await refetchGaps();
+    } catch {
+      notify('Toewijzen is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setAssignBusy(null);
+    }
+  };
+
   // Vrije chauffeurs ophalen voor de gekozen dag (kandidaten om het gat te vullen).
   useEffect(() => {
     if (!pick) { setFreeNames(null); return; }
@@ -101,7 +127,10 @@ export function CoverageView() {
         if (cancelled) return;
         const day = res.days.find((d) => d.date === pick.date);
         const freeSet = new Set(day?.free ?? []);
-        setFreeNames(res.drivers.filter((d) => freeSet.has(d.id)).map((d) => d.name).sort((a, b) => a.localeCompare(b)));
+        setFreeNames(res.drivers
+          .filter((d) => freeSet.has(d.id))
+          .map((d) => ({ id: String(d.id), name: d.name }))
+          .sort((a, b) => a.name.localeCompare(b.name)));
       })
       .catch(() => { if (!cancelled) setFreeNames([]); })
       .finally(() => { if (!cancelled) setPickLoading(false); });
@@ -503,19 +532,40 @@ export function CoverageView() {
               <div className="mt-4">
                 <MicroLabel className="text-emerald-600 tabular-nums">{freeNames.length} vrij</MicroLabel>
                 <div className="mt-2 flex flex-col gap-1.5">
-                  {freeNames.map((name) => (
-                    <div key={name} className="flex items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">
+                  {freeNames.map((kandidaat) => (
+                    <div key={kandidaat.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">
                       <UserCheck size={15} className="text-emerald-600 shrink-0" />
-                      <span className="text-sm font-bold text-slate-800 truncate">{name}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{kandidaat.name}</span>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        disabled={!!assignBusy}
+                        onClick={() => setAssignConfirm(kandidaat)}
+                      >
+                        {assignBusy === kandidaat.id ? 'Bezig…' : 'Wijs toe'}
+                      </Button>
                     </div>
                   ))}
                 </div>
-                <p className="mt-3 text-2xs font-medium text-slate-400">"Vrij" = geen dienst en geen verlof die dag. De planner wijst de dienst toe in de planning.</p>
+                <p className="mt-3 text-2xs font-medium text-slate-400">"Vrij" = geen dienst en geen verlof die dag. Toewijzen zet de dienst meteen in de planning; de chauffeur krijgt een melding.</p>
               </div>
             )}
           </div>
         )}
       </Modal>
+
+      <ConfirmationModal
+        isOpen={!!assignConfirm}
+        onClose={() => setAssignConfirm(null)}
+        onConfirm={() => { const k = assignConfirm; setAssignConfirm(null); if (k) void wijsToe(k); }}
+        title="Dienst toewijzen?"
+        message={pick && assignConfirm
+          ? `Dienst ${pick.code} op ${dayLabel(pick.date)} wordt toegewezen aan ${assignConfirm.name}. De planning wordt meteen bijgewerkt en de chauffeur krijgt een melding.`
+          : ''}
+        confirmText="Toewijzen"
+        cancelText="Annuleren"
+        variant="warning"
+      />
     </PageShell>
   );
 }
