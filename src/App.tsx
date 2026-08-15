@@ -38,7 +38,8 @@ import {
   CalendarCog,
   Hash,
   ClipboardList,
-  HeartPulse
+  HeartPulse,
+  Thermometer
 } from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
@@ -80,6 +81,7 @@ import { CapacityView } from './views/CapacityView';
 const LazyActivityLogView = lazyWithRetry(() => import('./views/admin/ActivityLogView').then((module) => ({ default: module.ActivityLogView })));
 const LazyOcpiDashboardView = lazyWithRetry(() => import('./views/admin/OcpiDashboardView').then((module) => ({ default: module.OcpiDashboardView })));
 const LazyVervaldataView = lazyWithRetry(() => import('./views/admin/VervaldataView').then((module) => ({ default: module.VervaldataView })));
+const LazyZiekteView = lazyWithRetry(() => import('./views/admin/ZiekteView').then((module) => ({ default: module.ZiekteView })));
 const LazyManageSchedulesView = lazyWithRetry(() => import('./views/admin/ManageSchedulesView').then((module) => ({ default: module.ManageSchedulesView })));
 const LazyPlanningMatrixView = lazyWithRetry(() => import('./views/admin/PlanningMatrixView').then((module) => ({ default: module.PlanningMatrixView })));
 const LazyPlanningCodesView = lazyWithRetry(() => import('./views/admin/PlanningCodesView').then((module) => ({ default: module.PlanningCodesView })));
@@ -123,6 +125,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-omleidingen',
     'beheer-dienstoverzicht',
     'vervaldata',
+    'ziekte',
   ],
   admin: [
     'dashboard',
@@ -144,6 +147,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-omleidingen',
     'beheer-dienstoverzicht',
     'vervaldata',
+    'ziekte',
     'gebruikers',
     'toestellen',
     'activiteit',
@@ -2019,6 +2023,7 @@ export default function App() {
     bezetting: { title: 'Maandplanning', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
     dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
+    ziekte: { title: 'Ziekte', subtitle: 'Ziekmeldingen en de diensten die daardoor open staan.' },
     'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
     'beheer-roosters': { title: 'Beheer roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
     'planning-matrix': { title: 'Planningsoverzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
@@ -2267,8 +2272,8 @@ export default function App() {
           {isPlanner && (
             <NavSection
               title="Beheer"
-              count={10}
-              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'vervaldata', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
+              count={11}
+              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'ziekte', 'vervaldata', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
             >
               {/* Drie subgroepen + uniek icoon per item: Settings/Bus stonden
                   elk 2× in deze lijst en dat sloopte de scanbaarheid van juist
@@ -2282,6 +2287,9 @@ export default function App() {
               <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
               <NavSubLabel>Mensen</NavSubLabel>
               <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
+              {/* Eigen blad, bewust los van Verlof: ziekte is geen aanvraag
+                  (keuze Jarno 15-08). */}
+              <NavItem icon={<Thermometer size={18} />} label="Ziekte" active={currentView === 'ziekte'} onClick={() => { setCurrentView('ziekte'); setIsSidebarOpen(false); }} />
               <NavItem icon={<IdCard size={18} />} label="Vervaldata" active={currentView === 'vervaldata'} onClick={() => { setCurrentView('vervaldata'); setIsSidebarOpen(false); }} />
               <NavSubLabel>Communicatie</NavSubLabel>
               <NavItem icon={<Plus size={18} />} label="Beheer updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
@@ -2558,6 +2566,18 @@ export default function App() {
                     lastSeenDecisionAt={lastSeenLeaveDecisionAt}
                     onMarkDecisionsSeen={markLeaveDecisionsSeen}
                     shifts={shifts}
+                  />
+                </Suspense>
+              ))}
+              {resolvedCurrentView === 'ziekte' && (isInitialLoad ? <ViewLoader /> : (
+                <Suspense fallback={<ViewLoader />}>
+                  <LazyZiekteView
+                    user={currentUser}
+                    users={users}
+                    leaveRequests={leaveRequests}
+                    shifts={shifts}
+                    onSickReport={reportSick}
+                    onSave={saveLeave}
                   />
                 </Suspense>
               ))}

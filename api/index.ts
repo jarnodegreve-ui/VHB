@@ -1370,10 +1370,17 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     const [leaveForCheck, usersForCheck] = await Promise.all([getLeaveData(), getUsersData()]);
     const userNameForConflict = (id: string) => usersForCheck.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
     const approvedLeaveForCheck = leaveForCheck.filter((l) => l.status === "approved");
+    // Alleen GEPLAND verlof blokkeert een import: betaald verlof en klein
+    // verlet hoorde de planner in de Excel verwerkt te hebben. Ziekte is
+    // onvoorzien — de Excel wordt vooraf gemaakt, dus een zieke die er nog in
+    // staat is normaal; daarvoor bestaat de herverdeel-flow. De import
+    // blokkeerde hierop en noemde het nog "verlof" ook (melding Jarno 15-08).
+    const blokkerendVerlof = approvedLeaveForCheck.filter((l) => l.type !== "ziekte");
+    const ziekteLeaveForCheck = approvedLeaveForCheck.filter((l) => l.type === "ziekte");
 
     // Conflicten VÓÓR de replay = conflicten die in de Excel zelf zitten. Die
     // kan de planner daar oplossen.
-    const matrixConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeaveForCheck, userNameForConflict);
+    const matrixConflicts = verlofConflictsIn(generatedPlanning.shifts, blokkerendVerlof, userNameForConflict);
 
     // Goedgekeurde ruilen opnieuw toepassen — de matrix kent ze niet.
     const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts, { van: startDate, tot: endDate });
@@ -1382,10 +1389,14 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     // Dat onderscheid is belangrijk: zo'n conflict staat NIET in de Excel — de
     // planner zocht zich suf naar een rij die daar niet bestaat, en de import
     // bleef geblokkeerd tot hij toevallig de ruil of het verlof vond.
-    const alleConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeaveForCheck, userNameForConflict);
+    const alleConflicts = verlofConflictsIn(generatedPlanning.shifts, blokkerendVerlof, userNameForConflict);
     const matrixKeys = new Set(matrixConflicts.map(verlofConflictKey));
     const replayConflicts = alleConflicts.filter((c) => !matrixKeys.has(verlofConflictKey(c)));
     const verlofConflictsForImport = alleConflicts;
+    // Informatief, niet blokkerend: diensten die op een ziek gemelde chauffeur
+    // staan. Na de import vangt de herverdeel-flow ze op (maandplanning,
+    // dashboard, dekking).
+    const ziekteDiensten = verlofConflictsIn(generatedPlanning.shifts, ziekteLeaveForCheck, userNameForConflict);
 
     if (
       generatedPlanning.summary.unknownCodes.length > 0 ||
@@ -1410,6 +1421,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
         verlofConflicts: verlofConflictsForImport,
         matrixVerlofConflicts: matrixConflicts,
         ruilVerlofConflicts: replayConflicts,
+        ziekteDiensten,
         blocked: true,
       });
     }
@@ -1455,6 +1467,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
       servicesWithoutSegments: generatedPlanning.summary.servicesWithoutSegments,
       perDriver: generatedPlanning.summary.perDriver,
+      ziekteDiensten,
       startDate,
       endDate,
     });
@@ -1480,16 +1493,21 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     const [leave, users] = await Promise.all([getLeaveData(), getUsersData()]);
     const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
     const approvedLeave = leave.filter((l) => l.status === "approved");
+    // Zelfde splitsing als de echte import: alleen gepland verlof blokkeert;
+    // ziekte is informatief (zie /planning-matrix/import).
+    const blokkerendVerlof = approvedLeave.filter((l) => l.type !== "ziekte");
+    const ziekteLeave = approvedLeave.filter((l) => l.type === "ziekte");
 
     // Zelfde volgorde als de echte import (zie /planning-matrix/import), zodat
     // het voorbeeld ook echt toont wat de import oplevert — inclusief het
     // onderscheid tussen conflicten uit de Excel en conflicten die pas door een
     // doorgevoerde ruil ontstaan.
-    const matrixConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeave, userName);
+    const matrixConflicts = verlofConflictsIn(generatedPlanning.shifts, blokkerendVerlof, userName);
     const reapplied = await reapplyApprovedSwaps(generatedPlanning.shifts, { van: startDate, tot: endDate });
-    const verlofConflicts = verlofConflictsIn(generatedPlanning.shifts, approvedLeave, userName);
+    const verlofConflicts = verlofConflictsIn(generatedPlanning.shifts, blokkerendVerlof, userName);
     const matrixKeys = new Set(matrixConflicts.map(verlofConflictKey));
     const replayConflicts = verlofConflicts.filter((c) => !matrixKeys.has(verlofConflictKey(c)));
+    const ziekteDiensten = verlofConflictsIn(generatedPlanning.shifts, ziekteLeave, userName);
 
     // perDriver komt uit buildPlanningFromMatrix en is dus van vóór de replay:
     // de chauffeur die een dienst wegruilde stond er nog mét, de ontvanger
@@ -1518,6 +1536,7 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       verlofConflicts,
       matrixVerlofConflicts: matrixConflicts,
       ruilVerlofConflicts: replayConflicts,
+      ziekteDiensten,
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
       servicesWithoutSegments: generatedPlanning.summary.servicesWithoutSegments,

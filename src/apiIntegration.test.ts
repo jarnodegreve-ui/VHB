@@ -245,6 +245,8 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       };
     },
     replacePlanningData: async (shifts: any[]) => { mem.planning = shifts; },
+    replacePlanningAndMatrix: async (rows: any[], shifts: any[]) => { mem.planningMatrix = rows; mem.planning = shifts; },
+    savePlanningMatrixHistoryEntry: async () => {},
     getCoverageExpectations: async () => mem.coverageExpectations ?? {},
     listUserDocuments: async (userId?: string) =>
       userId ? mem.documents.filter((d: any) => String(d.userId) === String(userId)) : mem.documents,
@@ -2402,6 +2404,57 @@ describe('handmatige dienstwissel — gates uit de controle-ronde', () => {
     expect(mem.planning.find((r: any) => r.id === 'sh-r12')?.driverId).toBe('4');
     // De swap bewaart de canonieke schrijfwijze, zodat de replay hem terugvindt.
     expect(mem.swaps.find((s: any) => s.shiftDate === '2026-07-20')?.shiftLine).toBe('r12');
+  });
+});
+
+describe('planning-import — ziekte blokkeert niet, gepland verlof wel', () => {
+  // Melding Jarno 15-08: een upload werd geblokkeerd door een "verlofconflict"
+  // dat in werkelijkheid een ziekteperiode was. Ziekte is onvoorzien (de Excel
+  // wordt vooraf gemaakt) en heeft een eigen herverdeel-flow — alleen gepland
+  // verlof (betaald/klein verlet) hoort de import tegen te houden.
+  const buildXlsxBase64 = async () => {
+    const XLSX = await import('xlsx');
+    const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'aantal'],
+      [serial('2030-08-03'), 'W', '12', '14', 2],
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws, 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+
+  it('preview scheidt ziekte (informatief) van verlof (blokkerend)', async () => {
+    mem.leave = [
+      { id: 'l-z', userId: '3', startDate: '2030-08-01', endDate: '2030-08-10', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-30T06:00:00Z', decidedAt: '2030-07-30T06:00:00Z' },
+    ];
+    const res = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: await buildXlsxBase64() } });
+    expect(res.status).toBe(200);
+    // Chauffeur A is ziek op 03/08 en staat op dienst 12 → informatief…
+    expect(res.json.ziekteDiensten).toHaveLength(1);
+    expect(res.json.ziekteDiensten[0]).toMatchObject({ driverName: 'Chauffeur A', serviceNumber: '12' });
+    // …maar géén blokkerend verlofconflict.
+    expect(res.json.verlofConflicts).toHaveLength(0);
+  });
+
+  it('import gaat dóór bij ziekte, en blokkeert nog steeds op betaald verlof', async () => {
+    mem.leave = [
+      { id: 'l-z', userId: '3', startDate: '2030-08-01', endDate: '2030-08-10', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-30T06:00:00Z', decidedAt: '2030-07-30T06:00:00Z' },
+    ];
+    const base64 = await buildXlsxBase64();
+    const ok = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(ok.status).toBe(200);
+    expect(ok.json.success).toBe(true);
+    expect(ok.json.ziekteDiensten).toHaveLength(1);
+
+    // Zelfde Excel, maar nu met goedgekeurd betaald verlof: wél blokkeren.
+    mem.leave = [
+      { id: 'l-bv', userId: '3', startDate: '2030-08-01', endDate: '2030-08-10', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2030-07-01T06:00:00Z', decidedAt: '2030-07-02T06:00:00Z' },
+    ];
+    const geblokkeerd = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(geblokkeerd.status).toBe(400);
+    expect(geblokkeerd.json.blocked).toBe(true);
+    expect(geblokkeerd.json.verlofConflicts).toHaveLength(1);
   });
 });
 

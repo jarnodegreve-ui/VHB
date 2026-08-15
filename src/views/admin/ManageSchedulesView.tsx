@@ -30,6 +30,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     unknownCodes: string[];
     unmatchedDrivers: string[];
     verlofConflicts: Array<{ driverId: string; driverName: string; date: string; serviceNumber: string; leaveStart: string; leaveEnd: string }>;
+    /** Diensten op ziek gemelde chauffeurs — informatief, blokkeert niet:
+     *  ziekte is onvoorzien en de herverdeel-flow vangt dit na de import op. */
+    ziekteDiensten: Array<{ driverId: string; driverName: string; date: string; serviceNumber: string; leaveStart: string; leaveEnd: string }>;
     servicesWithoutSegments: string[];
     perDriver: Array<{
       driverName: string;
@@ -145,6 +148,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
         unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
         verlofConflicts: Array.isArray(data.verlofConflicts) ? data.verlofConflicts : [],
+        ziekteDiensten: Array.isArray(data.ziekteDiensten) ? data.ziekteDiensten : [],
         servicesWithoutSegments: Array.isArray(data.servicesWithoutSegments) ? data.servicesWithoutSegments : [],
         perDriver: Array.isArray(data.perDriver) ? data.perDriver : [],
       });
@@ -734,6 +738,40 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           ))}
                           {matrixPreview.verlofConflicts.length > 8 && (
                             <li className="italic text-red-700">… en nog {matrixPreview.verlofConflicts.length - 8} meer.</li>
+                          )}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Informatief, blokkeert niet: ziekte is onvoorzien — de Excel
+                    wordt vooraf gemaakt. Na de import staan deze diensten als
+                    "nog te herverdelen" op dashboard en maandplanning. */}
+                {matrixPreview.ziekteDiensten.length > 0 && (
+                  <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+                      <div className="flex-1">
+                        <MicroLabel className="text-amber-700 dark:text-amber-400">Ziek gemelde chauffeurs in deze Excel</MicroLabel>
+                        <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+                          {matrixPreview.ziekteDiensten.length} dienst{matrixPreview.ziekteDiensten.length === 1 ? ' staat' : 'en staan'} op een chauffeur die ziek gemeld is.
+                          De import gaat gewoon door; daarna staan ze als "nog te herverdelen" op het dashboard en in de maandplanning.
+                        </p>
+                        <ul className="mt-3 space-y-1 text-xs text-amber-900 dark:text-amber-200">
+                          {matrixPreview.ziekteDiensten.slice(0, 6).map((c, i) => (
+                            <li key={i} className="flex items-start gap-2">
+                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                              <span>
+                                <span className="font-semibold">{c.driverName}</span>
+                                {' — '}
+                                {c.date}, dienst {c.serviceNumber}
+                                <span className="opacity-75"> · ziek {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
+                              </span>
+                            </li>
+                          ))}
+                          {matrixPreview.ziekteDiensten.length > 6 && (
+                            <li className="italic opacity-75">… en nog {matrixPreview.ziekteDiensten.length - 6} meer.</li>
                           )}
                         </ul>
                       </div>
