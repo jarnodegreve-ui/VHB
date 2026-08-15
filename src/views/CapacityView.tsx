@@ -649,6 +649,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         // knop hard aan/uit te wippen.
                         'ios-pressable relative flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
                         gekozen ? 'text-slate-950' : 'text-slate-500',
+                        // Vandaag: zachte oker hairline (inset, 35%) + het oker
+                        // cijfer. De eerdere 60%-ring las als een lege tweede
+                        // pil; op verzoek Jarno tóch een omlijsting, maar
+                        // duidelijk stiller dan de gevulde selectie-pil.
+                        !gekozen && vandaag && 'ring-1 ring-inset ring-oker-500/35',
                       )}
                     >
                       {gekozen && (
