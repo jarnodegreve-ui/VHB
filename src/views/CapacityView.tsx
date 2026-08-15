@@ -649,7 +649,6 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         // knop hard aan/uit te wippen.
                         'ios-pressable relative flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
                         gekozen ? 'text-slate-950' : 'text-slate-500',
-                        !gekozen && vandaag && 'ring-1 ring-oker-500/60',
                       )}
                     >
                       {gekozen && (
@@ -662,7 +661,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       <span className={cn('relative z-10 text-2xs font-semibold uppercase tracking-[0.08em] transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-400')}>
                         {WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}
                       </span>
-                      <span className="relative z-10 text-sm font-bold tabular-nums leading-tight">{d.getDate()}</span>
+                      {/* Vandaag (niet gekozen) = oker dagcijfer — hetzelfde
+                          stille signaal als de oude daglabels en het desktop-
+                          grid. Een ring om de hele knop las als een tweede,
+                          lege pil naast de gevulde selectie (melding Jarno). */}
+                      <span className={cn('relative z-10 text-sm font-bold tabular-nums leading-tight transition-colors', !gekozen && vandaag && 'text-oker-600')}>
+                        {d.getDate()}
+                      </span>
                       {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
                       <span className={cn('relative z-10 h-3 text-[10px] font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
                         {td?.kort ?? ''}
