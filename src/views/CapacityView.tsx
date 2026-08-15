@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { ChevronLeft, ChevronRight, Clock, RotateCcw, Search, TriangleAlert, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
@@ -305,11 +306,26 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     setToonRust(false);
   }, [dates, todayIso]);
 
-  // De gekozen dag in de strip in beeld houden (bv. na "Vandaag" of maandwissel).
+  // De gekozen dag in de strip in beeld houden (bv. na "Vandaag" of een
+  // maandwissel). Bewust NIET scrollIntoView bij elke tik: die sprong hard
+  // (geen smooth) en verschoof de strip ook als de dag al gewoon in beeld
+  // stond — dan gleed de hele rij onder je vinger weg (melding Jarno 15-08).
+  // Nu: alleen scrollen als de gekozen dag (deels) buiten beeld staat, zacht,
+  // en via de container zelf zodat de pagina nooit verticaal meespringt.
+  const reduceMotion = useReducedMotion();
   const stripDagRef = useRef<HTMLButtonElement | null>(null);
   useEffect(() => {
-    stripDagRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' });
-  }, [mobielDag]);
+    const el = stripDagRef.current;
+    const container = el?.parentElement;
+    if (!el || !container) return;
+    const elRect = el.getBoundingClientRect();
+    const cRect = container.getBoundingClientRect();
+    if (elRect.left >= cRect.left && elRect.right <= cRect.right) return;
+    container.scrollTo({
+      left: el.offsetLeft - container.clientWidth / 2 + el.clientWidth / 2,
+      behavior: reduceMotion ? 'auto' : 'smooth',
+    });
+  }, [mobielDag, reduceMotion]);
 
 
   /** Tooltip van een cel: type, code en wat er aan de hand is. */
@@ -627,17 +643,28 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       aria-selected={gekozen}
                       onClick={() => setMobielDag(iso)}
                       className={cn(
-                        'ios-pressable flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
-                        gekozen ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500',
+                        // Kleuren via transition-colors; de amber pil zelf is
+                        // een motion-span met layoutId die tussen de dagen
+                        // schúíft (zelfde patroon als de dock-tabs) i.p.v. per
+                        // knop hard aan/uit te wippen.
+                        'ios-pressable relative flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
+                        gekozen ? 'text-slate-950' : 'text-slate-500',
                         !gekozen && vandaag && 'ring-1 ring-oker-500/60',
                       )}
                     >
-                      <span className={cn('text-2xs font-semibold uppercase tracking-[0.08em]', gekozen ? 'text-slate-950/70' : 'text-slate-400')}>
+                      {gekozen && (
+                        <motion.span
+                          layoutId="dagstrip-actief"
+                          transition={reduceMotion ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                          className="absolute inset-0 rounded-xl bg-oker-500 shadow-sm shadow-oker-500/30"
+                        />
+                      )}
+                      <span className={cn('relative z-10 text-2xs font-semibold uppercase tracking-[0.08em] transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-400')}>
                         {WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}
                       </span>
-                      <span className="text-sm font-bold tabular-nums leading-tight">{d.getDate()}</span>
+                      <span className="relative z-10 text-sm font-bold tabular-nums leading-tight">{d.getDate()}</span>
                       {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
-                      <span className={cn('h-3 text-[10px] font-bold leading-3', td?.kort === 'F' ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
+                      <span className={cn('relative z-10 h-3 text-[10px] font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
                         {td?.kort ?? ''}
                       </span>
                     </button>
@@ -647,7 +674,16 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             </div>
 
             {mobielDag && (
-              <div className="surface-card rounded-3xl overflow-hidden">
+              /* key per dag + korte opacity-fade: de kolom wisselt anders in
+                 één harde klap van inhoud. Alleen opacity (composited) — geen
+                 transform/hoogte-animatie, dat jankt op oudere toestellen. */
+              <motion.div
+                key={mobielDag}
+                initial={reduceMotion ? false : { opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.15, ease: 'easeOut' }}
+                className="surface-card rounded-3xl overflow-hidden"
+              >
                 <div className="flex items-baseline justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
                   <span className="text-sm font-semibold capitalize text-slate-800">{formatDateLong(mobielDag)}</span>
                   <MicroLabel className="tabular-nums">
@@ -747,7 +783,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     })}
                   </>
                 )}
-              </div>
+              </motion.div>
             )}
           </div>
 
