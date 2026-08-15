@@ -247,6 +247,15 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     replacePlanningData: async (shifts: any[]) => { mem.planning = shifts; },
     replacePlanningAndMatrix: async (rows: any[], shifts: any[]) => { mem.planningMatrix = rows; mem.planning = shifts; },
     savePlanningMatrixHistoryEntry: async () => {},
+    saveMatrixRowAssignments: async (rowId: string, assignments: Record<string, string>) => {
+      mem.planningMatrix = mem.planningMatrix.map((r: any) => (String(r.id) === String(rowId) ? { ...r, assignments } : r));
+    },
+    insertPlanningRows: async (rows: any[]) => { mem.planning = [...mem.planning, ...rows]; },
+    getServiceSegments: (service: any) => {
+      const segs = [];
+      if (service.startTime && service.endTime) segs.push({ startTime: service.startTime, endTime: service.endTime, segment: 1, loopnr: String(service.loopnr ?? '') });
+      return segs;
+    },
     getCoverageExpectations: async () => mem.coverageExpectations ?? {},
     listUserDocuments: async (userId?: string) =>
       userId ? mem.documents.filter((d: any) => String(d.userId) === String(userId)) : mem.documents,
@@ -2486,6 +2495,85 @@ describe('dienstruil — dubbele inplanning bij goedkeuren', () => {
     expect(res.status).toBe(200);
     expect(mem.planning.find((r: any) => r.id === 'sh-a')?.driverId).toBe('4');
     expect(mem.planning.find((r: any) => r.id === 'sh-x')?.driverId).toBe('3');
+  });
+});
+
+describe('onbemande dienst toewijzen (Dekking)', () => {
+  // Een gat = een verwachte dienst die op níémand staat; de dienstwissel kan
+  // daar niets mee. Toewijzen schrijft in de matrix (bron van elke heropbouw)
+  // én zet de blokken direct in de planning.
+  beforeEach(() => {
+    mem.planningMatrix = [
+      { id: 'm-gat', source_date: '2030-09-02', day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.planning = [{ id: 'sh-a2', driverId: '3', date: '2030-09-02', line: '12' }];
+    mem.leave = [];
+    mem.swaps = [];
+  });
+
+  it('wijst een onbemande dienst toe: matrix + planning bijgewerkt', async () => {
+    // Dienst 14 wordt die dag verwacht maar staat op niemand; chauffeur 4 is vrij.
+    const res = await api('POST', '/api/planning/assign-service', {
+      token: 'tok-planner',
+      body: { date: '2030-09-02', serviceNumber: '14', driverId: '4' },
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    // Planning-rij met de tijden uit het dienstoverzicht.
+    const rij = mem.planning.find((r: any) => r.line === '14' && r.date === '2030-09-02');
+    expect(rij).toMatchObject({ driverId: '4', startTime: '10:00', endTime: '18:00' });
+    // Matrix-rij draagt de toewijzing, zodat een heropbouw hem regenereert.
+    expect(mem.planningMatrix[0].assignments['Chauffeur B']).toBe('14');
+    // Bestaande toewijzing van chauffeur A blijft staan.
+    expect(mem.planningMatrix[0].assignments['Chauffeur A']).toBe('12');
+  });
+
+  it('weigert toewijzen aan iemand die al rijdt, en aan een bemande dienst', async () => {
+    const alRijdt = await api('POST', '/api/planning/assign-service', {
+      token: 'tok-planner',
+      body: { date: '2030-09-02', serviceNumber: '14', driverId: '3' },
+    });
+    expect(alRijdt.status).toBe(409);
+    expect(String(alRijdt.json?.error)).toContain('al dienst');
+
+    const alBemand = await api('POST', '/api/planning/assign-service', {
+      token: 'tok-planner',
+      body: { date: '2030-09-02', serviceNumber: '12', driverId: '4' },
+    });
+    expect(alBemand.status).toBe(409);
+    expect(String(alBemand.json?.error)).toContain('al ingevuld');
+  });
+
+  it('weigert een afwezige chauffeur en een chauffeur-rol-check via 403 voor chauffeurs', async () => {
+    mem.leave = [{ id: 'l-a', userId: '4', startDate: '2030-09-02', endDate: '2030-09-02', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-09-01T06:00:00Z', decidedAt: '2030-09-01T06:00:00Z' }];
+    const ziek = await api('POST', '/api/planning/assign-service', {
+      token: 'tok-planner',
+      body: { date: '2030-09-02', serviceNumber: '14', driverId: '4' },
+    });
+    expect(ziek.status).toBe(409);
+
+    const chauffeur = await api('POST', '/api/planning/assign-service', {
+      token: 'tok-a',
+      body: { date: '2030-09-02', serviceNumber: '14', driverId: '4' },
+    });
+    expect(chauffeur.status).toBe(403);
+  });
+});
+
+describe('dienstruil — concurrency-vangnet bij goedkeuren', () => {
+  it('weigert goedkeuring als de doorvoer nul rijen verplaatst (planning intussen gewijzigd)', async () => {
+    // Geaccepteerde ruil, maar de dienst is intussen (bv. door een admin-
+    // wissel) al naar iemand anders verplaatst: apply raakt 0 rijen.
+    mem.planning = [{ id: 'sh-a', driverId: '9', date: '2026-07-01', line: '12' }];
+    mem.swaps = [{
+      id: 's-race', shiftId: 'sh-weg', requesterId: '3', targetDriverId: '4', status: 'accepted',
+      reason: '', createdAt: '2026-06-01T08:00:00Z', shiftDate: '2026-07-01', shiftLine: '12', swapType: 'overname',
+    }];
+    const res = await api('PATCH', '/api/swaps/s-race', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(res.status).toBe(409);
+    expect(String(res.json?.error)).toContain('intussen gewijzigd');
+    // Niet half goedgekeurd: status bleef accepted.
+    expect(mem.swaps.find((s: any) => s.id === 's-race')?.status).toBe('accepted');
   });
 });
 

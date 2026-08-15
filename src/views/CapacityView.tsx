@@ -187,7 +187,27 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       .catch((e) => { if (!cancelled) setError(e?.message || 'Kon de maandplanning niet laden.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [monthParam, reloadTick]);
+  }, [monthParam]);
+
+  // Stille herlaad-momenten: na een eigen wissel (reloadTick) en wanneer een
+  // collega de planning wijzigt (realtime planning_version → App dispatcht
+  // 'vhb-planning-changed'). Géén skeleton — de bestaande data blijft staan
+  // tot de verse binnen is, anders flitst het scherm bij elke wissel.
+  useEffect(() => {
+    if (reloadTick === 0) return;
+    let cancelled = false;
+    fetchMonthPlanning(monthParam)
+      .then((res) => { if (!cancelled) setData(res); })
+      .catch(() => { /* stil: volgende verversing of maandwissel herstelt */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reloadTick]);
+
+  useEffect(() => {
+    const opWijziging = () => setReloadTick((t) => t + 1);
+    window.addEventListener('vhb-planning-changed', opWijziging);
+    return () => window.removeEventListener('vhb-planning-changed', opWijziging);
+  }, []);
 
   const dates = data?.dates ?? [];
   const drivers = data?.drivers ?? [];
@@ -336,14 +356,36 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     heeftNotitie ? 'notitie' : '',
   ].filter(Boolean).join(' · ') + ' — klik voor details';
 
-  // Zoeken op chauffeur: bij 39 namen scroll je anders het halve scherm door
-  // om één iemand te vinden (zelfde patroon als Contacten/Gebruikersbeheer).
+  // Zoeken op chauffeur óf dienstnummer: bij 39 namen scroll je anders het
+  // halve scherm door, en "wie rijdt 4102?" is de omgekeerde vraag die je
+  // bij een telefoontje net zo vaak krijgt. Een dienst-treffer matcht ook de
+  // dienst die onder een afwezigheid ligt (hiddenService).
   const [zoek, setZoek] = useState('');
   const zoekTerm = zoek.trim().toLowerCase();
-  const zichtbareDrivers = useMemo(
-    () => (zoekTerm ? drivers.filter((d) => d.name.toLowerCase().includes(zoekTerm)) : drivers),
-    [drivers, zoekTerm],
+  const zichtbareDrivers = useMemo(() => {
+    if (!zoekTerm) return drivers;
+    return drivers.filter((d) => {
+      if (d.name.toLowerCase().includes(zoekTerm)) return true;
+      const rij = cells[d.id] ?? {};
+      return Object.values(rij).some((c) =>
+        c.code.toLowerCase().includes(zoekTerm) ||
+        (c.hiddenService ?? '').toLowerCase().includes(zoekTerm),
+      );
+    });
+  }, [drivers, cells, zoekTerm]);
+
+  // Dagen waar werk wacht (dienst nog niet herverdeeld onder een afwezigheid)
+  // — voedt het sprong-pijltje in de strip zodat je niet dag voor dag hoeft
+  // te vegen om het volgende aandachtspunt te vinden.
+  const aandachtDagen = useMemo(
+    () => dates.filter((iso) => zichtbareDrivers.some((d) => cells[d.id]?.[iso]?.hiddenService)),
+    [dates, zichtbareDrivers, cells],
   );
+  const springNaarAandacht = () => {
+    if (aandachtDagen.length === 0) return;
+    const volgende = aandachtDagen.find((iso) => !!mobielDag && iso > mobielDag) ?? aandachtDagen[0];
+    setMobielDag(volgende);
+  };
 
   // Rijen van de mobiele dag-weergave: hoofdlijst per sectie (op dienstnummer,
   // zoals het bord in het lokaal) + ingeklapte rest-groep. Zie het state-blok
@@ -416,7 +458,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 type="search"
                 value={zoek}
                 onChange={(e) => setZoek(e.target.value)}
-                placeholder="Zoek chauffeur…"
+                placeholder="Zoek chauffeur of dienst…"
                 className="control-input h-11 sm:pointer-fine:h-9 w-full sm:w-52 rounded-xl pl-9 pr-3 text-base sm:text-sm font-medium outline-none"
               />
             </label>
@@ -619,14 +661,29 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   <ChevronLeft size={17} />
                 </button>
                 <span className="text-sm font-semibold tracking-tight text-slate-800">{MONTH_NAMES[monthIndex]} {year}</span>
-                <button
-                  type="button"
-                  onClick={() => { setPendingEdge('first'); setViewMonth(new Date(year, monthIndex + 1, 1)); }}
-                  aria-label="Volgende maand"
-                  className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
-                >
-                  <ChevronRight size={17} />
-                </button>
+                <div className="flex items-center">
+                  {/* Spring naar de eerstvolgende dag met een nog niet
+                      herverdeelde dienst — scheelt dag voor dag vegen. */}
+                  {aandachtDagen.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={springNaarAandacht}
+                      aria-label="Naar de volgende dag met een openstaande dienst"
+                      title="Volgende dag met een openstaande dienst"
+                      className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-amber-600 dark:text-amber-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                    >
+                      <TriangleAlert size={15} />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => { setPendingEdge('first'); setViewMonth(new Date(year, monthIndex + 1, 1)); }}
+                    aria-label="Volgende maand"
+                    className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                  >
+                    <ChevronRight size={17} />
+                  </button>
+                </div>
               </div>
               <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Kies een dag">
                 {dates.map((iso) => {

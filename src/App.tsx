@@ -344,6 +344,10 @@ export default function App() {
         ? { driverId: String(currentUser.id) }
         : undefined;
       fetchPlanning(undefined, planningFilter, { silent: true });
+      // Maandplanning haalt haar eigen data (/api/month-planning); dit event
+      // laat een open Maandplanning-scherm stil meeverversen zodra een
+      // collega een wissel doorvoert of de planning herbouwt.
+      window.dispatchEvent(new Event('vhb-planning-changed'));
       // Dekking beweegt mee met de planning (Operations Center).
       if (currentUser && currentUser.role !== 'chauffeur') {
         refreshCoverageGaps();
@@ -2578,6 +2582,13 @@ export default function App() {
                     shifts={shifts}
                     onSickReport={reportSick}
                     onSave={saveLeave}
+                    onShiftSwapped={async () => {
+                      await Promise.all([
+                        fetchPlanning(undefined, undefined, { silent: true }),
+                        fetchSwaps(),
+                        refreshCoverageGaps(),
+                      ]);
+                    }}
                   />
                 </Suspense>
               ))}
