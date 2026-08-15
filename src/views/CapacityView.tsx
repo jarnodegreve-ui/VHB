@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, Clock, RotateCcw, Search, TriangleAlert, X } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
@@ -250,6 +250,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     const n = new Date();
     setPendingEdge('today');
     setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1));
+    // Mobiele dag-weergave springt mee; valt vandaag buiten de al geladen
+    // maand, dan corrigeert het dates-effect zodra de nieuwe maand binnen is.
+    setMobielDag(todayIso);
   };
 
   const visibleDates = pages[pageIndex] ?? [];
@@ -285,6 +288,30 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const showSections = drivers.some((d) => !!d.section);
   const sectionOf = (d: { section?: string | null }) => (d.section || 'Overige');
 
+  // === Mobiel: dag-weergave (keuze Jarno 15-08) =============================
+  // Op een telefoon is de vraag "wie doet wat op dag X?", niet "wat doet
+  // chauffeur Y de hele maand?" (daarvoor bestaat Mijn rooster). De oude
+  // mobiele lijst was chauffeur-per-chauffeur: ~39 kaarten × 14 dagregels
+  // scrollen zonder ooit één dag in z'n geheel te zien. Nu: één gekozen dag,
+  // alle chauffeurs in één kolom, gegroepeerd per sectie en gesorteerd op
+  // dienstnummer — leest als het bord in het chauffeurslokaal.
+  const [mobielDag, setMobielDag] = useState<string | null>(null);
+  const [toonRust, setToonRust] = useState(false);
+  useEffect(() => {
+    if (dates.length === 0) { setMobielDag(null); return; }
+    // Vandaag als hij in de geladen maand valt, anders de eerste dag; een al
+    // geldige keuze blijft staan (maandwissel reset, dagwissel niet).
+    setMobielDag((cur) => (cur && dates.includes(cur) ? cur : (dates.includes(todayIso) ? todayIso : dates[0])));
+    setToonRust(false);
+  }, [dates, todayIso]);
+
+  // De gekozen dag in de strip in beeld houden (bv. na "Vandaag" of maandwissel).
+  const stripDagRef = useRef<HTMLButtonElement | null>(null);
+  useEffect(() => {
+    stripDagRef.current?.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }, [mobielDag]);
+
+
   /** Tooltip van een cel: type, code en wat er aan de hand is. */
   const celTitel = (cell: MonthCell, heeftNotitie: boolean) => [
     `${KIND_LABEL[cell.kind]} · ${cell.code}`,
@@ -301,6 +328,34 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     () => (zoekTerm ? drivers.filter((d) => d.name.toLowerCase().includes(zoekTerm)) : drivers),
     [drivers, zoekTerm],
   );
+
+  // Rijen van de mobiele dag-weergave: hoofdlijst per sectie (op dienstnummer,
+  // zoals het bord in het lokaal) + ingeklapte rest-groep. Zie het state-blok
+  // "Mobiel: dag-weergave" hierboven voor het waarom.
+  type DagRij = { drv: (typeof drivers)[number]; cell: MonthCell | undefined };
+  const dagRijen = useMemo(() => {
+    const secties: Array<{ naam: string; rijen: DagRij[] }> = [];
+    const rust: DagRij[] = [];
+    if (!mobielDag) return { secties, rust };
+    for (const drv of zichtbareDrivers) {
+      const cell = cells[drv.id]?.[mobielDag];
+      // Hoofdlijst = wat er die dag rijdt of aandacht vraagt: diensten én
+      // afwezigheidscellen met een nog niet herverdeelde dienst eronder.
+      if (cell && (cell.kind === 'service' || cell.hiddenService)) {
+        const naam = sectionOf(drv);
+        const laatste = secties[secties.length - 1];
+        if (laatste && laatste.naam === naam) laatste.rijen.push({ drv, cell });
+        else secties.push({ naam, rijen: [{ drv, cell }] });
+      } else {
+        // Vrij/afwezig/niets gepland: meestal ruis — ingeklapt onderaan.
+        rust.push({ drv, cell });
+      }
+    }
+    const codeVan = (r: DagRij) => String(r.cell?.hiddenService ?? r.cell?.code ?? '');
+    for (const s of secties) s.rijen.sort((a, b) => codeVan(a).localeCompare(codeVan(b), undefined, { numeric: true }));
+    return { secties, rust };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cells, zichtbareDrivers, mobielDag]);
 
   // Legende: de codes die in de héle maand voorkomen, elk met hun betekenis.
   // Data-gedreven (geen hardgecodeerde codes) → toont "BV = Verlof", "ziek =
@@ -349,13 +404,17 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 className="control-input h-11 sm:pointer-fine:h-9 w-full sm:w-52 rounded-xl pl-9 pr-3 text-base sm:text-sm font-medium outline-none"
               />
             </label>
-            <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
-              <ChevronLeft size={18} />
-            </button>
-            <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
-            <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-11 h-11 sm:pointer-fine:w-9 sm:pointer-fine:h-9 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
-              <ChevronRight size={18} />
-            </button>
+            {/* Het 2-weken-venster is een desktop-begrip; op mobiel navigeert
+                de datumstrip (met eigen maandwissel) en is dit cluster ruis. */}
+            <div className="hidden md:flex items-center gap-2">
+              <button type="button" onClick={goPrevWindow} aria-label="Vorige 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
+                <ChevronLeft size={18} />
+              </button>
+              <span className="px-3 text-sm font-semibold tracking-tight capitalize min-w-[150px] text-center tabular-nums">{windowLabel}</span>
+              <button type="button" onClick={goNextWindow} aria-label="Volgende 2 weken" className="ios-pressable w-9 h-9 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
+                <ChevronRight size={18} />
+              </button>
+            </div>
             <Button variant="secondary" size="sm" className="ml-1 h-9 rounded-xl" onClick={goToday}>
               Vandaag
             </Button>
@@ -527,67 +586,169 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             </div>
           </div>
 
-          {/* Mobile: per chauffeur de codes per dag als chips. */}
-          <div className="md:hidden surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
-            {drivers.map((drv, i) => {
-              const row = cells[drv.id] || {};
-              const entries = visibleDates.filter((iso) => row[iso]).map((iso) => ({ iso, cell: row[iso] }));
-              const isOwn = ownId && drv.id === ownId;
-              const section = sectionOf(drv);
-              const showHeader = showSections && (i === 0 || sectionOf(zichtbareDrivers[i - 1]) !== section);
-              return (
-                <Fragment key={drv.id}>
-                {showHeader && (
-                  <div className="bg-slate-100/80 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{section}</div>
-                )}
-                <div className={cn('p-4', isOwn && 'bg-oker-50')}>
-                  <div className="flex items-baseline justify-between gap-2">
-                    <div className={cn('text-sm font-semibold truncate inline-flex items-center gap-1.5', isOwn ? 'text-oker-800' : 'text-slate-800')}>
-                      {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500 shrink-0" aria-hidden />}
-                      {drv.name}
-                      {isOwn && <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
-                    </div>
-                    <MicroLabel className="shrink-0 tabular-nums">{entries.length}</MicroLabel>
-                  </div>
-                  {entries.length === 0 ? (
-                    <div className="mt-2 text-xs text-slate-300 italic">Niets gepland in deze periode.</div>
-                  ) : (
-                    <div className="mt-2">
-                      {entries.map(({ iso, cell }) => {
-                        const d = new Date(`${iso}T00:00:00`);
-                        const wd = WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7];
-                        const today = iso === todayIso;
-                        const summary = cell.kind === 'service'
-                          ? (cell.segments.length ? cell.segments.join(' · ') : 'Dienst')
-                          : cell.label;
-                        return (
-                          <button
-                            key={iso}
-                            type="button"
-                            onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), iso)) ?? ''); }}
-                            className="w-full flex items-center gap-3 rounded-xl px-2 py-2.5 min-h-11 text-left active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
-                          >
-                            <span className={cn('w-11 shrink-0 text-xs font-semibold tabular-nums', today ? 'text-oker-600' : 'text-slate-400')}>{wd} {d.getDate()}</span>
-                            <span className={cn(
-                              'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-black/5',
-                              // Zie het desktop-grid: gewisseld = rood.
-                              cell.swapId ? 'bg-red-50 text-red-600' : KIND_CLS[cell.kind],
-                            )}>{cell.code}</span>
-                            <span className="min-w-0 flex-1 text-xs font-medium text-slate-500 truncate tabular-nums">
-                              {cell.hiddenService ? `dienst ${cell.hiddenService} open` : summary}
-                            </span>
-                            {cell.hiddenService && (
-                              <TriangleAlert size={13} className="shrink-0 text-amber-600 dark:text-amber-400" aria-label="dienst nog niet herverdeeld" />
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
+          {/* Mobile: dag-weergave — datumstrip + alle chauffeurs van één dag
+              in één kolom (per sectie, op dienstnummer). De cel-modal met
+              details/notitie/dienstwissel blijft dezelfde. */}
+          <div className="md:hidden space-y-3">
+            <div className="surface-card rounded-3xl p-2">
+              {/* Maandwissel hoort hier bij de dagen — de venster-pijlen in de
+                  kop zijn op mobiel verborgen. */}
+              <div className="flex items-center justify-between gap-2 px-1 pb-1">
+                <button
+                  type="button"
+                  onClick={() => { setPendingEdge('last'); setViewMonth(new Date(year, monthIndex - 1, 1)); }}
+                  aria-label="Vorige maand"
+                  className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                >
+                  <ChevronLeft size={17} />
+                </button>
+                <span className="text-sm font-semibold tracking-tight text-slate-800">{MONTH_NAMES[monthIndex]} {year}</span>
+                <button
+                  type="button"
+                  onClick={() => { setPendingEdge('first'); setViewMonth(new Date(year, monthIndex + 1, 1)); }}
+                  aria-label="Volgende maand"
+                  className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                >
+                  <ChevronRight size={17} />
+                </button>
+              </div>
+              <div className="flex gap-1 overflow-x-auto" role="tablist" aria-label="Kies een dag">
+                {dates.map((iso) => {
+                  const d = new Date(`${iso}T00:00:00`);
+                  const gekozen = iso === mobielDag;
+                  const vandaag = iso === todayIso;
+                  const td = typedagLabel(iso);
+                  return (
+                    <button
+                      key={iso}
+                      ref={gekozen ? stripDagRef : undefined}
+                      type="button"
+                      role="tab"
+                      aria-selected={gekozen}
+                      onClick={() => setMobielDag(iso)}
+                      className={cn(
+                        'ios-pressable flex min-h-11 w-12 shrink-0 flex-col items-center justify-center rounded-xl py-1.5 transition-colors',
+                        gekozen ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500',
+                        !gekozen && vandaag && 'ring-1 ring-oker-500/60',
+                      )}
+                    >
+                      <span className={cn('text-2xs font-semibold uppercase tracking-[0.08em]', gekozen ? 'text-slate-950/70' : 'text-slate-400')}>
+                        {WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}
+                      </span>
+                      <span className="text-sm font-bold tabular-nums leading-tight">{d.getDate()}</span>
+                      {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
+                      <span className={cn('h-3 text-[10px] font-bold leading-3', td?.kort === 'F' ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
+                        {td?.kort ?? ''}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {mobielDag && (
+              <div className="surface-card rounded-3xl overflow-hidden">
+                <div className="flex items-baseline justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
+                  <span className="text-sm font-semibold capitalize text-slate-800">{formatDateLong(mobielDag)}</span>
+                  <MicroLabel className="tabular-nums">
+                    {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0)} {dagRijen.secties.reduce((n, s) => n + s.rijen.length, 0) === 1 ? 'dienst' : 'diensten'}
+                  </MicroLabel>
                 </div>
-                </Fragment>
-              );
-            })}
+
+                {dagRijen.secties.length === 0 ? (
+                  <p className="px-4 py-6 text-sm font-medium text-slate-400">
+                    {zoekTerm ? 'Geen chauffeurs gevonden voor deze zoekterm.' : 'Geen diensten op deze dag.'}
+                  </p>
+                ) : dagRijen.secties.map((sectie) => (
+                  <Fragment key={sectie.naam}>
+                    {showSections && (
+                      <div className="bg-slate-100/80 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{sectie.naam}</div>
+                    )}
+                    {sectie.rijen.map(({ drv, cell }) => {
+                      if (!cell) return null;
+                      const isOwn = ownId && drv.id === ownId;
+                      return (
+                        <button
+                          key={drv.id}
+                          type="button"
+                          onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
+                          className={cn(
+                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-slate-100 last:border-b-0 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors',
+                            isOwn && 'bg-oker-50',
+                          )}
+                        >
+                          <span className={cn(
+                            'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-black/5',
+                            cell.swapId ? 'bg-red-50 text-red-600' : KIND_CLS[cell.kind],
+                          )}>{cell.code}</span>
+                          <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', isOwn ? 'text-oker-800' : 'text-slate-800')}>
+                            {drv.name}
+                            {isOwn && <span className="ml-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                          </span>
+                          {/* Uren compact rechts; bij een open dienst de melding. */}
+                          <span className="shrink-0 text-xs font-medium text-slate-400 tabular-nums">
+                            {cell.hiddenService ? `dienst ${cell.hiddenService} open` : (cell.segments[0] ?? '')}
+                          </span>
+                          {cell.hiddenService && (
+                            <TriangleAlert size={13} className="shrink-0 text-amber-600 dark:text-amber-400" aria-label="dienst nog niet herverdeeld" />
+                          )}
+                          {notes.has(noteKey(String(drv.id), mobielDag)) && (
+                            <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500" aria-label="notitie aanwezig" />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </Fragment>
+                ))}
+
+                {dagRijen.rust.length > 0 && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setToonRust((v) => !v)}
+                      aria-expanded={toonRust}
+                      className="w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                    >
+                      <span>Vrij / afwezig · {dagRijen.rust.length}</span>
+                      <ChevronRight size={14} className={cn('transition-transform', toonRust && 'rotate-90')} />
+                    </button>
+                    {toonRust && dagRijen.rust.map(({ drv, cell }) => {
+                      const isOwn = ownId && drv.id === ownId;
+                      const inhoud = (
+                        <>
+                          <span className={cn(
+                            'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums',
+                            cell ? cn('ring-1 ring-black/5', KIND_CLS[cell.kind]) : 'text-slate-300',
+                          )}>{cell?.code ?? '—'}</span>
+                          <span className={cn('min-w-0 flex-1 truncate text-sm font-medium', isOwn ? 'text-oker-800' : 'text-slate-600')}>
+                            {drv.name}
+                            {isOwn && <span className="ml-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                          </span>
+                          <span className="shrink-0 text-xs font-medium text-slate-400">{cell?.label ?? ''}</span>
+                        </>
+                      );
+                      const rijCls = cn(
+                        'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-slate-100 last:border-b-0',
+                        isOwn && 'bg-oker-50',
+                      );
+                      // Zonder cel valt er niets te openen — dan geen knop.
+                      return cell ? (
+                        <button
+                          key={drv.id}
+                          type="button"
+                          onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
+                          className={cn(rijCls, 'active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors')}
+                        >
+                          {inhoud}
+                        </button>
+                      ) : (
+                        <div key={drv.id} className={rijCls}>{inhoud}</div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Legende — de codes die deze maand écht voorkomen, met hun betekenis. */}
