@@ -462,6 +462,17 @@ html.dark {
       background-color 200ms ease;
   }
 
+  /* iOS geeft <input type="date"> een intrinsieke minimumbreedte en negeert
+     dan w-full: in een grid-kolom schoof het veld over z'n buurveld heen
+     (Van/Tot-en-met in de ziekmeld-modal, melding Jarno 15-08). min-width:0
+     laat hem krimpen; appearance:none schakelt de native opmaak uit zodat de
+     breedte én de linkse uitlijning van .control-input gewoon gelden. */
+  input.control-input[type="date"] {
+    min-width: 0;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   /* iOS Safari zoomt naar input-velden in als de font-size < 16px.
      We forceren 16px op mobile zodat focus-zoom niet meer optreedt. */
   @media (max-width: 767px) {
