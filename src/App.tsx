@@ -46,7 +46,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY } from './lib/ui';
+import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, notify } from './lib/ui';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { reportHandledError, reportUserFeedback, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
@@ -1519,6 +1519,29 @@ export default function App() {
     });
   };
 
+  // Chauffeur bevestigt een doorgevoerde wissel ("gezien") — eigen endpoint,
+  // want targetSeenAt is bewust niet schrijfbaar via de array-route.
+  const confirmSwapSeen = async (id: string): Promise<boolean> => {
+    try {
+      const response = await apiFetch(`/api/swaps/${id}/gezien`, { method: 'POST' });
+      if (!response.ok) {
+        const data = await response.json().catch(() => null);
+        notify(data?.error || 'Bevestigen mislukt. Probeer het opnieuw.', 'error');
+        void fetchSwaps();
+        return false;
+      }
+      // Endpoint geeft { success: true } terug; lokaal direct markeren en de
+      // echte timestamp via de refresh binnenhalen.
+      setSwaps((curr) => curr.map((s) => (s.id === id ? { ...s, targetSeenAt: new Date().toISOString() } : s)));
+      void fetchSwaps();
+      notify('Bevestigd — de planner ziet dat je de wissel gezien hebt.', 'success');
+      return true;
+    } catch {
+      notify('Bevestigen mislukt. Controleer je verbinding.', 'error');
+      return false;
+    }
+  };
+
   // Dienstnotities van de ingelogde chauffeur (planner leest ze in het
   // Maandrooster zelf). Venster: gisteren t/m +45 dagen.
   const fetchMyNotes = async (accessToken = session?.access_token) => {
@@ -2555,8 +2578,8 @@ export default function App() {
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
               {resolvedCurrentView === 'beheer-omleidingen' && <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} /></Suspense>}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>}
-              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
-              {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
+              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
+              {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} swaps={swaps} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>}
               {resolvedCurrentView === 'verlof' && (isInitialLoad ? <ViewLoader /> : (
@@ -2580,6 +2603,7 @@ export default function App() {
                     users={users}
                     leaveRequests={leaveRequests}
                     shifts={shifts}
+                    swaps={swaps}
                     onSickReport={reportSick}
                     onSave={saveLeave}
                     onShiftSwapped={async () => {

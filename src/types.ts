@@ -59,6 +59,8 @@ export interface SwapRequest {
   /** Dag + dienstnummer van de aangeboden dienst — door de server ingevuld. */
   shiftDate?: string;
   shiftLine?: string;
+  /** Moment waarop de ontvangende chauffeur de wissel bevestigde ("gezien"). */
+  targetSeenAt?: string;
 }
 
 export interface LeaveRequest {

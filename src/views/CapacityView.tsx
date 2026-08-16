@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Clock, RotateCcw, Search, TriangleAlert, X } from 'lucide-react';
-import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
+import { ChevronLeft, ChevronRight, Clock, Download, RotateCcw, Search, TriangleAlert, X } from 'lucide-react';
+import { cn, downloadBlob, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { SkeletonRow } from '../components/Skeleton';
@@ -11,8 +11,9 @@ import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
 import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
-import type { User } from '../types';
+import type { SwapRequest, User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../lib/format';
+import { kandidaatLabel, overnameTellingDitJaar, rangschikKandidaten } from '../lib/vervangers';
 
 const WEEKDAY_LETTERS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 
@@ -25,7 +26,7 @@ const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Andere correctie'] a
  * datum met codes), zoals het overzicht dat in het chauffeurslokaal hangt.
  * Zichtbaar voor iedereen zodat collega's wissels kunnen vinden.
  */
-export function CapacityView({ currentUser }: { currentUser: User }) {
+export function CapacityView({ currentUser, swaps = [] }: { currentUser: User; swaps?: SwapRequest[] }) {
   const ownId = String(currentUser?.id ?? '');
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
@@ -93,6 +94,29 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // rol óók af via requireRole). 'reloadTick' herlaadt de maand na een wissel,
   // zodat de dienst meteen bij de nieuwe chauffeur staat.
   const isAdmin = currentUser.role === 'admin';
+  const overnameTelling = useMemo(() => overnameTellingDitJaar(swaps), [swaps]);
+
+  // Excel-terugexport (staf): de actuele maand — wissels, toewijzingen en
+  // afwezigheid verwerkt — in het her-importeerbare praktijk-tab-formaat.
+  const [isExporteren, setIsExporteren] = useState(false);
+  const exporteerExcel = async () => {
+    if (isExporteren) return;
+    setIsExporteren(true);
+    try {
+      const res = await fetch(`/api/month-planning?month=${monthParam}&format=xlsx`, { headers: await getSupabaseAuthHeaders() });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({} as any));
+        notify(body.error || 'Exporteren is mislukt.', 'error');
+        return;
+      }
+      await downloadBlob(`planning-${monthParam}.xlsx`, await res.blob());
+      notify('Excel gedownload — dit is de actuele stand, direct her-importeerbaar.', 'success');
+    } catch {
+      notify('Exporteren is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setIsExporteren(false);
+    }
+  };
   const [wisselNaar, setWisselNaar] = useState('');
   const [wisselReden, setWisselReden] = useState<string>(WISSEL_REDENEN[0]);
   const [wisselToelichting, setWisselToelichting] = useState('');
@@ -476,6 +500,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             <Button variant="secondary" size="sm" className="ml-1 h-9 rounded-xl" onClick={goToday}>
               Vandaag
             </Button>
+            {/* Terugexport: alleen staf — sluit de Excel-cyclus (bewerken op
+                de actuele stand i.p.v. de verouderde upload). */}
+            {canEditNotes && (
+              <Button variant="secondary" size="sm" className="h-9 rounded-xl" icon={<Download size={14} />} disabled={isExporteren} onClick={() => void exporteerExcel()}>
+                {isExporteren ? 'Bezig…' : 'Excel'}
+              </Button>
+            )}
           </div>
         )}
       />
@@ -990,8 +1021,18 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     className="control-input w-full px-3.5 py-2.5 rounded-2xl font-semibold text-base sm:text-sm outline-none bg-surface-field"
                   >
                     <option value="">Kies een chauffeur…</option>
-                    {drivers.filter((d) => String(d.id) !== selected.driverId).map((d) => (
-                      <option key={d.id} value={String(d.id)}>{d.name}</option>
+                    {/* Vrij die dag bovenaan, daarbinnen minst ingevallen dit
+                        jaar — eerlijk verdelen i.p.v. alfabetisch. "Vrij" =
+                        geen dienst(cel) op deze dag in de maandplanning. */}
+                    {rangschikKandidaten(
+                      drivers.filter((d) => String(d.id) !== selected.driverId),
+                      (d) => {
+                        const c = cells[String(d.id)]?.[selected.iso];
+                        return !c || (c.kind !== 'service' && !c.hiddenService);
+                      },
+                      overnameTelling,
+                    ).map((k) => (
+                      <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>
                     ))}
                   </select>
                 </div>

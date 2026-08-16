@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Plus, Thermometer } from 'lucide-react';
-import type { LeaveRequest, Shift, User } from '../../types';
+import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { isoDate } from '../../lib/availability';
 import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { kandidaatLabel, overnameTellingDitJaar, rangschikKandidaten, vrijOpDatum } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
@@ -25,6 +26,7 @@ export function ZiekteView({
   users,
   leaveRequests,
   shifts,
+  swaps = [],
   onSickReport,
   onSave,
   onShiftSwapped,
@@ -33,6 +35,7 @@ export function ZiekteView({
   users: User[];
   leaveRequests: LeaveRequest[];
   shifts: Shift[];
+  swaps?: SwapRequest[];
   onSickReport: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>;
   onSave: (requests: LeaveRequest[]) => Promise<boolean> | boolean;
   /** Ververst planning + ruilen na een dienstwissel vanuit dit blad. */
@@ -97,6 +100,7 @@ export function ZiekteView({
   }, [ziektes, jaar]);
 
   // --- Herverdelen vanuit het detail (admin): zelfde wissel als overal -------
+  const overnameTelling = overnameTellingDitJaar(swaps);
   const [vervangerPerDienst, setVervangerPerDienst] = useState<Record<string, string>>({});
   const [wisselBezig, setWisselBezig] = useState<string | null>(null);
   const [overgezet, setOvergezet] = useState<Record<string, string>>({});
@@ -359,10 +363,11 @@ export function ZiekteView({
                                     className="control-input min-w-0 flex-1 rounded-2xl bg-surface-field px-3.5 py-2.5 text-base font-semibold outline-none sm:text-sm"
                                   >
                                     <option value="">Kies een chauffeur…</option>
-                                    {users
-                                      .filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId))
-                                      .sort((a, b) => a.name.localeCompare(b.name))
-                                      .map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}
+                                    {rangschikKandidaten(
+                                      users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId)),
+                                      vrijOpDatum(shifts, dienst.date),
+                                      overnameTelling,
+                                    ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
                                   </select>
                                   <Button variant="primary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id} onClick={() => void zetOver(detail, dienst)}>
                                     {wisselBezig === dienst.id ? 'Bezig…' : 'Zet over'}

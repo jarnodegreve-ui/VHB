@@ -26,7 +26,8 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "diversions", columns: "id,line,title,description,startDate,endDate,severity,pdfUrl" },
   // swap_type: ruil zonder tegenprestatie (supabase/swaps_swap_type.sql).
   // shift_date/shift_line: planning-doorvoer (2026-08-01_swaps_shift_info.sql).
-  { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code,swap_type,shift_date,shift_line" },
+  // target_seen_at: gezien-bevestiging door de ontvanger (2026-08-16_swaps_target_seen.sql).
+  { table: "swaps", columns: "id,shiftid,requesterid,targetdriverid,status,createdat,reason,decidedat,return_date,return_code,swap_type,shift_date,shift_line,target_seen_at" },
   { table: "leave", columns: "id,userid,startdate,enddate,type,status,comment,createdat,decidedat" },
   // entity_type/entity_id: koppeling naar het gelogde record
   // (supabase/activity_log_entity_columns.sql). Ontbraken hier, terwijl

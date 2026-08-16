@@ -81,6 +81,7 @@ export function Badge({
   dot = false,
   icon,
   className,
+  title,
   children,
 }: {
   tone?: BadgeTone;
@@ -88,11 +89,13 @@ export function Badge({
   dot?: boolean;
   icon?: ReactNode;
   className?: string;
+  /** Native tooltip (bv. bevestigingstijdstip bij het gezien-vinkje). */
+  title?: string;
   children: ReactNode;
 }) {
   const t = BADGE_TONES[tone];
   return (
-    <span className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium', t.chip, className)}>
+    <span title={title} className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium', t.chip, className)}>
       {dot && <span className={cn('h-1.5 w-1.5 rounded-full', t.dot)} />}
       {icon}
       {children}

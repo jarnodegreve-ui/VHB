@@ -1828,6 +1828,20 @@ export const saveSwapsData = async (data: any, idsToDelete: string[] = []) => {
   }
 };
 
+/**
+ * Gezien-bevestiging van de ontvangende chauffeur op een doorgevoerde wissel.
+ * Directe kolom-update (niet via saveSwapsData): het bevestig-endpoint is de
+ * enige schrijver en de array-route behoudt altijd de opgeslagen waarde.
+ */
+export const markSwapTargetSeen = async (swapId: string, seenAtIso: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client
+    .from('swaps')
+    .update({ target_seen_at: seenAtIso })
+    .eq('id', String(swapId));
+  if (error) throw error;
+};
+
 // --- Planning-doorvoer van goedgekeurde ruilen -------------------------------
 //
 // Een goedgekeurde ruil/overname wordt direct in de planning doorgevoerd:

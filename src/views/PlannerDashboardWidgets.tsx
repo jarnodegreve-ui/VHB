@@ -36,6 +36,7 @@ import type {
 import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
+import { kandidaatLabel, overnameTellingDitJaar, rangschikKandidaten, vrijOpDatum } from '../lib/vervangers';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
@@ -356,6 +357,7 @@ export function PlannerDashboardWidgets({
   // (Geen useMemo: alle hooks moeten vóór de skeleton-return staan — zie de
   //  waarschuwing daar. De lijst is klein en de berekening lineair.)
   const teHerverdelen = openstaandeDienstenVanAfwezigen(shifts, leaveRequests, today);
+  const overnameTelling = overnameTellingDitJaar(swaps);
   // Per chauffeur groeperen i.p.v. één rij per dienst: bij een langere ziekte
   // zijn dat er al gauw acht, terwijl de lijst er maar vier toonde. Je loste er
   // vier op, de volgende vier schoven door, en het leek alsof de melding bleef
@@ -398,8 +400,17 @@ export function PlannerDashboardWidgets({
     }
   };
 
+  // Horizon van de geladen planning: hoe lang kunnen chauffeurs nog vooruit
+  // kijken? "Al X dagen niet bijgewerkt" bestond al, maar zei niets over de
+  // vraag die telt: wanneer valt de planning stil? Waarschuwing vanaf 5 dagen
+  // vooraf; rood zodra de horizon vandaag of eerder eindigt.
+  const HORIZON_WAARSCHUWING_DAGEN = 5;
+  const planningHorizon = shifts.reduce((max, s) => (s.date > max ? s.date : max), '');
+  const horizonDagenOver = planningHorizon ? Math.round((Date.parse(planningHorizon) - Date.parse(today)) / 86400000) : null;
+  const horizonKrap = horizonDagenOver !== null && horizonDagenOver <= HORIZON_WAARSCHUWING_DAGEN;
+
   const attentionCount =
-    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + gapDays.length + openTasks + vervalTaken.length + teHerverdelen.length;
+    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + (horizonKrap ? 1 : 0) + gapDays.length + openTasks + vervalTaken.length + teHerverdelen.length;
   const needsAttention = attentionCount > 0;
   // Het paneel toont per soort een top-N (3 dekkingsdagen, 4 verlof, 4 ruil,
   // 3 toestellen); dit is wat daarbuiten valt, zodat de teller in de kop
@@ -761,6 +772,17 @@ export function PlannerDashboardWidgets({
                 onClick={() => onNavigate('beheer-roosters')}
               />
             )}
+            {horizonKrap && (
+              <OpsRow
+                tone={horizonDagenOver! <= 0 ? 'red' : 'amber'}
+                icon={<CalendarClock size={15} />}
+                primary={horizonDagenOver! <= 0
+                  ? 'De geladen planning is op'
+                  : `Planning geladen t/m ${formatDay(planningHorizon)} — nog ${horizonDagenOver} ${horizonDagenOver === 1 ? 'dag' : 'dagen'}`}
+                secondary="Importeer de volgende periode zodat chauffeurs vooruit kunnen kijken."
+                onClick={() => onNavigate('beheer-roosters')}
+              />
+            )}
             {importIssueCount > 0 && lastImport && (
               <OpsRow
                 tone="red"
@@ -1094,10 +1116,13 @@ export function PlannerDashboardWidgets({
                           className="control-input min-w-0 flex-1 rounded-2xl px-3.5 py-2.5 text-base sm:text-sm font-semibold outline-none bg-surface-field"
                         >
                           <option value="">Kies een chauffeur…</option>
-                          {users
-                            .filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(d.driverId))
-                            .sort((a, b) => a.name.localeCompare(b.name))
-                            .map((u) => <option key={u.id} value={String(u.id)}>{u.name}</option>)}
+                          {/* Vrij die dag bovenaan, daarbinnen minst ingevallen
+                              dit jaar — eerlijk verdelen i.p.v. alfabetisch. */}
+                          {rangschikKandidaten(
+                            users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(d.driverId)),
+                            vrijOpDatum(shifts, d.date),
+                            overnameTelling,
+                          ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
                         </select>
                         <Button
                           variant="primary"
