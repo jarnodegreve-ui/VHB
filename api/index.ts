@@ -30,7 +30,7 @@ import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
 import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -81,6 +81,7 @@ import {
   bumpActiveSessions,
   getShiftById,
   getShiftsOnDate,
+  markSwapTargetSeen,
   getServiceSegments,
   saveMatrixRowAssignments,
   insertPlanningRows,
@@ -944,6 +945,21 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
           };
         }
       }
+    }
+
+    // Excel-terugexport (planner/admin): de ACTUELE cel-waarheid — wissels,
+    // toewijzingen en afwezigheids-overlay verwerkt — in het praktijk-tab-
+    // formaat, direct her-importeerbaar. Zo start de volgende Excel-bewerking
+    // op de werkelijke stand i.p.v. de verouderde upload.
+    if (String(req.query.format ?? "") === "xlsx") {
+      if (req.appUser?.role === "chauffeur") {
+        return res.status(403).json({ error: "Onvoldoende rechten." });
+      }
+      const dayTypeByDate = new Map<string, string>(monthRows.map((r: any) => [String(r.source_date), String(r.day_type ?? "")]));
+      const buffer = bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells);
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);
+      return res.send(buffer);
     }
 
     res.json({ month, dates, drivers: chauffeurs.map((c) => ({ id: c.id, name: c.name, section: c.section || null })), cells });
@@ -3484,6 +3500,9 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
         swapType: normalizeSwapType(prev ? prev.swapType : n.swapType),
         shiftDate,
         shiftLine,
+        // Gezien-bevestiging is nooit client-schrijfbaar via deze route: de
+        // opgeslagen waarde wint altijd (nieuw record = nog niet bevestigd).
+        targetSeenAt: prev?.targetSeenAt,
       });
     }
 
@@ -3895,6 +3914,40 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
   } catch (err) {
     console.error("Handmatige dienstwissel is mislukt.", err);
     res.status(500).json({ error: "Handmatige dienstwissel is mislukt." });
+  }
+});
+
+// --- Gezien-bevestiging op een doorgevoerde wissel --------------------------
+//
+// Push bereikt vrijwel niemand; hiermee weet de planner of de nieuwe rijder
+// de wijziging echt gezien heeft. Alleen de ontvanger zelf mag bevestigen,
+// en alleen op een doorgevoerde wissel (approved/completed).
+app.post("/api/swaps/:id/gezien", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id ?? "");
+    const swap = (await getSwapsData()).find((s) => String(s.id) === id);
+    if (!swap) return res.status(404).json({ error: "Deze dienstruil bestaat niet (meer)." });
+    if (String(swap.targetDriverId ?? "") !== String(req.appUser?.id)) {
+      return res.status(403).json({ error: "Alleen de chauffeur die de dienst overneemt kan bevestigen." });
+    }
+    if (swap.status !== "approved" && swap.status !== "completed") {
+      return res.status(409).json({ error: "Deze wissel is (nog) niet doorgevoerd — er valt niets te bevestigen." });
+    }
+    if (!swap.targetSeenAt) {
+      const nu = new Date().toISOString();
+      await markSwapTargetSeen(id, nu);
+      await logActivity(
+        req,
+        "swaps",
+        "Dienstwissel bevestigd",
+        `${req.appUser?.name ?? "Chauffeur"} bevestigde de overgenomen dienst${swap.shiftLine ? ` ${swap.shiftLine}` : ""}${swap.shiftDate ? ` op ${swap.shiftDate}` : ""}.`,
+        { type: "swap", id },
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Bevestigen van de dienstwissel is mislukt.", err);
+    res.status(500).json({ error: "Bevestigen is mislukt." });
   }
 });
 

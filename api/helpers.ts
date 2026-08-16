@@ -112,6 +112,36 @@ export const HANDMATIGE_WISSEL_PREFIX = "Handmatige wissel door ";
 export const isHandmatigeWissel = (swap: { reason?: unknown } | null | undefined) =>
   String(swap?.reason ?? "").startsWith(HANDMATIGE_WISSEL_PREFIX);
 
+/**
+ * Bouwt een praktijk-tab-Excel uit de ACTUELE cel-waarheid van de maand-
+ * planning — de omgekeerde richting van parsePlanningMatrixXlsx, in exact
+ * hetzelfde formaat (sheet 'praktijk', kolom A datum als Excel-serial, B
+ * dagtype, één kolom per chauffeur, afsluitende 'aantal'-kolom). Doel: de
+ * planner start zijn volgende Excel-bewerking op de werkelijke stand
+ * (wissels, toewijzingen, ziektes verwerkt) in plaats van op de verouderde
+ * upload — en het bestand is direct her-importeerbaar.
+ */
+export const bouwMatrixXlsx = (
+  dates: string[],
+  dayTypeByDate: Map<string, string>,
+  chauffeurs: Array<{ id: string; name: string }>,
+  cells: Record<string, Record<string, { code: string; kind: string }>>,
+): Buffer => {
+  const serial = (iso: string) => {
+    const ms = Date.parse(`${iso}T00:00:00Z`) - Date.parse("1899-12-30T00:00:00Z");
+    return Math.round(ms / 86400000);
+  };
+  const aoa: unknown[][] = [["datum", "dagtype", ...chauffeurs.map((c) => c.name), "aantal"]];
+  for (const iso of dates) {
+    const codes = chauffeurs.map((c) => cells[c.id]?.[iso]?.code ?? "");
+    const aantal = chauffeurs.filter((c) => cells[c.id]?.[iso]?.kind === "service").length;
+    aoa.push([serial(iso), dayTypeByDate.get(iso) ?? "", ...codes, aantal]);
+  }
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "praktijk");
+  return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+};
+
 /** Onbekende/ontbrekende waarden vallen terug op de klassieke 1-op-1 ruil. */
 export const normalizeSwapType = (value: unknown): SwapType =>
   String(value ?? "").trim().toLowerCase() === "overname" ? "overname" : "ruil";
@@ -134,6 +164,7 @@ export const toPublicSwap = (swap: any): SwapRecord => {
     swapType,
     shiftDate: swap.shiftDate ?? swap.shift_date ?? undefined,
     shiftLine: swap.shiftLine ?? swap.shift_line ?? undefined,
+    targetSeenAt: swap.targetSeenAt ?? swap.target_seen_at ?? undefined,
   };
 };
 
@@ -153,6 +184,7 @@ export const toDatabaseSwap = (swap: SwapRecord) => {
     swap_type: swapType,
     shift_date: swap.shiftDate || null,
     shift_line: swap.shiftLine || null,
+    target_seen_at: swap.targetSeenAt || null,
   };
 };
 

@@ -154,6 +154,10 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     saveSwapsData: async (data: any[], idsToDelete: string[] = []) => {
       mem.swaps = replaceById(mem.swaps, data, idsToDelete);
     },
+    markSwapTargetSeen: async (id: string, seenAtIso: string) => {
+      const sw = mem.swaps.find((s: any) => String(s.id) === String(id));
+      if (sw) sw.targetSeenAt = seenAtIso;
+    },
     getShiftById: async (id: string) =>
       mem.planning.find((s: any) => String(s.id) === String(id)) ?? null,
     getShiftsOnDate: async (date: string) =>
@@ -2642,5 +2646,104 @@ describe('vervaldata (Code 95 / medische schifting)', () => {
     await api('PUT', '/api/user-expiries', { token: 'tok-admin', body: { userId: '3', soort: 'code95', validUntil: '2027-03-01' } });
     const alle = await api('GET', '/api/user-expiries', { token: 'tok-planner' });
     expect(alle.json).toEqual([{ userId: '3', soort: 'code95', validUntil: '2027-03-01' }]);
+  });
+});
+
+describe('gezien-bevestiging op een doorgevoerde wissel', () => {
+  beforeEach(() => {
+    mem.swaps = [
+      { id: 's-app', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'approved', reason: '', createdAt: '2026-07-01T08:00:00Z', decidedAt: '2026-07-02T08:00:00Z', shiftDate: '2026-07-15', shiftLine: '12' },
+      { id: 's-pend', shiftId: 'sh-b', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-07-01T09:00:00Z' },
+    ];
+  });
+
+  it('alleen de ontvangende chauffeur mag bevestigen (403 voor anderen)', async () => {
+    // Aanvrager (chauffeur 3) is niet de ontvanger.
+    const res = await api('POST', '/api/swaps/s-app/gezien', { token: 'tok-a' });
+    expect(res.status).toBe(403);
+    expect(mem.swaps.find((s: any) => s.id === 's-app')?.targetSeenAt).toBeUndefined();
+  });
+
+  it('weigert een nog niet doorgevoerde wissel (409)', async () => {
+    const res = await api('POST', '/api/swaps/s-pend/gezien', { token: 'tok-b' });
+    expect(res.status).toBe(409);
+  });
+
+  it('zet target_seen_at, logt de activiteit en is idempotent', async () => {
+    const res = await api('POST', '/api/swaps/s-app/gezien', { token: 'tok-b' });
+    expect(res.status).toBe(200);
+    const eerste = mem.swaps.find((s: any) => s.id === 's-app')?.targetSeenAt;
+    expect(typeof eerste).toBe('string');
+    expect(mem.activity.some((a: any) => a.action === 'Dienstwissel bevestigd')).toBe(true);
+    // Tweede keer bevestigen overschrijft de timestamp niet.
+    const opnieuw = await api('POST', '/api/swaps/s-app/gezien', { token: 'tok-b' });
+    expect(opnieuw.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-app')?.targetSeenAt).toBe(eerste);
+  });
+
+  it('de array-route wist een bestaande bevestiging niet', async () => {
+    await api('POST', '/api/swaps/s-app/gezien', { token: 'tok-b' });
+    const eerste = mem.swaps.find((s: any) => s.id === 's-app')?.targetSeenAt;
+    // Chauffeur 4 stuurt zijn eigen lijst terug zónder targetSeenAt (en zelfs
+    // met een vervalste waarde op de pending) — de server negeert dat veld.
+    const eigen = mem.swaps
+      .filter((s: any) => s.requesterId === '4' || s.targetDriverId === '4')
+      .map((s: any) => ({ ...s, targetSeenAt: s.id === 's-pend' ? '2020-01-01T00:00:00Z' : undefined }));
+    const res = await api('POST', '/api/swaps', { token: 'tok-b', body: eigen });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s: any) => s.id === 's-app')?.targetSeenAt).toBe(eerste);
+    expect(mem.swaps.find((s: any) => s.id === 's-pend')?.targetSeenAt ?? undefined).toBeUndefined();
+  });
+
+  it('GET /api/swaps geeft targetSeenAt terug', async () => {
+    await api('POST', '/api/swaps/s-app/gezien', { token: 'tok-b' });
+    const res = await api('GET', '/api/swaps', { token: 'tok-planner' });
+    expect(res.json.find((s: any) => s.id === 's-app')?.targetSeenAt).toBeTruthy();
+  });
+});
+
+describe('Excel-terugexport van de maandplanning', () => {
+  beforeEach(() => {
+    mem.planningMatrix = [
+      { id: 'm-1', source_date: '2026-07-15', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '11' }, raw_row: '' },
+    ];
+  });
+
+  it('weigert een chauffeur (403)', async () => {
+    const res = await api('GET', '/api/month-planning?month=2026-07&format=xlsx', { token: 'tok-a' });
+    expect(res.status).toBe(403);
+  });
+
+  it('levert een geldig xlsx-bestand met de actuele cel-waarheid', async () => {
+    // Wissel doorgevoerd ná de Excel-import: de export moet de áctuele stand
+    // bevatten (dienst 12 bij chauffeur B), niet de originele upload.
+    mem.swaps = [{
+      id: 's-x', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'approved',
+      reason: '', createdAt: '2026-07-01T08:00:00Z', decidedAt: '2026-07-02T08:00:00Z',
+      shiftDate: '2026-07-15', shiftLine: '12', swapType: 'overname',
+    }];
+    const raw = await fetch(`${baseUrl}/api/month-planning?month=2026-07&format=xlsx`, {
+      headers: { Authorization: 'Bearer tok-planner', 'X-Device-Token': 'dev-ok' },
+    });
+    expect(raw.status).toBe(200);
+    expect(raw.headers.get('content-type')).toContain('spreadsheetml');
+    expect(raw.headers.get('content-disposition')).toContain('planning-2026-07.xlsx');
+    const XLSX = await import('xlsx');
+    const wb = XLSX.read(Buffer.from(await raw.arrayBuffer()), { type: 'buffer' });
+    const ws = wb.Sheets['praktijk'];
+    expect(ws).toBeTruthy();
+    const rows = XLSX.utils.sheet_to_json<any>(ws, { header: 1, raw: true });
+    const header = (rows[0] as any[]).map((h: any) => String(h).toLowerCase());
+    expect(header).toContain('chauffeur a');
+    expect(header).toContain('chauffeur b');
+    // Kolom A is een Excel-serial (zelfde formaat als de praktijk-tab-upload).
+    const serial = Math.round((Date.parse('2026-07-15T00:00:00Z') - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+    const dag = rows.find((r: any[]) => Number(r[0]) === serial) as any[];
+    expect(dag).toBeTruthy();
+    const colB = header.indexOf('chauffeur b');
+    const colA = header.indexOf('chauffeur a');
+    expect(String(dag[colB])).toBe('12');
+    // Chauffeur A gaf de dienst weg (overname) → geen dienstcode meer.
+    expect(String(dag[colA] ?? '')).not.toBe('12');
   });
 });

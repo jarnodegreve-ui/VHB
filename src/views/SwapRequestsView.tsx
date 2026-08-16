@@ -21,7 +21,7 @@ const TakeoverBadge = ({ compact = false }: { compact?: boolean }) => (
   </Badge>
 );
 
-export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide, preselectShiftId = null, onPreselectConsumed }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status'], seenStatus?: string) => Promise<boolean>, preselectShiftId?: string | null, onPreselectConsumed?: () => void }) {
+export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [], onSave, onDecide, preselectShiftId = null, onPreselectConsumed, onConfirmSeen }: { user: User, swaps: SwapRequest[], shifts: Shift[], users: User[], leaveRequests?: LeaveRequest[], onSave: (s: SwapRequest[]) => void | boolean | Promise<void | boolean>, onDecide?: (id: string, status: SwapRequest['status'], seenStatus?: string) => Promise<boolean>, preselectShiftId?: string | null, onPreselectConsumed?: () => void, onConfirmSeen?: (id: string) => Promise<boolean> }) {
   const [showOfferModal, setShowOfferModal] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via de nette ConfirmationModal i.p.v. kale window.confirm
@@ -228,7 +228,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
   // (door mij geaccepteerd, wacht op planner) zodat de collega de status volgt.
   const availableSwaps = swaps.filter(s => {
     if (s.requesterId === user.id) return false;
-    if (s.status !== 'pending' && s.status !== 'accepted') return false;
+    // Een doorgevoerde wissel die de chauffeur nog niet bevestigde blijft in
+    // zijn lijst staan mét bevestig-knop — zo weet de planner dat de nieuwe
+    // rijder de wijziging écht gezien heeft (push bereikt bijna niemand).
+    const wachtOpBevestiging = s.status === 'approved' && s.targetDriverId === user.id && !s.targetSeenAt;
+    if (s.status !== 'pending' && s.status !== 'accepted' && !wachtOpBevestiging) return false;
     // Tonen aan de chauffeur waaraan de ruil gericht is. Planner/admin
     // ziet alle openstaande ruilverzoeken (zoals voorheen).
     if (!isPlanner && s.targetDriverId && s.targetDriverId !== user.id) return false;
@@ -238,6 +242,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
     if (isBeheerder) return false;
     return true;
   });
+
+  // Gezien-bevestiging door de ontvanger van de dienst.
+  const [isConfirmingSeen, setIsConfirmingSeen] = useState<string | null>(null);
+  const bevestigGezien = async (id: string) => {
+    if (isConfirmingSeen || !onConfirmSeen) return;
+    setIsConfirmingSeen(id);
+    try {
+      await onConfirmSeen(id);
+    } finally {
+      setIsConfirmingSeen(null);
+    }
+  };
 
   const handleOfferShift = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -503,6 +519,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     </div>
                   ) : swap.status === 'accepted' && swap.targetDriverId === user.id ? (
                     <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).</p>
+                  ) : swap.status === 'approved' && swap.targetDriverId === user.id && !swap.targetSeenAt ? (
+                    /* Doorgevoerd maar nog niet bevestigd: dé plek waar de
+                       chauffeur laat weten dat hij de wijziging gezien heeft
+                       (push bereikt bijna niemand — dit vinkje wel). */
+                    <Button
+                      variant="success"
+                      full
+                      icon={<Check size={15} />}
+                      disabled={isConfirmingSeen === swap.id}
+                      onClick={() => void bevestigGezien(swap.id)}
+                    >
+                      {isConfirmingSeen === swap.id ? 'Bevestigen…' : 'Begrepen — ik rijd deze dienst'}
+                    </Button>
                   ) : null}
                 </div>
               );
@@ -600,7 +629,18 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="block text-2xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
                           </Td>
-                          <Td><StatusBadge status={swap.status} /></Td>
+                          <Td>
+                            <span className="inline-flex items-center gap-1.5">
+                              <StatusBadge status={swap.status} />
+                              {/* Weet de nieuwe rijder het al? Bij approved is
+                                  dát de vraag die telt (push bereikt weinigen). */}
+                              {swap.status === 'approved' && swap.targetDriverId && (
+                                swap.targetSeenAt
+                                  ? <Badge tone="emerald" icon={<Check size={11} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>gezien</Badge>
+                                  : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">niet bevestigd</Badge>
+                              )}
+                            </span>
+                          </Td>
                           <Td>
                             <div className="flex items-center gap-1.5">
                               <Button variant="ghost" size="sm" icon={<History size={16} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistorySwap(swap)} />
@@ -662,7 +702,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             <p className="text-2xs font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
                         </div>
-                        <StatusBadge status={swap.status} className="shrink-0" />
+                        <span className="flex shrink-0 flex-col items-end gap-1">
+                          <StatusBadge status={swap.status} />
+                          {swap.status === 'approved' && swap.targetDriverId && (
+                            swap.targetSeenAt
+                              ? <Badge tone="emerald" icon={<Check size={11} />}>gezien</Badge>
+                              : <Badge tone="slate">niet bevestigd</Badge>
+                          )}
+                        </span>
                       </div>
                       <div className="flex gap-2 pt-1">
                         {swap.status === 'accepted' && (

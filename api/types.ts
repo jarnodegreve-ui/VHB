@@ -47,6 +47,10 @@ export interface SwapRecord {
   shiftDate?: string;
   /** Dienstnummer van de aangeboden dienst (planning.line) — idem. */
   shiftLine?: string;
+  /** Moment waarop de ontvangende chauffeur de wissel bevestigde ("gezien").
+   *  Alleen schrijfbaar via het eigen bevestig-endpoint; de array-route
+   *  behoudt altijd de opgeslagen waarde. */
+  targetSeenAt?: string;
 }
 
 export interface LeaveRecord {
