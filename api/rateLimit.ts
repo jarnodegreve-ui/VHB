@@ -239,10 +239,44 @@ export const clientErrorRateLimit = async (req: express.Request, res: express.Re
   next();
 };
 
+/**
+ * Per-actie limiet voor gevoelige, laagfrequente endpoints (nieuw toestel
+ * registreren, bedrijfsbreed noodbericht). Die horen een handvol keer per uur
+ * voor te komen, niet honderden keren per minuut binnen de globale authed-
+ * limiet. Sleutel = de ingelogde gebruiker (`req.appUser`, gezet door
+ * `authenticate` — plaats de middleware dus ná authenticate), met het IP als
+ * terugval. Registreert zijn in-memory teller voor resetAllRateLimiters.
+ */
+const ACTION_WINDOW_MS = num(process.env.RATE_LIMIT_ACTION_WINDOW_MS, 3_600_000); // 1 uur
+const actionLimiters: RateLimiter[] = [];
+export function createActionRateLimit(name: string, max: number) {
+  const local = createRateLimiter({ windowMs: ACTION_WINDOW_MS, max });
+  actionLimiters.push(local);
+  return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const appUser = (req as any).appUser;
+    const who = appUser?.id ? `u:${appUser.id}` : `ip:${clientIp(req)}`;
+    const key = `act:${name}:${who}`;
+    const { allowed, retryAfterSec } =
+      (await sharedCheck(key, ACTION_WINDOW_MS, max)) ?? local.check(key);
+    if (!allowed) {
+      res.setHeader("Retry-After", String(retryAfterSec));
+      return res.status(429).json({ error: "Te veel opeenvolgende verzoeken. Probeer het straks opnieuw." });
+    }
+    next();
+  };
+}
+
+// Nieuw toestel registreren: ruim voor een normale gebruiker (meerdere
+// telefoons/tablets), streng genoeg tegen token-rotatie-flood.
+export const deviceRegisterRateLimit = createActionRateLimit("device-register", num(process.env.RATE_LIMIT_DEVICE_MAX, 12));
+// Bedrijfsbreed noodbericht (mail + push naar de hele ploeg): een paar per uur.
+export const urgentEmailRateLimit = createActionRateLimit("urgent-email", num(process.env.RATE_LIMIT_URGENT_MAX, 6));
+
 /** Voor tests: wis alle telstanden zodat testvolgorde geen 429 veroorzaakt. */
 export const resetAllRateLimiters = () => {
   authedLimiter.reset();
   anonLimiter.reset();
   ipGuardLimiter.reset();
   clientErrorLimiter.reset();
+  for (const l of actionLimiters) l.reset();
 };

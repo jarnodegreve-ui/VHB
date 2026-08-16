@@ -24,11 +24,14 @@ const eigenDeployHost = (jsUrl: string): boolean => {
     if (u.protocol !== "https:") return false;
     const host = u.hostname.toLowerCase();
     if (host === "vhbportaal.com" || host === "www.vhbportaal.com") return true;
-    // Eigen Vercel-previews (vhb-portaal-<hash>.vercel.app); VERCEL_URL dekt
-    // de actuele deployment ook als het projectvoorvoegsel ooit wijzigt.
+    // Eigen Vercel-previews; VERCEL_URL dekt de actuele deployment exact.
     const vercelUrl = String(process.env.VERCEL_URL ?? "").toLowerCase();
     if (vercelUrl && host === vercelUrl) return true;
-    return host.endsWith(".vercel.app") && host.startsWith("vhb-portaal");
+    // Anker op de team-slug (zelfde vorm als de CORS-allowlist): een los
+    // `startsWith("vhb-portaal")` liet ook een door een aanvaller zelf
+    // gedeployde `vhb-portaal-xyz.vercel.app` passeren — die mist het
+    // `-jarnodegreve-uis-projects`-segment en wordt nu geweigerd.
+    return /^vhb-[a-z0-9-]+-jarnodegreve-uis-projects\.vercel\.app$/.test(host);
   } catch {
     return false;
   }

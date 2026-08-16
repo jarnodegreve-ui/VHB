@@ -816,6 +816,24 @@ export default function App() {
     setUitlogMelding(reden);
     try { sessionStorage.setItem(LOGIN_MELDING_KEY, reden); } catch { /* privémodus */ }
     if (reden === 'account') showToast(msg, 'error');
+    // Gedeeld toestel (depot-tablet): net als bij de gewone uitlog mag de
+    // stale-while-revalidate-cache (rooster, profiel, ritblad-PDF) en het
+    // push-abonnement van deze gebruiker niet achterblijven na een gedwongen
+    // uitlog (verlopen sessie / gedeactiveerd account). Vóór signOut, want de
+    // push-afmelding heeft nog een geldig token nodig; alles best-effort zodat
+    // het uitloggen nooit ophoudt.
+    try {
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch { /* cache-API geblokkeerd — geen blocker */ }
+    try {
+      if (session?.access_token && isPushSupported()) {
+        await unsubscribeFromPush({ Authorization: `Bearer ${session.access_token}`, ...deviceHeaders() });
+      }
+    } catch { /* best-effort */ }
+    setPushEnabled(false);
     try { await supabase?.auth.signOut(); } catch { /* val sowieso terug op login */ }
     // Zelf de sessie-state wissen i.p.v. te wachten op SIGNED_OUT: als de
     // signOut-call zelf faalt (offline, of de auth-server geeft een fout)

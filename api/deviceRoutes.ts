@@ -13,7 +13,13 @@ import {
   renameDevice,
   setAppSetting,
 } from "./storage.js";
+import { deviceRegisterRateLimit } from "./rateLimit.js";
 import type { AuthenticatedRequest } from "./types.js";
+
+// Harde bovengrens op het aantal toestellen per gebruiker: een normale
+// medewerker heeft er een paar, dus dit raakt niemand — het stopt alleen de
+// aanmaak-flood via geroteerde tokens (registratie is device-gate-exempt).
+const MAX_DEVICES_PER_USER = 15;
 
 /**
  * Toestel-whitelist — registratie + admin-beheer.
@@ -35,13 +41,22 @@ const sanitizeDeviceName = (raw: unknown): string =>
     .slice(0, 80) || "Onbekend toestel";
 
 export const mountDeviceRoutes = (app: express.Express) => {
-  app.post("/api/devices/register", authenticate, async (req: AuthenticatedRequest, res) => {
+  app.post("/api/devices/register", authenticate, deviceRegisterRateLimit, async (req: AuthenticatedRequest, res) => {
     try {
       const deviceToken = String(req.headers[DEVICE_TOKEN_HEADER] ?? "").trim();
       if (!deviceToken || deviceToken.length > 100) {
         return res.status(400).json({ error: "Geen geldig toestel-token meegestuurd." });
       }
       const appUser = req.appUser!;
+      // Cap op het aantal toestellen: alleen wanneer dit een níéuw token is (een
+      // al bekend token verstuurt straks enkel een last_seen-update en maakt
+      // geen rij/push aan). Blokkeert de rij-/push-flood via geroteerde tokens
+      // zonder een gewone gebruiker met meerdere toestellen te raken.
+      const mijnToestellen = (await listAllDevices()).filter((d) => d.userId === String(appUser.id));
+      const nieuwToken = !mijnToestellen.some((d) => d.deviceToken === deviceToken);
+      if (nieuwToken && mijnToestellen.length >= MAX_DEVICES_PER_USER) {
+        return res.status(429).json({ error: "Maximum aantal toestellen bereikt. Verwijder eerst een oud toestel." });
+      }
       // Chauffeur-invoer: geen regeleinden/controltekens in een naam die straks in
       // een admin-pushmelding belandt (anti-injectie), gecapt op 80 tekens.
       const name = sanitizeDeviceName(req.body?.name);

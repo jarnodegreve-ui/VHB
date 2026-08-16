@@ -26,8 +26,8 @@ import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
-import { rateLimitMiddleware, clientErrorRateLimit } from "./rateLimit.js";
-import { mountOcpiRoutes, getOcpiRegistration } from "./ocpi.js";
+import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit } from "./rateLimit.js";
+import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
@@ -444,14 +444,23 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
   }
 });
 
-app.get("/api/planning", authenticate, async (req, res) => {
+app.get("/api/planning", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     // Optionele filters: ?driverId=X of ?month=YYYY-MM laten de client
     // gericht ophalen i.p.v. de hele tabel — drastisch minder data over
     // het draad voor mobile en maandprint.
-    const driverId = typeof req.query.driverId === "string" && req.query.driverId.trim()
+    const gevraagdeDriverId = typeof req.query.driverId === "string" && req.query.driverId.trim()
       ? req.query.driverId.trim()
       : undefined;
+    // Een chauffeur mag alleen zijn eigen diensten via deze route lezen —
+    // zonder deze scope kon hij met een kale fetch de volledige planning
+    // (busnr, loopnr, segmenttijden) van álle collega's ophalen. Het open
+    // maandbord (/api/month-planning) toont toewijzingen bewust wél breed,
+    // maar deze detail-route hoort per-chauffeur begrensd (zoals /api/leave,
+    // /api/swaps en /api/planning-notes dat al zijn).
+    const driverId = req.appUser?.role === "chauffeur"
+      ? String(req.appUser.id)
+      : gevraagdeDriverId;
     const monthIso = typeof req.query.month === "string" && /^\d{4}-\d{2}$/.test(req.query.month)
       ? req.query.month
       : undefined;
@@ -1905,6 +1914,14 @@ app.post("/api/push/subscribe", authenticate, async (req: AuthenticatedRequest, 
     if (!endpoint || !p256dh || !auth) {
       return res.status(400).json({ error: "Ongeldig push-abonnement." });
     }
+    // Het endpoint wordt later server-side aangeroepen door webpush.sendNotification
+    // (en de digest-cron). Zonder deze check kon een geauthenticeerde gebruiker
+    // een intern/loopback/metadata-adres opslaan en de server dat laten fetchen
+    // (blinde SSRF). Alleen https naar een publieke host toestaan — een echt
+    // push-endpoint (FCM/Mozilla/WNS/Apple) voldoet daar altijd aan.
+    if (!isSafeExternalHttpsUrl(endpoint)) {
+      return res.status(400).json({ error: "Ongeldig push-endpoint." });
+    }
     await savePushSubscription({ userId: String(req.appUser!.id), endpoint, p256dh, auth });
     res.json({ success: true });
   } catch (err: any) {
@@ -3259,7 +3276,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             if (next.swapType !== undefined && normalizeSwapType(next.swapType) !== normalizeSwapType(prev.swapType)) {
               return res.status(403).json({ error: "Niet toegestaan: je mag een aanvraag alleen accepteren of weigeren." });
             }
-            writes.push({ ...next, swapType: normalizeSwapType(prev.swapType) });
+            // decidedAt is server-gezaghebbend: 'accepted' is een tussenstap
+            // (geen beslismoment, behoud wat er stond), 'rejected' krijgt het
+            // servertijdstip. Nooit de client-waarde vertrouwen — reapplyApproved
+            // Swaps sorteert kettingen op decidedAt.
+            writes.push({
+              ...next,
+              swapType: normalizeSwapType(prev.swapType),
+              decidedAt: next.status === "rejected" ? new Date().toISOString() : prev.decidedAt,
+            });
           }
           // Anders: ongewijzigde echo of een gelijktijdig door een ander
           // gewijzigd record → bewust NIET wegschrijven (geen 403, geen
@@ -3494,12 +3519,22 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             createdAt: prev.createdAt,
           }
         : {};
+      // decidedAt server-gezaghebbend (spiegel van de PATCH-route): een reeds
+      // besliste ruil behoudt zijn oorspronkelijke tijdstip (niet herschrijfbaar
+      // via een latere array-save), een verse beslissing krijgt het servertijd-
+      // stip, en 'accepted'/ongewijzigd 'pending' hebben geen beslismoment.
+      const wasBeslist = prev && String(prev.status) !== "pending" && String(prev.status) !== "accepted";
+      const wordtBeslist = String(n.status) !== "pending" && String(n.status) !== "accepted";
+      const decidedAtDef = wasBeslist
+        ? prev!.decidedAt
+        : (wordtBeslist ? new Date().toISOString() : (prev?.decidedAt ?? undefined));
       finalRecords.push({
         ...n,
         ...bevroren,
         swapType: normalizeSwapType(prev ? prev.swapType : n.swapType),
         shiftDate,
         shiftLine,
+        decidedAt: decidedAtDef,
         // Gezien-bevestiging is nooit client-schrijfbaar via deze route: de
         // opgeslagen waarde wint altijd (nieuw record = nog niet bevestigd).
         targetSeenAt: prev?.targetSeenAt,
@@ -4513,7 +4548,7 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
   }
 });
 
-app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "admin"), async (req, res) => {
+app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "admin"), urgentEmailRateLimit, async (req, res) => {
   const { update } = req.body;
 
   if (!update || !update.title) {
