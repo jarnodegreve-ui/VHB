@@ -131,9 +131,16 @@ export const bouwMatrixXlsx = (
     const ms = Date.parse(`${iso}T00:00:00Z`) - Date.parse("1899-12-30T00:00:00Z");
     return Math.round(ms / 86400000);
   };
-  const aoa: unknown[][] = [["datum", "dagtype", ...chauffeurs.map((c) => c.name), "aantal"]];
+  // Formule-injectie neutraliseren: een celwaarde die met = + - @ (of een
+  // tab/CR die Excel negeert) begint, wordt door sommige spreadsheets als
+  // formule uitgevoerd bij het openen. In .xlsx typeert aoa_to_sheet strings
+  // al als tekst, maar deze helper is bewust her-importeerbaar en kan ooit als
+  // CSV belanden — dus defensief een apostrof voorzetten. Namen én codes.
+  const veilig = (raw: string): string =>
+    /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+  const aoa: unknown[][] = [["datum", "dagtype", ...chauffeurs.map((c) => veilig(c.name)), "aantal"]];
   for (const iso of dates) {
-    const codes = chauffeurs.map((c) => cells[c.id]?.[iso]?.code ?? "");
+    const codes = chauffeurs.map((c) => veilig(cells[c.id]?.[iso]?.code ?? ""));
     const aantal = chauffeurs.filter((c) => cells[c.id]?.[iso]?.kind === "service").length;
     aoa.push([serial(iso), dayTypeByDate.get(iso) ?? "", ...codes, aantal]);
   }

@@ -17,6 +17,15 @@
         ],
         "createdAt": "2026-08-09T20:19:04.122Z",
         "reason": "Blanket-override-tabel: detector ziet de bijbehorende achtergrond niet; .hover:text-slate-950 = bindende huisstijl (VHB Black op amber, nooit wit — CLAUDE.md). Bekend terugkerend vals-positief."
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/App.tsx"
+        ],
+        "createdAt": "2026-08-16T21:05:41.368Z",
+        "reason": "Uitlogknop Meer-menu: rust = grijs op transparant; het rode vlak verschijnt alleen op hover en de tekst kleurt dan mee naar red-600. Bekend terugkerend vals-positief (akkoord Jarno 16-08)."
       }
     ]
   }

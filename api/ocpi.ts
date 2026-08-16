@@ -43,7 +43,7 @@ const safeEqual = (a: string, b: string): boolean => {
 /** SSRF-guard voor URL's die uit een (extern) OCPI-credentials-object komen:
  *  alleen https naar een publieke host — geen loopback/link-local/private/
  *  metadata-adressen die de server naar zichzelf/interne diensten laten fetchen. */
-const isSafeExternalHttpsUrl = (raw: string): boolean => {
+export const isSafeExternalHttpsUrl = (raw: string): boolean => {
   let u: URL;
   try { u = new URL(raw); } catch { return false; }
   if (u.protocol !== "https:") return false;

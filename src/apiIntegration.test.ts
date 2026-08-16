@@ -2747,3 +2747,82 @@ describe('Excel-terugexport van de maandplanning', () => {
     expect(String(dag[colA] ?? '')).not.toBe('12');
   });
 });
+
+describe('beveiliging (controleronde 16-08)', () => {
+  it('A — /api/planning is per chauffeur gescoped, ook met een vreemde ?driverId', async () => {
+    const eigen = await api('GET', '/api/planning', { token: 'tok-a' });
+    expect(eigen.status).toBe(200);
+    expect(eigen.json.every((s: any) => String(s.driverId) === '3')).toBe(true);
+    expect(eigen.json.some((s: any) => String(s.driverId) === '4')).toBe(false);
+    // Bypass-poging: kale fetch met andermans id → nog steeds alleen eigen rijen.
+    const vreemd = await api('GET', '/api/planning?driverId=4', { token: 'tok-a' });
+    expect(vreemd.json.every((s: any) => String(s.driverId) === '3')).toBe(true);
+  });
+
+  it('A — planner/admin mag wél gericht een andere chauffeur opvragen', async () => {
+    const res = await api('GET', '/api/planning?driverId=4', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.every((s: any) => String(s.driverId) === '4')).toBe(true);
+  });
+
+  it('E — push-subscribe weigert een intern/loopback-endpoint (SSRF)', async () => {
+    for (const endpoint of [
+      'http://169.254.169.254/latest/meta-data',
+      'https://localhost/x',
+      'http://push.example/x',        // geen https
+      'https://127.0.0.1/x',
+      'https://[::1]/x',
+    ]) {
+      const res = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint, keys: { p256dh: 'pk', auth: 'au' } } });
+      expect(res.status, endpoint).toBe(400);
+    }
+    expect(mem.pushSubscriptions).toHaveLength(0);
+    // Een echt (publiek https) endpoint gaat wél door.
+    const ok = await api('POST', '/api/push/subscribe', { token: 'tok-a', body: { endpoint: 'https://fcm.googleapis.com/abc', keys: { p256dh: 'pk', auth: 'au' } } });
+    expect(ok.status).toBe(200);
+  });
+
+  it('C — nieuw toestel boven de bovengrens wordt geweigerd, een bekend token nog wel', async () => {
+    mem.devices = Array.from({ length: 15 }, (_, i) => ({
+      userId: '3', deviceToken: `d${i}`, name: `t${i}`, status: 'approved',
+      createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto',
+    }));
+    const nieuw = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'd-nieuw', body: { name: 'nog een' } });
+    expect(nieuw.status).toBe(429);
+    expect(mem.devices).toHaveLength(15); // geen rij bijgemaakt
+    // Een reeds bekend token (last_seen-update) mag ondanks de cap.
+    const bekend = await api('POST', '/api/devices/register', { token: 'tok-a', device: 'd0', body: { name: 't0' } });
+    expect(bekend.status).toBe(200);
+  });
+
+  it('D — decidedAt is server-gezaghebbend bij een afwijzing via de array-route', async () => {
+    const eigen = mem.swaps
+      .filter((s: any) => s.requesterId === '4' || s.targetDriverId === '4')
+      .map((s: any) => (s.id === 's-1' ? { ...s, status: 'rejected', decidedAt: '2000-01-01T00:00:00Z' } : s));
+    const res = await api('POST', '/api/swaps', { token: 'tok-b', body: eigen });
+    expect(res.status).toBe(200);
+    const saved = mem.swaps.find((s: any) => s.id === 's-1');
+    expect(saved.status).toBe('rejected');
+    expect(saved.decidedAt).not.toBe('2000-01-01T00:00:00Z');
+    expect(Date.parse(saved.decidedAt)).toBeGreaterThan(Date.parse('2026-01-01'));
+  });
+
+  it('D — decidedAt is server-gezaghebbend bij goedkeuring via de array-route', async () => {
+    // Force-approve pending→approved via de array-route mag alleen admin.
+    const all = mem.swaps.map((s: any) => (s.id === 's-1' ? { ...s, status: 'approved', decidedAt: '2000-01-01T00:00:00Z' } : s));
+    const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: all });
+    expect(res.status).toBe(200);
+    const saved = mem.swaps.find((s: any) => s.id === 's-1');
+    expect(saved.status).toBe('approved');
+    expect(saved.decidedAt).not.toBe('2000-01-01T00:00:00Z');
+    expect(Date.parse(saved.decidedAt)).toBeGreaterThan(Date.parse('2026-01-01'));
+  });
+
+  it('G — het bedrijfsbrede noodbericht is rate-limited', async () => {
+    let last: any;
+    for (let i = 0; i < 8; i++) {
+      last = await api('POST', '/api/send-urgent-update-email', { token: 'tok-admin', body: { update: { title: 't', content: 'c' } } });
+    }
+    expect(last.status).toBe(429); // max 6/uur → de latere calls worden geweigerd
+  });
+});
