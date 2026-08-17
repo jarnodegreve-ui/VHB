@@ -142,20 +142,42 @@ describe('beoordeelKandidaat: de regels samen', () => {
     expect(k.rustVoor).toBeNull();
     expect(k.past).toBe(true);
   });
+
+  it('een schoolvervoerchauffeur springt niet in op een lijndienst', () => {
+    const k = advies({ sectie: 'Schoolvervoer' });
+    expect(k.past).toBe(false);
+    expect(k.redenen).toEqual(['schoolvervoerchauffeur — springt niet in op een lijndienst']);
+    // Ruim matchen: een hernoemde sectie blijft herkend; andere secties niet.
+    expect(advies({ sectie: 'schoolvervoer 2' }).past).toBe(false);
+    expect(advies({ sectie: 'Reguliere' }).past).toBe(true);
+    expect(advies({ sectie: null }).past).toBe(true);
+  });
 });
 
-describe('sorteerKandidaten: passend eerst, dan eerlijk verdeeld', () => {
-  it('sorteert op past → keren → naam', () => {
-    const maak = (name: string, past: boolean, keren: number): KandidaatAdvies => ({
-      id: name, name, rustVoor: null, rustNa: null, dagenNaElkaar: 1, keren, past, redenen: past ? [] : ['x'],
-    });
+describe('sorteerKandidaten: passend eerst, dan minste dagen op rij, dan eerlijk verdeeld', () => {
+  const maak = (name: string, past: boolean, dagen: number, keren: number): KandidaatAdvies => ({
+    id: name, name, rustVoor: null, rustNa: null, dagenNaElkaar: dagen, keren, past, redenen: past ? [] : ['x'],
+  });
+
+  it('sorteert op past → dagenNaElkaar → keren → naam', () => {
     const volgorde = sorteerKandidaten([
-      maak('Zoë', true, 2),
-      maak('An', false, 0),
-      maak('Bert', true, 0),
-      maak('Ann', true, 0),
+      maak('Zoë', true, 1, 2),
+      maak('An', false, 1, 0),
+      maak('Bert', true, 4, 0),
+      maak('Ann', true, 1, 2),
+      maak('Cas', true, 1, 0),
     ]).map((k) => k.name);
-    expect(volgorde).toEqual(['Ann', 'Bert', 'Zoë', 'An']);
+    // Cas wint van Ann/Zoë (zelfde reeks, minder ingevallen); Bert werkt al
+    // 4 dagen op rij en zakt onder hen; An past niet en sluit af.
+    expect(volgorde).toEqual(['Cas', 'Ann', 'Zoë', 'Bert', 'An']);
+  });
+
+  it('de reeks werkdagen weegt zwaarder dan de invalteller (keuze Jarno)', () => {
+    const volgorde = sorteerKandidaten([
+      maak('Veel-ingevallen-maar-uitgerust', true, 1, 5),
+      maak('Nooit-ingevallen-maar-5e-dag', true, 5, 0),
+    ]).map((k) => k.name);
+    expect(volgorde).toEqual(['Veel-ingevallen-maar-uitgerust', 'Nooit-ingevallen-maar-5e-dag']);
   });
 });
 
