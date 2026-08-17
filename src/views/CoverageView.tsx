@@ -601,7 +601,7 @@ export function CoverageView() {
                   )}
 
                   <p className="text-2xs font-medium text-slate-400">
-                    Passend = die dag vrij, minstens {advies.minRustUren}u rust t.o.v. de aansluitende werkdagen en maximaal {advies.maxDagenNaElkaar} werkdagen na elkaar. Wie dit jaar het minst inviel staat bovenaan; toewijzen zet de dienst meteen in de planning en meldt het aan de chauffeur.
+                    Passend = die dag vrij, minstens {advies.minRustUren}u rust t.o.v. de aansluitende werkdagen, maximaal {advies.maxDagenNaElkaar} werkdagen na elkaar en geen schoolvervoerchauffeur. Kortste reeks werkdagen bovenaan, daarna wie dit jaar het minst inviel; toewijzen zet de dienst meteen in de planning en meldt het aan de chauffeur.
                   </p>
                 </div>
               );

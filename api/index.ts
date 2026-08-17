@@ -1203,7 +1203,7 @@ app.get("/api/coverage-advisor", authenticate, requireRole("planner", "admin"), 
 
     const chauffeurs = (users as any[])
       .filter((u) => u.isActive !== false && u.role === "chauffeur" && String(u.name).toLowerCase() !== "beheerder")
-      .map((u) => ({ id: String(u.id), name: String(u.name) }));
+      .map((u) => ({ id: String(u.id), name: String(u.name), sectie: (u.section ?? null) as string | null }));
 
     // Per chauffeur: zijn werkdagen in het venster + de rijen per dag
     // (gesplitste diensten = meerdere rijen op dezelfde dag).
@@ -1242,6 +1242,7 @@ app.get("/api/coverage-advisor", authenticate, requireRole("planner", "admin"), 
           beoordeelKandidaat({
             id: c.id,
             name: c.name,
+            sectie: c.sectie,
             dienstVenster: venster,
             vorigeDag: rijenPerDag.get(`${c.id}|${addDagen(date, -1)}`) ?? [],
             volgendeDag: rijenPerDag.get(`${c.id}|${addDagen(date, 1)}`) ?? [],

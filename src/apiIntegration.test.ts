@@ -2901,6 +2901,37 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
     ]);
   });
 
+  it('een schoolvervoerchauffeur valt buiten het voorstel, mét reden', async () => {
+    mem.planning = [];
+    mem.users = mem.users.map((u: any) => (u.id === '4' ? { ...u, section: 'Schoolvervoer' } : u));
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res.json.kandidaten.map((k: any) => [k.name, k.past])).toEqual([
+      ['Chauffeur A', true],
+      ['Chauffeur B', false],
+    ]);
+    const b = res.json.kandidaten.find((k: any) => k.name === 'Chauffeur B');
+    expect(b.redenen).toEqual(['schoolvervoerchauffeur — springt niet in op een lijndienst']);
+  });
+
+  it('minder dagen op rij wint van de invalteller in de volgorde', async () => {
+    // Chauffeur A viel nooit in maar zit aan dag 3 op rij; Chauffeur B viel
+    // al eens in maar is helemaal uitgerust → B staat toch bovenaan.
+    mem.planning = [
+      { id: 'p-14', driverId: '3', date: '2026-09-14', startTime: '08:00', endTime: '14:00', line: '12' },
+      { id: 'p-15', driverId: '3', date: '2026-09-15', startTime: '08:00', endTime: '14:00', line: '12' },
+    ];
+    mem.swaps = [{
+      id: 's-sort', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved',
+      reason: '', createdAt: '2026-03-01T08:00:00Z', decidedAt: '2026-03-02T08:00:00Z',
+      shiftDate: '2026-03-03', shiftLine: '12', swapType: 'overname',
+    }];
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res.json.kandidaten.map((k: any) => [k.name, k.dagenNaElkaar, k.keren])).toEqual([
+      ['Chauffeur B', 1, 1],
+      ['Chauffeur A', 3, 0],
+    ]);
+  });
+
   it('onbekende dienst: kandidaten mét 6-dagenregel, maar rustcheck gemarkeerd als onmogelijk', async () => {
     mem.planning = [];
     const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=999`, { token: 'tok-planner' });

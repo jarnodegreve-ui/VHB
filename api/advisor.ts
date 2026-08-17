@@ -1,12 +1,13 @@
 /**
  * Advies voor openstaande diensten: past een onbemande dienst in het schema
- * van een vrije chauffeur? Twee harde regels (vraag Jarno 17-08):
+ * van een vrije chauffeur? Drie harde regels (vraag Jarno 17-08):
  *
  *  1. Minstens MIN_RUST_UREN uur rust t.o.v. de dienst van de dag ervoor — en
  *     spiegelbeeldig ook t.o.v. de dag erna, want dat is dezelfde regel
  *     bekeken vanaf morgen: anders maakt de toewijzing van vandaag de rust
  *     van een al ingeplande dienst kapot.
  *  2. Maximum MAX_WERKDAGEN_NA_ELKAAR gewerkte dagen na elkaar.
+ *  3. Een schoolvervoerchauffeur (sectie) springt niet in op een lijndienst.
  *
  * Pure logica zonder storage, zodat src/advisor.test.ts hem direct kan
  * testen; de endpoint (/api/coverage-advisor) voert alleen de data aan.
@@ -86,6 +87,13 @@ export const dagenNaElkaarMet = (gewerkteDagen: Set<string>, datum: string): num
   return n;
 };
 
+/** Een schoolbuschauffeur springt niet in op een lijndienst (regel Jarno
+ *  17-08). Er is géén kenmerk op de dienst zelf dat "schoolrit" zegt, dus de
+ *  regel hangt aan de sectie van de kandidaat; ruim matchen op "school" zodat
+ *  een hernoemde sectie ("Schoolvervoer 2") hem niet stil uitschakelt. */
+export const isSchoolvervoerSectie = (sectie?: string | null): boolean =>
+  String(sectie ?? "").toLowerCase().includes("school");
+
 /** "8u" / "7u53" — compacte urennotatie voor redenen en badges. */
 export const formatUren = (minuten: number): string => {
   const heel = Math.max(0, minuten);
@@ -111,6 +119,8 @@ export type KandidaatAdvies = {
 export const beoordeelKandidaat = (invoer: {
   id: string;
   name: string;
+  /** Sectie uit gebruikersbeheer (Reguliere/Nacht/Flexi/Schoolvervoer). */
+  sectie?: string | null;
   /** Venster van de aangeboden dienst; null = tijden onbekend → alleen de 6-dagenregel telt. */
   dienstVenster: { start: number; eind: number } | null;
   vorigeDag: TijdRij[];
@@ -124,6 +134,8 @@ export const beoordeelKandidaat = (invoer: {
   const dagen = dagenNaElkaarMet(invoer.gewerkteDagen, invoer.datum);
   const grens = MIN_RUST_UREN * 60;
   const redenen: string[] = [];
+  // Categorische reden eerst: sectie vóór de tijd- en reeksregels.
+  if (isSchoolvervoerSectie(invoer.sectie)) redenen.push("schoolvervoerchauffeur — springt niet in op een lijndienst");
   if (rustVoor !== null && rustVoor < grens) redenen.push(`maar ${formatUren(rustVoor)} rust na de dienst van de dag ervoor`);
   if (rustNa !== null && rustNa < grens) redenen.push(`maar ${formatUren(rustNa)} rust vóór de dienst van de dag erna`);
   if (dagen > MAX_WERKDAGEN_NA_ELKAAR) redenen.push(`zou ${dagen} dagen na elkaar werken`);
@@ -139,9 +151,14 @@ export const beoordeelKandidaat = (invoer: {
   };
 };
 
-/** Passend eerst; daarbinnen wie dit jaar het minst inviel, dan op naam —
- *  zelfde eerlijke volgorde als rangschikKandidaten (src/lib/vervangers.ts). */
+/** Passend eerst; daarbinnen de kortste reeks werkdagen rond het gat (wie
+ *  het minst dagen na elkaar zou werken komt het meest in aanmerking —
+ *  keuze Jarno 17-08), dan wie dit jaar het minst inviel, dan op naam. */
 export const sorteerKandidaten = (ks: KandidaatAdvies[]): KandidaatAdvies[] =>
   [...ks].sort(
-    (a, b) => Number(b.past) - Number(a.past) || a.keren - b.keren || a.name.localeCompare(b.name),
+    (a, b) =>
+      Number(b.past) - Number(a.past) ||
+      a.dagenNaElkaar - b.dagenNaElkaar ||
+      a.keren - b.keren ||
+      a.name.localeCompare(b.name),
   );
