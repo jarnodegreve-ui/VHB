@@ -961,6 +961,10 @@ html.dark {
 :where(.dark) .group:hover .group-hover\:bg-oker-50 { background-color: rgba(232, 163, 61, 0.10); }
 :where(.dark) .bg-emerald-50\/70 { background-color: rgba(16, 185, 129, 0.10); }
 :where(.dark) .ring-emerald-100 { --tw-ring-color: rgba(16, 185, 129, 0.25); }
+/* rose-spiegel van het emerald-paar hierboven — de "vrij, maar past niet"-
+   rijen in de openstaande-diensten-advisor. */
+:where(.dark) .bg-rose-50\/60 { background-color: rgba(244, 63, 94, 0.10); }
+:where(.dark) .ring-rose-100 { --tw-ring-color: rgba(244, 63, 94, 0.25); }
 
 /* Ontbrekende .dark-overrides voor opacity-suffix-varianten (controle-ronde):
    zonder deze bleven de import-/feedbackpanelen en weekend-/hovertinten
