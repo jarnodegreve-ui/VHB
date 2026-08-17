@@ -2826,3 +2826,89 @@ describe('beveiliging (controleronde 16-08)', () => {
     expect(last.status).toBe(429); // max 6/uur → de latere calls worden geweigerd
   });
 });
+
+describe('advies openstaande diensten (/api/coverage-advisor)', () => {
+  // Vaste toekomst-dag: het advies rekent alleen met de meegegeven dag en
+  // het ±6-dagenvenster eromheen — geen "vandaag" in de logica.
+  const DAG = '2026-09-16';
+
+  it('is planner/admin-terrein (chauffeur krijgt 403)', async () => {
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-a' });
+    expect(res.status).toBe(403);
+  });
+
+  it('weigert een kapotte datum of ontbrekende code', async () => {
+    const geenCode = await api('GET', `/api/coverage-advisor?date=${DAG}`, { token: 'tok-planner' });
+    expect(geenCode.status).toBe(400);
+    const kapot = await api('GET', '/api/coverage-advisor?date=16-09-2026&code=10', { token: 'tok-planner' });
+    expect(kapot.status).toBe(400);
+  });
+
+  it('beoordeelt rust: wie gisteren laat eindigde past niet vóór een vroege dienst', async () => {
+    // Dienst 10 = 06:00–14:00. Chauffeur A werkte gisteren tot 23:30 → 6u30
+    // rust; Chauffeur B was vrij → passend. B hoort vóór A te staan.
+    mem.planning = [
+      { id: 'p-1', driverId: '3', date: '2026-09-15', startTime: '15:00', endTime: '23:30', line: '12' },
+    ];
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.tijdenOnbekend).toBe(false);
+    expect(res.json.segmenten).toEqual([{ startTime: '06:00', endTime: '14:00' }]);
+    expect(res.json.kandidaten.map((k: any) => [k.name, k.past])).toEqual([
+      ['Chauffeur B', true],
+      ['Chauffeur A', false],
+    ]);
+    const a = res.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
+    expect(a.rustVoor).toBe(6 * 60 + 30);
+    expect(a.redenen).toEqual(['maar 6u30 rust na de dienst van de dag ervoor']);
+  });
+
+  it('bewaakt de 6-dagenregel over de bestaande planning heen', async () => {
+    // Chauffeur A werkte 10 t/m 15 september (6 dagen): de 16e zou dag 7 zijn.
+    mem.planning = ['10', '11', '12', '13', '14', '15'].map((d) => (
+      { id: `p-${d}`, driverId: '3', date: `2026-09-${d}`, startTime: '08:00', endTime: '14:00', line: '12' }
+    ));
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    const a = res.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
+    expect(a.past).toBe(false);
+    expect(a.dagenNaElkaar).toBe(7);
+    expect(a.redenen).toEqual(['zou 7 dagen na elkaar werken']);
+  });
+
+  it('wie die dag al rijdt of verlof heeft, is geen kandidaat', async () => {
+    mem.planning = [
+      { id: 'p-b', driverId: '4', date: DAG, startTime: '08:00', endTime: '16:00', line: '12' },
+    ];
+    mem.leave = [
+      { id: 'l-adv', userId: '3', startDate: DAG, endDate: DAG, type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2026-09-01T08:00:00Z', decidedAt: '2026-09-02T08:00:00Z' },
+    ];
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res.json.kandidaten).toEqual([]);
+  });
+
+  it('sorteert eerlijk: wie dit jaar het minst inviel staat bovenaan', async () => {
+    mem.planning = [];
+    // Chauffeur A (id 3) viel dit jaar al één keer in via een doorgevoerde wissel.
+    mem.swaps = [{
+      id: 's-adv', shiftId: 'sh-x', requesterId: '4', targetDriverId: '3', status: 'approved',
+      reason: '', createdAt: '2026-05-01T08:00:00Z', decidedAt: '2026-05-02T08:00:00Z',
+      shiftDate: '2026-05-03', shiftLine: '12', swapType: 'overname',
+    }];
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res.json.kandidaten.map((k: any) => [k.name, k.keren])).toEqual([
+      ['Chauffeur B', 0],
+      ['Chauffeur A', 1],
+    ]);
+  });
+
+  it('onbekende dienst: kandidaten mét 6-dagenregel, maar rustcheck gemarkeerd als onmogelijk', async () => {
+    mem.planning = [];
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=999`, { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.tijdenOnbekend).toBe(true);
+    expect(res.json.segmenten).toEqual([]);
+    const a = res.json.kandidaten.find((k: any) => k.name === 'Chauffeur A');
+    expect(a.rustVoor).toBeNull();
+    expect(a.past).toBe(true);
+  });
+});

@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, Plus } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
-import { fetchAvailability } from '../lib/availability';
+import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
 import { formatShortDay, MONTH_NAMES } from '../lib/format';
 import {
   fetchCoverageConfig,
@@ -52,12 +52,14 @@ export function CoverageView() {
   const [error, setError] = useState('');
   const [showConfig, setShowConfig] = useState(false);
   const [onlyGaps, setOnlyGaps] = useState(true);
-  // Klik op een ontbrekende dienst → wie is er vrij die dag?
+  // Klik op een ontbrekende dienst → advies: wie is vrij én bij wie past dit?
   const [pick, setPick] = useState<{ date: string; code: string } | null>(null);
-  const [freeNames, setFreeNames] = useState<Array<{ id: string; name: string }> | null>(null);
+  const [advies, setAdvies] = useState<CoverageAdvies | null>(null);
+  const [adviesError, setAdviesError] = useState('');
   // Toewijzen van het gat aan een vrije chauffeur (POST /api/planning/assign-service).
   const [assignBusy, setAssignBusy] = useState<string | null>(null);
-  const [assignConfirm, setAssignConfirm] = useState<{ id: string; name: string } | null>(null);
+  // redenen ≠ leeg = bewust overrulen van het advies → waarschuwing in de bevestiging.
+  const [assignConfirm, setAssignConfirm] = useState<{ id: string; name: string; redenen: string[] } | null>(null);
   const [pickLoading, setPickLoading] = useState(false);
 
   const year = viewMonth.getFullYear();
@@ -116,23 +118,18 @@ export function CoverageView() {
     }
   };
 
-  // Vrije chauffeurs ophalen voor de gekozen dag (kandidaten om het gat te vullen).
+  // Advies ophalen voor het gekozen gat: vrije chauffeurs, beoordeeld op
+  // rusttijd (≥ 8u t.o.v. de aansluitende werkdagen) en de 6-dagenregel,
+  // gesorteerd op wie dit jaar het minst inviel.
   useEffect(() => {
-    if (!pick) { setFreeNames(null); return; }
+    if (!pick) { setAdvies(null); setAdviesError(''); return; }
     let cancelled = false;
     setPickLoading(true);
-    setFreeNames(null);
-    fetchAvailability(pick.date, pick.date)
-      .then((res) => {
-        if (cancelled) return;
-        const day = res.days.find((d) => d.date === pick.date);
-        const freeSet = new Set(day?.free ?? []);
-        setFreeNames(res.drivers
-          .filter((d) => freeSet.has(d.id))
-          .map((d) => ({ id: String(d.id), name: d.name }))
-          .sort((a, b) => a.name.localeCompare(b.name)));
-      })
-      .catch(() => { if (!cancelled) setFreeNames([]); })
+    setAdvies(null);
+    setAdviesError('');
+    fetchCoverageAdvies(pick.date, pick.code)
+      .then((res) => { if (!cancelled) setAdvies(res); })
+      .catch((e) => { if (!cancelled) setAdviesError(e?.message || 'Kon het advies niet laden.'); })
       .finally(() => { if (!cancelled) setPickLoading(false); });
     return () => { cancelled = true; };
   }, [pick]);
@@ -507,7 +504,7 @@ export function CoverageView() {
         </div>
       )}
 
-      {/* Wie is vrij op de gekozen dag? — kandidaten om het gat te vullen */}
+      {/* Advies voor het gekozen gat: wie is vrij én bij wie past de dienst? */}
       <Modal open={!!pick} onClose={() => setPick(null)} maxWidth="sm">
         {pick && (
           <div className="p-6">
@@ -515,6 +512,9 @@ export function CoverageView() {
               <div className="min-w-0">
                 <MicroLabel className="tabular-nums">Kandidaten voor dienst {pick.code}</MicroLabel>
                 <h3 className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 capitalize">{dayLabel(pick.date)}</h3>
+                {advies && advies.segmenten.length > 0 && (
+                  <p className="mt-0.5 text-xs font-semibold text-slate-500 tabular-nums">{segmentenLabel(advies.segmenten)}</p>
+                )}
               </div>
               <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
                 <X size={16} />
@@ -524,32 +524,88 @@ export function CoverageView() {
             {pickLoading ? (
               <div className="mt-5 flex items-center gap-3 text-slate-500">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
-                <span className="text-sm font-bold">Beschikbaarheid laden…</span>
+                <span className="text-sm font-bold">Advies berekenen…</span>
               </div>
-            ) : !freeNames || freeNames.length === 0 ? (
+            ) : adviesError ? (
+              <p className="mt-5 text-sm font-semibold text-red-700">{adviesError}</p>
+            ) : !advies || advies.kandidaten.length === 0 ? (
               <p className="mt-5 text-sm font-medium text-slate-400">Niemand is vrij op deze dag (geen dienst én geen verlof).</p>
-            ) : (
-              <div className="mt-4">
-                <MicroLabel className="text-emerald-600 tabular-nums">{freeNames.length} vrij</MicroLabel>
-                <div className="mt-2 flex flex-col gap-1.5">
-                  {freeNames.map((kandidaat) => (
-                    <div key={kandidaat.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">
-                      <UserCheck size={15} className="text-emerald-600 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-bold text-slate-800">{kandidaat.name}</span>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        disabled={!!assignBusy}
-                        onClick={() => setAssignConfirm(kandidaat)}
-                      >
-                        {assignBusy === kandidaat.id ? 'Bezig…' : 'Wijs toe'}
-                      </Button>
+            ) : (() => {
+              const passend = advies.kandidaten.filter((k) => k.past);
+              const nietPassend = advies.kandidaten.filter((k) => !k.past);
+              return (
+                <div className="mt-4 space-y-4">
+                  {advies.tijdenOnbekend && (
+                    <p className="text-2xs font-semibold text-amber-800">
+                      Dienst {pick.code} heeft geen tijden in het dienstoverzicht — de rustcheck kon niet, alleen de 6-dagenregel is toegepast.
+                    </p>
+                  )}
+
+                  {passend.length > 0 ? (
+                    <div>
+                      <MicroLabel className="text-emerald-600 tabular-nums">Voorstel — {passend.length} passend</MicroLabel>
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        {passend.map((k, i) => (
+                          <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">
+                            <UserCheck size={15} className="text-emerald-600 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="min-w-0 truncate text-sm font-bold text-slate-800">{k.name}</span>
+                                {i === 0 && <Badge tone="oker" className="shrink-0">Advies</Badge>}
+                              </div>
+                              <p className="truncate text-2xs font-medium text-slate-500 tabular-nums">{kandidaatMeta(k)}</p>
+                            </div>
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              className="shrink-0"
+                              disabled={!!assignBusy}
+                              onClick={() => setAssignConfirm({ id: k.id, name: k.name, redenen: [] })}
+                            >
+                              {assignBusy === k.id ? 'Bezig…' : 'Wijs toe'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
                     </div>
-                  ))}
+                  ) : (
+                    <p className="text-sm font-medium text-slate-400">
+                      Niemand bij wie deze dienst zonder meer past — hieronder wie wél vrij is, met wat er wringt.
+                    </p>
+                  )}
+
+                  {nietPassend.length > 0 && (
+                    <div>
+                      <MicroLabel className="text-rose-600 tabular-nums">Vrij, maar past niet — {nietPassend.length}</MicroLabel>
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        {nietPassend.map((k) => (
+                          <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-rose-50/60 ring-1 ring-rose-100 px-3 py-2">
+                            <UserX size={15} className="text-rose-500 shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <span className="block truncate text-sm font-bold text-slate-800">{k.name}</span>
+                              <p className="text-2xs font-medium text-rose-600 dark:text-rose-400">{k.redenen.join(' · ')}</p>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="shrink-0"
+                              disabled={!!assignBusy}
+                              onClick={() => setAssignConfirm({ id: k.id, name: k.name, redenen: k.redenen })}
+                            >
+                              {assignBusy === k.id ? 'Bezig…' : 'Toch toewijzen'}
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <p className="text-2xs font-medium text-slate-400">
+                    Passend = die dag vrij, minstens {advies.minRustUren}u rust t.o.v. de aansluitende werkdagen en maximaal {advies.maxDagenNaElkaar} werkdagen na elkaar. Wie dit jaar het minst inviel staat bovenaan; toewijzen zet de dienst meteen in de planning en meldt het aan de chauffeur.
+                  </p>
                 </div>
-                <p className="mt-3 text-2xs font-medium text-slate-400">"Vrij" = geen dienst en geen verlof die dag. Toewijzen zet de dienst meteen in de planning; de chauffeur krijgt een melding.</p>
-              </div>
-            )}
+              );
+            })()}
           </div>
         )}
       </Modal>
@@ -560,7 +616,7 @@ export function CoverageView() {
         onConfirm={() => { const k = assignConfirm; setAssignConfirm(null); if (k) void wijsToe(k); }}
         title="Dienst toewijzen?"
         message={pick && assignConfirm
-          ? `Dienst ${pick.code} op ${dayLabel(pick.date)} wordt toegewezen aan ${assignConfirm.name}. De planning wordt meteen bijgewerkt en de chauffeur krijgt een melding.`
+          ? `Dienst ${pick.code} op ${dayLabel(pick.date)} wordt toegewezen aan ${assignConfirm.name}.${assignConfirm.redenen.length > 0 ? ` Let op — dit wijkt af van het advies: ${assignConfirm.redenen.join(', en ')}.` : ''} De planning wordt meteen bijgewerkt en de chauffeur krijgt een melding.`
           : ''}
         confirmText="Toewijzen"
         cancelText="Annuleren"

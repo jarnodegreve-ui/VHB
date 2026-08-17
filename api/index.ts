@@ -8,6 +8,7 @@ import dotenv from "dotenv";
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 import { computeDayGap, normalizeCode, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
+import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij } from "./advisor.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
 // de uitzonderingen op te slaan — zo is er geen aparte tabel/migratie nodig.
@@ -1164,6 +1165,108 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
   } catch (err) {
     console.error("Error computing coverage gaps:", err);
     res.status(500).json({ error: "Kon dekking niet berekenen." });
+  }
+});
+
+// Advies bij één openstaande dienst: wie is die dag vrij én bij wie past de
+// dienst in het schema? Twee harde regels — minstens 8u rust t.o.v. de dienst
+// van de dag ervoor (en erna: dezelfde regel bekeken vanaf morgen) en maximum
+// 6 gewerkte dagen na elkaar. Server-side omdat alleen de server de
+// diensttijden van álle chauffeurs kent (/api/availability geeft enkel
+// dienstnummers). Niet-passende kandidaten reizen mee mét reden: de planner
+// mag bewust overrulen, maar moet zien wát hij overrult.
+app.get("/api/coverage-advisor", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const date = typeof req.query.date === "string" ? req.query.date : "";
+    const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
+    if (!ISO_DAY_RE.test(date) || !code) {
+      return res.status(400).json({ error: "Geef een geldige datum (YYYY-MM-DD) en dienstcode mee." });
+    }
+    // Venster ±6 dagen rond de dag: genoeg voor de 6-dagenregel in beide
+    // richtingen én de rustcheck met de buurdagen.
+    const vanaf = addDagen(date, -6);
+    const tot = addDagen(date, 6);
+    const months = Array.from(new Set([vanaf, date, tot].map((d) => d.slice(0, 7))));
+    const [users, leave, services, swaps, ...planningChunks] = await Promise.all([
+      getUsersData(),
+      getLeaveData({ endOnOrAfter: vanaf }),
+      getServicesData(),
+      getSwapsData(),
+      ...months.map((m) => getPlanningData({ monthIso: m })),
+    ]);
+    const shifts = (planningChunks.flat() as any[]).filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);
+
+    const dienstToken = toLookupToken(code);
+    const service = (services as any[]).find((s) => toLookupToken(s.serviceNumber) === dienstToken);
+    const segmenten = service ? getServiceSegments(service) : [];
+    const venster = dagVenster(segmenten);
+
+    const chauffeurs = (users as any[])
+      .filter((u) => u.isActive !== false && u.role === "chauffeur" && String(u.name).toLowerCase() !== "beheerder")
+      .map((u) => ({ id: String(u.id), name: String(u.name) }));
+
+    // Per chauffeur: zijn werkdagen in het venster + de rijen per dag
+    // (gesplitste diensten = meerdere rijen op dezelfde dag).
+    const rijenPerDag = new Map<string, TijdRij[]>();
+    const werkdagen = new Map<string, Set<string>>();
+    for (const s of shifts) {
+      const id = String(s.driverId);
+      const dag = String(s.date ?? "");
+      const key = `${id}|${dag}`;
+      rijenPerDag.set(key, [...(rijenPerDag.get(key) ?? []), { startTime: String(s.startTime ?? ""), endTime: String(s.endTime ?? "") }]);
+      if (!werkdagen.has(id)) werkdagen.set(id, new Set());
+      werkdagen.get(id)!.add(dag);
+    }
+    const verlofOpDag = new Set<string>();
+    for (const l of leave as any[]) {
+      if (l?.status === "approved" && String(l.startDate) <= date && date <= String(l.endDate)) verlofOpDag.add(String(l.userId));
+    }
+
+    // Eerlijkheidsteller: hoe vaak nam iemand dit jaar al een dienst over —
+    // zelfde telling als overnameTellingDitJaar (src/lib/vervangers.ts),
+    // met het jaar van de gevraagde dag als peiljaar.
+    const jaar = date.slice(0, 4);
+    const keren = new Map<string, number>();
+    for (const sw of swaps as any[]) {
+      if (sw?.status !== "approved" && sw?.status !== "completed") continue;
+      if (!sw?.targetDriverId) continue;
+      if (!String(sw.decidedAt ?? sw.createdAt ?? "").startsWith(jaar)) continue;
+      const id = String(sw.targetDriverId);
+      keren.set(id, (keren.get(id) ?? 0) + 1);
+    }
+
+    const kandidaten = sorteerKandidaten(
+      chauffeurs
+        .filter((c) => !werkdagen.get(c.id)?.has(date) && !verlofOpDag.has(c.id))
+        .map((c) =>
+          beoordeelKandidaat({
+            id: c.id,
+            name: c.name,
+            dienstVenster: venster,
+            vorigeDag: rijenPerDag.get(`${c.id}|${addDagen(date, -1)}`) ?? [],
+            volgendeDag: rijenPerDag.get(`${c.id}|${addDagen(date, 1)}`) ?? [],
+            gewerkteDagen: werkdagen.get(c.id) ?? new Set(),
+            datum: date,
+            keren: keren.get(c.id) ?? 0,
+          }),
+        ),
+    );
+
+    res.json({
+      date,
+      code,
+      // Tijdsblokken van de dienst zelf — context voor de planner in de
+      // advieslijst ("06:12–09:30 + 15:41–18:20"). Leeg = dienst onbekend of
+      // zonder tijden; het advies valt dan terug op alleen de 6-dagenregel.
+      segmenten: segmenten.map((s) => ({ startTime: s.startTime, endTime: s.endTime })),
+      tijdenOnbekend: venster === null,
+      minRustUren: MIN_RUST_UREN,
+      maxDagenNaElkaar: MAX_WERKDAGEN_NA_ELKAAR,
+      kandidaten,
+    });
+  } catch (err) {
+    console.error("Error computing coverage advisor:", err);
+    res.status(500).json({ error: "Kon het advies niet berekenen." });
   }
 });
 
