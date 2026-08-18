@@ -39,7 +39,8 @@ import {
   Hash,
   ClipboardList,
   HeartPulse,
-  Thermometer
+  Thermometer,
+  Sparkles
 } from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
@@ -89,6 +90,7 @@ const LazyManageDiversionsView = lazyWithRetry(() => import('./views/admin/Manag
 const LazyManageServicesView = lazyWithRetry(() => import('./views/admin/ManageServicesView').then((module) => ({ default: module.ManageServicesView })));
 const LazyVerlofKalenderView = lazyWithRetry(() => import('./views/admin/VerlofKalenderView').then((module) => ({ default: module.VerlofKalenderView })));
 const LazyCoverageView = lazyWithRetry(() => import('./views/CoverageView').then((module) => ({ default: module.CoverageView })));
+const LazyAssistentView = lazyWithRetry(() => import('./views/AssistentView').then((module) => ({ default: module.AssistentView })));
 const LazyDebugView = lazyWithRetry(() => import('./views/admin/DebugView').then((module) => ({ default: module.DebugView })));
 const LazyManageUpdatesView = lazyWithRetry(() => import('./views/admin/ManageUpdatesView').then((module) => ({ default: module.ManageUpdatesView })));
 const LazyManageUsersView = lazyWithRetry(() => import('./views/admin/ManageUsersView').then((module) => ({ default: module.ManageUsersView })));
@@ -116,6 +118,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
+    'assistent',
     'verlof',
     'verlof-kalender',
     'beheer-roosters',
@@ -138,6 +141,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'ruil-verzoeken',
     'bezetting',
     'dekking',
+    'assistent',
     'verlof',
     'verlof-kalender',
     'beheer-roosters',
@@ -2067,6 +2071,7 @@ export default function App() {
     'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
     bezetting: { title: 'Maandplanning', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
     dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
+    assistent: { title: 'Planner-assistent', subtitle: 'Stel je planningsvraag — advies op basis van de actuele planning.' },
     verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
     ziekte: { title: 'Ziekte', subtitle: 'Ziekmeldingen en de diensten die daardoor open staan.' },
     'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
@@ -2318,7 +2323,7 @@ export default function App() {
             <NavSection
               title="Beheer"
               count={11}
-              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'verlof-kalender', 'ziekte', 'vervaldata', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
+              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'assistent', 'verlof-kalender', 'ziekte', 'vervaldata', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
             >
               {/* Drie subgroepen + uniek icoon per item: Settings/Bus stonden
                   elk 2× in deze lijst en dat sloopte de scanbaarheid van juist
@@ -2330,6 +2335,7 @@ export default function App() {
               <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
               <NavItem icon={<ClipboardList size={18} />} label="Beheer dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
               <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
+              <NavItem icon={<Sparkles size={18} />} label="Assistent" active={currentView === 'assistent'} onClick={() => { setCurrentView('assistent'); setIsSidebarOpen(false); }} />
               <NavSubLabel>Mensen</NavSubLabel>
               <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
               {/* Eigen blad, bewust los van Verlof: ziekte is geen aanvraag
@@ -2599,6 +2605,7 @@ export default function App() {
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} swaps={swaps} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
+              {resolvedCurrentView === 'assistent' && <Suspense fallback={<ViewLoader />}><LazyAssistentView /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>}
               {resolvedCurrentView === 'verlof' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
