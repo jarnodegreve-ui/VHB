@@ -8,7 +8,7 @@ import dotenv from "dotenv";
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 import { computeDayGap, normalizeCode, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
-import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij } from "./advisor.js";
+import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
 // de uitzonderingen op te slaan — zo is er geen aparte tabel/migratie nodig.
@@ -1054,13 +1054,9 @@ app.put("/api/coverage-expectations", authenticate, requireRole("planner", "admi
   }
 });
 
-app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), async (req, res) => {
-  try {
-    const from = typeof req.query.from === "string" ? req.query.from : "";
-    const to = typeof req.query.to === "string" ? req.query.to : "";
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
-      return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
-    }
+/** Dekkingsgaten in [from, to] — gedeeld door GET /api/coverage-gaps en de
+ *  dagelijkse digest (proactieve sectie "Openstaande diensten"). */
+async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]> {
     const [stored, rows, usersForLeave, leaveAll, swapsAll] = await Promise.all([
       getCoverageExpectations(),
       getPlanningMatrixRows(),
@@ -1161,6 +1157,17 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
       }
       return Object.keys(uitval).length > 0 ? { ...gap, uitval } : gap;
     });
+    return days;
+}
+
+app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const from = typeof req.query.from === "string" ? req.query.from : "";
+    const to = typeof req.query.to === "string" ? req.query.to : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+      return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
+    }
+    const days = await berekenDekkingsGaten(from, to);
     res.json({ from, to, days });
   } catch (err) {
     console.error("Error computing coverage gaps:", err);
@@ -1175,13 +1182,9 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
 // diensttijden van álle chauffeurs kent (/api/availability geeft enkel
 // dienstnummers). Niet-passende kandidaten reizen mee mét reden: de planner
 // mag bewust overrulen, maar moet zien wát hij overrult.
-app.get("/api/coverage-advisor", authenticate, requireRole("planner", "admin"), async (req, res) => {
-  try {
-    const date = typeof req.query.date === "string" ? req.query.date : "";
-    const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
-    if (!ISO_DAY_RE.test(date) || !code) {
-      return res.status(400).json({ error: "Geef een geldige datum (YYYY-MM-DD) en dienstcode mee." });
-    }
+/** Volledig advies voor één openstaande dienst — gedeeld door
+ *  GET /api/coverage-advisor en de dagelijkse digest. */
+async function berekenCoverageAdvies(date: string, code: string) {
     // Venster ±6 dagen rond de dag: genoeg voor de 6-dagenregel in beide
     // richtingen én de rustcheck met de buurdagen.
     const vanaf = addDagen(date, -6);
@@ -1235,25 +1238,49 @@ app.get("/api/coverage-advisor", authenticate, requireRole("planner", "admin"), 
       keren.set(id, (keren.get(id) ?? 0) + 1);
     }
 
+    const vrijeIds = chauffeurs.filter((c) => !werkdagen.get(c.id)?.has(date) && !verlofOpDag.has(c.id));
     const kandidaten = sorteerKandidaten(
-      chauffeurs
-        .filter((c) => !werkdagen.get(c.id)?.has(date) && !verlofOpDag.has(c.id))
-        .map((c) =>
-          beoordeelKandidaat({
-            id: c.id,
-            name: c.name,
-            sectie: c.sectie,
-            dienstVenster: venster,
-            vorigeDag: rijenPerDag.get(`${c.id}|${addDagen(date, -1)}`) ?? [],
-            volgendeDag: rijenPerDag.get(`${c.id}|${addDagen(date, 1)}`) ?? [],
-            gewerkteDagen: werkdagen.get(c.id) ?? new Set(),
-            datum: date,
-            keren: keren.get(c.id) ?? 0,
-          }),
-        ),
+      vrijeIds.map((c) =>
+        beoordeelKandidaat({
+          id: c.id,
+          name: c.name,
+          sectie: c.sectie,
+          dienstVenster: venster,
+          vorigeDag: rijenPerDag.get(`${c.id}|${addDagen(date, -1)}`) ?? [],
+          volgendeDag: rijenPerDag.get(`${c.id}|${addDagen(date, 1)}`) ?? [],
+          gewerkteDagen: werkdagen.get(c.id) ?? new Set(),
+          datum: date,
+          keren: keren.get(c.id) ?? 0,
+        }),
+      ),
     );
 
-    res.json({
+    // Ketting-voorstellen: alleen relevant (en getoond) als niemand direct
+    // past — een werkende collega staat zijn dienst af aan een vrije en
+    // rijdt zelf het gat. De zoeker checkt beide schakels op álle regels.
+    const kettingBasis = (c: { id: string; name: string; sectie: string | null }): KettingPersoon => ({
+      id: c.id,
+      name: c.name,
+      sectie: c.sectie,
+      vorigeDag: rijenPerDag.get(`${c.id}|${addDagen(date, -1)}`) ?? [],
+      volgendeDag: rijenPerDag.get(`${c.id}|${addDagen(date, 1)}`) ?? [],
+      gewerkteDagen: werkdagen.get(c.id) ?? new Set(),
+      keren: keren.get(c.id) ?? 0,
+    });
+    const werkenden: KettingWerkende[] = chauffeurs
+      .filter((c) => werkdagen.get(c.id)?.has(date) && !verlofOpDag.has(c.id))
+      .map((c) => {
+        const rijen = rijenPerDag.get(`${c.id}|${date}`) ?? [];
+        const codes = Array.from(new Set(
+          shifts.filter((s) => String(s.driverId) === c.id && String(s.date) === date).map((s) => String(s.line ?? "").trim() || "•"),
+        ));
+        return { ...kettingBasis(c), dienstCode: codes.join("/"), rijen };
+      });
+    const kettingen = kandidaten.some((k) => k.past)
+      ? []
+      : zoekKettingen({ datum: date, dienstVenster: venster, werkenden, vrijen: vrijeIds.map(kettingBasis) });
+
+    return {
       date,
       code,
       // Tijdsblokken van de dienst zelf — context voor de planner in de
@@ -1264,7 +1291,20 @@ app.get("/api/coverage-advisor", authenticate, requireRole("planner", "admin"), 
       minRustUren: MIN_RUST_UREN,
       maxDagenNaElkaar: MAX_WERKDAGEN_NA_ELKAAR,
       kandidaten,
-    });
+      kettingen,
+      // De collega-zin: zelfde feiten, maar dan zoals je ze tegen elkaar zegt.
+      samenvatting: adviesSamenvatting({ code, kandidaten, kettingen }),
+    };
+}
+
+app.get("/api/coverage-advisor", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const date = typeof req.query.date === "string" ? req.query.date : "";
+    const code = typeof req.query.code === "string" ? req.query.code.trim() : "";
+    if (!ISO_DAY_RE.test(date) || !code) {
+      return res.status(400).json({ error: "Geef een geldige datum (YYYY-MM-DD) en dienstcode mee." });
+    }
+    res.json(await berekenCoverageAdvies(date, code));
   } catch (err) {
     console.error("Error computing coverage advisor:", err);
     res.status(500).json({ error: "Kon het advies niet berekenen." });
@@ -2528,6 +2568,54 @@ app.get("/api/cron/error-digest", async (req, res) => {
       console.error("[error-digest] vervaldata-sectie mislukt:", err?.message ?? err);
     }
 
+    // Proactieve advisor (idee 3, 18-08): elke ochtend de openstaande diensten
+    // van de komende 7 dagen mét het collega-advies per gat — de planner hoeft
+    // het portaal niet meer te openen om te wéten dat er iets openstaat. Best-
+    // effort, mag het dagoverzicht nooit breken. Per gat draait de volledige
+    // adviesberekening; cap op 8 zodat de cron niet ontspoort bij een lege maand.
+    let dekkingTekst = "";
+    let dekkingHtml = "";
+    try {
+      const vandaagBrussel = brusselsDay(new Date().toISOString());
+      const dagen = await berekenDekkingsGaten(vandaagBrussel, addDagen(vandaagBrussel, 6));
+      const gaten = dagen.flatMap((d) => d.missing.map((code) => ({ date: d.date, code })));
+      if (gaten.length > 0) {
+        const MAX_ADVIEZEN = 8;
+        const digestDag = (iso: string) =>
+          new Date(`${iso}T12:00:00Z`).toLocaleDateString("nl-BE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Brussels" });
+        const regels: string[] = [];
+        for (const gat of gaten.slice(0, MAX_ADVIEZEN)) {
+          try {
+            const advies = await berekenCoverageAdvies(gat.date, gat.code);
+            regels.push(`${digestDag(gat.date)} — dienst ${gat.code}: ${advies.samenvatting}`);
+          } catch {
+            regels.push(`${digestDag(gat.date)} — dienst ${gat.code}: advies kon niet berekend worden.`);
+          }
+        }
+        if (gaten.length > MAX_ADVIEZEN) {
+          regels.push(`…en nog ${gaten.length - MAX_ADVIEZEN} openstaande diensten — zie Openstaande diensten in het portaal.`);
+        }
+        dekkingTekst = `\n\nOpenstaande diensten (komende 7 dagen):\n${regels.map((r) => `• ${r}`).join("\n")}`;
+        dekkingHtml = `<p><strong>Openstaande diensten (komende 7 dagen)</strong></p><ul>${regels.map((r) => `<li>${escapeHtml(r)}</li>`).join("")}</ul>`;
+        // Push naar planners/admins — 1×/dag en alleen als er echt iets
+        // openstaat (geen ruis bij een gedekte week, zelfde principe als
+        // isDigestRuis). Mail blijft het volledige overzicht.
+        const alleVoorPush = await getUsersData();
+        const planners = (alleVoorPush as any[])
+          .filter((u) => u.isActive !== false && (u.role === "planner" || u.role === "admin"))
+          .map((u) => String(u.id));
+        if (planners.length > 0) {
+          await sendPushToUsers(planners, {
+            title: `${gaten.length} openstaande dienst${gaten.length === 1 ? "" : "en"} komende 7 dagen`,
+            body: regels[0].slice(0, 140),
+            url: "/",
+          });
+        }
+      }
+    } catch (err: any) {
+      console.error("[error-digest] openstaande-diensten-sectie mislukt:", err?.message ?? err);
+    }
+
     // Bewust GEEN drempel meer (verzoek Jarno, 02-08): elke dag een overzicht,
     // ook bij nul meldingen. Een mail die alleen bij problemen komt, laat je
     // je afvragen of hij niet gewoon niet verstuurd is. ERROR_DIGEST_MIN_COUNT
@@ -2592,12 +2680,12 @@ app.get("/api/cron/error-digest", async (req, res) => {
     const staart = filtered > 0
       ? `\n\n${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).`
       : "";
-    const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}${vervalTekst}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
+    const text = `${inleiding}${errors.length === 0 ? "" : `\n\n${topLines}${moreLine}`}${staart}${vervalTekst}${dekkingTekst}\n\nBekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.`;
     // g.source/message/lastUrl zijn door de client aangeleverd — escapen,
     // anders is de digest-mail een HTML-injectiekanaal richting de admins.
     // De symbolicatie-uitkomst komt uit de sourcemap (indirect ook input) —
     // dus óók escapen.
-    const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).</p>` : ""}${vervalHtml}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
+    const html = `<p>${escapeHtml(inleiding)}</p>${errors.length === 0 ? "" : `<ul>${sorted.slice(0, 15).map((g) => `<li><strong>${g.count}×</strong> [${escapeHtml(g.source)}] ${escapeHtml(g.message)}${originOf.has(g) ? ` → <code>${escapeHtml(originOf.get(g)!)}</code>` : ""}${g.lastUrl ? ` <em>(${escapeHtml(g.lastUrl)})</em>` : ""}</li>`).join("")}</ul>${sorted.length > 15 ? `<p>…en nog ${sorted.length - 15} andere soorten.</p>` : ""}`}${filtered > 0 ? `<p style="color:#6E767F">${filtered} melding${filtered === 1 ? "" : "en"} niet meegeteld (verlopen sessies en laadfouten vlak na een uitrol — die vangt de app zelf op).</p>` : ""}${vervalHtml}${dekkingHtml}<p>Bekijk de details in het portaal onder Systeem Status (Debug) of in de Vercel-logs.</p>`;
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
