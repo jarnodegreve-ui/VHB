@@ -3010,3 +3010,35 @@ describe('digest: proactieve sectie openstaande diensten', () => {
     expect(mem.pushesSent.some((p) => String(p.payload.title).includes('openstaande dienst'))).toBe(false);
   });
 });
+
+describe('planner-assistent (/api/planner-chat)', () => {
+  it('is planner/admin-terrein (chauffeur krijgt 403)', async () => {
+    const res = await api('POST', '/api/planner-chat', { token: 'tok-a', body: { messages: [{ role: 'user', content: 'test' }] } });
+    expect(res.status).toBe(403);
+  });
+
+  it('meldt netjes dat de assistent nog niet geactiveerd is zonder API-sleutel', async () => {
+    const bewaard = process.env.ANTHROPIC_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    try {
+      const res = await api('POST', '/api/planner-chat', { token: 'tok-planner', body: { messages: [{ role: 'user', content: 'test' }] } });
+      expect(res.status).toBe(503);
+      expect(res.json.code).toBe('assistent_uitgeschakeld');
+    } finally {
+      if (bewaard !== undefined) process.env.ANTHROPIC_API_KEY = bewaard;
+    }
+  });
+
+  it('weigert een lege of kapotte gespreksgeschiedenis (vóór er een model aan te pas komt)', async () => {
+    process.env.ANTHROPIC_API_KEY = 'sk-test-nep';
+    try {
+      const leeg = await api('POST', '/api/planner-chat', { token: 'tok-planner', body: { messages: [] } });
+      expect(leeg.status).toBe(400);
+      // Laatste beurt moet van de gebruiker zijn.
+      const verkeerd = await api('POST', '/api/planner-chat', { token: 'tok-planner', body: { messages: [{ role: 'assistant', content: 'hoi' }] } });
+      expect(verkeerd.status).toBe(400);
+    } finally {
+      delete process.env.ANTHROPIC_API_KEY;
+    }
+  });
+});
