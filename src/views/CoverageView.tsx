@@ -535,6 +535,13 @@ export function CoverageView() {
               const nietPassend = advies.kandidaten.filter((k) => !k.past);
               return (
                 <div className="mt-4 space-y-4">
+                  {/* De collega-zin: zelfde feiten als de lijst, maar dan zoals
+                      je ze tegen elkaar zegt — server-side opgebouwd. */}
+                  <div className="rounded-2xl bg-oker-50/70 ring-1 ring-oker-100 px-4 py-3">
+                    <MicroLabel className="text-oker-700">Advies</MicroLabel>
+                    <p className="mt-1 text-sm font-semibold leading-snug text-slate-800">{advies.samenvatting}</p>
+                  </div>
+
                   {advies.tijdenOnbekend && (
                     <p className="text-2xs font-semibold text-amber-800">
                       Dienst {pick.code} heeft geen tijden in het dienstoverzicht — de rustcheck kon niet, alleen de 6-dagenregel is toegepast.
@@ -572,6 +579,23 @@ export function CoverageView() {
                     <p className="text-sm font-medium text-slate-400">
                       Niemand bij wie deze dienst zonder meer past — hieronder wie wél vrij is, met wat er wringt.
                     </p>
+                  )}
+
+                  {/* Ruil in één stap — alleen berekend als niemand direct past.
+                      Bewust advies-zonder-knop: de planner voert de ruil zelf
+                      uit (Maandplanning) en wijst daarna het gat toe. */}
+                  {passend.length === 0 && advies.kettingen.length > 0 && (
+                    <div>
+                      <MicroLabel className="text-oker-700 tabular-nums">Via een ruil — {advies.kettingen.length} {advies.kettingen.length === 1 ? 'optie' : 'opties'}</MicroLabel>
+                      <div className="mt-2 flex flex-col gap-1.5">
+                        {advies.kettingen.map((k) => (
+                          <div key={`${k.vanId}-${k.naarId}`} className="rounded-xl bg-surface-field ring-1 ring-hairline px-3 py-2.5 text-sm font-medium text-slate-700">
+                            <span className="font-bold">{k.naarNaam}</span> neemt dienst <span className="font-bold tabular-nums">{k.viaCode}</span> <span className="text-slate-500 tabular-nums">({k.viaTijden})</span> over van <span className="font-bold">{k.vanNaam}</span> — dan kan {k.vanNaam} dienst <span className="font-bold tabular-nums">{pick.code}</span> rijden. Beide schakels voldoen aan alle regels.
+                          </div>
+                        ))}
+                      </div>
+                      <p className="mt-1.5 text-2xs font-medium text-slate-400">Uitvoeren: zet de dienst over via de cel in de Maandplanning en wijs daarna dienst {pick.code} hier toe.</p>
+                    </div>
                   )}
 
                   {nietPassend.length > 0 && (

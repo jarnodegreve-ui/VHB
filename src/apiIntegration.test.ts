@@ -2943,3 +2943,70 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
     expect(a.past).toBe(true);
   });
 });
+
+describe('advisor: ketting-voorstellen en collega-samenvatting', () => {
+  const DAG = '2026-09-16';
+
+  it('stelt een ruil in één stap voor als niemand direct past', async () => {
+    // Dienst 10 begint 06:00. Chauffeur B is vrij maar werkte gisteren tot
+    // 23:30 → maar 6u30 rust vóór 06:00, wél 8u30 vóór 08:00. Chauffeur A
+    // rijdt dienst 12 (08:00–16:00) en kan zelf het gat rijden.
+    mem.planning = [
+      { id: 'p-ka', driverId: '3', date: DAG, startTime: '08:00', endTime: '16:00', line: '12' },
+      { id: 'p-kb', driverId: '4', date: '2026-09-15', startTime: '15:00', endTime: '23:30', line: '14' },
+    ];
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.kandidaten.some((k: any) => k.past)).toBe(false);
+    expect(res.json.kettingen).toEqual([{
+      vanId: '3', vanNaam: 'Chauffeur A', viaCode: '12', viaTijden: '08:00–16:00',
+      naarId: '4', naarNaam: 'Chauffeur B',
+    }]);
+    expect(res.json.samenvatting).toContain('Wél mogelijk via een ruil');
+    expect(res.json.samenvatting).toContain('Chauffeur B');
+  });
+
+  it('geen kettingen zolang er een passende kandidaat is; samenvatting noemt hem', async () => {
+    mem.planning = [];
+    const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res.json.kettingen).toEqual([]);
+    expect(res.json.samenvatting).toContain('Ik zou Chauffeur A vragen');
+  });
+});
+
+describe('digest: proactieve sectie openstaande diensten', () => {
+  it('mailt de gaten van de komende 7 dagen mét advies en pusht de planning', async () => {
+    // Morgen (lokale klok — valt hoe dan ook binnen het Brusselse 7-dagenvenster):
+    // dienst 12 is bemand in de matrix, dienst 11 wordt verwacht maar staat open.
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    const morgen = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    mem.planningMatrix = [
+      { id: 'm-dig', source_date: morgen, day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+    mem.planning = [];
+
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    const mail = mem.emailsSent.find((m) => m.context === 'error-digest');
+    expect(mail?.text).toContain('Openstaande diensten (komende 7 dagen)');
+    expect(mail?.text).toContain('dienst 11');
+    // De samenvatting reist mee de mail in ("Ik zou … vragen").
+    expect(mail?.text).toContain('Ik zou');
+    // En de planners/admins krijgen één push met het aantal.
+    const push = mem.pushesSent.find((p) => String(p.payload.title).includes('openstaande dienst'));
+    expect(push).toBeTruthy();
+    expect(push!.userIds.sort()).toEqual(['1', '2']);
+  });
+
+  it('geen gaten → geen sectie en geen push', async () => {
+    mem.planningMatrix = [];
+    mem.coverageExpectations = {};
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    const mail = mem.emailsSent.find((m) => m.context === 'error-digest');
+    expect(mail?.text ?? '').not.toContain('Openstaande diensten');
+    expect(mem.pushesSent.some((p) => String(p.payload.title).includes('openstaande dienst'))).toBe(false);
+  });
+});

@@ -7,10 +7,15 @@ import {
   dagenNaElkaarMet,
   beoordeelKandidaat,
   sorteerKandidaten,
+  zoekKettingen,
+  adviesSamenvatting,
+  tijdenLabel,
   formatUren,
   MIN_RUST_UREN,
   MAX_WERKDAGEN_NA_ELKAAR,
   type KandidaatAdvies,
+  type KettingPersoon,
+  type KettingWerkende,
 } from '../api/advisor';
 import { kandidaatMeta, formatRustUren, segmentenLabel } from './lib/advisor';
 
@@ -202,5 +207,97 @@ describe('weergave-helpers', () => {
       { startTime: '06:12', endTime: '09:30' },
       { startTime: '15:41', endTime: '18:20' },
     ])).toBe('06:12–09:30 + 15:41–18:20');
+  });
+});
+
+describe('zoekKettingen: ruil in één stap als niemand direct past', () => {
+  const persoon = (naam: string, extra: Partial<KettingPersoon> = {}): KettingPersoon => ({
+    id: naam, name: naam, sectie: null, vorigeDag: [], volgendeDag: [],
+    gewerkteDagen: new Set<string>(), keren: 0, ...extra,
+  });
+  const werkende = (naam: string, code: string, rijen: KettingWerkende['rijen'], extra: Partial<KettingPersoon> = {}): KettingWerkende => ({
+    ...persoon(naam, { gewerkteDagen: new Set(['2026-08-20']), ...extra }), dienstCode: code, rijen,
+  });
+  const venster = { start: 6 * 60, eind: 14 * 60 }; // het gat: 06:00–14:00
+
+  it('vindt de ruil: werkende staat zijn dienst af, vrije collega neemt hem over', () => {
+    // Eric is vrij maar werkte gisteren tot 23:30 → te weinig rust vóór 06:00,
+    // wél genoeg vóór 08:00. Dirk (werkt 08:00–16:00) kan het gat rijden.
+    const kettingen = zoekKettingen({
+      datum: '2026-08-20',
+      dienstVenster: venster,
+      werkenden: [werkende('Dirk', '4101', [{ startTime: '08:00', endTime: '16:00' }])],
+      vrijen: [persoon('Eric', { vorigeDag: [{ startTime: '15:00', endTime: '23:30' }] })],
+    });
+    expect(kettingen).toEqual([{
+      vanId: 'Dirk', vanNaam: 'Dirk', viaCode: '4101', viaTijden: '08:00–16:00', naarId: 'Eric', naarNaam: 'Eric',
+    }]);
+  });
+
+  it('geen ketting als de vrijgekomen dienst óók niet past bij de vrije collega', () => {
+    // Nachtdienst tot 26:00 gisteren: zelfs 08:00 laat maar 6u rust over.
+    const kettingen = zoekKettingen({
+      datum: '2026-08-20',
+      dienstVenster: venster,
+      werkenden: [werkende('Dirk', '4101', [{ startTime: '08:00', endTime: '16:00' }])],
+      vrijen: [persoon('Eric', { vorigeDag: [{ startTime: '18:00', endTime: '26:00' }] })],
+    });
+    expect(kettingen).toEqual([]);
+  });
+
+  it('een schoolvervoerchauffeur schuift niet door naar het gat', () => {
+    const kettingen = zoekKettingen({
+      datum: '2026-08-20',
+      dienstVenster: venster,
+      werkenden: [werkende('Sara', '4101', [{ startTime: '08:00', endTime: '16:00' }], { sectie: 'Schoolvervoer' })],
+      vrijen: [persoon('Eric')],
+    });
+    expect(kettingen).toEqual([]);
+  });
+
+  it('zonder tijden van de open dienst geen voorstellen (rustcheck onmogelijk)', () => {
+    const kettingen = zoekKettingen({
+      datum: '2026-08-20',
+      dienstVenster: null,
+      werkenden: [werkende('Dirk', '4101', [{ startTime: '08:00', endTime: '16:00' }])],
+      vrijen: [persoon('Eric')],
+    });
+    expect(kettingen).toEqual([]);
+  });
+
+  it('tijdenLabel sorteert gesplitste rijen op starttijd', () => {
+    expect(tijdenLabel([
+      { startTime: '15:41', endTime: '18:20' },
+      { startTime: '06:12', endTime: '09:30' },
+    ])).toBe('06:12–09:30 + 15:41–18:20');
+  });
+});
+
+describe('adviesSamenvatting: de collega-zin', () => {
+  const k = (name: string, past: boolean, extra: Partial<KandidaatAdvies> = {}): KandidaatAdvies => ({
+    id: name, name, rustVoor: null, rustNa: null, dagenNaElkaar: 1, keren: 0,
+    past, redenen: past ? [] : ['maar 6u30 rust na de dienst van de dag ervoor'], ...extra,
+  });
+  const ketting = { vanId: 'd', vanNaam: 'Dirk', viaCode: '4101', viaTijden: '08:00–16:00', naarId: 'e', naarNaam: 'Eric' };
+
+  it('noemt de beste kandidaat mét waarom, en de tweede keuze', () => {
+    const tekst = adviesSamenvatting({ code: '2603', kandidaten: [k('Danny', true, { rustVoor: 12 * 60 }), k('Bart', true)], kettingen: [] });
+    expect(tekst).toBe('Ik zou Danny vragen — geen aansluitende werkdagen, rust 12u, nog niet ingevallen dit jaar. Bart is de logische tweede keuze.');
+  });
+
+  it('valt terug op de ruil als niemand direct past', () => {
+    const tekst = adviesSamenvatting({ code: '2603', kandidaten: [k('Bart', false)], kettingen: [ketting] });
+    expect(tekst).toContain('Wél mogelijk via een ruil');
+    expect(tekst).toContain('laat Eric dienst 4101 (08:00–16:00) overnemen van Dirk');
+  });
+
+  it('benoemt wie het dichtst in de buurt komt als ook een ruil niet lukt', () => {
+    const tekst = adviesSamenvatting({ code: '2603', kandidaten: [k('Bart', false)], kettingen: [] });
+    expect(tekst).toContain('Bart komt het dichtst in de buurt');
+    expect(tekst).toContain('6u30 rust');
+  });
+
+  it('zegt het eerlijk als er die dag helemaal niemand vrij is', () => {
+    expect(adviesSamenvatting({ code: '2603', kandidaten: [], kettingen: [] })).toContain('Niemand is vrij op deze dag');
   });
 });

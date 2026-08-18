@@ -20,6 +20,17 @@ export type KandidaatAdvies = {
   redenen: string[];
 };
 
+/** Ruil in één stap: `vanNaam` staat dienst `viaCode` af aan `naarNaam` en
+ *  rijdt zelf het gat. Alleen berekend als niemand direct past. */
+export type KettingVoorstel = {
+  vanId: string;
+  vanNaam: string;
+  viaCode: string;
+  viaTijden: string;
+  naarId: string;
+  naarNaam: string;
+};
+
 export type CoverageAdvies = {
   date: string;
   code: string;
@@ -29,6 +40,9 @@ export type CoverageAdvies = {
   minRustUren: number;
   maxDagenNaElkaar: number;
   kandidaten: KandidaatAdvies[];
+  kettingen: KettingVoorstel[];
+  /** De collega-zin: het advies in mensentaal, server-side opgebouwd. */
+  samenvatting: string;
 };
 
 export function fetchCoverageAdvies(date: string, code: string): Promise<CoverageAdvies> {

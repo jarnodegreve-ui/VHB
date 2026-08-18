@@ -162,3 +162,163 @@ export const sorteerKandidaten = (ks: KandidaatAdvies[]): KandidaatAdvies[] =>
       a.keren - b.keren ||
       a.name.localeCompare(b.name),
   );
+
+// --- Ketting-voorstellen (vraag Jarno 18-08, "voor als het moeilijker is") ---
+//
+// Past de open dienst bij niemand die vrij is, dan kan hij vaak wél via een
+// ruil in één stap: een collega die al werkt staat zijn eigen dienst af aan
+// een vrije collega en rijdt zelf het gat. Beide schakels moeten aan alle
+// regels voldoen — de ketting verplaatst het probleem, hij mag het niet
+// doorgeven.
+
+/** Gegevens per persoon die de ketting-zoeker nodig heeft om de regels te
+ *  checken — zelfde velden als beoordeelKandidaat verwacht. */
+export type KettingPersoon = {
+  id: string;
+  name: string;
+  sectie?: string | null;
+  vorigeDag: TijdRij[];
+  volgendeDag: TijdRij[];
+  gewerkteDagen: Set<string>;
+  keren: number;
+};
+
+export type KettingWerkende = KettingPersoon & {
+  /** Zijn dienstcode(s) die dag (bv. "4101" of "4101/4103"). */
+  dienstCode: string;
+  /** Zijn planning-rijen die dag — de échte tijden van de dienst die vrijkomt. */
+  rijen: TijdRij[];
+};
+
+export type KettingVoorstel = {
+  /** Wie zijn eigen dienst afstaat en het gat rijdt. */
+  vanId: string;
+  vanNaam: string;
+  /** De dienst die daardoor vrijkomt. */
+  viaCode: string;
+  viaTijden: string;
+  /** De vrije collega die die dienst overneemt. */
+  naarId: string;
+  naarNaam: string;
+};
+
+/** "08:00–16:00" of "06:12–09:30 + 15:41–18:20" — weergave van planning-rijen,
+ *  gesorteerd op starttijd (gesplitste diensten staan niet per se op volgorde). */
+export const tijdenLabel = (rijen: TijdRij[]): string =>
+  [...rijen]
+    .filter((r) => r.startTime && r.endTime)
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
+    .map((r) => `${r.startTime}–${r.endTime}`)
+    .join(" + ");
+
+/**
+ * Zoek ruilen in één stap: werkende X staat dienst D af aan vrije Y en rijdt
+ * zelf het gat. Voorwaarden: het gat past in X' schema (X werkt al, dus zijn
+ * reeks verandert niet — alleen de rusttijden tellen), en D past volledig in
+ * dat van Y. Zonder tijden van de open dienst is de rustcheck voor X
+ * onmogelijk → dan geen voorstellen (liever niets dan een onbetrouwbare ruil).
+ * Beste ketting eerst: de overnemer met de kortste reeks / minste invallen.
+ */
+export const zoekKettingen = (invoer: {
+  datum: string;
+  dienstVenster: { start: number; eind: number } | null;
+  werkenden: KettingWerkende[];
+  vrijen: KettingPersoon[];
+  max?: number;
+}): KettingVoorstel[] => {
+  if (!invoer.dienstVenster) return [];
+  const max = invoer.max ?? 3;
+  const gevonden: Array<{ voorstel: KettingVoorstel; naar: KandidaatAdvies }> = [];
+  for (const x of [...invoer.werkenden].sort((a, b) => a.name.localeCompare(b.name))) {
+    const xOordeel = beoordeelKandidaat({
+      id: x.id,
+      name: x.name,
+      sectie: x.sectie,
+      dienstVenster: invoer.dienstVenster,
+      vorigeDag: x.vorigeDag,
+      volgendeDag: x.volgendeDag,
+      gewerkteDagen: x.gewerkteDagen,
+      datum: invoer.datum,
+      keren: x.keren,
+    });
+    if (!xOordeel.past) continue;
+    const dVenster = dagVenster(x.rijen);
+    if (!dVenster) continue;
+    const overnemers = sorteerKandidaten(
+      invoer.vrijen.map((y) =>
+        beoordeelKandidaat({
+          id: y.id,
+          name: y.name,
+          sectie: y.sectie,
+          dienstVenster: dVenster,
+          vorigeDag: y.vorigeDag,
+          volgendeDag: y.volgendeDag,
+          gewerkteDagen: y.gewerkteDagen,
+          datum: invoer.datum,
+          keren: y.keren,
+        }),
+      ),
+    ).filter((k) => k.past);
+    if (overnemers.length === 0) continue;
+    const beste = overnemers[0];
+    gevonden.push({
+      voorstel: {
+        vanId: x.id,
+        vanNaam: x.name,
+        viaCode: x.dienstCode,
+        viaTijden: tijdenLabel(x.rijen),
+        naarId: beste.id,
+        naarNaam: beste.name,
+      },
+      naar: beste,
+    });
+  }
+  return gevonden
+    .sort(
+      (a, b) =>
+        a.naar.dagenNaElkaar - b.naar.dagenNaElkaar ||
+        a.naar.keren - b.naar.keren ||
+        a.naar.name.localeCompare(b.naar.name),
+    )
+    .slice(0, max)
+    .map((g) => g.voorstel);
+};
+
+// --- Collega-samenvatting (vraag Jarno 18-08, bewust zónder AI) ---
+
+/**
+ * Eén advies-zin zoals een collega hem zou zeggen, opgebouwd uit de al
+ * berekende feiten. Wordt getoond in de advies-modal én in de dagelijkse
+ * digest-mail — platte tekst, geen opmaak.
+ */
+export const adviesSamenvatting = (invoer: {
+  code: string;
+  kandidaten: KandidaatAdvies[];
+  kettingen: KettingVoorstel[];
+}): string => {
+  if (invoer.kandidaten.length === 0) {
+    return `Niemand is vrij op deze dag — dienst ${invoer.code} is alleen op te lossen door te schuiven met de planning.`;
+  }
+  const passend = invoer.kandidaten.filter((k) => k.past);
+  if (passend.length > 0) {
+    const eerste = passend[0];
+    const delen: string[] = [];
+    delen.push(eerste.dagenNaElkaar === 1 ? "geen aansluitende werkdagen" : `${eerste.dagenNaElkaar}e werkdag op rij`);
+    const rusten = [eerste.rustVoor, eerste.rustNa].filter((r): r is number => r !== null);
+    if (rusten.length > 0) delen.push(`rust ${formatUren(Math.min(...rusten))}`);
+    delen.push(eerste.keren > 0 ? `${eerste.keren}× ingevallen dit jaar` : "nog niet ingevallen dit jaar");
+    const tweede = passend[1];
+    const staart = tweede
+      ? ` ${tweede.name} is de logische tweede keuze.`
+      : invoer.kandidaten.length > 1
+        ? " Bij de rest past dit niet zonder een regel te breken."
+        : "";
+    return `Ik zou ${eerste.name} vragen — ${delen.join(", ")}.${staart}`;
+  }
+  if (invoer.kettingen.length > 0) {
+    const k = invoer.kettingen[0];
+    return `Niemand is vrij én passend voor dienst ${invoer.code}. Wél mogelijk via een ruil: laat ${k.naarNaam} dienst ${k.viaCode} (${k.viaTijden}) overnemen van ${k.vanNaam} — dan kan ${k.vanNaam} dienst ${invoer.code} rijden.`;
+  }
+  const dichtstbij = invoer.kandidaten[0];
+  return `Dit past bij niemand zonder een regel te breken, en ook een ruil in één stap lost het niet op. ${dichtstbij.name} komt het dichtst in de buurt (${dichtstbij.redenen.join(" en ")}).`;
+};
