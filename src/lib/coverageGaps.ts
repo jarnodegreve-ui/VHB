@@ -42,6 +42,30 @@ export function parseOverrides(raw: unknown): DayTypeOverride[] {
   return out;
 }
 
+/** Weekdag-toewijzing met ingangsdatum: vanaf `vanaf` (yyyy-mm-dd) geldt deze
+ *  toewijzing i.p.v. de basis — bv. het schooljaar-regime vanaf 1 september.
+ *  Opgeslagen als reserved key "__weekdagen_<vanaf>__" naast "__weekdagen__".
+ *  Houd in sync met api/coverageGaps.ts. */
+export type WeekdagPeriode = { vanaf: string; weekdays: string[] };
+
+export const WEEKDAY_PERIOD_KEY_RE = /^__weekdagen_(\d{4}-\d{2}-\d{2})__$/;
+export const encodeWeekdagPeriodeKey = (vanaf: string): string => `__weekdagen_${vanaf}__`;
+
+/** De geldende weekdag-toewijzing voor een datum: de periode met de laatste
+ *  ingangsdatum ≤ datum wint; zonder passende periode geldt de basis. */
+export function weekdaysVoorDatum(basis: string[], perioden: WeekdagPeriode[], datum: string): string[] {
+  let keuze = basis;
+  let besteVanaf = '';
+  for (const p of perioden) {
+    if (!Array.isArray(p.weekdays) || p.weekdays.length !== 7) continue;
+    if (p.vanaf <= datum && p.vanaf > besteVanaf) {
+      keuze = p.weekdays;
+      besteVanaf = p.vanaf;
+    }
+  }
+  return keuze;
+}
+
 /**
  * Bepaal het dag-type van een planning-rij:
  *   1. Expliciet dag-type uit de import (kolom B) wint altijd.

@@ -7,6 +7,9 @@ export type { DayGap } from './coverageGaps';
 export type CoverageDayType = { name: string; services: string[] };
 /** Uitzondering: binnen [from,to] geldt een ander dag-type dan de weekdag-standaard. */
 export type CoverageOverride = { from: string; to: string; dayType: string };
+/** Weekdag-toewijzing met ingangsdatum: vanaf `vanaf` geldt deze i.p.v. de basis
+ *  (bv. het schooljaar-regime vanaf 1 september). Recentste ingangsdatum wint. */
+export type CoverageWeekdayPeriod = { vanaf: string; weekdays: string[] };
 
 export type CoverageConfig = {
   /** alle dienstnummers uit het dienstoverzicht (om uit te kiezen) */
@@ -15,6 +18,8 @@ export type CoverageConfig = {
   dayTypes: CoverageDayType[];
   /** standaard dag-type per weekdag — index 0=zondag .. 6=zaterdag */
   weekdays: string[];
+  /** weekdag-toewijzingen die vanaf een datum de basis vervangen */
+  weekdayPeriods: CoverageWeekdayPeriod[];
   /** uitzonderingen die de weekdag-standaard overschrijven */
   overrides: CoverageOverride[];
 };
@@ -22,6 +27,7 @@ export type CoverageConfig = {
 export type CoverageConfigInput = {
   dayTypes: CoverageDayType[];
   weekdays: string[];
+  weekdayPeriods: CoverageWeekdayPeriod[];
   overrides: CoverageOverride[];
 };
 

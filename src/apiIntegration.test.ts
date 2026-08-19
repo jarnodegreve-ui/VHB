@@ -261,6 +261,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       return segs;
     },
     getCoverageExpectations: async () => mem.coverageExpectations ?? {},
+    saveCoverageExpectations: async (map: any) => { mem.coverageExpectations = map; },
     listUserDocuments: async (userId?: string) =>
       userId ? mem.documents.filter((d: any) => String(d.userId) === String(userId)) : mem.documents,
     getUserDocument: async (id: string) => mem.documents.find((d: any) => String(d.id) === String(id)) ?? null,
@@ -2123,6 +2124,54 @@ describe('ziekte werkt door in maandplanning en dekking', () => {
     expect(dag16.missing).toEqual(['11']);
     // 11 was nooit toegewezen → géén uitval-info (kale chip in de UI).
     expect(dag16.uitval).toBeUndefined();
+  });
+
+  it('weekdag-periode: vanaf de ingangsdatum geldt een ander regime (dienstregelingswissel)', async () => {
+    // Basis-toewijzing = 'zomer' (dienst 41); vanaf 01-09 geldt 'school'
+    // (dienst 21). Matrixrijen zonder eigen dagtype vallen terug op de
+    // toewijzing — en die moet per datum de juiste periode pakken.
+    mem.planningMatrix = [
+      { id: 'm-p1', source_date: '2030-08-26', day_type: '', assignments: {}, raw_row: '' },
+      { id: 'm-p2', source_date: '2030-09-02', day_type: '', assignments: {}, raw_row: '' },
+    ];
+    mem.leave = [];
+    mem.coverageExpectations = {
+      zomer: ['41'],
+      school: ['21'],
+      __weekdagen__: ['zomer', 'zomer', 'zomer', 'zomer', 'zomer', 'zomer', 'zomer'],
+      '__weekdagen_2030-09-01__': ['school', 'school', 'school', 'school', 'school', 'school', 'school'],
+    };
+    const res = await api('GET', '/api/coverage-gaps?from=2030-08-26&to=2030-09-02', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    const aug = res.json.days.find((d: any) => d.date === '2030-08-26');
+    const sep = res.json.days.find((d: any) => d.date === '2030-09-02');
+    expect([aug.dayType, aug.missing]).toEqual(['zomer', ['41']]);
+    expect([sep.dayType, sep.missing]).toEqual(['school', ['21']]);
+  });
+
+  it('weekdag-periodes overleven een GET/PUT-rondje van de instellingen', async () => {
+    mem.coverageExpectations = {};
+    const put = await api('PUT', '/api/coverage-expectations', {
+      token: 'tok-planner',
+      body: {
+        dayTypes: [{ name: 'zomer', services: ['41'] }, { name: 'school', services: ['21'] }],
+        weekdays: ['zomer', 'zomer', 'zomer', 'zomer', 'zomer', 'zomer', 'zomer'],
+        weekdayPeriods: [
+          { vanaf: '2030-09-01', weekdays: ['school', 'school', 'school', 'school', 'school', 'school', 'school'] },
+          // Ongeldige ingangsdatum → genegeerd, mag de rest niet blokkeren.
+          { vanaf: 'kapot', weekdays: ['school'] },
+        ],
+        overrides: [],
+      },
+    });
+    expect(put.status).toBe(200);
+    const get = await api('GET', '/api/coverage-expectations', { token: 'tok-planner' });
+    expect(get.status).toBe(200);
+    expect(get.json.weekdayPeriods).toEqual([
+      { vanaf: '2030-09-01', weekdays: ['school', 'school', 'school', 'school', 'school', 'school', 'school'] },
+    ]);
+    // De periode-sleutel is reserved en lekt niet als dag-type de lijst in.
+    expect(get.json.dayTypes.map((d: any) => d.name)).toEqual(['school', 'zomer']);
   });
 
   it('een herverdeelde dienst verdwijnt uit de dekking (melding Jarno 14-08)', async () => {

@@ -382,7 +382,13 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             if (!changesSinceImport) {
               return null;
             }
-            const totalChanges = changesSinceImport.approvedLeave.length + changesSinceImport.approvedSwaps.length;
+            // Ziekte is geen verlof (scheiding sinds 15-08, #370): een
+            // geregistreerde ziekteperiode staat wel in de leave-tabel maar
+            // hoort hier een eigen naam en telling te krijgen — de melding
+            // "1 verlof goedgekeurd" voor een ziekmelding verwarde (19-08).
+            const verlofSinds = changesSinceImport.approvedLeave.filter((l) => l.type !== 'ziekte');
+            const ziekteSinds = changesSinceImport.approvedLeave.filter((l) => l.type === 'ziekte');
+            const totalChanges = verlofSinds.length + ziekteSinds.length + changesSinceImport.approvedSwaps.length;
             const hasChanges = totalChanges > 0;
             const lastImportLabel = changesSinceImport.lastImport
               ? new Date(changesSinceImport.lastImport.createdAt).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
@@ -411,8 +417,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       </h4>
                       <p className={cn('mt-1 text-sm font-medium', accent.body)}>
                         {hasChanges
-                          ? `${changesSinceImport.approvedLeave.length} verlof${changesSinceImport.approvedLeave.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd. Dienstruilen voert het portaal automatisch door (ook na een import) — dit lijstje is ter controle voor je Excel-archief; verlof verwerk je wél in Excel.`
-                          : 'Geen verloven of dienstruilen goedgekeurd in de app sinds je laatste matrix-import. Excel en app zijn in sync.'}
+                          ? `${verlofSinds.length} verlof${verlofSinds.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd${ziekteSinds.length > 0 ? `, ${ziekteSinds.length} ziekteperiode${ziekteSinds.length === 1 ? '' : 's'} geregistreerd` : ''}. Dienstruilen voert het portaal automatisch door (ook na een import) — dit lijstje is ter controle voor je Excel-archief; verlof verwerk je wél in Excel.${ziekteSinds.length > 0 ? ' Ziekte hoeft niet vooraf in je Excel — na de import staan die diensten als te herverdelen klaar.' : ''}`
+                          : 'Geen verloven, dienstruilen of ziekmeldingen in de app sinds je laatste matrix-import. Excel en app zijn in sync.'}
                       </p>
                       <MicroLabel className={cn('mt-1', accent.stamp)}>
                         Laatste import: {lastImportLabel}
@@ -427,9 +433,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
                       <MicroLabel className={cn('mb-2', accent.eyebrow)}>Verlof</MicroLabel>
-                      {changesSinceImport.approvedLeave.length > 0 ? (
+                      {verlofSinds.length > 0 ? (
                         <ul className="space-y-1.5 text-xs text-slate-700">
-                          {changesSinceImport.approvedLeave.map((l) => (
+                          {verlofSinds.map((l) => (
                             <li key={l.id} className="flex items-start gap-2">
                               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
                               <span>
@@ -443,6 +449,23 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         </ul>
                       ) : (
                         <p className="text-xs italic text-slate-400">Geen.</p>
+                      )}
+                      {ziekteSinds.length > 0 && (
+                        <>
+                          <MicroLabel className={cn('mb-2 mt-4', accent.eyebrow)}>Ziekte</MicroLabel>
+                          <ul className="space-y-1.5 text-xs text-slate-700">
+                            {ziekteSinds.map((l) => (
+                              <li key={l.id} className="flex items-start gap-2">
+                                <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
+                                <span>
+                                  <span className="font-semibold">{l.userName}</span>
+                                  {' — ziek '}
+                                  {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        </>
                       )}
                     </div>
                     <div>

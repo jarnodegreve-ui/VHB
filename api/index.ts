@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
-import { computeDayGap, normalizeCode, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
+import { computeDayGap, normalizeCode, resolveDayType, parseOverrides, encodeOverride, weekdaysVoorDatum, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
@@ -18,6 +18,16 @@ const COVERAGE_OVERRIDES_KEY = "__uitzonderingen__";
 // Behandel élke __...__ sleutel als gereserveerd: zo vervuilen ook oudere
 // interne sleutels (bv. een vroegere __vakantieperiodes__) de dag-type-lijst niet.
 const isReservedCoverageKey = (k: string) => /^__.+__$/.test(k);
+/** Periode-toewijzingen uit de opgeslagen config: __weekdagen_<vanaf>__ → 7 dag-types. */
+const parseWeekdagPerioden = (stored: Record<string, string[]>): WeekdagPeriode[] =>
+  Object.entries(stored)
+    .flatMap(([k, v]) => {
+      const m = WEEKDAY_PERIOD_KEY_RE.exec(k);
+      return m && Array.isArray(v) && v.length === 7
+        ? [{ vanaf: m[1], weekdays: v.map((s) => String(s ?? "")) }]
+        : [];
+    })
+    .sort((a, b) => a.vanaf.localeCompare(b.vanaf));
 
 import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
@@ -996,6 +1006,7 @@ app.get("/api/coverage-expectations", authenticate, requireRole("planner", "admi
     const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
     const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
     const overrides = parseOverrides(stored[COVERAGE_OVERRIDES_KEY]);
+    const weekdayPeriods = parseWeekdagPerioden(stored);
     // De overige sleutels zijn de zelf-gedefinieerde dag-types + hun diensten.
     const dayTypeEntries = Object.entries(stored).filter(([k]) => !isReservedCoverageKey(k));
     const dayTypes = dayTypeEntries.length > 0
@@ -1006,7 +1017,7 @@ app.get("/api/coverage-expectations", authenticate, requireRole("planner", "admi
     const serviceNumbers = Array.from(
       new Set((services as any[]).map((s) => String(s.serviceNumber ?? "").trim()).filter(Boolean)),
     ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    res.json({ services: serviceNumbers, dayTypes, weekdays, overrides });
+    res.json({ services: serviceNumbers, dayTypes, weekdays, weekdayPeriods, overrides });
   } catch (err) {
     console.error("Error reading coverage expectations:", err);
     res.status(500).json({ error: "Kon dekkingsinstellingen niet laden." });
@@ -1037,6 +1048,24 @@ app.put("/api/coverage-expectations", authenticate, requireRole("planner", "admi
       weekdays.push(validNames.has(v) ? v : "");
     }
     clean[COVERAGE_WEEKDAYS_KEY] = weekdays;
+    // Weekdag-periodes: vanaf <datum> geldt een andere toewijzing (bv. het
+    // schooljaar-regime vanaf 1 september — melding Jarno 19-08: de dekking
+    // bleef anders eeuwig het zomerregime verwachten). Zelfde validatie als
+    // de basis-toewijzing; dubbele ingangsdatums: eerste wint.
+    const rawPeriods = Array.isArray(req.body?.weekdayPeriods) ? req.body.weekdayPeriods : [];
+    const gezienVanaf = new Set<string>();
+    for (const p of rawPeriods) {
+      const vanaf = String(p?.vanaf ?? "").trim();
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(vanaf) || gezienVanaf.has(vanaf)) continue;
+      gezienVanaf.add(vanaf);
+      const wd = Array.isArray(p?.weekdays) ? p.weekdays : [];
+      const schoon: string[] = [];
+      for (let i = 0; i < 7; i++) {
+        const v = String(wd[i] ?? "").trim();
+        schoon.push(validNames.has(v) ? v : "");
+      }
+      clean[encodeWeekdagPeriodeKey(vanaf)] = schoon;
+    }
     // Uitzonderingen: geldige range + bestaand dag-type, opgeslagen als string.
     const rawOverrides = Array.isArray(req.body?.overrides) ? req.body.overrides : [];
     const overrideStrings: string[] = [];
@@ -1074,6 +1103,7 @@ async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]>
     const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
     const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
     const overrides = parseOverrides(stored[COVERAGE_OVERRIDES_KEY]);
+    const weekdagPerioden = parseWeekdagPerioden(stored);
     // Goedgekeurde afwezigheden: de matrix-cel van die chauffeur telt die dag
     // niet mee als invulling — zijn dienst valt dus (terecht) als gat uit de
     // dekking. Matrix-cellen zijn op náám, leave op user-id; naam-resolutie
@@ -1123,7 +1153,7 @@ async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]>
       .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
     const days: DayGap[] = inRange.map((r: any) => {
       const date = String(r.source_date ?? "");
-      const dayType = resolveDayType(r.day_type, date, weekdays, overrides);
+      const dayType = resolveDayType(r.day_type, date, weekdaysVoorDatum(weekdays, weekdagPerioden, date), overrides);
       const expected = stored[dayType] || [];
       // Cellen van afwezigen tellen niet mee als invulling; onthoud per
       // weggefilterde code wie uitviel en waarom — de reden reist mee naar de
