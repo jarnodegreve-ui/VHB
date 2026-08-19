@@ -2897,7 +2897,8 @@ describe('beveiliging (controleronde 16-08)', () => {
 
 describe('advies openstaande diensten (/api/coverage-advisor)', () => {
   // Vaste toekomst-dag: het advies rekent alleen met de meegegeven dag en
-  // het ±6-dagenvenster eromheen — geen "vandaag" in de logica.
+  // het venster eromheen (±6 dagen + de hele week én kalendermaand voor de
+  // belastingtelling) — geen "vandaag" in de logica.
   const DAG = '2026-09-16';
 
   it('is planner/admin-terrein (chauffeur krijgt 403)', async () => {
@@ -2954,16 +2955,14 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
     expect(res.json.kandidaten).toEqual([]);
   });
 
-  it('sorteert eerlijk: wie dit jaar het minst inviel staat bovenaan', async () => {
-    mem.planning = [];
-    // Chauffeur A (id 3) viel dit jaar al één keer in via een doorgevoerde wissel.
-    mem.swaps = [{
-      id: 's-adv', shiftId: 'sh-x', requesterId: '4', targetDriverId: '3', status: 'approved',
-      reason: '', createdAt: '2026-05-01T08:00:00Z', decidedAt: '2026-05-02T08:00:00Z',
-      shiftDate: '2026-05-03', shiftLine: '12', swapType: 'overname',
-    }];
+  it('sorteert op belasting: wie deze week het minst werkte staat bovenaan', async () => {
+    // Chauffeur A werkte al op maandag 14/09 (zelfde week als het gat, niet
+    // aansluitend); Chauffeur B werkte die week nog niet → B eerst.
+    mem.planning = [
+      { id: 'p-wk', driverId: '3', date: '2026-09-14', startTime: '08:00', endTime: '14:00', line: '12' },
+    ];
     const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
-    expect(res.json.kandidaten.map((k: any) => [k.name, k.keren])).toEqual([
+    expect(res.json.kandidaten.map((k: any) => [k.name, k.dagenDezeWeek])).toEqual([
       ['Chauffeur B', 0],
       ['Chauffeur A', 1],
     ]);
@@ -2981,22 +2980,29 @@ describe('advies openstaande diensten (/api/coverage-advisor)', () => {
     expect(b.redenen).toEqual(['schoolvervoerchauffeur — springt niet in op een lijndienst']);
   });
 
-  it('minder dagen op rij wint van de invalteller in de volgorde', async () => {
-    // Chauffeur A viel nooit in maar zit aan dag 3 op rij; Chauffeur B viel
-    // al eens in maar is helemaal uitgerust → B staat toch bovenaan.
+  it('bij gelijke weekbelasting beslist de reeks, daarna het maandtotaal', async () => {
+    // Beiden één werkdag deze week: A op di 15/09 (sluit aan op het gat →
+    // reeks van 2), B op ma 14/09 (los → reeks van 1). B staat bovenaan.
     mem.planning = [
-      { id: 'p-14', driverId: '3', date: '2026-09-14', startTime: '08:00', endTime: '14:00', line: '12' },
-      { id: 'p-15', driverId: '3', date: '2026-09-15', startTime: '08:00', endTime: '14:00', line: '12' },
+      { id: 'p-a15', driverId: '3', date: '2026-09-15', startTime: '08:00', endTime: '14:00', line: '12' },
+      { id: 'p-b14', driverId: '4', date: '2026-09-14', startTime: '08:00', endTime: '14:00', line: '12' },
     ];
-    mem.swaps = [{
-      id: 's-sort', shiftId: 'sh-x', requesterId: '3', targetDriverId: '4', status: 'approved',
-      reason: '', createdAt: '2026-03-01T08:00:00Z', decidedAt: '2026-03-02T08:00:00Z',
-      shiftDate: '2026-03-03', shiftLine: '12', swapType: 'overname',
-    }];
     const res = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
-    expect(res.json.kandidaten.map((k: any) => [k.name, k.dagenNaElkaar, k.keren])).toEqual([
+    expect(res.json.kandidaten.map((k: any) => [k.name, k.dagenDezeWeek, k.dagenNaElkaar])).toEqual([
       ['Chauffeur B', 1, 1],
-      ['Chauffeur A', 3, 0],
+      ['Chauffeur A', 1, 2],
+    ]);
+
+    // Zelfde week (0 gewerkte dagen) en zelfde reeks: het maandtotaal beslist.
+    // A werkte 3 septemberdagen buiten de week van het gat — dat kan de
+    // advisor alleen zien doordat het datavenster de hele maand dekt.
+    mem.planning = ['01', '03', '05'].map((d) => (
+      { id: `p-m${d}`, driverId: '3', date: `2026-09-${d}`, startTime: '08:00', endTime: '14:00', line: '12' }
+    ));
+    const res2 = await api('GET', `/api/coverage-advisor?date=${DAG}&code=10`, { token: 'tok-planner' });
+    expect(res2.json.kandidaten.map((k: any) => [k.name, k.dagenDezeMaand])).toEqual([
+      ['Chauffeur B', 0],
+      ['Chauffeur A', 3],
     ]);
   });
 

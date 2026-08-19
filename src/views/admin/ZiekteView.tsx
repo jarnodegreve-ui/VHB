@@ -1,9 +1,9 @@
 import { useMemo, useState } from 'react';
 import { Plus, Thermometer } from 'lucide-react';
-import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
+import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
 import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { kandidaatLabel, overnameTellingDitJaar, rangschikKandidaten, vrijOpDatum } from '../../lib/vervangers';
+import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
@@ -26,7 +26,6 @@ export function ZiekteView({
   users,
   leaveRequests,
   shifts,
-  swaps = [],
   onSickReport,
   onSave,
   onShiftSwapped,
@@ -35,7 +34,6 @@ export function ZiekteView({
   users: User[];
   leaveRequests: LeaveRequest[];
   shifts: Shift[];
-  swaps?: SwapRequest[];
   onSickReport: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>;
   onSave: (requests: LeaveRequest[]) => Promise<boolean> | boolean;
   /** Ververst planning + ruilen na een dienstwissel vanuit dit blad. */
@@ -100,7 +98,7 @@ export function ZiekteView({
   }, [ziektes, jaar]);
 
   // --- Herverdelen vanuit het detail (admin): zelfde wissel als overal -------
-  const overnameTelling = overnameTellingDitJaar(swaps);
+  const werkdagen = werkdagenUitShifts(shifts);
   const [vervangerPerDienst, setVervangerPerDienst] = useState<Record<string, string>>({});
   const [wisselBezig, setWisselBezig] = useState<string | null>(null);
   const [overgezet, setOvergezet] = useState<Record<string, string>>({});
@@ -366,7 +364,8 @@ export function ZiekteView({
                                     {rangschikKandidaten(
                                       users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(dienst.driverId)),
                                       vrijOpDatum(shifts, dienst.date),
-                                      overnameTelling,
+                                      werkdagen,
+                                      dienst.date,
                                     ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
                                   </select>
                                   <Button variant="primary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id} onClick={() => void zetOver(detail, dienst)}>

@@ -5,6 +5,9 @@ import {
   rustTovVorigeDag,
   rustTovVolgendeDag,
   dagenNaElkaarMet,
+  maandagVan,
+  dagenInWeekVan,
+  dagenInMaandVan,
   beoordeelKandidaat,
   sorteerKandidaten,
   zoekKettingen,
@@ -159,30 +162,60 @@ describe('beoordeelKandidaat: de regels samen', () => {
   });
 });
 
-describe('sorteerKandidaten: passend eerst, dan minste dagen op rij, dan eerlijk verdeeld', () => {
-  const maak = (name: string, past: boolean, dagen: number, keren: number): KandidaatAdvies => ({
-    id: name, name, rustVoor: null, rustNa: null, dagenNaElkaar: dagen, keren, past, redenen: past ? [] : ['x'],
+describe('week- en maandtelling van gewerkte dagen', () => {
+  it('maandagVan vindt de maandag van de week (ma–zo)', () => {
+    expect(maandagVan('2026-08-19')).toBe('2026-08-17'); // woensdag
+    expect(maandagVan('2026-08-17')).toBe('2026-08-17'); // maandag zelf
+    expect(maandagVan('2026-08-23')).toBe('2026-08-17'); // zondag hoort er nog bij
   });
 
-  it('sorteert op past → dagenNaElkaar → keren → naam', () => {
+  it('telt alleen dagen in de week van het gat, de dag zelf niet', () => {
+    const gewerkt = new Set(['2026-08-17', '2026-08-18', '2026-08-23', '2026-08-24']);
+    // 24-08 is de maandag van de vólgende week en telt niet mee; 19-08 zelf ook niet.
+    expect(dagenInWeekVan(gewerkt, '2026-08-19')).toBe(3);
+    expect(dagenInWeekVan(new Set(['2026-08-19']), '2026-08-19')).toBe(0);
+  });
+
+  it('telt de kalendermaand van het gat, over weekgrenzen heen', () => {
+    const gewerkt = new Set(['2026-08-01', '2026-08-15', '2026-08-31', '2026-07-31', '2026-09-01']);
+    expect(dagenInMaandVan(gewerkt, '2026-08-19')).toBe(3);
+  });
+});
+
+describe('sorteerKandidaten: passend eerst, dan minst gewerkt die week, dan reeks, dan maandtotaal', () => {
+  const maak = (name: string, past: boolean, week: number, reeks: number, maand: number): KandidaatAdvies => ({
+    id: name, name, rustVoor: null, rustNa: null, dagenNaElkaar: reeks,
+    dagenDezeWeek: week, dagenDezeMaand: maand, keren: 0, past, redenen: past ? [] : ['x'],
+  });
+
+  it('sorteert op past → dagenDezeWeek → dagenNaElkaar → dagenDezeMaand → naam', () => {
     const volgorde = sorteerKandidaten([
-      maak('Zoë', true, 1, 2),
-      maak('An', false, 1, 0),
-      maak('Bert', true, 4, 0),
-      maak('Ann', true, 1, 2),
-      maak('Cas', true, 1, 0),
+      maak('Zoë', true, 2, 1, 8),
+      maak('An', false, 0, 1, 0),
+      maak('Bert', true, 2, 4, 8),
+      maak('Ann', true, 2, 1, 8),
+      maak('Cas', true, 1, 3, 12),
     ]).map((k) => k.name);
-    // Cas wint van Ann/Zoë (zelfde reeks, minder ingevallen); Bert werkt al
-    // 4 dagen op rij en zakt onder hen; An past niet en sluit af.
+    // Cas werkte deze week het minst en wint ondanks langere reeks en hoger
+    // maandtotaal; Ann/Zoë zijn gelijk en vallen terug op naam; Bert zakt op
+    // zijn langere reeks; An past niet en sluit af.
     expect(volgorde).toEqual(['Cas', 'Ann', 'Zoë', 'Bert', 'An']);
   });
 
-  it('de reeks werkdagen weegt zwaarder dan de invalteller (keuze Jarno)', () => {
+  it('het maandtotaal beslist bij gelijke week en reeks (keuze Jarno 19-08)', () => {
     const volgorde = sorteerKandidaten([
-      maak('Veel-ingevallen-maar-uitgerust', true, 1, 5),
-      maak('Nooit-ingevallen-maar-5e-dag', true, 5, 0),
+      maak('Veel-deze-maand', true, 1, 2, 14),
+      maak('Weinig-deze-maand', true, 1, 2, 6),
     ]).map((k) => k.name);
-    expect(volgorde).toEqual(['Veel-ingevallen-maar-uitgerust', 'Nooit-ingevallen-maar-5e-dag']);
+    expect(volgorde).toEqual(['Weinig-deze-maand', 'Veel-deze-maand']);
+  });
+
+  it('de invalteller doet niet meer mee in de volgorde', () => {
+    const volgorde = sorteerKandidaten([
+      { ...maak('Vaak-ingevallen-niets-gewerkt', true, 0, 1, 0), keren: 9 },
+      { ...maak('Nooit-ingevallen-een-dag-gewerkt', true, 1, 1, 1), keren: 0 },
+    ]).map((k) => k.name);
+    expect(volgorde).toEqual(['Vaak-ingevallen-niets-gewerkt', 'Nooit-ingevallen-een-dag-gewerkt']);
   });
 });
 
@@ -193,13 +226,13 @@ describe('weergave-helpers', () => {
     expect(formatRustUren(-30)).toBe('0u');
   });
 
-  it('kandidaatMeta: bindende (krapste) rust + reeks + invalteller', () => {
+  it('kandidaatMeta: bindende (krapste) rust + reeks + week-/maandtelling', () => {
     const k: KandidaatAdvies = {
       id: '1', name: 'Test', rustVoor: 11 * 60 + 30, rustNa: 9 * 60,
-      dagenNaElkaar: 4, keren: 2, past: true, redenen: [],
+      dagenNaElkaar: 4, dagenDezeWeek: 2, dagenDezeMaand: 8, keren: 2, past: true, redenen: [],
     };
-    expect(kandidaatMeta(k)).toBe('rust 9u · 4e werkdag op rij · 2× ingevallen');
-    expect(kandidaatMeta({ ...k, rustVoor: null, rustNa: null, dagenNaElkaar: 1, keren: 0 })).toBe('nog niet ingevallen');
+    expect(kandidaatMeta(k)).toBe('rust 9u · 4e werkdag op rij · 2 dagen deze week · 8 deze maand');
+    expect(kandidaatMeta({ ...k, rustVoor: null, rustNa: null, dagenNaElkaar: 1, dagenDezeWeek: 1, dagenDezeMaand: 1 })).toBe('1 dag deze week · 1 deze maand');
   });
 
   it('segmentenLabel: tijdsblokken als contextregel', () => {
@@ -275,14 +308,15 @@ describe('zoekKettingen: ruil in één stap als niemand direct past', () => {
 
 describe('adviesSamenvatting: de collega-zin', () => {
   const k = (name: string, past: boolean, extra: Partial<KandidaatAdvies> = {}): KandidaatAdvies => ({
-    id: name, name, rustVoor: null, rustNa: null, dagenNaElkaar: 1, keren: 0,
+    id: name, name, rustVoor: null, rustNa: null, dagenNaElkaar: 1,
+    dagenDezeWeek: 0, dagenDezeMaand: 0, keren: 0,
     past, redenen: past ? [] : ['maar 6u30 rust na de dienst van de dag ervoor'], ...extra,
   });
   const ketting = { vanId: 'd', vanNaam: 'Dirk', viaCode: '4101', viaTijden: '08:00–16:00', naarId: 'e', naarNaam: 'Eric' };
 
   it('noemt de beste kandidaat mét waarom, en de tweede keuze', () => {
     const tekst = adviesSamenvatting({ code: '2603', kandidaten: [k('Danny', true, { rustVoor: 12 * 60 }), k('Bart', true)], kettingen: [] });
-    expect(tekst).toBe('Ik zou Danny vragen — geen aansluitende werkdagen, rust 12u, nog niet ingevallen dit jaar. Bart is de logische tweede keuze.');
+    expect(tekst).toBe('Ik zou Danny vragen — geen aansluitende werkdagen, rust 12u, nog geen werkdag deze week. Bart is de logische tweede keuze.');
   });
 
   it('valt terug op de ruil als niemand direct past', () => {

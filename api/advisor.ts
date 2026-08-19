@@ -102,6 +102,34 @@ export const formatUren = (minuten: number): string => {
   return m === 0 ? `${u}u` : `${u}u${String(m).padStart(2, "0")}`;
 };
 
+/** Maandag van de week (ma–zo) waarin `iso` valt. */
+export const maandagVan = (iso: string): string => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  return addDagen(iso, -((d.getUTCDay() + 6) % 7));
+};
+
+/** Gewerkte dagen in de week (ma–zo) van `datum`, de dag zelf niet meegeteld
+ *  — die is voor iedere kandidaat dezelfde toevoeging en zou alleen ruis geven. */
+export const dagenInWeekVan = (gewerkteDagen: Set<string>, datum: string): number => {
+  const maandag = maandagVan(datum);
+  let n = 0;
+  for (let i = 0; i < 7; i++) {
+    const dag = addDagen(maandag, i);
+    if (dag !== datum && gewerkteDagen.has(dag)) n++;
+  }
+  return n;
+};
+
+/** Gewerkte dagen in de kalendermaand van `datum`, de dag zelf niet meegeteld. */
+export const dagenInMaandVan = (gewerkteDagen: Set<string>, datum: string): number => {
+  const maand = datum.slice(0, 7);
+  let n = 0;
+  for (const dag of gewerkteDagen) {
+    if (dag !== datum && dag.slice(0, 7) === maand) n++;
+  }
+  return n;
+};
+
 export type KandidaatAdvies = {
   id: string;
   name: string;
@@ -110,7 +138,12 @@ export type KandidaatAdvies = {
   rustNa: number | null;
   /** Gewerkte dagen na elkaar mét deze toewijzing erbij. */
   dagenNaElkaar: number;
-  /** Hoe vaak dit jaar al ingevallen (eerlijke verdeling, zie src/lib/vervangers.ts). */
+  /** Al gewerkte dagen in de week (ma–zo) resp. kalendermaand van het gat. */
+  dagenDezeWeek: number;
+  dagenDezeMaand: number;
+  /** Hoe vaak dit jaar al ingevallen. Telt sinds 19-08 niet meer mee in de
+   *  sortering (keuze Jarno: het portaal wordt nog te weinig gebruikt om die
+   *  teller iets te laten zeggen); blijft in het antwoord voor wie het wil zien. */
   keren: number;
   past: boolean;
   redenen: string[];
@@ -145,21 +178,27 @@ export const beoordeelKandidaat = (invoer: {
     rustVoor,
     rustNa,
     dagenNaElkaar: dagen,
+    dagenDezeWeek: dagenInWeekVan(invoer.gewerkteDagen, invoer.datum),
+    dagenDezeMaand: dagenInMaandVan(invoer.gewerkteDagen, invoer.datum),
     keren: invoer.keren,
     past: redenen.length === 0,
     redenen,
   };
 };
 
-/** Passend eerst; daarbinnen de kortste reeks werkdagen rond het gat (wie
- *  het minst dagen na elkaar zou werken komt het meest in aanmerking —
- *  keuze Jarno 17-08), dan wie dit jaar het minst inviel, dan op naam. */
+/** Passend eerst; daarbinnen wie deze week (ma–zo) het minst werkte, dan de
+ *  kortste aaneengesloten reeks rond het gat, dan het laagste maandtotaal,
+ *  dan op naam — keuze Jarno 19-08. De invalbeurten-teller telt niet meer
+ *  mee: zolang chauffeurs het portaal amper gebruiken staat die vrijwel
+ *  overal op nul; de gewerkte dagen komen uit de geïmporteerde planning en
+ *  zeggen wél iets. */
 export const sorteerKandidaten = (ks: KandidaatAdvies[]): KandidaatAdvies[] =>
   [...ks].sort(
     (a, b) =>
       Number(b.past) - Number(a.past) ||
+      a.dagenDezeWeek - b.dagenDezeWeek ||
       a.dagenNaElkaar - b.dagenNaElkaar ||
-      a.keren - b.keren ||
+      a.dagenDezeMaand - b.dagenDezeMaand ||
       a.name.localeCompare(b.name),
   );
 
@@ -217,7 +256,8 @@ export const tijdenLabel = (rijen: TijdRij[]): string =>
  * reeks verandert niet — alleen de rusttijden tellen), en D past volledig in
  * dat van Y. Zonder tijden van de open dienst is de rustcheck voor X
  * onmogelijk → dan geen voorstellen (liever niets dan een onbetrouwbare ruil).
- * Beste ketting eerst: de overnemer met de kortste reeks / minste invallen.
+ * Beste ketting eerst: de overnemer die deze week het minst werkte (zelfde
+ * criteria als sorteerKandidaten).
  */
 export const zoekKettingen = (invoer: {
   datum: string;
@@ -276,8 +316,9 @@ export const zoekKettingen = (invoer: {
   return gevonden
     .sort(
       (a, b) =>
+        a.naar.dagenDezeWeek - b.naar.dagenDezeWeek ||
         a.naar.dagenNaElkaar - b.naar.dagenNaElkaar ||
-        a.naar.keren - b.naar.keren ||
+        a.naar.dagenDezeMaand - b.naar.dagenDezeMaand ||
         a.naar.name.localeCompare(b.naar.name),
     )
     .slice(0, max)
@@ -306,7 +347,9 @@ export const adviesSamenvatting = (invoer: {
     delen.push(eerste.dagenNaElkaar === 1 ? "geen aansluitende werkdagen" : `${eerste.dagenNaElkaar}e werkdag op rij`);
     const rusten = [eerste.rustVoor, eerste.rustNa].filter((r): r is number => r !== null);
     if (rusten.length > 0) delen.push(`rust ${formatUren(Math.min(...rusten))}`);
-    delen.push(eerste.keren > 0 ? `${eerste.keren}× ingevallen dit jaar` : "nog niet ingevallen dit jaar");
+    delen.push(eerste.dagenDezeWeek === 0
+      ? "nog geen werkdag deze week"
+      : `${eerste.dagenDezeWeek} werkdag${eerste.dagenDezeWeek === 1 ? "" : "en"} deze week`);
     const tweede = passend[1];
     const staart = tweede
       ? ` ${tweede.name} is de logische tweede keuze.`

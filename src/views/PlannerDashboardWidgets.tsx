@@ -36,7 +36,7 @@ import type {
 import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
-import { kandidaatLabel, overnameTellingDitJaar, rangschikKandidaten, vrijOpDatum } from '../lib/vervangers';
+import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
@@ -357,7 +357,7 @@ export function PlannerDashboardWidgets({
   // (Geen useMemo: alle hooks moeten vóór de skeleton-return staan — zie de
   //  waarschuwing daar. De lijst is klein en de berekening lineair.)
   const teHerverdelen = openstaandeDienstenVanAfwezigen(shifts, leaveRequests, today);
-  const overnameTelling = overnameTellingDitJaar(swaps);
+  const werkdagen = werkdagenUitShifts(shifts);
   // Per chauffeur groeperen i.p.v. één rij per dienst: bij een langere ziekte
   // zijn dat er al gauw acht, terwijl de lijst er maar vier toonde. Je loste er
   // vier op, de volgende vier schoven door, en het leek alsof de melding bleef
@@ -1116,12 +1116,14 @@ export function PlannerDashboardWidgets({
                           className="control-input min-w-0 flex-1 rounded-2xl px-3.5 py-2.5 text-base sm:text-sm font-semibold outline-none bg-surface-field"
                         >
                           <option value="">Kies een chauffeur…</option>
-                          {/* Vrij die dag bovenaan, daarbinnen minst ingevallen
-                              dit jaar — eerlijk verdelen i.p.v. alfabetisch. */}
+                          {/* Vrij die dag bovenaan, daarbinnen minst gewerkt
+                              die week — zelfde criteria als de advisor
+                              (keuze Jarno 19-08). */}
                           {rangschikKandidaten(
                             users.filter((u) => u.role === 'chauffeur' && u.isActive !== false && String(u.id) !== String(d.driverId)),
                             vrijOpDatum(shifts, d.date),
-                            overnameTelling,
+                            werkdagen,
+                            d.date,
                           ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
                         </select>
                         <Button

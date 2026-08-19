@@ -11,9 +11,9 @@ import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
 import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
-import type { SwapRequest, User } from '../types';
+import type { User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../lib/format';
-import { kandidaatLabel, overnameTellingDitJaar, rangschikKandidaten } from '../lib/vervangers';
+import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 
 const WEEKDAY_LETTERS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 
@@ -26,7 +26,7 @@ const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Andere correctie'] a
  * datum met codes), zoals het overzicht dat in het chauffeurslokaal hangt.
  * Zichtbaar voor iedereen zodat collega's wissels kunnen vinden.
  */
-export function CapacityView({ currentUser, swaps = [] }: { currentUser: User; swaps?: SwapRequest[] }) {
+export function CapacityView({ currentUser }: { currentUser: User }) {
   const ownId = String(currentUser?.id ?? '');
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
@@ -94,7 +94,6 @@ export function CapacityView({ currentUser, swaps = [] }: { currentUser: User; s
   // rol óók af via requireRole). 'reloadTick' herlaadt de maand na een wissel,
   // zodat de dienst meteen bij de nieuwe chauffeur staat.
   const isAdmin = currentUser.role === 'admin';
-  const overnameTelling = useMemo(() => overnameTellingDitJaar(swaps), [swaps]);
 
   // Excel-terugexport (staf): de actuele maand — wissels, toewijzingen en
   // afwezigheid verwerkt — in het her-importeerbare praktijk-tab-formaat.
@@ -236,6 +235,20 @@ export function CapacityView({ currentUser, swaps = [] }: { currentUser: User; s
   const dates = data?.dates ?? [];
   const drivers = data?.drivers ?? [];
   const cells = data?.cells ?? {};
+  // Werkdagen per chauffeur uit de maandcellen — voedt de vervanger-sortering
+  // (minst gewerkt die week eerst). hiddenService telt mee als werkdag: de
+  // dienst staat dan nog op naam (ziekte-overlay), dus die dag is niet vrij.
+  const werkdagenPerChauffeur = useMemo(() => {
+    const per = new Map<string, Set<string>>();
+    for (const [driverId, perDag] of Object.entries(cells)) {
+      const set = new Set<string>();
+      for (const [iso, cel] of Object.entries(perDag)) {
+        if (cel && (cel.kind === 'service' || cel.hiddenService)) set.add(iso);
+      }
+      per.set(driverId, set);
+    }
+    return per;
+  }, [cells]);
 
   // Maandag van de week (lokaal) → sleutel om dagen per week te bucketen.
   const weekKeyOf = (iso: string) => {
@@ -1021,16 +1034,18 @@ export function CapacityView({ currentUser, swaps = [] }: { currentUser: User; s
                     className="control-input w-full px-3.5 py-2.5 rounded-2xl font-semibold text-base sm:text-sm outline-none bg-surface-field"
                   >
                     <option value="">Kies een chauffeur…</option>
-                    {/* Vrij die dag bovenaan, daarbinnen minst ingevallen dit
-                        jaar — eerlijk verdelen i.p.v. alfabetisch. "Vrij" =
-                        geen dienst(cel) op deze dag in de maandplanning. */}
+                    {/* Vrij die dag bovenaan, daarbinnen minst gewerkt die
+                        week — zelfde criteria als de advisor (keuze Jarno
+                        19-08). "Vrij" = geen dienst(cel) op deze dag in de
+                        maandplanning. */}
                     {rangschikKandidaten(
                       drivers.filter((d) => String(d.id) !== selected.driverId),
                       (d) => {
                         const c = cells[String(d.id)]?.[selected.iso];
                         return !c || (c.kind !== 'service' && !c.hiddenService);
                       },
-                      overnameTelling,
+                      werkdagenPerChauffeur,
+                      selected.iso,
                     ).map((k) => (
                       <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>
                     ))}
