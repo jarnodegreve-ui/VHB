@@ -14,6 +14,7 @@ import {
   type CoverageConfig,
   type CoverageDayType,
   type CoverageOverride,
+  type CoverageWeekdayPeriod,
   type DayGap,
 } from '../lib/coverage';
 import { normalizeCode } from '../lib/coverageGaps';
@@ -45,6 +46,7 @@ export function CoverageView() {
   // Bewerkbare config-state.
   const [dayTypes, setDayTypes] = useState<CoverageDayType[]>([]);
   const [weekdays, setWeekdays] = useState<string[]>(['', '', '', '', '', '', '']);
+  const [weekdayPeriods, setWeekdayPeriods] = useState<CoverageWeekdayPeriod[]>([]);
   const [overrides, setOverrides] = useState<CoverageOverride[]>([]);
   const [gaps, setGaps] = useState<DayGap[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,6 +79,7 @@ export function CoverageView() {
         setDayTypes((c.dayTypes || []).map((dt) => ({ name: dt.name, services: [...(dt.services || [])] })));
         const w = Array.isArray(c.weekdays) && c.weekdays.length === 7 ? c.weekdays : ['', '', '', '', '', '', ''];
         setWeekdays([...w]);
+        setWeekdayPeriods((c.weekdayPeriods || []).map((p) => ({ vanaf: p.vanaf, weekdays: [...(p.weekdays || [])] })));
         setOverrides((c.overrides || []).map((o) => ({ ...o })));
       })
       .catch((e) => { if (!cancelled) setError(e?.message || 'Kon instellingen niet laden.'); });
@@ -201,6 +204,16 @@ export function CoverageView() {
   const setWeekday = (dow: number, name: string) =>
     setWeekdays((prev) => prev.map((x, idx) => (idx === dow ? name : x)));
 
+  // --- Weekdag-periodes (vanaf een datum geldt een andere toewijzing) ---
+  const addWeekdayPeriod = () =>
+    setWeekdayPeriods((prev) => [...prev, { vanaf: '', weekdays: ['', '', '', '', '', '', ''] }]);
+  const setPeriodVanaf = (i: number, vanaf: string) =>
+    setWeekdayPeriods((prev) => prev.map((p, idx) => (idx === i ? { ...p, vanaf } : p)));
+  const setPeriodWeekday = (i: number, dow: number, name: string) =>
+    setWeekdayPeriods((prev) => prev.map((p, idx) => (idx === i ? { ...p, weekdays: p.weekdays.map((x, d) => (d === dow ? name : x)) } : p)));
+  const removeWeekdayPeriod = (i: number) =>
+    setWeekdayPeriods((prev) => prev.filter((_, idx) => idx !== i));
+
   // --- Uitzonderingen ---
   const addOverride = () => setOverrides((prev) => [...prev, { from: '', to: '', dayType: '' }]);
   const updateOverride = (i: number, field: keyof CoverageOverride, value: string) =>
@@ -225,7 +238,10 @@ export function CoverageView() {
       const cleanOverrides = overrides
         .filter((o) => o.from && o.to && validNames.has(o.dayType))
         .map((o) => ({ from: o.from, to: o.to, dayType: o.dayType }));
-      await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, overrides: cleanOverrides });
+      const cleanPeriods = weekdayPeriods
+        .filter((p) => /^\d{4}-\d{2}-\d{2}$/.test(p.vanaf))
+        .map((p) => ({ vanaf: p.vanaf, weekdays: p.weekdays.map((w) => (validNames.has(w) ? w : '')) }));
+      await saveCoverageConfig({ dayTypes: cleanDayTypes, weekdays: cleanWeekdays, weekdayPeriods: cleanPeriods, overrides: cleanOverrides });
       await refetchGaps();
     } catch (e: any) {
       setError(e?.message || 'Opslaan is mislukt.');
@@ -362,6 +378,52 @@ export function CoverageView() {
                         <option value="">— geen —</option>
                         {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                       </select>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Weekdag-periodes: bij een dienstregelingswissel (bv. schooljaar
+                    vanaf 1 september) verandert wat elke weekdag is — zonder
+                    ingangsdatum bleef de dekking eeuwig het oude regime
+                    verwachten (melding Jarno 19-08). */}
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <p className="text-xs font-medium text-slate-500">
+                      Vanaf een datum kan een ándere toewijzing gelden — bv. het schooljaar-regime vanaf 1 september. De recentste ingangsdatum vóór een dag wint; uitzonderingen hieronder gaan altijd voor.
+                    </p>
+                    <Button variant="secondary" size="sm" icon={<Plus size={13} />} className="shrink-0" onClick={addWeekdayPeriod}>
+                      Periode
+                    </Button>
+                  </div>
+                  {weekdayPeriods.map((p, i) => (
+                    <div key={i} className="rounded-2xl border border-slate-100 bg-surface-field p-4 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <MicroLabel className="text-slate-500">Vanaf</MicroLabel>
+                        <input
+                          type="date"
+                          value={p.vanaf}
+                          onChange={(e) => setPeriodVanaf(i, e.target.value)}
+                          aria-label="Ingangsdatum van deze weekdag-toewijzing"
+                          className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                        />
+                        <Button variant="ghost" size="sm" icon={<X size={15} />} className="ml-auto shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Periode verwijderen" onClick={() => removeWeekdayPeriod(i)} />
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {WEEKDAY_ORDER.map(({ dow, label }) => (
+                          <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
+                            <span className="text-sm font-bold text-slate-700">{label}</span>
+                            <select
+                              value={p.weekdays[dow] || ''}
+                              onChange={(e) => setPeriodWeekday(i, dow, e.target.value)}
+                              aria-label={`Dag-type voor ${label} vanaf ${p.vanaf || 'de ingangsdatum'}`}
+                              className="control-input rounded-lg px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                            >
+                              <option value="">— geen —</option>
+                              {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   ))}
                 </div>

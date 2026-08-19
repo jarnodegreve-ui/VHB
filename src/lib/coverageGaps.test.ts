@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeCode, computeDayGap, resolveDayType, parseOverrides, encodeOverride, DEFAULT_WEEKDAYS } from './coverageGaps';
+import { normalizeCode, computeDayGap, resolveDayType, parseOverrides, encodeOverride, weekdaysVoorDatum, encodeWeekdagPeriodeKey, WEEKDAY_PERIOD_KEY_RE, DEFAULT_WEEKDAYS } from './coverageGaps';
 
 describe('coverageGaps', () => {
   it('normalizeCode trimt + lowercase', () => {
@@ -90,5 +90,28 @@ describe('coverageGaps', () => {
     expect(parseOverrides(['geen-pipe', '2026-07-01..x|y', '2026-07-01..2026-07-01|', null])).toEqual([]);
     expect(parseOverrides('geen-array' as unknown)).toEqual([]);
     expect(encodeOverride({ from: '2026-08-31', to: '2026-07-01', dayType: 'feestdag' })).toBe('2026-07-01..2026-08-31|feestdag');
+  });
+
+  it('weekdaysVoorDatum: recentste ingangsdatum ≤ datum wint, anders de basis', () => {
+    const basis = ['b', 'b', 'b', 'b', 'b', 'b', 'b'];
+    const zomer = { vanaf: '2026-07-01', weekdays: ['z', 'z', 'z', 'z', 'z', 'z', 'z'] };
+    const school = { vanaf: '2026-09-01', weekdays: ['s', 's', 's', 's', 's', 's', 's'] };
+    // Vóór elke periode: basis; binnen een periode: die periode; bij twee
+    // gepasseerde ingangsdatums wint de recentste — volgorde in de lijst
+    // maakt niet uit.
+    expect(weekdaysVoorDatum(basis, [school, zomer], '2026-06-30')).toBe(basis);
+    expect(weekdaysVoorDatum(basis, [school, zomer], '2026-07-01')).toBe(zomer.weekdays);
+    expect(weekdaysVoorDatum(basis, [school, zomer], '2026-08-31')).toBe(zomer.weekdays);
+    expect(weekdaysVoorDatum(basis, [school, zomer], '2026-09-01')).toBe(school.weekdays);
+    // Een kapotte periode (geen 7 entries) telt niet mee.
+    expect(weekdaysVoorDatum(basis, [{ vanaf: '2026-01-01', weekdays: ['x'] }], '2026-06-01')).toBe(basis);
+  });
+
+  it('weekdag-periode-sleutels: encode/parse zijn elkaars spiegel', () => {
+    expect(encodeWeekdagPeriodeKey('2026-09-01')).toBe('__weekdagen_2026-09-01__');
+    expect(WEEKDAY_PERIOD_KEY_RE.exec('__weekdagen_2026-09-01__')?.[1]).toBe('2026-09-01');
+    // De basis-sleutel en andere reserved keys matchen niet.
+    expect(WEEKDAY_PERIOD_KEY_RE.test('__weekdagen__')).toBe(false);
+    expect(WEEKDAY_PERIOD_KEY_RE.test('__uitzonderingen__')).toBe(false);
   });
 });
