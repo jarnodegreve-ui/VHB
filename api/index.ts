@@ -1739,11 +1739,43 @@ const parseMatrixInput = (body: any) => {
   return { rows: parsePlanningMatrixXlsx(buffer) };
 };
 
+// Parse + optionele periode-selectie, gedeeld door import en preview. De
+// planner maakt de Excel vaak maanden vooruit, maar alleen het vaststaande
+// deel mag het portaal in: rijen buiten [van, tot] worden genegeerd alsof ze
+// niet in het bestand stonden. Het te vervangen bereik volgt daardoor vanzelf
+// de overgebleven rijen (de RPC leidt het af uit min/max source_date).
+const parseMatrixInputMetPeriode = (body: any) => {
+  const { rows } = parseMatrixInput(body);
+  const bestandDates = rows.map((row) => row.source_date).filter(Boolean);
+  const fileStartDate = bestandDates[0] || null;
+  const fileEndDate = bestandDates[bestandDates.length - 1] || null;
+  const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
+  const periode = body?.periode;
+  let van: string | null = null;
+  let tot: string | null = null;
+  if (periode && typeof periode === "object") {
+    van = typeof periode.van === "string" && ISO_DATUM.test(periode.van) ? periode.van : null;
+    tot = typeof periode.tot === "string" && ISO_DATUM.test(periode.tot) ? periode.tot : null;
+    if ((periode.van && !van) || (periode.tot && !tot)) {
+      throw new Error("Ongeldige periode: gebruik datums in het formaat YYYY-MM-DD.");
+    }
+    if (van && tot && van > tot) {
+      throw new Error("Ongeldige periode: de begindatum ligt na de einddatum.");
+    }
+  }
+  const selectie = rows.filter((row) =>
+    (!van || row.source_date >= van) && (!tot || row.source_date <= tot));
+  if (selectie.length === 0) {
+    throw new Error(`Geen dagen binnen de gekozen periode — het bestand loopt van ${fileStartDate ?? "?"} t/m ${fileEndDate ?? "?"}.`);
+  }
+  return { rows: selectie, fileStartDate, fileEndDate };
+};
+
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
-    let rows;
+    let rows, fileStartDate, fileEndDate;
     try {
-      ({ rows } = parseMatrixInput(req.body));
+      ({ rows, fileStartDate, fileEndDate } = parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }
@@ -1834,7 +1866,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       req,
       "planning",
       "Matrix import bevestigd",
-      `${rows.length} dagen verwerkt (periode ${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"} vervangen; planning daarbuiten onaangetast), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
+      `${rows.length} dagen verwerkt (periode ${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"} vervangen; planning daarbuiten onaangetast${fileStartDate !== startDate || fileEndDate !== endDate ? `; selectie uit bestand ${fileStartDate} t/m ${fileEndDate}` : ""}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
     );
 
     // Chauffeurs met diensten in deze import krijgen een seintje.
@@ -1859,6 +1891,8 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       ziekteDiensten,
       startDate,
       endDate,
+      fileStartDate,
+      fileEndDate,
     });
   } catch (err: any) {
     console.error("Planning importeren is mislukt.", err);
@@ -1868,9 +1902,9 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
 
 app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
-    let rows;
+    let rows, fileStartDate, fileEndDate;
     try {
-      ({ rows } = parseMatrixInput(req.body));
+      ({ rows, fileStartDate, fileEndDate } = parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }
@@ -1935,6 +1969,8 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       skippedAbsences: generatedPlanning.summary.skippedAbsences,
       startDate,
       endDate,
+      fileStartDate,
+      fileEndDate,
       importedDates,
       existingStart,
       existingEnd,
