@@ -54,50 +54,27 @@ begin
 end;
 $$;
 
-create or replace function public.replace_planning_and_matrix(matrix_rows jsonb, shifts jsonb)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  matrix_count integer;
-  shift_count integer := 0;
-begin
-  if matrix_rows is null or jsonb_typeof(matrix_rows) <> 'array' or jsonb_array_length(matrix_rows) = 0 then
-    raise exception 'Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.';
-  end if;
-
-  -- Hergebruikt de bestaande, gereviewde replace-functies; omdat dit alles
-  -- binnen één functie-aanroep gebeurt, is het geheel één transactie:
-  -- faalt eender welke stap, dan rolt álles terug (geen skew meer).
-  select public.replace_planning_matrix_rows(matrix_rows) into matrix_count;
-
-  if shifts is not null and jsonb_typeof(shifts) = 'array' and jsonb_array_length(shifts) > 0 then
-    select public.replace_planning(shifts) into shift_count;
-  else
-    -- Import met enkel niet-dienst-codes (verlof/ziekte/…): legitiem 0
-    -- diensten. De planning is afgeleid van de matrix, dus die wordt hier
-    -- bewust mee geleegd — atomair, binnen dezelfde transactie.
-    delete from public.planning where true;
-    shift_count := 0;
-  end if;
-
-  return jsonb_build_object('matrix', matrix_count, 'shifts', shift_count);
-end;
-$$;
+-- =============================================================================
+-- LET OP — replace_planning_and_matrix staat NIET meer in dit bestand
+-- =============================================================================
+-- De wrapper is per 2026-08-19 vervangen door replace_planning_and_matrix_periode
+-- in supabase/2026-08-19_periode_import.sql: een import vervangt sindsdien
+-- alléén het datumbereik van het geüploade bestand i.p.v. álles. Dit bestand
+-- opnieuw draaien zou de oude alles-wissende wrapper stil terugzetten (en de
+-- UI belooft intussen "de rest blijft staan"), dus de oude definitie is hier
+-- verwijderd — zelfde behandeling als replace_planning ooit kreeg in
+-- transactional_replace.sql. Draai 2026-08-19_periode_import.sql voor de
+-- actuele importfunctie.
+-- =============================================================================
 
 -- Alleen de server (service_role) mag deze destructieve replaces aanroepen.
 -- Zonder deze revokes exposeert PostgREST elke public-functie als
 -- /rest/v1/rpc/... en geeft Postgres EXECUTE standaard aan PUBLIC — een
 -- bezoeker met de publieke anon-key kon zo (security definer = RLS-bypass)
--- de volledige planning + matrix wissen, buiten de Express-API om. Dit gat
--- bestond ook al op de oudere functies; we dichten het hier voor alle drie.
+-- de volledige planning + matrix wissen, buiten de Express-API om.
 revoke all on function public.replace_planning(jsonb) from public, anon, authenticated;
 revoke all on function public.replace_planning_matrix_rows(jsonb) from public, anon, authenticated;
-revoke all on function public.replace_planning_and_matrix(jsonb, jsonb) from public, anon, authenticated;
 grant execute on function public.replace_planning(jsonb) to service_role;
 grant execute on function public.replace_planning_matrix_rows(jsonb) to service_role;
-grant execute on function public.replace_planning_and_matrix(jsonb, jsonb) to service_role;
 
 commit;

@@ -291,7 +291,7 @@ const runSchemaCheck = async (res: express.Response) => {
   const RPC_PROBES: Array<{ name: string; args: Record<string, unknown> }> = [
     { name: "replace_planning", args: { rows: null } },
     { name: "replace_planning_matrix_rows", args: { rows: null } },
-    { name: "replace_planning_and_matrix", args: { matrix_rows: null, shifts: null } },
+    { name: "replace_planning_and_matrix_periode", args: { matrix_rows: null, shifts: null } },
     { name: "bump_active_sessions", args: { uid: "__schema_probe__", delta: 0 } },
   ];
   for (const probe of RPC_PROBES) {
@@ -1834,7 +1834,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       req,
       "planning",
       "Matrix import bevestigd",
-      `${rows.length} dagen verwerkt (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
+      `${rows.length} dagen verwerkt (periode ${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"} vervangen; planning daarbuiten onaangetast), ${generatedPlanning.summary.generatedShifts} diensten opgebouwd, ${reapplied.applied} goedgekeurde ruil(en) opnieuw doorgevoerd${reapplied.skipped > 0 ? ` (${reapplied.skipped} niet toepasbaar)` : ""}. Onbekende codes: ${summarizeTokens(generatedPlanning.summary.unknownCodes)}. Niet-gematchte chauffeurs: ${summarizeTokens(generatedPlanning.summary.unmatchedDrivers)}.`,
     );
 
     // Chauffeurs met diensten in deze import krijgen een seintje.
@@ -1879,6 +1879,20 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     const endDate = importedDates[importedDates.length - 1] || null;
     const generatedPlanning = await buildPlanningFromMatrix(rows);
 
+    // Een import vervangt alléén zijn eigen datumbereik. Leg de bestaande
+    // matrix ernaast zodat de preview kan tonen wat vervangen wordt, wat
+    // blijft staan en of er een gat tussen beide periodes valt.
+    const bestaandeMatrixDates = (await getPlanningMatrixRows())
+      .map((r) => String(r.source_date))
+      .filter(Boolean)
+      .sort();
+    const existingStart = bestaandeMatrixDates[0] || null;
+    const existingEnd = bestaandeMatrixDates[bestaandeMatrixDates.length - 1] || null;
+    const replacedExistingDays = startDate && endDate
+      ? bestaandeMatrixDates.filter((d) => d >= startDate && d <= endDate).length
+      : 0;
+    const retainedDays = bestaandeMatrixDates.length - replacedExistingDays;
+
     const [leave, users] = await Promise.all([getLeaveData(), getUsersData()]);
     const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name || `Onbekend (${id})`;
     const approvedLeave = leave.filter((l) => l.status === "approved");
@@ -1922,6 +1936,10 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       startDate,
       endDate,
       importedDates,
+      existingStart,
+      existingEnd,
+      replacedExistingDays,
+      retainedDays,
       verlofConflicts,
       matrixVerlofConflicts: matrixConflicts,
       ruilVerlofConflicts: replayConflicts,
