@@ -14,7 +14,11 @@ export type KandidaatAdvies = {
   rustNa: number | null;
   /** Gewerkte dagen na elkaar mét deze toewijzing erbij. */
   dagenNaElkaar: number;
-  /** Hoe vaak dit jaar al ingevallen (eerlijke verdeling). */
+  /** Al gewerkte dagen in de week (ma–zo) resp. kalendermaand van het gat —
+   *  dé sorteersleutels sinds 19-08 (minst belast eerst). */
+  dagenDezeWeek: number;
+  dagenDezeMaand: number;
+  /** Hoe vaak dit jaar al ingevallen; telt niet meer mee in de sortering. */
   keren: number;
   past: boolean;
   redenen: string[];
@@ -59,16 +63,18 @@ export const formatRustUren = (minuten: number): string => {
 
 /**
  * Compacte metaregel onder een passende kandidaat:
- * "rust 11u30 · 4e werkdag op rij · 2× ingevallen". De krapste rust van de
- * twee kanten is de bindende en dus de getoonde; zonder aansluitende
- * diensten valt het rust-deel weg.
+ * "rust 11u30 · 4e werkdag op rij · 2 dagen deze week · 8 deze maand".
+ * De krapste rust van de twee kanten is de bindende en dus de getoonde;
+ * zonder aansluitende diensten valt het rust-deel weg. De week-/maandtelling
+ * toont waarop de volgorde sorteert (minst belast eerst, keuze Jarno 19-08).
  */
 export const kandidaatMeta = (k: KandidaatAdvies): string => {
   const delen: string[] = [];
   const rusten = [k.rustVoor, k.rustNa].filter((r): r is number => r !== null);
   if (rusten.length > 0) delen.push(`rust ${formatRustUren(Math.min(...rusten))}`);
   if (k.dagenNaElkaar > 1) delen.push(`${k.dagenNaElkaar}e werkdag op rij`);
-  delen.push(k.keren > 0 ? `${k.keren}× ingevallen` : 'nog niet ingevallen');
+  delen.push(`${k.dagenDezeWeek} ${k.dagenDezeWeek === 1 ? 'dag' : 'dagen'} deze week`);
+  delen.push(`${k.dagenDezeMaand} deze maand`);
   return delen.join(' · ');
 };
 

@@ -26,6 +26,15 @@
         ],
         "createdAt": "2026-08-16T21:05:41.368Z",
         "reason": "Uitlogknop Meer-menu: rust = grijs op transparant; het rode vlak verschijnt alleen op hover en de tekst kleurt dan mee naar red-600. Bekend terugkerend vals-positief (akkoord Jarno 16-08)."
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/views/PlannerDashboardWidgets.tsx"
+        ],
+        "createdAt": "2026-08-19T18:48:09.109Z",
+        "reason": "text-slate-600 op bg-surface-muted: neutraal grijs oppervlak-token, geen gekleurde achtergrond — zelfde bekende vals-positief-klasse als de override-tabel (config 09-08)"
       }
     ]
   }

@@ -8,7 +8,7 @@ import dotenv from "dotenv";
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 import { computeDayGap, normalizeCode, resolveDayType, parseOverrides, encodeOverride, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap } from "./coverageGaps.js";
-import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
+import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
 // de uitzonderingen op te slaan — zo is er geen aparte tabel/migratie nodig.
@@ -1189,10 +1189,17 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
 /** Volledig advies voor één openstaande dienst — gedeeld door
  *  GET /api/coverage-advisor en de dagelijkse digest. */
 async function berekenCoverageAdvies(date: string, code: string) {
-    // Venster ±6 dagen rond de dag: genoeg voor de 6-dagenregel in beide
-    // richtingen én de rustcheck met de buurdagen.
-    const vanaf = addDagen(date, -6);
-    const tot = addDagen(date, 6);
+    // Venster: ±6 dagen (6-dagenregel + rustcheck met de buurdagen), opgerekt
+    // tot de volledige week (ma–zo) én kalendermaand van de dag — de sortering
+    // telt sinds 19-08 gewerkte dagen per week en per maand.
+    const maandStart = `${date.slice(0, 7)}-01`;
+    // Laatste dag van de maand = de dag vóór de 1e van de volgende maand
+    // (dag 28 + 7 valt gegarandeerd in de volgende maand).
+    const volgendeMaandStart = `${addDagen(`${date.slice(0, 7)}-28`, 7).slice(0, 7)}-01`;
+    const maandEind = addDagen(volgendeMaandStart, -1);
+    const weekStart = maandagVan(date);
+    const vanaf = [addDagen(date, -6), maandStart, weekStart].sort()[0];
+    const tot = [addDagen(date, 6), maandEind, addDagen(weekStart, 6)].sort().slice(-1)[0];
     const months = Array.from(new Set([vanaf, date, tot].map((d) => d.slice(0, 7))));
     const [users, leave, services, swaps, ...planningChunks] = await Promise.all([
       getUsersData(),
@@ -1362,7 +1369,7 @@ app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), pla
       },
       {
         name: "advies_voor_dienst",
-        description: "Het volledige invaladvies voor één openstaande dienst op één dag: de collega-samenvatting, passende kandidaten (met reeks werkdagen en invalbeurten), wie niet past en waarom, en eventuele ruilopties in één stap. Roep dit altijd aan vóór je iemand aanraadt voor een dienst.",
+        description: "Het volledige invaladvies voor één openstaande dienst op één dag: de collega-samenvatting, passende kandidaten (met gewerkte dagen deze week en deze maand, en de reeks aaneengesloten werkdagen), wie niet past en waarom, en eventuele ruilopties in één stap. Roep dit altijd aan vóór je iemand aanraadt voor een dienst.",
         input_schema: {
           type: "object",
           properties: {
@@ -1418,7 +1425,9 @@ app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), pla
           samenvatting: advies.samenvatting,
           tijden: advies.segmenten,
           tijdenOnbekend: advies.tijdenOnbekend,
-          passend: advies.kandidaten.filter((k) => k.past).map((k) => ({ naam: k.name, dagenNaElkaar: k.dagenNaElkaar, invalbeurten: k.keren })),
+          // Volgorde = de sortering van de advisor (minst gewerkt deze week
+          // eerst); de teller-namen zeggen het model wat de cijfers betekenen.
+          passend: advies.kandidaten.filter((k) => k.past).map((k) => ({ naam: k.name, dagenDezeWeek: k.dagenDezeWeek, reeksWerkdagen: k.dagenNaElkaar, dagenDezeMaand: k.dagenDezeMaand })),
           pastNiet: advies.kandidaten.filter((k) => !k.past).map((k) => ({ naam: k.name, redenen: k.redenen })),
           ruilOpties: advies.kettingen.map((k) => ({ wieRijdtHetGat: k.vanNaam, staatAf: k.viaCode, tijden: k.viaTijden, overgenomenDoor: k.naarNaam })),
         });
@@ -1467,7 +1476,10 @@ app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), pla
       "Baseer élk feit (namen, diensten, tijden, datums) op de uitvoer van je tools. Verzin nooit namen of diensten; geeft een tool niets terug, zeg dat dan eerlijk.",
       "De invalregels zitten al in de tools verwerkt: minstens 8 uur rust ten opzichte van de aansluitende werkdagen, maximaal 6 gewerkte dagen na elkaar, en schoolvervoerchauffeurs rijden geen lijndiensten. Volg het tool-advies en reken rusttijden nooit zelf uit.",
       "Je adviseert alleen — je kunt niets wijzigen of versturen. Verwijs voor het uitvoeren naar het portaal: toewijzen via Openstaande diensten, wissels via de Maandplanning.",
-      "Antwoord kort en concreet, in het Nederlands, in gewone lopende tekst zonder opmaaktekens (geen sterretjes, koppen of lijstjes met streepjes tenzij echt nodig). Schrijf datums als 'za 29 aug'. Interpreteer relatieve datums ('zaterdag', 'volgende week') ten opzichte van vandaag.",
+      // Beknoptheid als hard contract i.p.v. "kort en concreet" — feedback
+      // Jarno 19-08: de antwoorden waren veel te lang.
+      "Wees kort: standaard twee tot vier zinnen. Noem bij een invaladvies alleen de beste twee à drie kandidaten — de tools leveren ze al in de juiste volgorde (wie deze week het minst werkte eerst, dan de kortste reeks aaneengesloten werkdagen, dan het laagste maandtotaal). Som nooit een volledige kandidaten- of dagenlijst op; details zoals wie niet past en waarom, ruilopties of volledige dagplanningen geef je alleen wanneer de planner er expliciet naar vraagt.",
+      "Antwoord in het Nederlands, in gewone lopende tekst zonder opmaaktekens (geen sterretjes, koppen of lijstjes met streepjes tenzij echt nodig). Schrijf datums als 'za 29 aug'. Interpreteer relatieve datums ('zaterdag', 'volgende week') ten opzichte van vandaag.",
     ].join("\n");
 
     const AnthropicSdk = (await import("@anthropic-ai/sdk")).default;
