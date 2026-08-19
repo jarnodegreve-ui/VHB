@@ -259,31 +259,49 @@ const savePlanningMatrixRows = async (rows: PlanningMatrixRow[]) => {
 };
 
 /**
- * Atomische import: matrix + afgeleide planning in ÉÉN transactie vervangen
- * (RPC replace_planning_and_matrix). Voorheen waren dit twee losse replaces:
- * faalde de tweede, dan toonde de Maandplanning (matrix) een andere maand dan
- * de roosters (planning) — skew. Een lege shifts-set is toegestaan (import
- * met enkel verlof-/afwezigheidscodes): de planning volgt de matrix en wordt
- * dan bewust mee geleegd.
+ * Periode-import: matrix + afgeleide planning atomair vervangen, maar ALLEEN
+ * binnen het datumbereik van het aangeleverde bestand (RPC
+ * replace_planning_and_matrix_periode leidt dat bereik zelf af uit min/max
+ * source_date). Alles buiten het bereik blijft staan — zo kunnen twee
+ * aansluitende maandplanningen ("actueel" en "vanaf september") naast elkaar
+ * bestaan. Een lege shifts-set is toegestaan (import met enkel verlof-/
+ * afwezigheidscodes): de planning binnen het bereik wordt dan bewust geleegd.
  *
- * Fallback zolang de RPC niet bestaat (migratie nog niet gedraaid): het oude
- * sequentiële pad — mét de oude beperking dat een lege shifts-set geweigerd
- * wordt, omdat het niet-atomische pad een wipe niet veilig kan garanderen.
+ * Fallback zolang de RPC niet bestaat (migratie nog niet gedraaid): zelfde
+ * periode-semantiek, maar niet-atomisch (losse delete/insert-calls). Bewust
+ * NIET terugvallen op de oude alles-wissende replaces — de UI belooft
+ * intussen dat de rest blijft staan.
  */
 export const replacePlanningAndMatrix = async (rows: PlanningMatrixRow[], shifts: ShiftRecord[]) => {
   const client = requireDb();
   if (!Array.isArray(rows) || rows.length === 0) {
-    throw new Error("Lege matrix-set geweigerd: dit zou de volledige matrixplanning wissen.");
+    throw new Error("Lege matrix-set geweigerd: er valt geen periode uit af te leiden.");
   }
-  const { error: rpcError } = await client.rpc('replace_planning_and_matrix', {
+  const { error: rpcError } = await client.rpc('replace_planning_and_matrix_periode', {
     matrix_rows: rows,
     shifts: Array.isArray(shifts) ? shifts : [],
   });
   if (!rpcError) return;
   if (!isMissingDbFunction(rpcError)) throw rpcError;
-  console.warn('replace_planning_and_matrix ontbreekt (migratie niet gedraaid?) — val terug op het niet-atomische pad.');
-  await savePlanningMatrixRows(rows);
-  await replacePlanningData(shifts);
+  console.warn('replace_planning_and_matrix_periode ontbreekt (migratie niet gedraaid?) — val terug op het niet-atomische periode-pad.');
+  const dates = rows.map((r) => String(r.source_date)).filter(Boolean).sort();
+  const spanStart = dates[0];
+  const spanEnd = dates[dates.length - 1];
+  if (!spanStart || !spanEnd) {
+    throw new Error("Matrixrijen zonder geldige source_date — periode niet af te leiden.");
+  }
+  const { error: matrixDeleteError } = await client
+    .from('planning_matrix_rows').delete().gte('source_date', spanStart).lte('source_date', spanEnd);
+  if (matrixDeleteError) throw matrixDeleteError;
+  const { error: matrixInsertError } = await client.from('planning_matrix_rows').insert(rows);
+  if (matrixInsertError) throw matrixInsertError;
+  const { error: planningDeleteError } = await client
+    .from('planning').delete().gte('date', spanStart).lte('date', spanEnd);
+  if (planningDeleteError) throw planningDeleteError;
+  if (Array.isArray(shifts) && shifts.length > 0) {
+    const { error: planningInsertError } = await client.from('planning').insert(shifts);
+    if (planningInsertError) throw planningInsertError;
+  }
 };
 
 // --- Planning codes ---

@@ -27,6 +27,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     startDate: string | null;
     endDate: string | null;
     importedDates: string[];
+    /** Bereik van de matrix die nu al in het portaal staat (null = nog leeg). */
+    existingStart: string | null;
+    existingEnd: string | null;
+    /** Bestaande matrixdagen binnen resp. buiten het importbereik. */
+    replacedExistingDays: number;
+    retainedDays: number;
     unknownCodes: string[];
     unmatchedDrivers: string[];
     verlofConflicts: Array<{ driverId: string; driverName: string; date: string; serviceNumber: string; leaveStart: string; leaveEnd: string }>;
@@ -82,20 +88,33 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   const matrixOverwriteSummary = useMemo(() => {
     if (!matrixPreview) return null;
 
-    const importedDateSet = new Set(matrixPreview.importedDates);
-    const existingDates = shifts.map((shift) => shift.date).filter(Boolean).sort();
-    const currentStartDate = existingDates[0] || null;
-    const currentEndDate = existingDates[existingDates.length - 1] || null;
-    const affectedExistingShifts = importedDateSet.size > 0
-      ? shifts.filter((shift) => importedDateSet.has(shift.date)).length
-      : 0;
+    const { startDate, endDate, existingStart, existingEnd } = matrixPreview;
+    // Een import vervangt alléén zijn eigen datumbereik: regels binnen het
+    // bereik worden vervangen, alles daarbuiten blijft staan.
+    const inSpan = (date: string) => Boolean(startDate && endDate && date >= startDate && date <= endDate);
+    const affectedExistingShifts = shifts.filter((shift) => shift.date && inSpan(shift.date)).length;
+
+    // Gat tussen de bestaande matrix en dit bestand. Server-bereik gebruiken,
+    // niet shifts: dagen met enkel afwezigheidscodes tellen daar wél mee.
+    const dayMs = 24 * 60 * 60 * 1000;
+    const gapDagen = (van: string, tot: string) => Math.round((Date.parse(tot) - Date.parse(van)) / dayMs) - 1;
+    let gap: { van: string; tot: string; dagen: number } | null = null;
+    if (startDate && endDate && existingStart && existingEnd) {
+      if (startDate > existingEnd && gapDagen(existingEnd, startDate) > 0) {
+        gap = { van: existingEnd, tot: startDate, dagen: gapDagen(existingEnd, startDate) };
+      } else if (endDate < existingStart && gapDagen(endDate, existingStart) > 0) {
+        gap = { van: endDate, tot: existingStart, dagen: gapDagen(endDate, existingStart) };
+      }
+    }
 
     return {
       currentShiftCount: shifts.length,
       affectedExistingShifts,
+      retainedExistingShifts: shifts.length - affectedExistingShifts,
       incomingShiftCount: matrixPreview.generatedShifts,
-      currentStartDate,
-      currentEndDate,
+      currentStartDate: existingStart,
+      currentEndDate: existingEnd,
+      gap,
     };
   }, [matrixPreview, shifts]);
 
@@ -145,6 +164,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         startDate: data.startDate || null,
         endDate: data.endDate || null,
         importedDates: Array.isArray(data.importedDates) ? data.importedDates : [],
+        existingStart: data.existingStart || null,
+        existingEnd: data.existingEnd || null,
+        replacedExistingDays: data.replacedExistingDays || 0,
+        retainedDays: data.retainedDays || 0,
         unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
         unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
         verlofConflicts: Array.isArray(data.verlofConflicts) ? data.verlofConflicts : [],
@@ -188,8 +211,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         syncNotes.push(`${data.unmatchedDrivers.length} niet-gematchte chauffeur${data.unmatchedDrivers.length === 1 ? '' : 's'}`);
       }
 
+      const periode = data.startDate && data.endDate
+        ? ` (${new Date(data.startDate).toLocaleDateString('nl-BE')} t/m ${new Date(data.endDate).toLocaleDateString('nl-BE')} vervangen)`
+        : '';
       notify(
-        `Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen, ${data.generatedShifts || 0} roosterregels opgebouwd${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`,
+        `Matrixplanning geïmporteerd: ${data.importedDays || 0} dagen${periode}, ${data.generatedShifts || 0} roosterregels opgebouwd${syncNotes.length ? `, ${syncNotes.join(', ')}` : ''}.`,
         'success'
       );
       setMatrixPreviewOpen(false);
@@ -683,9 +709,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         <>
               <div className="p-8 border-b border-white/70 shrink-0">
                 <MicroLabel className="text-oker-600">Matrix Import Preview</MicroLabel>
-                <h4 className="mt-3 text-xl font-bold tracking-tight">Controleer voor je de planning vervangt</h4>
+                <h4 className="mt-3 text-xl font-bold tracking-tight">Controleer voor je deze periode vervangt</h4>
                 <p className="mt-2 text-sm font-medium text-slate-500">
-                  Deze stap schrijft nog niets weg. Bevestig pas als dagen, diensten en probleempunten correct ogen.
+                  Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen — planning buiten die periode blijft staan.
                 </p>
               </div>
 
@@ -807,7 +833,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         : 'Onbekend'}
                     </p>
                     <p className="mt-2 text-sm font-medium text-slate-500">
-                      {matrixPreview.importedDays} dagen uit de nieuwe matrix worden in dit bereik verwerkt.
+                      {matrixPreview.importedDays} dagen uit de nieuwe matrix. Alleen dit bereik wordt vervangen{matrixPreview.retainedDays > 0
+                        ? ` — ${matrixPreview.retainedDays} bestaande dag${matrixPreview.retainedDays === 1 ? ' erbuiten blijft' : 'en erbuiten blijven'} staan.`
+                        : '; er staat geen planning buiten dit bereik.'}
                     </p>
                   </div>
 
@@ -817,7 +845,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels geraakt
                     </p>
                     <p className="mt-2 text-sm font-medium text-slate-500">
-                      {matrixOverwriteSummary?.currentShiftCount || 0} actieve regels in totaal, {matrixOverwriteSummary?.incomingShiftCount || 0} nieuwe regels komen binnen.
+                      {matrixOverwriteSummary?.currentShiftCount || 0} actieve regels in totaal; {matrixOverwriteSummary?.incomingShiftCount || 0} nieuwe komen binnen, {matrixOverwriteSummary?.retainedExistingShifts || 0} buiten het bereik blijven ongewijzigd.
                     </p>
                   </div>
                 </div>
@@ -827,7 +855,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <div>
                       <MicroLabel className="text-oker-700">Wat wordt overschreven</MicroLabel>
                       <p className="mt-2 text-sm font-medium text-oker-900">
-                        {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels binnen het importbereik worden vervangen door {matrixPreview.generatedShifts} nieuw opgebouwde roosterregels.
+                        {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels binnen het importbereik worden vervangen door {matrixPreview.generatedShifts} nieuw opgebouwde roosterregels. Alles buiten het bereik blijft staan.
                       </p>
                     </div>
                     <Badge tone="oker" className="tabular-nums">
@@ -837,6 +865,24 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </Badge>
                   </div>
                 </div>
+
+                {/* De periodes sluiten niet aan: dagen zonder planning tussen de
+                    bestaande matrix en dit bestand. Meestal een verkeerd of
+                    onvolledig bestand — informatief, blokkeert niet. */}
+                {matrixOverwriteSummary?.gap && (
+                  <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+                      <div>
+                        <MicroLabel className="text-amber-700 dark:text-amber-400">De periodes sluiten niet aan</MicroLabel>
+                        <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+                          Tussen {new Date(matrixOverwriteSummary.gap.van).toLocaleDateString('nl-BE')} en {new Date(matrixOverwriteSummary.gap.tot).toLocaleDateString('nl-BE')} {matrixOverwriteSummary.gap.dagen === 1 ? 'valt 1 dag' : `vallen ${matrixOverwriteSummary.gap.dagen} dagen`} zonder planning.
+                          Klopt dat niet, controleer dan of je het juiste bestand uploadt — de import gaat anders gewoon door.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
@@ -962,7 +1008,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   disabled={isMatrixImporting || matrixPreviewHasIssues}
                   title={matrixPreviewHasIssues ? 'Los eerst de fouten op in de Excel of in de planningscodes/chauffeurslijst.' : undefined}
                 >
-                  {isMatrixImporting ? 'Importeren…' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang huidige planning'}
+                  {isMatrixImporting ? 'Importeren…' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang deze periode'}
                 </Button>
               </div>
         </>
