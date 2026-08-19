@@ -1472,16 +1472,17 @@ app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), pla
 
     const AnthropicSdk = (await import("@anthropic-ai/sdk")).default;
     const client: AnthropicClient = new AnthropicSdk({ apiKey });
-    // Opus 5 met server-side fallback (beta): wijst een veiligheidsfilter een
-    // vraag af, dan beantwoordt een terugvalmodel hem in dezelfde call.
-    // Effort laag: de tools doen het rekenwerk, de chat moet vlot aanvoelen.
+    // Sonnet 5 (keuze Jarno 19-08): vrijwel Opus-niveau op dit werk — het
+    // denkwerk zit in de deterministische tools — maar ~40% goedkoper en
+    // vlotter in een chat. Effort laag om dezelfde reden. Via de env-var
+    // PLANNER_CHAT_MODEL is zonder code-wijziging om te schakelen (bv. naar
+    // claude-opus-5 als de vragen toch te complex blijken).
+    const model = String(process.env.PLANNER_CHAT_MODEL ?? "").trim() || "claude-sonnet-5";
     const vraagModel = (messages: any[]) =>
-      (client.beta.messages.create as any)({
-        model: "claude-opus-5",
+      (client.messages.create as any)({
+        model,
         max_tokens: 8192,
         output_config: { effort: "low" },
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
         system,
         tools,
         messages,
@@ -1507,6 +1508,12 @@ app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), pla
       response = await vraagModel(gesprek);
     }
 
+    // Een veiligheidsfilter kan een vraag afwijzen (stop_reason "refusal") —
+    // in dit domein vrijwel uitgesloten, maar dan liever een nette zin dan
+    // een leeg antwoord.
+    if (response.stop_reason === "refusal") {
+      return res.json({ antwoord: "Daar kan ik binnen dit portaal niet mee helpen — stel gerust een planningsvraag." });
+    }
     const antwoord = (response.content as any[])
       .filter((b) => b.type === "text")
       .map((b) => b.text)
