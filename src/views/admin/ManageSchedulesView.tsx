@@ -1,4 +1,4 @@
-import React, { Fragment, useEffect, useMemo, useState } from 'react';
+import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
@@ -18,6 +18,14 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   // te uploaden.
   const [pendingMatrixXlsxBase64, setPendingMatrixXlsxBase64] = useState('');
   const [pendingMatrixFilename, setPendingMatrixFilename] = useState('');
+  // Gekozen importperiode (standaard het volledige bestand). De planner maakt
+  // de Excel vaak maanden vooruit; met een kortere periode blijft het
+  // nog-niet-vaststaande deel buiten het portaal.
+  const [periodeVan, setPeriodeVan] = useState('');
+  const [periodeTot, setPeriodeTot] = useState('');
+  const [isPreviewVerversen, setIsPreviewVerversen] = useState(false);
+  // Volgnummer tegen out-of-order preview-antwoorden bij snel datum-klikken.
+  const previewVolgnummerRef = useRef(0);
   const [matrixPreview, setMatrixPreview] = useState<null | {
     importedDays: number;
     detectedDrivers: number;
@@ -26,6 +34,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     skippedAbsences: number;
     startDate: string | null;
     endDate: string | null;
+    /** Volledig bereik van het bestand, vóór de periode-selectie. */
+    fileStartDate: string | null;
+    fileEndDate: string | null;
     importedDates: string[];
     /** Bereik van de matrix die nu al in het portaal staat (null = nog leeg). */
     existingStart: string | null;
@@ -135,6 +146,42 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     return btoa(binary);
   };
 
+  const fetchMatrixPreview = async (xlsxBase64: string, periode?: { van: string; tot: string }) => {
+    const response = await fetch('/api/planning-matrix/preview', {
+      method: 'POST',
+      headers: await getSupabaseAuthHeaders(),
+      body: JSON.stringify(periode ? { xlsxBase64, periode } : { xlsxBase64 }),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.details || data.error || 'Import mislukt.');
+    }
+    return data;
+  };
+
+  const previewToState = (data: any) => ({
+    importedDays: data.importedDays || 0,
+    detectedDrivers: data.detectedDrivers || 0,
+    generatedShifts: data.generatedShifts || 0,
+    matchedServices: data.matchedServices || 0,
+    skippedAbsences: data.skippedAbsences || 0,
+    startDate: data.startDate || null,
+    endDate: data.endDate || null,
+    fileStartDate: data.fileStartDate || null,
+    fileEndDate: data.fileEndDate || null,
+    importedDates: Array.isArray(data.importedDates) ? data.importedDates : [],
+    existingStart: data.existingStart || null,
+    existingEnd: data.existingEnd || null,
+    replacedExistingDays: data.replacedExistingDays || 0,
+    retainedDays: data.retainedDays || 0,
+    unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
+    unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
+    verlofConflicts: Array.isArray(data.verlofConflicts) ? data.verlofConflicts : [],
+    ziekteDiensten: Array.isArray(data.ziekteDiensten) ? data.ziekteDiensten : [],
+    servicesWithoutSegments: Array.isArray(data.servicesWithoutSegments) ? data.servicesWithoutSegments : [],
+    perDriver: Array.isArray(data.perDriver) ? data.perDriver : [],
+  });
+
   const handleMatrixFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -142,45 +189,40 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     try {
       setIsMatrixImporting(true);
       const xlsxBase64 = await fileToBase64(file);
-      const response = await fetch('/api/planning-matrix/preview', {
-        method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
-        body: JSON.stringify({ xlsxBase64 }),
-      });
-
-      const data = await response.json().catch(() => ({}));
-      if (!response.ok) {
-        throw new Error(data.details || data.error || 'Import mislukt.');
-      }
-
+      const data = await fetchMatrixPreview(xlsxBase64);
       setPendingMatrixXlsxBase64(xlsxBase64);
       setPendingMatrixFilename(file.name);
-      setMatrixPreview({
-        importedDays: data.importedDays || 0,
-        detectedDrivers: data.detectedDrivers || 0,
-        generatedShifts: data.generatedShifts || 0,
-        matchedServices: data.matchedServices || 0,
-        skippedAbsences: data.skippedAbsences || 0,
-        startDate: data.startDate || null,
-        endDate: data.endDate || null,
-        importedDates: Array.isArray(data.importedDates) ? data.importedDates : [],
-        existingStart: data.existingStart || null,
-        existingEnd: data.existingEnd || null,
-        replacedExistingDays: data.replacedExistingDays || 0,
-        retainedDays: data.retainedDays || 0,
-        unknownCodes: Array.isArray(data.unknownCodes) ? data.unknownCodes : [],
-        unmatchedDrivers: Array.isArray(data.unmatchedDrivers) ? data.unmatchedDrivers : [],
-        verlofConflicts: Array.isArray(data.verlofConflicts) ? data.verlofConflicts : [],
-        ziekteDiensten: Array.isArray(data.ziekteDiensten) ? data.ziekteDiensten : [],
-        servicesWithoutSegments: Array.isArray(data.servicesWithoutSegments) ? data.servicesWithoutSegments : [],
-        perDriver: Array.isArray(data.perDriver) ? data.perDriver : [],
-      });
+      setMatrixPreview(previewToState(data));
+      // Periode start op het volledige bestand; inkorten kan in de preview.
+      setPeriodeVan(data.startDate || '');
+      setPeriodeTot(data.endDate || '');
       setMatrixPreviewOpen(true);
     } catch (error: any) {
       notify(`Excel-preview mislukt: ${error.message}`, 'error');
     } finally {
       setIsMatrixImporting(false);
       if (event.target) event.target.value = '';
+    }
+  };
+
+  // Periode gewijzigd in de preview: voorbeeld opnieuw berekenen over de
+  // geselecteerde dagen (aantallen, conflicten en bereik-info schuiven mee).
+  const handlePeriodeChange = async (van: string, tot: string) => {
+    setPeriodeVan(van);
+    setPeriodeTot(tot);
+    if (!pendingMatrixXlsxBase64 || !van || !tot || van > tot) return;
+    const volgnummer = ++previewVolgnummerRef.current;
+    try {
+      setIsPreviewVerversen(true);
+      const data = await fetchMatrixPreview(pendingMatrixXlsxBase64, { van, tot });
+      if (volgnummer !== previewVolgnummerRef.current) return;
+      setMatrixPreview(previewToState(data));
+    } catch (error: any) {
+      if (volgnummer === previewVolgnummerRef.current) {
+        notify(`Voorbeeld bijwerken mislukt: ${error.message}`, 'error');
+      }
+    } finally {
+      if (volgnummer === previewVolgnummerRef.current) setIsPreviewVerversen(false);
     }
   };
 
@@ -195,7 +237,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       const response = await fetch('/api/planning-matrix/import', {
         method: 'POST',
         headers: await getSupabaseAuthHeaders(),
-        body: JSON.stringify({ xlsxBase64: pendingMatrixXlsxBase64 }),
+        body: JSON.stringify({
+          xlsxBase64: pendingMatrixXlsxBase64,
+          // Zelfde periode als het getoonde voorbeeld — de import verwerkt
+          // en vervangt alleen de geselecteerde dagen.
+          ...(periodeVan && periodeTot ? { periode: { van: periodeVan, tot: periodeTot } } : {}),
+        }),
       });
 
       const data = await response.json().catch(() => ({}));
@@ -222,6 +269,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       setPendingMatrixXlsxBase64('');
       setPendingMatrixFilename('');
       setMatrixPreview(null);
+      setPeriodeVan('');
+      setPeriodeTot('');
       await onMatrixImported();
       await fetchChangesSince();
     } catch (error: any) {
@@ -826,14 +875,39 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="surface-card rounded-3xl p-5">
-                    <MicroLabel>Importbereik</MicroLabel>
-                    <p className="mt-2 text-lg font-black text-slate-900 tabular-nums">
-                      {matrixPreview.startDate
-                        ? `${new Date(matrixPreview.startDate).toLocaleDateString('nl-BE')} ${matrixPreview.endDate && matrixPreview.endDate !== matrixPreview.startDate ? `t/m ${new Date(matrixPreview.endDate).toLocaleDateString('nl-BE')}` : ''}`
-                        : 'Onbekend'}
-                    </p>
+                    <div className="flex items-center justify-between gap-3">
+                      <MicroLabel>Importperiode</MicroLabel>
+                      {isPreviewVerversen && <MicroLabel className="text-oker-600">Bijwerken…</MicroLabel>}
+                    </div>
                     <p className="mt-2 text-sm font-medium text-slate-500">
-                      {matrixPreview.importedDays} dagen uit de nieuwe matrix. Alleen dit bereik wordt vervangen{matrixPreview.retainedDays > 0
+                      Het bestand loopt van {matrixPreview.fileStartDate ? new Date(matrixPreview.fileStartDate).toLocaleDateString('nl-BE') : '?'} t/m {matrixPreview.fileEndDate ? new Date(matrixPreview.fileEndDate).toLocaleDateString('nl-BE') : '?'}. Alleen de gekozen periode wordt geïmporteerd en vervangen — kort hem in als latere maanden nog niet vaststaan.
+                    </p>
+                    <div className="mt-3 grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <MicroLabel className="ml-1">Van</MicroLabel>
+                        <input
+                          type="date"
+                          value={periodeVan}
+                          min={matrixPreview.fileStartDate ?? undefined}
+                          max={periodeTot || matrixPreview.fileEndDate || undefined}
+                          onChange={(e) => handlePeriodeChange(e.target.value, periodeTot)}
+                          className="control-input w-full px-3 py-2.5 rounded-2xl font-semibold text-sm outline-none tabular-nums"
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <MicroLabel className="ml-1">Tot en met</MicroLabel>
+                        <input
+                          type="date"
+                          value={periodeTot}
+                          min={periodeVan || matrixPreview.fileStartDate || undefined}
+                          max={matrixPreview.fileEndDate ?? undefined}
+                          onChange={(e) => handlePeriodeChange(periodeVan, e.target.value)}
+                          className="control-input w-full px-3 py-2.5 rounded-2xl font-semibold text-sm outline-none tabular-nums"
+                        />
+                      </div>
+                    </div>
+                    <p className="mt-3 text-sm font-medium text-slate-500">
+                      {matrixPreview.importedDays} dag{matrixPreview.importedDays === 1 ? '' : 'en'} geselecteerd. Alleen dit bereik wordt vervangen{matrixPreview.retainedDays > 0
                         ? ` — ${matrixPreview.retainedDays} bestaande dag${matrixPreview.retainedDays === 1 ? ' erbuiten blijft' : 'en erbuiten blijven'} staan.`
                         : '; er staat geen planning buiten dit bereik.'}
                     </p>
@@ -996,6 +1070,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     setPendingMatrixXlsxBase64('');
                     setPendingMatrixFilename('');
                     setMatrixPreview(null);
+                    setPeriodeVan('');
+                    setPeriodeTot('');
                   }}
                 >
                   Annuleren
@@ -1005,7 +1081,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   size="lg"
                   className={cn('flex-1', matrixPreviewHasIssues && 'bg-slate-400 hover:bg-slate-400 shadow-none')}
                   onClick={confirmMatrixImport}
-                  disabled={isMatrixImporting || matrixPreviewHasIssues}
+                  disabled={isMatrixImporting || isPreviewVerversen || matrixPreviewHasIssues}
                   title={matrixPreviewHasIssues ? 'Los eerst de fouten op in de Excel of in de planningscodes/chauffeurslijst.' : undefined}
                 >
                   {isMatrixImporting ? 'Importeren…' : matrixPreviewHasIssues ? 'Eerst fouten oplossen' : 'Vervang deze periode'}

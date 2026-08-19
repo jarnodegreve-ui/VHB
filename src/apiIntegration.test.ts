@@ -2471,6 +2471,74 @@ describe('planning-import — ziekte blokkeert niet, gepland verlof wel', () => 
   });
 });
 
+describe('planning-import — periode-selectie', () => {
+  // De planner maakt de Excel maanden vooruit, maar alleen het vaststaande
+  // deel mag het portaal in: een meegegeven periode filtert de rijen vóór
+  // opbouw én vervanging, alsof de rest niet in het bestand stond.
+  const buildTweeMaandenXlsx = async () => {
+    const XLSX = await import('xlsx');
+    const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'aantal'],
+      [serial('2030-09-01'), 'W', '12', '', 1],
+      [serial('2030-10-01'), 'W', '', '14', 1],
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws, 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+
+  it('preview met periode filtert tot de gekozen dagen en meldt het volledige bestandsbereik', async () => {
+    mem.leave = [];
+    const res = await api('POST', '/api/planning-matrix/preview', {
+      token: 'tok-planner',
+      body: { xlsxBase64: await buildTweeMaandenXlsx(), periode: { van: '2030-09-01', tot: '2030-09-30' } },
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.importedDays).toBe(1);
+    expect(res.json.startDate).toBe('2030-09-01');
+    expect(res.json.endDate).toBe('2030-09-01');
+    expect(res.json.fileStartDate).toBe('2030-09-01');
+    expect(res.json.fileEndDate).toBe('2030-10-01');
+  });
+
+  it('import met periode schrijft alleen de geselecteerde dagen weg', async () => {
+    mem.leave = [];
+    mem.swaps = [];
+    const res = await api('POST', '/api/planning-matrix/import', {
+      token: 'tok-planner',
+      body: { xlsxBase64: await buildTweeMaandenXlsx(), periode: { van: '2030-09-01', tot: '2030-09-30' } },
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    expect(res.json.importedDays).toBe(1);
+    // De oktober-rij uit het bestand is genegeerd: matrix én planning bevatten
+    // alleen september.
+    expect(mem.planningMatrix.map((r: any) => r.source_date)).toEqual(['2030-09-01']);
+    expect(mem.planning.every((r: any) => r.date === '2030-09-01')).toBe(true);
+  });
+
+  it('weigert een periode zonder dagen, met het bestandsbereik in de melding', async () => {
+    const res = await api('POST', '/api/planning-matrix/preview', {
+      token: 'tok-planner',
+      body: { xlsxBase64: await buildTweeMaandenXlsx(), periode: { van: '2030-11-01', tot: '2030-11-30' } },
+    });
+    expect(res.status).toBe(400);
+    expect(String(res.json.error)).toContain('Geen dagen binnen de gekozen periode');
+    expect(String(res.json.error)).toContain('2030-09-01');
+    expect(String(res.json.error)).toContain('2030-10-01');
+  });
+
+  it('weigert een periode met begindatum na einddatum', async () => {
+    const res = await api('POST', '/api/planning-matrix/import', {
+      token: 'tok-planner',
+      body: { xlsxBase64: await buildTweeMaandenXlsx(), periode: { van: '2030-10-01', tot: '2030-09-01' } },
+    });
+    expect(res.status).toBe(400);
+    expect(String(res.json.error)).toContain('begindatum ligt na de einddatum');
+  });
+});
+
 describe('dienstruil — dubbele inplanning bij goedkeuren', () => {
   it('weigert goedkeuring als de collega intussen zelf een dienst heeft die dag', async () => {
     // s-1: chauffeur 3 biedt sh-a (01/07, dienst 12) aan chauffeur 4, tegen een
