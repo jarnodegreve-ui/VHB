@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -147,8 +147,21 @@ export function CoverageView() {
   // chips-lijsten en lijkt "toevoegen" niets te doen) + naamveld focussen.
   const firstNameRef = useRef<HTMLInputElement | null>(null);
   const [focusTick, setFocusTick] = useState(0);
+  // Uitklap-status per dag-type-kaart (vraag Jarno 20-08: met 60+ dienst-
+  // chips per kaart werd het paneel onoverzichtelijk). Standaard dicht; een
+  // nieuwe kaart opent meteen, anders valt er niets aan te vinken.
+  const [openDayTypes, setOpenDayTypes] = useState<Set<number>>(new Set());
+  const toggleDayTypeOpen = (i: number) =>
+    setOpenDayTypes((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i); else next.add(i);
+      return next;
+    });
+
   const addDayType = () => {
     setDayTypes((prev) => [{ name: '', services: [] }, ...prev]);
+    // Nieuwe kaart komt vooraan: bestaande open indexen schuiven één op.
+    setOpenDayTypes((prev) => new Set([0, ...Array.from(prev, (x) => x + 1)]));
     setFocusTick((t) => t + 1);
   };
   useEffect(() => {
@@ -195,6 +208,7 @@ export function CoverageView() {
   const removeDayType = (i: number) => {
     const removed = (dayTypes[i]?.name ?? '').trim();
     setDayTypes((prev) => prev.filter((_, idx) => idx !== i));
+    setOpenDayTypes((prev) => new Set(Array.from(prev).filter((x) => x !== i).map((x) => (x > i ? x - 1 : x))));
     if (removed) {
       setWeekdays((prev) => prev.map((x) => (x === removed ? '' : x)));
       setOverrides((prev) => prev.filter((o) => o.dayType !== removed));
@@ -321,6 +335,15 @@ export function CoverageView() {
                       return (
                         <div key={i} className="rounded-2xl border border-slate-100 bg-surface-field p-4">
                           <div className="flex items-center gap-2">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              icon={<ChevronDown size={15} className={cn('transition-transform', openDayTypes.has(i) && 'rotate-180')} />}
+                              className="shrink-0"
+                              aria-label={openDayTypes.has(i) ? `Dag-type ${dt.name || ''} inklappen` : `Dag-type ${dt.name || ''} uitklappen`}
+                              aria-expanded={openDayTypes.has(i)}
+                              onClick={() => toggleDayTypeOpen(i)}
+                            />
                             <input
                               ref={i === 0 ? firstNameRef : undefined}
                               value={dt.name}
@@ -334,6 +357,7 @@ export function CoverageView() {
                             <Badge tone="slate" className="shrink-0 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</Badge>
                             <Button variant="ghost" size="sm" icon={<X size={15} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Dag-type verwijderen" onClick={() => removeDayType(i)} />
                           </div>
+                          {openDayTypes.has(i) && (
                           <div className="mt-3 flex flex-wrap gap-1.5">
                             {config.services.map((svc) => {
                               const on = selected.has(svc);
@@ -352,6 +376,7 @@ export function CoverageView() {
                               );
                             })}
                           </div>
+                          )}
                         </div>
                       );
                     })}
