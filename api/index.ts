@@ -1278,7 +1278,10 @@ app.get("/api/ziekte-zonder-registratie", authenticate, requireRole("planner", "
 app.get("/api/planning-presence", authenticate, requireRole("planner", "admin"), async (_req, res) => {
   try {
     const [rows, users] = await Promise.all([getPlanningMatrixRows(), getUsersData()]);
-    const idByName = nameIdIndex((users as any[]).filter((u) => u?.role === "chauffeur"));
+    // Alleen actieve chauffeurs: een gepauzeerd oud account met dezelfde naam
+    // zou anders een naam-botsing veroorzaken waardoor de actieve chauffeur
+    // ten onrechte "Niet in de planning" kreeg (controle-ronde 20-08).
+    const idByName = nameIdIndex((users as any[]).filter((u) => u?.role === "chauffeur" && u?.isActive !== false));
     const laatstePerId = new Map<string, string>();
     let van: string | null = null;
     let tot: string | null = null;
@@ -2097,11 +2100,26 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       shiftsGenerated: rijenPerDriver.get(String(d.driverId)) ?? 0,
     }));
 
-    // Chauffeurs vergeleken met de planning vóór deze periode: wie verdween
-    // uit de Excel, wie kwam erbij? Zo valt een per ongeluk weggevallen kolom
-    // (case Luc Cherlet, 20-08) meteen op — de import zelf blokkeert hier
-    // bewust niet op, want een vertrokken of nieuwe collega is ook gewoon zo.
-    const eerdereRows = (bestaandeMatrix as any[]).filter((r) => String(r?.source_date ?? "") < String(startDate ?? ""));
+    // Chauffeurs vergeleken met de planning vlak vóór deze periode: wie
+    // verdween uit de Excel, wie kwam erbij? Zo valt een per ongeluk
+    // weggevallen kolom (case Luc Cherlet, 20-08) meteen op — de import zelf
+    // blokkeert hier bewust niet op, want een vertrokken of nieuwe collega is
+    // ook gewoon zo. Het venster is begrensd (onbegrensd terugkijken liet elke
+    // ooit-vertrokken chauffeur eeuwig als "verdwenen" terugkeren); dekt het
+    // bestand de hele bewaarde periode, dan vergelijken we met de oude versie
+    // van de vervangen periode zelf (controle-ronde 20-08).
+    const VERGELIJK_VENSTER_DAGEN = 60;
+    const vergelijkGrens = startDate ? addDagen(startDate, -VERGELIJK_VENSTER_DAGEN) : null;
+    let vergelijkRows = (bestaandeMatrix as any[]).filter((r) => {
+      const d = String(r?.source_date ?? "");
+      return Boolean(startDate && vergelijkGrens) && d >= vergelijkGrens! && d < startDate!;
+    });
+    if (vergelijkRows.length === 0 && startDate && endDate) {
+      vergelijkRows = (bestaandeMatrix as any[]).filter((r) => {
+        const d = String(r?.source_date ?? "");
+        return d >= startDate && d <= endDate;
+      });
+    }
     const namenIn = (rs: any[]) => {
       const m = new Map<string, { naam: string; laatste: string }>();
       for (const r of rs) {
@@ -2117,8 +2135,8 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     };
     let chauffeursNieuw: string[] = [];
     let chauffeursVerdwenen: Array<{ naam: string; laatste: string }> = [];
-    if (eerdereRows.length > 0) {
-      const oud = namenIn(eerdereRows);
+    if (vergelijkRows.length > 0) {
+      const oud = namenIn(vergelijkRows);
       const nieuw = namenIn(rows as any[]);
       chauffeursVerdwenen = [...oud.entries()].filter(([k]) => !nieuw.has(k)).map(([, v]) => v).sort((a, b) => a.naam.localeCompare(b.naam));
       chauffeursNieuw = [...nieuw.entries()].filter(([k]) => !oud.has(k)).map(([, v]) => v.naam).sort();

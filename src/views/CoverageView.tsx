@@ -19,6 +19,7 @@ import {
   type DayGap,
 } from '../lib/coverage';
 import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking } from '../lib/coverageGaps';
+import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
 
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
@@ -60,6 +61,10 @@ export function CoverageView() {
   const [onlyGaps, setOnlyGaps] = useState(true);
   // Klik op een ontbrekende dienst → advies: wie is vrij én bij wie past dit?
   const [pick, setPick] = useState<{ date: string; code: string } | null>(null);
+  // Dag-type-badge aangetikt → herkomst-uitleg inline onder de badge. Een
+  // title-tooltip alleen bestaat niet op touch, en dit scherm wordt juist op
+  // iPhone/iPad gebruikt (controle-ronde 20-08).
+  const [bronOpenDate, setBronOpenDate] = useState<string | null>(null);
   const [advies, setAdvies] = useState<CoverageAdvies | null>(null);
   const [adviesError, setAdviesError] = useState('');
   // Toewijzen van het gat aan een vrije chauffeur (POST /api/planning/assign-service).
@@ -90,24 +95,34 @@ export function CoverageView() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Versieteller tegen kruisende responses: zowel de maandwissel als een
+  // refetch (na toewijzen/opslaan) bumpen hem, en alleen het recentste
+  // antwoord mag de state zetten — anders kon een traag antwoord van de
+  // vorige maand over de nieuwe heen schrijven.
+  const gapsVersieRef = useRef(0);
+  const laadGaps = (van: string, tot: string) => {
+    const versie = ++gapsVersieRef.current;
+    const alsActueel = (fn: () => void) => { if (versie === gapsVersieRef.current) fn(); };
     setLoading(true);
-    fetchCoverageGaps(from, to)
-      .then((res) => { if (!cancelled) setGaps(Array.isArray(res?.days) ? res.days : []); })
-      .catch((e) => { if (!cancelled) setError(e?.message || 'Kon dekking niet berekenen.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    // Best-effort naast de gaten: een mislukte check mag het scherm niet raken.
-    fetchExpectationCheck(from, to)
-      .then((res) => { if (!cancelled) setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : []); })
-      .catch(() => { if (!cancelled) setExpCheck([]); });
-    return () => { cancelled = true; };
+    return Promise.all([
+      fetchCoverageGaps(van, tot)
+        .then((res) => alsActueel(() => setGaps(Array.isArray(res?.days) ? res.days : [])))
+        .catch((e) => alsActueel(() => setError(e?.message || 'Kon dekking niet berekenen.')))
+        .finally(() => alsActueel(() => setLoading(false))),
+      // Best-effort naast de gaten: een mislukte check mag het scherm niet raken.
+      fetchExpectationCheck(van, tot)
+        .then((res) => alsActueel(() => setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : [])))
+        .catch(() => alsActueel(() => setExpCheck([]))),
+    ]);
+  };
+
+  useEffect(() => {
+    laadGaps(from, to);
+    return () => { gapsVersieRef.current += 1; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to]);
 
-  const refetchGaps = () => Promise.all([
-    fetchCoverageGaps(from, to).then((res) => setGaps(Array.isArray(res?.days) ? res.days : [])).catch(() => {}),
-    fetchExpectationCheck(from, to).then((res) => setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : [])).catch(() => {}),
-  ]);
+  const refetchGaps = () => laadGaps(from, to);
 
   /** Wijs het gekozen gat toe aan een vrije chauffeur — de matrix én de
    *  planning worden server-side bijgewerkt, daarna verdwijnt het gat hier. */
@@ -545,26 +560,14 @@ export function CoverageView() {
               <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
                 Sommige dag-type-lijsten sporen niet met wat er deze maand echt gereden wordt — meestal een dienstregelingswissel die nog niet in de dekkingsinstellingen verwerkt is. Pas de lijsten aan via Instellen.
               </p>
-              <ul className="mt-3 space-y-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
-                {expCheck.map((a) => (
-                  <li key={a.dayType} className="flex items-start gap-2">
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                    <span>
-                      <span className="font-bold capitalize">{a.dayType}</span>
-                      <span className="tabular-nums"> ({a.dagen} {a.dagen === 1 ? 'dag' : 'dagen'})</span>
-                      {a.nooitGereden.length > 0 && <> — verwacht maar nooit gereden: <span className="font-bold tabular-nums">{a.nooitGereden.join(', ')}</span></>}
-                      {a.nietVerwacht.length > 0 && <>{a.nooitGereden.length > 0 ? ' · ' : ' — '}wél gereden maar niet in de verwachting: <span className="font-bold tabular-nums">{a.nietVerwacht.map((x) => x.code).join(', ')}</span></>}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+              <VerwachtingAfwijkingLijst afwijkingen={expCheck} />
             </div>
           </div>
         </div>
       )}
 
       {/* === Gaten-overzicht === */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
             <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-red-600 tabular-nums">
@@ -611,9 +614,30 @@ export function CoverageView() {
                 <div className="sm:w-44 shrink-0">
                   <div className="text-sm font-semibold text-slate-800 capitalize tabular-nums">{dayLabel(d.date)}</div>
                   <div className="mt-1">
-                    {/* title = herkomst van het dag-type: scheelt debuggen bij
-                        elke dienstregelingswissel ("waarom is dit di/vrij?"). */}
-                    <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize" title={bronUitleg(d.bron)}>{d.dayType || '—'}</Badge>
+                    {/* Herkomst van het dag-type ("waarom is dit di/vrij?"):
+                        tik/klik op de badge klapt de uitleg inline uit — een
+                        title alleen zou op touch onzichtbaar zijn. -m-2/p-2 =
+                        hit-slop zodat het doel raakbaar blijft zonder de rij
+                        te laten groeien. */}
+                    {bronUitleg(d.bron) ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setBronOpenDate((cur) => (cur === d.date ? null : d.date))}
+                          aria-expanded={bronOpenDate === d.date}
+                          aria-label={`Waarom is ${dayLabel(d.date)} een ${d.dayType || 'dag zonder type'}?`}
+                          title={bronUitleg(d.bron)}
+                          className="ios-pressable -m-2 rounded-xl p-2 text-left"
+                        >
+                          <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+                        </button>
+                        {bronOpenDate === d.date && (
+                          <p className="mt-1.5 max-w-[15rem] text-2xs font-medium leading-snug text-slate-500">{bronUitleg(d.bron)}</p>
+                        )}
+                      </>
+                    ) : (
+                      <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+                    )}
                   </div>
                 </div>
                 <div className="shrink-0 sm:w-28">

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeCode, computeDayGap, resolveDayType, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, parseOverrides, encodeOverride, weekdaysVoorDatum, encodeWeekdagPeriodeKey, WEEKDAY_PERIOD_KEY_RE, DEFAULT_WEEKDAYS } from './coverageGaps';
+import { normalizeCode, computeDayGap, resolveDayType, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, parseOverrides, encodeOverride, periodeVoorDatum, weekdaysVoorDatum, encodeWeekdagPeriodeKey, WEEKDAY_PERIOD_KEY_RE, DEFAULT_WEEKDAYS } from './coverageGaps';
 
 describe('coverageGaps', () => {
   it('normalizeCode trimt + lowercase', () => {
@@ -202,8 +202,10 @@ describe('vergelijkVerwachtingenMetPraktijk', () => {
   });
 
   it('resolvet het dag-type via weekdagen/periodes als kolom B leeg is', () => {
-    // 2026-09-01 = dinsdag; de periode vanaf 01-09 wijst di naar 'di-type'.
-    const rows = [rij('2026-09-01', '', { A: '2101' })];
+    // 01-09 en 08-09-2026 zijn dinsdagen; de periode vanaf 01-09 wijst di
+    // naar 'di-type' (twee dagen, zodat de kleine-steekproef-drempel niet
+    // in de weg zit).
+    const rows = [rij('2026-09-01', '', { A: '2101' }), rij('2026-09-08', '', { A: '2101' })];
     const periode = [{ vanaf: '2026-09-01', weekdays: ['', '', 'di-type', '', '', '', ''] }];
     const uit = vergelijkVerwachtingenMetPraktijk(rows, { 'di-type': ['2101', '2114'] }, ['', '', 'basis-di', '', '', '', ''], periode, []);
     expect(uit).toHaveLength(1);
@@ -214,5 +216,24 @@ describe('vergelijkVerwachtingenMetPraktijk', () => {
   it('slaat dag-types zonder verwachtingslijst over', () => {
     const rows = [rij('2026-09-01', 'onbekend-type', { A: '2101' })];
     expect(vergelijkVerwachtingenMetPraktijk(rows, { school: ['2101'] }, [], [], [])).toEqual([]);
+  });
+
+  it('zwijgt over een dag-type met maar één dag in het venster (kleine steekproef)', () => {
+    // Eén feestdag met een invaller op een andere dienst is dekking-lijst-
+    // werk, geen structurele verwachtingsafwijking.
+    const rows = [rij('2026-09-01', 'feestdag', { A: '2599' })];
+    expect(vergelijkVerwachtingenMetPraktijk(rows, { feestdag: ['2101'] }, [], [], [])).toEqual([]);
+  });
+});
+
+describe('periodeVoorDatum', () => {
+  it('kiest de recentste gepasseerde periode, of null', () => {
+    const zomer = { vanaf: '2026-07-01', weekdays: ['z', 'z', 'z', 'z', 'z', 'z', 'z'] };
+    const school = { vanaf: '2026-09-01', weekdays: ['s', 's', 's', 's', 's', 's', 's'] };
+    expect(periodeVoorDatum([school, zomer], '2026-06-30')).toBeNull();
+    expect(periodeVoorDatum([school, zomer], '2026-08-31')).toBe(zomer);
+    expect(periodeVoorDatum([school, zomer], '2026-09-01')).toBe(school);
+    // Kapotte periode (geen 7 entries) telt niet mee.
+    expect(periodeVoorDatum([{ vanaf: '2026-01-01', weekdays: ['x'] }], '2026-06-01')).toBeNull();
   });
 });

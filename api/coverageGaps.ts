@@ -43,19 +43,22 @@ export type WeekdagPeriode = { vanaf: string; weekdays: string[] };
 export const WEEKDAY_PERIOD_KEY_RE = /^__weekdagen_(\d{4}-\d{2}-\d{2})__$/;
 export const encodeWeekdagPeriodeKey = (vanaf: string): string => `__weekdagen_${vanaf}__`;
 
+/** De winnende weekdag-periode voor een datum (laatste ingangsdatum ≤ datum),
+ *  of null als geen periode past. Eén plek voor de selectieregel — gedeeld
+ *  door weekdaysVoorDatum en resolveDayTypeMetBron. */
+export function periodeVoorDatum(perioden: WeekdagPeriode[], datum: string): WeekdagPeriode | null {
+  let beste: WeekdagPeriode | null = null;
+  for (const p of perioden) {
+    if (!Array.isArray(p.weekdays) || p.weekdays.length !== 7) continue;
+    if (p.vanaf <= datum && (!beste || p.vanaf > beste.vanaf)) beste = p;
+  }
+  return beste;
+}
+
 /** De geldende weekdag-toewijzing voor een datum: de periode met de laatste
  *  ingangsdatum ≤ datum wint; zonder passende periode geldt de basis. */
 export function weekdaysVoorDatum(basis: string[], perioden: WeekdagPeriode[], datum: string): string[] {
-  let keuze = basis;
-  let besteVanaf = "";
-  for (const p of perioden) {
-    if (!Array.isArray(p.weekdays) || p.weekdays.length !== 7) continue;
-    if (p.vanaf <= datum && p.vanaf > besteVanaf) {
-      keuze = p.weekdays;
-      besteVanaf = p.vanaf;
-    }
-  }
-  return keuze;
+  return periodeVoorDatum(perioden, datum)?.weekdays ?? basis;
 }
 
 /**
@@ -91,7 +94,9 @@ export type DayTypeBron =
   | { soort: "basis" }
   | { soort: "geen" };
 
-/** Zelfde beslisregels als resolveDayType, maar mét de herkomst erbij. */
+/** Zelfde beslisregels als resolveDayType, maar mét de herkomst erbij. De
+ *  beslissing zelf wordt bewust gedelegeerd (resolveDayType + periodeVoorDatum)
+ *  zodat de regels maar op één plek bestaan. */
 export function resolveDayTypeMetBron(
   rawDayType: unknown,
   sourceDate: string,
@@ -102,26 +107,16 @@ export function resolveDayTypeMetBron(
   const explicit = String(rawDayType ?? "").trim();
   if (explicit) return { dayType: explicit, bron: { soort: "excel" } };
   const iso = String(sourceDate ?? "").trim();
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
-  if (!m) return { dayType: "", bron: { soort: "geen" } };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return { dayType: "", bron: { soort: "geen" } };
   for (const o of overrides) {
     if (iso >= o.from && iso <= o.to) {
       return { dayType: o.dayType, bron: { soort: "uitzondering", from: o.from, to: o.to } };
     }
   }
-  const dow = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
-  let keuze = basisWeekdays;
-  let besteVanaf = "";
-  for (const p of perioden) {
-    if (!Array.isArray(p.weekdays) || p.weekdays.length !== 7) continue;
-    if (p.vanaf <= iso && p.vanaf > besteVanaf) {
-      keuze = p.weekdays;
-      besteVanaf = p.vanaf;
-    }
-  }
-  const dayType = String(keuze[dow] ?? "").trim();
+  const periode = periodeVoorDatum(perioden, iso);
+  const dayType = resolveDayType("", iso, periode?.weekdays ?? basisWeekdays, []);
   if (!dayType) return { dayType: "", bron: { soort: "geen" } };
-  return { dayType, bron: besteVanaf ? { soort: "periode", vanaf: besteVanaf } : { soort: "basis" } };
+  return { dayType, bron: periode ? { soort: "periode", vanaf: periode.vanaf } : { soort: "basis" } };
 }
 
 export type DayGap = {
@@ -190,6 +185,10 @@ export function vergelijkVerwachtingenMetPraktijk(
   }
   const out: VerwachtingAfwijking[] = [];
   for (const [dayType, e] of perType) {
+    // Minstens 2 dagen van dit type in het venster: bij één dag is elk
+    // incidenteel gat meteen "structureel" en elke invaldienst een
+    // "afwijking" — dat is dekking-lijst-werk, geen verwachtingsprobleem.
+    if (e.dagen < 2) continue;
     const expected = expectationsByDayType[dayType] ?? [];
     const seen = new Set<string>();
     const nooitGereden: string[] = [];
@@ -199,7 +198,7 @@ export function vergelijkVerwachtingenMetPraktijk(
       seen.add(key);
       if (!e.aanwezig.has(key)) nooitGereden.push(s);
     }
-    const drempel = Math.max(1, Math.ceil(e.dagen / 2));
+    const drempel = Math.max(2, Math.ceil(e.dagen / 2));
     const nietVerwacht = [...e.extra.entries()]
       .filter(([, dagen]) => dagen >= drempel)
       .map(([code, dagen]) => ({ code, dagen }))

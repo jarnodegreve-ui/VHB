@@ -42,11 +42,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     })();
     return () => { cancelled = true; };
   }, []);
-  // Wie staat er (niet) in de geïmporteerde planning-matrix? Een chauffeur-
-  // account dat nergens ingepland is, is óf een nieuwe collega, óf een
-  // weggevallen Excel-kolom (case Cherlet/Mendez/De Laere, 20-08). Best-effort:
-  // zonder deze data tonen we simpelweg geen badge of filter.
-  const [planningPresence, setPlanningPresence] = useState<{ geladen: boolean; ids: Set<string> }>({ geladen: false, ids: new Set() });
+  // Wie staat er (niet) in de geïmporteerde planning-matrix, en tot wanneer?
+  // Een chauffeur-account zonder cel aan het EINDE van de bekende planning is
+  // óf een nieuwe collega, óf een weggevallen Excel-kolom (case Cherlet/
+  // Mendez/De Laere, 20-08) — de laatste-datum is essentieel: wie ooit in een
+  // oude maand stond maar uit de nieuwste import viel, moet júíst gevlagd
+  // worden. Best-effort: zonder data geen badge of filter.
+  const [planningPresence, setPlanningPresence] = useState<{ geladen: boolean; tot: string; laatstePerId: Map<string, string> }>({ geladen: false, tot: '', laatstePerId: new Map() });
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -56,8 +58,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         const body = await res.json();
         if (cancelled || !Array.isArray(body?.perUser)) return;
         // Lege matrix (nog nooit geïmporteerd) → geen zinvol signaal.
-        if (!body.van) return;
-        setPlanningPresence({ geladen: true, ids: new Set(body.perUser.map((p: any) => String(p.userId))) });
+        if (!body.van || !body.tot) return;
+        setPlanningPresence({
+          geladen: true,
+          tot: String(body.tot),
+          laatstePerId: new Map(body.perUser.map((p: any) => [String(p.userId), String(p.laatste ?? '')])),
+        });
       } catch { /* geen badge/filter zonder data */ }
     })();
     return () => { cancelled = true; };
@@ -122,9 +128,14 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const actieveChauffeurs = actieveUsers.filter((u) => u.role === 'chauffeur');
   const chauffeursOoitIn = actieveChauffeurs.filter((u) => Boolean(u.lastLogin)).length;
   const nooitIngelogd = actieveChauffeurs.length - chauffeursOoitIn;
-  // Chauffeur-accounts zonder één enkele cel in de geïmporteerde planning.
-  const nietInPlanning = (u: User) =>
-    planningPresence.geladen && u.role === 'chauffeur' && u.isActive !== false && !planningPresence.ids.has(String(u.id));
+  // Chauffeur-accounts zonder cel aan het einde van de bekende planning:
+  // nooit aanwezig, óf laatste cel vóór het matrix-einde (kolom weggevallen).
+  const laatsteInPlanning = (u: User) => planningPresence.laatstePerId.get(String(u.id));
+  const nietInPlanning = (u: User) => {
+    if (!planningPresence.geladen || u.role !== 'chauffeur' || u.isActive === false) return false;
+    const laatste = laatsteInPlanning(u);
+    return !laatste || laatste < planningPresence.tot;
+  };
   const aantalNietInPlanning = actieveChauffeurs.filter(nietInPlanning).length;
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
@@ -488,25 +499,30 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             />
             {/* Snelfilter voor de uitrol: wie moet ik nog persoonlijk
                 meekrijgen? Alleen tonen als er zo iemand is. */}
-            {nooitIngelogd > 0 && (
+            {/* min-h-11: losse chips buiten de segmented-rail haalden het
+                44px-aanraakminimum niet. Blijven renderen zolang het filter
+                aanstaat — anders kon een actieve filter zijn eigen knop laten
+                verdwijnen en bleef een lege tabel zonder uitweg achter
+                (controle-ronde 20-08). */}
+            {(nooitIngelogd > 0 || alleenNooitIn) && (
               <button
                 type="button"
                 onClick={() => setAlleenNooitIn((v) => !v)}
                 aria-pressed={alleenNooitIn}
-                className={segItemClass(alleenNooitIn, 'self-start inline-flex items-center gap-1.5 rounded-2xl')}
+                className={segItemClass(alleenNooitIn, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
               >
                 <LogIn size={13} />
                 Nog nooit ingelogd ({nooitIngelogd})
               </button>
             )}
-            {/* Snelfilter: chauffeur-accounts die nergens in de geïmporteerde
-                planning staan — nieuwe collega of weggevallen Excel-kolom. */}
-            {aantalNietInPlanning > 0 && (
+            {/* Snelfilter: chauffeur-accounts zonder cel aan het einde van de
+                geïmporteerde planning — nieuwe collega of weggevallen kolom. */}
+            {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
               <button
                 type="button"
                 onClick={() => setAlleenNietInPlanning((v) => !v)}
                 aria-pressed={alleenNietInPlanning}
-                className={segItemClass(alleenNietInPlanning, 'self-start inline-flex items-center gap-1.5 rounded-2xl')}
+                className={segItemClass(alleenNietInPlanning, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
               >
                 <CalendarOff size={13} />
                 Niet in de planning ({aantalNietInPlanning})
@@ -564,7 +580,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     <div className="mt-1 flex flex-wrap items-center gap-1.5">
                       <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
                       {nietInPlanning(u) && (
-                        <Badge tone="amber" icon={<CalendarOff size={11} />} title="Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.">
+                        <Badge
+                          tone="amber"
+                          icon={<CalendarOff size={11} />}
+                          title={laatsteInPlanning(u)
+                            ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                            : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
+                        >
                           Niet in planning
                         </Badge>
                       )}

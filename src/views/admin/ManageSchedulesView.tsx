@@ -7,6 +7,7 @@ import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageS
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 import type { VerwachtingAfwijking } from '../../lib/coverageGaps';
+import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
 /** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
  *  met een kop + teller per blok blijft het scanbaar en klap je alleen open
@@ -98,7 +99,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     chauffeursNieuw: string[];
     chauffeursVerdwenen: Array<{ naam: string; laatste: string }>;
     /** "ziek" in de Excel zonder geregistreerde ziekteperiode in het portaal. */
-    ziekTeRegistreren: Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number }>;
+    ziekTeRegistreren: ZiekteReeks[];
     /** Dag-type-lijsten die niet sporen met wat dit bestand echt rijdt. */
     verwachtingsCheck: VerwachtingAfwijking[];
   }>(null);
@@ -234,8 +235,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   // zichtbaar met een vinkje zodat de lijst niet onder je muis verschuift.
   const [ziekteRegBusy, setZiekteRegBusy] = useState<string | null>(null);
   const [ziekteGeregistreerd, setZiekteGeregistreerd] = useState<Set<string>>(new Set());
-  const ziekteReeksSleutel = (r: { userId: string | null; van: string }) => `${r.userId}|${r.van}`;
-  const registreerZiekte = async (reeks: { userId: string | null; naam: string; van: string; tot: string }) => {
+  const registreerZiekte = async (reeks: ZiekteReeks) => {
     if (!reeks.userId || ziekteRegBusy) return;
     const sleutel = ziekteReeksSleutel(reeks);
     setZiekteRegBusy(sleutel);
@@ -960,8 +960,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {matrixPreview.chauffeursVerdwenen.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-semibold">Niet meer in dit bestand:</span>
+                          {/* Datum ín de badge: een title-tooltip bestaat niet op
+                              touch, en juist "t/m wanneer?" stuurt de beoordeling. */}
                           {matrixPreview.chauffeursVerdwenen.map((c) => (
-                            <Badge key={c.naam} tone="amber" title={`Stond in de planning t/m ${new Date(c.laatste).toLocaleDateString('nl-BE')}`}>{c.naam}</Badge>
+                            <Badge key={c.naam} tone="amber" className="tabular-nums">{c.naam} · t/m {new Date(c.laatste).toLocaleDateString('nl-BE')}</Badge>
                           ))}
                         </div>
                       )}
@@ -985,28 +987,20 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
                       Deze chauffeurs staan in de Excel als "ziek", maar hebben geen ziekteperiode in het portaal — het Ziekte-blad en de meldingen kennen hen dan niet. Registreren kan meteen:
                     </p>
+                    {/* Zelfde rij-component als het Ziekte-blad: één presentatie
+                        (datumvorm, knoptekst, chips) op beide plekken. */}
                     <ul className="mt-3 space-y-2">
                       {matrixPreview.ziekTeRegistreren.map((r) => {
                         const sleutel = ziekteReeksSleutel(r);
-                        const klaar = ziekteGeregistreerd.has(sleutel);
                         return (
-                          <li key={sleutel} className="flex min-h-11 flex-wrap items-center gap-2 rounded-xl bg-surface-white ring-1 ring-amber-200/70 px-3 py-2 dark:ring-amber-500/30">
-                            <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
-                              <span className="font-bold">{r.naam}</span>
-                              {' — ziek '}
-                              <span className="tabular-nums">{new Date(r.van).toLocaleDateString('nl-BE')}{r.tot !== r.van ? ` t/m ${new Date(r.tot).toLocaleDateString('nl-BE')}` : ''}</span>
-                              <span className="text-slate-400 tabular-nums"> · {r.dagen} {r.dagen === 1 ? 'dag' : 'dagen'}</span>
-                            </span>
-                            {klaar ? (
-                              <Badge tone="emerald">Geregistreerd</Badge>
-                            ) : r.userId ? (
-                              <Button variant="secondary" size="sm" className="shrink-0" disabled={!!ziekteRegBusy} onClick={() => registreerZiekte(r)}>
-                                {ziekteRegBusy === sleutel ? 'Bezig…' : 'Registreer ziekte'}
-                              </Button>
-                            ) : (
-                              <Badge tone="slate" title="Deze Excel-naam is niet aan een account te koppelen — registreren kan pas na het matchen van de chauffeur.">Geen account</Badge>
-                            )}
-                          </li>
+                          <ZiekteReeksRij
+                            key={sleutel}
+                            reeks={r}
+                            bezig={ziekteRegBusy === sleutel}
+                            klaar={ziekteGeregistreerd.has(sleutel)}
+                            disabled={!!ziekteRegBusy}
+                            onRegistreer={registreerZiekte}
+                          />
                         );
                       })}
                     </ul>
@@ -1021,19 +1015,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
                       Vergelijking van de dag-type-lijsten (Openstaande diensten → Instellen) met wat dit bestand echt rijdt:
                     </p>
-                    <ul className="mt-3 space-y-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
-                      {matrixPreview.verwachtingsCheck.map((a) => (
-                        <li key={a.dayType} className="flex items-start gap-2">
-                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                          <span>
-                            <span className="font-bold capitalize">{a.dayType}</span>
-                            <span className="tabular-nums"> ({a.dagen} {a.dagen === 1 ? 'dag' : 'dagen'})</span>
-                            {a.nooitGereden.length > 0 && <> — verwacht maar nooit gereden: <span className="font-bold tabular-nums">{a.nooitGereden.join(', ')}</span></>}
-                            {a.nietVerwacht.length > 0 && <>{a.nooitGereden.length > 0 ? ' · ' : ' — '}wél gereden maar niet in de verwachting: <span className="font-bold tabular-nums">{a.nietVerwacht.map((x) => x.code).join(', ')}</span></>}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
+                    <VerwachtingAfwijkingLijst afwijkingen={matrixPreview.verwachtingsCheck} />
                   </InklapSectie>
                 )}
 
@@ -1169,10 +1151,14 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   </div>
                 )}
 
+                {/* Kleur volgt de zwaarste inhoud: rood alleen bij onbekende
+                    codes; alleen niet-gematchte chauffeurs = amber (zoals hun
+                    eigen kaart) — rode kop om amber inhoud gaf een gemengd
+                    signaal op precies het scherm waar rood "geblokkeerd" is. */}
                 <InklapSectie
                   title="Codes & chauffeur-matching"
                   aantal={matrixPreview.unknownCodes.length + matrixPreview.unmatchedDrivers.length}
-                  tone={matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0 ? 'red' : 'slate'}
+                  tone={matrixPreview.unknownCodes.length > 0 ? 'red' : matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'slate'}
                   defaultOpen={matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0}
                 >
                   <div className="grid gap-4 md:grid-cols-2">
@@ -1207,22 +1193,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 </InklapSectie>
 
                 {matrixPreview.servicesWithoutSegments.length > 0 && (
-                  <div className="rounded-3xl border border-amber-200/70 bg-amber-50/70 p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
-                      <div className="flex-1">
-                        <MicroLabel className="text-amber-700">Services zonder geldige uren</MicroLabel>
-                        <p className="mt-1 text-sm font-medium text-amber-900">
-                          {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {matrixPreview.servicesWithoutSegments.map((code) => (
-                            <Fragment key={code}><Badge tone="amber">{code}</Badge></Fragment>
-                          ))}
-                        </div>
-                      </div>
+                  <InklapSectie title="Services zonder geldige uren" aantal={matrixPreview.servicesWithoutSegments.length} tone="amber" defaultOpen>
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                      {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {matrixPreview.servicesWithoutSegments.map((code) => (
+                        <Fragment key={code}><Badge tone="amber">{code}</Badge></Fragment>
+                      ))}
                     </div>
-                  </div>
+                  </InklapSectie>
                 )}
 
                 {matrixPreview.perDriver.length > 0 && (

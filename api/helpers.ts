@@ -112,9 +112,18 @@ export const HANDMATIGE_WISSEL_PREFIX = "Handmatige wissel door ";
 export const isHandmatigeWissel = (swap: { reason?: unknown } | null | undefined) =>
   String(swap?.reason ?? "").startsWith(HANDMATIGE_WISSEL_PREFIX);
 
+// Formule-injectie neutraliseren: een celwaarde die met = + - @ (of een
+// tab/CR die Excel negeert) begint, wordt door sommige spreadsheets als
+// formule uitgevoerd bij het openen. In .xlsx typeert aoa_to_sheet strings
+// al als tekst, maar de exports zijn bewust her-importeerbaar en kunnen ooit
+// als CSV belanden — dus defensief een apostrof voorzetten. Geldt voor álle
+// vrije-tekst-cellen: praktijk-tab én maandoverzicht (namen, codes).
+const veilig = (raw: string): string =>
+  /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
+
 /**
  * Bouwt een praktijk-tab-Excel uit de ACTUELE cel-waarheid van de maand-
- * planning — de omgekeerde richting van parsePlanningMatrixXlsx, in exact
+ * planning — de omgekeerde richting van de praktijk-tab-parser, in exact
  * hetzelfde formaat (sheet 'praktijk', kolom A datum als Excel-serial, B
  * dagtype, één kolom per chauffeur, afsluitende 'aantal'-kolom). Doel: de
  * planner start zijn volgende Excel-bewerking op de werkelijke stand
@@ -134,13 +143,6 @@ export const bouwMatrixXlsx = (
     const ms = Date.parse(`${iso}T00:00:00Z`) - Date.parse("1899-12-30T00:00:00Z");
     return Math.round(ms / 86400000);
   };
-  // Formule-injectie neutraliseren: een celwaarde die met = + - @ (of een
-  // tab/CR die Excel negeert) begint, wordt door sommige spreadsheets als
-  // formule uitgevoerd bij het openen. In .xlsx typeert aoa_to_sheet strings
-  // al als tekst, maar deze helper is bewust her-importeerbaar en kan ooit als
-  // CSV belanden — dus defensief een apostrof voorzetten. Namen én codes.
-  const veilig = (raw: string): string =>
-    /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   const aoa: unknown[][] = [["datum", "dagtype", ...chauffeurs.map((c) => veilig(c.name)), "aantal"]];
   for (const iso of dates) {
     const codes = chauffeurs.map((c) => veilig(cells[c.id]?.[iso]?.code ?? ""));
@@ -247,15 +249,17 @@ export const bouwMaandoverzichtAoa = (
       else overigPerCode.set(cel.code, (overigPerCode.get(cel.code) ?? 0) + 1);
     }
     const overigTelling = [...overigPerCode.values()].reduce((a, b) => a + b, 0);
+    // veilig(): naam en overig-codes zijn vrije tekst — zelfde neutralisatie
+    // als de praktijk-tab (controle-ronde 20-08, security-lens).
     aoa.push([
-      c.name,
+      veilig(c.name),
       diensten,
       formatMinutenAlsUren(minuten),
       anderWerk,
       ziek,
       betaald,
       vrij,
-      [...overigPerCode.entries()].map(([code, x]) => `${code}×${x}`).join(", "),
+      veilig([...overigPerCode.entries()].map(([code, x]) => `${code}×${x}`).join(", ")),
       dagen,
     ]);
     totaal.diensten += diensten;
@@ -378,17 +382,21 @@ const addDagenIso = (iso: string, n: number): string => {
  * "ziek"-cellen in de planning-matrix waarvoor géén goedgekeurde ziekteperiode
  * in het portaal bestaat. De Excel en het Ziekte-blad lopen dan uiteen: digest,
  * advisor en het blad zelf kennen die afwezigheid niet. Aaneengesloten dagen
- * worden één reeks; `userId` is null als de Excel-naam niet aan een account te
- * koppelen is (dan valt er ook niets te registreren).
+ * worden één reeks. `userId` is null als de Excel-naam niet aan een account te
+ * koppelen is; `ambigu` onderscheidt daarbij "matcht méérdere accounts" van
+ * "matcht er geen" (de remedie is tegengesteld: namen uniek maken vs. account
+ * aanmaken). `actief` laat de UI een gepauzeerd account herkennen — sick-report
+ * weigert die, dus een registreer-knop zou een dood einde zijn.
  */
 export const vindOngeregistreerdeZiekte = (
   rows: Array<Pick<PlanningMatrixRow, "source_date" | "assignments">>,
-  users: Array<Pick<AppUser, "id" | "name">>,
+  users: Array<Pick<AppUser, "id" | "name"> & { isActive?: boolean | null }>,
   leave: Array<{ userId?: unknown; startDate?: unknown; endDate?: unknown; status?: unknown; type?: unknown }>,
   vanafDatum?: string,
-): Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number }> => {
-  const idByName = nameIdIndex(users);
+): Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number; actief: boolean; ambigu: boolean }> => {
+  const { map: idByName, botsingen } = nameIdIndexMetBotsingen(users);
   const naamById = new Map(users.map((u) => [String(u.id), String(u.name ?? "")]));
+  const actiefById = new Map(users.map((u) => [String(u.id), u.isActive !== false]));
   const ziekteLeave = leave.filter((l) => l?.status === "approved" && String(l?.type) === "ziekte");
   const gedekt = (userId: string, date: string) =>
     ziekteLeave.some((l) => {
@@ -398,7 +406,7 @@ export const vindOngeregistreerdeZiekte = (
       if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(eind) || start > eind) return false;
       return start <= date && date <= eind;
     });
-  const perPersoon = new Map<string, { userId: string | null; naam: string; dagen: string[] }>();
+  const perPersoon = new Map<string, { userId: string | null; naam: string; actief: boolean; ambigu: boolean; dagen: string[] }>();
   const gesorteerd = [...rows].sort((a, b) => String(a.source_date).localeCompare(String(b.source_date)));
   for (const row of gesorteerd) {
     const date = String(row.source_date ?? "");
@@ -414,7 +422,13 @@ export const vindOngeregistreerdeZiekte = (
       const sleutel = id ?? `naam:${sortedNameToken(naam)}`;
       let entry = perPersoon.get(sleutel);
       if (!entry) {
-        entry = { userId: id, naam: (id && naamById.get(id)) || naam, dagen: [] };
+        entry = {
+          userId: id,
+          naam: (id && naamById.get(id)) || naam,
+          actief: id ? actiefById.get(id) !== false : false,
+          ambigu: !id && (botsingen.has(toLookupToken(naam)) || botsingen.has(sortedNameToken(naam))),
+          dagen: [],
+        };
         perPersoon.set(sleutel, entry);
       }
       entry.dagen.push(date);
@@ -423,13 +437,13 @@ export const vindOngeregistreerdeZiekte = (
   // Losse dagen → aaneengesloten reeksen. Een niet-zieke dag ertussen (bv.
   // "vrij" op zaterdag) breekt de reeks bewust: liever twee korte periodes
   // registreren dan stilzwijgend een langere ziekte aannemen.
-  const out: Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number }> = [];
+  const out: Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number; actief: boolean; ambigu: boolean }> = [];
   for (const p of perPersoon.values()) {
     let van = "";
     let vorige = "";
     let telling = 0;
     const sluit = () => {
-      if (van) out.push({ userId: p.userId, naam: p.naam, van, tot: vorige, dagen: telling });
+      if (van) out.push({ userId: p.userId, naam: p.naam, van, tot: vorige, dagen: telling, actief: p.actief, ambigu: p.ambigu });
     };
     for (const date of p.dagen) {
       if (van && date === addDagenIso(vorige, 1)) {
@@ -620,7 +634,9 @@ export const sortedNameToken = (name: string) =>
  * dekking bij zo'n botsing de cel van de verkeerde chauffeur weg en meldt hij
  * een fantoom-gat op de verkeerde naam.
  */
-export const nameIdIndex = (users: Array<{ id: string | number; name?: string | null }>): Map<string, string> => {
+export const nameIdIndexMetBotsingen = (
+  users: Array<{ id: string | number; name?: string | null }>,
+): { map: Map<string, string>; botsingen: Set<string> } => {
   const map = new Map<string, string>();
   const botsingen = new Set<string>();
   const zet = (token: string, id: string) => {
@@ -635,8 +651,11 @@ export const nameIdIndex = (users: Array<{ id: string | number; name?: string | 
     zet(sortedNameToken(String(u.name ?? "")), id);
   }
   for (const token of botsingen) map.delete(token);
-  return map;
+  return { map, botsingen };
 };
+
+export const nameIdIndex = (users: Array<{ id: string | number; name?: string | null }>): Map<string, string> =>
+  nameIdIndexMetBotsingen(users).map;
 
 /** Nette verloftype-labels (server-kant). Bewust gedupliceerd in
  *  src/lib/format.ts (LEAVE_TYPE_LABELS) — de repo-conventie verbiedt
@@ -770,10 +789,6 @@ const excelSerialToIso = (serial: number): string | null => {
 // (buildPlanningFromMatrix → preview → confirm) kan verwerken. Datums
 // blijven Excel-serial zodat we geen locale-LUT nodig hebben, en lege
 // cellen vs. lege strings blijven goed gescheiden.
-/** Achterwaarts-compatibele variant zonder waarschuwingen (tests, oude callers). */
-export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] =>
-  parsePlanningMatrixXlsxMetWaarschuwingen(buffer).rows;
-
 export const parsePlanningMatrixXlsxMetWaarschuwingen = (
   buffer: Buffer,
 ): { rows: PlanningMatrixRow[]; waarschuwingen: string[] } => {

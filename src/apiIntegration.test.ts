@@ -3175,10 +3175,14 @@ describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () =
   };
   const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
 
-  it('preview waarschuwt voor kolommen ná "aantal" en vergelijkt chauffeurs met de bestaande planning', async () => {
-    // Bestaande matrix (juli) heeft Chauffeur A + B; dit bestand (2030-08)
-    // heeft alleen A + een nieuwe C, plus een kolom áchter aantal — precies
-    // het patroon waarmee Luc Cherlet op 20-08 geruisloos verdween.
+  it('preview waarschuwt voor kolommen ná "aantal" en vergelijkt chauffeurs met de planning vlak vóór de periode', async () => {
+    // Bestaande matrix (juli 2030, binnen het 60-dagen-venster) heeft
+    // Chauffeur A + B; dit bestand (2030-08) heeft alleen A + een nieuwe C,
+    // plus een kolom áchter aantal — precies het patroon waarmee Luc Cherlet
+    // op 20-08 geruisloos verdween.
+    mem.planningMatrix = [
+      { id: 'm-jul', source_date: '2030-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+    ];
     const base64 = await bouwXlsx([
       ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur C', 'aantal', 'Vergeten Chauffeur'],
       [serial('2030-08-03'), 'W', '12', '14', 2, '15'],
@@ -3187,8 +3191,31 @@ describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () =
     expect(res.status).toBe(200);
     expect(res.json.parserWaarschuwingen).toHaveLength(1);
     expect(res.json.parserWaarschuwingen[0]).toContain('Vergeten Chauffeur');
-    expect(res.json.chauffeursVerdwenen).toEqual([{ naam: 'Chauffeur B', laatste: '2026-07-08' }]);
+    expect(res.json.chauffeursVerdwenen).toEqual([{ naam: 'Chauffeur B', laatste: '2030-07-08' }]);
     expect(res.json.chauffeursNieuw).toEqual(['Chauffeur C']);
+  });
+
+  it('chauffeurs-vergelijking: oude planning buiten het venster telt niet mee; dekt het bestand alles, dan vergelijkt hij met de oude versie van de periode zelf', async () => {
+    const base64 = await bouwXlsx([
+      ['datum', 'dagtype', 'Chauffeur A', 'aantal'],
+      [serial('2030-08-03'), 'W', '12', 1],
+    ]);
+    // Alleen jaren-oude rijen (ver buiten het 60-dagen-venster): geen ruis
+    // over allang vertrokken collega's.
+    mem.planningMatrix = [
+      { id: 'm-oud', source_date: '2026-07-01', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+    ];
+    const stil = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(stil.json.chauffeursVerdwenen).toEqual([]);
+    expect(stil.json.chauffeursNieuw).toEqual([]);
+
+    // Zelfde bestand, maar nu bestaat er een oude versie van exact deze
+    // periode mét Chauffeur B: de fallback vergelijkt daarmee.
+    mem.planningMatrix = [
+      { id: 'm-zelfde', source_date: '2030-08-03', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+    ];
+    const fallback = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(fallback.json.chauffeursVerdwenen).toEqual([{ naam: 'Chauffeur B', laatste: '2030-08-03' }]);
   });
 
   it('preview meldt Excel-"ziek" zonder geregistreerde ziekteperiode, en zwijgt mét', async () => {
@@ -3198,7 +3225,7 @@ describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () =
     ]);
     const zonder = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
     expect(zonder.status).toBe(200);
-    expect(zonder.json.ziekTeRegistreren).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-08-03', tot: '2030-08-03', dagen: 1 }]);
+    expect(zonder.json.ziekTeRegistreren).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-08-03', tot: '2030-08-03', dagen: 1, actief: true, ambigu: false }]);
 
     mem.leave = [
       { id: 'l-z', userId: '3', startDate: '2030-08-01', endDate: '2030-08-10', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-30T06:00:00Z', decidedAt: '2030-07-30T06:00:00Z' },
@@ -3229,7 +3256,7 @@ describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () =
     ];
     const res = await api('GET', '/api/ziekte-zonder-registratie', { token: 'tok-planner' });
     expect(res.status).toBe(200);
-    expect(res.json.reeksen).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-09-01', tot: '2030-09-01', dagen: 1 }]);
+    expect(res.json.reeksen).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-09-01', tot: '2030-09-01', dagen: 1, actief: true, ambigu: false }]);
   });
 
   it('GET /api/planning-presence geeft per gematchte chauffeur de laatste datum in de matrix', async () => {
