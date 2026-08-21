@@ -3270,3 +3270,93 @@ describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () =
     expect(perUser['4']).toBe('2026-07-08');
   });
 });
+
+describe('telegram-webhook — secret, koppeling en commando\'s', () => {
+  const verzonden: Array<{ chatId: string; tekst: string; knoppen?: Array<Array<{ tekst: string; data: string }>> }> = [];
+  const webhook = (body: unknown, secretHeader?: string) =>
+    api('POST', '/api/telegram/webhook', {
+      body,
+      headers: secretHeader === undefined ? {} : { 'X-Telegram-Bot-Api-Secret-Token': secretHeader },
+    });
+
+  beforeEach(async () => {
+    const { zetTelegramVerzenderVoorTests } = await import('../api/telegram');
+    verzonden.length = 0;
+    zetTelegramVerzenderVoorTests(async (v: any) => { verzonden.push(v); return true; });
+    process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
+    process.env.TELEGRAM_CHAT_ID = '777';
+    delete process.env.TELEGRAM_BOT_TOKEN; // answerCallbackQuery wordt dan een no-op
+  });
+
+  afterAll(async () => {
+    const { zetTelegramVerzenderVoorTests } = await import('../api/telegram');
+    zetTelegramVerzenderVoorTests(null);
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    delete process.env.TELEGRAM_CHAT_ID;
+  });
+
+  it('weigert zonder (juiste) secret-header, en is dicht zonder geconfigureerd secret', async () => {
+    expect((await webhook({ message: {} }, 'fout-secret')).status).toBe(401);
+    expect((await webhook({ message: {} })).status).toBe(401);
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    expect((await webhook({ message: {} }, 'wat-dan-ook')).status).toBe(401);
+  });
+
+  it('toont bij /start de chat-id zolang er geen chat gekoppeld is, en negeert andere afzenders stil', async () => {
+    delete process.env.TELEGRAM_CHAT_ID;
+    const res = await webhook({ message: { chat: { id: 12345 }, text: '/start' } }, 'test-secret');
+    expect(res.status).toBe(200);
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].chatId).toBe('12345');
+    expect(verzonden[0].tekst).toContain('12345');
+    expect(verzonden[0].tekst).toContain('TELEGRAM_CHAT_ID');
+
+    // Mét gekoppelde chat: een vreemde afzender krijgt niets — ook geen /start.
+    process.env.TELEGRAM_CHAT_ID = '777';
+    verzonden.length = 0;
+    await webhook({ message: { chat: { id: 999 }, text: '/start' } }, 'test-secret');
+    await webhook({ message: { chat: { id: 999 }, text: '/gaten' } }, 'test-secret');
+    expect(verzonden).toHaveLength(0);
+  });
+
+  it('/gaten antwoordt met de openstaande diensten en kandidaten-knoppen', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.planningMatrix = [
+      { id: 'm-nu', source_date: vandaag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+    const res = await webhook({ message: { chat: { id: 777 }, text: '/gaten' } }, 'test-secret');
+    expect(res.status).toBe(200);
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].chatId).toBe('777');
+    expect(verzonden[0].tekst).toContain('1 openstaande dienst');
+    expect(verzonden[0].tekst).toContain('11');
+    expect(verzonden[0].knoppen?.flat().map((k) => k.data)).toEqual([`adv|${vandaag}|11`]);
+  });
+
+  it('kandidaten-knop stuurt het invaladvies voor dat gat', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.planningMatrix = [
+      { id: 'm-nu', source_date: vandaag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+    const res = await webhook({
+      callback_query: { id: 'cb1', data: `adv|${vandaag}|11`, message: { chat: { id: 777 } } },
+    }, 'test-secret');
+    expect(res.status).toBe(200);
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].tekst).toContain('Dienst 11');
+    // Chauffeur B staat op "vrij" en hoort in het advies voor te komen.
+    expect(verzonden[0].tekst).toContain('Chauffeur B');
+  });
+
+  it('/ziek somt de actuele ziekmeldingen op', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.leave = [
+      { id: 'l-z', userId: '3', startDate: vandaag, endDate: vandaag, type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-08-01T06:00:00Z', decidedAt: '2026-08-01T06:00:00Z' },
+    ];
+    await webhook({ message: { chat: { id: 777 }, text: '/ziek' } }, 'test-secret');
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].tekst).toContain('Chauffeur A');
+  });
+});

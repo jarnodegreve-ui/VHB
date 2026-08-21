@@ -44,6 +44,7 @@ import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit, create
 import type AnthropicClient from "@anthropic-ai/sdk";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
+import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten } from "./telegram.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
 import {
@@ -193,6 +194,11 @@ mountOcpiRoutes(app);
 
 // Toestel-whitelist (registratie + admin-beheer). Zie api/deviceRoutes.ts.
 mountDeviceRoutes(app);
+
+// Telegram-bot voor de planner (webhook + commando's). Zie api/telegram.ts.
+// De bereken-functies staan verderop in dit bestand (function-declaraties,
+// dus gehoist) — doorgeven i.p.v. importeren voorkomt een import-cyclus.
+mountTelegramRoutes(app, { berekenDekkingsGaten, berekenCoverageAdvies, addDagen });
 
 // Health check — publiek maar kaal: geen tabelstatussen/foutmeldingen/env
 // naar buiten (info-disclosure). Gedetailleerde checks alleen voor admins.
@@ -3079,6 +3085,13 @@ app.get("/api/cron/error-digest", async (req, res) => {
             url: "/",
           });
         }
+        // Zelfde signaal ook naar de gekoppelde Telegram-chat, mét
+        // kandidaten-knoppen per gat — push bereikt bijna niemand, Telegram
+        // wél (keuze Jarno 21-08). Best-effort, net als de rest.
+        if (telegramGeconfigureerd()) {
+          const { tekst: tgTekst, knoppen } = formatGaten(dagen);
+          await stuurTelegram(tgTekst, { knoppen });
+        }
       }
     } catch (err: any) {
       console.error("[error-digest] openstaande-diensten-sectie mislukt:", err?.message ?? err);
@@ -4886,6 +4899,16 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
       body: `${target.name} is ziek gemeld voor ${period}.`,
       url: "/",
     });
+    // Ziekmelding ook naar de gekoppelde Telegram-chat, mét de diensten die
+    // erdoor openvallen — dát is wat de planner meteen wil weten. Best-effort.
+    if (telegramGeconfigureerd()) {
+      const dienstRegels = openDiensten.slice(0, 5).map((d) => `• ${d.label}: ${d.nummers}`);
+      if (openDiensten.length > 5) dienstRegels.push(`• …en nog ${openDiensten.length - 5} dagen`);
+      await stuurTelegram([
+        `🤒 <b>Ziekmelding</b> — ${escapeHtml(target.name)} (${period})`,
+        openDiensten.length > 0 ? `Diensten op naam in deze periode:\n${dienstRegels.join("\n")}` : "Geen diensten op naam in deze periode.",
+      ].join("\n"));
+    }
     // Per planner een eigen mail, rechtstreeks geadresseerd — géén BCC-batch.
     // sendEmail zet meerdere ontvangers in BCC (met noreply als To), en
     // Microsoft 365 filterde precies die vorm stilletjes weg: de testmail
