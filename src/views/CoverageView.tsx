@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -20,6 +20,7 @@ import {
 } from '../lib/coverage';
 import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking } from '../lib/coverageGaps';
 import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
+import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
 
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
@@ -253,6 +254,39 @@ export function CoverageView() {
     setWeekdayPeriods((prev) => prev.map((p, idx) => (idx === i ? { ...p, weekdays: p.weekdays.map((x, d) => (d === dow ? name : x)) } : p)));
   const removeWeekdayPeriod = (i: number) =>
     setWeekdayPeriods((prev) => prev.filter((_, idx) => idx !== i));
+
+  // --- Kalender-voorzet: feestdagen + schoolvakanties 2026-2027 ------------
+  // Zonder dit tikte de planner elke vakantie en feestdag handmatig in als
+  // uitzondering — één vergeten krokusvakantie = wéér fantoomgaten. De
+  // dag-type-koppeling is instelbaar; standaard fuzzy op de bestaande namen.
+  const [kalFeest, setKalFeest] = useState('');
+  const [kalMaDiWo, setKalMaDiWo] = useState('');
+  const [kalDo, setKalDo] = useState('');
+  const [kalVr, setKalVr] = useState('');
+  useEffect(() => {
+    if (!config) return;
+    const namen = (config.dayTypes || []).map((d) => d.name);
+    const vind = (test: (n: string) => boolean) => namen.find((n) => test(n.toLowerCase())) ?? '';
+    setKalFeest((cur) => cur || vind((n) => n.includes('zondag')));
+    setKalMaDiWo((cur) => cur || vind((n) => n.includes('ma/di/wo')));
+    setKalDo((cur) => cur || vind((n) => n.includes('vakantie') && n.includes('donderdag')));
+    setKalVr((cur) => cur || vind((n) => n.includes('vakantie') && n.includes('vrijdag')));
+  }, [config]);
+  const voegKalenderToe = () => {
+    const vandaag = new Date().toISOString().slice(0, 10);
+    const { uitzonderingen, overgeslagen } = bouwKalenderUitzonderingen({
+      feestdagType: kalFeest || undefined,
+      vakantieTypes: { maDiWo: kalMaDiWo || undefined, donderdag: kalDo || undefined, vrijdag: kalVr || undefined },
+      bestaande: overrides,
+      vanafDatum: vandaag,
+    });
+    if (uitzonderingen.length === 0) {
+      notify(overgeslagen > 0 ? 'Alles uit de kalender staat al in de lijst.' : 'Kies eerst waar de feestdagen en vakantiedagen naartoe moeten.', 'error');
+      return;
+    }
+    setOverrides((prev) => [...prev, ...uitzonderingen]);
+    notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''} — controleer de lijst en klik op Opslaan.`, 'success');
+  };
 
   // --- Uitzonderingen ---
   const addOverride = () => setOverrides((prev) => [...prev, { from: '', to: '', dayType: '' }]);
@@ -540,6 +574,40 @@ export function CoverageView() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* 4. Kalender-voorzet: feestdagen + schoolvakanties in één klik */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <div>
+                  <MicroLabel className="text-slate-500">Kalender 2026–2027</MicroLabel>
+                  <p className="text-xs font-medium text-slate-500 mt-0.5">
+                    Zet de Belgische feestdagen (zondagsdienst) en de Vlaamse schoolvakanties (herfst, kerst, krokus, Pasen) in één keer voor als uitzonderingen. Je kiest hieronder welk dag-type elke groep krijgt; daarna gewoon controleren en opslaan. De zomervakantie stel je in via een weekdagperiode, zoals vanaf 1 september.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([
+                    { label: 'Feestdagen', waarde: kalFeest, zet: setKalFeest },
+                    { label: 'Vakantie ma/di/wo', waarde: kalMaDiWo, zet: setKalMaDiWo },
+                    { label: 'Vakantie donderdag', waarde: kalDo, zet: setKalDo },
+                    { label: 'Vakantie vrijdag', waarde: kalVr, zet: setKalVr },
+                  ] as const).map(({ label, waarde, zet }) => (
+                    <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
+                      <span className="text-sm font-bold text-slate-700">{label}</span>
+                      <select
+                        value={waarde}
+                        onChange={(e) => zet(e.target.value)}
+                        aria-label={`Dag-type voor ${label.toLowerCase()}`}
+                        className="control-input rounded-lg px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                      >
+                        <option value="">— overslaan —</option>
+                        {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="secondary" size="sm" icon={<CalendarPlus size={13} />} onClick={voegKalenderToe}>
+                  Zet voor in de lijst
+                </Button>
               </div>
 
               <p className="text-2xs font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
