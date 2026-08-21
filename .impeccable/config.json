@@ -35,6 +35,15 @@
         ],
         "createdAt": "2026-08-19T18:48:09.109Z",
         "reason": "text-slate-600 op bg-surface-muted: neutraal grijs oppervlak-token, geen gekleurde achtergrond — zelfde bekende vals-positief-klasse als de override-tabel (config 09-08)"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/views/admin/ManageUsersView.tsx"
+        ],
+        "createdAt": "2026-08-20T21:24:26.487Z",
+        "reason": "Bekende vals-positief: detector ziet de (witte/neutrale) tabelachtergrond niet; bestaande slate-400-regels verschoven enkel van regelnummer in verbeterronde 20-08"
       }
     ]
   }

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Plus, Thermometer } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
@@ -149,6 +149,30 @@ export function ZiekteView({
     if (ok) sluitMelden();
   };
 
+  // --- "ziek" in de planning-Excel zonder registratie hier ------------------
+  // De Excel en dit blad kunnen uiteenlopen: een chauffeur die in de planning
+  // als "ziek" staat maar hier nooit gemeld is (case 20-08: hele maand ziek in
+  // de Excel, onbekend voor digest en advisor). Best-effort geladen; per reeks
+  // is registreren één klik via dezelfde flow als "Ziek melden".
+  const [excelZiekte, setExcelZiekte] = useState<Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number }>>([]);
+  const [excelZiekteBusy, setExcelZiekteBusy] = useState<string | null>(null);
+  const laadExcelZiekte = async () => {
+    try {
+      const res = await fetch('/api/ziekte-zonder-registratie', { headers: await getSupabaseAuthHeaders() });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => ({} as any));
+      if (Array.isArray(body?.reeksen)) setExcelZiekte(body.reeksen);
+    } catch { /* zonder data geen banner */ }
+  };
+  useEffect(() => { void laadExcelZiekte(); }, []);
+  const registreerUitExcel = async (r: { userId: string | null; van: string; tot: string }) => {
+    if (!r.userId || excelZiekteBusy) return;
+    setExcelZiekteBusy(`${r.userId}|${r.van}`);
+    const ok = await onSickReport({ userId: r.userId, startDate: r.van, endDate: r.tot, comment: 'Stond als "ziek" in de planning-Excel.' })
+      .finally(() => setExcelZiekteBusy(null));
+    if (ok) await laadExcelZiekte();
+  };
+
   // --- Detail: einddatum bijstellen of intrekken ----------------------------
   const [detail, setDetail] = useState<LeaveRequest | null>(null);
   const [nieuwEinde, setNieuwEinde] = useState('');
@@ -230,6 +254,39 @@ export function ZiekteView({
           </Button>
         )}
       />
+
+      {/* Excel zegt ziek, portaal weet van niets — vóór de secties, want dit
+          is precies het geval waarin de secties hieronder leeg blijven. */}
+      {excelZiekte.length > 0 && (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <MicroLabel className="text-amber-700 dark:text-amber-400">In de planning als ziek, hier niet geregistreerd</MicroLabel>
+          <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+            Deze chauffeurs staan in de geïmporteerde planning als "ziek", maar hebben geen ziekteperiode in het portaal — meldingen, dekking en dit blad kennen die afwezigheid dan niet.
+          </p>
+          <ul className="mt-3 space-y-2">
+            {excelZiekte.map((r) => {
+              const sleutel = `${r.userId}|${r.van}`;
+              return (
+                <li key={`${r.naam}|${r.van}`} className="flex min-h-11 flex-wrap items-center gap-2 rounded-xl bg-surface-white ring-1 ring-amber-200/70 px-3 py-2 dark:ring-amber-500/30">
+                  <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
+                    <span className="font-bold">{r.naam}</span>
+                    {' — '}
+                    <span className="tabular-nums">{formatShortDay(r.van)}{r.tot !== r.van ? ` → ${formatShortDay(r.tot)}` : ''}</span>
+                    <span className="text-slate-400 tabular-nums"> · {r.dagen} {r.dagen === 1 ? 'dag' : 'dagen'}</span>
+                  </span>
+                  {r.userId ? (
+                    <Button variant="secondary" size="sm" className="shrink-0" disabled={!!excelZiekteBusy} onClick={() => registreerUitExcel(r)}>
+                      {excelZiekteBusy === sleutel ? 'Bezig…' : 'Registreer'}
+                    </Button>
+                  ) : (
+                    <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold text-slate-500" title="Deze Excel-naam is niet aan een account te koppelen — maak of corrigeer eerst het account.">geen account</span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
 
       {ziektes.length === 0 ? (
         <EmptyState title="Nog geen ziekmeldingen" message="Registreer een ziekmelding met de knop rechtsboven — de dagen staan dan meteen als onbeschikbaar in de planning." />

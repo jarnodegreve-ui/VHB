@@ -51,3 +51,16 @@ export function saveCoverageConfig(config: CoverageConfigInput): Promise<{ succe
 export function fetchCoverageGaps(from: string, to: string): Promise<CoverageGaps> {
   return apiFetch<CoverageGaps>(`/api/coverage-gaps?from=${from}&to=${to}`);
 }
+
+export type ExpectationCheck = {
+  from: string;
+  to: string;
+  dagen: number;
+  afwijkingen: import('./coverageGaps').VerwachtingAfwijking[];
+};
+
+/** Verwachtingen-vs-praktijk: verwachte diensten die in de periode nooit
+ *  gereden worden + structureel gereden codes buiten de verwachting. */
+export function fetchExpectationCheck(from: string, to: string): Promise<ExpectationCheck> {
+  return apiFetch<ExpectationCheck>(`/api/coverage-expectation-check?from=${from}&to=${to}`);
+}

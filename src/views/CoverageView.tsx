@@ -10,6 +10,7 @@ import { formatShortDay, MONTH_NAMES } from '../lib/format';
 import {
   fetchCoverageConfig,
   fetchCoverageGaps,
+  fetchExpectationCheck,
   saveCoverageConfig,
   type CoverageConfig,
   type CoverageDayType,
@@ -17,7 +18,7 @@ import {
   type CoverageWeekdayPeriod,
   type DayGap,
 } from '../lib/coverage';
-import { normalizeCode } from '../lib/coverageGaps';
+import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking } from '../lib/coverageGaps';
 
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
@@ -49,6 +50,9 @@ export function CoverageView() {
   const [weekdayPeriods, setWeekdayPeriods] = useState<CoverageWeekdayPeriod[]>([]);
   const [overrides, setOverrides] = useState<CoverageOverride[]>([]);
   const [gaps, setGaps] = useState<DayGap[]>([]);
+  // Verwachtingen-vs-praktijk voor de getoonde maand: structurele afwijkingen
+  // tussen de dag-type-lijsten en wat er echt gereden wordt (fantoomgaten).
+  const [expCheck, setExpCheck] = useState<VerwachtingAfwijking[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -93,10 +97,17 @@ export function CoverageView() {
       .then((res) => { if (!cancelled) setGaps(Array.isArray(res?.days) ? res.days : []); })
       .catch((e) => { if (!cancelled) setError(e?.message || 'Kon dekking niet berekenen.'); })
       .finally(() => { if (!cancelled) setLoading(false); });
+    // Best-effort naast de gaten: een mislukte check mag het scherm niet raken.
+    fetchExpectationCheck(from, to)
+      .then((res) => { if (!cancelled) setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : []); })
+      .catch(() => { if (!cancelled) setExpCheck([]); });
     return () => { cancelled = true; };
   }, [from, to]);
 
-  const refetchGaps = () => fetchCoverageGaps(from, to).then((res) => setGaps(Array.isArray(res?.days) ? res.days : [])).catch(() => {});
+  const refetchGaps = () => Promise.all([
+    fetchCoverageGaps(from, to).then((res) => setGaps(Array.isArray(res?.days) ? res.days : [])).catch(() => {}),
+    fetchExpectationCheck(from, to).then((res) => setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : [])).catch(() => {}),
+  ]);
 
   /** Wijs het gekozen gat toe aan een vrije chauffeur — de matrix én de
    *  planning worden server-side bijgewerkt, daarna verdwijnt het gat hier. */
@@ -267,8 +278,38 @@ export function CoverageView() {
   const dayLabel = formatShortDay; // gedeelde compacte dag-vorm (datum-consolidatie)
 
   const totalMissing = useMemo(() => gaps.reduce((sum, d) => sum + d.missing.length, 0), [gaps]);
+  // Oorzaak-uitsplitsing voor de teller: een gat mét uitval-info komt door een
+  // gemelde afwezigheid (één zieke collega kan de hele teller kleuren); een
+  // kaal gat heeft écht nog geen chauffeur. Dat onderscheid vertelt in één
+  // regel of het structureel is of niet.
+  const uitvalSplit = useMemo(() => {
+    let doorAfwezigheid = 0;
+    const namen = new Set<string>();
+    for (const d of gaps) {
+      for (const svc of d.missing) {
+        const info = d.uitval?.[normalizeCode(svc)];
+        if (info) {
+          doorAfwezigheid += 1;
+          namen.add(info.name);
+        }
+      }
+    }
+    return { doorAfwezigheid, zonderChauffeur: totalMissing - doorAfwezigheid, namen: [...namen] };
+  }, [gaps, totalMissing]);
   const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);
   const visibleDays = onlyGaps ? gaps.filter((d) => d.missing.length > 0) : gaps;
+
+  /** Uitleg bij het dag-type van een dag: waar komt het vandaan? */
+  const bronUitleg = (bron?: DayTypeBron): string | undefined => {
+    if (!bron) return undefined;
+    switch (bron.soort) {
+      case 'excel': return 'Dag-type komt uit de Excel-import (kolom B) en gaat vóór alle instellingen.';
+      case 'uitzondering': return `Via de uitzondering ${bron.from} t/m ${bron.to} (Instellen → Uitzonderingen).`;
+      case 'periode': return `Via de weekdagperiode vanaf ${bron.vanaf} (Instellen → Standaard per weekdag).`;
+      case 'basis': return 'Via de basis-weekdagtoewijzing (Instellen → Standaard per weekdag).';
+      default: return undefined;
+    }
+  };
 
   return (
     <PageShell width="6xl">
@@ -492,11 +533,48 @@ export function CoverageView() {
         </div>
       )}
 
+      {/* Verwachtingen-vs-praktijk: structurele afwijkingen tussen de dag-
+          type-lijsten en wat er echt gereden wordt. Zonder deze banner lezen
+          die als "openstaande diensten" terwijl niemand ontbreekt (20-08). */}
+      {expCheck.length > 0 && (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="flex items-start gap-3">
+            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+            <div className="min-w-0">
+              <MicroLabel className="text-amber-700 dark:text-amber-400">Verwachtingen wijken af van de planning</MicroLabel>
+              <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+                Sommige dag-type-lijsten sporen niet met wat er deze maand echt gereden wordt — meestal een dienstregelingswissel die nog niet in de dekkingsinstellingen verwerkt is. Pas de lijsten aan via Instellen.
+              </p>
+              <ul className="mt-3 space-y-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
+                {expCheck.map((a) => (
+                  <li key={a.dayType} className="flex items-start gap-2">
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                    <span>
+                      <span className="font-bold capitalize">{a.dayType}</span>
+                      <span className="tabular-nums"> ({a.dagen} {a.dagen === 1 ? 'dag' : 'dagen'})</span>
+                      {a.nooitGereden.length > 0 && <> — verwacht maar nooit gereden: <span className="font-bold tabular-nums">{a.nooitGereden.join(', ')}</span></>}
+                      {a.nietVerwacht.length > 0 && <>{a.nooitGereden.length > 0 ? ' · ' : ' — '}wél gereden maar niet in de verwachting: <span className="font-bold tabular-nums">{a.nietVerwacht.map((x) => x.code).join(', ')}</span></>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* === Gaten-overzicht === */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-red-600 tabular-nums"><AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand</span>
+            <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-red-600 tabular-nums">
+              <AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand
+              {uitvalSplit.doorAfwezigheid > 0 && (
+                <span className="font-medium text-slate-500">
+                  — {uitvalSplit.zonderChauffeur > 0 ? `${uitvalSplit.zonderChauffeur} zonder chauffeur · ` : ''}{uitvalSplit.doorAfwezigheid} door afwezigheid{uitvalSplit.namen.length === 1 ? ` (${uitvalSplit.namen[0]})` : ` (${uitvalSplit.namen.length} chauffeurs)`}
+                </span>
+              )}
+            </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn ingevuld</span>
           )}
@@ -533,7 +611,9 @@ export function CoverageView() {
                 <div className="sm:w-44 shrink-0">
                   <div className="text-sm font-semibold text-slate-800 capitalize tabular-nums">{dayLabel(d.date)}</div>
                   <div className="mt-1">
-                    <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+                    {/* title = herkomst van het dag-type: scheelt debuggen bij
+                        elke dienstregelingswissel ("waarom is dit di/vrij?"). */}
+                    <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize" title={bronUitleg(d.bron)}>{d.dayType || '—'}</Badge>
                   </div>
                 </div>
                 <div className="shrink-0 sm:w-28">
