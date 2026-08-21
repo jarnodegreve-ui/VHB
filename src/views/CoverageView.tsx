@@ -263,6 +263,9 @@ export function CoverageView() {
   const [kalMaDiWo, setKalMaDiWo] = useState('');
   const [kalDo, setKalDo] = useState('');
   const [kalVr, setKalVr] = useState('');
+  // Standaard dicht, zoals de dag-type-kaarten (#385): het Instellen-paneel
+  // moet scanbaar blijven — dit is een af-en-toe-actie, geen dagelijks werk.
+  const [kalenderOpen, setKalenderOpen] = useState(false);
   useEffect(() => {
     if (!config) return;
     const namen = (config.dayTypes || []).map((d) => d.name);
@@ -578,12 +581,23 @@ export function CoverageView() {
 
               {/* 4. Kalender-voorzet: feestdagen + schoolvakanties in één klik */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
-                <div>
-                  <MicroLabel className="text-slate-500">Kalender 2026–2027</MicroLabel>
-                  <p className="text-xs font-medium text-slate-500 mt-0.5">
-                    Zet de Belgische feestdagen (zondagsdienst) en de Vlaamse schoolvakanties (herfst, kerst, krokus, Pasen) in één keer voor als uitzonderingen. Je kiest hieronder welk dag-type elke groep krijgt; daarna gewoon controleren en opslaan. De zomervakantie stel je in via een weekdagperiode, zoals vanaf 1 september.
-                  </p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setKalenderOpen((v) => !v)}
+                  aria-expanded={kalenderOpen}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <MicroLabel className="text-slate-500">Kalender 2026–2027</MicroLabel>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Feestdagen en schoolvakanties in één klik voorzetten als uitzonderingen.</p>
+                  </div>
+                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', kalenderOpen && 'rotate-180')} />
+                </button>
+                {kalenderOpen && (
+                <>
+                <p className="text-xs font-medium text-slate-500">
+                  Zet de Belgische feestdagen (zondagsdienst) en de Vlaamse schoolvakanties (herfst, kerst, krokus, Pasen) in één keer voor als uitzonderingen. Je kiest hieronder welk dag-type elke groep krijgt; daarna gewoon controleren en opslaan. De zomervakantie stel je in via een weekdagperiode, zoals vanaf 1 september.
+                </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {([
                     { label: 'Feestdagen', waarde: kalFeest, zet: setKalFeest },
@@ -608,6 +622,8 @@ export function CoverageView() {
                 <Button variant="secondary" size="sm" icon={<CalendarPlus size={13} />} onClick={voegKalenderToe}>
                   Zet voor in de lijst
                 </Button>
+                </>
+                )}
               </div>
 
               <p className="text-2xs font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
