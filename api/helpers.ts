@@ -126,6 +126,9 @@ export const bouwMatrixXlsx = (
   dayTypeByDate: Map<string, string>,
   chauffeurs: Array<{ id: string; name: string }>,
   cells: Record<string, Record<string, { code: string; kind: string }>>,
+  // Optioneel tweede tabblad "maandoverzicht": per-chauffeur maandtelling
+  // (diensten/uren/ziekte/verlof) als voorbereiding op de loonadministratie.
+  maandoverzicht?: unknown[][],
 ): Buffer => {
   const serial = (iso: string) => {
     const ms = Date.parse(`${iso}T00:00:00Z`) - Date.parse("1899-12-30T00:00:00Z");
@@ -146,7 +149,127 @@ export const bouwMatrixXlsx = (
   }
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), "praktijk");
+  if (maandoverzicht && maandoverzicht.length > 0) {
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(maandoverzicht), "maandoverzicht");
+  }
   return XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+};
+
+/** 'HH:MM' → minuten; busvak-uren ≥ 24 ("26:16") geldig tot 47:59 — zelfde
+ *  regels als parseBusvakMin in api/advisor.ts. */
+const parseBusvakMinuten = (t: string): number | null => {
+  const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? "").trim());
+  if (!m) return null;
+  const h = Number(m[1]);
+  const min = Number(m[2]);
+  if (h > 47 || min > 59) return null;
+  return h * 60 + min;
+};
+
+/** Som van de segmentduren van één dienst in minuten (einde ≤ start = nacht,
+ *  +24u); null zonder bruikbare tijden. */
+export const dienstMinuten = (s: {
+  startTime?: string | null; endTime?: string | null;
+  startTime2?: string | null; endTime2?: string | null;
+  startTime3?: string | null; endTime3?: string | null;
+}): number | null => {
+  const paren: Array<[unknown, unknown]> = [
+    [s.startTime, s.endTime],
+    [s.startTime2, s.endTime2],
+    [s.startTime3, s.endTime3],
+  ];
+  let som: number | null = null;
+  for (const [a, b] of paren) {
+    const start = parseBusvakMinuten(String(a ?? ""));
+    const eind = parseBusvakMinuten(String(b ?? ""));
+    if (start === null || eind === null) continue;
+    som = (som ?? 0) + (eind <= start ? eind + 24 * 60 : eind) - start;
+  }
+  return som;
+};
+
+export const formatMinutenAlsUren = (minuten: number): string =>
+  `${Math.floor(minuten / 60)}:${String(Math.round(minuten) % 60).padStart(2, "0")}`;
+
+/**
+ * Per-chauffeur maandtelling als AOA voor het xlsx-tabblad "maandoverzicht" —
+ * voorbereiding op de loonadministratie. Rekent op de ACTUELE cel-waarheid
+ * (zelfde `cells` als de praktijk-terugexport: wissels, toewijzingen en
+ * afwezigheids-overlay verwerkt). Categorieën: dienst (dienstoverzicht-nummer,
+ * mét uren-som), ander werk (planningscode met counts_as_shift: EEK/bureau/
+ * garage), ziek, betaalde afwezigheid (bv/f/kv), vrij, en overig per code.
+ */
+export const bouwMaandoverzichtAoa = (
+  month: string,
+  dates: string[],
+  chauffeurs: Array<{ id: string; name: string }>,
+  cells: Record<string, Record<string, { code: string; kind: string }>>,
+  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null }>,
+  planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
+): unknown[][] => {
+  const serviceByNorm = new Map(services.map((s) => [toLookupToken(String(s.serviceNumber ?? "")), s]));
+  const codeByNorm = new Map(planningCodes.map((c) => [toLookupToken(c.code), c]));
+  const aoa: unknown[][] = [
+    [`Maandoverzicht ${month}`],
+    [`Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${dates.length} dagen). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`],
+    [],
+    ["chauffeur", "diensten", "uren diensten", "ander werk", "ziek", "betaalde afwezigheid", "vrij", "overig", "dagen ingepland"],
+  ];
+  const totaal = { diensten: 0, minuten: 0, anderWerk: 0, ziek: 0, betaald: 0, vrij: 0, overig: 0, dagen: 0 };
+  for (const c of chauffeurs) {
+    let diensten = 0;
+    let minuten = 0;
+    let anderWerk = 0;
+    let ziek = 0;
+    let betaald = 0;
+    let vrij = 0;
+    let dagen = 0;
+    const overigPerCode = new Map<string, number>();
+    for (const iso of dates) {
+      const cel = cells[c.id]?.[iso];
+      if (!cel || !String(cel.code ?? "").trim()) continue;
+      dagen += 1;
+      const n = toLookupToken(cel.code);
+      const svc = serviceByNorm.get(n);
+      if (svc) {
+        diensten += 1;
+        minuten += dienstMinuten(svc) ?? 0;
+        continue;
+      }
+      if (n === "ziek") {
+        ziek += 1;
+        continue;
+      }
+      const pc = codeByNorm.get(n);
+      if (pc?.countsAsShift) anderWerk += 1;
+      else if (pc?.isPaidAbsence) betaald += 1;
+      else if (pc?.isDayOff) vrij += 1;
+      else overigPerCode.set(cel.code, (overigPerCode.get(cel.code) ?? 0) + 1);
+    }
+    const overigTelling = [...overigPerCode.values()].reduce((a, b) => a + b, 0);
+    aoa.push([
+      c.name,
+      diensten,
+      formatMinutenAlsUren(minuten),
+      anderWerk,
+      ziek,
+      betaald,
+      vrij,
+      [...overigPerCode.entries()].map(([code, x]) => `${code}×${x}`).join(", "),
+      dagen,
+    ]);
+    totaal.diensten += diensten;
+    totaal.minuten += minuten;
+    totaal.anderWerk += anderWerk;
+    totaal.ziek += ziek;
+    totaal.betaald += betaald;
+    totaal.vrij += vrij;
+    totaal.overig += overigTelling;
+    totaal.dagen += dagen;
+  }
+  aoa.push([]);
+  aoa.push(["totaal", totaal.diensten, formatMinutenAlsUren(totaal.minuten), totaal.anderWerk, totaal.ziek, totaal.betaald, totaal.vrij, totaal.overig, totaal.dagen]);
+  return aoa;
 };
 
 /** Onbekende/ontbrekende waarden vallen terug op de klassieke 1-op-1 ruil. */
@@ -242,6 +365,86 @@ export const matrixCodesForDate = (
     }
   }
   return out;
+};
+
+/** ISO-dag + n dagen (puur datumrekenen in UTC-frame). */
+const addDagenIso = (iso: string, n: number): string => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/**
+ * "ziek"-cellen in de planning-matrix waarvoor géén goedgekeurde ziekteperiode
+ * in het portaal bestaat. De Excel en het Ziekte-blad lopen dan uiteen: digest,
+ * advisor en het blad zelf kennen die afwezigheid niet. Aaneengesloten dagen
+ * worden één reeks; `userId` is null als de Excel-naam niet aan een account te
+ * koppelen is (dan valt er ook niets te registreren).
+ */
+export const vindOngeregistreerdeZiekte = (
+  rows: Array<Pick<PlanningMatrixRow, "source_date" | "assignments">>,
+  users: Array<Pick<AppUser, "id" | "name">>,
+  leave: Array<{ userId?: unknown; startDate?: unknown; endDate?: unknown; status?: unknown; type?: unknown }>,
+  vanafDatum?: string,
+): Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number }> => {
+  const idByName = nameIdIndex(users);
+  const naamById = new Map(users.map((u) => [String(u.id), String(u.name ?? "")]));
+  const ziekteLeave = leave.filter((l) => l?.status === "approved" && String(l?.type) === "ziekte");
+  const gedekt = (userId: string, date: string) =>
+    ziekteLeave.some((l) => {
+      if (String(l.userId) !== userId) return false;
+      const start = String(l.startDate ?? "");
+      const eind = String(l.endDate ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(start) || !/^\d{4}-\d{2}-\d{2}$/.test(eind) || start > eind) return false;
+      return start <= date && date <= eind;
+    });
+  const perPersoon = new Map<string, { userId: string | null; naam: string; dagen: string[] }>();
+  const gesorteerd = [...rows].sort((a, b) => String(a.source_date).localeCompare(String(b.source_date)));
+  for (const row of gesorteerd) {
+    const date = String(row.source_date ?? "");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+    if (vanafDatum && date < vanafDatum) continue;
+    const assignments = row.assignments && typeof row.assignments === "object" && !Array.isArray(row.assignments)
+      ? row.assignments
+      : {};
+    for (const [naam, v] of Object.entries(assignments)) {
+      if (String(v ?? "").trim().toLowerCase() !== "ziek") continue;
+      const id = idByName.get(toLookupToken(naam)) ?? idByName.get(sortedNameToken(naam)) ?? null;
+      if (id && gedekt(id, date)) continue;
+      const sleutel = id ?? `naam:${sortedNameToken(naam)}`;
+      let entry = perPersoon.get(sleutel);
+      if (!entry) {
+        entry = { userId: id, naam: (id && naamById.get(id)) || naam, dagen: [] };
+        perPersoon.set(sleutel, entry);
+      }
+      entry.dagen.push(date);
+    }
+  }
+  // Losse dagen → aaneengesloten reeksen. Een niet-zieke dag ertussen (bv.
+  // "vrij" op zaterdag) breekt de reeks bewust: liever twee korte periodes
+  // registreren dan stilzwijgend een langere ziekte aannemen.
+  const out: Array<{ userId: string | null; naam: string; van: string; tot: string; dagen: number }> = [];
+  for (const p of perPersoon.values()) {
+    let van = "";
+    let vorige = "";
+    let telling = 0;
+    const sluit = () => {
+      if (van) out.push({ userId: p.userId, naam: p.naam, van, tot: vorige, dagen: telling });
+    };
+    for (const date of p.dagen) {
+      if (van && date === addDagenIso(vorige, 1)) {
+        vorige = date;
+        telling += 1;
+        continue;
+      }
+      sluit();
+      van = date;
+      vorige = date;
+      telling = 1;
+    }
+    sluit();
+  }
+  return out.sort((a, b) => a.van.localeCompare(b.van) || a.naam.localeCompare(b.naam));
 };
 
 export const toPublicDiversion = (d: any): DiversionRecord => ({
@@ -567,7 +770,13 @@ const excelSerialToIso = (serial: number): string | null => {
 // (buildPlanningFromMatrix → preview → confirm) kan verwerken. Datums
 // blijven Excel-serial zodat we geen locale-LUT nodig hebben, en lege
 // cellen vs. lege strings blijven goed gescheiden.
-export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => {
+/** Achterwaarts-compatibele variant zonder waarschuwingen (tests, oude callers). */
+export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] =>
+  parsePlanningMatrixXlsxMetWaarschuwingen(buffer).rows;
+
+export const parsePlanningMatrixXlsxMetWaarschuwingen = (
+  buffer: Buffer,
+): { rows: PlanningMatrixRow[]; waarschuwingen: string[] } => {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false });
   const sheetName = workbook.SheetNames.find((name) => name.trim().toLowerCase() === "praktijk");
   if (!sheetName) {
@@ -609,6 +818,21 @@ export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => 
   }
   if (duplicateHeaders.size > 0) {
     throw new Error(`Dubbele chauffeur-kolommen in de praktijk-tab: ${Array.from(duplicateHeaders).join(", ")}. Hernoem of verwijder de dubbele kolom en importeer opnieuw.`);
+  }
+
+  // Naamachtige kolommen NÁ de eerste "aantal"-kolom: daar begint het
+  // tellingen-blok en daar leest de import bewust niet. Een chauffeur die per
+  // ongeluk achteraan is toegevoegd, verdween tot nu geruisloos uit het
+  // portaal — vandaar een expliciete (niet-blokkerende) waarschuwing.
+  const NAAMACHTIG_RE = /^[a-zà-ÿ'’.-]+(\s+[a-zà-ÿ'’.-]+)+$/i;
+  const waarschuwingen: string[] = [];
+  for (let i = firstTotalsIndex + 1; i < header.length; i++) {
+    const naam = String(header[i] ?? "").trim();
+    if (!naam) continue;
+    const laag = naam.toLowerCase();
+    if (laag === "aantal" || PLANNING_MATRIX_NON_DRIVER_HEADERS.has(laag)) continue;
+    if (!NAAMACHTIG_RE.test(naam)) continue;
+    waarschuwingen.push(`Kolom "${naam}" staat ná de "aantal"-kolom en wordt niet geïmporteerd — staat daar een chauffeur, verplaats de kolom dan vóór "aantal" en importeer opnieuw.`);
   }
 
   // Voor diagnostiek bij faal: bewaar wat we wél zagen in kolom A.
@@ -688,7 +912,7 @@ export const parsePlanningMatrixXlsx = (buffer: Buffer): PlanningMatrixRow[] => 
     throw new Error(`Dubbele datumrijen in de praktijk-tab: ${Array.from(duplicateDates).sort().join(", ")}. Elke datum hoort één rij te hebben — verwijder de dubbele rij en importeer opnieuw.`);
   }
 
-  return rows;
+  return { rows, waarschuwingen };
 };
 
 /**

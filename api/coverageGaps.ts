@@ -81,6 +81,49 @@ export function resolveDayType(
   return String(weekdays[dow] ?? "").trim();
 }
 
+/** Waar komt het dag-type van een dag vandaan? Voedt de uitleg op de dekking
+ *  ("waarom is dit een schooldag?") — scheelt debuggen bij elke
+ *  dienstregelingswissel. Houd in sync met src/lib/coverageGaps.ts. */
+export type DayTypeBron =
+  | { soort: "excel" }
+  | { soort: "uitzondering"; from: string; to: string }
+  | { soort: "periode"; vanaf: string }
+  | { soort: "basis" }
+  | { soort: "geen" };
+
+/** Zelfde beslisregels als resolveDayType, maar mét de herkomst erbij. */
+export function resolveDayTypeMetBron(
+  rawDayType: unknown,
+  sourceDate: string,
+  basisWeekdays: string[] = [],
+  perioden: WeekdagPeriode[] = [],
+  overrides: DayTypeOverride[] = [],
+): { dayType: string; bron: DayTypeBron } {
+  const explicit = String(rawDayType ?? "").trim();
+  if (explicit) return { dayType: explicit, bron: { soort: "excel" } };
+  const iso = String(sourceDate ?? "").trim();
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  if (!m) return { dayType: "", bron: { soort: "geen" } };
+  for (const o of overrides) {
+    if (iso >= o.from && iso <= o.to) {
+      return { dayType: o.dayType, bron: { soort: "uitzondering", from: o.from, to: o.to } };
+    }
+  }
+  const dow = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).getUTCDay();
+  let keuze = basisWeekdays;
+  let besteVanaf = "";
+  for (const p of perioden) {
+    if (!Array.isArray(p.weekdays) || p.weekdays.length !== 7) continue;
+    if (p.vanaf <= iso && p.vanaf > besteVanaf) {
+      keuze = p.weekdays;
+      besteVanaf = p.vanaf;
+    }
+  }
+  const dayType = String(keuze[dow] ?? "").trim();
+  if (!dayType) return { dayType: "", bron: { soort: "geen" } };
+  return { dayType, bron: besteVanaf ? { soort: "periode", vanaf: besteVanaf } : { soort: "basis" } };
+}
+
 export type DayGap = {
   date: string;
   dayType: string;
@@ -91,7 +134,82 @@ export type DayGap = {
    *  Alleen gevuld als het gat door een goedgekeurde afwezigheid komt —
    *  een dienst die nooit toegewezen was, heeft geen uitval-info. */
   uitval?: Record<string, { name: string; reason: string }>;
+  /** Herkomst van het dag-type (uitleg-tooltip); ouder cachemateriaal mist dit veld. */
+  bron?: DayTypeBron;
 };
+
+/** Eén dag-type waarvan de verwachtingslijst niet spoort met wat er in de
+ *  planning-matrix echt gereden wordt. `nooitGereden` = verwacht maar op geen
+ *  enkele dag van dit type aanwezig (structureel fantoom-gat, zoals 2114 op
+ *  dinsdag na de schooljaarswissel); `nietVerwacht` = dienst-achtige code die
+ *  op minstens de helft van de dagen gereden wordt maar niet in de lijst
+ *  staat (zoals 2515/2517 op vrijdag). */
+export type VerwachtingAfwijking = {
+  dayType: string;
+  dagen: number;
+  nooitGereden: string[];
+  nietVerwacht: Array<{ code: string; dagen: number }>;
+};
+
+/** Vergelijk de verwachtingslijsten met de praktijk in de matrix-rijen.
+ *  Alleen cijfercodes (3-4 cijfers) tellen als "gereden maar niet verwacht" —
+ *  vrij/ziek/EEK-codes zouden de lijst anders vervuilen. */
+export function vergelijkVerwachtingenMetPraktijk(
+  rows: Array<{ source_date?: unknown; day_type?: unknown; assignments?: unknown }>,
+  expectationsByDayType: Record<string, string[]>,
+  basisWeekdays: string[],
+  perioden: WeekdagPeriode[],
+  overrides: DayTypeOverride[],
+): VerwachtingAfwijking[] {
+  const DIENSTCODE_RE = /^\d{3,4}$/;
+  const perType = new Map<string, { dagen: number; aanwezig: Map<string, number>; extra: Map<string, number> }>();
+  for (const r of rows) {
+    const date = String(r.source_date ?? "");
+    const dayType = resolveDayType(r.day_type, date, weekdaysVoorDatum(basisWeekdays, perioden, date), overrides);
+    if (!dayType) continue;
+    const expected = expectationsByDayType[dayType];
+    if (!Array.isArray(expected) || expected.length === 0) continue;
+    const expectedSet = new Set(expected.map(normalizeCode));
+    let entry = perType.get(dayType);
+    if (!entry) {
+      entry = { dagen: 0, aanwezig: new Map(), extra: new Map() };
+      perType.set(dayType, entry);
+    }
+    entry.dagen += 1;
+    const assignments = r.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments)
+      ? (r.assignments as Record<string, unknown>)
+      : {};
+    const opDezeDag = new Set<string>();
+    for (const v of Object.values(assignments)) {
+      const code = normalizeCode(v);
+      if (!code || opDezeDag.has(code)) continue;
+      opDezeDag.add(code);
+      if (expectedSet.has(code)) entry.aanwezig.set(code, (entry.aanwezig.get(code) ?? 0) + 1);
+      else if (DIENSTCODE_RE.test(code)) entry.extra.set(code, (entry.extra.get(code) ?? 0) + 1);
+    }
+  }
+  const out: VerwachtingAfwijking[] = [];
+  for (const [dayType, e] of perType) {
+    const expected = expectationsByDayType[dayType] ?? [];
+    const seen = new Set<string>();
+    const nooitGereden: string[] = [];
+    for (const s of expected) {
+      const key = normalizeCode(s);
+      if (!key || seen.has(key)) continue;
+      seen.add(key);
+      if (!e.aanwezig.has(key)) nooitGereden.push(s);
+    }
+    const drempel = Math.max(1, Math.ceil(e.dagen / 2));
+    const nietVerwacht = [...e.extra.entries()]
+      .filter(([, dagen]) => dagen >= drempel)
+      .map(([code, dagen]) => ({ code, dagen }))
+      .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+    if (nooitGereden.length > 0 || nietVerwacht.length > 0) {
+      out.push({ dayType, dagen: e.dagen, nooitGereden, nietVerwacht });
+    }
+  }
+  return out.sort((a, b) => a.dayType.localeCompare(b.dayType));
+}
 
 export function computeDayGap(
   date: string,

@@ -88,3 +88,30 @@ describe('parsePlanningMatrixXlsx', () => {
     expect(rows[0].source_date).toBe('2026-07-06');
   });
 });
+
+describe('parsePlanningMatrixXlsxMetWaarschuwingen — kolommen ná "aantal"', () => {
+  it('waarschuwt voor een naamachtige kolom achter de aantal-kolom', async () => {
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
+    const buffer = buildXlsx([
+      ['datum', 'dagtype', 'Jan Peeters', 'aantal', 'Cherlet Luc'],
+      [serial('2026-07-06'), 'W', '4101', 1, '4102'],
+    ]);
+    const { rows, waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
+    // De kolom wordt níét gelezen (bestaand gedrag) …
+    expect(rows[0].assignments).toEqual({ 'Jan Peeters': '4101' });
+    // … maar verdwijnt niet langer geruisloos.
+    expect(waarschuwingen).toHaveLength(1);
+    expect(waarschuwingen[0]).toContain('Cherlet Luc');
+    expect(waarschuwingen[0]).toContain('aantal');
+  });
+
+  it('waarschuwt niet voor tellingen-headers of losse woorden achter aantal', async () => {
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
+    const buffer = buildXlsx([
+      ['datum', 'dagtype', 'Jan Peeters', 'aantal', 'uur', '17', 'Flexi', ''],
+      [serial('2026-07-06'), 'W', '4101', 1, '', '', '', ''],
+    ]);
+    const { waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
+    expect(waarschuwingen).toEqual([]);
+  });
+});

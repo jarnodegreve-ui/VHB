@@ -7,7 +7,7 @@ import dotenv from "dotenv";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
-import { computeDayGap, normalizeCode, resolveDayType, parseOverrides, encodeOverride, weekdaysVoorDatum, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
+import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 
 // Gereserveerde sleutels in coverage_expectations om de weekdag-toewijzing en
@@ -45,7 +45,7 @@ import type AnthropicClient from "@anthropic-ai/sdk";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { normalizeEmail, parsePlanningMatrixXlsx, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
+import { normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -980,7 +980,11 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
         return res.status(403).json({ error: "Onvoldoende rechten." });
       }
       const dayTypeByDate = new Map<string, string>(monthRows.map((r: any) => [String(r.source_date), String(r.day_type ?? "")]));
-      const buffer = bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells);
+      // Tweede tabblad "maandoverzicht": per-chauffeur maandtelling (diensten,
+      // uren, ziekte, verlof, vrij) op dezelfde cel-waarheid — opstap naar de
+      // loonadministratie zonder aparte export.
+      const overzicht = bouwMaandoverzichtAoa(month, dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[]);
+      const buffer = bouwMatrixXlsx(dates, dayTypeByDate, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, overzicht);
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename="planning-${month}.xlsx"`);
       return res.send(buffer);
@@ -1087,6 +1091,22 @@ app.put("/api/coverage-expectations", authenticate, requireRole("planner", "admi
   }
 });
 
+/** Verwachtingen-vs-praktijk over een set matrix-rijen, met de opgeslagen
+ *  dekking-config. Gedeeld door GET /api/coverage-expectation-check (rijen uit
+ *  de database) en de import-preview (rijen uit het geüploade bestand). */
+async function berekenVerwachtingsCheck(rows: Array<{ source_date?: unknown; day_type?: unknown; assignments?: unknown }>) {
+  const stored = await getCoverageExpectations();
+  const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
+  const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
+  return vergelijkVerwachtingenMetPraktijk(
+    rows,
+    Object.fromEntries(Object.entries(stored).filter(([k]) => !isReservedCoverageKey(k))),
+    weekdays,
+    parseWeekdagPerioden(stored),
+    parseOverrides(stored[COVERAGE_OVERRIDES_KEY]),
+  );
+}
+
 /** Dekkingsgaten in [from, to] — gedeeld door GET /api/coverage-gaps en de
  *  dagelijkse digest (proactieve sectie "Openstaande diensten"). */
 async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]> {
@@ -1153,7 +1173,9 @@ async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]>
       .sort((a: any, b: any) => String(a.source_date).localeCompare(String(b.source_date)));
     const days: DayGap[] = inRange.map((r: any) => {
       const date = String(r.source_date ?? "");
-      const dayType = resolveDayType(r.day_type, date, weekdaysVoorDatum(weekdays, weekdagPerioden, date), overrides);
+      // Mét herkomst: de dekking toont per dag wáárom dit het dag-type is
+      // (Excel-kolom B, uitzondering, weekdagperiode of basis-toewijzing).
+      const { dayType, bron } = resolveDayTypeMetBron(r.day_type, date, weekdays, weekdagPerioden, overrides);
       const expected = stored[dayType] || [];
       // Cellen van afwezigen tellen niet mee als invulling; onthoud per
       // weggefilterde code wie uitviel en waarom — de reden reist mee naar de
@@ -1189,7 +1211,7 @@ async function berekenDekkingsGaten(from: string, to: string): Promise<DayGap[]>
         const info = uitvalByCode.get(normalizeCode(svc));
         if (info) uitval[normalizeCode(svc)] = info;
       }
-      return Object.keys(uitval).length > 0 ? { ...gap, uitval } : gap;
+      return Object.keys(uitval).length > 0 ? { ...gap, bron, uitval } : { ...gap, bron };
     });
     return days;
 }
@@ -1206,6 +1228,77 @@ app.get("/api/coverage-gaps", authenticate, requireRole("planner", "admin"), asy
   } catch (err) {
     console.error("Error computing coverage gaps:", err);
     res.status(500).json({ error: "Kon dekking niet berekenen." });
+  }
+});
+
+// Verwachtingen-vs-praktijk over de matrix in de database: welke verwachte
+// diensten worden in [from, to] op geen enkele dag van hun dag-type gereden,
+// en welke dienstcodes rijden er structureel zónder in de verwachting te
+// staan? Precies de check die de fantoomgaten na de schooljaarswissel
+// (melding Jarno 20-08) meteen had verklaard.
+app.get("/api/coverage-expectation-check", authenticate, requireRole("planner", "admin"), async (req, res) => {
+  try {
+    const from = typeof req.query.from === "string" ? req.query.from : "";
+    const to = typeof req.query.to === "string" ? req.query.to : "";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+      return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
+    }
+    const rows = (await getPlanningMatrixRows()).filter((r: any) => {
+      const d = String(r.source_date ?? "");
+      return d >= from && d <= to;
+    });
+    const afwijkingen = await berekenVerwachtingsCheck(rows as any[]);
+    res.json({ from, to, dagen: rows.length, afwijkingen });
+  } catch (err) {
+    console.error("Error computing expectation check:", err);
+    res.status(500).json({ error: "Kon de verwachtingscheck niet berekenen." });
+  }
+});
+
+// "ziek" in de geïmporteerde planning zonder geregistreerde ziekteperiode —
+// het Ziekte-blad, de digest en de advisor kennen die afwezigheid dan niet
+// (case 20-08: hele maand ziek in de Excel, nergens in het portaal). Alleen
+// vandaag en later: historiek is geen actiepunt meer.
+app.get("/api/ziekte-zonder-registratie", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const [rows, users, leave] = await Promise.all([getPlanningMatrixRows(), getUsersData(), getLeaveData()]);
+    const vandaag = brusselsDay(new Date().toISOString());
+    const reeksen = vindOngeregistreerdeZiekte(rows as any[], users as any[], leave as any[], vandaag);
+    res.json({ vanaf: vandaag, reeksen });
+  } catch (err) {
+    console.error("Error computing unregistered sickness:", err);
+    res.status(500).json({ error: "Kon de ziekte-controle niet berekenen." });
+  }
+});
+
+// Welke chauffeurs komen voor in de geïmporteerde planning-matrix, en tot
+// wanneer? Voedt de badge/filter "Niet in planning" in het gebruikersbeheer:
+// een account dat nergens ingepland staat is óf een nieuwe collega, óf een
+// weggevallen Excel-kolom.
+app.get("/api/planning-presence", authenticate, requireRole("planner", "admin"), async (_req, res) => {
+  try {
+    const [rows, users] = await Promise.all([getPlanningMatrixRows(), getUsersData()]);
+    const idByName = nameIdIndex((users as any[]).filter((u) => u?.role === "chauffeur"));
+    const laatstePerId = new Map<string, string>();
+    let van: string | null = null;
+    let tot: string | null = null;
+    for (const r of rows as any[]) {
+      const date = String(r?.source_date ?? "");
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue;
+      if (!van || date < van) van = date;
+      if (!tot || date > tot) tot = date;
+      const assignments = r?.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments) ? r.assignments : {};
+      for (const naam of Object.keys(assignments)) {
+        const id = idByName.get(toLookupToken(naam)) ?? idByName.get(sortedNameToken(naam));
+        if (!id) continue;
+        const cur = laatstePerId.get(id);
+        if (!cur || date > cur) laatstePerId.set(id, date);
+      }
+    }
+    res.json({ van, tot, perUser: [...laatstePerId.entries()].map(([userId, laatste]) => ({ userId, laatste })) });
+  } catch (err) {
+    console.error("Error computing planning presence:", err);
+    res.status(500).json({ error: "Kon de planning-aanwezigheid niet berekenen." });
   }
 });
 
@@ -1778,7 +1871,7 @@ const parseMatrixInput = (body: any) => {
   if (buffer.length > 5 * 1024 * 1024) {
     throw new Error("Excel-bestand is te groot (max 5 MB). Exporteer enkel de praktijk-tab.");
   }
-  return { rows: parsePlanningMatrixXlsx(buffer) };
+  return parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
 };
 
 // Parse + optionele periode-selectie, gedeeld door import en preview. De
@@ -1787,7 +1880,7 @@ const parseMatrixInput = (body: any) => {
 // niet in het bestand stonden. Het te vervangen bereik volgt daardoor vanzelf
 // de overgebleven rijen (de RPC leidt het af uit min/max source_date).
 const parseMatrixInputMetPeriode = (body: any) => {
-  const { rows } = parseMatrixInput(body);
+  const { rows, waarschuwingen } = parseMatrixInput(body);
   const bestandDates = rows.map((row) => row.source_date).filter(Boolean);
   const fileStartDate = bestandDates[0] || null;
   const fileEndDate = bestandDates[bestandDates.length - 1] || null;
@@ -1810,14 +1903,14 @@ const parseMatrixInputMetPeriode = (body: any) => {
   if (selectie.length === 0) {
     throw new Error(`Geen dagen binnen de gekozen periode — het bestand loopt van ${fileStartDate ?? "?"} t/m ${fileEndDate ?? "?"}.`);
   }
-  return { rows: selectie, fileStartDate, fileEndDate };
+  return { rows: selectie, fileStartDate, fileEndDate, parserWaarschuwingen: waarschuwingen };
 };
 
 app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
-    let rows, fileStartDate, fileEndDate;
+    let rows, fileStartDate, fileEndDate, parserWaarschuwingen;
     try {
-      ({ rows, fileStartDate, fileEndDate } = parseMatrixInputMetPeriode(req.body));
+      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }
@@ -1931,6 +2024,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       servicesWithoutSegments: generatedPlanning.summary.servicesWithoutSegments,
       perDriver: generatedPlanning.summary.perDriver,
       ziekteDiensten,
+      parserWaarschuwingen,
       startDate,
       endDate,
       fileStartDate,
@@ -1944,9 +2038,9 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
 
 app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "admin"), async (req, res) => {
   try {
-    let rows, fileStartDate, fileEndDate;
+    let rows, fileStartDate, fileEndDate, parserWaarschuwingen;
     try {
-      ({ rows, fileStartDate, fileEndDate } = parseMatrixInputMetPeriode(req.body));
+      ({ rows, fileStartDate, fileEndDate, parserWaarschuwingen } = parseMatrixInputMetPeriode(req.body));
     } catch (parseErr: any) {
       return res.status(400).json({ error: parseErr.message });
     }
@@ -1958,7 +2052,8 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     // Een import vervangt alléén zijn eigen datumbereik. Leg de bestaande
     // matrix ernaast zodat de preview kan tonen wat vervangen wordt, wat
     // blijft staan en of er een gat tussen beide periodes valt.
-    const bestaandeMatrixDates = (await getPlanningMatrixRows())
+    const bestaandeMatrix = await getPlanningMatrixRows();
+    const bestaandeMatrixDates = bestaandeMatrix
       .map((r) => String(r.source_date))
       .filter(Boolean)
       .sort();
@@ -2002,6 +2097,43 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       shiftsGenerated: rijenPerDriver.get(String(d.driverId)) ?? 0,
     }));
 
+    // Chauffeurs vergeleken met de planning vóór deze periode: wie verdween
+    // uit de Excel, wie kwam erbij? Zo valt een per ongeluk weggevallen kolom
+    // (case Luc Cherlet, 20-08) meteen op — de import zelf blokkeert hier
+    // bewust niet op, want een vertrokken of nieuwe collega is ook gewoon zo.
+    const eerdereRows = (bestaandeMatrix as any[]).filter((r) => String(r?.source_date ?? "") < String(startDate ?? ""));
+    const namenIn = (rs: any[]) => {
+      const m = new Map<string, { naam: string; laatste: string }>();
+      for (const r of rs) {
+        const date = String(r?.source_date ?? "");
+        const assignments = r?.assignments && typeof r.assignments === "object" && !Array.isArray(r.assignments) ? r.assignments : {};
+        for (const naam of Object.keys(assignments)) {
+          const key = sortedNameToken(String(naam));
+          const cur = m.get(key);
+          if (!cur || date > cur.laatste) m.set(key, { naam: String(naam), laatste: date });
+        }
+      }
+      return m;
+    };
+    let chauffeursNieuw: string[] = [];
+    let chauffeursVerdwenen: Array<{ naam: string; laatste: string }> = [];
+    if (eerdereRows.length > 0) {
+      const oud = namenIn(eerdereRows);
+      const nieuw = namenIn(rows as any[]);
+      chauffeursVerdwenen = [...oud.entries()].filter(([k]) => !nieuw.has(k)).map(([, v]) => v).sort((a, b) => a.naam.localeCompare(b.naam));
+      chauffeursNieuw = [...nieuw.entries()].filter(([k]) => !oud.has(k)).map(([, v]) => v.naam).sort();
+    }
+
+    // "ziek" in de Excel zonder geregistreerde ziekteperiode: het Ziekte-blad,
+    // de digest en de advisor kennen die afwezigheid dan niet. Alleen vandaag
+    // en later — historiek is geen actiepunt meer.
+    const ziekTeRegistreren = vindOngeregistreerdeZiekte(rows as any[], users as any[], leave as any[], brusselsDay(new Date().toISOString()));
+
+    // Verwachtingen-vs-praktijk over dit bestand: een dienstregelingswissel
+    // waarvan de dag-type-lijsten nog niet bijgewerkt zijn, valt zo al in de
+    // preview op i.p.v. pas als fantoomgaten op de dekking (20-08).
+    const verwachtingsCheck = await berekenVerwachtingsCheck(rows as any[]);
+
     res.json({
       success: true,
       importedDays: rows.length,
@@ -2029,6 +2161,11 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
       // De import meldde de replay wél in de log, het voorbeeld verzweeg hem —
       // terwijl de cijfers hierboven er al door beïnvloed zijn.
       reappliedSwaps: reapplied,
+      parserWaarschuwingen,
+      chauffeursNieuw,
+      chauffeursVerdwenen,
+      ziekTeRegistreren,
+      verwachtingsCheck,
     });
   } catch (err: any) {
     console.error("Import-voorbeeld maken is mislukt.", err);

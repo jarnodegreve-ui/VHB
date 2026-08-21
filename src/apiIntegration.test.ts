@@ -3165,3 +3165,81 @@ describe('planner-assistent (/api/planner-chat)', () => {
     }
   });
 });
+
+describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () => {
+  const bouwXlsx = async (aoa: unknown[][]) => {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+  const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+
+  it('preview waarschuwt voor kolommen ná "aantal" en vergelijkt chauffeurs met de bestaande planning', async () => {
+    // Bestaande matrix (juli) heeft Chauffeur A + B; dit bestand (2030-08)
+    // heeft alleen A + een nieuwe C, plus een kolom áchter aantal — precies
+    // het patroon waarmee Luc Cherlet op 20-08 geruisloos verdween.
+    const base64 = await bouwXlsx([
+      ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur C', 'aantal', 'Vergeten Chauffeur'],
+      [serial('2030-08-03'), 'W', '12', '14', 2, '15'],
+    ]);
+    const res = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(res.status).toBe(200);
+    expect(res.json.parserWaarschuwingen).toHaveLength(1);
+    expect(res.json.parserWaarschuwingen[0]).toContain('Vergeten Chauffeur');
+    expect(res.json.chauffeursVerdwenen).toEqual([{ naam: 'Chauffeur B', laatste: '2026-07-08' }]);
+    expect(res.json.chauffeursNieuw).toEqual(['Chauffeur C']);
+  });
+
+  it('preview meldt Excel-"ziek" zonder geregistreerde ziekteperiode, en zwijgt mét', async () => {
+    const base64 = await bouwXlsx([
+      ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'aantal'],
+      [serial('2030-08-03'), 'W', 'ziek', '14', 1],
+    ]);
+    const zonder = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(zonder.status).toBe(200);
+    expect(zonder.json.ziekTeRegistreren).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-08-03', tot: '2030-08-03', dagen: 1 }]);
+
+    mem.leave = [
+      { id: 'l-z', userId: '3', startDate: '2030-08-01', endDate: '2030-08-10', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-30T06:00:00Z', decidedAt: '2030-07-30T06:00:00Z' },
+    ];
+    const met = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(met.json.ziekTeRegistreren).toEqual([]);
+  });
+
+  it('GET /api/coverage-expectation-check vindt structurele afwijkingen (en is staf-only)', async () => {
+    mem.planningMatrix = [
+      { id: 'm-a', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
+      { id: 'm-b', source_date: '2030-09-02', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { school: ['2101', '2114'] };
+    const res = await api('GET', '/api/coverage-expectation-check?from=2030-09-01&to=2030-09-30', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.afwijkingen).toEqual([
+      { dayType: 'school', dagen: 2, nooitGereden: ['2114'], nietVerwacht: [{ code: '2515', dagen: 2 }] },
+    ]);
+    const verboden = await api('GET', '/api/coverage-expectation-check?from=2030-09-01&to=2030-09-30', { token: 'tok-a' });
+    expect(verboden.status).toBe(403);
+  });
+
+  it('GET /api/ziekte-zonder-registratie kijkt alleen vooruit', async () => {
+    mem.planningMatrix = [
+      { id: 'm-verleden', source_date: '2020-01-01', day_type: '', assignments: { 'Chauffeur A': 'ziek' }, raw_row: '' },
+      { id: 'm-toekomst', source_date: '2030-09-01', day_type: '', assignments: { 'Chauffeur A': 'ziek' }, raw_row: '' },
+    ];
+    const res = await api('GET', '/api/ziekte-zonder-registratie', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.reeksen).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-09-01', tot: '2030-09-01', dagen: 1 }]);
+  });
+
+  it('GET /api/planning-presence geeft per gematchte chauffeur de laatste datum in de matrix', async () => {
+    const res = await api('GET', '/api/planning-presence', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.van).toBe('2026-07-01');
+    expect(res.json.tot).toBe('2026-07-08');
+    const perUser = Object.fromEntries(res.json.perUser.map((p: { userId: string; laatste: string }) => [p.userId, p.laatste]));
+    // Ook een afwezigheidscel (bv) telt als "komt voor in de planning".
+    expect(perUser['3']).toBe('2026-07-08');
+    expect(perUser['4']).toBe('2026-07-08');
+  });
+});
