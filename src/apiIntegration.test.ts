@@ -3350,6 +3350,48 @@ describe('telegram-webhook — secret, koppeling en commando\'s', () => {
     expect(verzonden[0].tekst).toContain('Chauffeur B');
   });
 
+  it('/dienst toont de tijden uit het Dienstoverzicht, of legt een planningscode uit', async () => {
+    mem.planningCodes = [{ code: 'bv', category: 'leave', description: 'Betaald verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: false }];
+    await webhook({ message: { chat: { id: 777 }, text: '/dienst 12' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Dienst 12');
+    expect(verzonden[0].tekst).toContain('08:00');
+    verzonden.length = 0;
+    await webhook({ message: { chat: { id: 777 }, text: '/dienst bv' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('planningscode');
+    verzonden.length = 0;
+    await webhook({ message: { chat: { id: 777 }, text: '/dienst 9999' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('niet in het Dienstoverzicht');
+  });
+
+  it('/wie toont wie de dienst rijdt in de komende week (ruil-correcte planning)', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.planning = [
+      { id: 'p-1', driverId: '3', date: vandaag, line: '12', startTime: '08:00', endTime: '16:00' },
+      { id: 'p-2', driverId: '4', date: '2020-01-01', line: '12', startTime: '08:00', endTime: '16:00' },
+    ];
+    await webhook({ message: { chat: { id: 777 }, text: '/wie 12' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Chauffeur A');
+    // De oude rij van Chauffeur B valt buiten het venster.
+    expect(verzonden[0].tekst).not.toContain('Chauffeur B');
+  });
+
+  it('/rooster vraagt om verduidelijking bij meerdere matches en toont anders de week', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.planning = [
+      { id: 'p-1', driverId: '3', date: vandaag, line: '12', startTime: '08:00', endTime: '16:00' },
+    ];
+    mem.planningMatrix = [
+      { id: 'm-morgen', source_date: new Date(Date.parse(`${vandaag}T00:00:00Z`) + 86400000).toISOString().slice(0, 10), day_type: '', assignments: { 'Chauffeur A': 'vrij' }, raw_row: '' },
+    ];
+    await webhook({ message: { chat: { id: 777 }, text: '/rooster chauffeur' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Meerdere chauffeurs');
+    verzonden.length = 0;
+    await webhook({ message: { chat: { id: 777 }, text: '/rooster chauffeur a' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Chauffeur A');
+    expect(verzonden[0].tekst).toContain('12 (08:00\u201316:00)');
+    expect(verzonden[0].tekst).toContain('vrij');
+  });
+
   it('/ziek somt de actuele ziekmeldingen op', async () => {
     const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
     mem.leave = [
