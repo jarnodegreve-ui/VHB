@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Plus, Thermometer } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { AlertTriangle, Plus, Thermometer } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
 import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
@@ -9,6 +9,7 @@ import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format
 import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
+import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
 /**
  * Ziekte — eigen blad, bewust gescheiden van het verlofbeheer (keuze Jarno
@@ -149,6 +150,30 @@ export function ZiekteView({
     if (ok) sluitMelden();
   };
 
+  // --- "ziek" in de planning-Excel zonder registratie hier ------------------
+  // De Excel en dit blad kunnen uiteenlopen: een chauffeur die in de planning
+  // als "ziek" staat maar hier nooit gemeld is (case 20-08: hele maand ziek in
+  // de Excel, onbekend voor digest en advisor). Best-effort geladen; per reeks
+  // is registreren één klik via dezelfde flow als "Ziek melden".
+  const [excelZiekte, setExcelZiekte] = useState<ZiekteReeks[]>([]);
+  const [excelZiekteBusy, setExcelZiekteBusy] = useState<string | null>(null);
+  const laadExcelZiekte = async () => {
+    try {
+      const res = await fetch('/api/ziekte-zonder-registratie', { headers: await getSupabaseAuthHeaders() });
+      if (!res.ok) return;
+      const body = await res.json().catch(() => ({} as any));
+      if (Array.isArray(body?.reeksen)) setExcelZiekte(body.reeksen);
+    } catch { /* zonder data geen banner */ }
+  };
+  useEffect(() => { void laadExcelZiekte(); }, []);
+  const registreerUitExcel = async (r: ZiekteReeks) => {
+    if (!r.userId || excelZiekteBusy) return;
+    setExcelZiekteBusy(ziekteReeksSleutel(r));
+    const ok = await onSickReport({ userId: r.userId, startDate: r.van, endDate: r.tot, comment: 'Stond als "ziek" in de planning-Excel.' })
+      .finally(() => setExcelZiekteBusy(null));
+    if (ok) await laadExcelZiekte();
+  };
+
   // --- Detail: einddatum bijstellen of intrekken ----------------------------
   const [detail, setDetail] = useState<LeaveRequest | null>(null);
   const [nieuwEinde, setNieuwEinde] = useState('');
@@ -230,6 +255,36 @@ export function ZiekteView({
           </Button>
         )}
       />
+
+      {/* Excel zegt ziek, portaal weet van niets — vóór de secties, want dit
+          is precies het geval waarin de secties hieronder leeg blijven. */}
+      {excelZiekte.length > 0 && (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="flex items-start gap-3">
+            {/* Zelfde banner-anatomie als de dekking (icoon-chip + tekst) —
+                één signaalvorm voor "Excel en portaal lopen uiteen". */}
+            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+            <div className="min-w-0 flex-1">
+              <MicroLabel className="text-amber-700 dark:text-amber-400">In de planning als ziek, hier niet geregistreerd</MicroLabel>
+              <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+                Deze chauffeurs staan in de geïmporteerde planning als "ziek", maar hebben geen ziekteperiode in het portaal — meldingen, dekking en dit blad kennen die afwezigheid dan niet.
+              </p>
+              {/* Zelfde rij-component als de import-preview: één presentatie. */}
+              <ul className="mt-3 space-y-2">
+                {excelZiekte.map((r) => (
+                  <ZiekteReeksRij
+                    key={ziekteReeksSleutel(r)}
+                    reeks={r}
+                    bezig={excelZiekteBusy === ziekteReeksSleutel(r)}
+                    disabled={!!excelZiekteBusy}
+                    onRegistreer={registreerUitExcel}
+                  />
+                ))}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       {ziektes.length === 0 ? (
         <EmptyState title="Nog geen ziekmeldingen" message="Registreer een ziekmelding met de knop rechtsboven — de dagen staan dan meteen als onbeschikbaar in de planning." />

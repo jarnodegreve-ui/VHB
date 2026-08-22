@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
+import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -10,6 +10,7 @@ import { formatShortDay, MONTH_NAMES } from '../lib/format';
 import {
   fetchCoverageConfig,
   fetchCoverageGaps,
+  fetchExpectationCheck,
   saveCoverageConfig,
   type CoverageConfig,
   type CoverageDayType,
@@ -17,7 +18,9 @@ import {
   type CoverageWeekdayPeriod,
   type DayGap,
 } from '../lib/coverage';
-import { normalizeCode } from '../lib/coverageGaps';
+import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking } from '../lib/coverageGaps';
+import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
+import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
 
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
@@ -49,6 +52,9 @@ export function CoverageView() {
   const [weekdayPeriods, setWeekdayPeriods] = useState<CoverageWeekdayPeriod[]>([]);
   const [overrides, setOverrides] = useState<CoverageOverride[]>([]);
   const [gaps, setGaps] = useState<DayGap[]>([]);
+  // Verwachtingen-vs-praktijk voor de getoonde maand: structurele afwijkingen
+  // tussen de dag-type-lijsten en wat er echt gereden wordt (fantoomgaten).
+  const [expCheck, setExpCheck] = useState<VerwachtingAfwijking[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -56,6 +62,10 @@ export function CoverageView() {
   const [onlyGaps, setOnlyGaps] = useState(true);
   // Klik op een ontbrekende dienst → advies: wie is vrij én bij wie past dit?
   const [pick, setPick] = useState<{ date: string; code: string } | null>(null);
+  // Dag-type-badge aangetikt → herkomst-uitleg inline onder de badge. Een
+  // title-tooltip alleen bestaat niet op touch, en dit scherm wordt juist op
+  // iPhone/iPad gebruikt (controle-ronde 20-08).
+  const [bronOpenDate, setBronOpenDate] = useState<string | null>(null);
   const [advies, setAdvies] = useState<CoverageAdvies | null>(null);
   const [adviesError, setAdviesError] = useState('');
   // Toewijzen van het gat aan een vrije chauffeur (POST /api/planning/assign-service).
@@ -86,17 +96,34 @@ export function CoverageView() {
     return () => { cancelled = true; };
   }, []);
 
-  useEffect(() => {
-    let cancelled = false;
+  // Versieteller tegen kruisende responses: zowel de maandwissel als een
+  // refetch (na toewijzen/opslaan) bumpen hem, en alleen het recentste
+  // antwoord mag de state zetten — anders kon een traag antwoord van de
+  // vorige maand over de nieuwe heen schrijven.
+  const gapsVersieRef = useRef(0);
+  const laadGaps = (van: string, tot: string) => {
+    const versie = ++gapsVersieRef.current;
+    const alsActueel = (fn: () => void) => { if (versie === gapsVersieRef.current) fn(); };
     setLoading(true);
-    fetchCoverageGaps(from, to)
-      .then((res) => { if (!cancelled) setGaps(Array.isArray(res?.days) ? res.days : []); })
-      .catch((e) => { if (!cancelled) setError(e?.message || 'Kon dekking niet berekenen.'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+    return Promise.all([
+      fetchCoverageGaps(van, tot)
+        .then((res) => alsActueel(() => setGaps(Array.isArray(res?.days) ? res.days : [])))
+        .catch((e) => alsActueel(() => setError(e?.message || 'Kon dekking niet berekenen.')))
+        .finally(() => alsActueel(() => setLoading(false))),
+      // Best-effort naast de gaten: een mislukte check mag het scherm niet raken.
+      fetchExpectationCheck(van, tot)
+        .then((res) => alsActueel(() => setExpCheck(Array.isArray(res?.afwijkingen) ? res.afwijkingen : [])))
+        .catch(() => alsActueel(() => setExpCheck([]))),
+    ]);
+  };
+
+  useEffect(() => {
+    laadGaps(from, to);
+    return () => { gapsVersieRef.current += 1; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [from, to]);
 
-  const refetchGaps = () => fetchCoverageGaps(from, to).then((res) => setGaps(Array.isArray(res?.days) ? res.days : [])).catch(() => {});
+  const refetchGaps = () => laadGaps(from, to);
 
   /** Wijs het gekozen gat toe aan een vrije chauffeur — de matrix én de
    *  planning worden server-side bijgewerkt, daarna verdwijnt het gat hier. */
@@ -228,6 +255,42 @@ export function CoverageView() {
   const removeWeekdayPeriod = (i: number) =>
     setWeekdayPeriods((prev) => prev.filter((_, idx) => idx !== i));
 
+  // --- Kalender-voorzet: feestdagen + schoolvakanties 2026-2027 ------------
+  // Zonder dit tikte de planner elke vakantie en feestdag handmatig in als
+  // uitzondering — één vergeten krokusvakantie = wéér fantoomgaten. De
+  // dag-type-koppeling is instelbaar; standaard fuzzy op de bestaande namen.
+  const [kalFeest, setKalFeest] = useState('');
+  const [kalMaDiWo, setKalMaDiWo] = useState('');
+  const [kalDo, setKalDo] = useState('');
+  const [kalVr, setKalVr] = useState('');
+  // Standaard dicht, zoals de dag-type-kaarten (#385): het Instellen-paneel
+  // moet scanbaar blijven — dit is een af-en-toe-actie, geen dagelijks werk.
+  const [kalenderOpen, setKalenderOpen] = useState(false);
+  useEffect(() => {
+    if (!config) return;
+    const namen = (config.dayTypes || []).map((d) => d.name);
+    const vind = (test: (n: string) => boolean) => namen.find((n) => test(n.toLowerCase())) ?? '';
+    setKalFeest((cur) => cur || vind((n) => n.includes('zondag')));
+    setKalMaDiWo((cur) => cur || vind((n) => n.includes('ma/di/wo')));
+    setKalDo((cur) => cur || vind((n) => n.includes('vakantie') && n.includes('donderdag')));
+    setKalVr((cur) => cur || vind((n) => n.includes('vakantie') && n.includes('vrijdag')));
+  }, [config]);
+  const voegKalenderToe = () => {
+    const vandaag = new Date().toISOString().slice(0, 10);
+    const { uitzonderingen, overgeslagen } = bouwKalenderUitzonderingen({
+      feestdagType: kalFeest || undefined,
+      vakantieTypes: { maDiWo: kalMaDiWo || undefined, donderdag: kalDo || undefined, vrijdag: kalVr || undefined },
+      bestaande: overrides,
+      vanafDatum: vandaag,
+    });
+    if (uitzonderingen.length === 0) {
+      notify(overgeslagen > 0 ? 'Alles uit de kalender staat al in de lijst.' : 'Kies eerst waar de feestdagen en vakantiedagen naartoe moeten.', 'error');
+      return;
+    }
+    setOverrides((prev) => [...prev, ...uitzonderingen]);
+    notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''} — controleer de lijst en klik op Opslaan.`, 'success');
+  };
+
   // --- Uitzonderingen ---
   const addOverride = () => setOverrides((prev) => [...prev, { from: '', to: '', dayType: '' }]);
   const updateOverride = (i: number, field: keyof CoverageOverride, value: string) =>
@@ -267,8 +330,38 @@ export function CoverageView() {
   const dayLabel = formatShortDay; // gedeelde compacte dag-vorm (datum-consolidatie)
 
   const totalMissing = useMemo(() => gaps.reduce((sum, d) => sum + d.missing.length, 0), [gaps]);
+  // Oorzaak-uitsplitsing voor de teller: een gat mét uitval-info komt door een
+  // gemelde afwezigheid (één zieke collega kan de hele teller kleuren); een
+  // kaal gat heeft écht nog geen chauffeur. Dat onderscheid vertelt in één
+  // regel of het structureel is of niet.
+  const uitvalSplit = useMemo(() => {
+    let doorAfwezigheid = 0;
+    const namen = new Set<string>();
+    for (const d of gaps) {
+      for (const svc of d.missing) {
+        const info = d.uitval?.[normalizeCode(svc)];
+        if (info) {
+          doorAfwezigheid += 1;
+          namen.add(info.name);
+        }
+      }
+    }
+    return { doorAfwezigheid, zonderChauffeur: totalMissing - doorAfwezigheid, namen: [...namen] };
+  }, [gaps, totalMissing]);
   const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);
   const visibleDays = onlyGaps ? gaps.filter((d) => d.missing.length > 0) : gaps;
+
+  /** Uitleg bij het dag-type van een dag: waar komt het vandaan? */
+  const bronUitleg = (bron?: DayTypeBron): string | undefined => {
+    if (!bron) return undefined;
+    switch (bron.soort) {
+      case 'excel': return 'Dag-type komt uit de Excel-import (kolom B) en gaat vóór alle instellingen.';
+      case 'uitzondering': return `Via de uitzondering ${bron.from} t/m ${bron.to} (Instellen → Uitzonderingen).`;
+      case 'periode': return `Via de weekdagperiode vanaf ${bron.vanaf} (Instellen → Standaard per weekdag).`;
+      case 'basis': return 'Via de basis-weekdagtoewijzing (Instellen → Standaard per weekdag).';
+      default: return undefined;
+    }
+  };
 
   return (
     <PageShell width="6xl">
@@ -486,17 +579,89 @@ export function CoverageView() {
                 )}
               </div>
 
+              {/* 4. Kalender-voorzet: feestdagen + schoolvakanties in één klik */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setKalenderOpen((v) => !v)}
+                  aria-expanded={kalenderOpen}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <MicroLabel className="text-slate-500">Kalender 2026–2027</MicroLabel>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Feestdagen en schoolvakanties in één klik voorzetten als uitzonderingen.</p>
+                  </div>
+                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', kalenderOpen && 'rotate-180')} />
+                </button>
+                {kalenderOpen && (
+                <>
+                <p className="text-xs font-medium text-slate-500">
+                  Zet de Belgische feestdagen (zondagsdienst) en de Vlaamse schoolvakanties (herfst, kerst, krokus, Pasen) in één keer voor als uitzonderingen. Je kiest hieronder welk dag-type elke groep krijgt; daarna gewoon controleren en opslaan. De zomervakantie stel je in via een weekdagperiode, zoals vanaf 1 september.
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {([
+                    { label: 'Feestdagen', waarde: kalFeest, zet: setKalFeest },
+                    { label: 'Vakantie ma/di/wo', waarde: kalMaDiWo, zet: setKalMaDiWo },
+                    { label: 'Vakantie donderdag', waarde: kalDo, zet: setKalDo },
+                    { label: 'Vakantie vrijdag', waarde: kalVr, zet: setKalVr },
+                  ] as const).map(({ label, waarde, zet }) => (
+                    <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
+                      <span className="text-sm font-bold text-slate-700">{label}</span>
+                      <select
+                        value={waarde}
+                        onChange={(e) => zet(e.target.value)}
+                        aria-label={`Dag-type voor ${label.toLowerCase()}`}
+                        className="control-input rounded-lg px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                      >
+                        <option value="">— overslaan —</option>
+                        {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                      </select>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="secondary" size="sm" icon={<CalendarPlus size={13} />} onClick={voegKalenderToe}>
+                  Zet voor in de lijst
+                </Button>
+                </>
+                )}
+              </div>
+
               <p className="text-2xs font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
             </>
           )}
         </div>
       )}
 
+      {/* Verwachtingen-vs-praktijk: structurele afwijkingen tussen de dag-
+          type-lijsten en wat er echt gereden wordt. Zonder deze banner lezen
+          die als "openstaande diensten" terwijl niemand ontbreekt (20-08). */}
+      {expCheck.length > 0 && (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+          <div className="flex items-start gap-3">
+            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+            <div className="min-w-0">
+              <MicroLabel className="text-amber-700 dark:text-amber-400">Verwachtingen wijken af van de planning</MicroLabel>
+              <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+                Sommige dag-type-lijsten sporen niet met wat er deze maand echt gereden wordt — meestal een dienstregelingswissel die nog niet in de dekkingsinstellingen verwerkt is. Pas de lijsten aan via Instellen.
+              </p>
+              <VerwachtingAfwijkingLijst afwijkingen={expCheck} />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* === Gaten-overzicht === */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-red-600 tabular-nums"><AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand</span>
+            <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-red-600 tabular-nums">
+              <AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand
+              {uitvalSplit.doorAfwezigheid > 0 && (
+                <span className="font-medium text-slate-500">
+                  — {uitvalSplit.zonderChauffeur > 0 ? `${uitvalSplit.zonderChauffeur} zonder chauffeur · ` : ''}{uitvalSplit.doorAfwezigheid} door afwezigheid{uitvalSplit.namen.length === 1 ? ` (${uitvalSplit.namen[0]})` : ` (${uitvalSplit.namen.length} chauffeurs)`}
+                </span>
+              )}
+            </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn ingevuld</span>
           )}
@@ -533,7 +698,30 @@ export function CoverageView() {
                 <div className="sm:w-44 shrink-0">
                   <div className="text-sm font-semibold text-slate-800 capitalize tabular-nums">{dayLabel(d.date)}</div>
                   <div className="mt-1">
-                    <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+                    {/* Herkomst van het dag-type ("waarom is dit di/vrij?"):
+                        tik/klik op de badge klapt de uitleg inline uit — een
+                        title alleen zou op touch onzichtbaar zijn. -m-2/p-2 =
+                        hit-slop zodat het doel raakbaar blijft zonder de rij
+                        te laten groeien. */}
+                    {bronUitleg(d.bron) ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setBronOpenDate((cur) => (cur === d.date ? null : d.date))}
+                          aria-expanded={bronOpenDate === d.date}
+                          aria-label={`Waarom is ${dayLabel(d.date)} een ${d.dayType || 'dag zonder type'}?`}
+                          title={bronUitleg(d.bron)}
+                          className="ios-pressable -m-2 rounded-xl p-2 text-left"
+                        >
+                          <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+                        </button>
+                        {bronOpenDate === d.date && (
+                          <p className="mt-1.5 max-w-[15rem] text-2xs font-medium leading-snug text-slate-500">{bronUitleg(d.bron)}</p>
+                        )}
+                      </>
+                    ) : (
+                      <Badge tone={d.dayType ? 'oker' : 'slate'} className="capitalize">{d.dayType || '—'}</Badge>
+                    )}
                   </div>
                 </div>
                 <div className="shrink-0 sm:w-28">

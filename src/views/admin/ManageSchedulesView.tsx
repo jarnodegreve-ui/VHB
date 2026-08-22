@@ -6,6 +6,39 @@ import { isoDate } from '../../lib/availability';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
+import type { VerwachtingAfwijking } from '../../lib/coverageGaps';
+import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
+
+/** Inklapbare preview-sectie: de import-preview groeide naar acht blokken —
+ *  met een kop + teller per blok blijft het scanbaar en klap je alleen open
+ *  wat je wilt nalezen. Blokken met een actiepunt staan standaard open. */
+function InklapSectie({ title, aantal, tone, defaultOpen, children }: {
+  title: string;
+  aantal?: number;
+  tone: 'amber' | 'slate' | 'red';
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(Boolean(defaultOpen));
+  const kader = tone === 'amber'
+    ? 'border-amber-200/70 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10'
+    : tone === 'red'
+      ? 'border-red-200/70 bg-red-50/80'
+      : 'border-slate-200/70 bg-surface-field';
+  const label = tone === 'amber' ? 'text-amber-700 dark:text-amber-400' : tone === 'red' ? 'text-red-700' : 'text-slate-600';
+  return (
+    <div className={cn('rounded-3xl border', kader)}>
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-4 text-left">
+        <span className="flex items-center gap-2">
+          <MicroLabel className={label}>{title}</MicroLabel>
+          {typeof aantal === 'number' && <Badge tone={tone === 'red' ? 'red' : tone === 'amber' ? 'amber' : 'slate'} className="tabular-nums">{aantal}</Badge>}
+        </span>
+        <ChevronDown size={16} className={cn('shrink-0 transition-transform', label, open && 'rotate-180')} />
+      </button>
+      {open && <div className="px-5 pb-5">{children}</div>}
+    </div>
+  );
+}
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
   const [showExcelInfo, setShowExcelInfo] = useState(false);
@@ -60,6 +93,15 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       absences: number;
       servicesWithoutSegments: number;
     }>;
+    /** Naamachtige kolommen ná de "aantal"-kolom: die leest de import niet. */
+    parserWaarschuwingen: string[];
+    /** Chauffeurs vergeleken met de planning vóór deze periode. */
+    chauffeursNieuw: string[];
+    chauffeursVerdwenen: Array<{ naam: string; laatste: string }>;
+    /** "ziek" in de Excel zonder geregistreerde ziekteperiode in het portaal. */
+    ziekTeRegistreren: ZiekteReeks[];
+    /** Dag-type-lijsten die niet sporen met wat dit bestand echt rijdt. */
+    verwachtingsCheck: VerwachtingAfwijking[];
   }>(null);
   const matrixPreviewHasIssues = !!matrixPreview && (matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0 || matrixPreview.verlofConflicts.length > 0);
 
@@ -180,7 +222,47 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     ziekteDiensten: Array.isArray(data.ziekteDiensten) ? data.ziekteDiensten : [],
     servicesWithoutSegments: Array.isArray(data.servicesWithoutSegments) ? data.servicesWithoutSegments : [],
     perDriver: Array.isArray(data.perDriver) ? data.perDriver : [],
+    parserWaarschuwingen: Array.isArray(data.parserWaarschuwingen) ? data.parserWaarschuwingen : [],
+    chauffeursNieuw: Array.isArray(data.chauffeursNieuw) ? data.chauffeursNieuw : [],
+    chauffeursVerdwenen: Array.isArray(data.chauffeursVerdwenen) ? data.chauffeursVerdwenen : [],
+    ziekTeRegistreren: Array.isArray(data.ziekTeRegistreren) ? data.ziekTeRegistreren : [],
+    verwachtingsCheck: Array.isArray(data.verwachtingsCheck) ? data.verwachtingsCheck : [],
   });
+
+  // Eén-klik ziekte-registratie vanuit de preview: de reeks komt uit de Excel
+  // ("ziek"-cellen zonder ziekteperiode in het portaal), de registratie loopt
+  // via dezelfde route als het Ziekte-blad. Geregistreerde reeksen blijven
+  // zichtbaar met een vinkje zodat de lijst niet onder je muis verschuift.
+  const [ziekteRegBusy, setZiekteRegBusy] = useState<string | null>(null);
+  const [ziekteGeregistreerd, setZiekteGeregistreerd] = useState<Set<string>>(new Set());
+  const registreerZiekte = async (reeks: ZiekteReeks) => {
+    if (!reeks.userId || ziekteRegBusy) return;
+    const sleutel = ziekteReeksSleutel(reeks);
+    setZiekteRegBusy(sleutel);
+    try {
+      const res = await fetch('/api/leave/sick-report', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({
+          userId: reeks.userId,
+          startDate: reeks.van,
+          endDate: reeks.tot,
+          comment: 'Geregistreerd vanuit de import-preview (stond als "ziek" in de Excel).',
+        }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) {
+        notify(body.error || 'Ziekte registreren is mislukt.', 'error');
+        return;
+      }
+      notify(`Ziekte geregistreerd voor ${reeks.naam} (${reeks.van}${reeks.tot !== reeks.van ? ` t/m ${reeks.tot}` : ''}).`, 'success');
+      setZiekteGeregistreerd((cur) => new Set(cur).add(sleutel));
+    } catch {
+      notify('Ziekte registreren is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setZiekteRegBusy(null);
+    }
+  };
 
   const handleMatrixFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -192,6 +274,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       const data = await fetchMatrixPreview(xlsxBase64);
       setPendingMatrixXlsxBase64(xlsxBase64);
       setPendingMatrixFilename(file.name);
+      setZiekteGeregistreerd(new Set());
       setMatrixPreview(previewToState(data));
       // Periode start op het volledige bestand; inkorten kan in de preview.
       setPeriodeVan(data.startDate || '');
@@ -271,6 +354,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       setMatrixPreview(null);
       setPeriodeVan('');
       setPeriodeTot('');
+      setZiekteGeregistreerd(new Set());
       await onMatrixImported();
       await fetchChangesSince();
     } catch (error: any) {
@@ -843,38 +927,124 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   </div>
                 )}
 
+                {/* Kolommen die de import bewust niet leest (ná "aantal"):
+                    een chauffeur die daar per ongeluk staat, verdween tot nu
+                    geruisloos uit het portaal. */}
+                {matrixPreview.parserWaarschuwingen.length > 0 && (
+                  <InklapSectie title="Kolommen buiten de import" aantal={matrixPreview.parserWaarschuwingen.length} tone="amber" defaultOpen>
+                    <ul className="space-y-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
+                      {matrixPreview.parserWaarschuwingen.map((w, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                          <span>{w}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </InklapSectie>
+                )}
+
+                {/* Chauffeurs vergeleken met de planning vóór deze periode:
+                    een weggevallen Excel-kolom (of een nieuwe collega) valt zo
+                    op vóór je vervangt, niet weken later op de dekking. */}
+                {(matrixPreview.chauffeursVerdwenen.length > 0 || matrixPreview.chauffeursNieuw.length > 0) && (
+                  <InklapSectie
+                    title="Chauffeurs veranderd t.o.v. de vorige planning"
+                    aantal={matrixPreview.chauffeursVerdwenen.length + matrixPreview.chauffeursNieuw.length}
+                    tone="amber"
+                    defaultOpen
+                  >
+                    <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
+                      Klopt dit met de realiteit (vertrokken of nieuwe collega), dan is er niets aan de hand — staat hier iemand die nog gewoon rijdt, controleer dan zijn kolom in de Excel.
+                    </p>
+                    <div className="mt-3 space-y-2 text-xs text-amber-900 dark:text-amber-200">
+                      {matrixPreview.chauffeursVerdwenen.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-semibold">Niet meer in dit bestand:</span>
+                          {/* Datum ín de badge: een title-tooltip bestaat niet op
+                              touch, en juist "t/m wanneer?" stuurt de beoordeling. */}
+                          {matrixPreview.chauffeursVerdwenen.map((c) => (
+                            <Badge key={c.naam} tone="amber" className="tabular-nums">{c.naam} · t/m {new Date(c.laatste).toLocaleDateString('nl-BE')}</Badge>
+                          ))}
+                        </div>
+                      )}
+                      {matrixPreview.chauffeursNieuw.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <span className="font-semibold">Nieuw in dit bestand:</span>
+                          {matrixPreview.chauffeursNieuw.map((naam) => (
+                            <Badge key={naam} tone="emerald">{naam}</Badge>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </InklapSectie>
+                )}
+
+                {/* "ziek" in de Excel zonder ziekteperiode in het portaal: het
+                    Ziekte-blad, de digest en de advisor kennen die afwezigheid
+                    dan niet. Registreren kan meteen hiervandaan. */}
+                {matrixPreview.ziekTeRegistreren.length > 0 && (
+                  <InklapSectie title="Ziekte nog niet geregistreerd" aantal={matrixPreview.ziekTeRegistreren.length} tone="amber" defaultOpen>
+                    <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
+                      Deze chauffeurs staan in de Excel als "ziek", maar hebben geen ziekteperiode in het portaal — het Ziekte-blad en de meldingen kennen hen dan niet. Registreren kan meteen:
+                    </p>
+                    {/* Zelfde rij-component als het Ziekte-blad: één presentatie
+                        (datumvorm, knoptekst, chips) op beide plekken. */}
+                    <ul className="mt-3 space-y-2">
+                      {matrixPreview.ziekTeRegistreren.map((r) => {
+                        const sleutel = ziekteReeksSleutel(r);
+                        return (
+                          <ZiekteReeksRij
+                            key={sleutel}
+                            reeks={r}
+                            bezig={ziekteRegBusy === sleutel}
+                            klaar={ziekteGeregistreerd.has(sleutel)}
+                            disabled={!!ziekteRegBusy}
+                            onRegistreer={registreerZiekte}
+                          />
+                        );
+                      })}
+                    </ul>
+                  </InklapSectie>
+                )}
+
+                {/* Dag-type-lijsten die niet sporen met wat dit bestand rijdt:
+                    een dienstregelingswissel valt zo al hier op, niet pas als
+                    fantoomgaten op de dekking (20-08). */}
+                {matrixPreview.verwachtingsCheck.length > 0 && (
+                  <InklapSectie title="Dekking-verwachtingen wijken af" aantal={matrixPreview.verwachtingsCheck.length} tone="amber" defaultOpen>
+                    <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
+                      Vergelijking van de dag-type-lijsten (Openstaande diensten → Instellen) met wat dit bestand echt rijdt:
+                    </p>
+                    <VerwachtingAfwijkingLijst afwijkingen={matrixPreview.verwachtingsCheck} />
+                  </InklapSectie>
+                )}
+
                 {/* Informatief, blokkeert niet: ziekte is onvoorzien — de Excel
                     wordt vooraf gemaakt. Na de import staan deze diensten als
                     "nog te herverdelen" op dashboard en maandplanning. */}
                 {matrixPreview.ziekteDiensten.length > 0 && (
-                  <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
-                      <div className="flex-1">
-                        <MicroLabel className="text-amber-700 dark:text-amber-400">Ziek gemelde chauffeurs in deze Excel</MicroLabel>
-                        <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
-                          {matrixPreview.ziekteDiensten.length} dienst{matrixPreview.ziekteDiensten.length === 1 ? ' staat' : 'en staan'} op een chauffeur die ziek gemeld is.
-                          De import gaat gewoon door; daarna staan ze als "nog te herverdelen" op het dashboard en in de maandplanning.
-                        </p>
-                        <ul className="mt-3 space-y-1 text-xs text-amber-900 dark:text-amber-200">
-                          {matrixPreview.ziekteDiensten.slice(0, 6).map((c, i) => (
-                            <li key={i} className="flex items-start gap-2">
-                              <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
-                              <span>
-                                <span className="font-semibold">{c.driverName}</span>
-                                {' — '}
-                                {c.date}, dienst {c.serviceNumber}
-                                <span className="opacity-75"> · ziek {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
-                              </span>
-                            </li>
-                          ))}
-                          {matrixPreview.ziekteDiensten.length > 6 && (
-                            <li className="italic opacity-75">… en nog {matrixPreview.ziekteDiensten.length - 6} meer.</li>
-                          )}
-                        </ul>
-                      </div>
-                    </div>
-                  </div>
+                  <InklapSectie title="Ziek gemelde chauffeurs in deze Excel" aantal={matrixPreview.ziekteDiensten.length} tone="amber">
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                      {matrixPreview.ziekteDiensten.length} dienst{matrixPreview.ziekteDiensten.length === 1 ? ' staat' : 'en staan'} op een chauffeur die ziek gemeld is.
+                      De import gaat gewoon door; daarna staan ze als "nog te herverdelen" op het dashboard en in de maandplanning.
+                    </p>
+                    <ul className="mt-3 space-y-1 text-xs text-amber-900 dark:text-amber-200">
+                      {matrixPreview.ziekteDiensten.slice(0, 6).map((c, i) => (
+                        <li key={i} className="flex items-start gap-2">
+                          <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
+                          <span>
+                            <span className="font-semibold">{c.driverName}</span>
+                            {' — '}
+                            {c.date}, dienst {c.serviceNumber}
+                            <span className="opacity-75"> · ziek {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
+                          </span>
+                        </li>
+                      ))}
+                      {matrixPreview.ziekteDiensten.length > 6 && (
+                        <li className="italic opacity-75">… en nog {matrixPreview.ziekteDiensten.length - 6} meer.</li>
+                      )}
+                    </ul>
+                  </InklapSectie>
                 )}
 
                 <div className="grid gap-4 md:grid-cols-4">
@@ -981,62 +1151,63 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   </div>
                 )}
 
-                <div className="grid gap-4 md:grid-cols-2">
-                  <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <MicroLabel className="text-red-700">Onbekende Codes</MicroLabel>
-                      <Badge tone="red" className="tabular-nums">{matrixPreview.unknownCodes.length}</Badge>
+                {/* Kleur volgt de zwaarste inhoud: rood alleen bij onbekende
+                    codes; alleen niet-gematchte chauffeurs = amber (zoals hun
+                    eigen kaart) — rode kop om amber inhoud gaf een gemengd
+                    signaal op precies het scherm waar rood "geblokkeerd" is. */}
+                <InklapSectie
+                  title="Codes & chauffeur-matching"
+                  aantal={matrixPreview.unknownCodes.length + matrixPreview.unmatchedDrivers.length}
+                  tone={matrixPreview.unknownCodes.length > 0 ? 'red' : matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'slate'}
+                  defaultOpen={matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0}
+                >
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div className="rounded-2xl bg-surface-white ring-1 ring-hairline p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <MicroLabel className={matrixPreview.unknownCodes.length > 0 ? 'text-red-700' : 'text-slate-500'}>Onbekende Codes</MicroLabel>
+                        <Badge tone={matrixPreview.unknownCodes.length > 0 ? 'red' : 'emerald'} className="tabular-nums">{matrixPreview.unknownCodes.length}</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {matrixPreview.unknownCodes.length > 0 ? matrixPreview.unknownCodes.map((code) => (
+                          <Fragment key={code}><Badge tone="red">{code}</Badge></Fragment>
+                        )) : (
+                          <span className="text-sm font-medium text-slate-400">Geen onbekende codes.</span>
+                        )}
+                      </div>
                     </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {matrixPreview.unknownCodes.length > 0 ? matrixPreview.unknownCodes.map((code) => (
-                        <Fragment key={code}><Badge tone="red">{code}</Badge></Fragment>
-                      )) : (
-                        <span className="text-sm font-medium text-red-700">Geen onbekende codes.</span>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="rounded-3xl border border-amber-200/70 bg-amber-50/80 p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <MicroLabel className="text-amber-700">Niet-Gematchte Chauffeurs</MicroLabel>
-                      <Badge tone="amber" className="tabular-nums">{matrixPreview.unmatchedDrivers.length}</Badge>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {matrixPreview.unmatchedDrivers.length > 0 ? matrixPreview.unmatchedDrivers.map((driver) => (
-                        <Fragment key={driver}><Badge tone="amber">{driver}</Badge></Fragment>
-                      )) : (
-                        <span className="text-sm font-medium text-amber-700">Alle chauffeurs werden herkend.</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                {matrixPreview.servicesWithoutSegments.length > 0 && (
-                  <div className="rounded-3xl border border-amber-200/70 bg-amber-50/70 p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
-                      <div className="flex-1">
-                        <MicroLabel className="text-amber-700">Services zonder geldige uren</MicroLabel>
-                        <p className="mt-1 text-sm font-medium text-amber-900">
-                          {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {matrixPreview.servicesWithoutSegments.map((code) => (
-                            <Fragment key={code}><Badge tone="amber">{code}</Badge></Fragment>
-                          ))}
-                        </div>
+                    <div className="rounded-2xl bg-surface-white ring-1 ring-hairline p-4">
+                      <div className="flex items-center justify-between gap-3">
+                        <MicroLabel className={matrixPreview.unmatchedDrivers.length > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500'}>Niet-Gematchte Chauffeurs</MicroLabel>
+                        <Badge tone={matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} className="tabular-nums">{matrixPreview.unmatchedDrivers.length}</Badge>
+                      </div>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {matrixPreview.unmatchedDrivers.length > 0 ? matrixPreview.unmatchedDrivers.map((driver) => (
+                          <Fragment key={driver}><Badge tone="amber">{driver}</Badge></Fragment>
+                        )) : (
+                          <span className="text-sm font-medium text-slate-400">Alle chauffeurs werden herkend.</span>
+                        )}
                       </div>
                     </div>
                   </div>
+                </InklapSectie>
+
+                {matrixPreview.servicesWithoutSegments.length > 0 && (
+                  <InklapSectie title="Services zonder geldige uren" aantal={matrixPreview.servicesWithoutSegments.length} tone="amber" defaultOpen>
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                      {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {matrixPreview.servicesWithoutSegments.map((code) => (
+                        <Fragment key={code}><Badge tone="amber">{code}</Badge></Fragment>
+                      ))}
+                    </div>
+                  </InklapSectie>
                 )}
 
                 {matrixPreview.perDriver.length > 0 && (
-                  <div className="surface-card rounded-3xl p-5">
-                    <div className="flex items-center justify-between gap-3">
-                      <MicroLabel className="text-slate-600">Per-chauffeur breakdown</MicroLabel>
-                      <Badge tone="slate" className="tabular-nums">{matrixPreview.perDriver.length} chauffeurs</Badge>
-                    </div>
-                    <p className="mt-1 text-2xs font-medium text-slate-500">
+                  <InklapSectie title="Per-chauffeur breakdown" aantal={matrixPreview.perDriver.length} tone="slate">
+                    <p className="text-2xs font-medium text-slate-500">
                       Stille gaten worden hier zichtbaar: een chauffeur met dagen-met-code maar nul diensten betekent ofwel allemaal afwezigheden, ofwel een service zonder geldige uren.
                     </p>
                     <div className="mt-4 overflow-x-auto">
@@ -1079,7 +1250,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         </tbody>
                       </table>
                     </div>
-                  </div>
+                  </InklapSectie>
                 )}
               </div>
 
@@ -1095,6 +1266,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     setMatrixPreview(null);
                     setPeriodeVan('');
                     setPeriodeTot('');
+                    setZiekteGeregistreerd(new Set());
                   }}
                 >
                   Annuleren

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, BellOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
+import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
@@ -42,6 +42,32 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     })();
     return () => { cancelled = true; };
   }, []);
+  // Wie staat er (niet) in de geïmporteerde planning-matrix, en tot wanneer?
+  // Een chauffeur-account zonder cel aan het EINDE van de bekende planning is
+  // óf een nieuwe collega, óf een weggevallen Excel-kolom (case Cherlet/
+  // Mendez/De Laere, 20-08) — de laatste-datum is essentieel: wie ooit in een
+  // oude maand stond maar uit de nieuwste import viel, moet júíst gevlagd
+  // worden. Best-effort: zonder data geen badge of filter.
+  const [planningPresence, setPlanningPresence] = useState<{ geladen: boolean; tot: string; laatstePerId: Map<string, string> }>({ geladen: false, tot: '', laatstePerId: new Map() });
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch('/api/planning-presence', { headers: await getSupabaseAuthHeaders() });
+        if (!res.ok) return;
+        const body = await res.json();
+        if (cancelled || !Array.isArray(body?.perUser)) return;
+        // Lege matrix (nog nooit geïmporteerd) → geen zinvol signaal.
+        if (!body.van || !body.tot) return;
+        setPlanningPresence({
+          geladen: true,
+          tot: String(body.tot),
+          laatstePerId: new Map(body.perUser.map((p: any) => [String(p.userId), String(p.laatste ?? '')])),
+        });
+      } catch { /* geen badge/filter zonder data */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     void (async () => {
@@ -74,6 +100,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const [roleFilter, setRoleFilter] = useState<'all' | 'chauffeur' | 'planner' | 'admin'>('all');
   // Uitrol-filter: toon alleen wie nog nooit inlogde (idee 47).
   const [alleenNooitIn, setAlleenNooitIn] = useState(false);
+  // Planning-filter: toon alleen chauffeurs die nergens in de matrix staan.
+  const [alleenNietInPlanning, setAlleenNietInPlanning] = useState(false);
   // Naam-zoekveld: met 42 accounts is scrollen traag; zoeken is de kortste weg.
   const [userSearch, setUserSearch] = useState('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -100,6 +128,15 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const actieveChauffeurs = actieveUsers.filter((u) => u.role === 'chauffeur');
   const chauffeursOoitIn = actieveChauffeurs.filter((u) => Boolean(u.lastLogin)).length;
   const nooitIngelogd = actieveChauffeurs.length - chauffeursOoitIn;
+  // Chauffeur-accounts zonder cel aan het einde van de bekende planning:
+  // nooit aanwezig, óf laatste cel vóór het matrix-einde (kolom weggevallen).
+  const laatsteInPlanning = (u: User) => planningPresence.laatstePerId.get(String(u.id));
+  const nietInPlanning = (u: User) => {
+    if (!planningPresence.geladen || u.role !== 'chauffeur' || u.isActive === false) return false;
+    const laatste = laatsteInPlanning(u);
+    return !laatste || laatste < planningPresence.tot;
+  };
+  const aantalNietInPlanning = actieveChauffeurs.filter(nietInPlanning).length;
 
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
@@ -113,6 +150,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     })
     .filter((u) => roleFilter === 'all' || u.role === roleFilter)
     .filter((u) => !alleenNooitIn || (u.role === 'chauffeur' && u.isActive !== false && !u.lastLogin))
+    .filter((u) => !alleenNietInPlanning || nietInPlanning(u))
     .filter((u) => {
       const q = userSearch.trim().toLowerCase();
       if (!q) return true;
@@ -433,6 +471,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} icon={<LogIn size={11} />}>
                   {chauffeursOoitIn} van {actieveChauffeurs.length} chauffeurs ooit ingelogd
                 </Badge>
+                {/* Accounts zonder één cel in de geïmporteerde planning:
+                    nieuwe collega, vertrokken, of weggevallen Excel-kolom. */}
+                {aantalNietInPlanning > 0 && (
+                  <Badge tone="amber" icon={<CalendarOff size={11} />}>
+                    {aantalNietInPlanning} niet in de planning
+                  </Badge>
+                )}
               </div>
             )}
           />
@@ -454,15 +499,33 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             />
             {/* Snelfilter voor de uitrol: wie moet ik nog persoonlijk
                 meekrijgen? Alleen tonen als er zo iemand is. */}
-            {nooitIngelogd > 0 && (
+            {/* min-h-11: losse chips buiten de segmented-rail haalden het
+                44px-aanraakminimum niet. Blijven renderen zolang het filter
+                aanstaat — anders kon een actieve filter zijn eigen knop laten
+                verdwijnen en bleef een lege tabel zonder uitweg achter
+                (controle-ronde 20-08). */}
+            {(nooitIngelogd > 0 || alleenNooitIn) && (
               <button
                 type="button"
                 onClick={() => setAlleenNooitIn((v) => !v)}
                 aria-pressed={alleenNooitIn}
-                className={segItemClass(alleenNooitIn, 'self-start inline-flex items-center gap-1.5 rounded-2xl')}
+                className={segItemClass(alleenNooitIn, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
               >
                 <LogIn size={13} />
                 Nog nooit ingelogd ({nooitIngelogd})
+              </button>
+            )}
+            {/* Snelfilter: chauffeur-accounts zonder cel aan het einde van de
+                geïmporteerde planning — nieuwe collega of weggevallen kolom. */}
+            {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
+              <button
+                type="button"
+                onClick={() => setAlleenNietInPlanning((v) => !v)}
+                aria-pressed={alleenNietInPlanning}
+                className={segItemClass(alleenNietInPlanning, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
+              >
+                <CalendarOff size={13} />
+                Niet in de planning ({aantalNietInPlanning})
               </button>
             )}
           </div>
@@ -514,7 +577,20 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <Td className="w-10"><input type="checkbox" aria-label={`Selecteer ${u.name}`} checked={selectedIds.has(u.id)} disabled={isBulkProtected(u)} onChange={() => toggleSelect(u.id)} className="h-4 w-4 rounded border-slate-300 accent-oker-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" /></Td>
                   <Td>
                     <div className="font-bold tracking-tight text-slate-800">{u.name}</div>
-                    <div className="mt-1"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                      <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
+                      {nietInPlanning(u) && (
+                        <Badge
+                          tone="amber"
+                          icon={<CalendarOff size={11} />}
+                          title={laatsteInPlanning(u)
+                            ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                            : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
+                        >
+                          Niet in planning
+                        </Badge>
+                      )}
+                    </div>
                   </Td>
                   <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>
                   {/* Zonder abonnement komt géén enkele melding aan. */}
@@ -579,7 +655,12 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <input type="checkbox" aria-label={`Selecteer ${u.name}`} checked={selectedIds.has(u.id)} disabled={isBulkProtected(u)} onChange={() => toggleSelect(u.id)} className="mt-1 h-4 w-4 rounded border-slate-300 accent-oker-500 disabled:opacity-30" />
                   <div>
                     <div className="font-bold tracking-tight text-slate-800 leading-tight">{u.name}</div>
-                    <div className="mt-1.5"><Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge></div>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
+                      {nietInPlanning(u) && (
+                        <Badge tone="amber" icon={<CalendarOff size={11} />}>Niet in planning</Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">

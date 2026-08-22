@@ -3165,3 +3165,198 @@ describe('planner-assistent (/api/planner-chat)', () => {
     }
   });
 });
+
+describe('verbeterronde 20-08 — import-signalen & planning-aanwezigheid', () => {
+  const bouwXlsx = async (aoa: unknown[][]) => {
+    const XLSX = await import('xlsx');
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+  const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+
+  it('preview waarschuwt voor kolommen ná "aantal" en vergelijkt chauffeurs met de planning vlak vóór de periode', async () => {
+    // Bestaande matrix (juli 2030, binnen het 60-dagen-venster) heeft
+    // Chauffeur A + B; dit bestand (2030-08) heeft alleen A + een nieuwe C,
+    // plus een kolom áchter aantal — precies het patroon waarmee Luc Cherlet
+    // op 20-08 geruisloos verdween.
+    mem.planningMatrix = [
+      { id: 'm-jul', source_date: '2030-07-08', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+    ];
+    const base64 = await bouwXlsx([
+      ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur C', 'aantal', 'Vergeten Chauffeur'],
+      [serial('2030-08-03'), 'W', '12', '14', 2, '15'],
+    ]);
+    const res = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(res.status).toBe(200);
+    expect(res.json.parserWaarschuwingen).toHaveLength(1);
+    expect(res.json.parserWaarschuwingen[0]).toContain('Vergeten Chauffeur');
+    expect(res.json.chauffeursVerdwenen).toEqual([{ naam: 'Chauffeur B', laatste: '2030-07-08' }]);
+    expect(res.json.chauffeursNieuw).toEqual(['Chauffeur C']);
+  });
+
+  it('chauffeurs-vergelijking: oude planning buiten het venster telt niet mee; dekt het bestand alles, dan vergelijkt hij met de oude versie van de periode zelf', async () => {
+    const base64 = await bouwXlsx([
+      ['datum', 'dagtype', 'Chauffeur A', 'aantal'],
+      [serial('2030-08-03'), 'W', '12', 1],
+    ]);
+    // Alleen jaren-oude rijen (ver buiten het 60-dagen-venster): geen ruis
+    // over allang vertrokken collega's.
+    mem.planningMatrix = [
+      { id: 'm-oud', source_date: '2026-07-01', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+    ];
+    const stil = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(stil.json.chauffeursVerdwenen).toEqual([]);
+    expect(stil.json.chauffeursNieuw).toEqual([]);
+
+    // Zelfde bestand, maar nu bestaat er een oude versie van exact deze
+    // periode mét Chauffeur B: de fallback vergelijkt daarmee.
+    mem.planningMatrix = [
+      { id: 'm-zelfde', source_date: '2030-08-03', day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': '14' }, raw_row: '' },
+    ];
+    const fallback = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(fallback.json.chauffeursVerdwenen).toEqual([{ naam: 'Chauffeur B', laatste: '2030-08-03' }]);
+  });
+
+  it('preview meldt Excel-"ziek" zonder geregistreerde ziekteperiode, en zwijgt mét', async () => {
+    const base64 = await bouwXlsx([
+      ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'aantal'],
+      [serial('2030-08-03'), 'W', 'ziek', '14', 1],
+    ]);
+    const zonder = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(zonder.status).toBe(200);
+    expect(zonder.json.ziekTeRegistreren).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-08-03', tot: '2030-08-03', dagen: 1, actief: true, ambigu: false }]);
+
+    mem.leave = [
+      { id: 'l-z', userId: '3', startDate: '2030-08-01', endDate: '2030-08-10', type: 'ziekte', status: 'approved', comment: '', createdAt: '2030-07-30T06:00:00Z', decidedAt: '2030-07-30T06:00:00Z' },
+    ];
+    const met = await api('POST', '/api/planning-matrix/preview', { token: 'tok-planner', body: { xlsxBase64: base64 } });
+    expect(met.json.ziekTeRegistreren).toEqual([]);
+  });
+
+  it('GET /api/coverage-expectation-check vindt structurele afwijkingen (en is staf-only)', async () => {
+    mem.planningMatrix = [
+      { id: 'm-a', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
+      { id: 'm-b', source_date: '2030-09-02', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2515' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { school: ['2101', '2114'] };
+    const res = await api('GET', '/api/coverage-expectation-check?from=2030-09-01&to=2030-09-30', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.afwijkingen).toEqual([
+      { dayType: 'school', dagen: 2, nooitGereden: ['2114'], nietVerwacht: [{ code: '2515', dagen: 2 }] },
+    ]);
+    const verboden = await api('GET', '/api/coverage-expectation-check?from=2030-09-01&to=2030-09-30', { token: 'tok-a' });
+    expect(verboden.status).toBe(403);
+  });
+
+  it('GET /api/ziekte-zonder-registratie kijkt alleen vooruit', async () => {
+    mem.planningMatrix = [
+      { id: 'm-verleden', source_date: '2020-01-01', day_type: '', assignments: { 'Chauffeur A': 'ziek' }, raw_row: '' },
+      { id: 'm-toekomst', source_date: '2030-09-01', day_type: '', assignments: { 'Chauffeur A': 'ziek' }, raw_row: '' },
+    ];
+    const res = await api('GET', '/api/ziekte-zonder-registratie', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.reeksen).toEqual([{ userId: '3', naam: 'Chauffeur A', van: '2030-09-01', tot: '2030-09-01', dagen: 1, actief: true, ambigu: false }]);
+  });
+
+  it('GET /api/planning-presence geeft per gematchte chauffeur de laatste datum in de matrix', async () => {
+    const res = await api('GET', '/api/planning-presence', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.van).toBe('2026-07-01');
+    expect(res.json.tot).toBe('2026-07-08');
+    const perUser = Object.fromEntries(res.json.perUser.map((p: { userId: string; laatste: string }) => [p.userId, p.laatste]));
+    // Ook een afwezigheidscel (bv) telt als "komt voor in de planning".
+    expect(perUser['3']).toBe('2026-07-08');
+    expect(perUser['4']).toBe('2026-07-08');
+  });
+});
+
+describe('telegram-webhook — secret, koppeling en commando\'s', () => {
+  const verzonden: Array<{ chatId: string; tekst: string; knoppen?: Array<Array<{ tekst: string; data: string }>> }> = [];
+  const webhook = (body: unknown, secretHeader?: string) =>
+    api('POST', '/api/telegram/webhook', {
+      body,
+      headers: secretHeader === undefined ? {} : { 'X-Telegram-Bot-Api-Secret-Token': secretHeader },
+    });
+
+  beforeEach(async () => {
+    const { zetTelegramVerzenderVoorTests } = await import('../api/telegram');
+    verzonden.length = 0;
+    zetTelegramVerzenderVoorTests(async (v: any) => { verzonden.push(v); return true; });
+    process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
+    process.env.TELEGRAM_CHAT_ID = '777';
+    delete process.env.TELEGRAM_BOT_TOKEN; // answerCallbackQuery wordt dan een no-op
+  });
+
+  afterAll(async () => {
+    const { zetTelegramVerzenderVoorTests } = await import('../api/telegram');
+    zetTelegramVerzenderVoorTests(null);
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    delete process.env.TELEGRAM_CHAT_ID;
+  });
+
+  it('weigert zonder (juiste) secret-header, en is dicht zonder geconfigureerd secret', async () => {
+    expect((await webhook({ message: {} }, 'fout-secret')).status).toBe(401);
+    expect((await webhook({ message: {} })).status).toBe(401);
+    delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    expect((await webhook({ message: {} }, 'wat-dan-ook')).status).toBe(401);
+  });
+
+  it('toont bij /start de chat-id zolang er geen chat gekoppeld is, en negeert andere afzenders stil', async () => {
+    delete process.env.TELEGRAM_CHAT_ID;
+    const res = await webhook({ message: { chat: { id: 12345 }, text: '/start' } }, 'test-secret');
+    expect(res.status).toBe(200);
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].chatId).toBe('12345');
+    expect(verzonden[0].tekst).toContain('12345');
+    expect(verzonden[0].tekst).toContain('TELEGRAM_CHAT_ID');
+
+    // Mét gekoppelde chat: een vreemde afzender krijgt niets — ook geen /start.
+    process.env.TELEGRAM_CHAT_ID = '777';
+    verzonden.length = 0;
+    await webhook({ message: { chat: { id: 999 }, text: '/start' } }, 'test-secret');
+    await webhook({ message: { chat: { id: 999 }, text: '/gaten' } }, 'test-secret');
+    expect(verzonden).toHaveLength(0);
+  });
+
+  it('/gaten antwoordt met de openstaande diensten en kandidaten-knoppen', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.planningMatrix = [
+      { id: 'm-nu', source_date: vandaag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+    const res = await webhook({ message: { chat: { id: 777 }, text: '/gaten' } }, 'test-secret');
+    expect(res.status).toBe(200);
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].chatId).toBe('777');
+    expect(verzonden[0].tekst).toContain('1 openstaande dienst');
+    expect(verzonden[0].tekst).toContain('11');
+    expect(verzonden[0].knoppen?.flat().map((k) => k.data)).toEqual([`adv|${vandaag}|11`]);
+  });
+
+  it('kandidaten-knop stuurt het invaladvies voor dat gat', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.planningMatrix = [
+      { id: 'm-nu', source_date: vandaag, day_type: 'week', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11'] };
+    const res = await webhook({
+      callback_query: { id: 'cb1', data: `adv|${vandaag}|11`, message: { chat: { id: 777 } } },
+    }, 'test-secret');
+    expect(res.status).toBe(200);
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].tekst).toContain('Dienst 11');
+    // Chauffeur B staat op "vrij" en hoort in het advies voor te komen.
+    expect(verzonden[0].tekst).toContain('Chauffeur B');
+  });
+
+  it('/ziek somt de actuele ziekmeldingen op', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.leave = [
+      { id: 'l-z', userId: '3', startDate: vandaag, endDate: vandaag, type: 'ziekte', status: 'approved', comment: '', createdAt: '2026-08-01T06:00:00Z', decidedAt: '2026-08-01T06:00:00Z' },
+    ];
+    await webhook({ message: { chat: { id: 777 }, text: '/ziek' } }, 'test-secret');
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].tekst).toContain('Chauffeur A');
+  });
+});

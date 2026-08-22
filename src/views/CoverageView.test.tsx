@@ -20,6 +20,7 @@ vi.mock('../lib/coverage', () => ({
     overrides: [],
   }),
   fetchCoverageGaps: vi.fn().mockResolvedValue({ from: '', to: '', days: [] }),
+  fetchExpectationCheck: vi.fn().mockResolvedValue({ from: '', to: '', dagen: 0, afwijkingen: [] }),
   saveCoverageConfig: vi.fn().mockResolvedValue({ success: true }),
 }));
 vi.mock('../lib/availability', () => ({
