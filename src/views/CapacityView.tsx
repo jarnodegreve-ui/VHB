@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Clock, Download, RotateCcw, Search, TriangleAlert, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Clock, Download, RotateCcw, Search, Table2, TriangleAlert, X } from 'lucide-react';
 import { cn, downloadBlob, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -116,6 +116,37 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
       setIsExporteren(false);
     }
   };
+  // Maandoverzicht-venster (verbeterronde 22-08, nr. 3): dezelfde telling als
+  // het xlsx-tabblad (gedeelde server-berekening), maar als sorteerbare tabel
+  // — voor de snelle blik zonder download.
+  type OverzichtRij = { driverId: string; naam: string; diensten: number; minuten: number; anderWerk: number; ziek: number; betaald: number; vrij: number; overig: Array<{ code: string; keren: number }>; dagen: number };
+  const [overzichtOpen, setOverzichtOpen] = useState(false);
+  const [overzichtLaden, setOverzichtLaden] = useState(false);
+  const [overzicht, setOverzicht] = useState<null | { dagen: number; rijen: OverzichtRij[]; totaal: Record<string, number> }>(null);
+  const [overzichtSort, setOverzichtSort] = useState<{ kolom: keyof OverzichtRij; richting: 1 | -1 }>({ kolom: 'naam', richting: 1 });
+  const urenLabel = (minuten: number) => `${Math.floor(minuten / 60)}:${String(Math.round(minuten) % 60).padStart(2, '0')}`;
+  const openOverzicht = async () => {
+    setOverzichtOpen(true);
+    setOverzichtLaden(true);
+    try {
+      const res = await fetch(`/api/month-planning?month=${monthParam}&format=summary`, { headers: await getSupabaseAuthHeaders() });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) {
+        notify(body.error || 'Overzicht laden is mislukt.', 'error');
+        setOverzichtOpen(false);
+        return;
+      }
+      setOverzicht(body);
+    } catch {
+      notify('Overzicht laden is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      setOverzichtOpen(false);
+    } finally {
+      setOverzichtLaden(false);
+    }
+  };
+  const sorteerOverzicht = (kolom: keyof OverzichtRij) =>
+    setOverzichtSort((cur) => (cur.kolom === kolom ? { kolom, richting: cur.richting === 1 ? -1 : 1 } : { kolom, richting: kolom === 'naam' ? 1 : -1 }));
+
   const [wisselNaar, setWisselNaar] = useState('');
   const [wisselReden, setWisselReden] = useState<string>(WISSEL_REDENEN[0]);
   const [wisselToelichting, setWisselToelichting] = useState('');
@@ -516,9 +547,14 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             {/* Terugexport: alleen staf — sluit de Excel-cyclus (bewerken op
                 de actuele stand i.p.v. de verouderde upload). */}
             {canEditNotes && (
-              <Button variant="secondary" size="sm" className="h-9 rounded-xl" icon={<Download size={14} />} disabled={isExporteren} onClick={() => void exporteerExcel()}>
-                {isExporteren ? 'Bezig…' : 'Excel'}
-              </Button>
+              <>
+                <Button variant="secondary" size="sm" className="h-9 rounded-xl" icon={<Download size={14} />} disabled={isExporteren} onClick={() => void exporteerExcel()}>
+                  {isExporteren ? 'Bezig…' : 'Excel'}
+                </Button>
+                <Button variant="secondary" size="sm" className="h-9 rounded-xl" icon={<Table2 size={14} />} onClick={() => void openOverzicht()}>
+                  Overzicht
+                </Button>
+              </>
             )}
           </div>
         )}
@@ -1077,6 +1113,92 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             )}
           </div>
         )}
+      </Modal>
+
+      {/* Maandoverzicht per chauffeur — zelfde telling als de Excel-export. */}
+      <Modal open={overzichtOpen} onClose={() => setOverzichtOpen(false)} maxWidth="2xl">
+        <div className="p-6">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <MicroLabel>Maandoverzicht</MicroLabel>
+              <h3 className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 capitalize">{MONTH_NAMES[monthIndex]} {year}</h3>
+              <p className="mt-0.5 text-xs font-medium text-slate-500">
+                Stand ná wissels, toewijzingen en afwezigheden — identiek aan het tabblad "maandoverzicht" in de Excel-export. Uren = som van de dienstsegmenten; diensten zonder tijden tellen alleen in de dagtelling.
+              </p>
+            </div>
+            <button type="button" onClick={() => setOverzichtOpen(false)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
+              <X size={16} />
+            </button>
+          </div>
+          {overzichtLaden ? (
+            <div className="mt-5 flex items-center gap-3 text-slate-500">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+              <span className="text-sm font-bold">Overzicht berekenen…</span>
+            </div>
+          ) : overzicht && (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    {([
+                      ['naam', 'Chauffeur'],
+                      ['diensten', 'Diensten'],
+                      ['minuten', 'Uren'],
+                      ['anderWerk', 'Ander werk'],
+                      ['ziek', 'Ziek'],
+                      ['betaald', 'Betaald afw.'],
+                      ['vrij', 'Vrij'],
+                      ['dagen', 'Dagen'],
+                    ] as Array<[keyof OverzichtRij, string]>).map(([kolom, label]) => (
+                      <th key={kolom} className={cn('px-2 py-2 text-left text-xs font-medium text-slate-500 whitespace-nowrap', kolom !== 'naam' && 'text-right')}>
+                        <button type="button" onClick={() => sorteerOverzicht(kolom)} className="inline-flex items-center gap-1 font-medium hover:text-slate-800">
+                          {label}{overzichtSort.kolom === kolom ? (overzichtSort.richting === 1 ? ' ↑' : ' ↓') : ''}
+                        </button>
+                      </th>
+                    ))}
+                    <th className="px-2 py-2 text-left text-xs font-medium text-slate-500">Overig</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[...overzicht.rijen]
+                    .sort((a, b) => {
+                      const { kolom, richting } = overzichtSort;
+                      const va = a[kolom];
+                      const vb = b[kolom];
+                      const cmp = typeof va === 'number' && typeof vb === 'number' ? va - vb : String(va).localeCompare(String(vb));
+                      return cmp * richting || a.naam.localeCompare(b.naam);
+                    })
+                    .map((r) => (
+                      <tr key={r.driverId} className="border-t border-slate-100">
+                        <td className="px-2 py-1.5 font-semibold text-slate-800 whitespace-nowrap">{r.naam}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{r.diensten}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{urenLabel(r.minuten)}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{r.anderWerk}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{r.ziek}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{r.betaald}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums">{r.vrij}</td>
+                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{r.dagen}</td>
+                        <td className="px-2 py-1.5 text-slate-500 whitespace-nowrap">{r.overig.map(({ code, keren }) => `${code}×${keren}`).join(', ') || '—'}</td>
+                      </tr>
+                    ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-slate-200">
+                    <td className="px-2 py-2 font-bold text-slate-900">Totaal</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.diensten}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold">{urenLabel(overzicht.totaal.minuten)}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.anderWerk}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.ziek}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.betaald}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.vrij}</td>
+                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.dagen}</td>
+                    <td className="px-2 py-2" />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
       </Modal>
 
       <ConfirmationModal

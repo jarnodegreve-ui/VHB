@@ -817,7 +817,9 @@ export function PlannerDashboardWidgets({
                 icon={<UserX size={15} />}
                 primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld — ${userNameById(g.driverId)}`}
                 secondary={`${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDay(s.date)} (${serviceNumberOf(s)})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`}
-                onClick={() => onNavigate('bezetting')}
+                // Ziekte-blad, niet de maandplanning: dáár staan de
+                // herverdeel-knoppen (kortste route naar de actie).
+                onClick={() => onNavigate('ziekte')}
               />
               </Fragment>
             ))}

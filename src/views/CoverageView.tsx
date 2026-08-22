@@ -11,6 +11,7 @@ import {
   fetchCoverageConfig,
   fetchCoverageGaps,
   fetchExpectationCheck,
+  fetchExpectationVoorstel,
   saveCoverageConfig,
   type CoverageConfig,
   type CoverageDayType,
@@ -18,7 +19,7 @@ import {
   type CoverageWeekdayPeriod,
   type DayGap,
 } from '../lib/coverage';
-import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking } from '../lib/coverageGaps';
+import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking, type VerwachtingVoorstel } from '../lib/coverageGaps';
 import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
 import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
 
@@ -297,6 +298,52 @@ export function CoverageView() {
     setOverrides((prev) => prev.map((o, idx) => (idx === i ? { ...o, [field]: value } : o)));
   const removeOverride = (i: number) => setOverrides((prev) => prev.filter((_, idx) => idx !== i));
 
+  // Gesorteerd + verlopen gemarkeerd (nr. 5): de kalender-voorzet kan er
+  // tientallen injecteren — chronologisch lezen en oude opruimen moet licht
+  // blijven. De originele index reist mee voor de update/verwijder-handlers.
+  const overrideVandaag = new Date().toLocaleDateString('en-CA');
+  const gesorteerdeOverrides = useMemo(
+    () => overrides
+      .map((o, i) => ({ o, i, verlopen: Boolean(o.to && o.to < overrideVandaag) }))
+      .sort((a, b) => (a.o.from || '9999-99-99').localeCompare(b.o.from || '9999-99-99')),
+    [overrides, overrideVandaag],
+  );
+  const verlopenAantal = gesorteerdeOverrides.filter((x) => x.verlopen).length;
+  const ruimVerlopenOp = () => setOverrides((prev) => prev.filter((o) => !(o.to && o.to < overrideVandaag)));
+
+  // Inklap-status van de instellen-secties (nr. 4): het paneel moet één
+  // scanbaar lijstje zijn — zelfde patroon als de kalender-sectie.
+  const [weekdagenOpen, setWeekdagenOpen] = useState(false);
+  const [uitzonderingenOpen, setUitzonderingenOpen] = useState(false);
+
+  // Lijstenvoorstel uit de praktijk (nr. 2): wat rijdt er deze maand écht,
+  // per dag-type — na een dienstregelingswissel is dat de kortste weg naar
+  // kloppende lijsten.
+  const [voorstelOpen, setVoorstelOpen] = useState(false);
+  const [voorstelLaden, setVoorstelLaden] = useState(false);
+  const [voorstellen, setVoorstellen] = useState<VerwachtingVoorstel[] | null>(null);
+  const haalVoorstelOp = async () => {
+    setVoorstelLaden(true);
+    try {
+      const res = await fetchExpectationVoorstel(from, to);
+      setVoorstellen(Array.isArray(res?.voorstellen) ? res.voorstellen : []);
+    } catch (e: any) {
+      notify(e?.message || 'Kon het voorstel niet berekenen.', 'error');
+    } finally {
+      setVoorstelLaden(false);
+    }
+  };
+  const pasVoorstelToe = (v: VerwachtingVoorstel) => {
+    const codes = v.codes.map((c) => c.code);
+    setDayTypes((prev) => {
+      const bestaat = prev.some((dt) => dt.name.trim() === v.dayType);
+      return bestaat
+        ? prev.map((dt) => (dt.name.trim() === v.dayType ? { ...dt, services: codes } : dt))
+        : [...prev, { name: v.dayType, services: codes }];
+    });
+    notify(`Lijst voor "${v.dayType}" klaargezet (${codes.length} diensten) — controleer en klik op Opslaan.`, 'success');
+  };
+
   const handleSave = async () => {
     setSaving(true);
     setError('');
@@ -477,12 +524,73 @@ export function CoverageView() {
                 )}
               </div>
 
+              {/* 1b. Lijsten uit de planning: voorstel per dag-type uit wat er
+                  deze maand echt gereden wordt (verbeterronde 22-08, nr. 2). */}
+              <div className="border-t border-slate-100 pt-5 space-y-3">
+                <button
+                  type="button"
+                  onClick={() => setVoorstelOpen((v) => !v)}
+                  aria-expanded={voorstelOpen}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <MicroLabel className="text-slate-500">Lijsten uit de planning</MicroLabel>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Stel de dienstenlijsten voor op basis van wat er deze maand echt rijdt — de kortste weg na een dienstregelingswissel.</p>
+                  </div>
+                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', voorstelOpen && 'rotate-180')} />
+                </button>
+                {voorstelOpen && (
+                <>
+                <Button variant="secondary" size="sm" disabled={voorstelLaden} onClick={() => void haalVoorstelOp()}>
+                  {voorstelLaden ? 'Berekenen…' : `Haal voorstel op (${MONTH_NAMES[monthIndex].toLowerCase()} ${year})`}
+                </Button>
+                {voorstellen !== null && (voorstellen.length === 0 ? (
+                  <p className="text-xs font-medium text-slate-400">Geen voorstel mogelijk — te weinig dagen per dag-type in deze maand.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {voorstellen.map((v) => {
+                      const huidig = dayTypes.find((dt) => dt.name.trim() === v.dayType)?.services ?? null;
+                      const zelfde = huidig !== null && huidig.length === v.codes.length
+                        && v.codes.every((c) => huidig.some((h) => h.trim().toLowerCase() === c.code.trim().toLowerCase()));
+                      return (
+                        <div key={v.dayType} className="rounded-2xl border border-slate-100 bg-surface-field p-4">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-bold text-slate-700 capitalize">{v.dayType}</span>
+                            <Badge tone="slate" className="tabular-nums">{v.codes.length} diensten · {v.dagen} dagen</Badge>
+                            {zelfde ? (
+                              <Badge tone="emerald">lijst klopt al</Badge>
+                            ) : (
+                              <Button variant="secondary" size="sm" className="ml-auto shrink-0" onClick={() => pasVoorstelToe(v)}>
+                                {huidig === null ? 'Maak dag-type met deze lijst' : `Vervang lijst (nu ${huidig.length})`}
+                              </Button>
+                            )}
+                          </div>
+                          <p className="mt-2 text-2xs font-medium text-slate-500 tabular-nums">{v.codes.map((c) => c.code).join(' · ')}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ))}
+                </>
+                )}
+              </div>
+
               {/* 2. Standaard dag-type per weekdag */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
-                <div>
-                  <MicroLabel className="text-slate-500">Standaard per weekdag</MicroLabel>
-                  <p className="text-xs font-medium text-slate-500 mt-0.5">Welk dag-type geldt standaard op elke weekdag (tenzij een uitzondering hieronder).</p>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setWeekdagenOpen((v) => !v)}
+                  aria-expanded={weekdagenOpen}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+                >
+                  <div>
+                    <MicroLabel className="text-slate-500">Standaard per weekdag</MicroLabel>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Welk dag-type geldt standaard op elke weekdag{weekdayPeriods.length > 0 ? ` · ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : ''}.</p>
+                  </div>
+                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', weekdagenOpen && 'rotate-180')} />
+                </button>
+                {weekdagenOpen && (
+                <>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {WEEKDAY_ORDER.map(({ dow, label }) => (
                     <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
@@ -545,25 +653,47 @@ export function CoverageView() {
                     </div>
                   ))}
                 </div>
+                </>
+                )}
               </div>
 
               {/* 3. Uitzonderingen */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
-                <div className="flex items-start justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setUitzonderingenOpen((v) => !v)}
+                  aria-expanded={uitzonderingenOpen}
+                  className="flex min-h-11 w-full items-center justify-between gap-3 text-left"
+                >
                   <div>
                     <MicroLabel className="text-slate-500">Uitzonderingen</MicroLabel>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">Een periode die afwijkt van de weekdag-standaard — bv. een schoolvakantie of een feestdag (van = tot voor één dag).</p>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">
+                      {overrides.length === 0 ? 'Nog geen uitzonderingen' : `${overrides.length} ingesteld${verlopenAantal > 0 ? ` · ${verlopenAantal} verlopen` : ''}`} — een periode die afwijkt van de weekdag-standaard.
+                    </p>
                   </div>
-                  <Button variant="secondary" size="sm" icon={<Plus size={13} />} className="shrink-0" onClick={addOverride}>
-                    Uitzondering
-                  </Button>
+                  <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', uitzonderingenOpen && 'rotate-180')} />
+                </button>
+                {uitzonderingenOpen && (
+                <>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <p className="min-w-0 text-xs font-medium text-slate-500">Bv. een schoolvakantie of feestdag (van = tot voor één dag). Chronologisch gesorteerd; verlopen uitzonderingen doen niets meer.</p>
+                  <div className="flex shrink-0 gap-2">
+                    {verlopenAantal > 0 && (
+                      <Button variant="ghost" size="sm" onClick={ruimVerlopenOp}>
+                        Ruim {verlopenAantal} verlopen op
+                      </Button>
+                    )}
+                    <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addOverride}>
+                      Uitzondering
+                    </Button>
+                  </div>
                 </div>
                 {overrides.length === 0 ? (
                   <p className="text-xs font-medium text-slate-400">Geen uitzonderingen — elke dag volgt de weekdag-standaard.</p>
                 ) : (
                   <div className="space-y-2">
-                    {overrides.map((o, i) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2">
+                    {gesorteerdeOverrides.map(({ o, i, verlopen }) => (
+                      <div key={i} className={cn('flex flex-wrap items-center gap-2', verlopen && 'opacity-60')}>
                         <input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
                         <span className="text-2xs font-bold text-slate-400">t/m</span>
                         <input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
@@ -572,10 +702,13 @@ export function CoverageView() {
                           <option value="">— kies type —</option>
                           {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
+                        {verlopen && <Badge tone="slate">verlopen</Badge>}
                         <Button variant="ghost" size="sm" icon={<X size={15} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Uitzondering verwijderen" onClick={() => removeOverride(i)} />
                       </div>
                     ))}
                   </div>
+                )}
+                </>
                 )}
               </div>
 
