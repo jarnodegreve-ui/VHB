@@ -14,6 +14,10 @@
       "schedule": "0 6 * * *"
     },
     {
+      "path": "/api/cron/telegram-briefing",
+      "schedule": "45 4 * * *"
+    },
+    {
       "path": "/api/cron/ocpi-sync?parts=all",
       "schedule": "*/15 * * * *"
     },

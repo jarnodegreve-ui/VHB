@@ -24,7 +24,7 @@ import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit, create
 import type AnthropicClient from "@anthropic-ai/sdk";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
-import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten } from "./telegram.js";
+import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
@@ -178,7 +178,16 @@ mountDeviceRoutes(app);
 // Telegram-bot voor de planner (webhook + commando's). Zie api/telegram.ts.
 // De bereken-functies staan verderop in dit bestand (function-declaraties,
 // dus gehoist) — doorgeven i.p.v. importeren voorkomt een import-cyclus.
-mountTelegramRoutes(app, { berekenDekkingsGaten, berekenCoverageAdvies, addDagen });
+mountTelegramRoutes(app, {
+  berekenDekkingsGaten,
+  berekenCoverageAdvies,
+  addDagen,
+  beslisVerlof: beslisVerlofIntern,
+  beslisRuil: beslisRuilIntern,
+  registreerZiekmelding: registreerZiekmeldingIntern,
+  wijsDienstToe: wijsDienstToeIntern,
+  draaiPlannerChat,
+});
 
 // Dekking & advies (expectations, gaten, advisor). Zie api/coverageRoutes.ts.
 mountCoverageRoutes(app);
@@ -1003,25 +1012,20 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
 // invoer, max 6 tool-rondes, en het maandbudget op de sleutel zelf (console).
 const plannerChatRateLimit = createActionRateLimit("planner-chat", 60);
 
-app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), plannerChatRateLimit, async (req: AuthenticatedRequest, res) => {
-  try {
+/** De assistent-kern (tools + tool-lus + beknoptheidscontract), losgetrokken
+ *  van de route zodat óók de Telegram-bot vragen kan stellen. Zelfde model,
+ *  zelfde leestools, zelfde grenzen — alleen de transportlaag verschilt. */
+async function draaiPlannerChat(
+  gesprek: Array<{ role: "user" | "assistant"; content: any }>,
+): Promise<{ ok: true; antwoord: string } | { ok: false; status: number; error: string; code?: string }> {
     const apiKey = String(process.env.ANTHROPIC_API_KEY ?? "").trim();
     if (!apiKey) {
-      return res.status(503).json({
+      return {
+        ok: false,
+        status: 503,
         error: "De planner-assistent is nog niet geactiveerd — zet een ANTHROPIC_API_KEY in de Vercel-omgeving.",
         code: "assistent_uitgeschakeld",
-      });
-    }
-
-    // Chatgeschiedenis van de client, hard begrensd (dit endpoint kost geld
-    // per token): max 16 beurten van elk max 4000 tekens, alleen platte tekst.
-    const ruw = Array.isArray(req.body?.messages) ? req.body.messages : [];
-    const gesprek: Array<{ role: "user" | "assistant"; content: any }> = ruw
-      .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.content === "string" && m.content.trim())
-      .slice(-16)
-      .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
-    if (gesprek.length === 0 || gesprek[gesprek.length - 1].role !== "user") {
-      return res.status(400).json({ error: "Stuur minstens één vraag mee." });
+      };
     }
 
     const vandaag = brusselsDay(new Date().toISOString());
@@ -1196,16 +1200,36 @@ app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), pla
     // in dit domein vrijwel uitgesloten, maar dan liever een nette zin dan
     // een leeg antwoord.
     if (response.stop_reason === "refusal") {
-      return res.json({ antwoord: "Daar kan ik binnen dit portaal niet mee helpen — stel gerust een planningsvraag." });
+      return { ok: true, antwoord: "Daar kan ik binnen dit portaal niet mee helpen — stel gerust een planningsvraag." };
     }
     const antwoord = (response.content as any[])
       .filter((b) => b.type === "text")
       .map((b) => b.text)
       .join("\n")
       .trim();
-    res.json({
-      antwoord: antwoord || "Daar kon ik geen antwoord op formuleren — probeer de vraag anders te stellen.",
-    });
+    return { ok: true, antwoord: antwoord || "Daar kon ik geen antwoord op formuleren — probeer de vraag anders te stellen." };
+}
+
+app.post("/api/planner-chat", authenticate, requireRole("planner", "admin"), plannerChatRateLimit, async (req: AuthenticatedRequest, res) => {
+  try {
+    // Chatgeschiedenis van de client, hard begrensd (dit endpoint kost geld
+    // per token): max 16 beurten van elk max 4000 tekens, alleen platte tekst.
+    const ruw = Array.isArray(req.body?.messages) ? req.body.messages : [];
+    const gesprek: Array<{ role: "user" | "assistant"; content: any }> = ruw
+      .filter((m: any) => (m?.role === "user" || m?.role === "assistant") && typeof m?.content === "string" && m.content.trim())
+      .slice(-16)
+      .map((m: any) => ({ role: m.role, content: String(m.content).slice(0, 4000) }));
+    if (gesprek.length === 0 || gesprek[gesprek.length - 1].role !== "user") {
+      return res.status(400).json({ error: "Stuur minstens één vraag mee." });
+    }
+    const uit = await draaiPlannerChat(gesprek);
+    // 'in'-narrowing i.p.v. uit.ok: deze tsconfig narrowt boolean-
+    // discriminanten niet betrouwbaar.
+    if ("antwoord" in uit) {
+      res.json({ antwoord: uit.antwoord });
+      return;
+    }
+    res.status(uit.status).json({ error: uit.error, ...(uit.code ? { code: uit.code } : {}) });
   } catch (err: any) {
     console.error("[planner-chat] mislukt:", err?.message ?? err);
     res.status(500).json({ error: "De assistent kon je vraag niet beantwoorden — probeer het zo opnieuw." });
@@ -2488,6 +2512,74 @@ app.get("/api/cron/restore-proef", async (req, res) => {
   } catch (err: any) {
     console.error("[restore-proef] mislukt:", err?.message || err);
     res.status(500).json({ error: "Restore-proef mislukt" });
+  }
+});
+
+// Ochtendbriefing naar Telegram (verbeterronde-bot 22-08, nr. 4): elke dag
+// een kort overzicht — óók als alles in orde is, want "geen bericht" en
+// "geen probleem" zijn anders niet te onderscheiden. Bevat vandaag + morgen,
+// wie ziek is, de planning-horizon en dringende vervaldata (nr. 5).
+app.get("/api/cron/telegram-briefing", async (req, res) => {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({ error: "Niet toegestaan." });
+  }
+  try {
+    if (!telegramGeconfigureerd()) {
+      return res.json({ success: true, skipped: "telegram niet geconfigureerd" });
+    }
+    const vandaag = brusselsDay(new Date().toISOString());
+    const morgen = addDagen(vandaag, 1);
+    const [dagenVandaag, dagenMorgen, matrixRows, expiries, usersVoorVerval] = await Promise.all([
+      berekenDekkingsGaten(vandaag, vandaag),
+      berekenDekkingsGaten(morgen, morgen),
+      getPlanningMatrixRows(),
+      getUserExpiries(),
+      getUsersData(),
+    ]);
+
+    const delen: string[] = [];
+    const dagLang = new Date(`${vandaag}T12:00:00Z`).toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Brussels" });
+    delen.push(`🌅 <b>Ochtendbriefing — ${dagLang}</b>`);
+    delen.push(await formatVandaag(dagenVandaag));
+    const morgenGat = dagenMorgen.find((d) => d.date === morgen);
+    delen.push(morgenGat && morgenGat.missing.length > 0
+      ? `Morgen open: ${morgenGat.missing.join(", ")}.`
+      : "Morgen: alles ingevuld.");
+    delen.push(await formatZiek());
+
+    // Planning-horizon: hoe ver reikt de geïmporteerde matrix nog?
+    const laatste = (matrixRows as any[])
+      .map((r) => String(r.source_date ?? ""))
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort()
+      .pop();
+    if (laatste) {
+      const dagenOver = Math.round((Date.parse(`${laatste}T00:00:00Z`) - Date.parse(`${vandaag}T00:00:00Z`)) / 86400000);
+      if (dagenOver <= 7) {
+        delen.push(`⚠️ Nog maar ${dagenOver} dag${dagenOver === 1 ? "" : "en"} planning in het portaal (t/m ${laatste}) — tijd voor een import.`);
+      }
+    }
+
+    // Dringende vervaldata (≤ 7 dagen of verlopen) — de mail meldt breder,
+    // dit is alleen de staart die echt aandacht vraagt.
+    const naamVan = (id: string) => (usersVoorVerval as any[]).find((u) => String(u.id) === id)?.name ?? "Onbekend";
+    const dringend = expiries
+      .filter((e) => Boolean(EXPIRY_SOORT_LABEL[e.soort]) && e.validUntil)
+      .map((e) => ({ ...e, dagen: Math.round((Date.parse(`${e.validUntil}T00:00:00Z`) - Date.parse(`${vandaag}T00:00:00Z`)) / 86400000) }))
+      .filter((e) => e.dagen <= 7)
+      .sort((a, b) => a.dagen - b.dagen);
+    if (dringend.length > 0) {
+      delen.push(`📄 Documenten: ${dringend.map((e) => `${escapeHtml(naamVan(e.userId))} — ${EXPIRY_SOORT_LABEL[e.soort]} ${e.dagen < 0 ? `VERLOPEN (${e.validUntil})` : e.dagen === 0 ? "verloopt VANDAAG" : `nog ${e.dagen} dag${e.dagen === 1 ? "" : "en"}`}`).join("; ")}.`);
+    }
+
+    // Kandidaten-knoppen voor de gaten van vandaag + morgen (max 8).
+    const { knoppen } = formatGaten([...dagenVandaag, ...dagenMorgen.filter((d) => d.date === morgen)]);
+    const verzonden = await stuurTelegram(delen.join("\n\n"), { knoppen });
+    await logCronHeartbeat("telegram-briefing", verzonden ? "Briefing verstuurd." : "Versturen mislukt of niet geconfigureerd.");
+    res.json({ success: true, verzonden });
+  } catch (err: any) {
+    console.error("[telegram-briefing] mislukt:", err?.message ?? err);
+    res.status(500).json({ error: "Briefing versturen is mislukt." });
   }
 });
 
@@ -3864,6 +3956,10 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
               body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)} — rij- en rusttijden checken.`,
               url: "/",
             });
+            await meldRuilTerValidatieTelegram({
+              id: String(next.id),
+              omschrijving: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}${next.shiftLine ? ` — dienst ${next.shiftLine} op ${next.shiftDate ?? "?"}` : ""}.`,
+            });
           }
         }
       }
@@ -3883,31 +3979,24 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
 // via ifStatus. Twee planners die tegelijk beoordelen kunnen elkaars
 // beslissing zo niet meer stilletjes overschrijven (de whole-array-POST kon
 // dat wel): de tweede krijgt een 409 en een verse lijst.
-app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res) => {
-  try {
-    const id = String(req.params.id);
-    const status = String(req.body?.status ?? "");
-    // Verplicht: zonder ifStatus is er géén concurrency-guard en geldt stil
-    // last-write-wins — precies het gat dat deze route moest dichten.
-    const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
-    if (!ifStatus) {
-      return res.status(400).json({ error: "ifStatus ontbreekt: stuur de status waarop je beslissing gebaseerd is mee." });
-    }
-
+/** De ruil-beslissing zelf (rolregels, state-machine, planning-doorvoer,
+ *  opslag, log en pushes) — gedeeld door PATCH /api/swaps/:id en de
+ *  Telegram-goedkeurknoppen. Gedrag identiek aan de oude route-body. */
+async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: string | null; actor: BeslisActor }): Promise<
+  { fout: { status: number; error: string; currentStatus?: string } } | { swap: any; melding: string }
+> {
+    const { id, status, ifStatus, actor } = opts;
     const all = await getSwapsData();
     const current = all.find((s) => String(s.id) === id);
     if (!current) {
-      return res.status(404).json({ error: "Deze dienstruil bestaat niet (meer) — mogelijk net ingetrokken." });
+      return { fout: { status: 404, error: "Deze dienstruil bestaat niet (meer) — mogelijk net ingetrokken." } };
     }
     if (ifStatus && String(current.status) !== ifStatus) {
-      return res.status(409).json({
-        error: `Deze ruil is intussen al '${current.status}' — de lijst is ververst.`,
-        currentStatus: current.status,
-      });
+      return { fout: { status: 409, error: `Deze ruil is intussen al '${current.status}' — de lijst is ververst.`, currentStatus: String(current.status) } };
     }
 
-    const role = req.appUser!.role;
-    const selfId = String(req.appUser!.id);
+    const role = actor.role;
+    const selfId = String(actor.id);
     if (role === "chauffeur") {
       // Alleen de aangezochte collega mag een openstaande ruil accepteren
       // of weigeren — zelfde regels als de array-route. Daarnaast mag de
@@ -3919,7 +4008,7 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       const isRequester = String(current.requesterId) === selfId;
       const withdrawTransition = isRequester && status === "cancelled" && (current.status === "pending" || current.status === "accepted");
       if (!targetTransition && !withdrawTransition) {
-        return res.status(403).json({ error: "Niet toegestaan: je mag een aan jou gerichte, openstaande ruil accepteren of weigeren, of je eigen openstaande aanvraag intrekken." });
+        return { fout: { status: 403, error: "Niet toegestaan: je mag een aan jou gerichte, openstaande ruil accepteren of weigeren, of je eigen openstaande aanvraag intrekken." } };
       }
     } else {
       // 'accepted' ís de instemming van de aangezochte collega — alleen die
@@ -3930,15 +4019,15 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       // Een admin die zonder bevestiging wil goedkeuren gebruikt de bestaande
       // directe pending → approved-weg hieronder.
       if (status === "accepted" && current.status !== "accepted") {
-        return res.status(403).json({ error: "Niet toegestaan: alleen de aangezochte collega kan een ruil accepteren." });
+        return { fout: { status: 403, error: "Niet toegestaan: alleen de aangezochte collega kan een ruil accepteren." } };
       }
       const allowed = ["accepted", "approved", "rejected", "cancelled", "completed"];
       if (!allowed.includes(status)) {
-        return res.status(400).json({ error: "Ongeldige status." });
+        return { fout: { status: 400, error: "Ongeldige status." } };
       }
       // Force-approve vanuit pending blijft admin-only (zelfde beleid als POST).
       if (role !== "admin" && current.status === "pending" && status === "approved") {
-        return res.status(403).json({ error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." });
+        return { fout: { status: 403, error: "Niet toegestaan: een ruil zonder bevestiging van de collega kan alleen een admin rechtstreeks goedkeuren." } };
       }
     }
 
@@ -3946,20 +4035,20 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
     // voltooid) is geen overgang meer toegestaan (rejected → approved was zo
     // mogelijk).
     if (status !== current.status && TERMINAL_SWAP_STATES.has(String(current.status))) {
-      return res.status(409).json({ error: "Deze dienstruil is al afgehandeld en kan niet meer van status veranderen." });
+      return { fout: { status: 409, error: "Deze dienstruil is al afgehandeld en kan niet meer van status veranderen." } };
     }
 
     // Exclusiviteit: de aanvrager moet de dienst nog hebben (zie ook
     // staleApprovalError bij POST /api/swaps).
     if (status === "approved" && current.status !== "approved") {
       const stale = await staleApprovalError(current, all);
-      if (stale) return res.status(409).json({ error: stale });
+      if (stale) return { fout: { status: 409, error: stale } };
       // Zelfde afwezigheids-hercheck als de array-route: wie ziek gemeld is
       // sinds het indienen, mag de dienst niet alsnog toegeschoven krijgen.
       const afwFout = await ruilAfwezigheidsFout(current);
-      if (afwFout) return res.status(409).json({ error: afwFout });
+      if (afwFout) return { fout: { status: 409, error: afwFout } };
       const dubbelFout = await dubbeleInplanningFout(current);
-      if (dubbelFout) return res.status(409).json({ error: dubbelFout });
+      if (dubbelFout) return { fout: { status: 409, error: dubbelFout } };
     }
 
     // Planning-doorvoer VÓÓR de statuswijziging. movePlanningRows filtert op
@@ -3981,7 +4070,7 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       // mét dienst-info = planning wijzigde tussen check en doorvoer → 409
       // i.p.v. half goedkeuren met een logwaarschuwing.
       if (r && r.offeredMoved === 0) {
-        return res.status(409).json({ error: "De planning is intussen gewijzigd — de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." });
+        return { fout: { status: 409, error: "De planning is intussen gewijzigd — de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." } };
       }
       carry = describeSwapCarry(current, r, "doorgevoerd");
     } else if (current.status === "approved" && (status === "cancelled" || status === "rejected")) {
@@ -4007,7 +4096,7 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
       completed: "Dienstruil voltooid",
     };
     const action = actionLabels[status] ?? "Dienstruil bijgewerkt";
-    await logActivity(req, "swaps", action, `${userName(String(current.requesterId))} — dienstruil (${current.status} → ${status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id });
+    await logActivity(actorReq(actor), "swaps", action, `${userName(String(current.requesterId))} — dienstruil (${current.status} → ${status}).${carry ? ` ${carry}` : ""}`, { type: "swap", id });
 
     const betrokkenen = [String(current.requesterId), String(current.targetDriverId ?? "")]
       .filter((uid) => uid && uid !== selfId);
@@ -4018,7 +4107,8 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
         : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
       url: "/",
     });
-    // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route).
+    // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
+    // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
     if (status === "accepted") {
       const beslissers = usersForLog
         .filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== selfId)
@@ -4028,12 +4118,39 @@ app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res)
         body: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))} — rij- en rusttijden checken.`,
         url: "/",
       });
+      await meldRuilTerValidatieTelegram({
+        id: String(current.id),
+        omschrijving: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))}${current.shiftLine ? ` — dienst ${current.shiftLine} op ${current.shiftDate ?? "?"}` : ""}${current.returnCode && String(current.returnCode).toLowerCase() !== "vrij" ? `, tegenprestatie ${current.returnCode} op ${current.returnDate ?? "?"}` : ""}.`,
+      });
+    }
+
+    return { swap: updated, melding: `${action} — ${userName(String(current.requesterId))}${current.shiftLine ? ` · dienst ${current.shiftLine} op ${current.shiftDate ?? "?"}` : ""}.` };
+}
+
+app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const status = String(req.body?.status ?? "");
+    // Verplicht: zonder ifStatus is er géén concurrency-guard en geldt stil
+    // last-write-wins — precies het gat dat deze route moest dichten.
+    const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
+    if (!ifStatus) {
+      return res.status(400).json({ error: "ifStatus ontbreekt: stuur de status waarop je beslissing gebaseerd is mee." });
+    }
+    const uit = await beslisRuilIntern({
+      id,
+      status,
+      ifStatus,
+      actor: { id: String(req.appUser!.id), name: req.appUser!.name || "Planning", role: req.appUser!.role as "chauffeur" | "planner" | "admin" },
+    });
+    if ("fout" in uit) {
+      return res.status(uit.fout.status).json({ error: uit.fout.error, ...(uit.fout.currentStatus ? { currentStatus: uit.fout.currentStatus } : {}) });
     }
 
     // Verse collectie-revisie meegeven zodat een volgende array-save van
     // dezelfde client geen vals 409 krijgt na deze delta-wijziging.
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getSwapsData()));
-    res.json({ success: true, swap: updated });
+    res.json({ success: true, swap: uit.swap });
   } catch (err: any) {
     console.error("Beslissing opslaan is mislukt", err);
     res.status(500).json({ error: "Beslissing opslaan is mislukt" });
@@ -4209,13 +4326,17 @@ app.post("/api/swaps/:id/gezien", authenticate, async (req: AuthenticatedRequest
 // dienstblokken direct in de planning. Een nieuwe Excel-import vervangt de
 // matrix en dus ook deze toewijzing: bewust, de Excel is dan de waarheid en
 // het gat verschijnt gewoon weer in de dekking.
-app.post("/api/planning/assign-service", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
-  try {
-    const date = String(req.body?.date ?? "").trim();
-    const serviceNumber = String(req.body?.serviceNumber ?? "").trim();
-    const driverId = String(req.body?.driverId ?? "").trim();
-    if (!ISO_DAY_RE.test(date)) return res.status(400).json({ error: "Ongeldige datum (JJJJ-MM-DD verwacht)." });
-    if (!serviceNumber || !driverId) return res.status(400).json({ error: "Kies de dienst én de chauffeur." });
+/** Onbemande dienst toewijzen (matrix + planning + log + push) — gedeeld
+ *  door POST /api/planning/assign-service en de Telegram-toewijzen-knop.
+ *  Gedrag identiek aan de oude route-body. */
+async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber: unknown; driverId: unknown }, actor: BeslisActor): Promise<
+  { fout: { status: number; error: string } } | { rows: number; serviceNumber: string; driverName: string; date: string }
+> {
+    const date = String(invoer.date ?? "").trim();
+    const serviceNumber = String(invoer.serviceNumber ?? "").trim();
+    const driverId = String(invoer.driverId ?? "").trim();
+    if (!ISO_DAY_RE.test(date)) return { fout: { status: 400, error: "Ongeldige datum (JJJJ-MM-DD verwacht)." } };
+    if (!serviceNumber || !driverId) return { fout: { status: 400, error: "Kies de dienst én de chauffeur." } };
 
     const [users, services, matrixRows, dayRows] = await Promise.all([
       getUsersData(),
@@ -4224,31 +4345,31 @@ app.post("/api/planning/assign-service", authenticate, requireRole("planner", "a
       getShiftsOnDate(date),
     ]);
     const driver = users.find((u) => String(u.id) === driverId);
-    if (!driver || driver.isActive === false) return res.status(400).json({ error: "De gekozen chauffeur bestaat niet (meer) of is inactief." });
+    if (!driver || driver.isActive === false) return { fout: { status: 400, error: "De gekozen chauffeur bestaat niet (meer) of is inactief." } };
 
     const dienstToken = toLookupToken(serviceNumber);
     const service = (services as any[]).find((s) => toLookupToken(s.serviceNumber) === dienstToken);
-    if (!service) return res.status(400).json({ error: `Dienst ${serviceNumber} staat niet in het dienstoverzicht.` });
+    if (!service) return { fout: { status: 400, error: `Dienst ${serviceNumber} staat niet in het dienstoverzicht.` } };
     const segments = getServiceSegments(service);
-    if (segments.length === 0) return res.status(400).json({ error: `Dienst ${service.serviceNumber} heeft geen tijdsblokken in het dienstoverzicht — vul die eerst aan.` });
+    if (segments.length === 0) return { fout: { status: 400, error: `Dienst ${service.serviceNumber} heeft geen tijdsblokken in het dienstoverzicht — vul die eerst aan.` } };
 
     // De dienst moet écht onbemand zijn (tussen openen en klikken kan een
     // collega hem al ingevuld hebben) en de chauffeur mag die dag niets rijden.
     const alBemand = dayRows.find((r) => toLookupToken(r.line) === dienstToken);
     if (alBemand) {
       const naam = users.find((u) => String(u.id) === String(alBemand.driverId))?.name ?? "iemand";
-      return res.status(409).json({ error: `Dienst ${service.serviceNumber} is op ${date} intussen al ingevuld door ${naam} — vernieuw de pagina.` });
+      return { fout: { status: 409, error: `Dienst ${service.serviceNumber} is op ${date} intussen al ingevuld door ${naam} — vernieuw de pagina.` } };
     }
     const heeftAl = dayRows.find((r) => String(r.driverId) === driverId);
-    if (heeftAl) return res.status(409).json({ error: `${driver.name} rijdt op ${date} al dienst ${heeftAl.line} — dubbele inplanning kan niet.` });
+    if (heeftAl) return { fout: { status: 409, error: `${driver.name} rijdt op ${date} al dienst ${heeftAl.line} — dubbele inplanning kan niet.` } };
     const afwFout = await ruilAfwezigheidsFout({ requesterId: "", targetDriverId: driverId, swapType: "overname", shiftDate: date });
-    if (afwFout) return res.status(409).json({ error: afwFout });
+    if (afwFout) return { fout: { status: 409, error: afwFout } };
 
     // Matrix-rij van die dag: sleutel is de chauffeursnáám zoals de Excel die
     // schrijft — hergebruik een bestaande naamvariant van deze chauffeur als
     // die er is (accenten/volgorde), anders de naam uit gebruikersbeheer.
     const matrixRow = (matrixRows as any[]).find((r) => String(r.source_date) === date);
-    if (!matrixRow) return res.status(409).json({ error: `Er is geen geïmporteerde planning voor ${date} — importeer eerst de Excel.` });
+    if (!matrixRow) return { fout: { status: 409, error: `Er is geen geïmporteerde planning voor ${date} — importeer eerst de Excel.` } };
     const assignments: Record<string, string> = { ...(matrixRow.assignments ?? {}) };
     const eigenToken = toLookupToken(driver.name);
     const eigenSorted = sortedNameToken(driver.name);
@@ -4257,7 +4378,7 @@ app.post("/api/planning/assign-service", authenticate, requireRole("planner", "a
     // Alleen een lege cel of een overneembare code (vrij/bv/tk/ta) mag
     // overschreven worden — zelfde regel als de overname bij dienstruil.
     if (huidigeCode && !isTakeoverCode(huidigeCode)) {
-      return res.status(409).json({ error: `${driver.name} staat op ${date} al op '${huidigeCode}' in de planning — die cel kan niet stil overschreven worden.` });
+      return { fout: { status: 409, error: `${driver.name} staat op ${date} al op '${huidigeCode}' in de planning — die cel kan niet stil overschreven worden.` } };
     }
     assignments[bestaandeKey ?? driver.name] = String(service.serviceNumber);
 
@@ -4278,7 +4399,7 @@ app.post("/api/planning/assign-service", authenticate, requireRole("planner", "a
     await insertPlanningRows(nieuweRijen as any);
 
     await logActivity(
-      req,
+      actorReq(actor),
       "planning",
       "Dienst toegewezen",
       `Dienst ${service.serviceNumber} op ${date} toegewezen aan ${driver.name} (was onbemand). ${nieuweRijen.length} rij(en) toegevoegd; matrix bijgewerkt.`,
@@ -4288,13 +4409,22 @@ app.post("/api/planning/assign-service", authenticate, requireRole("planner", "a
       body: `Je rijdt dienst ${service.serviceNumber} op ${date}. Bekijk je rooster.`,
       url: "/",
     });
-    res.json({ success: true, rows: nieuweRijen.length });
+    return { rows: nieuweRijen.length, serviceNumber: String(service.serviceNumber), driverName: driver.name, date };
+}
+
+app.post("/api/planning/assign-service", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const uit = await wijsDienstToeIntern(
+      { date: req.body?.date, serviceNumber: req.body?.serviceNumber, driverId: req.body?.driverId },
+      { id: String(req.appUser!.id), name: req.appUser!.name || "Planning", role: req.appUser!.role as "planner" | "admin" },
+    );
+    if ("fout" in uit) return res.status(uit.fout.status).json({ error: uit.fout.error });
+    res.json({ success: true, rows: uit.rows });
   } catch (err) {
     console.error("Dienst toewijzen is mislukt.", err);
     res.status(500).json({ error: "Dienst toewijzen is mislukt." });
   }
 });
-
 app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const data = await getLeaveData();
@@ -4318,11 +4448,18 @@ app.get("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
 // planning via push + mail. BEWUST alleen planner/admin: ziekmelding komt
 // telefonisch bij de planning binnen, die registreert het — een chauffeur
 // mag zichzelf niet ziek (in)plannen.
-app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
-  try {
-    const selfId = String(req.appUser?.id ?? "");
-    const forUserId = String(req.body?.userId ?? "");
-    if (!forUserId) return res.status(400).json({ error: "Kies de chauffeur die ziek is." });
+/** De ziekmelding-kern (validatie, dedupe, record, log, openvallende
+ *  diensten, pushes en mails) — gedeeld door POST /api/leave/sick-report en
+ *  het /ziekmeld-commando van de Telegram-bot. `stuurTelegramAlert` staat uit
+ *  wanneer de bot zelf de afzender is (die bouwt zijn eigen antwoord). */
+async function registreerZiekmeldingIntern(
+  invoer: { userId: unknown; startDate?: unknown; endDate?: unknown; comment?: unknown },
+  actor: BeslisActor,
+  stuurTelegramAlert = true,
+): Promise<{ fout: { status: number; error: string } } | { leave: any; period: string; targetName: string; openDiensten: Array<{ label: string; nummers: string }>; openDienstenIso: Array<{ date: string; nummers: string[] }> }> {
+    const selfId = String(actor.id);
+    const forUserId = String(invoer.userId ?? "");
+    if (!forUserId) return { fout: { status: 400, error: "Kies de chauffeur die ziek is." } };
 
     // Echte kalendercheck, niet alleen het patroon: "2026-02-31" past in de
     // regex maar bestaat niet, en Date maakt er stilletjes 3 maart van — dan
@@ -4336,31 +4473,31 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     // om 00:30 Brusselse tijd hoort op vandáág te landen — met de UTC-dag
     // belandde ze op gisteren en bleef de dienst van vandaag ingevuld staan.
     const todayLocal = brusselsDay(new Date().toISOString()); // yyyy-mm-dd, Brusselse dag
-    if (req.body?.startDate != null && !isoDay(req.body.startDate)) {
-      return res.status(400).json({ error: "Ongeldige startdatum." });
+    if (invoer.startDate != null && !isoDay(invoer.startDate)) {
+      return { fout: { status: 400, error: "Ongeldige startdatum." } };
     }
-    if (req.body?.endDate != null && !isoDay(req.body.endDate)) {
-      return res.status(400).json({ error: "Ongeldige einddatum." });
+    if (invoer.endDate != null && !isoDay(invoer.endDate)) {
+      return { fout: { status: 400, error: "Ongeldige einddatum." } };
     }
-    const startDate = isoDay(req.body?.startDate) ?? todayLocal;
-    const endDate = isoDay(req.body?.endDate) ?? startDate;
-    if (endDate < startDate) return res.status(400).json({ error: "Einddatum ligt vóór de startdatum." });
+    const startDate = isoDay(invoer.startDate) ?? todayLocal;
+    const endDate = isoDay(invoer.endDate) ?? startDate;
+    if (endDate < startDate) return { fout: { status: 400, error: "Einddatum ligt vóór de startdatum." } };
     // Cap op de periode: één tikfout in het jaartal ("2027" i.p.v. "2026")
     // zette iemand anders permanent ziek in het hele rooster. Een jaar is
     // ruim genoeg voor langdurige ziekte; langer kan altijd via verlengen.
     const spanDagen = Math.round((new Date(`${endDate}T00:00:00`).getTime() - new Date(`${startDate}T00:00:00`).getTime()) / 86400000);
     if (spanDagen > 366) {
-      return res.status(400).json({ error: "Ziekteperiode is langer dan een jaar — controleer de datums (tikfout in het jaartal?)." });
+      return { fout: { status: 400, error: "Ziekteperiode is langer dan een jaar — controleer de datums (tikfout in het jaartal?)." } };
     }
-    const comment = String(req.body?.comment ?? "").slice(0, 1000);
+    const comment = String(invoer.comment ?? "").slice(0, 1000);
 
     const users = await getUsersData();
     const target = users.find((u) => String(u.id) === forUserId);
-    if (!target) return res.status(400).json({ error: "Onbekende gebruiker." });
+    if (!target) return { fout: { status: 400, error: "Onbekende gebruiker." } };
     // Alleen actieve chauffeurs: een admin, planner of ex-medewerker ziek
     // melden registreert gezondheidsdata op de verkeerde plek.
     if (target.role !== "chauffeur" || target.isActive === false) {
-      return res.status(400).json({ error: "Ziek melden kan alleen voor een actieve chauffeur." });
+      return { fout: { status: 400, error: "Ziek melden kan alleen voor een actieve chauffeur." } };
     }
 
     const previousLeave = await getLeaveData();
@@ -4373,7 +4510,7 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     );
     if (overlappend) {
       const p = overlappend.startDate === overlappend.endDate ? overlappend.startDate : `${overlappend.startDate} t/m ${overlappend.endDate}`;
-      return res.status(409).json({ error: `${target.name} staat al ziek gemeld voor ${p}. Pas die melding aan via Verlofbeheer.` });
+      return { fout: { status: 409, error: `${target.name} staat al ziek gemeld voor ${p}. Pas die melding aan via Verlofbeheer.` } };
     }
 
     const record = {
@@ -4393,7 +4530,7 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     await saveLeaveData([record]);
 
     const period = startDate === endDate ? startDate : `${startDate} t/m ${endDate}`;
-    await logActivity(req, "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period} (door ${req.appUser?.name}).`, { type: "leave", id: record.id });
+    await logActivity(actorReq(actor), "leave", "Ziekmelding", `${target.name} ziek gemeld voor ${period} (door ${actor.name}).`, { type: "leave", id: record.id });
 
     // Welke diensten vallen door deze ziekte open? Per dag van de periode de
     // ingeplande dienst(en) van de chauffeur — dat is wat de planner meteen
@@ -4441,7 +4578,7 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
     });
     // Ziekmelding ook naar de gekoppelde Telegram-chat, mét de diensten die
     // erdoor openvallen — dát is wat de planner meteen wil weten. Best-effort.
-    if (telegramGeconfigureerd()) {
+    if (telegramGeconfigureerd() && stuurTelegramAlert) {
       const dienstRegels = openDiensten.slice(0, 5).map((d) => `• ${d.label}: ${d.nummers}`);
       if (openDiensten.length > 5) dienstRegels.push(`• …en nog ${openDiensten.length - 5} dagen`);
       await stuurTelegram([
@@ -4476,14 +4613,30 @@ app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin")
       });
     }
 
+    return {
+      leave: record,
+      period,
+      targetName: target.name,
+      openDiensten,
+      // ISO-variant voor de bot: kandidaten-knoppen hebben de rauwe datum nodig.
+      openDienstenIso: [...dagDiensten.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([d, nummers]) => ({ date: d, nummers })),
+    };
+}
+
+app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const uit = await registreerZiekmeldingIntern(
+      { userId: req.body?.userId, startDate: req.body?.startDate, endDate: req.body?.endDate, comment: req.body?.comment },
+      { id: String(req.appUser!.id), name: req.appUser!.name || "Planning", role: req.appUser!.role as "planner" | "admin" },
+    );
+    if ("fout" in uit) return res.status(uit.fout.status).json({ error: uit.fout.error });
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getLeaveData()));
-    res.json({ success: true, leave: record });
+    res.json({ success: true, leave: uit.leave });
   } catch (err) {
     console.error("Ziekmelding mislukt:", err);
     res.status(500).json({ error: "Ziekmelding is mislukt." });
   }
 });
-
 app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
   try {
     const newData = req.body;
@@ -4628,7 +4781,8 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
           { type: "leave", id: next.id },
         );
-        // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins.
+        // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins,
+        // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
         if (req.appUser?.role === "chauffeur") {
           const beslissers = users.filter((u) => u.role === "planner" || u.role === "admin").map((u) => String(u.id));
           await sendPushToUsers(beslissers, {
@@ -4636,6 +4790,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
             body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
             url: "/",
           });
+          await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, period, comment: next.comment });
         }
         continue;
       }
@@ -4691,38 +4846,36 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
 // Delta-endpoint voor verlofbeslissingen (zie PATCH /api/swaps/:id voor het
 // waarom). Beslissen is planner/admin-werk; chauffeurs trekken in via de
 // array-route (volledige verwijdering van eigen pending).
-app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
-  try {
-    const id = String(req.params.id);
-    const status = String(req.body?.status ?? "");
-    // Verplicht, net als bij swaps: zonder ifStatus is er géén concurrency-
-    // guard en geldt stil last-write-wins — het gat dat deze route moest
-    // dichten (#251 beloofde dit voor beide routes; leave was vergeten).
-    const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
-    if (!ifStatus) {
-      return res.status(400).json({ error: "ifStatus ontbreekt: stuur de status waarop je beslissing gebaseerd is mee." });
-    }
+/** Actor van een beslissing die niet via een HTTP-request binnenkomt (de
+ *  Telegram-bot). logActivity leest alleen req.appUser — een synthetisch
+ *  request met dezelfde velden volstaat en houdt de auditlog eerlijk. */
+type BeslisActor = { id: string; name: string; role: "chauffeur" | "planner" | "admin" };
+const actorReq = (actor: BeslisActor) => ({ appUser: actor } as AuthenticatedRequest);
+
+/** De verlof-beslissing zelf (concurrency-guard, state-machine, opslag, log,
+ *  mail + push) — gedeeld door PATCH /api/leave/:id en de Telegram-knoppen. */
+async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: string; actor: BeslisActor }): Promise<
+  { fout: { status: number; error: string; currentStatus?: string } } | { leave: any; melding: string }
+> {
+    const { id, status, ifStatus, actor } = opts;
     const allowed = ["approved", "rejected", "cancelled"];
     if (!allowed.includes(status)) {
-      return res.status(400).json({ error: "Ongeldige status." });
+      return { fout: { status: 400, error: "Ongeldige status." } };
     }
 
     const all = await getLeaveData();
     const current = all.find((l) => String(l.id) === id);
     if (!current) {
-      return res.status(404).json({ error: "Deze verlofaanvraag bestaat niet (meer) — mogelijk net ingetrokken." });
+      return { fout: { status: 404, error: "Deze verlofaanvraag bestaat niet (meer) — mogelijk net ingetrokken." } };
     }
     if (String(current.status) !== ifStatus) {
-      return res.status(409).json({
-        error: `Deze aanvraag is intussen al '${current.status}' — de lijst is ververst.`,
-        currentStatus: current.status,
-      });
+      return { fout: { status: 409, error: `Deze aanvraag is intussen al '${current.status}' — de lijst is ververst.`, currentStatus: String(current.status) } };
     }
     // State-machine (spiegel van TERMINAL_SWAP_STATES): een afgewezen of
     // geannuleerde aanvraag is een eindstation. approved → cancelled blijft
     // toegestaan ("Verlof annuleren").
     if (status !== current.status && ["rejected", "cancelled"].includes(String(current.status))) {
-      return res.status(409).json({ error: "Deze verlofaanvraag is al afgehandeld en kan niet meer van status veranderen." });
+      return { fout: { status: 409, error: "Deze verlofaanvraag is al afgehandeld en kan niet meer van status veranderen." } };
     }
 
     const decidedAt = new Date().toISOString();
@@ -4740,15 +4893,15 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
       cancelled: "Verlof geannuleerd",
     };
     const action = actionLabels[status]!;
-    await logActivity(req, "leave", action, `${requesterName} — ${typeLabel} (${period}).`, { type: "leave", id });
+    await logActivity(actorReq(actor), "leave", action, `${requesterName} — ${typeLabel} (${period}).`, { type: "leave", id });
 
     // E-mail + push naar de aanvrager — niet de actor zelf.
-    if (req.appUser && String(req.appUser.id) !== String(current.userId)) {
+    if (String(actor.id) !== String(current.userId)) {
       if (requester?.email) {
         await sendLeaveDecisionEmail({
           to: requester.email,
           recipientName: requester.name,
-          decidedByName: req.appUser.name || "Planning",
+          decidedByName: actor.name || "Planning",
           typeLabel,
           startDate: current.startDate,
           endDate: current.endDate,
@@ -4757,14 +4910,37 @@ app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async
       }
       await sendPushToUsers([String(current.userId)], {
         title: action,
-        body: `${typeLabel} (${period}) — beslist door ${req.appUser.name || "Planning"}.`,
+        body: `${typeLabel} (${period}) — beslist door ${actor.name || "Planning"}.`,
         url: "/",
       });
+    }
+    return { leave: updated, melding: `${action}: ${requesterName} — ${typeLabel} (${period}).` };
+}
+
+app.patch("/api/leave/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const status = String(req.body?.status ?? "");
+    // Verplicht, net als bij swaps: zonder ifStatus is er géén concurrency-
+    // guard en geldt stil last-write-wins — het gat dat deze route moest
+    // dichten (#251 beloofde dit voor beide routes; leave was vergeten).
+    const ifStatus = req.body?.ifStatus ? String(req.body.ifStatus) : null;
+    if (!ifStatus) {
+      return res.status(400).json({ error: "ifStatus ontbreekt: stuur de status waarop je beslissing gebaseerd is mee." });
+    }
+    const uit = await beslisVerlofIntern({
+      id,
+      status,
+      ifStatus,
+      actor: { id: String(req.appUser!.id), name: req.appUser!.name || "Planning", role: req.appUser!.role as "planner" | "admin" },
+    });
+    if ("fout" in uit) {
+      return res.status(uit.fout.status).json({ error: uit.fout.error, ...(uit.fout.currentStatus ? { currentStatus: uit.fout.currentStatus } : {}) });
     }
 
     // Verse collectie-revisie (zie /api/swaps PATCH).
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getLeaveData()));
-    res.json({ success: true, leave: updated });
+    res.json({ success: true, leave: uit.leave });
   } catch (err: any) {
     console.error("Beslissing opslaan is mislukt", err);
     res.status(500).json({ error: "Beslissing opslaan is mislukt" });

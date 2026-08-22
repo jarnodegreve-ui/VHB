@@ -3392,6 +3392,75 @@ describe('telegram-webhook — secret, koppeling en commando\'s', () => {
     expect(verzonden[0].tekst).toContain('vrij');
   });
 
+  it('/ziekmeld toont de interpretatie met bevestigknop, en de knop registreert echt', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    const morgen = new Date(Date.parse(`${vandaag}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+    mem.leave = [];
+    await webhook({ message: { chat: { id: 777 }, text: '/ziekmeld chauffeur a t/m morgen' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Ziek melden');
+    expect(verzonden[0].tekst).toContain('Chauffeur A');
+    const knop = verzonden[0].knoppen?.flat().find((k) => k.data.startsWith('zm|'));
+    expect(knop?.data).toBe(`zm|3|${vandaag}|${morgen}`);
+
+    verzonden.length = 0;
+    await webhook({ callback_query: { id: 'cb-zm', data: knop!.data, message: { chat: { id: 777 } } } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Ziek gemeld');
+    const record = mem.leave.find((l: any) => l.type === 'ziekte' && String(l.userId) === '3');
+    expect(record).toMatchObject({ status: 'approved', startDate: vandaag, endDate: morgen });
+    // Meerdere matches → verduidelijking, geen knop.
+    verzonden.length = 0;
+    mem.leave = [];
+    await webhook({ message: { chat: { id: 777 }, text: '/ziekmeld chauffeur' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Meerdere chauffeurs');
+  });
+
+  it('verlof-goedkeurknop: bevestiging eerst, daarna echte beslissing via de kern', async () => {
+    mem.leave = [
+      { id: 'lv-1', userId: '3', startDate: '2030-10-01', endDate: '2030-10-03', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2030-09-01T08:00:00Z' },
+    ];
+    await webhook({ callback_query: { id: 'cb1', data: 'lv|lv-1|approved', message: { chat: { id: 777 } } } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('goedkeuren');
+    const bevestig = verzonden[0].knoppen?.flat().find((k) => k.data === 'lv2|lv-1|approved');
+    expect(bevestig).toBeTruthy();
+
+    verzonden.length = 0;
+    await webhook({ callback_query: { id: 'cb2', data: 'lv2|lv-1|approved', message: { chat: { id: 777 } } } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('Verlof goedgekeurd');
+    expect(mem.leave.find((l: any) => l.id === 'lv-1')?.status).toBe('approved');
+    // Nogmaals beslissen ketst af op de concurrency-guard (ifStatus pending).
+    verzonden.length = 0;
+    await webhook({ callback_query: { id: 'cb3', data: 'lv2|lv-1|approved', message: { chat: { id: 777 } } } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('intussen al');
+  });
+
+  it('toewijzen-knop: bevestiging eerst, daarna echte toewijzing via de kern', async () => {
+    mem.planningMatrix = [
+      { id: 'm-wt', source_date: '2030-08-03', day_type: 'W', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
+    ];
+    mem.planning = [{ id: 'p-a', driverId: '3', date: '2030-08-03', line: '12', startTime: '08:00', endTime: '16:00' }];
+    await webhook({ callback_query: { id: 'cb4', data: 'wt|2030-08-03|11|4', message: { chat: { id: 777 } } } }, 'test-secret');
+    const bevestig = verzonden[0].knoppen?.flat().find((k) => k.data === 'wt2|2030-08-03|11|4');
+    expect(bevestig).toBeTruthy();
+
+    verzonden.length = 0;
+    await webhook({ callback_query: { id: 'cb5', data: 'wt2|2030-08-03|11|4', message: { chat: { id: 777 } } } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('toegewezen aan');
+    expect(verzonden[0].tekst).toContain('Chauffeur B');
+    expect(mem.planning.some((r: any) => r.line === '11' && String(r.driverId) === '4' && r.date === '2030-08-03')).toBe(true);
+    expect(mem.planningMatrix[0].assignments['Chauffeur B']).toBe('11');
+  });
+
+  it('vrije tekst gaat naar de assistent (zonder sleutel: nette uitlegzin)', async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    await webhook({ message: { chat: { id: 777 }, text: 'wie kan er zaterdag rijden?' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('nog niet geactiveerd');
+  });
+
+  it('briefing-cron is dicht zonder cron-secret', async () => {
+    const res = await api('GET', '/api/cron/telegram-briefing', {});
+    expect(res.status).toBe(401);
+  });
+
   it('/ziek somt de actuele ziekmeldingen op', async () => {
     const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
     mem.leave = [
