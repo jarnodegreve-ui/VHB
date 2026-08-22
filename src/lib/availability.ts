@@ -96,5 +96,16 @@ export function openstaandeDienstenVanAfwezigen(
     if (!reden) continue;
     uit.push({ ...s, reden: LEAVE_TYPE_LABELS[reden.type] ?? 'Afwezig', redenType: reden.type });
   }
-  return uit.sort((a, b) => a.date.localeCompare(b.date) || String(a.line).localeCompare(String(b.line)));
+  // Gesplitste diensten = meerdere planning-rijen met dezelfde (chauffeur,
+  // dag, dienstcode) — voor "wat moet herverdeeld worden" telt de dienst één
+  // keer. Zonder dedupe meldde het dashboard "31 diensten" waar er 17
+  // openstonden (melding Jarno 22-08). Het vroegste segment blijft, zodat
+  // een getoonde tijd de start van de dienst is.
+  const perDienst = new Map<string, OpenstaandeDienst>();
+  for (const s of uit) {
+    const key = `${s.driverId}|${s.date}|${String(s.line ?? '').trim().toLowerCase()}`;
+    const bestaand = perDienst.get(key);
+    if (!bestaand || String(s.startTime ?? '') < String(bestaand.startTime ?? '')) perDienst.set(key, s);
+  }
+  return [...perDienst.values()].sort((a, b) => a.date.localeCompare(b.date) || String(a.line).localeCompare(String(b.line)));
 }
