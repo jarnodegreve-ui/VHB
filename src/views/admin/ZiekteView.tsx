@@ -6,7 +6,7 @@ import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
-import { EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
@@ -141,6 +141,99 @@ export function ZiekteView({
     }
   };
 
+  // --- Herverdeel-wizard (verbeterronde 22-08, nr. 1) -----------------------
+  // Alle open diensten van deze afwezige in één keer: het batch-advies vult
+  // per gat de beste pássende kandidaat voor (zelfde regels als het advies op
+  // Openstaande diensten), de planner corrigeert waar nodig, en één knop
+  // voert alles door. Sequentieel, niet parallel: elke wissel hercheckt
+  // dubbele inplanning tegen de stand mét de vorige wissels.
+  type BatchAdvies = { samenvatting?: string; tijdenOnbekend?: boolean; passend: Array<{ id: string; name: string }>; nietPassend: number };
+  const [batchAdvies, setBatchAdvies] = useState<Record<string, BatchAdvies>>({});
+  const [batchLaden, setBatchLaden] = useState(false);
+  const [verdeelBezig, setVerdeelBezig] = useState(false);
+  const [verdeelConfirm, setVerdeelConfirm] = useState(false);
+  const [verdeelFouten, setVerdeelFouten] = useState<Record<string, string>>({});
+  const adviesSleutel = (d: Shift) => `${d.date}|${serviceNumberOf(d).trim().toLowerCase()}`;
+  const haalKandidatenVoorstel = async (r: LeaveRequest) => {
+    const diensten = openDienstenLijst(r).filter((d) => !overgezet[d.id]);
+    if (diensten.length === 0 || batchLaden) return;
+    setBatchLaden(true);
+    try {
+      const res = await fetch('/api/coverage-advisor/batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+        body: JSON.stringify({ items: diensten.slice(0, 40).map((d) => ({ date: d.date, code: serviceNumberOf(d) })) }),
+      });
+      const body = await res.json().catch(() => ({} as any));
+      if (!res.ok) {
+        notify(body.error || 'Kandidaten voorstellen is mislukt.', 'error');
+        return;
+      }
+      const per: Record<string, BatchAdvies> = {};
+      for (const item of body.items ?? []) per[`${item.date}|${String(item.code).trim().toLowerCase()}`] = item;
+      setBatchAdvies(per);
+      // Alleen vooraf invullen waar nog geen keuze staat — de planner blijft
+      // de baas over elke rij.
+      setVervangerPerDienst((cur) => {
+        const next = { ...cur };
+        for (const d of diensten) {
+          if (next[d.id]) continue;
+          const advies = per[adviesSleutel(d)];
+          if (advies?.passend?.[0]?.id) next[d.id] = String(advies.passend[0].id);
+        }
+        return next;
+      });
+    } catch {
+      notify('Kandidaten voorstellen is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+    } finally {
+      setBatchLaden(false);
+    }
+  };
+  const verdeelAlles = async (r: LeaveRequest) => {
+    if (verdeelBezig) return;
+    const diensten = openDienstenLijst(r).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]);
+    if (diensten.length === 0) return;
+    setVerdeelBezig(true);
+    const fouten: Record<string, string> = {};
+    let gelukt = 0;
+    try {
+      for (const dienst of diensten) {
+        const naarId = vervangerPerDienst[dienst.id];
+        try {
+          const res = await fetch('/api/admin/shift-swap', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
+            body: JSON.stringify({
+              date: dienst.date,
+              line: serviceNumberOf(dienst),
+              fromDriverId: String(dienst.driverId),
+              toDriverId: naarId,
+              reason: 'Ziekte',
+            }),
+          });
+          const body = await res.json().catch(() => ({} as any));
+          if (!res.ok) {
+            fouten[dienst.id] = body.error || 'Overzetten is mislukt.';
+            continue;
+          }
+          gelukt += 1;
+          setOvergezet((cur) => ({ ...cur, [dienst.id]: naamVan(naarId) }));
+        } catch {
+          fouten[dienst.id] = 'Netwerkfout — deze dienst is niet overgezet.';
+        }
+      }
+    } finally {
+      setVerdeelBezig(false);
+      setVerdeelFouten(fouten);
+    }
+    const misluktAantal = Object.keys(fouten).length;
+    notify(
+      `${gelukt} van ${diensten.length} diensten herverdeeld${misluktAantal > 0 ? ` — ${misluktAantal} mislukt, zie de rijen` : ''}.`,
+      misluktAantal > 0 ? 'error' : 'success',
+    );
+    if (gelukt > 0) await onShiftSwapped?.();
+  };
+
   // --- Ziek melden (zelfde flow als het dashboard: onSickReport) ------------
   const [meldOpen, setMeldOpen] = useState(false);
   const [meldForm, setMeldForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
@@ -189,7 +282,7 @@ export function ZiekteView({
   const [detail, setDetail] = useState<LeaveRequest | null>(null);
   const [nieuwEinde, setNieuwEinde] = useState('');
   const [isOpslaan, setIsOpslaan] = useState(false);
-  const openDetail = (r: LeaveRequest) => { setDetail(r); setNieuwEinde(r.endDate); };
+  const openDetail = (r: LeaveRequest) => { setDetail(r); setNieuwEinde(r.endDate); setBatchAdvies({}); setVerdeelFouten({}); };
   const bewaarEinde = async (endDate: string) => {
     if (!detail || isOpslaan) return;
     if (endDate < detail.startDate) { return; }
@@ -404,9 +497,27 @@ export function ZiekteView({
                       herverdelen (admin), zonder omweg via de Maandplanning. */}
                   {openDienstenLijst(detail).length > 0 && (
                     <div className="space-y-2">
-                      <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">
-                        Nog op naam ({openDienstenLijst(detail).length})
-                      </label>
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">
+                          Nog op naam ({openDienstenLijst(detail).length})
+                        </label>
+                        {/* Wizard: batch-advies vult per gat de beste passende
+                            kandidaat voor; "Verdeel alles" voert de gekozen
+                            wissels in één keer door (met bevestiging). */}
+                        {isAdmin && openDienstenLijst(detail).filter((d) => !overgezet[d.id]).length > 1 && (() => {
+                          const teVerdelen = openDienstenLijst(detail).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]).length;
+                          return (
+                            <div className="flex shrink-0 flex-wrap gap-2">
+                              <Button variant="secondary" size="sm" disabled={batchLaden || verdeelBezig} onClick={() => void haalKandidatenVoorstel(detail)}>
+                                {batchLaden ? 'Advies berekenen…' : 'Stel kandidaten voor'}
+                              </Button>
+                              <Button variant="primary" size="sm" disabled={verdeelBezig || batchLaden || teVerdelen === 0} onClick={() => setVerdeelConfirm(true)}>
+                                {verdeelBezig ? 'Bezig…' : `Verdeel alles (${teVerdelen})`}
+                              </Button>
+                            </div>
+                          );
+                        })()}
+                      </div>
                       <div className="space-y-2.5">
                         {openDienstenLijst(detail).map((dienst) => {
                           const klaar = overgezet[dienst.id];
@@ -419,6 +530,13 @@ export function ZiekteView({
                               {klaar ? (
                                 <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Overgezet naar {klaar}</p>
                               ) : isAdmin ? (
+                                <>
+                                {batchAdvies[adviesSleutel(dienst)]?.samenvatting && (
+                                  <p className="text-2xs font-medium text-slate-500">{batchAdvies[adviesSleutel(dienst)].samenvatting}</p>
+                                )}
+                                {verdeelFouten[dienst.id] && (
+                                  <p className="text-2xs font-semibold text-rose-600 dark:text-rose-400">{verdeelFouten[dienst.id]}</p>
+                                )}
                                 <div className="flex flex-col gap-2 sm:flex-row">
                                   <select
                                     aria-label={`Vervanger voor dienst ${serviceNumberOf(dienst)} op ${dienst.date}`}
@@ -434,10 +552,11 @@ export function ZiekteView({
                                       dienst.date,
                                     ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
                                   </select>
-                                  <Button variant="primary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id} onClick={() => void zetOver(detail, dienst)}>
+                                  <Button variant="primary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id || verdeelBezig} onClick={() => void zetOver(detail, dienst)}>
                                     {wisselBezig === dienst.id ? 'Bezig…' : 'Zet over'}
                                   </Button>
                                 </div>
+                                </>
                               ) : (
                                 <p className="text-xs font-medium text-slate-500">Een admin kan deze dienst overzetten.</p>
                               )}
@@ -478,6 +597,22 @@ export function ZiekteView({
           </>
         )}
       </Modal>
+      <ConfirmationModal
+        isOpen={verdeelConfirm}
+        onClose={() => setVerdeelConfirm(false)}
+        onConfirm={() => {
+          setVerdeelConfirm(false);
+          if (detail) void verdeelAlles(detail);
+        }}
+        title="Alle diensten herverdelen?"
+        message={detail
+          ? `${openDienstenLijst(detail).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]).length} diensten van ${naamVan(detail.userId)} worden in één keer overgezet naar de gekozen vervangers. Elke chauffeur krijgt een melding; terugdraaien kan per dienst via de cel in de Maandplanning.`
+          : ''}
+        confirmText="Verdeel alles"
+        cancelText="Annuleren"
+        variant="warning"
+      />
+
     </PageShell>
   );
 }

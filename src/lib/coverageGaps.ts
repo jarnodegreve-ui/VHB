@@ -251,3 +251,58 @@ export function computeDayGap(
     missing,
   };
 }
+
+/** Eén voorgestelde verwachtingslijst: per dag-type de cijfercodes die op
+ *  minstens de helft van de dagen van dat type gereden worden. Afgeleid uit
+ *  de praktijk zelf — dezelfde bron als vergelijkVerwachtingenMetPraktijk,
+ *  zodat voorstel en check per definitie dezelfde taal spreken. */
+export type VerwachtingVoorstel = {
+  dayType: string;
+  dagen: number;
+  codes: Array<{ code: string; dagen: number }>;
+};
+
+export function stelVerwachtingenVoor(
+  rows: Array<{ source_date?: unknown; day_type?: unknown; assignments?: unknown }>,
+  basisWeekdays: string[],
+  perioden: WeekdagPeriode[],
+  overrides: DayTypeOverride[],
+): VerwachtingVoorstel[] {
+  const DIENSTCODE_RE = /^\d{3,4}$/;
+  const perType = new Map<string, { dagen: number; telling: Map<string, { code: string; dagen: number }> }>();
+  for (const r of rows) {
+    const date = String(r.source_date ?? '');
+    const dayType = resolveDayType(r.day_type, date, weekdaysVoorDatum(basisWeekdays, perioden, date), overrides);
+    if (!dayType) continue;
+    let entry = perType.get(dayType);
+    if (!entry) {
+      entry = { dagen: 0, telling: new Map() };
+      perType.set(dayType, entry);
+    }
+    entry.dagen += 1;
+    const assignments = r.assignments && typeof r.assignments === 'object' && !Array.isArray(r.assignments)
+      ? (r.assignments as Record<string, unknown>)
+      : {};
+    const gezien = new Set<string>();
+    for (const v of Object.values(assignments)) {
+      const raw = String(v ?? '').trim();
+      const key = normalizeCode(raw);
+      if (!key || gezien.has(key) || !DIENSTCODE_RE.test(key)) continue;
+      gezien.add(key);
+      const t = entry.telling.get(key);
+      if (t) t.dagen += 1;
+      else entry.telling.set(key, { code: raw, dagen: 1 });
+    }
+  }
+  const out: VerwachtingVoorstel[] = [];
+  for (const [dayType, e] of perType) {
+    // Zelfde kleine-steekproef-regel als de check: één dag zegt niets.
+    if (e.dagen < 2) continue;
+    const drempel = Math.ceil(e.dagen / 2);
+    const codes = [...e.telling.values()]
+      .filter((c) => c.dagen >= drempel)
+      .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
+    if (codes.length > 0) out.push({ dayType, dagen: e.dagen, codes });
+  }
+  return out.sort((a, b) => a.dayType.localeCompare(b.dayType));
+}

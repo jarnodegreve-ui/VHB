@@ -3402,3 +3402,51 @@ describe('telegram-webhook — secret, koppeling en commando\'s', () => {
     expect(verzonden[0].tekst).toContain('Chauffeur A');
   });
 });
+
+describe('verbeterronde 22-08 — voorstel, batch-advies en maandoverzicht', () => {
+  it('GET /api/coverage-expectations/voorstel stelt lijsten voor uit de praktijk (staf-only)', async () => {
+    mem.planningMatrix = [
+      { id: 'v-1', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': 'vrij' }, raw_row: '' },
+      { id: 'v-2', source_date: '2030-09-02', day_type: 'school', assignments: { 'Chauffeur A': '2101', 'Chauffeur B': '2102' }, raw_row: '' },
+    ];
+    const res = await api('GET', '/api/coverage-expectations/voorstel?from=2030-09-01&to=2030-09-30', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    expect(res.json.voorstellen).toEqual([
+      { dayType: 'school', dagen: 2, codes: [{ code: '2101', dagen: 2 }, { code: '2102', dagen: 1 }] },
+    ]);
+    expect((await api('GET', '/api/coverage-expectations/voorstel?from=2030-09-01&to=2030-09-30', { token: 'tok-a' })).status).toBe(403);
+  });
+
+  it('POST /api/coverage-advisor/batch geeft per gat de passende topkandidaten in één call', async () => {
+    // Chauffeur A rijdt dienst 12 op 01-09; Chauffeur B is vrij → kandidaat
+    // voor het gat op dienst 11 diezelfde dag.
+    mem.planning = [
+      { id: 'b-1', driverId: '3', date: '2030-09-01', line: '12', startTime: '08:00', endTime: '16:00' },
+    ];
+    const res = await api('POST', '/api/coverage-advisor/batch', {
+      token: 'tok-planner',
+      body: { items: [{ date: '2030-09-01', code: '11' }, { date: '2030-09-02', code: '12' }] },
+    });
+    expect(res.status).toBe(200);
+    expect(res.json.items).toHaveLength(2);
+    const eerste = res.json.items[0];
+    expect(eerste.date).toBe('2030-09-01');
+    expect(eerste.passend.map((k: any) => k.name)).toContain('Chauffeur B');
+    // Ongeldige input wordt geweigerd.
+    expect((await api('POST', '/api/coverage-advisor/batch', { token: 'tok-planner', body: { items: [] } })).status).toBe(400);
+  });
+
+  it('GET /api/month-planning?format=summary telt zoals het xlsx-tabblad en weigert chauffeurs', async () => {
+    mem.planningMatrix = [
+      { id: 's-1', source_date: '2030-09-01', day_type: 'school', assignments: { 'Chauffeur A': '12', 'Chauffeur B': 'vrij' }, raw_row: '' },
+    ];
+    mem.planningCodes = [{ code: 'vrij', category: 'absence', description: 'Geen dienst', countsAsShift: false, isPaidAbsence: false, isDayOff: true }];
+    const res = await api('GET', '/api/month-planning?month=2030-09&format=summary', { token: 'tok-planner' });
+    expect(res.status).toBe(200);
+    const rijA = res.json.rijen.find((r: any) => r.naam === 'Chauffeur A');
+    const rijB = res.json.rijen.find((r: any) => r.naam === 'Chauffeur B');
+    expect(rijA).toMatchObject({ diensten: 1, dagen: 1 });
+    expect(rijB).toMatchObject({ vrij: 1, dagen: 1 });
+    expect((await api('GET', '/api/month-planning?month=2030-09&format=summary', { token: 'tok-a' })).status).toBe(403);
+  });
+});

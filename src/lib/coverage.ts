@@ -59,6 +59,19 @@ export type ExpectationCheck = {
   afwijkingen: import('./coverageGaps').VerwachtingAfwijking[];
 };
 
+export type ExpectationVoorstel = {
+  from: string;
+  to: string;
+  dagen: number;
+  voorstellen: import('./coverageGaps').VerwachtingVoorstel[];
+};
+
+/** Lijstenvoorstel uit de praktijk: per dag-type de codes die op minstens de
+ *  helft van de dagen echt gereden worden. */
+export function fetchExpectationVoorstel(from: string, to: string): Promise<ExpectationVoorstel> {
+  return apiFetch<ExpectationVoorstel>(`/api/coverage-expectations/voorstel?from=${from}&to=${to}`);
+}
+
 /** Verwachtingen-vs-praktijk: verwachte diensten die in de periode nooit
  *  gereden worden + structureel gereden codes buiten de verwachting. */
 export function fetchExpectationCheck(from: string, to: string): Promise<ExpectationCheck> {
