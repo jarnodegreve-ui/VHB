@@ -371,6 +371,12 @@ export const matrixCodesForDate = (
   return out;
 };
 
+/** Kalenderdag in Belgische tijd (server draait op UTC). Eén bron — werd
+ *  eerst lokaal in api/index.ts gedefinieerd, maar de dekking-module en de
+ *  ziekte-detectie hebben hem net zo hard nodig. */
+export const brusselsDay = (iso: string) =>
+  new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+
 /** ISO-dag + n dagen (puur datumrekenen in UTC-frame). */
 const addDagenIso = (iso: string, n: number): string => {
   const d = new Date(`${iso}T00:00:00Z`);
