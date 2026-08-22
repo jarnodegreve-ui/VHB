@@ -1,7 +1,8 @@
 import type express from "express";
 import { timingSafeEqual } from "node:crypto";
 import { escapeHtml } from "./email.js";
-import { getLeaveData, getPlanningData, getUsersData } from "./storage.js";
+import { getLeaveData, getPlanningData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getUsersData } from "./storage.js";
+import { matrixCodesForDate, toLookupToken } from "./helpers.js";
 import type { DayGap } from "./coverageGaps.js";
 
 /**
@@ -185,11 +186,105 @@ const formatVandaag = async (dagen: DayGap[]): Promise<string> => {
   return regels.join("\n");
 };
 
+/** ISO-dag + n dagen (lokale kopie — puur datumrekenen in UTC-frame). */
+const addDagenIso = (iso: string, n: number): string => {
+  const d = new Date(`${iso}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+/** Planning-rijen (de actuele, ruil-correcte waarheid) binnen [van, tot]. */
+const planningInVenster = async (van: string, tot: string): Promise<any[]> => {
+  const maanden = new Set<string>();
+  for (let d = van; d <= tot; d = addDagenIso(d, 1)) maanden.add(d.slice(0, 7));
+  const chunks = await Promise.all([...maanden].map((m) => getPlanningData({ monthIso: m })));
+  return (chunks.flat() as any[]).filter((s) => {
+    const d = String(s?.date ?? "");
+    return d >= van && d <= tot;
+  });
+};
+
+const dienstSegmenten = (s: any): string[] => [
+  s.startTime && s.endTime ? `${s.startTime}–${s.endTime}${s.loopnr ? ` (loop ${s.loopnr})` : ""}` : "",
+  s.startTime2 && s.endTime2 ? `${s.startTime2}–${s.endTime2}${s.loopnr2 ? ` (loop ${s.loopnr2})` : ""}` : "",
+  s.startTime3 && s.endTime3 ? `${s.startTime3}–${s.endTime3}${s.loopnr3 ? ` (loop ${s.loopnr3})` : ""}` : "",
+].filter(Boolean);
+
+/** /dienst <code>: de tijden uit het Dienstoverzicht (of de planningscode-uitleg). */
+const formatDienst = async (code: string): Promise<string> => {
+  if (!code) return "Gebruik: /dienst &lt;nummer&gt; — bv. /dienst 2601.";
+  const [services, codes] = await Promise.all([getServicesData(), getPlanningCodesData()]);
+  const svc = (services as any[]).find((s) => toLookupToken(String(s.serviceNumber ?? "")) === toLookupToken(code));
+  if (svc) {
+    const seg = dienstSegmenten(svc);
+    return `🚌 <b>Dienst ${escapeHtml(String(svc.serviceNumber))}</b>\n${seg.length > 0 ? seg.map((x) => `• ${escapeHtml(x)}`).join("\n") : "Geen tijden in het Dienstoverzicht."}`;
+  }
+  const pc = (codes as any[]).find((c) => toLookupToken(String(c.code ?? "")) === toLookupToken(code));
+  if (pc) return `ℹ️ ${escapeHtml(code)} is geen dienst maar een planningscode: ${escapeHtml(String(pc.description || pc.code))}.`;
+  return `Dienst ${escapeHtml(code)} staat niet in het Dienstoverzicht.`;
+};
+
+/** /wie <code>: wie rijdt deze dienst in [van, tot] (ruil-correct). */
+const formatWie = async (code: string, van: string, tot: string): Promise<string> => {
+  if (!code) return "Gebruik: /wie &lt;dienstnummer&gt; — bv. /wie 2114.";
+  const [rijen, users] = await Promise.all([planningInVenster(van, tot), getUsersData()]);
+  const naam = (id: string) => (users as any[]).find((u) => String(u.id) === id)?.name ?? `Onbekend (${id})`;
+  const perDag = new Map<string, Set<string>>();
+  for (const s of rijen) {
+    if (toLookupToken(String(s.line ?? "")) !== toLookupToken(code)) continue;
+    const d = String(s.date);
+    if (!perDag.has(d)) perDag.set(d, new Set());
+    perDag.get(d)!.add(naam(String(s.driverId)));
+  }
+  if (perDag.size === 0) return `Niemand ingepland op dienst ${escapeHtml(code)} van ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}.`;
+  const regels = [...perDag.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([d, namen]) => `• ${DAG_KORT(d)}: ${[...namen].map(escapeHtml).join(", ")}`);
+  return `🚌 <b>Dienst ${escapeHtml(code)}</b> — ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}:\n${regels.join("\n")}`;
+};
+
+/** /rooster <naam>: iemands week — diensten uit de planning (ruil-correct),
+ *  andere dagen de matrix-code (vrij/ziek/bv…). */
+const formatRooster = async (query: string, van: string, tot: string): Promise<string> => {
+  if (!query) return "Gebruik: /rooster &lt;naam&gt; — bv. /rooster Danny.";
+  const users = await getUsersData();
+  const chauffeurs = (users as any[]).filter((u) => u.role === "chauffeur" && u.isActive !== false);
+  const q = toLookupToken(query);
+  const matches = chauffeurs.filter((u) => toLookupToken(String(u.name ?? "")).includes(q));
+  if (matches.length === 0) return `Geen chauffeur gevonden voor "${escapeHtml(query)}".`;
+  if (matches.length > 1) {
+    return `Meerdere chauffeurs matchen "${escapeHtml(query)}": ${matches.slice(0, 6).map((u) => escapeHtml(String(u.name))).join(", ")}${matches.length > 6 ? ", …" : ""}. Wees iets specifieker.`;
+  }
+  const u = matches[0];
+  const [rijen, matrix] = await Promise.all([planningInVenster(van, tot), getPlanningMatrixRows()]);
+  const perDag = new Map<string, string[]>();
+  for (const s of rijen) {
+    if (String(s.driverId) !== String(u.id)) continue;
+    const d = String(s.date);
+    const tijd = s.startTime && s.endTime ? ` (${s.startTime}–${s.endTime})` : "";
+    perDag.set(d, [...(perDag.get(d) ?? []), `${String(s.line ?? "?")}${tijd}`]);
+  }
+  const regels: string[] = [];
+  for (let d = van; d <= tot; d = addDagenIso(d, 1)) {
+    const diensten = perDag.get(d);
+    if (diensten) {
+      regels.push(`• ${DAG_KORT(d)}: ${diensten.map(escapeHtml).join(" + ")}`);
+      continue;
+    }
+    const cel = matrixCodesForDate(matrix as any[], [{ id: String(u.id), name: String(u.name) }], d).get(String(u.id));
+    regels.push(`• ${DAG_KORT(d)}: ${cel ? escapeHtml(cel) : "—"}`);
+  }
+  return `📋 <b>${escapeHtml(String(u.name))}</b> — ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}:\n${regels.join("\n")}`;
+};
+
 const HULP = [
   "Ik ben de VHB-portaal-bot. Commando's:",
   "/gaten — openstaande diensten komende 7 dagen (met kandidaten-knoppen)",
   "/ziek — wie is er nu ziek gemeld",
   "/vandaag — de dag in het kort",
+  "/wie 2114 — wie rijdt deze dienst, komende 7 dagen",
+  "/rooster Danny — iemands week",
+  "/dienst 2601 — de tijden van een dienst",
 ].join("\n");
 
 // ---------------------------------------------------------------------------
@@ -259,19 +354,31 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
       }
       if (vanChat !== bekend) return res.json({ ok: true });
 
-      if (tekst.startsWith("/start") || tekst.startsWith("/help")) {
+      // Commando + argument; "@botnaam"-suffix strippen (stuurt Telegram in
+      // groepen mee — wij zitten in een privéchat, maar defensief kost niks).
+      const [cmdRaw = "", ...rest] = tekst.split(/\s+/);
+      const cmd = cmdRaw.toLowerCase().replace(/@[\w_]+$/, "");
+      const arg = rest.join(" ").trim();
+      const vandaag = vandaagIso();
+      const eindWeek = deps.addDagen(vandaag, 6);
+
+      if (cmd === "/start" || cmd === "/help") {
         await stuurTelegram(HULP);
-      } else if (tekst.startsWith("/gaten")) {
-        const vandaag = vandaagIso();
-        const dagen = await deps.berekenDekkingsGaten(vandaag, deps.addDagen(vandaag, 6));
+      } else if (cmd === "/gaten") {
+        const dagen = await deps.berekenDekkingsGaten(vandaag, eindWeek);
         const { tekst: bericht, knoppen } = formatGaten(dagen);
         await stuurTelegram(bericht, { knoppen });
-      } else if (tekst.startsWith("/ziek")) {
+      } else if (cmd === "/ziek") {
         await stuurTelegram(await formatZiek());
-      } else if (tekst.startsWith("/vandaag")) {
-        const vandaag = vandaagIso();
+      } else if (cmd === "/vandaag") {
         const dagen = await deps.berekenDekkingsGaten(vandaag, vandaag);
         await stuurTelegram(await formatVandaag(dagen));
+      } else if (cmd === "/wie") {
+        await stuurTelegram(await formatWie(arg, vandaag, eindWeek));
+      } else if (cmd === "/rooster") {
+        await stuurTelegram(await formatRooster(arg, vandaag, eindWeek));
+      } else if (cmd === "/dienst") {
+        await stuurTelegram(await formatDienst(arg));
       } else if (tekst) {
         await stuurTelegram(`Dat commando ken ik niet.\n\n${HULP}`);
       }
