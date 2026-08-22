@@ -24,7 +24,7 @@ import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit, create
 import type AnthropicClient from "@anthropic-ai/sdk";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
-import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten } from "./telegram.js";
+import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
@@ -178,7 +178,16 @@ mountDeviceRoutes(app);
 // Telegram-bot voor de planner (webhook + commando's). Zie api/telegram.ts.
 // De bereken-functies staan verderop in dit bestand (function-declaraties,
 // dus gehoist) — doorgeven i.p.v. importeren voorkomt een import-cyclus.
-mountTelegramRoutes(app, { berekenDekkingsGaten, berekenCoverageAdvies, addDagen });
+mountTelegramRoutes(app, {
+  berekenDekkingsGaten,
+  berekenCoverageAdvies,
+  addDagen,
+  beslisVerlof: beslisVerlofIntern,
+  beslisRuil: beslisRuilIntern,
+  registreerZiekmelding: registreerZiekmeldingIntern,
+  wijsDienstToe: wijsDienstToeIntern,
+  draaiPlannerChat,
+});
 
 // Dekking & advies (expectations, gaten, advisor). Zie api/coverageRoutes.ts.
 mountCoverageRoutes(app);
@@ -2506,6 +2515,74 @@ app.get("/api/cron/restore-proef", async (req, res) => {
   }
 });
 
+// Ochtendbriefing naar Telegram (verbeterronde-bot 22-08, nr. 4): elke dag
+// een kort overzicht — óók als alles in orde is, want "geen bericht" en
+// "geen probleem" zijn anders niet te onderscheiden. Bevat vandaag + morgen,
+// wie ziek is, de planning-horizon en dringende vervaldata (nr. 5).
+app.get("/api/cron/telegram-briefing", async (req, res) => {
+  if (!isCronAuthorized(req)) {
+    return res.status(401).json({ error: "Niet toegestaan." });
+  }
+  try {
+    if (!telegramGeconfigureerd()) {
+      return res.json({ success: true, skipped: "telegram niet geconfigureerd" });
+    }
+    const vandaag = brusselsDay(new Date().toISOString());
+    const morgen = addDagen(vandaag, 1);
+    const [dagenVandaag, dagenMorgen, matrixRows, expiries, usersVoorVerval] = await Promise.all([
+      berekenDekkingsGaten(vandaag, vandaag),
+      berekenDekkingsGaten(morgen, morgen),
+      getPlanningMatrixRows(),
+      getUserExpiries(),
+      getUsersData(),
+    ]);
+
+    const delen: string[] = [];
+    const dagLang = new Date(`${vandaag}T12:00:00Z`).toLocaleDateString("nl-BE", { weekday: "long", day: "numeric", month: "long", timeZone: "Europe/Brussels" });
+    delen.push(`🌅 <b>Ochtendbriefing — ${dagLang}</b>`);
+    delen.push(await formatVandaag(dagenVandaag));
+    const morgenGat = dagenMorgen.find((d) => d.date === morgen);
+    delen.push(morgenGat && morgenGat.missing.length > 0
+      ? `Morgen open: ${morgenGat.missing.join(", ")}.`
+      : "Morgen: alles ingevuld.");
+    delen.push(await formatZiek());
+
+    // Planning-horizon: hoe ver reikt de geïmporteerde matrix nog?
+    const laatste = (matrixRows as any[])
+      .map((r) => String(r.source_date ?? ""))
+      .filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d))
+      .sort()
+      .pop();
+    if (laatste) {
+      const dagenOver = Math.round((Date.parse(`${laatste}T00:00:00Z`) - Date.parse(`${vandaag}T00:00:00Z`)) / 86400000);
+      if (dagenOver <= 7) {
+        delen.push(`⚠️ Nog maar ${dagenOver} dag${dagenOver === 1 ? "" : "en"} planning in het portaal (t/m ${laatste}) — tijd voor een import.`);
+      }
+    }
+
+    // Dringende vervaldata (≤ 7 dagen of verlopen) — de mail meldt breder,
+    // dit is alleen de staart die echt aandacht vraagt.
+    const naamVan = (id: string) => (usersVoorVerval as any[]).find((u) => String(u.id) === id)?.name ?? "Onbekend";
+    const dringend = expiries
+      .filter((e) => Boolean(EXPIRY_SOORT_LABEL[e.soort]) && e.validUntil)
+      .map((e) => ({ ...e, dagen: Math.round((Date.parse(`${e.validUntil}T00:00:00Z`) - Date.parse(`${vandaag}T00:00:00Z`)) / 86400000) }))
+      .filter((e) => e.dagen <= 7)
+      .sort((a, b) => a.dagen - b.dagen);
+    if (dringend.length > 0) {
+      delen.push(`📄 Documenten: ${dringend.map((e) => `${escapeHtml(naamVan(e.userId))} — ${EXPIRY_SOORT_LABEL[e.soort]} ${e.dagen < 0 ? `VERLOPEN (${e.validUntil})` : e.dagen === 0 ? "verloopt VANDAAG" : `nog ${e.dagen} dag${e.dagen === 1 ? "" : "en"}`}`).join("; ")}.`);
+    }
+
+    // Kandidaten-knoppen voor de gaten van vandaag + morgen (max 8).
+    const { knoppen } = formatGaten([...dagenVandaag, ...dagenMorgen.filter((d) => d.date === morgen)]);
+    const verzonden = await stuurTelegram(delen.join("\n\n"), { knoppen });
+    await logCronHeartbeat("telegram-briefing", verzonden ? "Briefing verstuurd." : "Versturen mislukt of niet geconfigureerd.");
+    res.json({ success: true, verzonden });
+  } catch (err: any) {
+    console.error("[telegram-briefing] mislukt:", err?.message ?? err);
+    res.status(500).json({ error: "Briefing versturen is mislukt." });
+  }
+});
+
 app.get("/api/cron/error-digest", async (req, res) => {
   if (!isCronAuthorized(req)) {
     return res.status(401).json({ error: "Niet toegestaan." });
@@ -3879,6 +3956,10 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
               body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)} — rij- en rusttijden checken.`,
               url: "/",
             });
+            await meldRuilTerValidatieTelegram({
+              id: String(next.id),
+              omschrijving: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}${next.shiftLine ? ` — dienst ${next.shiftLine} op ${next.shiftDate ?? "?"}` : ""}.`,
+            });
           }
         }
       }
@@ -4026,7 +4107,8 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
         : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
       url: "/",
     });
-    // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route).
+    // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
+    // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
     if (status === "accepted") {
       const beslissers = usersForLog
         .filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== selfId)
@@ -4035,6 +4117,10 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
         title: "Dienstruil wacht op validatie",
         body: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))} — rij- en rusttijden checken.`,
         url: "/",
+      });
+      await meldRuilTerValidatieTelegram({
+        id: String(current.id),
+        omschrijving: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))}${current.shiftLine ? ` — dienst ${current.shiftLine} op ${current.shiftDate ?? "?"}` : ""}${current.returnCode && String(current.returnCode).toLowerCase() !== "vrij" ? `, tegenprestatie ${current.returnCode} op ${current.returnDate ?? "?"}` : ""}.`,
       });
     }
 
@@ -4370,7 +4456,7 @@ async function registreerZiekmeldingIntern(
   invoer: { userId: unknown; startDate?: unknown; endDate?: unknown; comment?: unknown },
   actor: BeslisActor,
   stuurTelegramAlert = true,
-): Promise<{ fout: { status: number; error: string } } | { leave: any; period: string; targetName: string; openDiensten: Array<{ label: string; nummers: string }> }> {
+): Promise<{ fout: { status: number; error: string } } | { leave: any; period: string; targetName: string; openDiensten: Array<{ label: string; nummers: string }>; openDienstenIso: Array<{ date: string; nummers: string[] }> }> {
     const selfId = String(actor.id);
     const forUserId = String(invoer.userId ?? "");
     if (!forUserId) return { fout: { status: 400, error: "Kies de chauffeur die ziek is." } };
@@ -4527,7 +4613,14 @@ async function registreerZiekmeldingIntern(
       });
     }
 
-    return { leave: record, period, targetName: target.name, openDiensten };
+    return {
+      leave: record,
+      period,
+      targetName: target.name,
+      openDiensten,
+      // ISO-variant voor de bot: kandidaten-knoppen hebben de rauwe datum nodig.
+      openDienstenIso: [...dagDiensten.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([d, nummers]) => ({ date: d, nummers })),
+    };
 }
 
 app.post("/api/leave/sick-report", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
@@ -4688,7 +4781,8 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
           { type: "leave", id: next.id },
         );
-        // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins.
+        // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins,
+        // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
         if (req.appUser?.role === "chauffeur") {
           const beslissers = users.filter((u) => u.role === "planner" || u.role === "admin").map((u) => String(u.id));
           await sendPushToUsers(beslissers, {
@@ -4696,6 +4790,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
             body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
             url: "/",
           });
+          await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, period, comment: next.comment });
         }
         continue;
       }

@@ -153,7 +153,7 @@ export const formatAdvies = (
 const vandaagIso = () =>
   new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
 
-const formatZiek = async (): Promise<string> => {
+export const formatZiek = async (): Promise<string> => {
   const vandaag = vandaagIso();
   const [leave, users] = await Promise.all([getLeaveData({ endOnOrAfter: vandaag }), getUsersData()]);
   const naam = (id: string) => (users as any[]).find((u) => String(u.id) === id)?.name ?? "Onbekend";
@@ -170,7 +170,7 @@ const formatZiek = async (): Promise<string> => {
   return `🤒 <b>Ziek gemeld (${actueel.length})</b>\n${regels.join("\n")}`;
 };
 
-const formatVandaag = async (dagen: DayGap[]): Promise<string> => {
+export const formatVandaag = async (dagen: DayGap[]): Promise<string> => {
   const vandaag = vandaagIso();
   const planning = await getPlanningData({ monthIso: vandaag.slice(0, 7) });
   const rijen = (planning as any[]).filter((s) => String(s.date) === vandaag);
@@ -277,6 +277,33 @@ const formatRooster = async (query: string, van: string, tot: string): Promise<s
   return `📋 <b>${escapeHtml(String(u.name))}</b> — ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}:\n${regels.join("\n")}`;
 };
 
+/** /ziekmeld <naam> [t/m <wanneer>]: interpretatie tonen + bevestigknop.
+ *  De knop-tik is de bevestiging; registratie loopt via dezelfde kern als
+ *  het portaal (validatie, dedupe, mails, pushes). */
+const bereidZiekmeldingVoor = async (arg: string, vandaag: string): Promise<string | { tekst: string; knoppen: TelegramKnop[][] }> => {
+  if (!arg) return "Gebruik: /ziekmeld <naam> [t/m <dag>] — bv. /ziekmeld danny t/m vrijdag.";
+  const delen = arg.split(/\s+(?:t\/m|tm|tot)\s+/i);
+  const naamDeel = delen[0].trim();
+  const eindDeel = delen.length > 1 ? delen[delen.length - 1].trim() : "";
+  const eind = eindDeel ? parseDagAanduiding(eindDeel, vandaag) : vandaag;
+  if (!eind) return `Ik begrijp "${escapeHtml(eindDeel)}" niet als dag — gebruik bv. "t/m vrijdag", "t/m 29/08" of "t/m morgen".`;
+  const users = await getUsersData();
+  const chauffeurs = (users as any[]).filter((u) => u.role === "chauffeur" && u.isActive !== false);
+  const q = toLookupToken(naamDeel);
+  const matches = chauffeurs.filter((u) => toLookupToken(String(u.name ?? "")).includes(q));
+  if (matches.length === 0) return `Geen chauffeur gevonden voor "${escapeHtml(naamDeel)}".`;
+  if (matches.length > 1) {
+    return `Meerdere chauffeurs matchen "${escapeHtml(naamDeel)}": ${matches.slice(0, 6).map((u) => escapeHtml(String(u.name))).join(", ")}. Wees iets specifieker.`;
+  }
+  const u = matches[0];
+  const data = `zm|${String(u.id)}|${vandaag}|${eind}`;
+  if (data.length > 64) return "Deze combinatie is te lang voor een Telegram-knop — registreer via het Ziekte-blad.";
+  return {
+    tekst: `🤒 Ziek melden: <b>${escapeHtml(String(u.name))}</b>, ${DAG_KORT(vandaag)}${eind !== vandaag ? ` t/m ${DAG_KORT(eind)}` : " (alleen vandaag)"}. Klopt dat?`,
+    knoppen: [[{ tekst: "✅ Registreer", data }, { tekst: "Annuleer", data: "nvt" }]],
+  };
+};
+
 const HULP = [
   "Ik ben de VHB-portaal-bot. Commando's:",
   "/gaten — openstaande diensten komende 7 dagen (met kandidaten-knoppen)",
@@ -285,6 +312,8 @@ const HULP = [
   "/wie 2114 — wie rijdt deze dienst, komende 7 dagen",
   "/rooster Danny — iemands week",
   "/dienst 2601 — de tijden van een dienst",
+  "/ziekmeld danny t/m vrijdag — ziekmelding registreren (met bevestigknop)",
+  "Gewone tekst — een vraag aan de planner-assistent",
 ].join("\n");
 
 // ---------------------------------------------------------------------------
@@ -295,6 +324,94 @@ export type TelegramDeps = {
   berekenDekkingsGaten: (from: string, to: string) => Promise<DayGap[]>;
   berekenCoverageAdvies: (date: string, code: string) => Promise<any>;
   addDagen: (iso: string, n: number) => string;
+  // Schrijfacties — allemaal achter jouw chat-id + een expliciete
+  // bevestigknop; de actor verschijnt als "Jarno (via Telegram)" in het
+  // activiteitenlog. De kernen zijn exact dezelfde functies als de routes.
+  beslisVerlof: (opts: { id: string; status: string; ifStatus: string; actor: any }) => Promise<any>;
+  beslisRuil: (opts: { id: string; status: string; ifStatus: string | null; actor: any }) => Promise<any>;
+  registreerZiekmelding: (invoer: { userId: unknown; startDate?: unknown; endDate?: unknown; comment?: unknown }, actor: any, stuurTelegramAlert?: boolean) => Promise<any>;
+  wijsDienstToe: (invoer: { date: unknown; serviceNumber: unknown; driverId: unknown }, actor: any) => Promise<any>;
+  draaiPlannerChat: (gesprek: Array<{ role: "user" | "assistant"; content: any }>) => Promise<{ ok: true; antwoord: string } | { ok: false; status: number; error: string; code?: string }>;
+};
+
+/** De bot handelt namens de gekoppelde planner (chat-id = Jarno). Eerlijke
+ *  attributie in log en mails, zonder een portaal-account te lenen. */
+const BOT_ACTOR = { id: "telegram-bot", name: "Jarno (via Telegram)", role: "admin" as const };
+
+/** Eenvoudige uurlimiet voor assistent-vragen via de bot — het endpoint kost
+ *  geld per token en serverless geheugen is per instantie, dus dit is een
+ *  zachte rem, geen boekhouding. */
+const chatBeurten: number[] = [];
+const chatBinnenLimiet = () => {
+  const nu = Date.now();
+  while (chatBeurten.length > 0 && nu - chatBeurten[0] > 60 * 60 * 1000) chatBeurten.shift();
+  if (chatBeurten.length >= 20) return false;
+  chatBeurten.push(nu);
+  return true;
+};
+
+/** Dag-aanduiding uit mensentaal: 'vandaag', 'morgen', een weekdagnaam
+ *  (eerstvolgende), 'dd/mm', 'dd-mm' of 'jjjj-mm-dd'. Null = onbegrepen. */
+export const parseDagAanduiding = (raw: string, vandaag: string): string | null => {
+  const t = raw.trim().toLowerCase();
+  if (!t || t === "vandaag") return vandaag;
+  if (t === "morgen") return addDagenIso(vandaag, 1);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t;
+  const dm = /^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{4}))?$/.exec(t);
+  if (dm) {
+    const jaar = dm[3] ?? vandaag.slice(0, 4);
+    const iso = `${jaar}-${String(Number(dm[2])).padStart(2, "0")}-${String(Number(dm[1])).padStart(2, "0")}`;
+    return /^\d{4}-\d{2}-\d{2}$/.test(iso) ? iso : null;
+  }
+  const WEEKDAGEN = ["zondag", "maandag", "dinsdag", "woensdag", "donderdag", "vrijdag", "zaterdag"];
+  const KORT = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+  const idx = WEEKDAGEN.indexOf(t) !== -1 ? WEEKDAGEN.indexOf(t) : KORT.indexOf(t);
+  if (idx !== -1) {
+    const vandaagDow = new Date(`${vandaag}T00:00:00Z`).getUTCDay();
+    return addDagenIso(vandaag, (idx - vandaagDow + 7) % 7);
+  }
+  return null;
+};
+
+/** Wijs-toe-knoppen onder een invaladvies: de top-passende kandidaten. */
+const adviesKnoppen = (date: string, code: string, advies: { kandidaten?: Array<{ id: string; name: string; past: boolean }> }): TelegramKnop[][] =>
+  (advies.kandidaten ?? [])
+    .filter((k) => k.past)
+    .slice(0, 3)
+    .map((k) => [{ tekst: `✅ Wijs toe: ${k.name}`, data: `wt|${date}|${code}|${k.id}` }])
+    .filter((rij) => rij[0].data.length <= 64);
+
+/** Nieuwe verlofaanvraag → melding met goedkeurknoppen (aangeroepen vanuit
+ *  de verlof-route zodra een chauffeur iets indient). Best-effort. */
+export const meldVerlofAanvraagTelegram = async (info: { id: string; naam: string; typeLabel: string; period: string; comment?: string }) => {
+  if (!telegramGeconfigureerd()) return;
+  const knopData = `lv|${info.id}|approved`;
+  await stuurTelegram(
+    `📝 <b>Nieuwe verlofaanvraag</b>
+${escapeHtml(info.naam)} — ${escapeHtml(info.typeLabel)} (${escapeHtml(info.period)})${info.comment ? `
+„${escapeHtml(String(info.comment).slice(0, 200))}”` : ""}`,
+    {
+      knoppen: knopData.length <= 64
+        ? [[{ tekst: "✅ Goedkeuren", data: `lv|${info.id}|approved` }, { tekst: "❌ Afwijzen", data: `lv|${info.id}|rejected` }]]
+        : undefined,
+    },
+  );
+};
+
+/** Geaccepteerde ruil wacht op staf-validatie → melding met knoppen. */
+export const meldRuilTerValidatieTelegram = async (info: { id: string; omschrijving: string }) => {
+  if (!telegramGeconfigureerd()) return;
+  const knopData = `rl|${info.id}|approved`;
+  await stuurTelegram(
+    `🔁 <b>Dienstruil wacht op validatie</b>
+${escapeHtml(info.omschrijving)}
+Controleer rij- en rusttijden voor je beslist.`,
+    {
+      knoppen: knopData.length <= 64
+        ? [[{ tekst: "✅ Goedkeuren", data: `rl|${info.id}|approved` }, { tekst: "❌ Afwijzen", data: `rl|${info.id}|rejected` }]]
+        : undefined,
+    },
+  );
 };
 
 export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
@@ -320,17 +437,85 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           return res.json({ ok: true });
         }
         const data = String(cb.data ?? "");
+        const cbId = String(cb.id ?? "");
         if (data.startsWith("adv|")) {
           const [, date, code] = data.split("|");
-          await answerCallback(String(cb.id ?? ""), "Advies berekenen…");
+          await answerCallback(cbId, "Advies berekenen…");
           try {
             const advies = await deps.berekenCoverageAdvies(String(date ?? ""), String(code ?? ""));
-            await stuurTelegram(formatAdvies(String(date ?? ""), String(code ?? ""), advies));
+            await stuurTelegram(formatAdvies(String(date ?? ""), String(code ?? ""), advies), {
+              knoppen: adviesKnoppen(String(date ?? ""), String(code ?? ""), advies),
+            });
           } catch {
             await stuurTelegram(`Advies voor dienst ${escapeHtml(String(code ?? ""))} kon niet berekend worden.`);
           }
+        } else if (data.startsWith("lv|") || data.startsWith("rl|")) {
+          // Stap 1 van een beslissing: expliciete bevestiging vragen — één
+          // tik op een knop in een scrollende chat mag nooit direct beslissen.
+          const [soort, id, besluit] = data.split("|");
+          await answerCallback(cbId);
+          const label = besluit === "approved" ? "goedkeuren" : "afwijzen";
+          await stuurTelegram(
+            `${soort === "lv" ? "Verlofaanvraag" : "Dienstruil"} <b>${label}</b>?`,
+            { knoppen: [[{ tekst: `✅ Ja, ${label}`, data: `${soort}2|${id}|${besluit}` }, { tekst: "Annuleer", data: "nvt" }]] },
+          );
+        } else if (data.startsWith("lv2|")) {
+          const [, id, besluit] = data.split("|");
+          await answerCallback(cbId, "Beslissing doorvoeren…");
+          const uit = await deps.beslisVerlof({ id: String(id ?? ""), status: String(besluit ?? ""), ifStatus: "pending", actor: BOT_ACTOR });
+          await stuurTelegram("fout" in uit ? `⚠️ ${escapeHtml(uit.fout.error)}` : `✅ ${escapeHtml(uit.melding)}`);
+        } else if (data.startsWith("rl2|")) {
+          const [, id, besluit] = data.split("|");
+          await answerCallback(cbId, "Beslissing doorvoeren…");
+          const uit = await deps.beslisRuil({ id: String(id ?? ""), status: String(besluit ?? ""), ifStatus: "accepted", actor: BOT_ACTOR });
+          await stuurTelegram("fout" in uit ? `⚠️ ${escapeHtml(uit.fout.error)}` : `✅ ${escapeHtml(uit.melding)}`);
+        } else if (data.startsWith("zm|")) {
+          // De bevestigknop onder de /ziekmeld-interpretatie ís de bevestiging.
+          const [, userId, start, eind] = data.split("|");
+          await answerCallback(cbId, "Ziekmelding registreren…");
+          const uit = await deps.registreerZiekmelding(
+            { userId: String(userId ?? ""), startDate: String(start ?? ""), endDate: String(eind ?? ""), comment: "Geregistreerd via Telegram." },
+            BOT_ACTOR,
+            false,
+          );
+          if ("fout" in uit) {
+            await stuurTelegram(`⚠️ ${escapeHtml(uit.fout.error)}`);
+          } else {
+            const diensten: Array<{ date: string; nummers: string[] }> = uit.openDienstenIso ?? [];
+            const regels = diensten.slice(0, 6).map((d) => `• ${DAG_KORT(d.date)}: ${escapeHtml(d.nummers.join(" / "))}`);
+            if (diensten.length > 6) regels.push(`• …en nog ${diensten.length - 6} dagen`);
+            const knoppen: TelegramKnop[][] = diensten
+              .slice(0, 6)
+              .map((d) => [{ tekst: `👤 Kandidaten ${DAG_KORT(d.date)} · ${d.nummers[0]}`, data: `adv|${d.date}|${d.nummers[0]}` }])
+              .filter((rij) => rij[0].data.length <= 64);
+            await stuurTelegram(
+              [
+                `🤒 <b>Ziek gemeld:</b> ${escapeHtml(uit.targetName)} (${escapeHtml(uit.period)}).`,
+                diensten.length > 0 ? `Diensten die openvallen:\n${regels.join("\n")}` : "Geen diensten op naam in deze periode.",
+              ].join("\n"),
+              { knoppen },
+            );
+          }
+        } else if (data.startsWith("wt|")) {
+          const [, date, code, userId] = data.split("|");
+          await answerCallback(cbId);
+          await stuurTelegram(
+            `Dienst <b>${escapeHtml(String(code ?? ""))}</b> op ${DAG_KORT(String(date ?? ""))} toewijzen?`,
+            { knoppen: [[{ tekst: "✅ Ja, wijs toe", data: `wt2|${date}|${code}|${userId}` }, { tekst: "Annuleer", data: "nvt" }]] },
+          );
+        } else if (data.startsWith("wt2|")) {
+          const [, date, code, userId] = data.split("|");
+          await answerCallback(cbId, "Toewijzen…");
+          const uit = await deps.wijsDienstToe({ date: String(date ?? ""), serviceNumber: String(code ?? ""), driverId: String(userId ?? "") }, BOT_ACTOR);
+          await stuurTelegram(
+            "fout" in uit
+              ? `⚠️ ${escapeHtml(uit.fout.error)}`
+              : `✅ Dienst ${escapeHtml(uit.serviceNumber)} op ${DAG_KORT(uit.date)} toegewezen aan <b>${escapeHtml(uit.driverName)}</b> — de chauffeur krijgt een melding.`,
+          );
+        } else if (data === "nvt") {
+          await answerCallback(cbId, "Niets gedaan.");
         } else {
-          await answerCallback(String(cb.id ?? ""));
+          await answerCallback(cbId);
         }
         return res.json({ ok: true });
       }
@@ -379,8 +564,21 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
         await stuurTelegram(await formatRooster(arg, vandaag, eindWeek));
       } else if (cmd === "/dienst") {
         await stuurTelegram(await formatDienst(arg));
-      } else if (tekst) {
+      } else if (cmd === "/ziekmeld") {
+        const zmUit = await bereidZiekmeldingVoor(arg, vandaag);
+        if (typeof zmUit === "string") await stuurTelegram(zmUit);
+        else await stuurTelegram(zmUit.tekst, { knoppen: zmUit.knoppen });
+      } else if (cmd.startsWith("/")) {
         await stuurTelegram(`Dat commando ken ik niet.\n\n${HULP}`);
+      } else if (tekst) {
+        // Vrije tekst = een vraag aan de planner-assistent (zelfde leestools
+        // en beknoptheidscontract als in het portaal). Zachte uurlimiet.
+        if (!chatBinnenLimiet()) {
+          await stuurTelegram("Even rustig aan — maximaal 20 assistent-vragen per uur via de bot. Probeer het straks opnieuw of gebruik de Assistent in het portaal.");
+        } else {
+          const uit = await deps.draaiPlannerChat([{ role: "user", content: tekst.slice(0, 1000) }]);
+          await stuurTelegram("antwoord" in uit ? escapeHtml(uit.antwoord) : `⚠️ ${escapeHtml(uit.error)}`);
+        }
       }
       return res.json({ ok: true });
     } catch (err: any) {
