@@ -66,14 +66,25 @@ export function ZiekteView({
 
   /** Diensten die binnen de ziekteperiode (vanaf vandaag) nog op naam staan —
    *  dát is het werk dat dit scherm zichtbaar moet maken. */
-  const openDienstenLijst = (r: LeaveRequest) =>
-    shifts
-      .filter((s) =>
-        String(s.driverId) === String(r.userId) &&
-        s.date >= (r.startDate > today ? r.startDate : today) &&
-        s.date <= r.endDate,
-      )
-      .sort((a, b) => a.date.localeCompare(b.date));
+  const openDienstenLijst = (r: LeaveRequest) => {
+    const rijen = shifts.filter((s) =>
+      String(s.driverId) === String(r.userId) &&
+      s.date >= (r.startDate > today ? r.startDate : today) &&
+      s.date <= r.endDate,
+    );
+    // Gesplitste diensten (meerdere planning-rijen, zelfde dag + code) tellen
+    // hier één keer — zelfde dedupe als openstaandeDienstenVanAfwezigen; het
+    // vroegste segment blijft, en de wissel verhuist toch alle rijen van de
+    // dienst in één keer. Zonder dit stond "31 diensten op naam" waar er 17
+    // openstonden (melding Jarno 22-08).
+    const perDienst = new Map<string, Shift>();
+    for (const s of rijen) {
+      const key = `${s.date}|${serviceNumberOf(s).trim().toLowerCase()}`;
+      const bestaand = perDienst.get(key);
+      if (!bestaand || String(s.startTime ?? '') < String(bestaand.startTime ?? '')) perDienst.set(key, s);
+    }
+    return [...perDienst.values()].sort((a, b) => a.date.localeCompare(b.date));
+  };
   const openDienstenVan = (r: LeaveRequest) => openDienstenLijst(r).length;
 
   /** Ziektedagen per chauffeur dit jaar (goedgekeurde meldingen, afgekapt op
