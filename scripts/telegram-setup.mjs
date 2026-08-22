@@ -24,8 +24,12 @@ if (envPad) {
   }
 }
 
-const token = String(env.TELEGRAM_BOT_TOKEN ?? '').trim();
-const secret = String(env.TELEGRAM_WEBHOOK_SECRET ?? '').trim();
+// Waarden uit `vercel env pull` kunnen eindigen op een letterlijke "\n"
+// (ge-escapete newline van een gepipete `vercel env add`) — de server trimt
+// de échte newline bij het lezen, dus hier dezelfde staart wegstrippen.
+const schoon = (v) => String(v ?? '').replace(/(\\n|\\r|\s)+$/g, '').trim();
+const token = schoon(env.TELEGRAM_BOT_TOKEN);
+const secret = schoon(env.TELEGRAM_WEBHOOK_SECRET);
 if (!token || !secret) {
   console.error('TELEGRAM_BOT_TOKEN en TELEGRAM_WEBHOOK_SECRET zijn nodig — zet ze in het environment of geef een .env-bestand als eerste argument.');
   process.exit(1);
