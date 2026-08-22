@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeCode, computeDayGap, resolveDayType, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, parseOverrides, encodeOverride, periodeVoorDatum, weekdaysVoorDatum, encodeWeekdagPeriodeKey, WEEKDAY_PERIOD_KEY_RE, DEFAULT_WEEKDAYS } from './coverageGaps';
+import { normalizeCode, computeDayGap, resolveDayType, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, periodeVoorDatum, weekdaysVoorDatum, encodeWeekdagPeriodeKey, WEEKDAY_PERIOD_KEY_RE, DEFAULT_WEEKDAYS } from './coverageGaps';
 
 describe('coverageGaps', () => {
   it('normalizeCode trimt + lowercase', () => {
@@ -235,5 +235,57 @@ describe('periodeVoorDatum', () => {
     expect(periodeVoorDatum([school, zomer], '2026-09-01')).toBe(school);
     // Kapotte periode (geen 7 entries) telt niet mee.
     expect(periodeVoorDatum([{ vanaf: '2026-01-01', weekdays: ['x'] }], '2026-06-01')).toBeNull();
+  });
+});
+
+describe('stelVerwachtingenVoor', () => {
+  const rij = (date: string, dayType: string, codes: Record<string, string>) => ({
+    source_date: date,
+    day_type: dayType,
+    assignments: codes,
+  });
+
+  it('stelt per dag-type de codes voor die op minstens de helft van de dagen rijden', () => {
+    const rows = [
+      rij('2026-09-01', 'di', { A: '2101', B: '2115', C: 'vrij' }),
+      rij('2026-09-08', 'di', { A: '2101', B: '2115', C: '2214' }),
+      rij('2026-09-15', 'di', { A: '2101', B: 'ziek', C: '2214' }),
+    ];
+    const uit = stelVerwachtingenVoor(rows, [], [], []);
+    expect(uit).toEqual([
+      {
+        dayType: 'di',
+        dagen: 3,
+        codes: [
+          { code: '2101', dagen: 3 },
+          { code: '2115', dagen: 2 },
+          { code: '2214', dagen: 2 },
+        ],
+      },
+    ]);
+  });
+
+  it('negeert lettercodes, dubbele cellen en dag-types met maar één dag', () => {
+    const rows = [
+      rij('2026-09-02', 'wo', { A: '2301', B: 'EEK5', C: '2301' }),
+      rij('2026-09-05', 'za', { A: '2601' }),
+      rij('2026-09-09', 'wo', { A: '2301', B: 'EEK5', C: 'bv' }),
+    ];
+    const uit = stelVerwachtingenVoor(rows, [], [], []);
+    // za heeft één dag → geen voorstel; EEK5/bv zijn geen cijfercodes;
+    // de dubbele 2301 op 02-09 telt die dag één keer.
+    expect(uit).toEqual([
+      { dayType: 'wo', dagen: 2, codes: [{ code: '2301', dagen: 2 }] },
+    ]);
+  });
+
+  it('resolvet het dag-type via weekdagen/periodes als kolom B leeg is', () => {
+    const periode = [{ vanaf: '2026-09-01', weekdays: ['', '', 'di-type', '', '', '', ''] }];
+    const rows = [
+      rij('2026-09-01', '', { A: '2101' }),
+      rij('2026-09-08', '', { A: '2101' }),
+    ];
+    const uit = stelVerwachtingenVoor(rows, [], periode, []);
+    expect(uit).toEqual([{ dayType: 'di-type', dagen: 2, codes: [{ code: '2101', dagen: 2 }] }]);
   });
 });

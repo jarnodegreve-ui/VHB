@@ -201,6 +201,71 @@ export const formatMinutenAlsUren = (minuten: number): string =>
  * mét uren-som), ander werk (planningscode met counts_as_shift: EEK/bureau/
  * garage), ziek, betaalde afwezigheid (bv/f/kv), vrij, en overig per code.
  */
+export type MaandoverzichtRij = {
+  driverId: string;
+  naam: string;
+  diensten: number;
+  minuten: number;
+  anderWerk: number;
+  ziek: number;
+  betaald: number;
+  vrij: number;
+  overig: Array<{ code: string; keren: number }>;
+  dagen: number;
+};
+
+/** De maandtelling zelf, als data — gedeeld door het xlsx-tabblad én het
+ *  Overzicht-venster in de maandplanning (verbeterronde 22-08, nr. 3), zodat
+ *  scherm en export nooit verschillend kunnen tellen. */
+export const berekenMaandoverzicht = (
+  dates: string[],
+  chauffeurs: Array<{ id: string; name: string }>,
+  cells: Record<string, Record<string, { code: string; kind: string }>>,
+  services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null }>,
+  planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
+): { rijen: MaandoverzichtRij[]; totaal: Omit<MaandoverzichtRij, "driverId" | "naam" | "overig"> & { overig: number } } => {
+  const serviceByNorm = new Map(services.map((s) => [toLookupToken(String(s.serviceNumber ?? "")), s]));
+  const codeByNorm = new Map(planningCodes.map((c) => [toLookupToken(c.code), c]));
+  const rijen: MaandoverzichtRij[] = [];
+  const totaal = { diensten: 0, minuten: 0, anderWerk: 0, ziek: 0, betaald: 0, vrij: 0, overig: 0, dagen: 0 };
+  for (const c of chauffeurs) {
+    const rij: MaandoverzichtRij = { driverId: c.id, naam: c.name, diensten: 0, minuten: 0, anderWerk: 0, ziek: 0, betaald: 0, vrij: 0, overig: [], dagen: 0 };
+    const overigPerCode = new Map<string, number>();
+    for (const iso of dates) {
+      const cel = cells[c.id]?.[iso];
+      if (!cel || !String(cel.code ?? "").trim()) continue;
+      rij.dagen += 1;
+      const n = toLookupToken(cel.code);
+      const svc = serviceByNorm.get(n);
+      if (svc) {
+        rij.diensten += 1;
+        rij.minuten += dienstMinuten(svc) ?? 0;
+        continue;
+      }
+      if (n === "ziek") {
+        rij.ziek += 1;
+        continue;
+      }
+      const pc = codeByNorm.get(n);
+      if (pc?.countsAsShift) rij.anderWerk += 1;
+      else if (pc?.isPaidAbsence) rij.betaald += 1;
+      else if (pc?.isDayOff) rij.vrij += 1;
+      else overigPerCode.set(cel.code, (overigPerCode.get(cel.code) ?? 0) + 1);
+    }
+    rij.overig = [...overigPerCode.entries()].map(([code, keren]) => ({ code, keren }));
+    rijen.push(rij);
+    totaal.diensten += rij.diensten;
+    totaal.minuten += rij.minuten;
+    totaal.anderWerk += rij.anderWerk;
+    totaal.ziek += rij.ziek;
+    totaal.betaald += rij.betaald;
+    totaal.vrij += rij.vrij;
+    totaal.overig += rij.overig.reduce((a, b) => a + b.keren, 0);
+    totaal.dagen += rij.dagen;
+  }
+  return { rijen, totaal };
+};
+
 export const bouwMaandoverzichtAoa = (
   month: string,
   dates: string[],
@@ -209,67 +274,27 @@ export const bouwMaandoverzichtAoa = (
   services: Array<{ serviceNumber?: unknown; startTime?: string | null; endTime?: string | null; startTime2?: string | null; endTime2?: string | null; startTime3?: string | null; endTime3?: string | null }>,
   planningCodes: Array<{ code: string; countsAsShift?: boolean; isPaidAbsence?: boolean; isDayOff?: boolean }>,
 ): unknown[][] => {
-  const serviceByNorm = new Map(services.map((s) => [toLookupToken(String(s.serviceNumber ?? "")), s]));
-  const codeByNorm = new Map(planningCodes.map((c) => [toLookupToken(c.code), c]));
+  const { rijen, totaal } = berekenMaandoverzicht(dates, chauffeurs, cells, services, planningCodes);
   const aoa: unknown[][] = [
     [`Maandoverzicht ${month}`],
     [`Stand ná dienstruilen, toewijzingen en geregistreerde afwezigheden (${dates.length} dagen). Uren = som van de dienstsegmenten uit het Dienstoverzicht; diensten zonder tijden tellen alleen in de dagtelling.`],
     [],
     ["chauffeur", "diensten", "uren diensten", "ander werk", "ziek", "betaalde afwezigheid", "vrij", "overig", "dagen ingepland"],
   ];
-  const totaal = { diensten: 0, minuten: 0, anderWerk: 0, ziek: 0, betaald: 0, vrij: 0, overig: 0, dagen: 0 };
-  for (const c of chauffeurs) {
-    let diensten = 0;
-    let minuten = 0;
-    let anderWerk = 0;
-    let ziek = 0;
-    let betaald = 0;
-    let vrij = 0;
-    let dagen = 0;
-    const overigPerCode = new Map<string, number>();
-    for (const iso of dates) {
-      const cel = cells[c.id]?.[iso];
-      if (!cel || !String(cel.code ?? "").trim()) continue;
-      dagen += 1;
-      const n = toLookupToken(cel.code);
-      const svc = serviceByNorm.get(n);
-      if (svc) {
-        diensten += 1;
-        minuten += dienstMinuten(svc) ?? 0;
-        continue;
-      }
-      if (n === "ziek") {
-        ziek += 1;
-        continue;
-      }
-      const pc = codeByNorm.get(n);
-      if (pc?.countsAsShift) anderWerk += 1;
-      else if (pc?.isPaidAbsence) betaald += 1;
-      else if (pc?.isDayOff) vrij += 1;
-      else overigPerCode.set(cel.code, (overigPerCode.get(cel.code) ?? 0) + 1);
-    }
-    const overigTelling = [...overigPerCode.values()].reduce((a, b) => a + b, 0);
+  for (const r of rijen) {
     // veilig(): naam en overig-codes zijn vrije tekst — zelfde neutralisatie
     // als de praktijk-tab (controle-ronde 20-08, security-lens).
     aoa.push([
-      veilig(c.name),
-      diensten,
-      formatMinutenAlsUren(minuten),
-      anderWerk,
-      ziek,
-      betaald,
-      vrij,
-      veilig([...overigPerCode.entries()].map(([code, x]) => `${code}×${x}`).join(", ")),
-      dagen,
+      veilig(r.naam),
+      r.diensten,
+      formatMinutenAlsUren(r.minuten),
+      r.anderWerk,
+      r.ziek,
+      r.betaald,
+      r.vrij,
+      veilig(r.overig.map(({ code, keren }) => `${code}×${keren}`).join(", ")),
+      r.dagen,
     ]);
-    totaal.diensten += diensten;
-    totaal.minuten += minuten;
-    totaal.anderWerk += anderWerk;
-    totaal.ziek += ziek;
-    totaal.betaald += betaald;
-    totaal.vrij += vrij;
-    totaal.overig += overigTelling;
-    totaal.dagen += dagen;
   }
   aoa.push([]);
   aoa.push(["totaal", totaal.diensten, formatMinutenAlsUren(totaal.minuten), totaal.anderWerk, totaal.ziek, totaal.betaald, totaal.vrij, totaal.overig, totaal.dagen]);

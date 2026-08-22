@@ -55,3 +55,23 @@ describe('bouwMaandoverzichtAoa', () => {
     expect(aoa[4]).toEqual(['Leeg', 0, '0:00', 0, 0, 0, 0, '', 0]);
   });
 });
+
+describe('berekenMaandoverzicht', () => {
+  it('levert dezelfde telling als het xlsx-tabblad, maar als data (voor het Overzicht-venster)', async () => {
+    const { berekenMaandoverzicht } = await import('../api/helpers');
+    const services = [{ serviceNumber: '2101', startTime: '06:00', endTime: '14:00' }];
+    const planningCodes = [{ code: 'vrij', countsAsShift: false, isPaidAbsence: false, isDayOff: true }];
+    const cells = {
+      c1: {
+        '2026-09-01': { code: '2101', kind: 'service' },
+        '2026-09-02': { code: 'vrij', kind: 'absence' },
+      },
+    } as Record<string, Record<string, { code: string; kind: string }>>;
+    const { rijen, totaal } = berekenMaandoverzicht(['2026-09-01', '2026-09-02'], [{ id: 'c1', name: 'Jan' }], cells, services, planningCodes);
+    expect(rijen).toEqual([
+      { driverId: 'c1', naam: 'Jan', diensten: 1, minuten: 480, anderWerk: 0, ziek: 0, betaald: 0, vrij: 1, overig: [], dagen: 2 },
+    ]);
+    expect(totaal.diensten).toBe(1);
+    expect(totaal.dagen).toBe(2);
+  });
+});

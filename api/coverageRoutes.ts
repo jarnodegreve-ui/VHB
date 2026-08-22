@@ -1,6 +1,6 @@
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
-import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
+import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
 import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
 import { brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
 import {
@@ -180,27 +180,54 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
 // mag bewust overrulen, maar moet zien wát hij overrult.
 /** Volledig advies voor één openstaande dienst — gedeeld door
  *  GET /api/coverage-advisor en de dagelijkse digest. */
+/** Datavenster voor één advies-datum: ±6 dagen (6-dagenregel + rustcheck met
+ *  de buurdagen), opgerekt tot de volledige week (ma–zo) én kalendermaand van
+ *  de dag — de sortering telt sinds 19-08 gewerkte dagen per week en maand. */
+export function adviesVenster(date: string): { vanaf: string; tot: string } {
+  const maandStart = `${date.slice(0, 7)}-01`;
+  // Laatste dag van de maand = de dag vóór de 1e van de volgende maand
+  // (dag 28 + 7 valt gegarandeerd in de volgende maand).
+  const volgendeMaandStart = `${addDagen(`${date.slice(0, 7)}-28`, 7).slice(0, 7)}-01`;
+  const maandEind = addDagen(volgendeMaandStart, -1);
+  const weekStart = maandagVan(date);
+  const vanaf = [addDagen(date, -6), maandStart, weekStart].sort()[0];
+  const tot = [addDagen(date, 6), maandEind, addDagen(weekStart, 6)].sort().slice(-1)[0];
+  return { vanaf, tot };
+}
+
+type AdviesBron = { vanaf: string; tot: string; users: any[]; leave: any[]; services: any[]; swaps: any[]; shifts: any[] };
+
+/** Eén dataload voor [vanaf, tot] — gedeeld door het losse advies en de
+ *  batch (herverdeel-wizard): 17 gaten hoeven niet 17× alles op te halen. */
+export async function laadAdviesBron(vanaf: string, tot: string): Promise<AdviesBron> {
+  const months: string[] = [];
+  for (let m = vanaf.slice(0, 7); m <= tot.slice(0, 7); ) {
+    months.push(m);
+    const [jr, mnd] = m.split("-").map(Number);
+    m = mnd === 12 ? `${jr + 1}-01` : `${jr}-${String(mnd + 1).padStart(2, "0")}`;
+  }
+  const [users, leave, services, swaps, ...planningChunks] = await Promise.all([
+    getUsersData(),
+    getLeaveData({ endOnOrAfter: vanaf }),
+    getServicesData(),
+    getSwapsData(),
+    ...months.map((m) => getPlanningData({ monthIso: m })),
+  ]);
+  const shifts = (planningChunks.flat() as any[]).filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);
+  return { vanaf, tot, users, leave, services, swaps, shifts };
+}
+
 export async function berekenCoverageAdvies(date: string, code: string) {
-    // Venster: ±6 dagen (6-dagenregel + rustcheck met de buurdagen), opgerekt
-    // tot de volledige week (ma–zo) én kalendermaand van de dag — de sortering
-    // telt sinds 19-08 gewerkte dagen per week en per maand.
-    const maandStart = `${date.slice(0, 7)}-01`;
-    // Laatste dag van de maand = de dag vóór de 1e van de volgende maand
-    // (dag 28 + 7 valt gegarandeerd in de volgende maand).
-    const volgendeMaandStart = `${addDagen(`${date.slice(0, 7)}-28`, 7).slice(0, 7)}-01`;
-    const maandEind = addDagen(volgendeMaandStart, -1);
-    const weekStart = maandagVan(date);
-    const vanaf = [addDagen(date, -6), maandStart, weekStart].sort()[0];
-    const tot = [addDagen(date, 6), maandEind, addDagen(weekStart, 6)].sort().slice(-1)[0];
-    const months = Array.from(new Set([vanaf, date, tot].map((d) => d.slice(0, 7))));
-    const [users, leave, services, swaps, ...planningChunks] = await Promise.all([
-      getUsersData(),
-      getLeaveData({ endOnOrAfter: vanaf }),
-      getServicesData(),
-      getSwapsData(),
-      ...months.map((m) => getPlanningData({ monthIso: m })),
-    ]);
-    const shifts = (planningChunks.flat() as any[]).filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);
+  const { vanaf, tot } = adviesVenster(date);
+  return berekenCoverageAdviesUitBron(await laadAdviesBron(vanaf, tot), date, code);
+}
+
+/** Zelfde berekening als vanouds, maar op een (mogelijk ruimere) voorgeladen
+ *  bron; het venster van déze datum wordt er hier uit gefilterd. */
+export function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, code: string) {
+    const { vanaf, tot } = adviesVenster(date);
+    const { users, leave, services, swaps } = bron;
+    const shifts = bron.shifts.filter((s) => String(s.date ?? "") >= vanaf && String(s.date ?? "") <= tot);
 
     const dienstToken = toLookupToken(code);
     const service = (services as any[]).find((s) => toLookupToken(s.serviceNumber) === dienstToken);
@@ -498,6 +525,82 @@ export function mountCoverageRoutes(app: express.Express) {
     } catch (err) {
       console.error("Error computing coverage advisor:", err);
       res.status(500).json({ error: "Kon het advies niet berekenen." });
+    }
+  });
+
+  // Batch-advies voor de herverdeel-wizard: alle open diensten van één
+  // afwezige in één call — één dataload over het verenigde venster i.p.v.
+  // 17 losse advies-aanroepen die elk alles ophalen.
+  app.post("/api/coverage-advisor/batch", authenticate, requireRole("planner", "admin"), async (req, res) => {
+    try {
+      const ruw = Array.isArray(req.body?.items) ? req.body.items : [];
+      const items = ruw
+        .map((i: any) => ({ date: String(i?.date ?? ""), code: String(i?.code ?? "").trim() }))
+        .filter((i: { date: string; code: string }) => ISO_DAG_RE.test(i.date) && i.code);
+      if (items.length === 0) {
+        return res.status(400).json({ error: "Geef items mee als [{ date, code }]." });
+      }
+      if (items.length > 40) {
+        return res.status(400).json({ error: "Maximaal 40 diensten per batch." });
+      }
+      const vensters = items.map((i: { date: string }) => adviesVenster(i.date));
+      const vanaf = vensters.map((v: { vanaf: string }) => v.vanaf).sort()[0];
+      const tot = vensters.map((v: { tot: string }) => v.tot).sort().slice(-1)[0];
+      const bron = await laadAdviesBron(vanaf, tot);
+      const resultaten = items.map((i: { date: string; code: string }) => {
+        try {
+          const advies = berekenCoverageAdviesUitBron(bron, i.date, i.code);
+          const passend = (advies.kandidaten ?? []).filter((k: any) => k.past);
+          return {
+            date: i.date,
+            code: i.code,
+            samenvatting: advies.samenvatting,
+            tijdenOnbekend: advies.tijdenOnbekend,
+            // Top 3 passend volstaat voor de wizard; het volledige advies
+            // blijft per gat op te vragen via GET /api/coverage-advisor.
+            passend: passend.slice(0, 3),
+            nietPassend: (advies.kandidaten ?? []).length - passend.length,
+          };
+        } catch {
+          return { date: i.date, code: i.code, samenvatting: "Advies kon niet berekend worden.", tijdenOnbekend: false, passend: [], nietPassend: 0 };
+        }
+      });
+      res.json({ items: resultaten });
+    } catch (err) {
+      console.error("Error computing coverage advisor batch:", err);
+      res.status(500).json({ error: "Kon het batch-advies niet berekenen." });
+    }
+  });
+
+  // Voorstel voor de verwachtingslijsten, afgeleid uit de geïmporteerde
+  // planning zelf: per dag-type de cijfercodes die op minstens de helft van
+  // de dagen gereden worden. Ná een dienstregelingswissel is dit één klik
+  // i.p.v. 60 chips handwerk (en de bron is dezelfde als de praktijk-check,
+  // dus geen ruis uit losse Excel-tabbladen).
+  app.get("/api/coverage-expectations/voorstel", authenticate, requireRole("planner", "admin"), async (req, res) => {
+    try {
+      const from = typeof req.query.from === "string" ? req.query.from : "";
+      const to = typeof req.query.to === "string" ? req.query.to : "";
+      if (!ISO_DAG_RE.test(from) || !ISO_DAG_RE.test(to) || from > to) {
+        return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
+      }
+      const stored = await getCoverageExpectations();
+      const weekdaysRaw = Array.isArray(stored[COVERAGE_WEEKDAYS_KEY]) ? stored[COVERAGE_WEEKDAYS_KEY] : null;
+      const weekdays = weekdaysRaw && weekdaysRaw.length === 7 ? weekdaysRaw.map((s) => String(s ?? "")) : [...DEFAULT_WEEKDAYS];
+      const rows = (await getPlanningMatrixRows()).filter((r: any) => {
+        const d = String(r.source_date ?? "");
+        return d >= from && d <= to;
+      });
+      const voorstellen = stelVerwachtingenVoor(
+        rows as any[],
+        weekdays,
+        parseWeekdagPerioden(stored),
+        parseOverrides(stored[COVERAGE_OVERRIDES_KEY]),
+      );
+      res.json({ from, to, dagen: rows.length, voorstellen });
+    } catch (err) {
+      console.error("Error computing expectation proposal:", err);
+      res.status(500).json({ error: "Kon het lijstenvoorstel niet berekenen." });
     }
   });
 }

@@ -27,7 +27,7 @@ import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
+import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   applySwapToPlanning,
@@ -959,6 +959,18 @@ app.get("/api/month-planning", authenticate, async (req: AuthenticatedRequest, r
     // toewijzingen en afwezigheids-overlay verwerkt — in het praktijk-tab-
     // formaat, direct her-importeerbaar. Zo start de volgende Excel-bewerking
     // op de werkelijke stand i.p.v. de verouderde upload.
+    // Maandoverzicht als data voor het Overzicht-venster in de maandplanning
+    // — exact dezelfde telling als het xlsx-tabblad (gedeelde berekening),
+    // zodat scherm en export nooit kunnen verschillen. Staf-only: tellingen
+    // per collega zijn planner-informatie.
+    if (String(req.query.format ?? "") === "summary") {
+      if (req.appUser?.role === "chauffeur") {
+        return res.status(403).json({ error: "Onvoldoende rechten." });
+      }
+      const overzicht = berekenMaandoverzicht(dates, chauffeurs.map((c) => ({ id: c.id, name: c.name })), cells, services as any[], codes as any[]);
+      return res.json({ month, dagen: dates.length, ...overzicht });
+    }
+
     if (String(req.query.format ?? "") === "xlsx") {
       if (req.appUser?.role === "chauffeur") {
         return res.status(403).json({ error: "Onvoldoende rechten." });
