@@ -3461,6 +3461,50 @@ describe('telegram-webhook — secret, koppeling en commando\'s', () => {
     expect(res.status).toBe(401);
   });
 
+  it('parseDagAanduiding: jaargrens-rol, kalender-echtheid en weekdagen', async () => {
+    const { parseDagAanduiding } = await import('../api/telegram');
+    // Zonder jaar rolt een verleden datum naar volgend jaar (december-case).
+    expect(parseDagAanduiding('03/01', '2026-12-28')).toBe('2027-01-03');
+    expect(parseDagAanduiding('29/12', '2026-12-28')).toBe('2026-12-29');
+    // Onbestaande datums zijn null, geen "Invalid Date"-weergave verderop.
+    expect(parseDagAanduiding('31/02', '2026-08-23')).toBeNull();
+    expect(parseDagAanduiding('2026-02-31', '2026-08-23')).toBeNull();
+    // Weekdag = eerstvolgende (2026-08-23 is een zondag).
+    expect(parseDagAanduiding('vrijdag', '2026-08-23')).toBe('2026-08-28');
+    expect(parseDagAanduiding('zondag', '2026-08-23')).toBe('2026-08-23');
+    expect(parseDagAanduiding('morgen', '2026-08-23')).toBe('2026-08-24');
+  });
+
+  it('/ziekmeld zonder argument stuurt een hulptekst die Telegram-HTML overleeft', async () => {
+    await webhook({ message: { chat: { id: 777 }, text: '/ziekmeld' } }, 'test-secret');
+    expect(verzonden).toHaveLength(1);
+    expect(verzonden[0].tekst).toContain('Gebruik');
+    // Geen rauwe tags — die laten Telegram het hele bericht weigeren.
+    expect(verzonden[0].tekst).not.toMatch(/<naam>|<dag>/);
+  });
+
+  it('zm-knop van gisteren registreert vanaf vandaag, niet met terugwerkende kracht', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    const morgen = new Date(Date.parse(`${vandaag}T00:00:00Z`) + 86400000).toISOString().slice(0, 10);
+    const gisteren = new Date(Date.parse(`${vandaag}T00:00:00Z`) - 86400000).toISOString().slice(0, 10);
+    mem.leave = [];
+    await webhook({ callback_query: { id: 'cb-oud', data: `zm|3|${gisteren}|${morgen}`, message: { chat: { id: 777 } } } }, 'test-secret');
+    const record = mem.leave.find((l: any) => l.type === 'ziekte' && String(l.userId) === '3');
+    expect(record).toMatchObject({ startDate: vandaag, endDate: morgen });
+    expect(verzonden[0].tekst).toContain('start bijgesteld naar vandaag');
+  });
+
+  it('/gaten escapet dienstcodes zodat één rare code het bericht niet sloopt', async () => {
+    const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
+    mem.planningMatrix = [
+      { id: 'm-esc', source_date: vandaag, day_type: 'week', assignments: { 'Chauffeur A': '12' }, raw_row: '' },
+    ];
+    mem.coverageExpectations = { week: ['12', '11<x>'] };
+    await webhook({ message: { chat: { id: 777 }, text: '/gaten' } }, 'test-secret');
+    expect(verzonden[0].tekst).toContain('11&lt;x&gt;');
+    expect(verzonden[0].tekst).not.toContain('11<x>');
+  });
+
   it('/ziek somt de actuele ziekmeldingen op', async () => {
     const vandaag = new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Brussels' });
     mem.leave = [

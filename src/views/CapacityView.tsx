@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
-import { ChevronLeft, ChevronRight, Clock, Download, RotateCcw, Search, Table2, TriangleAlert, X } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Download, RotateCcw, Search, Table2, TriangleAlert, X } from 'lucide-react';
 import { cn, downloadBlob, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { SkeletonRow } from '../components/Skeleton';
-import { Button, MicroLabel } from '../components/primitives';
+import { Button, MicroLabel, Td, Th } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
@@ -124,6 +124,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const [overzichtLaden, setOverzichtLaden] = useState(false);
   const [overzicht, setOverzicht] = useState<null | { dagen: number; rijen: OverzichtRij[]; totaal: Record<string, number> }>(null);
   const [overzichtSort, setOverzichtSort] = useState<{ kolom: keyof OverzichtRij; richting: 1 | -1 }>({ kolom: 'naam', richting: 1 });
+  // Kopie van formatMinutenAlsUren (api/helpers.ts) — de client mag niet
+  // uit api/ importeren; houd het formaat gelijk.
   const urenLabel = (minuten: number) => `${Math.floor(minuten / 60)}:${String(Math.round(minuten) % 60).padStart(2, '0')}`;
   const openOverzicht = async () => {
     setOverzichtOpen(true);
@@ -1115,28 +1117,24 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         )}
       </Modal>
 
-      {/* Maandoverzicht per chauffeur — zelfde telling als de Excel-export. */}
-      <Modal open={overzichtOpen} onClose={() => setOverzichtOpen(false)} maxWidth="2xl">
-        <div className="p-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <MicroLabel>Maandoverzicht</MicroLabel>
-              <h3 className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 capitalize">{MONTH_NAMES[monthIndex]} {year}</h3>
-              <p className="mt-0.5 text-xs font-medium text-slate-500">
-                Stand ná wissels, toewijzingen en afwezigheden — identiek aan het tabblad "maandoverzicht" in de Excel-export. Uren = som van de dienstsegmenten; diensten zonder tijden tellen alleen in de dagtelling.
-              </p>
-            </div>
-            <button type="button" onClick={() => setOverzichtOpen(false)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
-              <X size={16} />
-            </button>
-          </div>
+      {/* Maandoverzicht per chauffeur — zelfde telling als de Excel-export.
+          Op de huisprimitieven (ModalHeader, Th/Td) zodat dit venster niet
+          zijn eigen dialect ontwikkelt (controle-ronde 22-08). */}
+      <Modal open={overzichtOpen} onClose={() => setOverzichtOpen(false)} maxWidth="2xl" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
+        <ModalHeader
+          eyebrow="Maandoverzicht"
+          title={`${MONTH_NAMES[monthIndex]} ${year}`}
+          description={'Stand ná wissels, toewijzingen en afwezigheden — identiek aan het tabblad "maandoverzicht" in de Excel-export. Uren = som van de dienstsegmenten; diensten zonder tijden tellen alleen in de dagtelling.'}
+          onClose={() => setOverzichtOpen(false)}
+        />
+        <div className="p-6 overflow-y-auto flex-1">
           {overzichtLaden ? (
-            <div className="mt-5 flex items-center gap-3 text-slate-500">
+            <div className="flex items-center gap-3 text-slate-500">
               <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
               <span className="text-sm font-bold">Overzicht berekenen…</span>
             </div>
           ) : overzicht && (
-            <div className="mt-4 overflow-x-auto">
+            <div className="overflow-x-auto">
               <table className="w-full text-xs">
                 <thead>
                   <tr>
@@ -1149,14 +1147,29 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       ['betaald', 'Betaald afw.'],
                       ['vrij', 'Vrij'],
                       ['dagen', 'Dagen'],
-                    ] as Array<[keyof OverzichtRij, string]>).map(([kolom, label]) => (
-                      <th key={kolom} className={cn('px-2 py-2 text-left text-xs font-medium text-slate-500 whitespace-nowrap', kolom !== 'naam' && 'text-right')}>
-                        <button type="button" onClick={() => sorteerOverzicht(kolom)} className="inline-flex items-center gap-1 font-medium hover:text-slate-800">
-                          {label}{overzichtSort.kolom === kolom ? (overzichtSort.richting === 1 ? ' ↑' : ' ↓') : ''}
-                        </button>
-                      </th>
-                    ))}
-                    <th className="px-2 py-2 text-left text-xs font-medium text-slate-500">Overig</th>
+                    ] as Array<[keyof OverzichtRij, string]>).map(([kolom, label]) => {
+                      const actief = overzichtSort.kolom === kolom;
+                      return (
+                        <Th
+                          key={kolom}
+                          sort={actief ? (overzichtSort.richting === 1 ? 'ascending' : 'descending') : undefined}
+                          className={cn('px-2 py-1', kolom !== 'naam' && 'text-right')}
+                        >
+                          <button
+                            type="button"
+                            onClick={() => sorteerOverzicht(kolom)}
+                            className={cn(
+                              'inline-flex min-h-11 sm:pointer-fine:min-h-0 items-center gap-1 px-1 -mx-1 transition-colors',
+                              actief ? 'font-semibold text-slate-900' : 'font-medium hover:text-slate-800',
+                            )}
+                          >
+                            {label}
+                            {actief && (overzichtSort.richting === 1 ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
+                          </button>
+                        </Th>
+                      );
+                    })}
+                    <Th className="px-2 py-1">Overig</Th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1170,29 +1183,29 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     })
                     .map((r) => (
                       <tr key={r.driverId} className="border-t border-slate-100">
-                        <td className="px-2 py-1.5 font-semibold text-slate-800 whitespace-nowrap">{r.naam}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{r.diensten}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{urenLabel(r.minuten)}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{r.anderWerk}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{r.ziek}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{r.betaald}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums">{r.vrij}</td>
-                        <td className="px-2 py-1.5 text-right tabular-nums font-semibold">{r.dagen}</td>
-                        <td className="px-2 py-1.5 text-slate-500 whitespace-nowrap">{r.overig.map(({ code, keren }) => `${code}×${keren}`).join(', ') || '—'}</td>
+                        <Td className="px-2 py-1.5 text-xs font-semibold text-slate-800 whitespace-nowrap">{r.naam}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.diensten}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{urenLabel(r.minuten)}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.anderWerk}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.ziek}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.betaald}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums">{r.vrij}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-right tabular-nums font-semibold">{r.dagen}</Td>
+                        <Td className="px-2 py-1.5 text-xs text-slate-500 whitespace-nowrap">{r.overig.map(({ code, keren }) => `${code}×${keren}`).join(', ') || '—'}</Td>
                       </tr>
                     ))}
                 </tbody>
                 <tfoot>
                   <tr className="border-t border-slate-200">
-                    <td className="px-2 py-2 font-bold text-slate-900">Totaal</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.diensten}</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-bold">{urenLabel(overzicht.totaal.minuten)}</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.anderWerk}</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.ziek}</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.betaald}</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.vrij}</td>
-                    <td className="px-2 py-2 text-right tabular-nums font-bold">{overzicht.totaal.dagen}</td>
-                    <td className="px-2 py-2" />
+                    <Td className="px-2 py-2 text-xs font-bold text-slate-900">Totaal</Td>
+                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.diensten}</Td>
+                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{urenLabel(overzicht.totaal.minuten)}</Td>
+                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.anderWerk}</Td>
+                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.ziek}</Td>
+                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.betaald}</Td>
+                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.vrij}</Td>
+                    <Td className="px-2 py-2 text-xs text-right tabular-nums font-bold text-slate-900">{overzicht.totaal.dagen}</Td>
+                    <Td className="px-2 py-2" />
                   </tr>
                 </tfoot>
               </table>

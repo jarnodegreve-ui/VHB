@@ -147,7 +147,7 @@ export function ZiekteView({
   // Openstaande diensten), de planner corrigeert waar nodig, en één knop
   // voert alles door. Sequentieel, niet parallel: elke wissel hercheckt
   // dubbele inplanning tegen de stand mét de vorige wissels.
-  type BatchAdvies = { samenvatting?: string; tijdenOnbekend?: boolean; passend: Array<{ id: string; name: string }>; nietPassend: number };
+  type BatchAdvies = { samenvatting?: string; passend: Array<{ id: string; name: string }> };
   const [batchAdvies, setBatchAdvies] = useState<Record<string, BatchAdvies>>({});
   const [batchLaden, setBatchLaden] = useState(false);
   const [verdeelBezig, setVerdeelBezig] = useState(false);
@@ -176,10 +176,26 @@ export function ZiekteView({
       // de baas over elke rij.
       setVervangerPerDienst((cur) => {
         const next = { ...cur };
+        // Dag-bewust voorinvullen: twee gaten op dezelfde dag mogen niet
+        // allebei dezelfde topkandidaat krijgen (de server weigert de tweede
+        // wissel dan terecht met een 409 en de batch strandt half). Bestaande
+        // handmatige keuzes tellen mee als bezet.
+        const bezetPerDag = new Map<string, Set<string>>();
+        const bezet = (dag: string) => {
+          if (!bezetPerDag.has(dag)) bezetPerDag.set(dag, new Set());
+          return bezetPerDag.get(dag)!;
+        };
+        for (const d of diensten) {
+          if (next[d.id]) bezet(d.date).add(String(next[d.id]));
+        }
         for (const d of diensten) {
           if (next[d.id]) continue;
           const advies = per[adviesSleutel(d)];
-          if (advies?.passend?.[0]?.id) next[d.id] = String(advies.passend[0].id);
+          const kandidaat = (advies?.passend ?? []).find((k) => !bezet(d.date).has(String(k.id)));
+          if (kandidaat) {
+            next[d.id] = String(kandidaat.id);
+            bezet(d.date).add(String(kandidaat.id));
+          }
         }
         return next;
       });
@@ -504,7 +520,7 @@ export function ZiekteView({
                         {/* Wizard: batch-advies vult per gat de beste passende
                             kandidaat voor; "Verdeel alles" voert de gekozen
                             wissels in één keer door (met bevestiging). */}
-                        {isAdmin && openDienstenLijst(detail).filter((d) => !overgezet[d.id]).length > 1 && (() => {
+                        {isAdmin && (openDienstenLijst(detail).filter((d) => !overgezet[d.id]).length > 1 || verdeelBezig) && (() => {
                           const teVerdelen = openDienstenLijst(detail).filter((d) => !overgezet[d.id] && vervangerPerDienst[d.id]).length;
                           return (
                             <div className="flex shrink-0 flex-wrap gap-2">
@@ -532,10 +548,12 @@ export function ZiekteView({
                               ) : isAdmin ? (
                                 <>
                                 {batchAdvies[adviesSleutel(dienst)]?.samenvatting && (
-                                  <p className="text-2xs font-medium text-slate-500">{batchAdvies[adviesSleutel(dienst)].samenvatting}</p>
+                                  <p className="text-xs font-medium text-slate-500">{batchAdvies[adviesSleutel(dienst)].samenvatting}</p>
                                 )}
                                 {verdeelFouten[dienst.id] && (
-                                  <p className="text-2xs font-semibold text-rose-600 dark:text-rose-400">{verdeelFouten[dienst.id]}</p>
+                                  // red, niet rose: rose is hier de zíekte-statuskleur;
+                                  // dit is een fout en hoort de fouttaal te spreken.
+                                  <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{verdeelFouten[dienst.id]}</p>
                                 )}
                                 <div className="flex flex-col gap-2 sm:flex-row">
                                   <select
