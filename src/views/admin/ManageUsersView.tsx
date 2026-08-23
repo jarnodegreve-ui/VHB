@@ -3,6 +3,7 @@ import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHoriz
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
+import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
@@ -159,6 +160,17 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     .sort((a, b) => a.name.localeCompare(b.name));
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+  // Naam-botsing-poort: de planning koppelt matrixcellen aan accounts op naam
+  // (accent-/volgorde-ongevoelig), en bij twee accounts op dezelfde sleutel
+  // weigert de server te kiezen — de chauffeur valt dan uit maandplanning,
+  // dekking en dagweergave (case Ivan Van Hoorde, 23-08). Opslaan mag wél
+  // (twee échte collega's kunnen dezelfde naam hebben), maar alleen na een
+  // expliciete bevestiging.
+  const [confirmNaamBotsing, setConfirmNaamBotsing] = useState<{ melding: string; doorgaan: () => void } | null>(null);
+  const naamBotsingMelding = (botsingen: User[]) => {
+    const wie = botsingen.map((b) => `${b.name}${b.employeeId ? ` (${b.employeeId})` : ''}`).join(', ');
+    return `Er bestaat al een account met deze naam: ${wie}. Twee accounts met dezelfde naam kunnen niet aan de planning gekoppeld worden — de diensten op die naam verdwijnen dan uit de maandplanning en de dekking. Toch opslaan?`;
+  };
 
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -178,6 +190,15 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       isActive: true,
     };
 
+    const botsingen = vindNaamBotsingen(userToAdd.name, users);
+    if (botsingen.length > 0) {
+      setConfirmNaamBotsing({ melding: naamBotsingMelding(botsingen), doorgaan: () => void voerToevoegenUit(userToAdd) });
+      return;
+    }
+    await voerToevoegenUit(userToAdd);
+  };
+
+  const voerToevoegenUit = async (userToAdd: UserDraft) => {
     setIsSubmittingUser(true);
     const success = await onSave([...users, userToAdd]).finally(() => setIsSubmittingUser(false));
     if (!success) return;
@@ -202,6 +223,20 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     const adminWouldBeRemoved = editingUser.role !== 'admin' || editingUser.isActive === false;
     if (isOnlyActiveAdmin && adminWouldBeRemoved) return notify('Je kunt de laatste actieve admin niet degraderen of deactiveren.', 'error');
 
+    // Alleen poorten als déze save de botsing introduceert (naam-sleutel
+    // gewijzigd): een al bestaande dubbel mag het bewerken van andere velden
+    // niet blijven tegenhouden — daarvoor staat de hint onder het naamveld.
+    const botsingen = vindNaamBotsingen(editingUser.name, users, editingUser.id);
+    const naamGewijzigd = sortedNameToken(editingUser.name) !== sortedNameToken(originalUser?.name ?? '');
+    if (botsingen.length > 0 && naamGewijzigd) {
+      setConfirmNaamBotsing({ melding: naamBotsingMelding(botsingen), doorgaan: () => void voerBijwerkenUit() });
+      return;
+    }
+    await voerBijwerkenUit();
+  };
+
+  const voerBijwerkenUit = async () => {
+    if (!editingUser) return;
     setIsSubmittingUser(true);
     const success = await onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u))).finally(() => setIsSubmittingUser(false));
     if (!success) return;
@@ -403,8 +438,20 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         if (addedCount === 0 && updatedCount === 0) {
           notify('Geen nieuwe gegevens of wijzigingen gevonden in het bestand.', 'info');
         } else {
+          // De merge hierboven matcht op exacte naam; een omgekeerde volgorde
+          // in het Excel ("Van Hoorde Ivan") glipt daar langs en wordt een
+          // tweede account. Dubbele naam-sleutels in het eindresultaat zijn
+          // onkoppelbaar in de planning — benoem ze in de bevestigvraag.
+          const perToken = new Map<string, string[]>();
+          for (const u of newUsersList) {
+            const token = sortedNameToken(u.name);
+            if (!token) continue;
+            perToken.set(token, [...(perToken.get(token) ?? []), u.name]);
+          }
+          const dubbeleNamen = [...perToken.values()].filter((namen) => namen.length > 1).map((namen) => namen[0]);
+          const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die worden bijgewerkt. Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
           setPendingImportUsers(newUsersList);
-          setPendingImportMessage(updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die worden bijgewerkt. Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`);
+          setPendingImportMessage(dubbeleNamen.length > 0 ? `${basis} Let op: na deze import bestaan er meerdere accounts met dezelfde naam (${dubbeleNamen.join(', ')}) — die namen zijn dan niet aan de planning te koppelen.` : basis);
         }
       } catch (error) {
         console.error('Error parsing Excel:', error);
@@ -691,6 +738,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       <ConfirmationModal isOpen={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
       <ConfirmationModal isOpen={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
       <ConfirmationModal isOpen={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
+      <ConfirmationModal isOpen={!!confirmNaamBotsing} onClose={() => setConfirmNaamBotsing(null)} onConfirm={() => { const poort = confirmNaamBotsing; setConfirmNaamBotsing(null); poort?.doorgaan(); }} title="Naam bestaat al" message={confirmNaamBotsing?.melding ?? ''} confirmText="Toch opslaan" variant="warning" />
 
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)}>
         <div className="p-6 border-b border-white/70">
@@ -699,7 +747,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         </div>
         <form onSubmit={handleAddUser} className="p-6 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2"><MicroLabel>Volledige Naam</MicroLabel><input type="text" autoComplete="name" required aria-label="Volledige naam" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. Jan Janssen" /></div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <MicroLabel>Volledige Naam</MicroLabel>
+              <input type="text" autoComplete="name" required aria-label="Volledige naam" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. Jan Janssen" />
+              {vindNaamBotsingen(newUser.name, users).length > 0 && (
+                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</p>
+              )}
+            </div>
             <div className="space-y-1.5"><MicroLabel>Rol</MicroLabel><select aria-label="Rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
             <div className="space-y-1.5"><MicroLabel>Personeelsnummer</MicroLabel><input type="text" autoComplete="off" aria-label="Personeelsnummer" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
             <div className="space-y-1.5 sm:col-span-2"><MicroLabel>E-mailadres</MicroLabel><input type="email" autoComplete="email" inputMode="email" required aria-label="E-mailadres" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
@@ -722,7 +776,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             </div>
             <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5 sm:col-span-2"><MicroLabel>Volledige Naam</MicroLabel><input type="text" autoComplete="name" required aria-label="Volledige naam" value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" /></div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <MicroLabel>Volledige Naam</MicroLabel>
+                  <input type="text" autoComplete="name" required aria-label="Volledige naam" value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" />
+                  {vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 && (
+                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</p>
+                  )}
+                </div>
                 <div className="space-y-1.5"><MicroLabel>Rol</MicroLabel><select aria-label="Rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
                 <div className="space-y-1.5"><MicroLabel>Personeelsnummer</MicroLabel><input type="text" autoComplete="off" aria-label="Personeelsnummer" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" /></div>
                 <div className="space-y-1.5 sm:col-span-2"><MicroLabel>E-mailadres</MicroLabel><input type="email" autoComplete="email" inputMode="email" aria-label="E-mailadres" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
