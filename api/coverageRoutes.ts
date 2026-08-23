@@ -428,7 +428,7 @@ export function mountCoverageRoutes(app: express.Express) {
     try {
       const from = typeof req.query.from === "string" ? req.query.from : "";
       const to = typeof req.query.to === "string" ? req.query.to : "";
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+      if (!ISO_DAG_RE.test(from) || !ISO_DAG_RE.test(to) || from > to) {
         return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
       }
       const days = await berekenDekkingsGaten(from, to);
@@ -448,7 +448,7 @@ export function mountCoverageRoutes(app: express.Express) {
     try {
       const from = typeof req.query.from === "string" ? req.query.from : "";
       const to = typeof req.query.to === "string" ? req.query.to : "";
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+      if (!ISO_DAG_RE.test(from) || !ISO_DAG_RE.test(to) || from > to) {
         return res.status(400).json({ error: "Geef een geldige periode (from/to als YYYY-MM-DD)." });
       }
       const rows = (await getPlanningMatrixRows()).filter((r: any) => {
@@ -555,14 +555,14 @@ export function mountCoverageRoutes(app: express.Express) {
             date: i.date,
             code: i.code,
             samenvatting: advies.samenvatting,
-            tijdenOnbekend: advies.tijdenOnbekend,
-            // Top 3 passend volstaat voor de wizard; het volledige advies
-            // blijft per gat op te vragen via GET /api/coverage-advisor.
-            passend: passend.slice(0, 3),
-            nietPassend: (advies.kandidaten ?? []).length - passend.length,
+            // Top 3 passend (alleen id + naam) volstaat voor de wizard; het
+            // volledige advies blijft per gat op te vragen via
+            // GET /api/coverage-advisor. Meer meesturen was over-levering
+            // zonder consument (controle-ronde 22-08).
+            passend: passend.slice(0, 3).map((k: any) => ({ id: String(k.id), name: String(k.name) })),
           };
         } catch {
-          return { date: i.date, code: i.code, samenvatting: "Advies kon niet berekend worden.", tijdenOnbekend: false, passend: [], nietPassend: 0 };
+          return { date: i.date, code: i.code, samenvatting: "Advies kon niet berekend worden.", passend: [] };
         }
       });
       res.json({ items: resultaten });

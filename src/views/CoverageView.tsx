@@ -119,6 +119,9 @@ export function CoverageView() {
   };
 
   useEffect(() => {
+    // Voorstel hoort bij de getoonde maand — bij bladeren resetten, anders
+    // belooft de knop september terwijl er augustus-cijfers staan.
+    setVoorstellen(null);
     laadGaps(from, to);
     return () => { gapsVersieRef.current += 1; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -335,10 +338,14 @@ export function CoverageView() {
   };
   const pasVoorstelToe = (v: VerwachtingVoorstel) => {
     const codes = v.codes.map((c) => c.code);
+    // Case-ongevoelig matchen: "Zaterdag" uit de Excel-kolom mag geen
+    // duplicaat naast een geconfigureerd "zaterdag" aanmaken — de bestaande
+    // naam (waar de weekdag-toewijzing naar wijst) blijft leidend.
+    const zelfdeNaam = (naam: string) => naam.trim().toLowerCase() === v.dayType.trim().toLowerCase();
     setDayTypes((prev) => {
-      const bestaat = prev.some((dt) => dt.name.trim() === v.dayType);
+      const bestaat = prev.some((dt) => zelfdeNaam(dt.name));
       return bestaat
-        ? prev.map((dt) => (dt.name.trim() === v.dayType ? { ...dt, services: codes } : dt))
+        ? prev.map((dt) => (zelfdeNaam(dt.name) ? { ...dt, services: codes } : dt))
         : [...prev, { name: v.dayType, services: codes }];
     });
     notify(`Lijst voor "${v.dayType}" klaargezet (${codes.length} diensten) — controleer en klik op Opslaan.`, 'success');
@@ -549,16 +556,16 @@ export function CoverageView() {
                 ) : (
                   <div className="space-y-2">
                     {voorstellen.map((v) => {
-                      const huidig = dayTypes.find((dt) => dt.name.trim() === v.dayType)?.services ?? null;
-                      const zelfde = huidig !== null && huidig.length === v.codes.length
+                      const huidig = dayTypes.find((dt) => dt.name.trim().toLowerCase() === v.dayType.trim().toLowerCase())?.services ?? null;
+                      const lijstKloptAl = huidig !== null && huidig.length === v.codes.length
                         && v.codes.every((c) => huidig.some((h) => h.trim().toLowerCase() === c.code.trim().toLowerCase()));
                       return (
                         <div key={v.dayType} className="rounded-2xl border border-slate-100 bg-surface-field p-4">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-bold text-slate-700 capitalize">{v.dayType}</span>
                             <Badge tone="slate" className="tabular-nums">{v.codes.length} diensten · {v.dagen} dagen</Badge>
-                            {zelfde ? (
-                              <Badge tone="emerald">lijst klopt al</Badge>
+                            {lijstKloptAl ? (
+                              <Badge tone="emerald" className="ml-auto shrink-0">Lijst klopt al</Badge>
                             ) : (
                               <Button variant="secondary" size="sm" className="ml-auto shrink-0" onClick={() => pasVoorstelToe(v)}>
                                 {huidig === null ? 'Maak dag-type met deze lijst' : `Vervang lijst (nu ${huidig.length})`}
@@ -585,7 +592,7 @@ export function CoverageView() {
                 >
                   <div>
                     <MicroLabel className="text-slate-500">Standaard per weekdag</MicroLabel>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">Welk dag-type geldt standaard op elke weekdag{weekdayPeriods.length > 0 ? ` · ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : ''}.</p>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">{weekdayPeriods.length > 0 ? `Basis + ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : 'Basis-toewijzing'} — welk dag-type elke weekdag standaard is.</p>
                   </div>
                   <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', weekdagenOpen && 'rotate-180')} />
                 </button>
@@ -693,7 +700,7 @@ export function CoverageView() {
                 ) : (
                   <div className="space-y-2">
                     {gesorteerdeOverrides.map(({ o, i, verlopen }) => (
-                      <div key={i} className={cn('flex flex-wrap items-center gap-2', verlopen && 'opacity-60')}>
+                      <div key={i} className="flex flex-wrap items-center gap-2">
                         <input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
                         <span className="text-2xs font-bold text-slate-400">t/m</span>
                         <input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
@@ -702,7 +709,7 @@ export function CoverageView() {
                           <option value="">— kies type —</option>
                           {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
-                        {verlopen && <Badge tone="slate">verlopen</Badge>}
+                        {verlopen && <Badge tone="slate">Verlopen</Badge>}
                         <Button variant="ghost" size="sm" icon={<X size={15} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Uitzondering verwijderen" onClick={() => removeOverride(i)} />
                       </div>
                     ))}

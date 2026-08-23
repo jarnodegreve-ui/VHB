@@ -159,10 +159,11 @@ export function TableShell({ className, children }: { className?: string; childr
   );
 }
 
-export function Th({ className, children, title }: { className?: string; children?: ReactNode; title?: string }) {
+export function Th({ className, children, title, sort }: { className?: string; children?: ReactNode; title?: string; sort?: 'ascending' | 'descending' }) {
   // Sentence-case, geen caps: tabelkoppen zijn leestekst, geen eyebrow.
+  // `sort` zet aria-sort voor sorteerbare kolommen (maandoverzicht).
   return (
-    <th title={title} className={cn('px-4 py-3 sm:pointer-fine:py-2.5 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
+    <th title={title} aria-sort={sort} className={cn('px-4 py-3 sm:pointer-fine:py-2.5 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
       {children}
     </th>
   );

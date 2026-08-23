@@ -24,7 +24,7 @@ import { rateLimitMiddleware, clientErrorRateLimit, urgentEmailRateLimit, create
 import type AnthropicClient from "@anthropic-ai/sdk";
 import { mountOcpiRoutes, getOcpiRegistration, isSafeExternalHttpsUrl } from "./ocpi.js";
 import { mountDeviceRoutes } from "./deviceRoutes.js";
-import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
+import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
 import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
@@ -175,13 +175,14 @@ mountOcpiRoutes(app);
 // Toestel-whitelist (registratie + admin-beheer). Zie api/deviceRoutes.ts.
 mountDeviceRoutes(app);
 
-// Telegram-bot voor de planner (webhook + commando's). Zie api/telegram.ts.
-// De bereken-functies staan verderop in dit bestand (function-declaraties,
-// dus gehoist) — doorgeven i.p.v. importeren voorkomt een import-cyclus.
+// Telegram-bot voor de planner (webhook, commando's, goedkeurknoppen). Zie
+// api/telegram.ts. De bereken-functies komen uit coverageRoutes/advisor; de
+// vijf *Intern-schrijfkernen zijn function-declaraties verderop in dit
+// bestand (gehoist) — doorgeven i.p.v. importeren voorkomt een cyclus
+// (telegram.ts wordt hier immers geïmporteerd voor de meld-helpers).
 mountTelegramRoutes(app, {
   berekenDekkingsGaten,
   berekenCoverageAdvies,
-  addDagen,
   beslisVerlof: beslisVerlofIntern,
   beslisRuil: beslisRuilIntern,
   registreerZiekmelding: registreerZiekmeldingIntern,
@@ -2542,9 +2543,11 @@ app.get("/api/cron/telegram-briefing", async (req, res) => {
     delen.push(`🌅 <b>Ochtendbriefing — ${dagLang}</b>`);
     delen.push(await formatVandaag(dagenVandaag));
     const morgenGat = dagenMorgen.find((d) => d.date === morgen);
-    delen.push(morgenGat && morgenGat.missing.length > 0
-      ? `Morgen open: ${morgenGat.missing.join(", ")}.`
-      : "Morgen: alles ingevuld.");
+    delen.push(!morgenGat
+      ? "⚠️ Geen geïmporteerde planning voor morgen."
+      : morgenGat.missing.length > 0
+        ? `Morgen open: ${morgenGat.missing.map((c) => escapeHtml(c)).join(", ")}.`
+        : "Morgen: alles ingevuld.");
     delen.push(await formatZiek());
 
     // Planning-horizon: hoe ver reikt de geïmporteerde matrix nog?
@@ -2555,8 +2558,10 @@ app.get("/api/cron/telegram-briefing", async (req, res) => {
       .pop();
     if (laatste) {
       const dagenOver = Math.round((Date.parse(`${laatste}T00:00:00Z`) - Date.parse(`${vandaag}T00:00:00Z`)) / 86400000);
-      if (dagenOver <= 7) {
-        delen.push(`⚠️ Nog maar ${dagenOver} dag${dagenOver === 1 ? "" : "en"} planning in het portaal (t/m ${laatste}) — tijd voor een import.`);
+      if (dagenOver < 0) {
+        delen.push(`⚠️ De geïmporteerde planning is verlopen (liep t/m ${DAG_KORT(laatste)}) — importeer de nieuwe Excel.`);
+      } else if (dagenOver <= 7) {
+        delen.push(`⚠️ Nog maar ${dagenOver} dag${dagenOver === 1 ? "" : "en"} planning in het portaal (t/m ${DAG_KORT(laatste)}) — tijd voor een import.`);
       }
     }
 
@@ -2687,15 +2692,13 @@ app.get("/api/cron/error-digest", async (req, res) => {
       const gaten = dagen.flatMap((d) => d.missing.map((code) => ({ date: d.date, code })));
       if (gaten.length > 0) {
         const MAX_ADVIEZEN = 8;
-        const digestDag = (iso: string) =>
-          new Date(`${iso}T12:00:00Z`).toLocaleDateString("nl-BE", { weekday: "short", day: "numeric", month: "short", timeZone: "Europe/Brussels" });
         const regels: string[] = [];
         for (const gat of gaten.slice(0, MAX_ADVIEZEN)) {
           try {
             const advies = await berekenCoverageAdvies(gat.date, gat.code);
-            regels.push(`${digestDag(gat.date)} — dienst ${gat.code}: ${advies.samenvatting}`);
+            regels.push(`${DAG_KORT(gat.date)} — dienst ${gat.code}: ${advies.samenvatting}`);
           } catch {
-            regels.push(`${digestDag(gat.date)} — dienst ${gat.code}: advies kon niet berekend worden.`);
+            regels.push(`${DAG_KORT(gat.date)} — dienst ${gat.code}: advies kon niet berekend worden.`);
           }
         }
         if (gaten.length > MAX_ADVIEZEN) {
@@ -3958,7 +3961,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             });
             await meldRuilTerValidatieTelegram({
               id: String(next.id),
-              omschrijving: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}${next.shiftLine ? ` — dienst ${next.shiftLine} op ${next.shiftDate ?? "?"}` : ""}.`,
+              omschrijving: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)}${next.shiftLine ? ` — dienst ${next.shiftLine} op ${next.shiftDate ? DAG_KORT(String(next.shiftDate)) : "?"}` : ""}.`,
             });
           }
         }
@@ -4120,11 +4123,11 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
       });
       await meldRuilTerValidatieTelegram({
         id: String(current.id),
-        omschrijving: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))}${current.shiftLine ? ` — dienst ${current.shiftLine} op ${current.shiftDate ?? "?"}` : ""}${current.returnCode && String(current.returnCode).toLowerCase() !== "vrij" ? `, tegenprestatie ${current.returnCode} op ${current.returnDate ?? "?"}` : ""}.`,
+        omschrijving: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))}${current.shiftLine ? ` — dienst ${current.shiftLine} op ${current.shiftDate ? DAG_KORT(String(current.shiftDate)) : "?"}` : ""}${current.returnCode && String(current.returnCode).toLowerCase() !== "vrij" ? `, tegenprestatie ${current.returnCode} op ${current.returnDate ? DAG_KORT(String(current.returnDate)) : "?"}` : ""}.`,
       });
     }
 
-    return { swap: updated, melding: `${action} — ${userName(String(current.requesterId))}${current.shiftLine ? ` · dienst ${current.shiftLine} op ${current.shiftDate ?? "?"}` : ""}.` };
+    return { swap: updated, melding: `${action} — ${userName(String(current.requesterId))}${current.shiftLine ? ` · dienst ${current.shiftLine} op ${current.shiftDate ? DAG_KORT(String(current.shiftDate)) : "?"}` : ""}.` };
 }
 
 app.patch("/api/swaps/:id", authenticate, async (req: AuthenticatedRequest, res) => {
@@ -4456,7 +4459,7 @@ async function registreerZiekmeldingIntern(
   invoer: { userId: unknown; startDate?: unknown; endDate?: unknown; comment?: unknown },
   actor: BeslisActor,
   stuurTelegramAlert = true,
-): Promise<{ fout: { status: number; error: string } } | { leave: any; period: string; targetName: string; openDiensten: Array<{ label: string; nummers: string }>; openDienstenIso: Array<{ date: string; nummers: string[] }> }> {
+): Promise<{ fout: { status: number; error: string } } | { leave: any; period: string; targetName: string; openDienstenIso: Array<{ date: string; nummers: string[] }> }> {
     const selfId = String(actor.id);
     const forUserId = String(invoer.userId ?? "");
     if (!forUserId) return { fout: { status: 400, error: "Kies de chauffeur die ziek is." } };
@@ -4617,8 +4620,8 @@ async function registreerZiekmeldingIntern(
       leave: record,
       period,
       targetName: target.name,
-      openDiensten,
-      // ISO-variant voor de bot: kandidaten-knoppen hebben de rauwe datum nodig.
+      // ISO-variant voor de bot: kandidaten-knoppen hebben de rauwe datum
+      // nodig; de label-variant leeft alleen intern (mail/alert).
       openDienstenIso: [...dagDiensten.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([d, nummers]) => ({ date: d, nummers })),
     };
 }
@@ -4790,7 +4793,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
             body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
             url: "/",
           });
-          await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, period, comment: next.comment });
+          await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, start: String(next.startDate), eind: String(next.endDate) });
         }
         continue;
       }
@@ -4885,7 +4888,7 @@ async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: 
     const users = await getUsersData();
     const requester = users.find((u) => String(u.id) === String(current.userId));
     const requesterName = requester?.name || `Onbekende gebruiker (${current.userId})`;
-    const period = current.startDate === current.endDate ? current.startDate : `${current.startDate} t/m ${current.endDate}`;
+    const period = current.startDate === current.endDate ? DAG_KORT(String(current.startDate)) : `${DAG_KORT(String(current.startDate))} t/m ${DAG_KORT(String(current.endDate))}`;
     const typeLabel = LEAVE_TYPE_LABEL[current.type] ?? current.type;
     const actionLabels: Record<string, string> = {
       approved: "Verlof goedgekeurd",

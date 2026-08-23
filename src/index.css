@@ -877,6 +877,10 @@ html.dark {
 :where(.dark) .border-slate-50 { border-color: rgba(79, 87, 95, 0.20); }
 :where(.dark) .border-slate-100 { border-color: rgba(79, 87, 95, 0.28); }
 :where(.dark) .border-slate-200 { border-color: rgba(79, 87, 95, 0.38); }
+/* Spinner-boog: de blanket-override hierboven zet border-color (shorthand)
+   en wist daarmee ook border-top-color van border-t-oker-500 — de spinner
+   werd in dark een egaal grijs ringetje. Hersteld ná de blanket-regel. */
+:where(.dark) .border-t-oker-500 { border-top-color: var(--color-oker-500); }
 :where(.dark) .border-slate-300 { border-color: rgba(110, 118, 127, 0.45); }
 /* Tailwind v4 tekent divide-y als border-BOTTOM op :not(:last-child) — de
    oude v3-selector (~ = alles behalve het eerste kind) miste daardoor in
