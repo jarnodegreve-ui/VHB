@@ -74,6 +74,24 @@ export const suggestClosestName = (
   return bestScore >= 0.62 ? best : null;
 };
 
+/**
+ * Accounts waarvan de naam op dezelfde sleutel uitkomt als `naam` (accent-,
+ * interpunctie- en volgorde-ongevoelig — exact de matching waarmee de server
+ * matrixcellen aan accounts koppelt). Bij zo'n botsing weigert de server te
+ * kiezen en valt de chauffeur uit planning, dekking en dagweergave (case
+ * Ivan Van Hoorde, 23-08). Gepauzeerde accounts tellen mee: de server filtert
+ * daar ook niet op. `negeerId` = het account dat zelf bewerkt wordt.
+ */
+export const vindNaamBotsingen = <T extends { id: string; name: string }>(
+  naam: string,
+  users: T[],
+  negeerId?: string,
+): T[] => {
+  const token = sortedNameToken(naam);
+  if (!token) return [];
+  return users.filter((u) => u.id !== negeerId && sortedNameToken(u.name) === token);
+};
+
 // Let op: client-variant die 'HH:MM - HH:MM'-labels teruggeeft. De server heeft
 // een gelijknamige-maar-andere getServiceSegments (api/storage.ts) die HH:MM
 // valideert en {startTime,endTime,segment}-objecten geeft — bewust los, dus
