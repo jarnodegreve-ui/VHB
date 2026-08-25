@@ -117,4 +117,19 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen — kolommen ná "aantal"', (
     const { waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
     expect(waarschuwingen).toEqual([]);
   });
+
+  it('waarschuwt niet voor chauffeurnamen die het tellingen-blok herhaalt', async () => {
+    const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
+    // De praktijk-tab van VHB herhaalt ná "aantal" elke chauffeur als kopje van
+    // de tellingen (25-08: 114 meldingen bij 38 chauffeurs). Alleen een naam
+    // die vóór "aantal" ontbreekt is mogelijk een vergeten chauffeur.
+    const buffer = buildXlsx([
+      ['datum', 'dagtype', 'Jan Peeters', 'Mia Claes', 'aantal', 'Jan Peeters', 'Mia Claes', 'uur', 'Peeters Jan', 'Cherlet Luc'],
+      [serial('2026-07-06'), 'W', '4101', '4102', 2, 1, 1, '', 1, '4103'],
+    ]);
+    const { rows, waarschuwingen } = parsePlanningMatrixXlsxMetWaarschuwingen(buffer);
+    expect(rows[0].assignments).toEqual({ 'Jan Peeters': '4101', 'Mia Claes': '4102' });
+    expect(waarschuwingen).toHaveLength(1);
+    expect(waarschuwingen[0]).toContain('Cherlet Luc');
+  });
 });
