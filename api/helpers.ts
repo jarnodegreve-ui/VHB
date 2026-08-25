@@ -870,7 +870,12 @@ export const parsePlanningMatrixXlsxMetWaarschuwingen = (
   // tellingen-blok en daar leest de import bewust niet. Een chauffeur die per
   // ongeluk achteraan is toegevoegd, verdween tot nu geruisloos uit het
   // portaal — vandaar een expliciete (niet-blokkerende) waarschuwing.
+  // Het tellingen-blok herhaalt per chauffeur de naam als kopje (de VHB-tab
+  // doet dat zelfs drie keer): een naam die vóór "aantal" al als
+  // chauffeur-kolom staat is dus géén vergeten chauffeur en krijgt geen
+  // waarschuwing (25-08: 114 valse meldingen bij 38 chauffeurs).
   const NAAMACHTIG_RE = /^[a-zà-ÿ'’.-]+(\s+[a-zà-ÿ'’.-]+)+$/i;
+  const chauffeurSleutels = new Set(driverColumns.map((column) => sortedNameToken(column.name)));
   const waarschuwingen: string[] = [];
   for (let i = firstTotalsIndex + 1; i < header.length; i++) {
     const naam = String(header[i] ?? "").trim();
@@ -878,6 +883,7 @@ export const parsePlanningMatrixXlsxMetWaarschuwingen = (
     const laag = naam.toLowerCase();
     if (laag === "aantal" || PLANNING_MATRIX_NON_DRIVER_HEADERS.has(laag)) continue;
     if (!NAAMACHTIG_RE.test(naam)) continue;
+    if (chauffeurSleutels.has(sortedNameToken(naam))) continue;
     waarschuwingen.push(`Kolom "${naam}" staat ná de "aantal"-kolom en wordt niet geïmporteerd — staat daar een chauffeur, verplaats de kolom dan vóór "aantal" en importeer opnieuw.`);
   }
 
