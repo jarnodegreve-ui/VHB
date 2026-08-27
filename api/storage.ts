@@ -354,6 +354,15 @@ const toPublicPlanningMatrixHistory = (row: PlanningMatrixImportHistoryRow | Pla
   skippedAbsences: 'skippedAbsences' in row ? row.skippedAbsences : row.skipped_absences,
   unknownCodes: 'unknownCodes' in row ? row.unknownCodes : row.unknown_codes,
   unmatchedDrivers: 'unmatchedDrivers' in row ? row.unmatchedDrivers : row.unmatched_drivers,
+  // De nieuwe velden zijn optioneel in béide vormen, dus `in`-narrowing werkt
+  // hier niet — lees beide spellingen via een brede cast.
+  filename: row.filename ?? null,
+  importedBy: (row as PlanningMatrixImportHistoryRecord).importedBy ?? (row as PlanningMatrixImportHistoryRow).imported_by ?? null,
+  periodStart: (row as PlanningMatrixImportHistoryRecord).periodStart ?? (row as PlanningMatrixImportHistoryRow).period_start ?? null,
+  periodEnd: (row as PlanningMatrixImportHistoryRecord).periodEnd ?? (row as PlanningMatrixImportHistoryRow).period_end ?? null,
+  fileStart: (row as PlanningMatrixImportHistoryRecord).fileStart ?? (row as PlanningMatrixImportHistoryRow).file_start ?? null,
+  fileEnd: (row as PlanningMatrixImportHistoryRecord).fileEnd ?? (row as PlanningMatrixImportHistoryRow).file_end ?? null,
+  snapshotPath: (row as PlanningMatrixImportHistoryRecord).snapshotPath ?? (row as PlanningMatrixImportHistoryRow).snapshot_path ?? null,
 });
 
 export const getPlanningMatrixHistory = async (): Promise<PlanningMatrixImportHistoryRecord[]> => {
@@ -379,6 +388,13 @@ export const savePlanningMatrixHistoryEntry = async (entry: PlanningMatrixImport
     skipped_absences: entry.skippedAbsences,
     unknown_codes: entry.unknownCodes,
     unmatched_drivers: entry.unmatchedDrivers,
+    filename: entry.filename ?? null,
+    imported_by: entry.importedBy ?? null,
+    period_start: entry.periodStart ?? null,
+    period_end: entry.periodEnd ?? null,
+    file_start: entry.fileStart ?? null,
+    file_end: entry.fileEnd ?? null,
+    snapshot_path: entry.snapshotPath ?? null,
   };
   const { error } = await client.from('planning_matrix_import_history').insert(historyRow);
   if (error) console.error("Supabase error saving planning matrix history:", error);
@@ -1288,6 +1304,82 @@ export const storeBackup = async (filename: string, body: string): Promise<{ rem
   return { removedOld };
 };
 
+// --- Herstelpunten vóór een matrix-import ---
+//
+// Vóór elke bevestigde import gaat de volledige stand van matrix + planning
+// als JSON de backups-bucket in. Terugzetten = integraal vervangen door die
+// stand — daarvoor bestaan de losse full-replace-paden nog precies.
+
+const SNAPSHOT_PREFIX = 'import-herstelpunt-';
+const SNAPSHOT_BEWAREN = 5;
+
+export type ImportSnapshot = {
+  createdAt: string;
+  matrixRows: PlanningMatrixRow[];
+  planning: ShiftRecord[];
+};
+
+export const storeImportSnapshot = async (snapshot: ImportSnapshot): Promise<string> => {
+  if (!supabaseAdmin) {
+    throw new Error('Herstelpunten vereisen de service-role client (SUPABASE_SERVICE_ROLE_KEY).');
+  }
+  const filename = `${SNAPSHOT_PREFIX}${snapshot.createdAt.replace(/[:.]/g, '-')}.json`;
+  const body = JSON.stringify(snapshot);
+  const upload = () =>
+    supabaseAdmin.storage.from(BACKUPS_BUCKET).upload(filename, Buffer.from(body, 'utf8'), {
+      contentType: 'application/json',
+      upsert: true,
+    });
+  let { error } = await upload();
+  if (error && /bucket.*not.*found/i.test(error.message ?? '')) {
+    const { error: createError } = await supabaseAdmin.storage.createBucket(BACKUPS_BUCKET, { public: false });
+    if (createError) throw new Error(`Backups-bucket aanmaken mislukt: ${createError.message}`);
+    ({ error } = await upload());
+  }
+  if (error) throw new Error(`Herstelpunt uploaden mislukt: ${error.message}`);
+
+  // Alleen de laatste SNAPSHOT_BEWAREN herstelpunten bewaren — de namen
+  // bevatten de ISO-timestamp, dus alfabetisch sorteren = chronologisch.
+  const { data: files } = await supabaseAdmin.storage.from(BACKUPS_BUCKET).list(undefined, { limit: 1000 });
+  const snapshots = (files ?? [])
+    .map((f: any) => f.name as string)
+    .filter((name) => name.startsWith(SNAPSHOT_PREFIX))
+    .sort();
+  const teVerwijderen = snapshots.slice(0, Math.max(0, snapshots.length - SNAPSHOT_BEWAREN));
+  if (teVerwijderen.length > 0) {
+    await supabaseAdmin.storage.from(BACKUPS_BUCKET).remove(teVerwijderen);
+  }
+  return filename;
+};
+
+export const getImportSnapshot = async (path: string): Promise<ImportSnapshot | null> => {
+  if (!supabaseAdmin) {
+    throw new Error('Herstelpunten vereisen de service-role client (SUPABASE_SERVICE_ROLE_KEY).');
+  }
+  const { data, error } = await supabaseAdmin.storage.from(BACKUPS_BUCKET).download(path);
+  if (error || !data) return null;
+  try {
+    const parsed = JSON.parse(await data.text());
+    if (!Array.isArray(parsed?.matrixRows) || !Array.isArray(parsed?.planning)) return null;
+    return parsed as ImportSnapshot;
+  } catch {
+    return null;
+  }
+};
+
+/** Volledige terugzet naar een herstelpunt. Niet-atomisch (twee losse
+ *  full-replaces) — acceptabel voor een bewuste admin-hersteldaad; de
+ *  matrix gaat eerst zodat een halve terugzet bij de volgende heropbouw
+ *  herstelbaar blijft. Lege planning in het herstelpunt = bewust wissen. */
+export const restorePlanningAndMatrixSnapshot = async (snapshot: ImportSnapshot) => {
+  await savePlanningMatrixRows(snapshot.matrixRows);
+  if (snapshot.planning.length > 0) {
+    await replacePlanningData(snapshot.planning);
+  } else {
+    await clearPlanningData();
+  }
+};
+
 /** Laatste back-up teruglezen — voor de maandelijkse restore-proef. */
 export const getLatestBackup = async (): Promise<{ filename: string; body: string } | null> => {
   if (!supabaseAdmin) {
@@ -1412,6 +1504,53 @@ export const getRitblaadjeMeta = async (): Promise<unknown | null> => {
 /** Ruimt alle documenten van één gebruiker op: eerst de storage-bestanden,
  *  dan de metadata-rijen. Wordt aangeroepen bij het verwijderen van een
  *  gebruiker zodat er geen wees-bestanden/rijen achterblijven. Best-effort. */
+/** Onthaal-documenten (categorie "Onthaal") automatisch klaarzetten voor een
+ *  nieuwe chauffeur: per bestandsnaam de recentste versie die een collega al
+ *  kreeg, gekopieerd in de bucket — zo krijgt elke nieuwkomer de
+ *  onthaalbrochure zonder dat de planner eraan moet denken. Best-effort:
+ *  geen Onthaal-documenten of geen service-role = no-op. */
+export const kopieerOnthaalDocumentenNaar = async (userId: string): Promise<number> => {
+  if (!supabaseAdmin) return 0;
+  const client = requireDb();
+  const { data, error } = await client
+    .from("user_documents")
+    .select("*")
+    .ilike("category", "onthaal")
+    .order("uploaded_at", { ascending: false })
+    .limit(200);
+  if (error || !data || data.length === 0) return 0;
+  const { data: eigen } = await client.from("user_documents").select("filename").eq("user_id", String(userId));
+  const heeftAl = new Set((eigen ?? []).map((r: any) => String(r.filename ?? "").toLowerCase()));
+  // Nieuwste versie per bestandsnaam wint (de query is aflopend gesorteerd).
+  const perBestand = new Map<string, any>();
+  for (const row of data) {
+    const key = String(row.filename ?? "").toLowerCase();
+    if (key && !perBestand.has(key)) perBestand.set(key, row);
+  }
+  let done = 0;
+  for (const row of perBestand.values()) {
+    const key = String(row.filename ?? "").toLowerCase();
+    if (heeftAl.has(key) || String(row.user_id) === String(userId)) continue;
+    const safeName = String(row.filename).replace(/[^a-zA-Z0-9._-]+/g, "_").slice(-100);
+    const doelPath = `${userId}/${crypto.randomUUID()}-${safeName}`;
+    const { error: copyError } = await supabaseAdmin.storage.from(DOCUMENTS_BUCKET).copy(String(row.storage_path), doelPath);
+    if (copyError) {
+      console.error(`[onthaal-docs] kopie voor ${userId} mislukt:`, copyError.message);
+      continue;
+    }
+    await insertUserDocument({
+      userId: String(userId),
+      filename: String(row.filename),
+      storagePath: doelPath,
+      category: row.category ?? "Onthaal",
+      sizeBytes: row.size_bytes ?? null,
+      uploadedBy: "automatisch (onthaal)",
+    });
+    done++;
+  }
+  return done;
+};
+
 export const deleteAllDocumentsForUser = async (userId: string): Promise<number> => {
   if (!db) return 0;
   try {

@@ -109,6 +109,10 @@ import {
   deleteUserExpiry,
   deletePlanningNote,
   getLatestBackup,
+  kopieerOnthaalDocumentenNaar,
+  storeImportSnapshot,
+  getImportSnapshot,
+  restorePlanningAndMatrixSnapshot,
 } from "./storage.js";
 
 dotenv.config();
@@ -1480,7 +1484,7 @@ const parseMatrixInputMetPeriode = (body: any) => {
   return { rows: selectie, fileStartDate, fileEndDate, parserWaarschuwingen: waarschuwingen };
 };
 
-app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req, res) => {
+app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
   try {
     let rows, fileStartDate, fileEndDate, parserWaarschuwingen;
     try {
@@ -1556,10 +1560,27 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       });
     }
 
+    // Herstelpunt: de volledige stand van vóór deze import naar de
+    // backups-bucket. Best-effort — een falend herstelpunt mag de import
+    // niet tegenhouden, maar zonder pad verschijnt er ook geen
+    // terugzet-knop bij deze import in de historiek.
+    let snapshotPath: string | null = null;
+    try {
+      const [matrixVoor, planningVoor] = await Promise.all([getPlanningMatrixRows(), getPlanningData()]);
+      snapshotPath = await storeImportSnapshot({
+        createdAt: new Date().toISOString(),
+        matrixRows: matrixVoor,
+        planning: planningVoor as any[],
+      });
+    } catch (snapErr) {
+      console.error("Herstelpunt maken mislukt (import gaat door):", snapErr);
+    }
+
     // Atomair: matrix + planning in één transactie (geen skew als één van
     // beide zou falen). Valt server-side terug op het oude pad zolang de
     // RPC-migratie nog niet gedraaid is.
     await replacePlanningAndMatrix(rows, generatedPlanning.shifts);
+    const bestandsnaam = typeof req.body?.filename === "string" ? req.body.filename.trim().slice(0, 200) : "";
     await savePlanningMatrixHistoryEntry({
       id: `${Date.now()}`,
       createdAt: new Date().toISOString(),
@@ -1570,6 +1591,13 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       skippedAbsences: generatedPlanning.summary.skippedAbsences,
       unknownCodes: generatedPlanning.summary.unknownCodes,
       unmatchedDrivers: generatedPlanning.summary.unmatchedDrivers,
+      filename: bestandsnaam || null,
+      importedBy: req.appUser?.name ?? null,
+      periodStart: startDate,
+      periodEnd: endDate,
+      fileStart: fileStartDate,
+      fileEnd: fileEndDate,
+      snapshotPath,
     });
     await logActivity(
       req,
@@ -1607,6 +1635,46 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
   } catch (err: any) {
     console.error("Planning importeren is mislukt.", err);
     res.status(500).json({ error: "Planning importeren is mislukt." });
+  }
+});
+
+// Terugzetten naar het herstelpunt van een import: de volledige stand van
+// matrix + planning van vóór díe import komt terug. Bewust admin-only en
+// integraal — dit is een noodrem, geen bewerkingsknop. De
+// planning_version-trigger verwittigt clients vanzelf.
+app.post("/api/planning-matrix/restore", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const historyId = String(req.body?.historyId ?? "").trim();
+    if (!historyId) {
+      return res.status(400).json({ error: "Geef de import mee waarvan je het herstelpunt wilt terugzetten (historyId)." });
+    }
+    const history = await getPlanningMatrixHistory();
+    const entry = history.find((h) => String(h.id) === historyId);
+    if (!entry) {
+      return res.status(404).json({ error: "Deze import staat niet (meer) in de historiek." });
+    }
+    if (!entry.snapshotPath) {
+      return res.status(400).json({ error: "Voor deze import bestaat geen herstelpunt — die worden pas sinds eind augustus aangemaakt." });
+    }
+    const snapshot = await getImportSnapshot(entry.snapshotPath);
+    if (!snapshot) {
+      return res.status(404).json({ error: "Het herstelpunt is niet meer beschikbaar (alleen de laatste vijf blijven bewaard)." });
+    }
+    if (snapshot.matrixRows.length === 0) {
+      return res.status(400).json({ error: "Dit herstelpunt is leeg (stand van vóór de allereerste import) — er valt niets terug te zetten." });
+    }
+    await restorePlanningAndMatrixSnapshot(snapshot);
+    const importMoment = new Date(entry.createdAt).toLocaleString("nl-BE", { dateStyle: "short", timeStyle: "short", timeZone: "Europe/Brussels" });
+    await logActivity(
+      req,
+      "planning",
+      "Planning teruggezet naar herstelpunt",
+      `Stand van vóór de import van ${importMoment}${entry.filename ? ` (${entry.filename})` : ""} teruggezet: ${snapshot.matrixRows.length} matrixdagen, ${snapshot.planning.length} roosterregels.`,
+    );
+    res.json({ success: true, matrixDagen: snapshot.matrixRows.length, roosterregels: snapshot.planning.length });
+  } catch (err: any) {
+    console.error("Herstelpunt terugzetten mislukt:", err);
+    res.status(500).json({ error: "Terugzetten is mislukt — de planning is mogelijk deels teruggezet. Controleer de maandplanning en probeer opnieuw." });
   }
 });
 
@@ -2033,6 +2101,18 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       const userDiff = diffUserChanges(previousUsers, newData);
       for (const u of userDiff.added) {
         await logActivity(req, "users", "Gebruiker toegevoegd", `${u.name} (${u.role}, ${u.employeeId || '—'}).`, { type: "user", id: u.id });
+        // Nieuwe chauffeur? Zet de Onthaal-documenten (brochure e.d.) meteen
+        // klaar in "Mijn documenten". Best-effort — mag de save nooit breken.
+        if (u.role === "chauffeur") {
+          try {
+            const klaargezet = await kopieerOnthaalDocumentenNaar(String(u.id));
+            if (klaargezet > 0) {
+              await logActivity(req, "users", "Onthaal-documenten klaargezet", `${klaargezet} document(en) automatisch toegevoegd voor ${u.name}.`, { type: "user", id: u.id });
+            }
+          } catch (err) {
+            console.error(`[onthaal-docs] klaarzetten voor ${u.name} mislukt:`, err);
+          }
+        }
       }
       for (const { user: u, fields } of userDiff.changed) {
         await logActivity(req, "users", "Gebruiker gewijzigd", `${u.name} — ${fields.join(', ')}.`, { type: "user", id: u.id });

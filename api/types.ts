@@ -92,6 +92,16 @@ export interface PlanningMatrixImportHistoryRecord {
   skippedAbsences: number;
   unknownCodes: string[];
   unmatchedDrivers: string[];
+  /** Audit sinds 27-08: welk bestand, welke periode, door wie — en het pad
+   *  naar het herstelpunt (stand van vóór de import) in de backups-bucket.
+   *  Nullable: oudere rijen hebben deze velden niet. */
+  filename?: string | null;
+  importedBy?: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  fileStart?: string | null;
+  fileEnd?: string | null;
+  snapshotPath?: string | null;
 }
 
 export type ActivityCategory =
@@ -150,6 +160,13 @@ export type PlanningMatrixImportHistoryRow = {
   skipped_absences: number;
   unknown_codes: string[];
   unmatched_drivers: string[];
+  filename?: string | null;
+  imported_by?: string | null;
+  period_start?: string | null;
+  period_end?: string | null;
+  file_start?: string | null;
+  file_end?: string | null;
+  snapshot_path?: string | null;
 };
 
 export interface DiversionRecord {

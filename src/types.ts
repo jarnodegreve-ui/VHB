@@ -140,6 +140,15 @@ export interface PlanningMatrixImportHistory {
   skippedAbsences: number;
   unknownCodes: string[];
   unmatchedDrivers: string[];
+  /** Sinds 27-08: bestand, periode, wie — en het herstelpunt-pad waarmee de
+   *  terugzet-knop verschijnt. Nullable: oudere imports hebben ze niet. */
+  filename?: string | null;
+  importedBy?: string | null;
+  periodStart?: string | null;
+  periodEnd?: string | null;
+  fileStart?: string | null;
+  fileEnd?: string | null;
+  snapshotPath?: string | null;
 }
 
 export type ActivityCategory =
