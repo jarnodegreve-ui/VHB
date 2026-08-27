@@ -141,15 +141,20 @@ type Dashboard = {
   storingen?: Array<{ soort: 'laadpunt' | 'sessie'; evseUid: string | null; status?: string; classificatie?: string; wanneer: string | null }>;
 };
 
-/** Antwoord van GET /api/ocpi/maandverbruik. */
-type Maandverbruik = {
-  maand: string;
-  eersteMaand: string | null;
-  huidigeMaand: string;
+/** Antwoord van GET /api/ocpi/verbruik. `maand` is gezet als de periode
+ *  precies een kalendermaand is. */
+type Verbruik = {
+  van: string;
+  tot: string;
+  maand: string | null;
+  eersteDag: string | null;
+  huidigeDag: string;
   totaalKwh: number;
   totaalSessies: number;
   punten: Array<{ evseUid: string; evseId: string | null; physicalReference: string | null; kwh: number; sessies: number }>;
 };
+/** Wat de gebruiker koos: een kalendermaand (‹ ›) of een vrije periode van/tot. */
+type PeriodeKeuze = { modus: 'maand'; maand: string } | { modus: 'periode'; van: string; tot: string };
 /** "YYYY-MM" ± n maanden — zuiver op de string, zonder tijdzone-gedoe. */
 const maandPlus = (maand: string, delta: number): string => {
   const [j, m] = maand.split('-').map(Number);
@@ -160,7 +165,17 @@ const maandLabel = (maand: string): string => {
   const [j, m] = maand.split('-').map(Number);
   return `${MONTH_NAMES[m - 1] ?? maand} ${j}`;
 };
-/** Hele kWh met Belgisch duizendtal ("6.559"): tienden zeggen niets op maandniveau. */
+const dagMaand = (dag: string) => `${Number(dag.slice(8, 10))} ${(MONTH_NAMES[Number(dag.slice(5, 7)) - 1] ?? '').toLowerCase()}`;
+/** "Augustus 2026" · "4 augustus 2026" · "4–5 augustus 2026" · "28 juli – 5 augustus 2026". */
+const periodeLabel = (v: Pick<Verbruik, 'van' | 'tot' | 'maand'>): string => {
+  if (v.maand) return maandLabel(v.maand);
+  const jaar = v.tot.slice(0, 4);
+  if (v.van === v.tot) return `${dagMaand(v.van)} ${jaar}`;
+  if (v.van.slice(0, 7) === v.tot.slice(0, 7)) return `${Number(v.van.slice(8, 10))}–${dagMaand(v.tot)} ${jaar}`;
+  if (v.van.slice(0, 4) === jaar) return `${dagMaand(v.van)} – ${dagMaand(v.tot)} ${jaar}`;
+  return `${dagMaand(v.van)} ${v.van.slice(0, 4)} – ${dagMaand(v.tot)} ${jaar}`;
+};
+/** Hele kWh met Belgisch duizendtal ("6.559"): tienden zeggen niets op dit niveau. */
 const fmtKwh = (kwh: number) => Math.round(kwh).toLocaleString('nl-BE');
 
 const STATUS_LABEL: Record<string, string> = {
@@ -220,35 +235,53 @@ export function OcpiDashboardView() {
 
   useEffect(() => { load(); }, []);
 
-  // Maandverbruik per laadpunt (verzoek Jarno 27-08): eigen endpoint met
-  // maandkeuze. null = "huidige maand" (de server bepaalt die in Brusselse
-  // tijd); bladeren zet een concrete "YYYY-MM". De herlaad-teller hangt aan
-  // de Ververs-knop zodat die ook deze kaart ververst. De actueel-vlag
-  // voorkomt dat een traag antwoord van een vorige maand een snelle van de
-  // volgende overschrijft bij snel doorbladeren.
-  const [maand, setMaand] = useState<string | null>(null);
-  const [maandData, setMaandData] = useState<Maandverbruik | null>(null);
-  const [maandLaadt, setMaandLaadt] = useState(false);
-  const [maandFout, setMaandFout] = useState<string | null>(null);
+  // Verbruik per laadpunt (verzoek Jarno 27-08): eigen endpoint met
+  // periodekeuze — een kalendermaand (‹ ›-navigatie) of een vrije periode
+  // van/tot (bv. 4–5 augustus). null = "lopende maand" (de server bepaalt
+  // die in Brusselse tijd). De herlaad-teller hangt aan de Ververs-knop
+  // zodat die ook deze kaart ververst. De actueel-vlag voorkomt dat een traag
+  // antwoord van een vorige keuze een snelle van de volgende overschrijft.
+  const [keuze, setKeuze] = useState<PeriodeKeuze | null>(null);
+  const [verbruik, setVerbruik] = useState<Verbruik | null>(null);
+  const [verbruikLaadt, setVerbruikLaadt] = useState(false);
+  const [verbruikFout, setVerbruikFout] = useState<string | null>(null);
   const [herlaad, setHerlaad] = useState(0);
   useEffect(() => {
     let actueel = true;
     (async () => {
-      setMaandLaadt(true);
+      setVerbruikLaadt(true);
       try {
-        const response = await fetch(`/api/ocpi/maandverbruik${maand ? `?maand=${maand}` : ''}`, { headers: await getSupabaseAuthHeaders() });
+        const query = !keuze ? '' : keuze.modus === 'maand' ? `?maand=${keuze.maand}` : `?van=${keuze.van}&tot=${keuze.tot}`;
+        const response = await fetch(`/api/ocpi/verbruik${query}`, { headers: await getSupabaseAuthHeaders() });
         if (!response.ok) throw new Error(String(response.status));
-        const json = (await response.json()) as Maandverbruik;
-        if (actueel) { setMaandData(json); setMaandFout(null); }
+        const json = (await response.json()) as Verbruik;
+        if (actueel) { setVerbruik(json); setVerbruikFout(null); }
       } catch {
-        if (actueel) setMaandFout('Kon het maandverbruik niet laden.');
+        if (actueel) setVerbruikFout('Kon het verbruik per laadpunt niet laden.');
       } finally {
-        if (actueel) setMaandLaadt(false);
+        if (actueel) setVerbruikLaadt(false);
       }
     })();
     return () => { actueel = false; };
-  }, [maand, herlaad]);
-  const maandGekozen = maand ?? maandData?.maand ?? isoDate(new Date()).slice(0, 7);
+  }, [keuze, herlaad]);
+  const vandaag = isoDate(new Date());
+  const periodeModus = keuze?.modus ?? 'maand';
+  // In maand-modus: de gekozen maand, anders wat de server toonde.
+  const maandGekozen = keuze?.modus === 'maand' ? keuze.maand : (verbruik?.maand ?? verbruik?.van.slice(0, 7) ?? vandaag.slice(0, 7));
+  const periodeGekozen = keuze?.modus === 'periode' ? keuze : { van: verbruik?.van ?? `${vandaag.slice(0, 7)}-01`, tot: verbruik?.tot ?? vandaag };
+  const wisselModus = (m: 'maand' | 'periode') => {
+    if (m === periodeModus) return;
+    // Periode start op wat nu in beeld staat (de maand, geknipt op vandaag)
+    // zodat je alleen de dagen bijstelt; terug naar maand = de maand van de
+    // begindag.
+    setKeuze(m === 'periode'
+      ? { modus: 'periode', van: periodeGekozen.van, tot: periodeGekozen.tot > vandaag ? vandaag : periodeGekozen.tot }
+      : { modus: 'maand', maand: periodeGekozen.van.slice(0, 7) });
+  };
+  // Datumvelden: 'van' voorbij 'tot' schuift 'tot' mee (en omgekeerd); een
+  // gewist veld (lege waarde uit de picker) wordt genegeerd.
+  const zetVan = (v: string) => { if (v) setKeuze({ modus: 'periode', van: v, tot: v > periodeGekozen.tot ? v : periodeGekozen.tot }); };
+  const zetTot = (t: string) => { if (t) setKeuze({ modus: 'periode', van: t < periodeGekozen.van ? t : periodeGekozen.van, tot: t }); };
 
   // Termijn-schakelaars (verzoek Jarno 05-08). Verbruik telt per dag, dus
   // daar is 24u geen zinnige stap; bij het vermogen tonen 7d/maand de
@@ -807,9 +840,9 @@ export function OcpiDashboardView() {
                     {sessie && typeof sessie.kwh === 'number' && rij('Geladen deze sessie', `${sessie.kwh} kWh`)}
                     {sessie?.start_date_time && rij('Aangekoppeld sinds', new Date(sessie.start_date_time).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}
                     {(() => {
-                      // Maandtotaal van dit punt uit de maandkaart hieronder (zelfde maandkeuze).
-                      const mv = maandData?.punten.find((p) => p.evseUid === gekozenPunt.uid);
-                      return maandData && mv ? rij(`Geladen in ${maandLabel(maandData.maand)}`, `${fmtKwh(mv.kwh)} kWh`) : null;
+                      // Totaal van dit punt uit de verbruikskaart hieronder (zelfde periodekeuze).
+                      const mv = verbruik?.punten.find((p) => p.evseUid === gekozenPunt.uid);
+                      return verbruik && mv ? rij(verbruik.maand ? `Geladen in ${maandLabel(verbruik.maand)}` : `Geladen ${periodeLabel(verbruik)}`, `${fmtKwh(mv.kwh)} kWh`) : null;
                     })()}
                     {conn && rij('Max. vermogen', kW(conn.max_electric_power))}
                     {conn && rij('Connector', `${conn.standard ?? '—'}${conn.power_type ? ` · ${conn.power_type}` : ''}`)}
@@ -958,58 +991,98 @@ export function OcpiDashboardView() {
             )}
           </div>
 
-          {/* Maandverbruik per laadpunt (verzoek Jarno 27-08): hoeveel kWh elk
-              laadpunt in een kalendermaand geleverd heeft. De verbruiksgrafiek
-              bovenaan telt alles bij elkaar op; dit splitst het uit per punt
-              (en dus per bus), in dezelfde CPU-kolommen als de statuslijst
-              zodat je een laadpunt op dezelfde plek terugvindt. Oker = het
-              punt met het hoogste maandtotaal, net als de piek in de grafieken. */}
+          {/* Verbruik per laadpunt (verzoek Jarno 27-08): hoeveel kWh elk
+              laadpunt in een periode geleverd heeft — een kalendermaand (‹ ›)
+              of een vrije periode van/tot (bv. 4–5 augustus). De
+              verbruiksgrafiek bovenaan telt alles bij elkaar op; dit splitst
+              het uit per punt (en dus per bus), in dezelfde CPU-kolommen als
+              de statuslijst zodat je een laadpunt op dezelfde plek terugvindt.
+              Oker = het punt met het hoogste totaal, net als de piek in de
+              grafieken. */}
           <div>
             <AdminSubsectionHeader
               title="Verbruik per laadpunt"
-              description="Geleverde energie per laadpunt per kalendermaand, uit de laadsessies van ChargEye."
+              description="Geleverde energie per laadpunt, per maand of per vrij gekozen periode, uit de laadsessies van ChargEye."
               aside={(
-                <div className="flex items-center gap-2" role="group" aria-label="Maandkeuze">
-                  <button
-                    type="button"
-                    onClick={() => setMaand(maandPlus(maandGekozen, -1))}
-                    disabled={!maandData?.eersteMaand || maandPlus(maandGekozen, -1) < maandData.eersteMaand}
-                    aria-label="Vorige maand"
-                    className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
-                  >
-                    <ChevronLeft size={16} />
-                  </button>
-                  <span className="min-w-[8.5rem] text-center text-sm font-semibold text-slate-800" aria-live="polite">{maandLabel(maandGekozen)}</span>
-                  <button
-                    type="button"
-                    onClick={() => setMaand(maandPlus(maandGekozen, 1))}
-                    disabled={!maandData || maandGekozen >= maandData.huidigeMaand}
-                    aria-label="Volgende maand"
-                    className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
-                  >
-                    <ChevronRight size={16} />
-                  </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <TermijnKeuze
+                    label="Maand of vrije periode"
+                    waarde={periodeModus}
+                    opties={[{ id: 'maand', label: 'Maand' }, { id: 'periode', label: 'Periode' }]}
+                    onKies={wisselModus}
+                  />
+                  {periodeModus === 'maand' ? (
+                    <div className="flex items-center gap-2" role="group" aria-label="Maandkeuze">
+                      <button
+                        type="button"
+                        onClick={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, -1) })}
+                        disabled={!verbruik?.eersteDag || maandPlus(maandGekozen, -1) < verbruik.eersteDag.slice(0, 7)}
+                        aria-label="Vorige maand"
+                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+                      >
+                        <ChevronLeft size={16} />
+                      </button>
+                      <span className="min-w-[8.5rem] text-center text-sm font-semibold text-slate-800" aria-live="polite">{maandLabel(maandGekozen)}</span>
+                      <button
+                        type="button"
+                        onClick={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, 1) })}
+                        disabled={!verbruik || maandGekozen >= verbruik.huidigeDag.slice(0, 7)}
+                        aria-label="Volgende maand"
+                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
+                      >
+                        <ChevronRight size={16} />
+                      </button>
+                    </div>
+                  ) : (
+                    // Vrije periode: twee datumvelden, begrensd op de eerste dag
+                    // met sessies en vandaag. Volgorde-fouten worden stil
+                    // rechtgezet (zie zetVan/zetTot) i.p.v. met een foutmelding.
+                    <div className="flex items-center gap-2" role="group" aria-label="Periodekeuze">
+                      <input
+                        type="date"
+                        value={periodeGekozen.van}
+                        min={verbruik?.eersteDag ?? undefined}
+                        max={vandaag}
+                        onChange={(e) => zetVan(e.target.value)}
+                        aria-label="Van"
+                        className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                      />
+                      <span className="text-xs font-medium text-slate-400">t/m</span>
+                      <input
+                        type="date"
+                        value={periodeGekozen.tot}
+                        min={verbruik?.eersteDag ?? undefined}
+                        max={vandaag}
+                        onChange={(e) => zetTot(e.target.value)}
+                        aria-label="Tot en met"
+                        className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             />
-            {maandFout ? (
-              <div className="p-4 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-100">{maandFout}</div>
-            ) : !maandData ? (
+            {verbruikFout ? (
+              <div className="p-4 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-100">{verbruikFout}</div>
+            ) : !verbruik ? (
               <SkeletonTile />
             ) : (() => {
-              const actief = maandData.punten.filter((p) => p.kwh > 0).length;
-              const max = Math.max(0, ...maandData.punten.map((p) => p.kwh));
-              const kolommen = groepeerPerCpu(maandData.punten.map((p) => ({
+              const actief = verbruik.punten.filter((p) => p.kwh > 0).length;
+              const max = Math.max(0, ...verbruik.punten.map((p) => p.kwh));
+              const kolommen = groepeerPerCpu(verbruik.punten.map((p) => ({
                 uid: p.evseUid, evse_id: p.evseId ?? undefined, physical_reference: p.physicalReference, kwh: p.kwh, sessies: p.sessies,
               })));
+              const label = periodeLabel(verbruik);
               return (
-                <div className={cn('surface-card p-6 rounded-3xl transition-opacity', maandLaadt && 'opacity-60')} aria-busy={maandLaadt}>
+                <div className={cn('surface-card p-6 rounded-3xl transition-opacity', verbruikLaadt && 'opacity-60')} aria-busy={verbruikLaadt}>
+                  {/* Eén regel die zegt wáárover de cijfers gaan — in periode-
+                      modus staat het label nergens anders voluit. */}
                   <p className="mb-4 text-2xs font-medium font-mono tabular-nums text-slate-500">
-                    totaal {fmtKwh(maandData.totaalKwh)} kWh · {maandData.totaalSessies} sessie{maandData.totaalSessies === 1 ? '' : 's'} · {actief} van {maandData.punten.length} laadpunten actief
-                    {maandData.maand === maandData.huidigeMaand ? ' · lopende maand' : ''}
+                    {label} · totaal {fmtKwh(verbruik.totaalKwh)} kWh · {verbruik.totaalSessies} sessie{verbruik.totaalSessies === 1 ? '' : 's'} · {actief} van {verbruik.punten.length} laadpunten actief
+                    {verbruik.tot >= verbruik.huidigeDag ? ' · t/m vandaag' : ''}
                   </p>
-                  {maandData.totaalSessies === 0 ? (
-                    <p className="text-sm text-slate-500">Geen laadsessies in {maandLabel(maandData.maand).toLowerCase()}.</p>
+                  {verbruik.totaalSessies === 0 ? (
+                    <p className="text-sm text-slate-500">Geen laadsessies in deze periode ({label}).</p>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 2xl:grid-cols-3 gap-4">
                       {kolommen.map((cpu) => {
