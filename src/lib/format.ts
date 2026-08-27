@@ -161,11 +161,14 @@ export function formatShortDayPadded(iso: string | undefined | null): string {
   return d.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' });
 }
 
-/** Getal in Belgische notatie (komma, duizendtal-punt) met maximaal `max`
- *  cijfers na de komma: 123,46 · 6.559 · 0,5 · 48. Voor kW/kWh op de
- *  laadpalenpagina (verzoek Jarno 27-08): ChargEye levert tot vijf decimalen,
- *  en een punt als decimaalteken botste met het duizendtal-punt ernaast. */
+/** Getal in Belgische notatie met maximaal `max` cijfers na de komma:
+ *  123,46 · 6 559 · 57 529,6 · 0,5 · 48. Voor kW/kWh op de laadpalenpagina
+ *  (verzoek Jarno 27-08): ChargEye levert tot vijf decimalen. Het duizendtal
+ *  is een smalle vaste spatie (U+202F), níét de nl-BE-punt: "6.582 kWh" werd
+ *  gelezen als 6,582 (melding Jarno 27-08) — naast een komma als decimaalteken
+ *  is een punt nooit ondubbelzinnig. */
 export function formatGetal(value: number, max = 2): string {
   if (!Number.isFinite(value)) return '—';
-  return value.toLocaleString('nl-BE', { maximumFractionDigits: max });
+  // nl-BE gebruikt de komma als decimaalteken, dus elke punt is een duizendtal.
+  return value.toLocaleString('nl-BE', { maximumFractionDigits: max }).replace(/\./g, '\u202F');
 }
