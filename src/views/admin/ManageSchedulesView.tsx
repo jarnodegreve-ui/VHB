@@ -51,6 +51,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   // te uploaden.
   const [pendingMatrixXlsxBase64, setPendingMatrixXlsxBase64] = useState('');
   const [pendingMatrixFilename, setPendingMatrixFilename] = useState('');
+  // Terugzetten naar het herstelpunt van een import (admin-only): knop in de
+  // historiek + expliciete bevestigmodal — dit vervangt de volledige planning.
+  const [restoreEntry, setRestoreEntry] = useState<PlanningMatrixImportHistory | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   // Gekozen importperiode (standaard het volledige bestand). De planner maakt
   // de Excel vaak maanden vooruit; met een kortere periode blijft het
   // nog-niet-vaststaande deel buiten het portaal.
@@ -309,6 +313,27 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     }
   };
 
+  const restoreImportSnapshot = async () => {
+    if (!restoreEntry) return;
+    try {
+      setIsRestoring(true);
+      const response = await fetch('/api/planning-matrix/restore', {
+        method: 'POST',
+        headers: await getSupabaseAuthHeaders(),
+        body: JSON.stringify({ historyId: restoreEntry.id }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(data.error || 'Terugzetten is mislukt.');
+      notify(`Planning teruggezet naar de stand van vóór de import van ${new Date(restoreEntry.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}.`, 'success');
+      setRestoreEntry(null);
+      await onMatrixImported();
+    } catch (error: any) {
+      notify(error.message || 'Terugzetten is mislukt.', 'error');
+    } finally {
+      setIsRestoring(false);
+    }
+  };
+
   const confirmMatrixImport = async () => {
     if (!pendingMatrixXlsxBase64) {
       notify('Er is geen matrixbestand klaar om te importeren.', 'error');
@@ -322,6 +347,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({
           xlsxBase64: pendingMatrixXlsxBase64,
+          // Bestandsnaam mee voor de historiek ("welk bestand was dit ook
+          // alweer?") — puur informatief.
+          ...(pendingMatrixFilename ? { filename: pendingMatrixFilename } : {}),
           // Zelfde periode als het getoonde voorbeeld — de import verwerkt
           // en vervangt alleen de geselecteerde dagen.
           ...(periodeVan && periodeTot ? { periode: { van: periodeVan, tot: periodeTot } } : {}),
@@ -700,6 +728,15 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <MicroLabel className="mt-2">
                       {hasIssues ? 'Controle nodig' : 'Volledig herkenbaar'}
                     </MicroLabel>
+                    {(entry.filename || entry.importedBy || (entry.periodStart && entry.periodEnd)) && (
+                      <p className="mt-1.5 max-w-sm truncate text-xs text-slate-500">
+                        {[
+                          entry.filename,
+                          entry.importedBy,
+                          entry.periodStart && entry.periodEnd ? `${entry.periodStart} t/m ${entry.periodEnd}` : null,
+                        ].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="slate" className="tabular-nums">{entry.importedDays} dagen</Badge>
@@ -710,6 +747,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <Badge tone={entry.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} className="tabular-nums">
                       {entry.unmatchedDrivers.length} chauffeur
                     </Badge>
+                    {canAdminOverride && entry.snapshotPath && (
+                      <button
+                        type="button"
+                        onClick={() => setRestoreEntry(entry)}
+                        disabled={isRestoring}
+                        className="ios-pressable inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-surface-soft-hover disabled:opacity-50"
+                      >
+                        <RotateCcw size={14} className="text-oker-500" /> Zet terug
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -723,6 +770,16 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           )}
         </div>
       </div>
+
+      <ConfirmationModal
+        isOpen={restoreEntry !== null}
+        onClose={() => { if (!isRestoring) setRestoreEntry(null); }}
+        onConfirm={() => { if (!isRestoring) void restoreImportSnapshot(); }}
+        title="Planning terugzetten?"
+        message={restoreEntry ? `De volledige planning en matrix gaan terug naar de stand van vóór de import van ${new Date(restoreEntry.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}${restoreEntry.filename ? ` (${restoreEntry.filename})` : ''}. Alles wat je ná die import wijzigde (latere imports, toewijzingen, geregistreerde ziektes) verdwijnt uit de planning.` : undefined}
+        confirmText={isRestoring ? 'Bezig…' : 'Zet terug'}
+        variant="warning"
+      />
 
       <div className="surface-card p-6 md:p-8 rounded-3xl">
         <AdminSubsectionHeader
