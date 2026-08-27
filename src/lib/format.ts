@@ -160,3 +160,12 @@ export function formatShortDayPadded(iso: string | undefined | null): string {
   if (Number.isNaN(d.getTime())) return String(iso);
   return d.toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short' });
 }
+
+/** Getal in Belgische notatie (komma, duizendtal-punt) met maximaal `max`
+ *  cijfers na de komma: 123,46 · 6.559 · 0,5 · 48. Voor kW/kWh op de
+ *  laadpalenpagina (verzoek Jarno 27-08): ChargEye levert tot vijf decimalen,
+ *  en een punt als decimaalteken botste met het duizendtal-punt ernaast. */
+export function formatGetal(value: number, max = 2): string {
+  if (!Number.isFinite(value)) return '—';
+  return value.toLocaleString('nl-BE', { maximumFractionDigits: max });
+}

@@ -671,23 +671,40 @@ const runOcpiSync = async (
 };
 
 // ============================================================================
-// Maandverbruik per laadpunt (verzoek Jarno 27-08): hoeveel kWh elk laadpunt
-// in een kalendermaand geleverd heeft. Bron = ocpi_sessions.kwh — de CDR's
-// blijven bij depotladen zonder tarieven leeg (zie de sync). Een sessie telt
-// mee in de maand waarin hij STARTTE, Brusselse tijd: depotladen begint 's
-// avonds laat, dus op UTC bucketen zou een deel van de laatste avond van de
-// maand naar de volgende maand schuiven — én het is dezelfde regel als de
-// dag-grafiek, zodat "vandaag geladen" en de maandtabel op elkaar aansluiten.
-// INVALID-sessies (door ChargEye ongeldig verklaard) tellen niet mee.
-// Zuivere functies, geëxporteerd voor de unit-tests.
+// Verbruik per laadpunt (verzoek Jarno 27-08; vrije periode erbij diezelfde
+// avond): hoeveel kWh elk laadpunt in een periode van kalenderdagen — of een
+// hele maand — geleverd heeft. Bron = ocpi_sessions.kwh; de CDR's blijven bij
+// depotladen zonder tarieven leeg (zie de sync). Een sessie telt mee op de
+// dag waarop hij STARTTE, Brusselse tijd: depotladen begint 's avonds laat,
+// dus op UTC bucketen zou een deel van de avond naar de volgende dag
+// schuiven — én het is dezelfde regel als de dag-grafiek, zodat "vandaag
+// geladen" en deze tabel op elkaar aansluiten. INVALID-sessies (door ChargEye
+// ongeldig verklaard) tellen niet mee. Zuivere functies, geëxporteerd voor de
+// unit-tests.
 // ============================================================================
 
 export const MAAND_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
+const DAG_RE = /^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/;
+
+/** Bestaande kalenderdag "YYYY-MM-DD" (31 februari valt af). */
+export const isGeldigeDag = (s: unknown): s is string => {
+  if (typeof s !== "string" || !DAG_RE.test(s)) return false;
+  const d = new Date(`${s}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+};
+
+/** "YYYY-MM-DD" ± n dagen — kalenderrekenen op de datumstring (UTC), geen tijdzone. */
+export const dagPlus = (dag: string, delta: number): string => {
+  const d = new Date(`${dag}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + delta);
+  return d.toISOString().slice(0, 10);
+};
 
 /** "YYYY-MM" van een tijdstip in Europe/Brussels ("" bij ongeldige input). */
 export const brusselseMaand = (iso: unknown): string => brusselseDag(iso).slice(0, 7);
 
-/** De huidige kalendermaand in Brussel als "YYYY-MM". */
+/** De huidige kalenderdag / kalendermaand in Brussel. */
+export const huidigeBrusselseDag = (nu: Date = new Date()): string => brusselseDag(nu.toISOString());
 export const huidigeBrusselseMaand = (nu: Date = new Date()): string => brusselseMaand(nu.toISOString());
 
 /** "YYYY-MM" ± n maanden, over jaargrenzen heen. */
@@ -697,20 +714,23 @@ export const maandPlus = (maand: string, delta: number): string => {
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 };
 
-/** Ruim ophaalvenster (UTC) rond een Brusselse kalendermaand: één dag marge
- *  aan beide kanten, zodat het tijdzoneverschil nooit een sessie op de
- *  maandgrens buiten de query laat vallen. De precieze toewijzing gebeurt
- *  daarna per sessie via brusselseMaand(). */
-export const maandVenster = (maand: string): { van: string; tot: string } => {
+/** Eerste en laatste kalenderdag van een maand. */
+export const maandGrenzen = (maand: string): { van: string; tot: string } => {
   const [j, m] = maand.split("-").map(Number);
-  const dag = 24 * 3600 * 1000;
-  return {
-    van: new Date(Date.UTC(j, m - 1, 1) - dag).toISOString(),
-    tot: new Date(Date.UTC(j, m, 1) + dag).toISOString(),
-  };
+  const laatste = new Date(Date.UTC(j, m, 0)).getUTCDate();
+  return { van: `${maand}-01`, tot: `${maand}-${String(laatste).padStart(2, "0")}` };
 };
 
-export type MaandverbruikRij = {
+/** Ruim ophaalvenster (UTC) rond een periode van Brusselse kalenderdagen
+ *  (van t/m tot, inclusief): één dag marge aan beide kanten, zodat het
+ *  tijdzoneverschil nooit een sessie op de periodegrens buiten de query laat
+ *  vallen. De precieze toewijzing gebeurt daarna per sessie via brusselseDag(). */
+export const periodeVenster = (van: string, tot: string): { van: string; tot: string } => ({
+  van: `${dagPlus(van, -1)}T00:00:00.000Z`,
+  tot: `${dagPlus(tot, 2)}T00:00:00.000Z`,
+});
+
+export type VerbruikRij = {
   evseUid: string;
   evseId: string | null;
   physicalReference: string | null;
@@ -718,19 +738,21 @@ export type MaandverbruikRij = {
   sessies: number;
 };
 
-/** Som van de kWh per laadpunt over de sessies die in `maand` startten. Elk
- *  bekend laadpunt krijgt een rij (0 kWh als er niets geladen is) zodat de
- *  lijst compleet en stabiel blijft; sessies op een onbekende uid (laadpunt
- *  intussen verwijderd) krijgen een eigen rij zolang er kWh op staat. */
+/** Som van de kWh per laadpunt over de sessies die op een Brusselse
+ *  kalenderdag binnen `periode` (van t/m tot) startten. Elk bekend laadpunt
+ *  krijgt een rij (0 kWh als er niets geladen is) zodat de lijst compleet en
+ *  stabiel blijft; sessies op een onbekende uid (laadpunt intussen
+ *  verwijderd) krijgen een eigen rij zolang er kWh op staat. */
 export const verbruikPerLaadpunt = (
-  maand: string,
+  periode: { van: string; tot: string },
   sessies: Array<{ evse_uid?: unknown; start_date_time?: unknown; kwh?: unknown; status?: unknown }>,
   evses: Array<{ uid: string; evse_id?: string | null; physical_reference?: string | null }>,
-): MaandverbruikRij[] => {
+): VerbruikRij[] => {
   const per = new Map<string, { kwh: number; sessies: number }>();
   for (const s of sessies) {
     if (String(s.status ?? "").toUpperCase() === "INVALID") continue;
-    if (brusselseMaand(s.start_date_time) !== maand) continue;
+    const dag = brusselseDag(s.start_date_time);
+    if (!dag || dag < periode.van || dag > periode.tot) continue;
     const uid = String(s.evse_uid ?? "");
     if (!uid) continue;
     const cur = per.get(uid) ?? { kwh: 0, sessies: 0 };
@@ -739,7 +761,7 @@ export const verbruikPerLaadpunt = (
     per.set(uid, cur);
   }
   const rond = (n: number) => Math.round(n * 10) / 10;
-  const rijen: MaandverbruikRij[] = evses.map((e) => {
+  const rijen: VerbruikRij[] = evses.map((e) => {
     const v = per.get(e.uid);
     per.delete(e.uid);
     return { evseUid: e.uid, evseId: e.evse_id ?? null, physicalReference: e.physical_reference ?? null, kwh: rond(v?.kwh ?? 0), sessies: v?.sessies ?? 0 };
@@ -945,39 +967,63 @@ export const mountOcpiRoutes = (app: express.Express) => {
     }
   });
 
-  // Maandverbruik per laadpunt (verzoek Jarno 27-08). ?maand=YYYY-MM,
-  // standaard de huidige Brusselse maand. Geeft de vroegste maand met sessies
-  // mee zodat de UI weet hoe ver ze terug kan bladeren. Eigen endpoint, los
-  // van /dashboard: door de maanden bladeren hoeft de hele pagina niet te
-  // herladen.
-  app.get("/api/ocpi/maandverbruik", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  // Verbruik per laadpunt (verzoek Jarno 27-08). Periode = ?van=YYYY-MM-DD&
+  // tot=YYYY-MM-DD (kalenderdagen, t/m) óf ?maand=YYYY-MM; zonder parameters
+  // de lopende Brusselse maand. Geeft de vroegste dag met sessies mee zodat
+  // de UI weet hoe ver ze terug kan. Eigen endpoint, los van /dashboard:
+  // bladeren hoeft de hele pagina niet te herladen. Het oude pad
+  // /maandverbruik blijft als alias werken voor een nog gecachete bundel.
+  app.get(["/api/ocpi/verbruik", "/api/ocpi/maandverbruik"], authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
     if (!db) return res.status(500).json({ error: "Database niet geconfigureerd." });
-    const maand = String(req.query.maand ?? "") || huidigeBrusselseMaand();
-    if (!MAAND_RE.test(maand)) return res.status(400).json({ error: "Ongeldige maand (verwacht YYYY-MM)." });
+    const q = (k: string) => (typeof req.query[k] === "string" ? (req.query[k] as string).trim() : "");
+    let van: string;
+    let tot: string;
+    let maand: string | null = null;
+    if (q("van") || q("tot")) {
+      van = q("van");
+      tot = q("tot");
+      if (!isGeldigeDag(van) || !isGeldigeDag(tot)) return res.status(400).json({ error: "Ongeldige periode (verwacht van=YYYY-MM-DD&tot=YYYY-MM-DD)." });
+      if (van > tot) return res.status(400).json({ error: "Ongeldige periode: 'van' ligt na 'tot'." });
+      if (dagPlus(van, 366) < tot) return res.status(400).json({ error: "Periode te lang (maximaal een jaar)." });
+      // Precies een kalendermaand? Dan ook als maand benoemen (label in de UI).
+      const grenzen = maandGrenzen(van.slice(0, 7));
+      if (van === grenzen.van && tot === grenzen.tot) maand = van.slice(0, 7);
+    } else {
+      maand = q("maand") || huidigeBrusselseMaand();
+      if (!MAAND_RE.test(maand)) return res.status(400).json({ error: "Ongeldige maand (verwacht YYYY-MM)." });
+      ({ van, tot } = maandGrenzen(maand));
+    }
     try {
-      const { van, tot } = maandVenster(maand);
+      const venster = periodeVenster(van, tot);
       const [evsesR, eersteR, sessieRows] = await Promise.all([
         db.from("ocpi_evses").select("uid,evse_id,physical_reference"),
         db.from("ocpi_sessions").select("start_date_time").not("start_date_time", "is", null).order("start_date_time", { ascending: true }).limit(1).maybeSingle(),
         // Gepagineerd: een maand depotladen zit rond de 750 sessies, dicht
         // genoeg bij de 1.000-rijen-cap van PostgREST om er ooit overheen te gaan.
-        selectAlles((v, t) => db!.from("ocpi_sessions").select("evse_uid,start_date_time,kwh,status").gte("start_date_time", van).lt("start_date_time", tot).order("start_date_time", { ascending: true }).range(v, t)),
+        selectAlles((v, t) => db!.from("ocpi_sessions").select("evse_uid,start_date_time,kwh,status").gte("start_date_time", venster.van).lt("start_date_time", venster.tot).order("start_date_time", { ascending: true }).range(v, t)),
       ]);
       if (evsesR.error) throw new Error(evsesR.error.message);
       if (eersteR.error) throw new Error(eersteR.error.message);
-      const punten = verbruikPerLaadpunt(maand, sessieRows, (evsesR.data ?? []) as any[]);
+      const punten = verbruikPerLaadpunt({ van, tot }, sessieRows, (evsesR.data ?? []) as any[]);
       const eerste = (eersteR.data as { start_date_time?: string } | null)?.start_date_time;
+      const eersteDag = eerste ? brusselseDag(eerste) || null : null;
       res.json({
+        van,
+        tot,
         maand,
-        eersteMaand: eerste ? brusselseMaand(eerste) || null : null,
+        eersteDag,
+        huidigeDag: huidigeBrusselseDag(),
+        // Oude veldnamen (eerste versie van dezelfde dag) voor een nog
+        // gecachete client-bundel.
+        eersteMaand: eersteDag ? eersteDag.slice(0, 7) : null,
         huidigeMaand: huidigeBrusselseMaand(),
         totaalKwh: Math.round(punten.reduce((a, p) => a + p.kwh, 0) * 10) / 10,
         totaalSessies: punten.reduce((a, p) => a + p.sessies, 0),
         punten,
       });
     } catch (err: any) {
-      console.error("[ocpi] maandverbruik mislukt:", err?.message ?? err);
-      res.status(500).json({ error: "OCPI-maandverbruik mislukt" });
+      console.error("[ocpi] verbruik per laadpunt mislukt:", err?.message ?? err);
+      res.status(500).json({ error: "OCPI-verbruik per laadpunt mislukt" });
     }
   });
 
