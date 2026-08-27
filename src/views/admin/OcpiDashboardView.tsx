@@ -3,7 +3,7 @@ import { AlertTriangle, Zap, BatteryCharging, ChevronLeft, ChevronRight, Gauge, 
 import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
 import { isoDate } from '../../lib/availability';
-import { MONTH_NAMES, WEEKDAY_SHORT_SUN } from '../../lib/format';
+import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal } from '../../lib/format';
 import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { OpsStat } from '../../components/ops';
@@ -51,7 +51,6 @@ function mooiMax(max: number): number {
  *  tussen "een blokje" en een afleesbaar instrument. Render in een
  *  `relative` wrapper; de labels hangen nét onder hun lijn. */
 function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
-  const fmt = (v: number) => (Number.isInteger(v) ? String(v) : v.toFixed(1));
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
       {[1, 0.5].map((f) => (
@@ -63,7 +62,7 @@ function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
             className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500"
             style={{ background: 'var(--tile-bg)' }}
           >
-            {fmt(top * f)} {eenheid}
+            {formatGetal(top * f)} {eenheid}
           </span>
         </div>
       ))}
@@ -176,7 +175,12 @@ const periodeLabel = (v: Pick<Verbruik, 'van' | 'tot' | 'maand'>): string => {
   return `${dagMaand(v.van)} ${v.van.slice(0, 4)} – ${dagMaand(v.tot)} ${jaar}`;
 };
 /** Hele kWh met Belgisch duizendtal ("6.559"): tienden zeggen niets op dit niveau. */
-const fmtKwh = (kwh: number) => Math.round(kwh).toLocaleString('nl-BE');
+const fmtKwh = (kwh: number) => formatGetal(Math.round(kwh));
+/** kW / kWh in Belgische notatie met max. 2 cijfers na de komma (verzoek
+ *  Jarno 27-08: ChargEye levert tot vijf decimalen). Eén plek voor de hele
+ *  pagina — ook titles en aria-labels. */
+const tekstKw = (v: number) => `${formatGetal(v)} kW`;
+const tekstKwh = (v: number) => `${formatGetal(v)} kWh`;
 
 const STATUS_LABEL: Record<string, string> = {
   AVAILABLE: 'Beschikbaar', CHARGING: 'Laden', RESERVED: 'Gereserveerd', BLOCKED: 'Geblokkeerd',
@@ -212,7 +216,7 @@ const laadStatus = (status: string | undefined, sessie?: { soc?: number | null; 
         : null;
   return { soc, kw, laadt, vol, label };
 };
-const kW = (w?: number) => (typeof w === 'number' ? `${Math.round(w / 100) / 10} kW` : '—');
+const maxVermogen = (w?: number) => (typeof w === 'number' ? tekstKw(w / 1000) : '—');
 
 export function OcpiDashboardView() {
   const [data, setData] = useState<Dashboard | null>(null);
@@ -509,7 +513,7 @@ export function OcpiDashboardView() {
               tone={kpi.laden > 0 ? 'blue' : 'slate'}
               label="Aan de lader"
               text={`${kpi.laden} / ${data.totals.evses}`}
-              sub={data.totals.totalPowerKw > 0 ? `${data.totals.totalPowerKw} kW nu` : 'geen vermogen nu'}
+              sub={data.totals.totalPowerKw > 0 ? `${tekstKw(data.totals.totalPowerKw)} nu` : 'geen vermogen nu'}
             />
             <OpsStat
               icon={<Zap size={16} />}
@@ -529,8 +533,8 @@ export function OcpiDashboardView() {
               icon={<Gauge size={16} />}
               tone="slate"
               label="Vandaag geladen"
-              text={`${Math.round(grafiek.dagen.at(-1)?.kwh ?? 0)} kWh`}
-              sub={`30 d: ${kwh30} kWh · ${data.totals.sessions30d} sessies`}
+              text={tekstKwh(Math.round(grafiek.dagen.at(-1)?.kwh ?? 0))}
+              sub={`30 d: ${tekstKwh(kwh30)} · ${data.totals.sessions30d} sessies`}
             />
           </div>
 
@@ -567,7 +571,7 @@ export function OcpiDashboardView() {
                   return (
                     <div
                       role="img"
-                      aria-label={`Verbruik per dag: totaal ${Math.round(grafiek.totaal)} kWh, gemiddeld ${grafiek.gemiddeld} kWh per laaddag, piek ${Math.round(grafiek.piek)} kWh`}
+                      aria-label={`Verbruik per dag: totaal ${tekstKwh(Math.round(grafiek.totaal))}, gemiddeld ${tekstKwh(grafiek.gemiddeld)} per laaddag, piek ${tekstKwh(Math.round(grafiek.piek))}`}
                       className="relative h-28 touch-pan-y"
                       {...scrubHandlers(grafiek.dagen.map((d) => ({ key: d.date })), gekozenDag, setGekozenDag)}
                     >
@@ -583,7 +587,7 @@ export function OcpiDashboardView() {
                               tabIndex={-1}
                               aria-hidden="true"
                               onClick={() => { if (scrubActief.current) return; setGekozenDag(gekozen ? null : d.date); }}
-                              title={`${d.date.slice(5)} · ${d.kwh} kWh · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
+                              title={`${d.date.slice(5)} · ${tekstKwh(d.kwh)} · ${d.sessions} sessie${d.sessions === 1 ? '' : 's'}`}
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
                               <div
@@ -608,11 +612,11 @@ export function OcpiDashboardView() {
                   const dag = grafiek.dagen.find((d) => d.date === gekozenDag);
                   return dag ? (
                     <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                      {new Date(`${dag.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · {dag.kwh} kWh · {dag.sessions} sessie{dag.sessions === 1 ? '' : 's'}
+                      {new Date(`${dag.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · {tekstKwh(dag.kwh)} · {dag.sessions} sessie{dag.sessions === 1 ? '' : 's'}
                     </p>
                   ) : (
                     <p className="mt-2 min-h-4 truncate text-2xs font-medium font-mono tabular-nums text-slate-500">
-                      totaal {Math.round(grafiek.totaal)} kWh · gemiddeld {grafiek.gemiddeld} kWh/laaddag · piek {Math.round(grafiek.piek)} kWh
+                      totaal {tekstKwh(Math.round(grafiek.totaal))} · gemiddeld {tekstKwh(grafiek.gemiddeld)}/laaddag · piek {tekstKwh(Math.round(grafiek.piek))}
                     </p>
                   );
                 })()}
@@ -661,7 +665,7 @@ export function OcpiDashboardView() {
                     return (
                       <div
                         role="img"
-                        aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${Math.round(maandpiek)} kW` : ''}`}
+                        aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${tekstKw(vermogen.piekKw)} ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}${maandpiek > 0 ? `, maandpiek ${tekstKw(Math.round(maandpiek))}` : ''}`}
                         className="relative h-28 touch-pan-y"
                         {...scrubHandlers(vermogen.staven, gekozenSlot, setGekozenSlot)}
                       >
@@ -679,7 +683,7 @@ export function OcpiDashboardView() {
                               className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400"
                               style={{ background: 'var(--tile-bg)' }}
                             >
-                              maandpiek {Math.round(maandpiek)} kW
+                              maandpiek {tekstKw(Math.round(maandpiek))}
                             </span>
                           </div>
                         )}
@@ -714,7 +718,7 @@ export function OcpiDashboardView() {
                                 if (scrubActief.current) return;
                                 setGekozenSlot(gekozenSlot === st.key ? null : st.key);
                               }}
-                              title={`${kopVan(st.key)} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
+                              title={`${kopVan(st.key)} · ${tekstKw(st.kw)} · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
                               className="h-full flex-1 cursor-pointer"
                             />
                           ))}
@@ -725,7 +729,7 @@ export function OcpiDashboardView() {
                   return (
                     <div
                       role="img"
-                      aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}`}
+                      aria-label={`Vermogen: ${vermogen.piekKw > 0 ? `piek ${tekstKw(vermogen.piekKw)} ${vermogen.piekWanneer}` : 'nog geen vermogen gemeten'}`}
                       className="relative h-28 touch-pan-y"
                       {...scrubHandlers(vermogen.staven, gekozenSlot, setGekozenSlot)}
                     >
@@ -740,7 +744,7 @@ export function OcpiDashboardView() {
                               tabIndex={-1}
                               aria-hidden="true"
                               onClick={() => { if (scrubActief.current) return; setGekozenSlot(gekozen ? null : st.key); }}
-                              title={`${kopVan(st.key)} · ${st.kw} kW · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
+                              title={`${kopVan(st.key)} · ${tekstKw(st.kw)} · ${st.charging} sessie${st.charging === 1 ? '' : 's'}`}
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
                               <div
@@ -778,13 +782,13 @@ export function OcpiDashboardView() {
                       : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel(st.ts || st.key)}`;
                     return (
                       <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
-                        {kop} · {st.kw} kW · {st.charging} sessie{st.charging === 1 ? '' : 's'}
+                        {kop} · {tekstKw(st.kw)} · {st.charging} sessie{st.charging === 1 ? '' : 's'}
                       </p>
                     );
                   }
                   return (
                     <p className="mt-2 min-h-4 truncate text-2xs font-medium font-mono tabular-nums text-slate-500">
-                      {vermogen.piekKw > 0 ? `piek ${vermogen.piekKw} kW ${vermogen.piekWanneer}${vermogen.modus === 'dagen' && vermogen.piekTs ? ` om ${uurLabel(vermogen.piekTs)}` : ''}` : 'nog geen vermogen gemeten'}
+                      {vermogen.piekKw > 0 ? `piek ${tekstKw(vermogen.piekKw)} ${vermogen.piekWanneer}${vermogen.modus === 'dagen' && vermogen.piekTs ? ` om ${uurLabel(vermogen.piekTs)}` : ''}` : 'nog geen vermogen gemeten'}
                     </p>
                   );
                 })()}
@@ -835,16 +839,16 @@ export function OcpiDashboardView() {
                     </span>
                   </div>
                   <div>
-                    {sessie && typeof sessie.powerKw === 'number' && rij('Actueel vermogen', `${sessie.powerKw} kW`)}
+                    {sessie && typeof sessie.powerKw === 'number' && rij('Actueel vermogen', tekstKw(sessie.powerKw))}
                     {sessie && typeof sessie.soc === 'number' && rij('Batterij voertuig', `${sessie.soc}%`)}
-                    {sessie && typeof sessie.kwh === 'number' && rij('Geladen deze sessie', `${sessie.kwh} kWh`)}
+                    {sessie && typeof sessie.kwh === 'number' && rij('Geladen deze sessie', tekstKwh(sessie.kwh))}
                     {sessie?.start_date_time && rij('Aangekoppeld sinds', new Date(sessie.start_date_time).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }))}
                     {(() => {
                       // Totaal van dit punt uit de verbruikskaart hieronder (zelfde periodekeuze).
                       const mv = verbruik?.punten.find((p) => p.evseUid === gekozenPunt.uid);
                       return verbruik && mv ? rij(verbruik.maand ? `Geladen in ${maandLabel(verbruik.maand)}` : `Geladen ${periodeLabel(verbruik)}`, `${fmtKwh(mv.kwh)} kWh`) : null;
                     })()}
-                    {conn && rij('Max. vermogen', kW(conn.max_electric_power))}
+                    {conn && rij('Max. vermogen', maxVermogen(conn.max_electric_power))}
                     {conn && rij('Connector', `${conn.standard ?? '—'}${conn.power_type ? ` · ${conn.power_type}` : ''}`)}
                     {!sessie && rij('Voertuig', 'geen aangekoppeld')}
                   </div>
@@ -880,7 +884,7 @@ export function OcpiDashboardView() {
                         </div>
                         <p className="mt-0.5 text-2xs text-slate-500">
                           sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString() : '—'}
-                          {typeof s.kwh === 'number' ? ` · ${s.kwh} kWh geladen` : ''}
+                          {typeof s.kwh === 'number' ? ` · ${tekstKwh(s.kwh)} geladen` : ''}
                         </p>
                       </div>
                       {/* nowrap: op iPad-breedte wikkelde "Laden · 112 kW" naar
