@@ -397,7 +397,15 @@ export const savePlanningMatrixHistoryEntry = async (entry: PlanningMatrixImport
     snapshot_path: entry.snapshotPath ?? null,
   };
   const { error } = await client.from('planning_matrix_import_history').insert(historyRow);
-  if (error) console.error("Supabase error saving planning matrix history:", error);
+  // Niet gooien: de import zelf is op dit punt al geslaagd. Wel eerlijk
+  // teruggeven, zodat de route de planner kan waarschuwen dat er geen
+  // herstelpunt is — voorheen bleef dit een console.error en meldde de
+  // import gewoon succes (controle-ronde 27-08, bevinding 25).
+  if (error) {
+    console.error("Supabase error saving planning matrix history:", error);
+    return false;
+  }
+  return true;
 };
 
 // --- Activity log ---
@@ -449,18 +457,22 @@ export const getActivityLog = async (
  *  ook gebruikers met een lopende PWA-sessie meetellen als actief. */
 export const getLoginActivity = async (sinceIso: string, limit = 3000): Promise<ActivityLogRecord[]> => {
   const client = requireDb();
-  const { data, error } = await client
-    .from("activity_log")
-    .select("*")
-    .eq("category", "auth")
-    .in("action", ["Aangemeld", "Actief"])
-    .gte("created_at", sinceIso)
-    .order("created_at", { ascending: false })
-    .limit(limit);
-  // Fouten doorgeven i.p.v. [] — een lege lijst is niet te onderscheiden van
-  // "niemand meldde zich aan" en verstopte DB-problemen voor de admin.
-  if (error) throw error;
-  return ((data ?? []) as ActivityLogRow[]).map(toPublicActivityLog);
+  // Gepagineerd, net als getActivityLog: PostgREST kapt élke select op
+  // 1.000 rijen, dus .limit(3000) leverde er nooit meer dan 1.000 — de
+  // oudste dagen van het aanwezigheidsoverzicht vielen dan stil weg
+  // (controle-ronde 27-08, bevinding 24). Fouten gooien i.p.v. [] — een lege
+  // lijst is niet te onderscheiden van "niemand meldde zich aan".
+  const rows = await paginatedFetch<ActivityLogRow>((from, to) =>
+    client
+      .from("activity_log")
+      .select("*")
+      .eq("category", "auth")
+      .in("action", ["Aangemeld", "Actief"])
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .range(from, Math.min(to, limit - 1)),
+  limit);
+  return rows.map(toPublicActivityLog);
 };
 
 /** Tijdstip (ISO) van het meest recente auth-event ('Aangemeld' of 'Actief')
@@ -1478,11 +1490,16 @@ const mapUserDocumentRow = (row: any): UserDocumentRecord => ({
 export const listUserDocuments = async (userId?: string): Promise<UserDocumentRecord[]> => {
   if (userId !== undefined && !userId) return [];
   const client = requireDb();
-  let query = client.from("user_documents").select("*").order("uploaded_at", { ascending: false }).limit(500);
-  if (userId) query = query.eq("user_id", userId);
-  const { data, error } = await query;
-  if (error) throw error;
-  return (data ?? []).map(mapUserDocumentRow);
+  // Gepagineerd i.p.v. .limit(500): onthaal-kopieën plus maandelijkse
+  // loonbrieven passeren die grens binnen een jaar, en dan verloren de
+  // admin-lijst en de back-up stil de oudste documenten (controle-ronde
+  // 27-08, bevinding 26).
+  const rows = await paginatedFetch<any>((from, to) => {
+    let query = client.from("user_documents").select("*").order("uploaded_at", { ascending: false }).range(from, to);
+    if (userId) query = query.eq("user_id", userId);
+    return query;
+  });
+  return rows.map(mapUserDocumentRow);
 };
 
 export const getUserDocument = async (id: string): Promise<UserDocumentRecord | null> => {
@@ -2164,6 +2181,28 @@ export const revertSwapFromPlanning = async (swap: SwapCarryFields): Promise<Swa
     returnMoved = await movePlanningRows(String(swap.returnDate), String(swap.returnCode), String(swap.requesterId), target);
   }
   return { offeredMoved, returnMoved };
+};
+
+/** Staat de wissel van deze ruil al in de planning? 'doorgevoerd' = de
+ *  aangeboden dienst staat bij de collega (en de eventuele terugdienst bij
+ *  de aanvrager), 'niet_doorgevoerd' = nog bij de aanvrager, 'onbekend' =
+ *  verlegd/verdwenen of geen dienst-info. Hiermee wordt goedkeuren
+ *  idempotent en kan afwijzen een halve doorvoer (planning al gewisseld,
+ *  status nooit opgeslagen) terugdraaien — controle-ronde 27-08, bevinding 8. */
+export const swapToestandInPlanning = async (swap: SwapCarryFields): Promise<'doorgevoerd' | 'niet_doorgevoerd' | 'onbekend'> => {
+  const target = String(swap.targetDriverId ?? '');
+  const requester = String(swap.requesterId);
+  if (!swap.shiftDate || !swap.shiftLine || !target) return 'onbekend';
+  const client = requireDb();
+  const { data, error } = await client.from('planning').select('driverId').eq('date', swap.shiftDate).eq('line', String(swap.shiftLine));
+  if (error) throw error;
+  const chauffeurs = new Set((data ?? []).map((r: any) => String(r.driverId)));
+  if (chauffeurs.has(requester)) return 'niet_doorgevoerd';
+  if (!chauffeurs.has(target)) return 'onbekend';
+  if (!swapHasReturnShift(swap)) return 'doorgevoerd';
+  const { data: terug, error: terugError } = await client.from('planning').select('driverId').eq('date', String(swap.returnDate)).eq('line', String(swap.returnCode));
+  if (terugError) throw terugError;
+  return (terug ?? []).some((r: any) => String(r.driverId) === requester) ? 'doorgevoerd' : 'onbekend';
 };
 
 // --- Leave ---
