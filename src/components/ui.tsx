@@ -81,24 +81,31 @@ export function AdminSubsectionHeader({
  * uiteen (p-6/p-8, text-lg/text-xl, `border-slate-200/70` vs een in light
  * onzichtbare `border-white/70`). Gebruik binnen een `flex flex-col`-modal
  * met `!p-0`; de body eronder krijgt zijn eigen padding.
+ * `leading` is het enige extra slot (icoontegel of terugknop vóór de tekst);
+ * andere knoppen horen in de body of de knoppenrij, niet in de kop.
  */
 export function ModalHeader({
   eyebrow,
   title,
   description,
   onClose,
+  leading,
 }: {
   eyebrow?: string;
   title: string;
   description?: React.ReactNode;
   onClose?: () => void;
+  leading?: React.ReactNode;
 }) {
   return (
     <div className="flex items-start justify-between gap-3 p-6 md:p-7 border-b border-slate-200/70 shrink-0">
-      <div className="min-w-0">
-        {eyebrow ? <p className="text-2xs font-medium uppercase tracking-[0.08em] text-oker-600">{eyebrow}</p> : null}
-        <h4 className={cn('text-lg font-bold tracking-tight text-slate-900', eyebrow && 'mt-1.5')}>{title}</h4>
-        {description ? <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500">{description}</p> : null}
+      <div className="flex min-w-0 items-center gap-3">
+        {leading ? <div className="shrink-0">{leading}</div> : null}
+        <div className="min-w-0">
+          {eyebrow ? <p className="text-2xs font-medium uppercase tracking-[0.08em] text-oker-600">{eyebrow}</p> : null}
+          <h4 className={cn('text-lg font-bold tracking-tight text-slate-900', eyebrow && 'mt-1.5')}>{title}</h4>
+          {description ? <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500">{description}</p> : null}
+        </div>
       </div>
       {onClose ? (
         <button
@@ -159,8 +166,10 @@ export function ConfirmationModal({
               onClose();
             }}
             /* warning = de semantische amber-kleur, net als het icoon erboven —
-               niet het merk-oker (dat mengde twee talen in één dialoog). */
-            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm text-white transition-all shadow-lg', variant === 'danger' ? 'bg-red-600 hover:bg-red-700 shadow-red-600/20' : 'bg-amber-600 hover:bg-amber-700 shadow-amber-600/20')}
+               niet het merk-oker (dat mengde twee talen in één dialoog).
+               Tekst op amber is altijd VHB Black (huisstijlregel; wit op
+               amber-600 haalde ≈3,6:1, onder AA — controle-ronde 27-08). */
+            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-600/20' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-amber-500/20')}
           >
             {confirmText}
           </button>

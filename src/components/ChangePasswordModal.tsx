@@ -1,8 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, CheckCircle, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { Modal } from './Modal';
+import { ModalHeader } from './ui';
 import { Button } from './primitives';
 
 export function ChangePasswordModal({
@@ -98,21 +99,9 @@ export function ChangePasswordModal({
   return (
     <Modal open={isOpen} onClose={handleClose} maxWidth="md" ariaLabel="Wachtwoord wijzigen">
       <div className="flex max-h-[88dvh] flex-col overflow-hidden">
-        <div className="p-6 md:p-8 border-b border-white/70 flex items-start justify-between gap-4 shrink-0">
-          <div>
-            <h4 className="text-lg font-bold tracking-tight">Wachtwoord wijzigen</h4>
-            <p className="mt-2 text-sm text-slate-500 font-medium">Kies een nieuw wachtwoord voor {email}.</p>
-          </div>
-          <button
-            onClick={handleClose}
-            aria-label="Sluiten"
-            className="w-11 h-11 inline-flex items-center justify-center text-slate-400 hover:bg-surface-soft-hover rounded-xl shrink-0 transition-colors"
-          >
-            <X size={20} />
-          </button>
-        </div>
+        <ModalHeader title="Wachtwoord wijzigen" description={`Kies een nieuw wachtwoord voor ${email}.`} onClose={handleClose} />
 
-        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-5 overflow-y-auto flex-1">
+        <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5 overflow-y-auto flex-1">
           <div className="space-y-1.5">
             <label htmlFor="cpm-current-password" className="block text-xs font-bold text-slate-500 uppercase tracking-[0.08em]">Huidig wachtwoord</label>
             <input

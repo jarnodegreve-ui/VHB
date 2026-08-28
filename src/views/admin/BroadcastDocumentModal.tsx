@@ -1,8 +1,9 @@
 import React, { useRef, useState } from 'react';
-import { Send, Upload, Users, X } from 'lucide-react';
+import { Send, Upload, Users } from 'lucide-react';
 import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { Button, MicroLabel } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
+import { ModalHeader } from '../../components/ui';
 
 const MAX_MB = 15;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
@@ -60,18 +61,14 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
   return (
     <Modal open onClose={onClose} maxWidth="md" ariaLabel="Document naar alle chauffeurs" boven>
       <div className="flex flex-col overflow-hidden">
-          <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center"><Users size={20} /></div>
-              <div>
-                <h3 className="text-lg font-bold tracking-tight text-slate-900">Document naar alle chauffeurs</h3>
-                <p className="text-xs font-medium text-slate-500">Elke actieve chauffeur krijgt een eigen kopie + melding.</p>
-              </div>
-            </div>
-            <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors"><X size={16} /></button>
-          </div>
+          <ModalHeader
+            leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center"><Users size={20} /></div>}
+            title="Document naar alle chauffeurs"
+            description="Elke actieve chauffeur krijgt een eigen kopie + melding."
+            onClose={onClose}
+          />
 
-          <div className="p-6 space-y-4">
+          <div className="p-6 md:p-7 space-y-4">
             <div className="space-y-1.5">
               <MicroLabel>Categorie (optioneel)</MicroLabel>
               <input

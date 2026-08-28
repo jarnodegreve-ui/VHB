@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Clock, History, X } from 'lucide-react';
+import { Clock, History } from 'lucide-react';
 import type { ActivityEntityType, ActivityLogEntry } from '../types';
 import { apiFetch } from '../lib/api';
 import { cn } from '../lib/ui';
 import { Modal } from './Modal';
+import { ModalHeader } from './ui';
 
 /**
  * Toon de volledige wijzigingsgeschiedenis van één specifieke entity
@@ -54,26 +55,14 @@ export function EntityHistoryModal({
   return (
     <Modal open={open} onClose={onClose} maxWidth="lg" ariaLabel="Wijzigingsgeschiedenis" boven>
       <div className="flex max-h-[80dvh] flex-col overflow-hidden">
-            <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center">
-                  <History size={18} />
-                </div>
-                <div>
-                  <h4 className="text-base font-bold tracking-tight text-slate-900 leading-none">Wijzigingsgeschiedenis</h4>
-                  {title && <p className="text-xs font-medium text-slate-500 mt-1">{title}</p>}
-                </div>
-              </div>
-              <button
-                onClick={onClose}
-                aria-label="Sluiten"
-                className="w-11 h-11 inline-flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100/60 rounded-xl transition-colors"
-              >
-                <X size={20} />
-              </button>
-            </div>
+            <ModalHeader
+              leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center"><History size={18} /></div>}
+              title="Wijzigingsgeschiedenis"
+              description={title}
+              onClose={onClose}
+            />
 
-            <div className="p-6 overflow-y-auto flex-1">
+            <div className="p-6 md:p-7 overflow-y-auto flex-1">
               {error && (
                 <p className="text-sm text-red-600 font-medium">{error}</p>
               )}

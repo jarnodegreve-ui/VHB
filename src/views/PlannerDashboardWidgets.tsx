@@ -18,7 +18,6 @@ import {
   UserX,
   Users,
   Smartphone,
-  X,
   Zap,
 } from 'lucide-react';
 import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
@@ -43,6 +42,7 @@ import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { apiFetch } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
+import { ModalHeader } from '../components/ui';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
@@ -1052,31 +1052,18 @@ export function PlannerDashboardWidgets({
         maxWidth="sm"
         className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0"
       >
-        <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
-          <div className="flex items-center gap-3 min-w-0">
+        <ModalHeader
+          leading={
             <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
               <AlertTriangle size={17} />
             </span>
-            <div className="min-w-0">
-              <h4 className="text-lg font-bold tracking-tight truncate">
-                {ziekVervolg ? 'Wie neemt de dienst over?' : 'Ziekmelding registreren'}
-              </h4>
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                {ziekVervolg ? 'ziekmelding geregistreerd' : 'meteen onbeschikbaar'}
-              </p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={closeSickModal}
-            aria-label="Sluiten"
-            className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-slate-400 hover:bg-surface-soft-hover hover:text-slate-900 dark:hover:bg-white/5"
-          >
-            <X size={18} />
-          </button>
-        </div>
+          }
+          eyebrow={ziekVervolg ? 'ziekmelding geregistreerd' : 'meteen onbeschikbaar'}
+          title={ziekVervolg ? 'Wie neemt de dienst over?' : 'Ziekmelding registreren'}
+          onClose={closeSickModal}
+        />
         {ziekVervolg ? (
-          <div className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1">
+          <div className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1">
             <p className="text-sm font-medium text-slate-600 leading-relaxed">
               {ziekVervolg.naam} is afgemeld, maar {ziekVervolg.diensten.length === 1
                 ? 'deze dienst staat'
@@ -1180,7 +1167,7 @@ export function PlannerDashboardWidgets({
             if (open.length === 0) { closeSickModal(); return; }
             setZiekVervolg({ naam: userNameById(sickForm.userId), diensten: open });
           }}
-          className="p-6 space-y-4 overflow-y-auto overscroll-contain flex-1"
+          className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
           <div className="space-y-1.5">
             <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
@@ -1341,26 +1328,17 @@ function DashboardListModal({
   children: ReactNode;
 }) {
   return (
-    <Modal open={open} onClose={onClose} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
-      <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
-        <div className="flex items-center gap-3 min-w-0">
+    <Modal open={open} onClose={onClose} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0">
+      <ModalHeader
+        leading={
           <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', iconClassName)}>
             {icon}
           </span>
-          <div className="min-w-0">
-            <h4 className="text-lg font-bold tracking-tight truncate">{title}</h4>
-            <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">{subtitle}</p>
-          </div>
-        </div>
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Sluiten"
-          className="ios-pressable shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover"
-        >
-          <X size={17} />
-        </button>
-      </div>
+        }
+        eyebrow={subtitle}
+        title={title}
+        onClose={onClose}
+      />
       {/* flex-1 + min-h-0: zonder die twee krimpt dit vak in de flex-kolom
           niet onder zijn inhoud (min-height:auto), dus was er niets te
           scrollen en werd een lange lijst gewoon afgekapt (iPhone-bug van

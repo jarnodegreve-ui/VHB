@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, X, Check } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
 import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
@@ -757,33 +757,27 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       {/* Gedeelde Modal i.p.v. eigen portal: ESC, backdrop-tap, safe-area en
           dvh-begrenzing komen daar vandaan (verbeterronde 29/07 #3). */}
       <Modal open={showOfferModal} onClose={() => setShowOfferModal(false)} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
-              <div className="px-6 py-5 md:px-8 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  {/* 44x44 op beide headerknoppen: dit zijn de enige twee
-                      uitwegen uit een driestapswizard op een telefoon. Ze
-                      stonden op 36 resp. 38px — onder de norm, en buiten het
-                      bereik van scripts/mobile-audit.mjs, dat nooit een modal
-                      opent. */}
-                  {wizardStep > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => setWizardStep((s) => (s === 3 ? 2 : 1))}
-                      aria-label="Vorige stap"
-                      className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover"
-                    >
-                      <ChevronRight size={18} className="rotate-180" />
-                    </button>
-                  )}
-                  <div className="min-w-0">
-                    <h4 className="text-lg font-bold tracking-tight truncate">
-                      {wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Hoe wil je ruilen?'}
-                    </h4>
-                    <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Stap {wizardStep} van 3</p>
-                  </div>
-                </div>
-                <button onClick={() => setShowOfferModal(false)} aria-label="Sluiten" className="inline-flex h-11 w-11 items-center justify-center text-slate-400 hover:bg-surface-soft-hover rounded-xl shrink-0"><X size={22} /></button>
-              </div>
-              <form ref={wizardScrollRef} onSubmit={handleOfferShift} className="p-6 md:p-8 space-y-4 overflow-y-auto flex-1">
+              {/* 44x44 op de terugknop (het kruisje van ModalHeader is dat op
+                  touch ook): dit zijn de enige twee uitwegen uit een
+                  driestapswizard op een telefoon. Ze stonden op 36 resp. 38px
+                  — onder de norm, en buiten het bereik van
+                  scripts/mobile-audit.mjs, dat nooit een modal opent. */}
+              <ModalHeader
+                leading={wizardStep > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => setWizardStep((s) => (s === 3 ? 2 : 1))}
+                    aria-label="Vorige stap"
+                    className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover"
+                  >
+                    <ChevronRight size={18} className="rotate-180" />
+                  </button>
+                ) : undefined}
+                eyebrow={`Stap ${wizardStep} van 3`}
+                title={wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Hoe wil je ruilen?'}
+                onClose={() => setShowOfferModal(false)}
+              />
+              <form ref={wizardScrollRef} onSubmit={handleOfferShift} className="p-6 md:p-7 space-y-4 overflow-y-auto flex-1">
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}
                 {wizardStep === 1 && (
                   myShifts.length === 0 ? (
