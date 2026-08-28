@@ -158,6 +158,15 @@ vi.mock('../api/storage.js', async (importOriginal) => {
       const sw = mem.swaps.find((s: any) => String(s.id) === String(id));
       if (sw) sw.targetSeenAt = seenAtIso;
     },
+    swapToestandInPlanning: async (swap: any) => {
+      if (!swap.shiftDate || !swap.shiftLine || !swap.targetDriverId) return 'onbekend';
+      const chauffeurs = new Set(mem.planning.filter((r: any) => r.date === swap.shiftDate && String(r.line) === String(swap.shiftLine)).map((r: any) => String(r.driverId)));
+      if (chauffeurs.has(String(swap.requesterId))) return 'niet_doorgevoerd';
+      if (!chauffeurs.has(String(swap.targetDriverId))) return 'onbekend';
+      const hasReturn = swap.swapType !== 'overname' && swap.returnDate && swap.returnCode && String(swap.returnCode).toLowerCase() !== 'vrij';
+      if (!hasReturn) return 'doorgevoerd';
+      return mem.planning.some((r: any) => r.date === swap.returnDate && String(r.line) === String(swap.returnCode) && String(r.driverId) === String(swap.requesterId)) ? 'doorgevoerd' : 'onbekend';
+    },
     getShiftById: async (id: string) =>
       mem.planning.find((s: any) => String(s.id) === String(id)) ?? null,
     getShiftsOnDate: async (date: string) =>
@@ -718,6 +727,33 @@ describe('dienstruil: autorisatieregels', () => {
     const res = await api('POST', '/api/swaps', { token: 'tok-admin', body: mem.swaps.map((s) => ({ ...s, status: 'approved' })) });
     expect(res.status).toBe(409);
     expect(mem.swaps.find((s) => s.id === 's-r')?.status).toBe('rejected');
+  });
+
+  it('halve doorvoer (planning al gewisseld, status nog accepted): goedkeuren slaagt alsnog i.p.v. 409 (controle-ronde 27-08, nr. 8)', async () => {
+    // De eerdere poging verplaatste sh-a al naar collega 4, maar het opslaan van de status mislukte.
+    mem.planning = [{ id: 'sh-a', driverId: '4', date: '2026-07-08', line: '12' }];
+    mem.swaps = [{ id: 's-h', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' }];
+    const res = await api('PATCH', '/api/swaps/s-h', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s) => s.id === 's-h')?.status).toBe('approved');
+    expect(mem.planning[0].driverId).toBe('4'); // niets dubbel verplaatst
+  });
+
+  it('halve doorvoer: afwijzen draait de wissel terug naar de aanvrager (controle-ronde 27-08, nr. 8)', async () => {
+    mem.planning = [{ id: 'sh-a', driverId: '4', date: '2026-07-08', line: '12' }];
+    mem.swaps = [{ id: 's-h', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' }];
+    const res = await api('PATCH', '/api/swaps/s-h', { token: 'tok-admin', body: { status: 'rejected', ifStatus: 'accepted' } });
+    expect(res.status).toBe(200);
+    expect(mem.swaps.find((s) => s.id === 's-h')?.status).toBe('rejected');
+    expect(mem.planning[0].driverId).toBe('3');
+  });
+
+  it('gewone goedkeuring blijft de checks doen: dienst intussen naar een derde → 409', async () => {
+    mem.planning = [{ id: 'sh-a', driverId: '9', date: '2026-07-08', line: '12' }];
+    mem.swaps = [{ id: 's-h', shiftId: 'sh-a', requesterId: '3', targetDriverId: '4', status: 'accepted', reason: '', createdAt: '2026-06-01T08:00:00Z', swapType: 'overname', shiftDate: '2026-07-08', shiftLine: '12' }];
+    const res = await api('PATCH', '/api/swaps/s-h', { token: 'tok-admin', body: { status: 'approved', ifStatus: 'accepted' } });
+    expect(res.status).toBe(409);
+    expect(mem.swaps.find((s) => s.id === 's-h')?.status).toBe('accepted');
   });
 
   it('weigert een overgang uit een afgehandelde status — rejected → approved via PATCH (409)', async () => {

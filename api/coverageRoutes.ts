@@ -93,7 +93,11 @@ export async function berekenDekkingsGaten(from: string, to: string): Promise<Da
     // fantoom-gat dat dit blok juist moet voorkomen.
     const vandaagIso = brusselsDay(new Date().toISOString());
     const approvedLeaveAll = (leaveAll as any[]).filter((l) => l?.status === "approved");
-    const chauffeursVoorNaam = (usersForLeave as any[]).filter((u) => u?.role === "chauffeur");
+    // Alleen actieve chauffeurs: een gepauzeerd oud account met dezelfde naam
+    // liet de sleutel in de naam-index wegvallen, waardoor de cel van een ziek
+    // gemelde chauffeur als bezet telde — geen gat (controle-ronde 27-08,
+    // bevinding 23; zelfde regel als /api/planning-presence).
+    const chauffeursVoorNaam = (usersForLeave as any[]).filter((u) => u?.role === "chauffeur" && u?.isActive !== false);
     const idByNameToken = nameIdIndex(chauffeursVoorNaam);
     const userNameById = new Map<string, string>(chauffeursVoorNaam.map((u) => [String(u.id), String(u.name ?? "")]));
     const UITVAL_REDEN: Record<string, string> = { ziekte: "ziek", betaald_verlof: "verlof", klein_verlet: "klein verlet" };

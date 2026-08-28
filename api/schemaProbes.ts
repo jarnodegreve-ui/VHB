@@ -44,6 +44,11 @@ export const TABLE_PROBES: Array<{ table: string; columns: string }> = [
   { table: "app_settings", columns: "key,value,updated_at" },
   // planning_notes hoort bij de dienstnotities (2026-07-30_planning_notes.sql)
   { table: "planning_notes", columns: "driver_id,date,note,updated_by,updated_at" },
+  // Import-historiek + herstelpunt (2026-08-20_import_historiek.sql). Stond
+  // hier niet, terwijl savePlanningMatrixHistoryEntry al deze kolommen
+  // schrijft — een niet-gedraaide migratie bleef zo onzichtbaar voor de
+  // schema-check (controle-ronde 27-08, bevinding 25).
+  { table: "planning_matrix_import_history", columns: "id,created_at,imported_days,detected_drivers,generated_shifts,matched_services,skipped_absences,unknown_codes,unmatched_drivers,filename,imported_by,period_start,period_end,file_start,file_end,snapshot_path" },
 ];
 
 export const probeColumns = (table: string): string[] => {

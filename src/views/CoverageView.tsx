@@ -280,7 +280,11 @@ export function CoverageView() {
     setKalVr((cur) => cur || vind((n) => n.includes('vakantie') && n.includes('vrijdag')));
   }, [config]);
   const voegKalenderToe = () => {
-    const vandaag = new Date().toISOString().slice(0, 10);
+    // Lokale kalenderdag, niet de UTC-dag: tussen 00:00 en 02:00 was
+    // "vandaag" nog gisteren en werd een net verlopen feestdag toch voorgezet
+    // terwijl de lijst eronder hem al als verlopen toonde (controle-ronde
+    // 27-08, bevinding 27). Zelfde vorm als overrideVandaag hieronder.
+    const vandaag = new Date().toLocaleDateString('en-CA');
     const { uitzonderingen, overgeslagen } = bouwKalenderUitzonderingen({
       feestdagType: kalFeest || undefined,
       vakantieTypes: { maDiWo: kalMaDiWo || undefined, donderdag: kalDo || undefined, vrijdag: kalVr || undefined },

@@ -33,6 +33,7 @@ import {
   swapRaaktBereik,
   applySwapToPlanning,
   revertSwapFromPlanning,
+  swapToestandInPlanning,
   buildPlanningFromMatrix,
   getActivityLog,
   getLatestAuthEventAt,
@@ -1582,7 +1583,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     // RPC-migratie nog niet gedraaid is.
     await replacePlanningAndMatrix(rows, generatedPlanning.shifts);
     const bestandsnaam = typeof req.body?.filename === "string" ? req.body.filename.trim().slice(0, 200) : "";
-    await savePlanningMatrixHistoryEntry({
+    const historiekOk = await savePlanningMatrixHistoryEntry({
       id: `${Date.now()}`,
       createdAt: new Date().toISOString(),
       importedDays: rows.length,
@@ -1600,6 +1601,15 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
       fileEnd: fileEndDate,
       snapshotPath,
     });
+    // Historiek niet weggeschreven (bv. migratie 2026-08-20 niet gedraaid):
+    // de import zelf is geslaagd, maar er is geen terugzet-knop voor deze
+    // import. Dat hoort de planner te zien, niet alleen de Vercel-logs
+    // (controle-ronde 27-08, bevinding 25).
+    if (!historiekOk) {
+      const melding = "Herstelpunt niet vastgelegd: de import-historiek kon niet worden opgeslagen. Terugzetten via 'Zet terug' is voor deze import niet mogelijk — meld dit aan de beheerder (schema-check in Systeemstatus).";
+      parserWaarschuwingen = [...(parserWaarschuwingen ?? []), melding];
+      await logActivity(req, "planning", "Herstelpunt niet vastgelegd", melding);
+    }
     await logActivity(
       req,
       "planning",
@@ -3744,10 +3754,18 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
     // nog écht hebben (zie staleApprovalError). Over recordsToWrite (niet
     // newData): een stale echo die niet weggeschreven wordt mag geen vals 409
     // op een ongerelateerde nieuwe aanvraag veroorzaken.
+    // Halve doorvoer herkennen (zie beslisRuilIntern): staat de wissel al in
+    // de planning, dan slaan de checks én de doorvoer over en wordt alleen
+    // de status alsnog opgeslagen.
+    const alDoorgevoerdIds = new Set<string>();
     for (const next of recordsToWrite) {
       const prev = previousById.get(String(next.id));
       const becomesApproved = next.status === "approved" && (!prev || prev.status !== "approved");
       if (!becomesApproved) continue;
+      if (prev && (await swapToestandInPlanning(prev)) === "doorgevoerd") {
+        alDoorgevoerdIds.add(String(next.id));
+        continue;
+      }
       const stale = await staleApprovalError(next, previousSwaps);
       if (stale) return res.status(409).json({ error: stale });
       // Tussen indienen en goedkeuren kan iemand ziek gemeld zijn — bij het
@@ -3838,7 +3856,13 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             return res.status(400).json({ error: "De aangeboden dienst bestaat niet (meer)." });
           }
           const date = String(offeredShift.date);
-          const code = matrixCodesForDate(matrixRows, usersForTakeover, date).get(targetId);
+          // Alleen actieve chauffeurs in de naam-index: een gepauzeerd oud
+          // account met dezelfde naam liet de sleutel wegvallen, waardoor de
+          // overname met "staat niets in de planning" werd geweigerd terwijl
+          // /api/availability de collega wél aanbood (controle-ronde 27-08,
+          // bevinding 23; zelfde regel als /api/planning-presence).
+          const actieveChauffeurs = usersForTakeover.filter((u: any) => u?.role === "chauffeur" && u?.isActive !== false);
+          const code = matrixCodesForDate(matrixRows, actieveChauffeurs, date).get(targetId);
           if (!isTakeoverCode(code)) {
             const naam = usersForTakeover.find((u: any) => String(u.id) === targetId)?.name ?? "De collega";
             return res.status(409).json({
@@ -3951,6 +3975,10 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
       const prev = previousById.get(String(next.id));
       if (!prev || prev.status === next.status) continue;
       if (next.status === "approved") {
+        if (alDoorgevoerdIds.has(String(next.id))) {
+          carryLogById.set(String(next.id), "wissel stond al in de planning (herstel na een eerdere halve doorvoer)");
+          continue;
+        }
         const r = await applySwapToPlanning(next);
         // Concurrency-vangnet: 0 verplaatste rijen mét dienst-info betekent
         // dat de planning tussen de hercheck en de doorvoer nog wijzigde
@@ -3962,9 +3990,15 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           return res.status(409).json({ error: "De planning is intussen gewijzigd — de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." });
         }
         carryLogById.set(String(next.id), describeSwapCarry(next, r, "doorgevoerd"));
-      } else if (prev.status === "approved" && (next.status === "cancelled" || next.status === "rejected")) {
-        const r = await revertSwapFromPlanning(next);
-        carryLogById.set(String(next.id), describeSwapCarry(next, r, "teruggedraaid"));
+      } else if (next.status === "cancelled" || next.status === "rejected") {
+        // Terugdraaien vanuit 'approved', en bij afwijzen ook een halve
+        // doorvoer (planning gewisseld zonder opgeslagen status).
+        const terug = prev.status === "approved"
+          || (next.status === "rejected" && (await swapToestandInPlanning(prev)) === "doorgevoerd");
+        if (terug) {
+          const r = await revertSwapFromPlanning(next);
+          carryLogById.set(String(next.id), describeSwapCarry(next, r, "teruggedraaid"));
+        }
       }
     }
 
@@ -4129,9 +4163,20 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
       return { fout: { status: 409, error: "Deze dienstruil is al afgehandeld en kan niet meer van status veranderen." } };
     }
 
+    // Halve doorvoer (planning al gewisseld, status nooit opgeslagen — DB-hik
+    // tussen de twee writes): de checks hieronder zagen de dienst dan bij de
+    // collega en gaven 409 op élke nieuwe poging, terwijl afwijzen niets
+    // terugdraaide (controle-ronde 27-08, bevinding 8). Eén blik op de
+    // planning maakt goedkeuren idempotent en afwijzen herstellend. Alleen
+    // bij goedkeuren/afwijzen (stafbeslissingen); een chauffeur die zijn
+    // eigen aanvraag intrekt raakt de planning niet.
+    const alDoorgevoerd = (status === "approved" || status === "rejected") && current.status !== "approved"
+      ? (await swapToestandInPlanning(current)) === "doorgevoerd"
+      : false;
+
     // Exclusiviteit: de aanvrager moet de dienst nog hebben (zie ook
     // staleApprovalError bij POST /api/swaps).
-    if (status === "approved" && current.status !== "approved") {
+    if (status === "approved" && current.status !== "approved" && !alDoorgevoerd) {
       const stale = await staleApprovalError(current, all);
       if (stale) return { fout: { status: 409, error: stale } };
       // Zelfde afwezigheids-hercheck als de array-route: wie ziek gemeld is
@@ -4156,15 +4201,19 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
     // staan terwijl de replay hem bij de volgende import weer terugzette.
     let carry: string | undefined;
     if (status === "approved" && current.status !== "approved") {
-      const r = await applySwapToPlanning(current);
-      // Zelfde concurrency-vangnet als de array-route: 0 verplaatste rijen
-      // mét dienst-info = planning wijzigde tussen check en doorvoer → 409
-      // i.p.v. half goedkeuren met een logwaarschuwing.
-      if (r && r.offeredMoved === 0) {
-        return { fout: { status: 409, error: "De planning is intussen gewijzigd — de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." } };
+      if (alDoorgevoerd) {
+        carry = "wissel stond al in de planning (herstel na een eerdere halve doorvoer)";
+      } else {
+        const r = await applySwapToPlanning(current);
+        // Zelfde concurrency-vangnet als de array-route: 0 verplaatste rijen
+        // mét dienst-info = planning wijzigde tussen check en doorvoer → 409
+        // i.p.v. half goedkeuren met een logwaarschuwing.
+        if (r && r.offeredMoved === 0) {
+          return { fout: { status: 409, error: "De planning is intussen gewijzigd — de dienst staat niet meer op naam van de aanvrager. Vernieuw de pagina en beoordeel opnieuw." } };
+        }
+        carry = describeSwapCarry(current, r, "doorgevoerd");
       }
-      carry = describeSwapCarry(current, r, "doorgevoerd");
-    } else if (current.status === "approved" && (status === "cancelled" || status === "rejected")) {
+    } else if ((current.status === "approved" || alDoorgevoerd) && (status === "cancelled" || status === "rejected")) {
       const r = await revertSwapFromPlanning(current);
       carry = describeSwapCarry(current, r, "teruggedraaid");
     }
