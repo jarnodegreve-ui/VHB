@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { Suspense, useState, useEffect, useRef } from 'react';
+import { useCallback, Suspense, useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard,
   MapPin,
@@ -167,7 +167,7 @@ export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentView] = useState<View>(() => {
+  const [currentView, setCurrentViewRaw] = useState<View>(() => {
     // Onthoud de laatst geopende pagina over een refresh heen. Een view die niet
     // (meer) mag voor deze rol wordt door de allowedViews-guard hieronder alsnog
     // teruggezet naar 'dashboard', en bij uitloggen wordt hij sowieso gereset.
@@ -238,6 +238,16 @@ export default function App() {
   // zette de overlay uit zodra de éérste klaar was. Teller fixt dat.
   const loadingCountRef = useRef(0);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  // Navigeren = bovenaan beginnen. De scroll-root is één element voor alle
+  // views, dus wie onderaan Rooster op de dock-tab Verlof tikte, landde
+  // halverwege Verlof mét de topbar-schaduw al aan (controle-ronde 27-08,
+  // bevinding 10). Reset hier, vóór de nieuwe view rendert, zodat een view
+  // die bij het openen zelf scrolt (assistent naar het laatste bericht) het
+  // laatste woord houdt. Dezelfde tab nog eens kiezen = ook naar boven.
+  const setCurrentView = useCallback((next: View | ((prev: View) => View)) => {
+    scrollContainerRef.current?.scrollTo({ top: 0 });
+    setCurrentViewRaw(next);
+  }, []);
   const ptrIndicatorRef = useRef<HTMLDivElement>(null);
   // Tijdstip van de laatste geslaagde dataload — chauffeurs zien zo hoe vers
   // hun rooster/omleidingen zijn (vooral offline of na een tijd weg).
@@ -443,6 +453,11 @@ export default function App() {
       // Alleen bij een échte vervanging: zonder controller is dit de eerste
       // installatie en valt er niets te vernieuwen.
       if (!wachtend || !navigator.serviceWorker.controller || gestopt) return;
+      // Niet aanbieden zonder netwerk: "Vernieuw" activeert de nieuwe SW en
+      // herlaadt; offline was dat een wit scherm zodra de nieuwe cache leeg
+      // bleek (controle-ronde 27-08, bevinding 6). Zodra het netwerk terug is,
+      // meldt de online-listener hieronder het alsnog.
+      if (!navigator.onLine) return;
       showToast('Er staat een nieuwe versie van het portaal klaar.', 'info', {
         label: 'Vernieuw',
         run: () => wachtend.postMessage({ type: 'SKIP_WAITING' }),
@@ -451,6 +466,9 @@ export default function App() {
     let registratie: ServiceWorkerRegistration | null = null;
     const bijZichtbaar = () => {
       if (document.visibilityState === 'visible' && registratie) meldUpdate(registratie);
+    };
+    const bijOnline = () => {
+      if (registratie) meldUpdate(registratie);
     };
     navigator.serviceWorker.getRegistration().then((reg) => {
       if (!reg || gestopt) return;
@@ -463,10 +481,12 @@ export default function App() {
         });
       });
       document.addEventListener('visibilitychange', bijZichtbaar);
+      window.addEventListener('online', bijOnline);
     });
     return () => {
       gestopt = true;
       document.removeEventListener('visibilitychange', bijZichtbaar);
+      window.removeEventListener('online', bijOnline);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

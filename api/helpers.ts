@@ -35,6 +35,13 @@ export const toPublicUser = (user: any): AppUser => ({
   startDate: (user.startDate ?? user.startdate) || undefined,
 });
 
+/** Planner of admin die nog actief is — de enigen die meldingen (push/mail)
+ *  over aanvragen, ruilen en ziekmeldingen mogen krijgen. Een gepauzeerd
+ *  staf-account kreeg ze nog wél, inclusief de vrije medische toelichting
+ *  van een ziekmelding (controle-ronde 27-08, bevinding 9). */
+export const isActieveStaf = (user: Pick<AppUser, "role" | "isActive">): boolean =>
+  user.isActive !== false && (user.role === "planner" || user.role === "admin");
+
 export const toRoleScopedUser = (user: AppUser, role: Role, viewerId?: string): AppUser => {
   if (role === "admin") {
     return user;

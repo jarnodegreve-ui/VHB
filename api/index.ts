@@ -27,9 +27,10 @@ import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL } from "./helpers.js";
+import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
+  swapRaaktBereik,
   applySwapToPlanning,
   revertSwapFromPlanning,
   buildPlanningFromMatrix,
@@ -2799,7 +2800,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
         // isDigestRuis). Mail blijft het volledige overzicht.
         const alleVoorPush = await getUsersData();
         const planners = (alleVoorPush as any[])
-          .filter((u) => u.isActive !== false && (u.role === "planner" || u.role === "admin"))
+          .filter(isActieveStaf)
           .map((u) => String(u.id));
         if (planners.length > 0) {
           await sendPushToUsers(planners, {
@@ -3445,11 +3446,10 @@ const reapplyApprovedSwaps = async (
   // de import-log een almaar groeiend "(x niet toepasbaar)" meldde terwijl er
   // niets mis was — en een échte mismatch (dienst intussen handmatig verlegd)
   // daarin verdronk.
+  // Beide benen tellen (swapRaaktBereik): een maandoverschrijdende 1-op-1-
+  // ruil met het terugbeen ín de periode moest anders stil terug.
   const relevant = bereik?.van && bereik?.tot
-    ? approved.filter((sw) => {
-        const d = String(sw.shiftDate ?? "");
-        return !d || (d >= bereik.van! && d <= bereik.tot!);
-      })
+    ? approved.filter((sw) => swapRaaktBereik(sw, { van: bereik.van!, tot: bereik.tot! }))
     : approved;
   return applySwapsToPlanningRows(shifts, relevant);
 };
@@ -4040,7 +4040,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
           // actor zelf, als die toevallig planner/admin is).
           if (next.status === "accepted") {
             const beslissers = usersForLog
-              .filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== actorId)
+              .filter((u) => isActieveStaf(u) && String(u.id) !== actorId)
               .map((u) => String(u.id));
             await sendPushToUsers(beslissers, {
               title: "Dienstruil wacht op validatie",
@@ -4202,7 +4202,7 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
     // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
     if (status === "accepted") {
       const beslissers = usersForLog
-        .filter((u) => (u.role === "planner" || u.role === "admin") && String(u.id) !== selfId)
+        .filter((u) => isActieveStaf(u) && String(u.id) !== selfId)
         .map((u) => String(u.id));
       await sendPushToUsers(beslissers, {
         title: "Dienstruil wacht op validatie",
@@ -4660,7 +4660,7 @@ async function registreerZiekmeldingIntern(
     // registreerde (een melding over je eigen klik is ruis), maar de mail
     // wél — die dient als vastlegging in de mailbox, en de registrerende
     // planner wil hem juist óók (verzoek Jarno 04-08).
-    const planningRollen = users.filter((u) => u.role === "planner" || u.role === "admin");
+    const planningRollen = users.filter(isActieveStaf);
     const beslissers = planningRollen.filter((u) => String(u.id) !== selfId);
     await sendPushToUsers(beslissers.map((u) => String(u.id)), {
       title: "Ziekmelding",
@@ -4875,7 +4875,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
         // Nieuwe aanvraag van een chauffeur → seintje naar planners/admins,
         // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
         if (req.appUser?.role === "chauffeur") {
-          const beslissers = users.filter((u) => u.role === "planner" || u.role === "admin").map((u) => String(u.id));
+          const beslissers = users.filter(isActieveStaf).map((u) => String(u.id));
           await sendPushToUsers(beslissers, {
             title: "Nieuwe verlofaanvraag",
             body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,

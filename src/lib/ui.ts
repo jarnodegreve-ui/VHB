@@ -32,9 +32,10 @@ export async function getSupabaseAuthHeaders() {
  * blob URL — modern browsers block top-level navigation to data: URLs as
  * an anti-phishing measure, which would otherwise result in a blank page.
  *
- * In een geïnstalleerde PWA (iOS-standalone) geeft window.open geregeld null
- * terug (geen tabbladen in standalone) — dan navigeren we in hetzelfde
- * venster; terug-swipen brengt de gebruiker weer in het portaal.
+ * Geeft window.open null terug (iOS-standalone zonder tabbladen, popup-
+ * blocker), dan navigeren we in hetzelfde venster; terug-swipen brengt de
+ * gebruiker weer in het portaal. Zie openNieuwVenster voor waarom dat null
+ * NIET via de 'noopener'-feature mag komen.
  */
 /** Alleen https/http en data:application/pdf mogen als navigatiedoel dienen.
  *  De pdfUrl van een omleiding is planner-invoer; zonder deze check kon een
@@ -73,6 +74,25 @@ export function telHref(phone: string | undefined | null): string | undefined {
 export const safeDocumentHref = (url: string | undefined | null): string | undefined =>
   url && isSafeDocumentUrl(url) ? url : undefined;
 
+/** Nieuw tabblad zonder opener-lek — bewust NIET via de 'noopener'/
+ *  'noreferrer'-features: per HTML-spec geeft window.open dán áltijd null
+ *  terug, óók als het venster gewoon opent. De fallback in openPdfInNewTab
+ *  navigeerde daardoor bij élke PDF-klik ook het portaal zelf naar de PDF
+ *  (controle-ronde 27-08, bevinding 5). opener handmatig op null zetten mag
+ *  ook cross-origin. De referrer gaat nu mee, maar de Referrer-Policy-header
+ *  (strict-origin-when-cross-origin) beperkt die tot de origin. */
+const openNieuwVenster = (url: string): Window | null => {
+  const win = window.open(url, '_blank');
+  if (win) {
+    try {
+      win.opener = null;
+    } catch {
+      // Setter geweigerd — dan blijft hooguit een opener-verwijzing naar het portaal.
+    }
+  }
+  return win;
+};
+
 export function openPdfInNewTab(pdfUrl: string | undefined | null) {
   if (!pdfUrl) return;
   if (!isSafeDocumentUrl(pdfUrl)) {
@@ -80,8 +100,7 @@ export function openPdfInNewTab(pdfUrl: string | undefined | null) {
     return;
   }
   if (!pdfUrl.startsWith('data:')) {
-    const win = window.open(pdfUrl, '_blank', 'noopener,noreferrer');
-    if (!win) window.location.assign(pdfUrl);
+    if (!openNieuwVenster(pdfUrl)) window.location.assign(pdfUrl);
     return;
   }
   try {
@@ -92,8 +111,7 @@ export function openPdfInNewTab(pdfUrl: string | undefined | null) {
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
     const blob = new Blob([bytes], { type: mime });
     const url = URL.createObjectURL(blob);
-    const win = window.open(url, '_blank', 'noopener,noreferrer');
-    if (!win) {
+    if (!openNieuwVenster(url)) {
       window.location.assign(url);
       return; // niet revoken — het huidige venster gebruikt de blob-URL nog
     }

@@ -610,6 +610,17 @@ describe('verlof: scoped diff-autorisatie (regressie hotfix #66)', () => {
     expect(mem.leave.find((l) => l.id === 'l-a3')).toBeTruthy();
   });
 
+  it('meldt een nieuwe aanvraag alleen aan actieve planners/admins — niet aan een gepauzeerd staf-account (controle-ronde 27-08)', async () => {
+    mem.users = [...mem.users, { id: '9', name: 'Paula Gepauzeerd', email: 'paula@vhb.be', role: 'planner', isActive: false }];
+    const own = mem.leave.filter((l) => l.userId === '3');
+    const nieuw = { id: 'l-a4', userId: '3', startDate: '2026-09-08', endDate: '2026-09-09', type: 'betaald_verlof', status: 'pending', comment: '', createdAt: '2026-08-28T08:00:00Z' };
+    const res = await api('POST', '/api/leave', { token: 'tok-a', body: [...own, nieuw] });
+    expect(res.status).toBe(200);
+    const naarStaf = mem.pushesSent.filter((p) => p.userIds.includes('2'));
+    expect(naarStaf.length).toBeGreaterThan(0); // de actieve planner krijgt het seintje…
+    expect(mem.pushesSent.some((p) => p.userIds.includes('9'))).toBe(false); // …het gepauzeerde account niet
+  });
+
   it('weigert verlof aanvragen voor een ander (403)', async () => {
     const own = mem.leave.filter((l) => l.userId === '3');
     const voorAnder = { id: 'l-x', userId: '4', startDate: '2026-09-01', endDate: '2026-09-01', type: 'betaald_verlof', status: 'pending', createdAt: '2026-06-12T08:00:00Z' };

@@ -69,15 +69,47 @@ self.addEventListener('install', (event) => {
   // ingevuld verlof- of ruilformulier. De nieuwe SW wacht nu netjes tot de
   // gebruiker via de "Vernieuw"-knop toestemming geeft (message
   // SKIP_WAITING hieronder) of tot alle vensters dicht zijn.
+  //
+  // Wél de shell alvast in de nieuwe cache zetten: index.html plus de assets
+  // die hij direct laadt (entry-chunk, css, modulepreloads). Zonder dat stond
+  // de nieuwe cache leeg tot de eerste geslaagde navigatie, terwijl activate
+  // de oude cache al wiste — "Vernieuw" zonder netwerk gaf zo een wit scherm
+  // (controle-ronde 27-08, bevinding 6). Best-effort: mislukt de precache
+  // (offline), dan houdt activate de oude cache aan.
+  event.waitUntil(precacheShell().catch(() => {}));
 });
+
+async function precacheShell() {
+  const cache = await caches.open(CACHE_NAME);
+  const res = await fetch(new Request('/', { cache: 'reload' }));
+  if (!res.ok) return;
+  const html = await res.clone().text();
+  await cache.put('/', res);
+  const assets = [...new Set(html.match(/\/assets\/[A-Za-z0-9._-]+/g) || [])];
+  await Promise.all(
+    assets.map((pad) =>
+      fetch(new Request(pad, { cache: 'reload' }))
+        .then((r) => (r.ok ? cache.put(pad, r) : null))
+        .catch(() => null),
+    ),
+  );
+}
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))),
-    ),
+    (async () => {
+      // Oude caches pas wissen als de nieuwe een shell heeft. Anders (precache
+      // mislukt, bv. offline) blijven ze staan: caches.match() zoekt over álle
+      // caches, dus de oude shell blijft bruikbaar tot de volgende activate.
+      const cache = await caches.open(CACHE_NAME);
+      const heeftShell = Boolean(await cache.match('/'));
+      if (heeftShell) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
+      }
+      await self.clients.claim();
+    })(),
   );
-  self.clients.claim();
 });
 
 // Gehashte assets stapelen op binnen dezelfde cache-naam: elke deploy levert

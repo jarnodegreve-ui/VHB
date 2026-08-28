@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { applySwapsToPlanningRows } from '../api/storage.js';
+import { applySwapsToPlanningRows, swapRaaktBereik } from '../api/storage.js';
 
 /**
  * Pure heropbouw-replay: goedgekeurde ruilen opnieuw toepassen op vers
@@ -67,5 +67,45 @@ describe('applySwapsToPlanningRows', () => {
     ]);
     expect(res).toEqual({ applied: 2, skipped: 0 });
     expect(r[0].driverId).toBe('5');
+  });
+});
+
+/**
+ * Periode-import: welke goedgekeurde ruilen horen bij een heropbouw van
+ * [van, tot]? Beide benen tellen — het terugbeen van een maandoverschrijdende
+ * 1-op-1-ruil viel er vroeger stil uit (controle-ronde 27-08, bevinding 7).
+ */
+describe('swapRaaktBereik (periode-import)', () => {
+  const september = { van: '2026-09-01', tot: '2026-09-30' };
+  const ruil = (extra: Record<string, unknown>) => ({
+    requesterId: '3', targetDriverId: '4', swapType: 'ruil' as const,
+    shiftDate: '2026-08-30', shiftLine: '12', returnDate: '2026-09-03', returnCode: '14',
+    ...extra,
+  });
+
+  it('telt het terugbeen van een maandoverschrijdende 1-op-1-ruil mee', () => {
+    expect(swapRaaktBereik(ruil({}), september)).toBe(true);
+  });
+
+  it('laat een ruil die volledig vóór het bereik ligt weg', () => {
+    expect(swapRaaktBereik(ruil({ returnDate: '2026-08-31' }), september)).toBe(false);
+  });
+
+  it('bij een overname of een vrije dag als tegenprestatie telt alleen de aangeboden dienst', () => {
+    expect(swapRaaktBereik(ruil({ swapType: 'overname' }), september)).toBe(false);
+    expect(swapRaaktBereik(ruil({ returnCode: 'VRIJ' }), september)).toBe(false);
+    expect(swapRaaktBereik(ruil({ swapType: 'overname', shiftDate: '2026-09-10' }), september)).toBe(true);
+  });
+
+  it('een legacy-ruil zonder shiftDate blijft relevant (de replay telt hem als niet-toepasbaar)', () => {
+    expect(swapRaaktBereik(ruil({ shiftDate: undefined, returnDate: '2026-08-31' }), september)).toBe(true);
+  });
+
+  it('de replay past bij zo\'n ruil alleen het been binnen de heropgebouwde rijen toe', () => {
+    // Alleen september-rijen (periode-import): de terugdienst staat vers op de collega.
+    const rijen = [{ date: '2026-09-03', line: '14', driverId: '4' }];
+    const res = applySwapsToPlanningRows(rijen, [ruil({})]);
+    expect(res).toEqual({ applied: 1, skipped: 0 });
+    expect(rijen[0].driverId).toBe('3');
   });
 });

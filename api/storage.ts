@@ -2053,7 +2053,7 @@ export const markSwapTargetSeen = async (swapId: string, seenAtIso: string): Pro
 // die wordt bij elke heropbouw opnieuw gevormd. Annuleren draait de wissel
 // om; de heropbouw past goedgekeurde ruilen opnieuw toe via de pure functie.
 
-type SwapCarryFields = Pick<SwapRecord, 'requesterId' | 'targetDriverId' | 'swapType' | 'returnDate' | 'returnCode' | 'shiftDate' | 'shiftLine'>;
+export type SwapCarryFields = Pick<SwapRecord, 'requesterId' | 'targetDriverId' | 'swapType' | 'returnDate' | 'returnCode' | 'shiftDate' | 'shiftLine'>;
 
 /** Heeft deze ruil een dienst als tegenprestatie (1-op-1, geen vrije dag)? */
 const swapHasReturnShift = (swap: SwapCarryFields) =>
@@ -2061,6 +2061,22 @@ const swapHasReturnShift = (swap: SwapCarryFields) =>
   !!swap.returnDate &&
   !!swap.returnCode &&
   String(swap.returnCode).toLowerCase() !== 'vrij';
+
+/** Raakt deze ruil een kalenderdag binnen [van, tot]? Beide benen tellen:
+ *  bij een 1-op-1-ruil kan de aangeboden dienst vóór het bereik liggen en
+ *  de terugdienst erin (maandoverschrijdende ruil). De heropbouw-replay
+ *  filterde alleen op shiftDate, waardoor het terugbeen bij een
+ *  periode-import stil op de collega terugviel terwijl de maandplanning-
+ *  overlay hem bij de aanvrager toonde (controle-ronde 27-08, bevinding 7).
+ *  Zonder shiftDate (legacy-ruil) blijft hij relevant — de replay telt hem
+ *  dan als niet-toepasbaar, zoals voorheen. */
+export const swapRaaktBereik = (swap: SwapCarryFields, bereik: { van: string; tot: string }): boolean => {
+  const aangeboden = String(swap.shiftDate ?? '');
+  if (!aangeboden || (aangeboden >= bereik.van && aangeboden <= bereik.tot)) return true;
+  if (!swapHasReturnShift(swap)) return false;
+  const terug = String(swap.returnDate);
+  return terug >= bereik.van && terug <= bereik.tot;
+};
 
 /**
  * Pure variant voor de heropbouw: past goedgekeurde ruilen toe op een
