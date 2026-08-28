@@ -3,7 +3,7 @@ import { Activity, AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
-import { AdminSubsectionHeader, ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { AdminSubsectionHeader, ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 import type { VerwachtingAfwijking } from '../../lib/coverageGaps';
@@ -920,15 +920,13 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       <Modal open={Boolean(matrixPreviewOpen && matrixPreview)} onClose={() => setMatrixPreviewOpen(false)} maxWidth="2xl" dismissOnBackdrop={false} className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
         {matrixPreview && (
         <>
-              <div className="p-8 border-b border-white/70 shrink-0">
-                <MicroLabel className="text-oker-600">Matrix Import Preview</MicroLabel>
-                <h4 className="mt-3 text-xl font-bold tracking-tight">Controleer voor je deze periode vervangt</h4>
-                <p className="mt-2 text-sm font-medium text-slate-500">
-                  Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen — planning buiten die periode blijft staan.
-                </p>
-              </div>
+              <ModalHeader
+                eyebrow="Matrix Import Preview"
+                title="Controleer voor je deze periode vervangt"
+                description="Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen — planning buiten die periode blijft staan."
+              />
 
-              <div className="p-8 space-y-6 overflow-y-auto flex-1">
+              <div className="p-6 md:p-7 space-y-6 overflow-y-auto flex-1">
                 <div className={cn(
                   "rounded-3xl border p-5",
                   matrixPreviewHasIssues ? "border-red-200 bg-red-50/80" : "border-emerald-200 bg-emerald-50/80"

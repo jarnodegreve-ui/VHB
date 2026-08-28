@@ -2007,12 +2007,20 @@ const revisionOf = (rows: any[]): string => {
   );
   return crypto.createHash("sha256").update(JSON.stringify(sorted)).digest("base64url").slice(0, 22);
 };
+/** Revisie van de gebruikerslijst ZONDER de sessie-velden. lastLogin en
+ *  activeSessions muteren bij elke login/logout — server-side, buiten
+ *  gebruikersbeheer om — en zaten mee in de hash: vrijwel elke admin-save
+ *  overdag kreeg zo een valse 409 "gewijzigd door iemand anders"
+ *  (controle-ronde 27-08). De velden zelf zijn ook geen beheer-invoer meer:
+ *  saveUsersData houdt de DB-waarde aan. */
+const usersRevisionOf = (users: AppUser[]): string =>
+  revisionOf(users.map((user) => ({ ...user, lastLogin: undefined, activeSessions: undefined })));
 /** True als de client een base-revisie meegaf die niet meer overeenkomt met
  *  de huidige serverstaat → iemand anders heeft intussen opgeslagen. */
-const revisionConflict = (req: AuthenticatedRequest, current: any[]): boolean => {
+const revisionConflict = (req: AuthenticatedRequest, current: any[], rev: (rows: any[]) => string = revisionOf): boolean => {
   const base = req.headers[COLLECTION_REVISION_HEADER];
   if (typeof base !== "string" || base.length === 0) return false; // oudere client → check overslaan
-  return base !== revisionOf(current);
+  return base !== rev(current);
 };
 const revisionConflictResponse = (res: any, label: string) =>
   res.status(409).json({
@@ -2068,7 +2076,7 @@ app.get("/api/users", authenticate, async (req: AuthenticatedRequest, res) => {
     const users = await getUsersData();
     // Revisie over de volledige serverstaat (niet de role-scoped weergave):
     // opaque token, hoeft enkel consistent te zijn met de POST-vergelijking.
-    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(users));
+    res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(users));
     res.json(users.map((user) => toRoleScopedUser(user, req.appUser!.role, req.appUser!.id)));
   } catch (err) {
     console.error("Error reading users data:", err);
@@ -2083,7 +2091,7 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       const previousUsers = await getUsersData();
       // Revisie-check: twee admin-sessies die tegelijk bewerken overschreven
       // elkaar anders stil — en saveUsersData doet onomkeerbare Auth-deletes.
-      if (revisionConflict(req, previousUsers)) return revisionConflictResponse(res, "De gebruikerslijst");
+      if (revisionConflict(req, previousUsers, usersRevisionOf)) return revisionConflictResponse(res, "De gebruikerslijst");
       const usersRemoved = detectMassDelete(previousUsers, newData);
       if (usersRemoved !== null) return massDeleteResponse(res, usersRemoved, previousUsers.length, "gebruikers");
       const { createdAccounts } = (await saveUsersData(newData)) ?? { createdAccounts: [] };
@@ -2148,7 +2156,7 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
         }
       }
 
-      res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUsersData()));
+      res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
       res.json({ success: true, count: newData.length, welcomed: (createdAccounts ?? []).length });
     } else {
       res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });

@@ -4,7 +4,7 @@ import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
-import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
@@ -598,7 +598,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       )}
 
       <TableShell>
-        <div className="border-b border-white/70 px-5 py-4 md:px-6">
+        <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
           <AdminSubsectionHeader
             eyebrow="Overzicht"
             title="Gebruikerslijst"
@@ -740,12 +740,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       <ConfirmationModal isOpen={!!pendingImportUsers} onClose={() => { setPendingImportUsers(null); setPendingImportMessage(''); }} onConfirm={handleConfirmImport} title="Gebruikers importeren" message={pendingImportMessage || 'Wil je deze import toepassen?'} confirmText="Importeren" variant="warning" />
       <ConfirmationModal isOpen={!!confirmNaamBotsing} onClose={() => setConfirmNaamBotsing(null)} onConfirm={() => { const poort = confirmNaamBotsing; setConfirmNaamBotsing(null); poort?.doorgaan(); }} title="Naam bestaat al" message={confirmNaamBotsing?.melding ?? ''} confirmText="Toch opslaan" variant="warning" />
 
-      <Modal open={showAddModal} onClose={() => setShowAddModal(false)}>
-        <div className="p-6 border-b border-white/70">
-          <h4 className="text-xl font-bold tracking-tight">Nieuwe Gebruiker</h4>
-          <p className="mt-1 text-sm text-slate-500">Voeg handmatig een medewerker toe.</p>
-        </div>
-        <form onSubmit={handleAddUser} className="p-6 space-y-4">
+      <Modal open={showAddModal} onClose={() => setShowAddModal(false)} className="flex flex-col !p-0">
+        <ModalHeader title="Nieuwe Gebruiker" description="Voeg handmatig een medewerker toe." />
+        <form onSubmit={handleAddUser} className="p-6 md:p-7 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-1.5 sm:col-span-2">
               <MicroLabel>Volledige Naam</MicroLabel>
@@ -767,14 +764,11 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         </form>
       </Modal>
 
-      <Modal open={!!editingUser} onClose={() => setEditingUser(null)} maxWidth="lg">
+      <Modal open={!!editingUser} onClose={() => setEditingUser(null)} maxWidth="lg" className="flex flex-col !p-0">
         {editingUser && (
           <>
-            <div className="p-6 border-b border-white/70 flex justify-between items-center">
-              <div><h4 className="text-xl font-bold tracking-tight">Gebruiker Bewerken</h4><p className="text-sm text-slate-500">Pas de gegevens van {editingUser.name} aan.</p></div>
-              <Button variant="danger" size="sm" className="px-2" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)} aria-label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} title={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} icon={<Trash2 size={16} />} />
-            </div>
-            <form onSubmit={handleUpdateUser} className="p-6 space-y-4">
+            <ModalHeader title="Gebruiker Bewerken" description={`Pas de gegevens van ${editingUser.name} aan.`} />
+            <form onSubmit={handleUpdateUser} className="p-6 md:p-7 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <div className="space-y-1.5 sm:col-span-2">
                   <MicroLabel>Volledige Naam</MicroLabel>
@@ -843,17 +837,20 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
-              <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
+              {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
+                  daar geen slot voor, dus links in de knoppenrij (zelfde
+                  gedrag, zelfde bescherming; controle-ronde 27-08). */}
+              <div className="flex gap-3 pt-2"><Button variant="danger" className="px-3" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)} aria-label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} title={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} icon={<Trash2 size={16} />} /><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
             </form>
           </>
         )}
       </Modal>
 
-      <Modal open={!!confirmResetUser} onClose={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>
+      <Modal open={!!confirmResetUser} onClose={() => { setConfirmResetUser(null); setResetPasswordValue(''); }} className="flex flex-col !p-0">
         {confirmResetUser && (
           <>
-            <div className="p-6 border-b border-white/70"><h4 className="text-xl font-bold tracking-tight">Wachtwoord resetten</h4><p className="mt-1 text-sm text-slate-500">Stel een nieuw tijdelijk wachtwoord in voor {confirmResetUser.name}.</p></div>
-            <div className="p-6 space-y-4">
+            <ModalHeader title="Wachtwoord resetten" description={`Stel een nieuw tijdelijk wachtwoord in voor ${confirmResetUser.name}.`} />
+            <div className="p-6 md:p-7 space-y-4">
               <div className="space-y-1.5"><MicroLabel>Tijdelijk wachtwoord</MicroLabel><input type="password" aria-label="Tijdelijk wachtwoord" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 6 tekens" autoFocus /></div>
               <p className="text-xs text-slate-400">De gebruiker logt daarna in met dit nieuwe wachtwoord.</p>
               <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>Annuleren</Button><Button variant="primary" className="flex-1" onClick={handleResetPassword} disabled={isResettingPassword}>{isResettingPassword ? 'Bezig…' : 'Resetten'}</Button></div>

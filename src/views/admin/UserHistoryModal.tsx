@@ -1,6 +1,7 @@
-import { Calendar, Clock, RotateCcw, X } from 'lucide-react';
+import { Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
+import { ModalHeader } from '../../components/ui';
 import { cn } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
@@ -79,19 +80,15 @@ export function UserHistoryModal({
   const userName = (id?: string) => users.find((u) => u.id === id)?.name || 'Onbekend';
 
   return (
-    <Modal open={!!user} onClose={onClose} maxWidth="2xl">
-      <div className="p-8 border-b border-white/70 shrink-0 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Historiek {currentYear}</p>
-          <h4 className="mt-1 text-lg font-bold tracking-tight">{user.name}</h4>
-          <p className="text-sm font-medium text-slate-500 capitalize">{user.role}{user.employeeId ? ` · #${user.employeeId}` : ''}</p>
-        </div>
-        <button aria-label="Sluiten" onClick={onClose} className="p-2 text-slate-400 hover:bg-surface-soft-hover rounded-xl shrink-0">
-          <X size={20} />
-        </button>
-      </div>
+    <Modal open={!!user} onClose={onClose} maxWidth="2xl" className="flex flex-col !p-0">
+      <ModalHeader
+        eyebrow={`Historiek ${currentYear}`}
+        title={user.name}
+        description={<span className="capitalize">{user.role}{user.employeeId ? ` · #${user.employeeId}` : ''}</span>}
+        onClose={onClose}
+      />
 
-      <div className="p-8 space-y-8 overflow-y-auto flex-1">
+      <div className="p-6 md:p-7 space-y-8 overflow-y-auto flex-1">
         {/* Verlofbalans */}
         <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, currentYear, user.verlofBudget)} year={currentYear} />
 

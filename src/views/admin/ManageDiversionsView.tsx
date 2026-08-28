@@ -1,8 +1,8 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Diversion } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -250,14 +250,12 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
       {/* Gedeelde Modal: ESC, backdrop-tap, safe-area en dvh (verbeterronde 29/07 #3). */}
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
-              <div className="p-6 border-b border-white/70 flex items-center justify-between shrink-0">
-                <div>
-                  <h4 className="text-xl font-bold tracking-tight">{editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}</h4>
-                  <p className="text-sm text-slate-500 font-medium">Vul de details in en upload eventueel een PDF.</p>
-                </div>
-                <Button variant="ghost" size="sm" icon={<X size={20} />} aria-label="Sluiten" onClick={() => setShowModal(false)} />
-              </div>
-              <form onSubmit={handleSubmit} className="p-6 space-y-5 overflow-y-auto flex-1">
+              <ModalHeader
+                title={editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}
+                description="Vul de details in en upload eventueel een PDF."
+                onClose={() => setShowModal(false)}
+              />
+              <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5 overflow-y-auto flex-1">
                 <div className="space-y-2">
                   <MicroLabel className="ml-1">Lijn(en)</MicroLabel>
                   <input

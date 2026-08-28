@@ -1040,13 +1040,24 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
 
   ensureUniqueUserEmails(incomingUsers);
 
-  const sanitizedUsers = incomingUsers.map(sanitizeIncomingUser);
+  const currentUsers = await getUsersData();
+  const currentById = new Map<string, AppUser>(currentUsers.map((user): [string, AppUser] => [String(user.id), user]));
+  // Sessie-velden (lastLogin/activeSessions) zijn server-eigendom: ze worden
+  // per login/logout gericht bijgewerkt (updateUserSessionMeta/
+  // bumpActiveSessions). Wat de client meestuurt is een momentopname van
+  // uren geleden en werd bij elke save teruggeschreven — na een 409 zelfs
+  // de stand van vóór de refetch (controle-ronde 27-08). Bestaande rijen
+  // houden hun DB-waarde; nieuwe rijen starten schoon.
+  const sanitizedUsers = incomingUsers.map((user) => {
+    const sanitized = sanitizeIncomingUser(user);
+    const previous = currentById.get(sanitized.id);
+    return previous
+      ? { ...sanitized, lastLogin: previous.lastLogin, activeSessions: previous.activeSessions }
+      : { ...sanitized, lastLogin: undefined, activeSessions: 0 };
+  });
   if (countAdmins(sanitizedUsers) === 0) {
     throw new Error("Er moet minstens 1 actieve admin overblijven.");
   }
-
-  const currentUsers = await getUsersData();
-  const currentById = new Map<string, AppUser>(currentUsers.map((user): [string, AppUser] => [String(user.id), user]));
   const incomingIds = new Set(sanitizedUsers.map((user) => String(user.id)));
 
   const { data: authPage, error: authListError } = await supabaseAdmin.auth.admin.listUsers({
@@ -1073,9 +1084,20 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
     const { error } = await client.from('users').delete().in('id', removedUserIds);
     if (error) throw error;
   }
-  const databaseUsers = sanitizedUsers.map(toDatabaseUser);
-  {
-    const { error } = await client.from('users').upsert(databaseUsers);
+  // Bestaande rijen zónder de sessie-kolommen upserten, zodat een login die
+  // tussen het lezen hierboven en dit schrijven in valt niet alsnog
+  // overschreven wordt; nieuwe rijen mét (schone) sessie-kolommen. Twee
+  // upserts, want PostgREST eist per batch identieke sleutels.
+  const SESSIE_KOLOMMEN = new Set(['lastlogin', 'activesessions']);
+  const bestaandeRijen = sanitizedUsers
+    .filter((user) => currentById.has(String(user.id)))
+    .map((user) => Object.fromEntries(Object.entries(toDatabaseUser(user)).filter(([kolom]) => !SESSIE_KOLOMMEN.has(kolom))));
+  const nieuweRijen = sanitizedUsers
+    .filter((user) => !currentById.has(String(user.id)))
+    .map(toDatabaseUser);
+  for (const rijen of [bestaandeRijen, nieuweRijen]) {
+    if (rijen.length === 0) continue;
+    const { error } = await client.from('users').upsert(rijen);
     if (error) throw error;
   }
 
@@ -1115,6 +1137,7 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
         authUsersByEmail.set(normalizeEmail(data.user.email) as string, data.user);
       }
       createdAccounts.push({ email: currentEmail, name: sanitizedUser.name });
+      if (!sanitizedUser.isActive && data.user) await zetAuthBan(data.user.id, true);
       continue;
     }
 
@@ -1138,9 +1161,31 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
       });
       if (error) throw error;
     }
+
+    // Pauzeren/heractiveren doorzetten naar Supabase Auth. "Pauzeer" zette
+    // alleen users.isactive; het Auth-account kon blijven inloggen en via
+    // PostgREST (anon-key + eigen JWT) rechtstreeks lezen, buiten de API en
+    // de toestel-whitelist om (controle-ronde 27-08, bevinding 1 — de
+    // RLS-kant zit in supabase/2026-08-28_rls_inactieve_gebruikers.sql).
+    // Reconciliatie op de wérkelijke ban-staat, niet op de overgang: zo
+    // raken accounts die vóór deze fix gepauzeerd werden bij de
+    // eerstvolgende save alsnog geband.
+    const bannedUntil = (currentAuthUser as { banned_until?: string | null }).banned_until;
+    const isGebannen = Boolean(bannedUntil) && new Date(String(bannedUntil)).getTime() > Date.now();
+    if (isGebannen !== !sanitizedUser.isActive) await zetAuthBan(currentAuthUser.id, !sanitizedUser.isActive);
   }
   // (DB-delete + DB-upsert zijn hierboven al uitgevoerd, vóór de Auth-mutaties.)
   return { createdAccounts };
+};
+
+/** Auth-account (de)blokkeren. Een ban van 100 jaar is Supabase's manier om
+ *  een account uit te zetten zonder het te verwijderen; "none" heft hem op.
+ *  Bestaande access-tokens lopen nog hooguit een uur door — de RLS-policies
+ *  vangen die periode op. */
+const zetAuthBan = async (authUserId: string, gebannen: boolean) => {
+  if (!supabaseAdmin) throw new Error("Supabase-admin niet geconfigureerd.");
+  const { error } = await supabaseAdmin.auth.admin.updateUserById(authUserId, { ban_duration: gebannen ? "876000h" : "none" });
+  if (error) throw error;
 };
 
 /** Gericht sessie-metadata bijwerken — alléén de eigen rij.

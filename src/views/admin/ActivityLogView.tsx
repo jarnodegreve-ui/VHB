@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
-import { Activity, Download, Search, Users, X } from 'lucide-react';
+import { Activity, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob, getSupabaseAuthHeaders } from '../../lib/ui';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { formatDayLong } from '../../lib/format';
-import { AdminSubsectionHeader, EmptyState, PageShell } from '../../components/ui';
+import { AdminSubsectionHeader, EmptyState, ModalHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
@@ -335,45 +335,23 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           )}
         </div>
       </section>
-      <Modal open={showDailyModal} onClose={() => setShowDailyModal(false)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
-        <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
-          <div className="min-w-0">
-            <h4 className="text-lg font-bold tracking-tight truncate">Actieve gebruikers per dag</h4>
-            <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Klik op een dag voor de namen</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowDailyModal(false)}
-            aria-label="Sluiten"
-            className="ios-pressable p-2 -m-1 text-slate-400 hover:bg-surface-soft-hover rounded-xl"
-          >
-            <X size={20} />
-          </button>
-        </div>
+      <Modal open={showDailyModal} onClose={() => setShowDailyModal(false)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0">
+        <ModalHeader title="Actieve gebruikers per dag" description="Klik op een dag voor de namen" onClose={() => setShowDailyModal(false)} />
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-1">
           {dailyActive.map(renderDayRow)}
         </div>
       </Modal>
 
-      <Modal open={Boolean(openDayData)} onClose={() => setOpenDay(null)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden">
+      <Modal open={Boolean(openDayData)} onClose={() => setOpenDay(null)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0">
         {openDayData && (
           <>
-            <div className="px-6 py-5 border-b border-slate-200/70 flex items-center justify-between shrink-0 gap-3">
-              <div className="min-w-0">
-                <h4 className="text-lg font-bold tracking-tight truncate capitalize">
-                  {formatDayLong(openDayData.day)}
-                </h4>
-                <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">{openDayData.count} {openDayData.count === 1 ? 'actieve gebruiker' : 'actieve gebruikers'}</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => setOpenDay(null)}
-                aria-label="Sluiten"
-                className="ios-pressable p-2 -m-1 text-slate-400 hover:bg-surface-soft-hover rounded-xl"
-              >
-                <X size={20} />
-              </button>
-            </div>
+            {/* ModalHeader neemt een string-titel; de CSS-`capitalize` van
+                de oude kop wordt hier een hoofdletter op de weekdag. */}
+            <ModalHeader
+              eyebrow={`${openDayData.count} ${openDayData.count === 1 ? 'actieve gebruiker' : 'actieve gebruikers'}`}
+              title={formatDayLong(openDayData.day).replace(/^./, (c) => c.toUpperCase())}
+              onClose={() => setOpenDay(null)}
+            />
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-0.5">
               {openDayData.names.map((name) => (
                 <div key={name} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-soft-hover">

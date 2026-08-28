@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Clock, Download, History, Pencil, Plus, Trash2, Upload, X } from 'lucide-react';
+import { Clock, Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { cn, notify } from '../../lib/ui';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -440,12 +440,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         )}
       </TableShell>
 
-      <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg">
-        <div className="p-6 md:p-8 border-b border-white/70 flex items-center justify-between">
-          <h4 className="text-lg font-bold tracking-tight">{editingId ? 'Dienst bewerken' : 'Nieuwe dienst'}</h4>
-          <Button variant="ghost" size="sm" className="px-2" icon={<X size={20} />} onClick={() => setShowModal(false)} aria-label="Sluiten" />
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 md:p-8 space-y-5">
+      <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex flex-col !p-0">
+        <ModalHeader title={editingId ? 'Dienst bewerken' : 'Nieuwe dienst'} onClose={() => setShowModal(false)} />
+        <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5">
           <div className="space-y-2">
             <MicroLabel className="ml-1">Dienstnummer</MicroLabel>
             <input

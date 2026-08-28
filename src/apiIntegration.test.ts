@@ -1494,6 +1494,26 @@ describe('optimistic concurrency (revisie-tokens, anti-overschrijf)', () => {
     expect(res.status).toBe(200);
   });
 
+  it('gebruikers: een login (lastLogin/activeSessions) verandert de revisie niet — geen valse 409 (controle-ronde 27-08)', async () => {
+    const get = await api('GET', '/api/users', { token: 'tok-admin' });
+    expect(get.status).toBe(200);
+    const rev = get.headers.get(REV)!;
+    expect(rev).toBeTruthy();
+    // Iemand logt in: sessie-velden muteren server-side, buiten gebruikersbeheer om.
+    mem.users = mem.users.map((u: any, i: number) => (i === 0 ? { ...u, lastLogin: '2026-08-27T21:00:00.000Z', activeSessions: (u.activeSessions ?? 0) + 1 } : u));
+    const again = await api('GET', '/api/users', { token: 'tok-admin' });
+    expect(again.headers.get(REV)).toBe(rev);
+    // De admin-save met de "oude" revisie mag gewoon door.
+    const edited = mem.users.map((u: any, i: number) => (i === 0 ? { ...u, phone: '0470 00 00 00' } : u));
+    const save = await api('POST', '/api/users', { token: 'tok-admin', body: edited, headers: { [REV]: rev } });
+    expect(save.status).toBe(200);
+    expect(mem.users[0].phone).toBe('0470 00 00 00');
+    // Een échte wijziging door een ander (naam) blijft wél een conflict.
+    mem.users = mem.users.map((u: any, i: number) => (i === 1 ? { ...u, name: `${u.name} (gewijzigd)` } : u));
+    const stale = await api('POST', '/api/users', { token: 'tok-admin', body: edited, headers: { [REV]: rev } });
+    expect(stale.status).toBe(409);
+  });
+
   it('handhaaft de revisie ook op updates en planningscodes', async () => {
     const upd = await api('POST', '/api/updates', { token: 'tok-planner', body: mem.updates, headers: { [REV]: 'oud' } });
     expect(upd.status).toBe(409);
