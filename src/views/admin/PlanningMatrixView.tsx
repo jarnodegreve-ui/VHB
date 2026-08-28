@@ -2,6 +2,7 @@ import { Fragment, useDeferredValue, useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Calendar, Clock, Download, FileText, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
+import { csvTekst } from '../../lib/csv';
 import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
@@ -208,19 +209,13 @@ export function PlanningMatrixView({
     }
 
     const header = ['datum', 'dagtype', 'type', 'chauffeur', 'code', 'details'];
-    const csvRows = [
-      header.join(';'),
-      ...problemReportRows.map((row) => [
-        row.date,
-        row.dayType,
-        row.type,
-        row.driver,
-        row.code,
-        row.details,
-      ].map((value) => `"${String(value).replace(/"/g, '""')}"`).join(';')),
-    ];
+    // csvTekst: chauffeursnaam/code/details komen uit de Excel — formule-guard.
+    const csv = csvTekst([
+      header,
+      ...problemReportRows.map((row) => [row.date, row.dayType, row.type, row.driver, row.code, row.details]),
+    ], ';');
 
-    const blob = new Blob([csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     void downloadBlob('planning-matrix-problemen.csv', blob);
   };
 

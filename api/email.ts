@@ -55,11 +55,22 @@ export const sendEmail = async (opts: SendEmailOptions): Promise<SendEmailResult
   if (recipients.length === 0) return { ok: true, mocked: false };
 
   if (!isSmtpConfigured()) {
-    console.log(`--- MOCK EMAIL${opts.context ? ` (${opts.context})` : ""} ---`);
-    console.log("To:", recipients.join(", "));
-    console.log("Subject:", opts.subject);
-    console.log("Body:", opts.text);
-    console.log("---------------------------------");
+    // In productie NOOIT de body loggen: welkomstmails bevatten wachtwoord-
+    // instel-links, ziekmeldingen een medische toelichting — die belandden
+    // zo in de Vercel-functielogs (controle-ronde 27-08, bevinding 30).
+    // Alleen lokaal (geen Vercel, geen production) blijft de volledige mock
+    // zichtbaar, want daar wil je de link kunnen aanklikken.
+    const inProductie = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
+    const ctx = opts.context ? ` (${opts.context})` : "";
+    if (inProductie) {
+      console.error(`[mail] SMTP niet geconfigureerd — mail NIET verzonden${ctx}: ${recipients.length} ontvanger(s), onderwerp "${opts.subject}".`);
+    } else {
+      console.log(`--- MOCK EMAIL${ctx} ---`);
+      console.log("To:", recipients.join(", "));
+      console.log("Subject:", opts.subject);
+      console.log("Body:", opts.text);
+      console.log("---------------------------------");
+    }
     return { ok: true, mocked: true };
   }
 

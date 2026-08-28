@@ -90,6 +90,31 @@ function warnSharedStoreDown(reason: string) {
 const sharedStoreDegraded = () => hasSharedStore() && Date.now() < storeDownUntil;
 
 /**
+ * Eén Upstash-pipeline-aanroep, best-effort: null als de store niet
+ * geconfigureerd of onbereikbaar is (zelfde degradatie-logica als de
+ * limiter). Gedeeld met de users-cache-epoch (api/userCache.ts).
+ */
+export async function sharedPipeline(commands: string[][], timeoutMs = 1500): Promise<Array<{ result?: unknown }> | null> {
+  if (!hasSharedStore()) return null;
+  try {
+    const res = await fetch(`${SHARED_URL}/pipeline`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${SHARED_TOKEN}`, "Content-Type": "application/json" },
+      body: JSON.stringify(commands),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) {
+      warnSharedStoreDown(`HTTP ${res.status}`);
+      return null;
+    }
+    return (await res.json()) as Array<{ result?: unknown }>;
+  } catch (err: any) {
+    warnSharedStoreDown(String(err?.name === "TimeoutError" ? "timeout" : err?.message || err));
+    return null;
+  }
+}
+
+/**
  * Fixed-window teller in Redis: INCR + (bij de eerste hit) EXPIRE.
  * Geeft null terug wanneer de store niet geconfigureerd of onbereikbaar is,
  * zodat de aanroeper kan terugvallen.

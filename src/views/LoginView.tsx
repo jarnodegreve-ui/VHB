@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { WACHTWOORD_HINT } from '../lib/wachtwoord';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/primitives';
@@ -220,7 +221,7 @@ export function LoginView({
                       setNewPassword(v);
                       resetFeedback();
                     }}
-                    placeholder="Minstens 6 tekens"
+                    placeholder={WACHTWOORD_HINT}
                     required
                     minLength={6}
                     autoFocus

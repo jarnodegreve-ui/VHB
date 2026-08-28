@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
@@ -177,7 +178,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     if (isSubmittingUser) return;
     if (!newUser.name) return;
     if (!newUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
-    if (newUser.password.length < 6) return notify('Gebruik een tijdelijk wachtwoord van minstens 6 tekens.', 'error');
+    if (newUser.password.length < WACHTWOORD_MIN) return notify(`Gebruik een tijdelijk wachtwoord van minstens ${WACHTWOORD_MIN} tekens.`, 'error');
 
     const userToAdd: UserDraft = {
       id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -216,7 +217,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     if (isSubmittingUser) return;
     if (!editingUser) return;
     if (!editingUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
-    if (editingUser.password && editingUser.password.length < 6) return notify('Een nieuw wachtwoord moet minstens 6 tekens hebben.', 'error');
+    if (editingUser.password && editingUser.password.length < WACHTWOORD_MIN) return notify(`Een nieuw wachtwoord moet minstens ${WACHTWOORD_MIN} tekens hebben.`, 'error');
 
     const originalUser = users.find((u) => u.id === editingUser.id);
     const isOnlyActiveAdmin = originalUser?.role === 'admin' && originalUser.isActive !== false && activeAdmins.length === 1;

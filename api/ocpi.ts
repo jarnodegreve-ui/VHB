@@ -773,19 +773,32 @@ export const verbruikPerLaadpunt = (
 };
 
 // ---- Auth voor ÓNZE gehoste OCPI-endpoints ----
-// Geldig is: Token A (tijdens registratie) of onze Token B (daarna). De CPO
-// stuurt 'Token <base64>'; we vergelijken zowel base64 als plain (2.1.1).
+// Geldig is: Token A (alleen zolang de registratie nog niet rond is) of onze
+// Token B (daarna). De CPO stuurt 'Token <base64>'; we vergelijken zowel
+// base64 als plain (2.1.1).
 const presentedToken = (req: express.Request): string | null => {
   const m = /^Token\s+(.+)$/i.exec(String(req.headers.authorization || "").trim());
   return m ? m[1].trim() : null;
+};
+/** Token A is het registratie-token en vervalt na de handshake (OCPI 2.2.1,
+ *  credentials-module). Voorheen bleef hij voor altijd geldig: wie hem ooit
+ *  zag kon de credentials-endpoint opnieuw aanroepen en Token C/endpoints
+ *  overschrijven (controle-ronde 27-08, bevinding 31). Herregistreren vanuit
+ *  het portaal (uitgaand, met Token A náár de CPO) raakt dit niet: de CPO
+ *  belt ons terug met Token B. Zuiver, geëxporteerd voor de tests. */
+export const ocpiTokenGeldig = (
+  presented: string,
+  reg: { cpo_token_c?: string | null; our_token_b?: string | null } | null,
+): boolean => {
+  const geregistreerd = Boolean(reg?.cpo_token_c);
+  const valid = [geregistreerd ? null : TOKEN_A, reg?.our_token_b].filter(Boolean) as string[];
+  return valid.some((t) => safeEqual(presented, b64(t)) || safeEqual(presented, t));
 };
 const ocpiAuth = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
   const presented = presentedToken(req);
   if (!presented) return res.status(401).json(ocpiError(2001, "Ontbrekende of ongeldige Authorization-header."));
   const reg = await getOcpiRegistration();
-  const valid = [TOKEN_A, reg?.our_token_b].filter(Boolean) as string[];
-  const ok = valid.some((t) => safeEqual(presented, b64(t)) || safeEqual(presented, t));
-  if (!ok) return res.status(401).json(ocpiError(2001, "Ongeldig OCPI-token."));
+  if (!ocpiTokenGeldig(presented, reg)) return res.status(401).json(ocpiError(2001, "Ongeldig OCPI-token."));
   next();
 };
 
@@ -865,7 +878,10 @@ export const mountOcpiRoutes = (app: express.Express) => {
         roles: [{ role: "EMSP", party_id: PARTY_ID, country_code: COUNTRY_CODE, business_details: { name: OUR_BUSINESS_NAME } }],
       }));
     } catch (err: any) {
-      res.status(500).json(ocpiError(3000, `Credentials verwerken mislukt: ${err?.message ?? err}`));
+      // Details alleen server-side: err.message kan interne paden/hosts
+      // bevatten en dit endpoint is voor de tegenpartij bereikbaar.
+      console.error("[ocpi] credentials verwerken mislukt:", err?.message ?? err);
+      res.status(500).json(ocpiError(3000, "Credentials verwerken mislukt."));
     }
   });
 

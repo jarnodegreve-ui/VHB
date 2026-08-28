@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState, type ComponentProps, type React
 import { Activity, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob, getSupabaseAuthHeaders } from '../../lib/ui';
+import { csvTekst } from '../../lib/csv';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { formatDayLong } from '../../lib/format';
@@ -170,7 +171,6 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   }, [activeCategory, categoryLabels, dateWindow, sourceEntries, searchTerm]);
 
   const exportFilteredActivity = () => {
-    const escapeCsv = (value: string) => `"${value.replace(/"/g, '""')}"`;
     const rows = filteredEntries.map((entry) => [
       entry.createdAt,
       categoryLabels[entry.category],
@@ -179,12 +179,12 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
       entry.actorRole,
       entry.details,
     ]);
-    const csv = [
+    // csvTekst neutraliseert formule-cellen: `details` bevat gebruikersinvoer
+    // (bv. een toestelnaam die met = of - begint).
+    const csv = csvTekst([
       ['tijdstip', 'categorie', 'actie', 'actor', 'rol', 'details'],
       ...rows,
-    ]
-      .map((row) => row.map((cell) => escapeCsv(String(cell ?? ''))).join(','))
-      .join('\n');
+    ]);
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const dateSuffix = new Date().toISOString().slice(0, 10);

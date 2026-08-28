@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, ChevronUp, Clock, Download, Search } from 'lucide-react';
 import type { Service } from '../types';
 import { cn, downloadBlob } from '../lib/ui';
+import { csvTekst } from '../lib/csv';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
 
@@ -51,22 +52,11 @@ export function ServicesView({ services }: { services: Service[] }) {
   const downloadCSV = () => {
     const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Loop 1', 'Start 2', 'Eind 2', 'Loop 2', 'Start 3', 'Eind 3', 'Loop 3'];
     const rows = filteredServices.map(s => [
-      `"${s.serviceNumber}"`,
-      `"${s.startTime}"`,
-      `"${s.endTime}"`,
-      `"${s.loopnr || ''}"`,
-      `"${s.startTime2 || ''}"`,
-      `"${s.endTime2 || ''}"`,
-      `"${s.loopnr2 || ''}"`,
-      `"${s.startTime3 || ''}"`,
-      `"${s.endTime3 || ''}"`,
-      `"${s.loopnr3 || ''}"`
+      s.serviceNumber, s.startTime, s.endTime, s.loopnr || '',
+      s.startTime2 || '', s.endTime2 || '', s.loopnr2 || '',
+      s.startTime3 || '', s.endTime3 || '', s.loopnr3 || '',
     ]);
-
-    const csvContent = [
-      headers.join(','),
-      ...rows.map(r => r.join(','))
-    ].join('\n');
+    const csvContent = csvTekst([headers, ...rows]);
 
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     void downloadBlob(`dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`, blob);

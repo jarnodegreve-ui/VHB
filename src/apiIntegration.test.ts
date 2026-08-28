@@ -1762,6 +1762,32 @@ describe('OCPI-dashboard — autorisatie', () => {
   });
 });
 
+describe('rostering-export — eigen secret (controle-ronde 27-08, nr. 28)', () => {
+  it('met ROSTERING_EXPORT_SECRET gezet werkt het cron-secret niet meer, het eigen secret wel', async () => {
+    process.env.ROSTERING_EXPORT_SECRET = 'solver-secret';
+    try {
+      expect((await api('GET', '/api/rostering-export', { headers: { Authorization: 'Bearer test-cron-secret' } })).status).toBe(401);
+      expect((await api('GET', '/api/rostering-export', { headers: { Authorization: 'Bearer solver-secret' } })).status).toBe(200);
+    } finally {
+      delete process.env.ROSTERING_EXPORT_SECRET;
+    }
+  });
+});
+
+describe('wachtwoordminimum server-side (controle-ronde 27-08, nr. 32)', () => {
+  it('POST /api/users weigert een nieuw account met een wachtwoord korter dan 10 tekens', async () => {
+    const nieuw = { id: '77', name: 'Nieuwe Chauffeur', email: 'nieuw@vhb.be', role: 'chauffeur', isActive: true, password: 'kort123' };
+    const res = await api('POST', '/api/users', { token: 'tok-admin', body: [...mem.users, nieuw] });
+    expect(res.status).toBe(400);
+    expect(mem.users.find((u: any) => u.id === '77')).toBeUndefined();
+  });
+  it('…en accepteert 10 tekens', async () => {
+    const nieuw = { id: '78', name: 'Nieuwe Chauffeur', email: 'nieuw2@vhb.be', role: 'chauffeur', isActive: true, password: 'lang-genoeg' };
+    const res = await api('POST', '/api/users', { token: 'tok-admin', body: [...mem.users, nieuw] });
+    expect(res.status).toBe(200);
+  });
+});
+
 describe('rostering-export (solver-brug)', () => {
   it('weigert zonder auth (401) en voor chauffeurs (403)', async () => {
     expect((await api('GET', '/api/rostering-export')).status).toBe(401);
