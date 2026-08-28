@@ -70,3 +70,43 @@ describe('makeUserCache', () => {
     expect(c).toBe(a);
   });
 });
+
+describe('makeUserCache — gedeelde epoch over instanties (controle-ronde 27-08, nr. 33)', () => {
+  const fakeStore = () => {
+    let epoch = 0;
+    return { lees: async () => epoch, verhoog: async () => { epoch += 1; } };
+  };
+
+  it('een invalidate op instantie A laat instantie B bij de volgende check opnieuw ophalen', async () => {
+    const store = fakeStore();
+    let callsB = 0;
+    let t = 0;
+    const a = makeUserCache(async () => users(1), { ttlMs: 100000, now: () => t, epochStore: store, epochCheckMs: 1000 });
+    const b = makeUserCache(async () => { callsB++; return users(1); }, { ttlMs: 100000, now: () => t, epochStore: store, epochCheckMs: 1000 });
+    await b.get();
+    await b.get();
+    expect(callsB).toBe(1);
+    a.invalidate();
+    await Promise.resolve(); // best-effort verhoog() laten landen
+    t += 999;
+    await b.get(); // nog binnen epochCheckMs: geen check, oude cache
+    expect(callsB).toBe(1);
+    t += 2;
+    await b.get(); // check → epoch verschoven → verse fetch
+    expect(callsB).toBe(2);
+  });
+
+  it('zonder bereikbare store valt het terug op TTL-gedrag', async () => {
+    let calls = 0;
+    let t = 0;
+    const kapot = { lees: async () => null, verhoog: async () => { throw new Error('down'); } };
+    const c = makeUserCache(async () => { calls++; return users(1); }, { ttlMs: 1000, now: () => t, epochStore: kapot, epochCheckMs: 10 });
+    await c.get();
+    t += 500;
+    await c.get();
+    expect(calls).toBe(1);
+    c.invalidate(); // verhoog() faalt — mag niet gooien
+    await c.get();
+    expect(calls).toBe(2);
+  });
+});

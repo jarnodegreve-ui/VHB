@@ -42,12 +42,29 @@ export const invalidateDeviceGateCache = () => { gateSettingCache = null; };
  * zodat noch de lengte noch de inhoud van het secret via de vergelijkingsduur
  * kan lekken.
  */
-export const isCronAuthorized = (req: express.Request): boolean => {
-  const secret = process.env.CRON_SECRET;
+const bearerMatches = (req: express.Request, secret: string | undefined): boolean => {
   if (!secret) return false;
   const expected = createHash("sha256").update(`Bearer ${secret}`).digest();
   const provided = createHash("sha256").update(String(req.headers.authorization ?? "")).digest();
   return timingSafeEqual(expected, provided);
+};
+export const isCronAuthorized = (req: express.Request): boolean => bearerMatches(req, process.env.CRON_SECRET);
+
+/**
+ * Roostersolver-export (vhb-planner op Render): eigen secret
+ * ROSTERING_EXPORT_SECRET, zodat het cron-secret niet óók in een andere
+ * omgeving hoeft te staan — wie het daar vond, kon ook back-up, briefing en
+ * OCPI-sync triggeren (controle-ronde 27-08, bevinding 28). Overgang: zolang
+ * het nieuwe secret niet gezet is, blijft CRON_SECRET werken, met een
+ * waarschuwing in de logs. Zodra het gezet is (Vercel + Render), werkt alleen
+ * nog het eigen secret.
+ */
+export const isRosteringExportAuthorized = (req: express.Request): boolean => {
+  const eigen = process.env.ROSTERING_EXPORT_SECRET;
+  if (eigen) return bearerMatches(req, eigen);
+  const viaCron = isCronAuthorized(req);
+  if (viaCron) console.warn("[rostering-export] geautoriseerd met CRON_SECRET — zet ROSTERING_EXPORT_SECRET (Vercel én Render) zodat het cron-secret niet gedeeld hoeft te worden.");
+  return viaCron;
 };
 
 /**

@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { WACHTWOORD_MIN, WACHTWOORD_HINT } from '../lib/wachtwoord';
 import { motion } from 'motion/react';
 import { AlertTriangle, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -52,8 +53,8 @@ export function ChangePasswordModal({
       return;
     }
 
-    if (newPassword.length < 6) {
-      setError('Nieuw wachtwoord moet minstens 6 tekens zijn.');
+    if (newPassword.length < WACHTWOORD_MIN) {
+      setError(`Nieuw wachtwoord moet minstens ${WACHTWOORD_MIN} tekens zijn.`);
       return;
     }
 
@@ -126,8 +127,8 @@ export function ChangePasswordModal({
               onChange={(e) => { setNewPassword(e.target.value); setError(''); }}
               className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
               required
-              minLength={6}
-              placeholder="Minstens 6 tekens"
+              minLength={WACHTWOORD_MIN}
+              placeholder={WACHTWOORD_HINT}
             />
           </div>
 
@@ -141,7 +142,7 @@ export function ChangePasswordModal({
               onChange={(e) => { setConfirmPassword(e.target.value); setError(''); }}
               className="control-input w-full px-4 py-3.5 rounded-2xl font-medium text-slate-800 placeholder:text-slate-300 outline-none transition-all"
               required
-              minLength={6}
+              minLength={WACHTWOORD_MIN}
               placeholder="Herhaal nieuw wachtwoord"
             />
           </div>

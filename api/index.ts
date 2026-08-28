@@ -13,7 +13,7 @@ import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, sendExpiryReminder
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
 import type { AppUser, AuthenticatedRequest } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
-import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser } from "./middleware.js";
+import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
 import { encryptOpensslCompatible } from "./backupCrypto.js";
 import { symbolicateTopFrame } from "./symbolicate.js";
@@ -133,6 +133,12 @@ if (process.env.NODE_ENV !== "production") {
 if (!process.env.CALENDAR_FEED_SECRET) {
   console.warn("[config] CALENDAR_FEED_SECRET ontbreekt — de agenda-feed is uitgeschakeld. Zet hem in de env om abonneren weer mogelijk te maken.");
 }
+
+/** Wachtwoordminimum, gespiegeld in de client (src/lib/wachtwoord.ts). 10
+ *  i.p.v. 6: het wachtwoord alleen geeft toegang tot Supabase Auth
+ *  (controle-ronde 27-08, bevinding 32). Supabase' eigen minimum staat in
+ *  het dashboard (Auth → Password) en hoort hier niet onder te liggen. */
+const WACHTWOORD_MIN = 10;
 
 const app = express();
 const PORT = 3000;
@@ -423,8 +429,8 @@ app.post("/api/admin/users/reset-password", authenticate, requireRole("admin"), 
 
     const userId = String(req.body?.userId || "");
     const password = String(req.body?.password || "");
-    if (!userId || password.length < 6) {
-      return res.status(400).json({ error: "Geef een gebruiker en een wachtwoord van minstens 6 tekens." });
+    if (!userId || password.length < WACHTWOORD_MIN) {
+      return res.status(400).json({ error: `Geef een gebruiker en een wachtwoord van minstens ${WACHTWOORD_MIN} tekens.` });
     }
 
     const users = await getUsersData();
@@ -2099,6 +2105,13 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
+      // Wachtwoordminimum ook server-side (stond alleen in de UI): het
+      // wachtwoord alleen geeft toegang tot Supabase Auth, dus 6 tekens was te
+      // weinig (controle-ronde 27-08, bevinding 32). Leeg = geen wijziging.
+      const teKort = newData.find((u: any) => typeof u?.password === "string" && u.password.length > 0 && u.password.length < WACHTWOORD_MIN);
+      if (teKort) {
+        return res.status(400).json({ error: `Een wachtwoord moet minstens ${WACHTWOORD_MIN} tekens hebben.` });
+      }
       const previousUsers = await getUsersData();
       // Revisie-check: twee admin-sessies die tegelijk bewerken overschreven
       // elkaar anders stil — en saveUsersData doet onomkeerbare Auth-deletes.
@@ -3107,8 +3120,10 @@ app.get("/api/services", authenticate, async (req, res) => {
 // Read-only export voor de CP-SAT-roostersolver (vhb-planner): actieve
 // chauffeurs met sectie/anciënniteit, dienstdefinities, goedgekeurd verlof
 // (onbeschikbaarheid) en de huidige toewijzingen binnen [from, to].
-// Auth: planner/admin-token, of Bearer CRON_SECRET zodat de solver headless
-// kan ophalen zonder gebruikersaccount.
+// Auth: planner/admin-token, of Bearer ROSTERING_EXPORT_SECRET zodat de
+// solver headless kan ophalen zonder gebruikersaccount (CRON_SECRET werkt
+// alleen nog als overgang zolang het eigen secret niet gezet is — zie
+// isRosteringExportAuthorized).
 app.get("/api/rostering-export", async (req, res) => {
   const handle = async () => {
     try {
@@ -3144,7 +3159,7 @@ app.get("/api/rostering-export", async (req, res) => {
       if (!res.headersSent) res.status(500).json({ error: "Rostering-export mislukt." });
     }
   };
-  if (isCronAuthorized(req)) return handle();
+  if (isRosteringExportAuthorized(req)) return handle();
   return authenticate(req as AuthenticatedRequest, res, () => {
     const role = (req as AuthenticatedRequest).appUser?.role;
     if (role !== "admin" && role !== "planner") return res.status(403).json({ error: "Alleen voor planners/admins." });
