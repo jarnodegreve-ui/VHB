@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CalendarPlus, Copy, Check, Download, ExternalLink, X, ShieldCheck } from 'lucide-react';
 import { Modal } from './Modal';
+import { MicroLabel } from './primitives';
 import { fetchCalendarLinks, type CalendarLinks } from '../lib/calendar';
 
 /**
@@ -60,14 +61,14 @@ export function CalendarSubscribeModal({
               <p className="text-xs font-medium text-slate-500">Je diensten in je eigen agenda — automatisch bijgewerkt.</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
+          <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
             <X size={16} />
           </button>
         </div>
 
         {/* Abonneren */}
         <div className="mt-5">
-          <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Abonneren (blijft up-to-date)</div>
+          <MicroLabel>Abonneren (blijft up-to-date)</MicroLabel>
 
           {loading ? (
             <div className="mt-3 flex items-center gap-3 text-slate-500">
@@ -125,7 +126,7 @@ export function CalendarSubscribeModal({
 
         {/* Eenmalig downloaden */}
         <div className="mt-5 pt-4 border-t border-slate-100">
-          <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Of eenmalig</div>
+          <MicroLabel>Of eenmalig</MicroLabel>
           <button
             type="button"
             onClick={() => { onDownload(); onClose(); }}

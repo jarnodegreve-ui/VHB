@@ -1,8 +1,8 @@
 import type express from "express";
 import { authenticate, requireRole } from "./middleware.js";
 import { computeDayGap, normalizeCode, resolveDayTypeMetBron, vergelijkVerwachtingenMetPraktijk, stelVerwachtingenVoor, parseOverrides, encodeOverride, WEEKDAY_PERIOD_KEY_RE, encodeWeekdagPeriodeKey, DEFAULT_DAY_TYPES, DEFAULT_WEEKDAYS, type DayTypeOverride, type DayGap, type WeekdagPeriode } from "./coverageGaps.js";
-import { beoordeelKandidaat, sorteerKandidaten, dagVenster, addDagen, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
-import { brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
+import { beoordeelKandidaat, sorteerKandidaten, dagVenster, maandagVan, zoekKettingen, adviesSamenvatting, MIN_RUST_UREN, MAX_WERKDAGEN_NA_ELKAAR, type TijdRij, type KettingWerkende, type KettingPersoon } from "./advisor.js";
+import { addDagenIso, brusselsDay, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, vindOngeregistreerdeZiekte, normalizeSwapType } from "./helpers.js";
 import {
   getCoverageExpectations,
   saveCoverageExpectations,
@@ -191,11 +191,11 @@ export function adviesVenster(date: string): { vanaf: string; tot: string } {
   const maandStart = `${date.slice(0, 7)}-01`;
   // Laatste dag van de maand = de dag vóór de 1e van de volgende maand
   // (dag 28 + 7 valt gegarandeerd in de volgende maand).
-  const volgendeMaandStart = `${addDagen(`${date.slice(0, 7)}-28`, 7).slice(0, 7)}-01`;
-  const maandEind = addDagen(volgendeMaandStart, -1);
+  const volgendeMaandStart = `${addDagenIso(`${date.slice(0, 7)}-28`, 7).slice(0, 7)}-01`;
+  const maandEind = addDagenIso(volgendeMaandStart, -1);
   const weekStart = maandagVan(date);
-  const vanaf = [addDagen(date, -6), maandStart, weekStart].sort()[0];
-  const tot = [addDagen(date, 6), maandEind, addDagen(weekStart, 6)].sort().slice(-1)[0];
+  const vanaf = [addDagenIso(date, -6), maandStart, weekStart].sort()[0];
+  const tot = [addDagenIso(date, 6), maandEind, addDagenIso(weekStart, 6)].sort().slice(-1)[0];
   return { vanaf, tot };
 }
 
@@ -280,8 +280,8 @@ export function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, cod
           name: c.name,
           sectie: c.sectie,
           dienstVenster: venster,
-          vorigeDag: rijenPerDag.get(`${c.id}|${addDagen(date, -1)}`) ?? [],
-          volgendeDag: rijenPerDag.get(`${c.id}|${addDagen(date, 1)}`) ?? [],
+          vorigeDag: rijenPerDag.get(`${c.id}|${addDagenIso(date, -1)}`) ?? [],
+          volgendeDag: rijenPerDag.get(`${c.id}|${addDagenIso(date, 1)}`) ?? [],
           gewerkteDagen: werkdagen.get(c.id) ?? new Set(),
           datum: date,
           keren: keren.get(c.id) ?? 0,
@@ -296,8 +296,8 @@ export function berekenCoverageAdviesUitBron(bron: AdviesBron, date: string, cod
       id: c.id,
       name: c.name,
       sectie: c.sectie,
-      vorigeDag: rijenPerDag.get(`${c.id}|${addDagen(date, -1)}`) ?? [],
-      volgendeDag: rijenPerDag.get(`${c.id}|${addDagen(date, 1)}`) ?? [],
+      vorigeDag: rijenPerDag.get(`${c.id}|${addDagenIso(date, -1)}`) ?? [],
+      volgendeDag: rijenPerDag.get(`${c.id}|${addDagenIso(date, 1)}`) ?? [],
       gewerkteDagen: werkdagen.get(c.id) ?? new Set(),
       keren: keren.get(c.id) ?? 0,
     });

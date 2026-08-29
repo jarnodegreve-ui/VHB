@@ -15,6 +15,4 @@ export const db = supabaseAdmin ?? supabase;
 
 if (!supabase) {
   console.warn("Supabase configuration missing. Falling back to local JSON files.");
-} else {
-  console.log("Supabase client initialized.");
 }

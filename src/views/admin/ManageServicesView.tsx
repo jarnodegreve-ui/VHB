@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { csvTekst } from '../../lib/csv';
+import { dienstoverzichtCsv } from '../../lib/dienstoverzichtExport';
 import { Clock, Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
@@ -144,14 +144,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   };
 
   const downloadCSV = () => {
-    const headers = ['Dienstnummer', 'Start 1', 'Eind 1', 'Loop 1', 'Start 2', 'Eind 2', 'Loop 2', 'Start 3', 'Eind 3', 'Loop 3'];
-    const rows = services.map(s => [
-      s.serviceNumber, s.startTime, s.endTime, s.loopnr || '',
-      s.startTime2 || '', s.endTime2 || '', s.loopnr2 || '',
-      s.startTime3 || '', s.endTime3 || '', s.loopnr3 || '',
-    ]);
-    const csvContent = csvTekst([headers, ...rows]);
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const blob = new Blob([dienstoverzichtCsv(services)], { type: 'text/csv;charset=utf-8;' });
     // downloadBlob i.p.v. een handmatige <a download>: dezelfde iOS-share-
     // route en revokeObjectURL als de andere exports.
     void downloadBlob(`beheer_dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`, blob);

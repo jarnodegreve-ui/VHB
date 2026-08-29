@@ -39,15 +39,15 @@ import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } 
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
 import { fetchMonthPlanning } from '../lib/monthPlanning';
-import { apiFetch } from '../lib/api';
+import { apiFetch, apiJson } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
 import { ModalHeader } from '../components/ui';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Button } from '../components/primitives';
-import { cn, getSupabaseAuthHeaders, notify, telHref } from '../lib/ui';
+import { Button, microLabelClass } from '../components/primitives';
+import { cn, notify, telHref } from '../lib/ui';
 
 /**
  * Operations Center — het planner/admin-dashboard als operationele cockpit.
@@ -137,7 +137,7 @@ export function PlannerDashboardWidgets({
   const [vervaldata, setVervaldata] = useState<Array<{ userId: string; soort: string; validUntil: string }>>([]);
   useEffect(() => {
     let cancelled = false;
-    apiFetch<Array<{ userId: string; soort: string; validUntil: string }>>('/api/user-expiries')
+    apiJson<Array<{ userId: string; soort: string; validUntil: string }>>('/api/user-expiries')
       .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
       .catch(() => { /* geen data = geen rijen */ });
     return () => { cancelled = true; };
@@ -146,7 +146,7 @@ export function PlannerDashboardWidgets({
   useEffect(() => {
     let cancelled = false;
     const haal = () => {
-      apiFetch<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number }>('/api/ocpi/summary')
+      apiJson<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number }>('/api/ocpi/summary')
         .then((sum) => { if (!cancelled && sum && sum.evses > 0) setLaadplein(sum); })
         .catch(() => { /* geen OCPI = geen tegel */ });
     };
@@ -196,7 +196,7 @@ export function PlannerDashboardWidgets({
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/devices', { headers: await getSupabaseAuthHeaders() });
+        const res = await apiFetch('/api/devices');
         if (!res.ok) return;
         const data = await res.json();
         if (!cancelled && Array.isArray(data)) {
@@ -378,9 +378,8 @@ export function PlannerDashboardWidgets({
     if (!naarId || wisselBezig) return;
     setWisselBezig(d.id);
     try {
-      const res = await fetch('/api/admin/shift-swap', {
+      const res = await apiFetch('/api/admin/shift-swap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({
           date: d.date,
           line: serviceNumberOf(d),
@@ -1170,7 +1169,7 @@ export function PlannerDashboardWidgets({
           className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Chauffeur</label>
             <select
               aria-label="Chauffeur"
               value={sickForm.userId}
@@ -1186,7 +1185,7 @@ export function PlannerDashboardWidgets({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Van</label>
               <input
                 type="date"
                 aria-label="Startdatum ziekmelding"
@@ -1196,7 +1195,7 @@ export function PlannerDashboardWidgets({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Tot en met</label>
               <input
                 type="date"
                 aria-label="Einddatum ziekmelding"
@@ -1208,7 +1207,7 @@ export function PlannerDashboardWidgets({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Opmerking (optioneel)</label>
             <textarea
               aria-label="Opmerking ziekmelding"
               value={sickForm.comment}

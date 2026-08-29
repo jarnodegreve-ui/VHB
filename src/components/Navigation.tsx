@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { MicroLabel, microLabelClass } from './primitives';
 
 
 export function NavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, badge?: number }) {
@@ -65,7 +66,7 @@ export function NavSection({ title, count, active = false, children }: { title: 
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        className="group flex w-full min-h-11 sm:pointer-fine:min-h-8 items-center gap-1.5 rounded-lg px-3 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400 hover:text-slate-600 transition-colors"
+        className={cn('group flex w-full min-h-11 sm:pointer-fine:min-h-8 items-center gap-1.5 rounded-lg px-3 py-1.5 transition-colors', microLabelClass, 'hover:text-slate-700')}
       >
         <ChevronRight size={12} className={cn('shrink-0 transition-transform duration-200', expanded && 'rotate-90')} />
         <span className="flex-1 text-left">{title}</span>
@@ -81,8 +82,8 @@ export function NavSection({ title, count, active = false, children }: { title: 
  *  in leesbare blokken deelt. */
 export function NavSubLabel({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-3 pt-2.5 pb-0.5 text-2xs font-medium uppercase tracking-[0.08em] text-slate-400 select-none">
+    <MicroLabel className="px-3 pt-2.5 pb-0.5 select-none">
       {children}
-    </p>
+    </MicroLabel>
   );
 }

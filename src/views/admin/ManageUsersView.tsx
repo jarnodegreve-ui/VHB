@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
+import { apiFetch } from '../../lib/api';
+import { Badge, Button, FilterChip, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
@@ -36,7 +37,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/push/subscribers', { headers: await getSupabaseAuthHeaders() });
+        const res = await apiFetch('/api/push/subscribers');
         if (!res.ok) return;
         const body = await res.json();
         if (!cancelled && Array.isArray(body?.userIds)) setPushUserIds(new Set(body.userIds.map(String)));
@@ -55,7 +56,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/planning-presence', { headers: await getSupabaseAuthHeaders() });
+        const res = await apiFetch('/api/planning-presence');
         if (!res.ok) return;
         const body = await res.json();
         if (cancelled || !Array.isArray(body?.perUser)) return;
@@ -74,7 +75,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/user-expiries', { headers: await getSupabaseAuthHeaders() });
+        const res = await apiFetch('/api/user-expiries');
         if (!res.ok) return;
         const rows: Array<{ userId: string; soort: string; validUntil: string }> = await res.json();
         if (cancelled || !Array.isArray(rows)) return;
@@ -248,9 +249,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       const oud = bestaand[soort] ?? '';
       if (nieuw === oud) continue;
       try {
-        const res = await fetch('/api/user-expiries', {
+        const res = await apiFetch('/api/user-expiries', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
           body: JSON.stringify({ userId: editingUser.id, soort, validUntil: nieuw || null }),
         });
         if (!res.ok) throw new Error(String(res.status));
@@ -313,9 +313,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     if (resetPasswordValue.length < 6) return notify('Gebruik minstens 6 tekens.', 'error');
     try {
       setIsResettingPassword(true);
-      const response = await fetch('/api/admin/users/reset-password', {
+      const response = await apiFetch('/api/admin/users/reset-password', {
         method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({ userId: confirmResetUser.id, password: resetPasswordValue }),
       });
       const data = await response.json().catch(() => ({}));
@@ -548,34 +547,22 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             />
             {/* Snelfilter voor de uitrol: wie moet ik nog persoonlijk
                 meekrijgen? Alleen tonen als er zo iemand is. */}
-            {/* min-h-11: losse chips buiten de segmented-rail haalden het
-                44px-aanraakminimum niet. Blijven renderen zolang het filter
+            {/* FilterChip (44 px op touch): losse chips buiten de segmented-rail
+                haalden het aanraakminimum niet. Blijven renderen zolang het filter
                 aanstaat — anders kon een actieve filter zijn eigen knop laten
                 verdwijnen en bleef een lege tabel zonder uitweg achter
                 (controle-ronde 20-08). */}
             {(nooitIngelogd > 0 || alleenNooitIn) && (
-              <button
-                type="button"
-                onClick={() => setAlleenNooitIn((v) => !v)}
-                aria-pressed={alleenNooitIn}
-                className={segItemClass(alleenNooitIn, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
-              >
-                <LogIn size={13} />
+              <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} className="self-start" icon={<LogIn size={13} />}>
                 Nog nooit ingelogd ({nooitIngelogd})
-              </button>
+              </FilterChip>
             )}
             {/* Snelfilter: chauffeur-accounts zonder cel aan het einde van de
                 geïmporteerde planning — nieuwe collega of weggevallen kolom. */}
             {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
-              <button
-                type="button"
-                onClick={() => setAlleenNietInPlanning((v) => !v)}
-                aria-pressed={alleenNietInPlanning}
-                className={segItemClass(alleenNietInPlanning, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
-              >
-                <CalendarOff size={13} />
+              <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} className="self-start" icon={<CalendarOff size={13} />}>
                 Niet in de planning ({aantalNietInPlanning})
-              </button>
+              </FilterChip>
             )}
           </div>
         </div>

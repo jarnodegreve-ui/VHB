@@ -954,7 +954,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {isTakeover ? null : returnLoading ? (
                         <p className="text-sm font-medium text-slate-400 py-6 text-center">Diensten laden…</p>
                       ) : pickable.length === 0 && conflicted.length === 0 ? (
-                        <p className="text-sm font-medium text-slate-400 py-4 text-center">Geen diensten of vrije dagen van {target?.name ?? 'deze collega'} gevonden in de komende 8 weken.</p>
+                        <p className="text-sm text-slate-500 py-4 text-center">Geen diensten of vrije dagen van {target?.name ?? 'deze collega'} gevonden in de komende 8 weken.</p>
                       ) : (
                         <>
                           <div className="space-y-2">

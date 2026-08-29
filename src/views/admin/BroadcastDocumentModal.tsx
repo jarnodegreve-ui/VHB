@@ -1,9 +1,10 @@
 import React, { useRef, useState } from 'react';
 import { Send, Upload, Users } from 'lucide-react';
-import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { notify } from '../../lib/ui';
 import { Button, MicroLabel } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 
 const MAX_MB = 15;
 const ACCEPT = '.pdf,.png,.jpg,.jpeg';
@@ -39,9 +40,8 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
     if (!dataUrl || !fileName) return notify('Kies eerst een bestand.', 'error');
     setSending(true);
     try {
-      const res = await fetch('/api/documents/broadcast', {
+      const res = await apiFetch('/api/documents/broadcast', {
         method: 'POST',
-        headers: { ...(await getSupabaseAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ filename: fileName, category: category.trim() || undefined, dataUrl }),
       });
       const body = await res.json().catch(() => ({}));

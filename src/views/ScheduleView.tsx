@@ -1,19 +1,20 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, FileText } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
 import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType, serviceNumberOf } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { MaandNavigatie } from '../components/MaandNavigatie';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
 import { cn, downloadBlob } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { shiftCategory } from '../lib/shiftTime';
-import { formatShortDayPadded, formatSyncedTime } from '../lib/format';
+import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { buildCalendar, type IcsEvent } from '../lib/ics';
 import { openHuidigRitblad } from '../lib/ritblad';
 
@@ -209,10 +210,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
               key={w}
               type="button"
               onClick={() => setWeergave(w)}
-              className={cn(
-                'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold capitalize transition-all',
-                weergave === w ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
-              )}
+              className={segItemClass(weergave === w, 'capitalize')}
             >
               {w}
             </button>
@@ -277,8 +275,6 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
 }
 
 // --- Subcomponent: persoonlijk maandgrid (diensten + verlof + typedagen) ---
-
-const WEEKDAY_HEAD = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
 
 function MonthCalendar({
   groups,
@@ -355,31 +351,17 @@ function MonthCalendar({
           het glipte er structureel doorheen. Met de kleinere gap erbij zitten
           ze op ~44px. */}
       <div className="surface-card rounded-3xl p-3 md:p-4">
-        {/* Maandnavigatie */}
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
-            aria-label="Vorige maand"
-            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span className="text-sm font-semibold capitalize text-slate-800">{monthName}</span>
-          <button
-            type="button"
-            onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
-            aria-label="Volgende maand"
-            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
+        <MaandNavigatie
+          className="justify-between"
+          label={monthName}
+          onVorige={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
+          onVolgende={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
+        />
 
         {/* Grid */}
         <div className="mt-3 grid grid-cols-7 gap-0.5 md:gap-1">
-          {WEEKDAY_HEAD.map((d) => (
-            <div key={d} className="py-1 text-center text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-500">
+          {WEEKDAY_SHORT_MON.map((d) => (
+            <div key={d} className="py-1 text-center text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">
               {d}
             </div>
           ))}
@@ -413,12 +395,12 @@ function MonthCalendar({
                   {day}
                 </span>
                 {td && td.kort === 'F' && (
-                  <span className="text-[10px] font-bold leading-none text-oker-600" title={td.titel}>
+                  <span className="text-2xs font-bold leading-none text-oker-600" title={td.titel}>
                     {td.kort}
                   </span>
                 )}
                 {dayGroups.length > 0 ? (
-                  <span className={cn('max-w-full truncate text-[10px] font-bold tabular-nums leading-none', conflict ? 'text-red-600' : 'text-oker-700')}>
+                  <span className={cn('max-w-full truncate text-2xs font-bold tabular-nums leading-none', conflict ? 'text-red-600' : 'text-oker-700')}>
                     {dayGroups[0].line}
                     {dayGroups.length > 1 && '+'}
                   </span>
@@ -430,7 +412,7 @@ function MonthCalendar({
                     )}
                   />
                 ) : isVrijeDag(iso) ? (
-                  <span className="text-[10px] font-bold lowercase leading-none text-slate-400" title="Vrij — geen dienst ingepland">
+                  <span className="text-2xs font-bold lowercase leading-none text-slate-400" title="Vrij — geen dienst ingepland">
                     v
                   </span>
                 ) : null}
@@ -440,12 +422,12 @@ function MonthCalendar({
         </div>
 
         {/* Legende */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-[10px] font-medium text-slate-400">
-          <span className="inline-flex items-center gap-1.5"><span className="text-[10px] font-bold tabular-nums text-oker-700">2101</span> dienst</span>
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-2xs font-medium text-slate-400">
+          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold tabular-nums text-oker-700">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-[10px] font-bold text-oker-600">F</span> feestdag</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-[10px] font-bold text-slate-400">v</span> vrij</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-oker-600">F</span> feestdag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-slate-400">v</span> vrij</span>
         </div>
       </div>
 
@@ -474,7 +456,7 @@ function MonthCalendar({
         )}
 
         {selectedGroups.length === 0 && !selectedLeave ? (
-          <p className="mt-2.5 text-xs font-medium text-slate-400">Geen dienst gepland.</p>
+          <p className="mt-2.5 text-sm text-slate-500">Geen dienst gepland.</p>
         ) : (
           selectedGroups.map((g) => (
             <div key={g.key} className="mt-3">

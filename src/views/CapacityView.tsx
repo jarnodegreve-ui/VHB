@@ -1,21 +1,21 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Download, RotateCcw, Search, Table2, TriangleAlert, X } from 'lucide-react';
-import { cn, downloadBlob, getSupabaseAuthHeaders, notify } from '../lib/ui';
+import { cn, downloadBlob, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
+import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
-import { Button, MicroLabel, Td, Th } from '../components/primitives';
+import { Button, MicroLabel, microLabelClass, Td, Th } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
 import { fetchMonthPlanning, type MonthPlanning, type MonthCell, type CellKind } from '../lib/monthPlanning';
 import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
 import type { User } from '../types';
-import { formatDayLong, MONTH_NAMES, WEEKDAY_SHORT_MON } from '../lib/format';
+import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 
-const WEEKDAY_LETTERS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 
 /** Vaste redenen voor een handmatige dienstwissel; bij 'Andere correctie' is
  *  de vrije toelichting verplicht (de server eist altijd een reden). */
@@ -55,7 +55,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const monthTo = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(new Date(year, monthIndex + 1, 0).getDate()).padStart(2, '0')}`;
   const loadNotes = async () => {
     try {
-      const res = await fetch(`/api/planning-notes?from=${monthFrom}&to=${monthTo}`, { headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch(`/api/planning-notes?from=${monthFrom}&to=${monthTo}`);
       if (!res.ok) return;
       const data = await res.json();
       if (Array.isArray(data)) setNotes(new Map(data.map((n: any) => [noteKey(String(n.driverId), n.date), String(n.note)])));
@@ -69,9 +69,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     if (!selected || isSavingNote) return;
     setIsSavingNote(true);
     try {
-      const res = await fetch('/api/planning-notes', {
+      const res = await apiFetch('/api/planning-notes', {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({ driverId: selected.driverId, date: selected.iso, note: noteDraft }),
       });
       const body = await res.json().catch(() => ({} as any));
@@ -102,7 +101,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     if (isExporteren) return;
     setIsExporteren(true);
     try {
-      const res = await fetch(`/api/month-planning?month=${monthParam}&format=xlsx`, { headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch(`/api/month-planning?month=${monthParam}&format=xlsx`);
       if (!res.ok) {
         const body = await res.json().catch(() => ({} as any));
         notify(body.error || 'Exporteren is mislukt.', 'error');
@@ -131,7 +130,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     setOverzichtOpen(true);
     setOverzichtLaden(true);
     try {
-      const res = await fetch(`/api/month-planning?month=${monthParam}&format=summary`, { headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch(`/api/month-planning?month=${monthParam}&format=summary`);
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) {
         notify(body.error || 'Overzicht laden is mislukt.', 'error');
@@ -182,9 +181,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     if (!selected || !wisselDienst || !wisselKlaar || isWisselen) return;
     setIsWisselen(true);
     try {
-      const res = await fetch('/api/admin/shift-swap', {
+      const res = await apiFetch('/api/admin/shift-swap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({
           date: selected.iso,
           line: wisselDienst,
@@ -214,9 +212,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     if (!selected?.cell.swapId || isTerugdraaien) return;
     setIsTerugdraaien(true);
     try {
-      const res = await fetch(`/api/swaps/${encodeURIComponent(selected.cell.swapId)}`, {
+      const res = await apiFetch(`/api/swaps/${encodeURIComponent(selected.cell.swapId)}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({ status: 'cancelled', ifStatus: 'approved' }),
       });
       const body = await res.json().catch(() => ({} as any));
@@ -361,7 +358,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     const d = new Date(`${iso}T00:00:00`);
     const jsDay = d.getDay();
     return {
-      letter: WEEKDAY_LETTERS[jsDay === 0 ? 6 : jsDay - 1],
+      letter: WEEKDAY_LETTER_MON[jsDay === 0 ? 6 : jsDay - 1],
       day: d.getDate(),
       weekend: jsDay === 0 || jsDay === 6,
       isMonday: jsDay === 1,
@@ -515,7 +512,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   }, [cells]);
 
   return (
-    <PageShell width="6xl">
+    <PageShell>
       <PageHeader
         title="Maandplanning"
         description="Wie rijdt welke dienst, zoals het overzicht in het chauffeurslokaal."
@@ -607,9 +604,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
                           )}
                         >
-                          <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
+                          <div className={microLabelClass}>{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
-                          <div className="mt-0.5 h-3 text-[10px] font-bold leading-3">
+                          <div className="mt-0.5 h-3 text-2xs font-bold leading-3">
                             {td && (
                               <span className={td.kort === 'F' ? 'text-oker-600' : 'text-slate-400'}>{td.kort}</span>
                             )}
@@ -635,7 +632,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
                           <td className="mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2 bg-slate-100/90">
-                            <div className="inline-flex items-center px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                            <div className={cn('inline-flex items-center px-4 py-1.5', microLabelClass)}>
                               {section}
                             </div>
                           </td>
@@ -803,7 +800,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           className="absolute inset-0 rounded-xl bg-oker-500 shadow-sm shadow-oker-500/30"
                         />
                       )}
-                      <span className={cn('relative z-10 text-2xs font-semibold uppercase tracking-[0.08em] transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-400')}>
+                      <span className={cn('relative z-10 text-2xs font-medium uppercase tracking-[0.08em] transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-500')}>
                         {WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}
                       </span>
                       {/* Vandaag (niet gekozen) = oker dagcijfer — hetzelfde
@@ -814,7 +811,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         {d.getDate()}
                       </span>
                       {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
-                      <span className={cn('relative z-10 h-3 text-[10px] font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
+                      <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
                         {td?.kort ?? ''}
                       </span>
                     </button>
@@ -848,7 +845,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 ) : dagRijen.secties.map((sectie) => (
                   <Fragment key={sectie.naam}>
                     {showSections && (
-                      <div className="bg-slate-100/80 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{sectie.naam}</div>
+                      <div className={cn('bg-slate-100/80 px-4 py-1.5', microLabelClass)}>{sectie.naam}</div>
                     )}
                     {sectie.rijen.map(({ drv, cell }) => {
                       if (!cell) return null;
@@ -893,7 +890,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       type="button"
                       onClick={() => setToonRust((v) => !v)}
                       aria-expanded={toonRust}
-                      className="w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                      className={cn('w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors', microLabelClass)}
                     >
                       <span>Vrij / afwezig · {dagRijen.rust.length}</span>
                       <ChevronRight size={14} className={cn('transition-transform', toonRust && 'rotate-90')} />
@@ -973,7 +970,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <MicroLabel className="capitalize">{formatDateLong(selected.iso)}</MicroLabel>
                 <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
               </div>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -1038,7 +1035,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   ))}
                 </div>
               ) : (
-                <p className="mt-5 text-sm font-medium text-slate-400">Geen uren bekend voor deze dienst in het dienstoverzicht.</p>
+                <p className="mt-5 text-sm text-slate-500">Geen uren bekend voor deze dienst in het dienstoverzicht.</p>
               )
             ) : (
               <p className="mt-5 text-sm font-medium text-slate-500">
@@ -1065,7 +1062,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   <span className="font-semibold text-slate-700">{selected.driverName}</span> naar een andere chauffeur.
                 </p>
                 <div className="space-y-2">
-                  <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1" htmlFor="wissel-naar">Nieuwe chauffeur</label>
+                  <label className={cn(microLabelClass, 'ml-1')} htmlFor="wissel-naar">Nieuwe chauffeur</label>
                   <select
                     id="wissel-naar"
                     value={wisselNaar}
@@ -1091,7 +1088,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1" htmlFor="wissel-reden">Reden</label>
+                  <label className={cn(microLabelClass, 'ml-1')} htmlFor="wissel-reden">Reden</label>
                   <select
                     id="wissel-reden"
                     value={wisselReden}

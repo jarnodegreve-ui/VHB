@@ -49,7 +49,7 @@ export function AssistentView() {
   const nietGeactiveerd = fout.includes('geactiveerd');
 
   return (
-    <PageShell width="3xl">
+    <PageShell>
       <div className="surface-card rounded-3xl flex flex-col overflow-hidden">
         {/* Gespreksvlak */}
         <div className="flex-1 min-h-[45dvh] max-h-[62dvh] overflow-y-auto p-5 space-y-3">

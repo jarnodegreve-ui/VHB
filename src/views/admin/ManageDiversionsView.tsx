@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Calendar, FileText, History, MapPin, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Diversion } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -56,9 +57,8 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       reader.onerror = () => reject(reader.error ?? new Error('Kon bestand niet lezen.'));
       reader.readAsDataURL(file);
     });
-    const response = await fetch('/api/diversions/pdf', {
+    const response = await apiFetch('/api/diversions/pdf', {
       method: 'POST',
-      headers: await getSupabaseAuthHeaders(),
       body: JSON.stringify({ id, filename: file.name, dataUrl }),
     });
     const text = await response.text();

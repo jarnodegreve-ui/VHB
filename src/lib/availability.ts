@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiJson } from './api';
 import { LEAVE_TYPE_LABELS } from './format';
 import type { LeaveRequest, Shift } from '../types';
 
@@ -42,7 +42,7 @@ export function fetchAvailability(
   opts: { takeover?: boolean } = {},
 ): Promise<AvailabilityResponse> {
   const takeover = opts.takeover ? '&takeover=1' : '';
-  return apiFetch<AvailabilityResponse>(`/api/availability?from=${from}&to=${to}${takeover}`);
+  return apiJson<AvailabilityResponse>(`/api/availability?from=${from}&to=${to}${takeover}`);
 }
 
 /** Drivers die zowel rijden als verlof hebben op dezelfde dag = conflict. */

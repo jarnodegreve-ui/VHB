@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
 import { Clock, History } from 'lucide-react';
 import type { ActivityEntityType, ActivityLogEntry } from '../types';
-import { apiFetch } from '../lib/api';
+import { apiJson } from '../lib/api';
 import { cn } from '../lib/ui';
 import { Modal } from './Modal';
-import { ModalHeader } from './ui';
+import { EmptyState, ModalHeader } from './ui';
+import { MicroLabel, microLabelClass } from './primitives';
 
 /**
  * Toon de volledige wijzigingsgeschiedenis van één specifieke entity
@@ -39,7 +40,7 @@ export function EntityHistoryModal({
     setError(null);
 
     let cancelled = false;
-    apiFetch<ActivityLogEntry[]>(`/api/activity/${entityType}/${encodeURIComponent(entityId)}`)
+    apiJson<ActivityLogEntry[]>(`/api/activity/${entityType}/${encodeURIComponent(entityId)}`)
       .then((data) => {
         if (!cancelled) setEntries(data);
       })
@@ -76,12 +77,7 @@ export function EntityHistoryModal({
               )}
 
               {entries && entries.length === 0 && (
-                <div className="text-center py-8">
-                  <p className="text-sm font-bold text-slate-500">Nog geen wijzigingen geregistreerd.</p>
-                  <p className="text-xs font-medium text-slate-400 mt-1">
-                    Geschiedenis wordt vanaf nu bijgehouden bij elke wijziging.
-                  </p>
-                </div>
+                <EmptyState mascotte={false} title="Nog geen wijzigingen geregistreerd." message="Geschiedenis wordt vanaf nu bijgehouden bij elke wijziging." />
               )}
 
               {entries && entries.length > 0 && (
@@ -95,7 +91,7 @@ export function EntityHistoryModal({
                       <div className="rounded-2xl border border-slate-100 bg-surface-field p-3.5">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-800">{entry.action}</p>
-                          <span className="text-2xs font-bold uppercase tracking-[0.08em] text-slate-400 shrink-0">
+                          <span className={cn(microLabelClass, 'shrink-0')}>
                             <Clock size={10} className="inline -mt-0.5 mr-1" />
                             {new Date(entry.createdAt).toLocaleString('nl-BE', {
                               day: '2-digit',
@@ -106,9 +102,9 @@ export function EntityHistoryModal({
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-slate-600 leading-relaxed">{entry.details}</p>
-                        <p className="mt-2 text-2xs font-bold uppercase tracking-[0.08em] text-slate-400">
+                        <MicroLabel className="mt-2">
                           {entry.actorName} · {entry.actorRole}
-                        </p>
+                        </MicroLabel>
                       </div>
                     </li>
                   ))}

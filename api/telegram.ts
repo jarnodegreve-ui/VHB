@@ -1,10 +1,9 @@
 import type express from "express";
 import { timingSafeEqual } from "node:crypto";
 import { escapeHtml } from "./email.js";
-import { addDagen } from "./advisor.js";
 import { getLeaveData, getPlanningData, getPlanningCodesData, getPlanningMatrixRows, getServicesData, getUsersData } from "./storage.js";
 import { sharedCheck } from "./rateLimit.js";
-import { matrixCodesForDate, toLookupToken } from "./helpers.js";
+import { addDagenIso, brusselsDay, matrixCodesForDate, toLookupToken } from "./helpers.js";
 import type { DayGap } from "./coverageGaps.js";
 
 /**
@@ -160,8 +159,8 @@ const formatAdvies = (
   return regels.join("\n");
 };
 
-const vandaagIso = () =>
-  new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+/** Vandaag als Brusselse kalenderdag (de server draait op UTC). */
+const vandaagIso = () => brusselsDay(new Date().toISOString());
 
 export const formatZiek = async (): Promise<string> => {
   const vandaag = vandaagIso();
@@ -200,7 +199,7 @@ export const formatVandaag = async (dagen: DayGap[]): Promise<string> => {
 /** Planning-rijen (de actuele, ruil-correcte waarheid) binnen [van, tot]. */
 const planningInVenster = async (van: string, tot: string): Promise<any[]> => {
   const maanden = new Set<string>();
-  for (let d = van; d <= tot; d = addDagen(d, 1)) maanden.add(d.slice(0, 7));
+  for (let d = van; d <= tot; d = addDagenIso(d, 1)) maanden.add(d.slice(0, 7));
   const chunks = await Promise.all([...maanden].map((m) => getPlanningData({ monthIso: m })));
   return (chunks.flat() as any[]).filter((s) => {
     const d = String(s?.date ?? "");
@@ -277,7 +276,7 @@ const formatRooster = async (query: string, van: string, tot: string): Promise<s
     perDag.set(d, [...(perDag.get(d) ?? []), `${String(s.line ?? "?")}${tijd}`]);
   }
   const regels: string[] = [];
-  for (let d = van; d <= tot; d = addDagen(d, 1)) {
+  for (let d = van; d <= tot; d = addDagenIso(d, 1)) {
     const diensten = perDag.get(d);
     if (diensten) {
       regels.push(`• ${DAG_KORT(d)}: ${diensten.map(escapeHtml).join(" + ")}`);
@@ -375,7 +374,7 @@ const inFlight = new Set<string>();
 export const parseDagAanduiding = (raw: string, vandaag: string): string | null => {
   const t = raw.trim().toLowerCase();
   if (!t || t === "vandaag") return vandaag;
-  if (t === "morgen") return addDagen(vandaag, 1);
+  if (t === "morgen") return addDagenIso(vandaag, 1);
   // Kalender-echte check: "2026-02-31" matcht elk patroon maar bestaat niet —
   // Date maakt er stil 3 maart van en DAG_KORT toonde "Invalid Date".
   const isEchteDag = (iso: string) => {
@@ -400,7 +399,7 @@ export const parseDagAanduiding = (raw: string, vandaag: string): string | null 
   const idx = WEEKDAGEN.indexOf(t) !== -1 ? WEEKDAGEN.indexOf(t) : KORT.indexOf(t);
   if (idx !== -1) {
     const vandaagDow = new Date(`${vandaag}T00:00:00Z`).getUTCDay();
-    return addDagen(vandaag, (idx - vandaagDow + 7) % 7);
+    return addDagenIso(vandaag, (idx - vandaagDow + 7) % 7);
   }
   return null;
 };
@@ -624,7 +623,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
       const cmd = cmdRaw.toLowerCase().replace(/@[\w_]+$/, "");
       const arg = rest.join(" ").trim();
       const vandaag = vandaagIso();
-      const eindWeek = addDagen(vandaag, 6);
+      const eindWeek = addDagenIso(vandaag, 6);
 
       if (cmd === "/start" || cmd === "/help") {
         await stuurTelegram(HULP);

@@ -93,6 +93,11 @@ export const WEEKDAY_SHORT_MON = ['ma', 'di', 'wo', 'do', 'vr', 'za', 'zo'];
 /** Weekdag-afkortingen in JS-volgorde (index = Date#getDay(), 0 = zo). */
 export const WEEKDAY_SHORT_SUN = ['zo', 'ma', 'di', 'wo', 'do', 'vr', 'za'];
 
+/** Eén letter per weekdag, maandag eerst — voor de smalste rasters
+ *  (capaciteit, verlof-kalender). 'D' en 'Z' komen dubbel voor: nooit als
+ *  React-key gebruiken zonder index. */
+export const WEEKDAY_LETTER_MON = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
+
 /** Bestandsgrootte kort: 'B' / 'KB' / 'MB'. Eén bron — stond als
  *  prettySize/formatSize 3× (bijna-)identiek in Documenten, Gebruiker-
  *  documenten en Ritbladen. null/0 → lege string. */

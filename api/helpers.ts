@@ -409,8 +409,10 @@ export const matrixCodesForDate = (
 export const brusselsDay = (iso: string) =>
   new Date(iso).toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
 
-/** ISO-dag + n dagen (puur datumrekenen in UTC-frame). */
-const addDagenIso = (iso: string, n: number): string => {
+/** ISO-dag + n dagen (puur datumrekenen in UTC-frame). Eén bron voor de
+ *  hele API — advisor, telegram, index en ocpi (daar als alias `dagPlus`)
+ *  hadden elk een eigen kopie (controle-ronde 27-08, bevinding 41). */
+export const addDagenIso = (iso: string, n: number): string => {
   const d = new Date(`${iso}T00:00:00Z`);
   d.setUTCDate(d.getUTCDate() + n);
   return d.toISOString().slice(0, 10);

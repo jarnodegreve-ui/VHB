@@ -2,42 +2,12 @@ import { Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
-import { cn } from '../../lib/ui';
+import { MicroLabel, microLabelClass, StatusBadge } from '../../components/primitives';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
 import { formatLeaveType, serviceNumberOf } from '../../lib/format';
 
-
-const LEAVE_STATUS_LABELS: Record<LeaveRequest['status'], string> = {
-  pending: 'In behandeling',
-  approved: 'Goedgekeurd',
-  rejected: 'Afgewezen',
-  cancelled: 'Geannuleerd',
-};
-const LEAVE_STATUS_STYLES: Record<LeaveRequest['status'], string> = {
-  pending: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
-  approved: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
-  rejected: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
-  cancelled: 'bg-surface-muted text-slate-500 dark:bg-slate-500/15 dark:text-slate-400',
-};
-
-const SWAP_STATUS_LABELS: Record<SwapRequest['status'], string> = {
-  pending: 'In behandeling',
-  accepted: 'Wacht op planner',
-  approved: 'Goedgekeurd',
-  rejected: 'Afgewezen',
-  cancelled: 'Geannuleerd',
-  completed: 'Voltooid',
-};
-const SWAP_STATUS_STYLES: Record<SwapRequest['status'], string> = {
-  pending: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
-  accepted: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
-  approved: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
-  rejected: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
-  cancelled: 'bg-surface-muted text-slate-500 dark:bg-slate-500/15 dark:text-slate-400',
-  completed: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400',
-};
 
 export function UserHistoryModal({
   user,
@@ -95,27 +65,27 @@ export function UserHistoryModal({
         {/* Stats overview */}
         <div className="grid grid-cols-3 gap-3">
           <div className="surface-muted rounded-2xl p-4">
-            <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Diensten</p>
-            <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{allShifts.length}</p>
+            <MicroLabel>Diensten</MicroLabel>
+            <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{allShifts.length}</p>
             <p className="text-2xs font-medium text-slate-400 mt-1">{upcomingShifts.length} komende</p>
           </div>
           <div className="surface-muted rounded-2xl p-4">
-            <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Verlof</p>
-            <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{approvedLeaveCount}</p>
+            <MicroLabel>Verlof</MicroLabel>
+            <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{approvedLeaveCount}</p>
             <p className="text-2xs font-medium text-slate-400 mt-1">goedgekeurd</p>
           </div>
           <div className="surface-muted rounded-2xl p-4">
-            <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Dienstruilen</p>
-            <p className="mt-1 text-2xl font-black tabular-nums text-slate-900">{userSwaps.length}</p>
+            <MicroLabel>Dienstruilen</MicroLabel>
+            <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{userSwaps.length}</p>
             <p className="text-2xs font-medium text-slate-400 mt-1">totaal</p>
           </div>
         </div>
 
         {/* Verlof */}
         <section className="space-y-3">
-          <h5 className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Verlof dit jaar</h5>
+          <h5 className={microLabelClass}>Verlof dit jaar</h5>
           {userLeave.length === 0 ? (
-            <p className="text-sm italic text-slate-400">Geen verlof geregistreerd in {currentYear}.</p>
+            <p className="text-sm text-slate-500">Geen verlof geregistreerd in {currentYear}.</p>
           ) : (
             <div className="space-y-2">
               {userLeave.map((l) => (
@@ -126,9 +96,7 @@ export function UserHistoryModal({
                     </p>
                     <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? ` — "${l.comment}"` : ''}</p>
                   </div>
-                  <span className={cn('px-3 py-1 rounded-full text-2xs font-semibold uppercase tracking-[0.08em] shrink-0', LEAVE_STATUS_STYLES[l.status])}>
-                    {LEAVE_STATUS_LABELS[l.status]}
-                  </span>
+                  <StatusBadge status={l.status} className="shrink-0" />
                 </div>
               ))}
             </div>
@@ -137,9 +105,9 @@ export function UserHistoryModal({
 
         {/* Dienstruilen */}
         <section className="space-y-3">
-          <h5 className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Dienstruilen dit jaar</h5>
+          <h5 className={microLabelClass}>Dienstruilen dit jaar</h5>
           {userSwaps.length === 0 ? (
-            <p className="text-sm italic text-slate-400">Geen dienstruilen in {currentYear}.</p>
+            <p className="text-sm text-slate-500">Geen dienstruilen in {currentYear}.</p>
           ) : (
             <div className="space-y-2">
               {userSwaps.map((s) => {
@@ -157,9 +125,7 @@ export function UserHistoryModal({
                         <span className="font-medium text-slate-500">{isRequester ? 'Aan' : 'Van'}</span>
                         <span className="font-semibold text-slate-800 truncate">{userName(counterpartId)}</span>
                       </div>
-                      <span className={cn('px-3 py-1 rounded-full text-2xs font-semibold uppercase tracking-[0.08em] shrink-0', SWAP_STATUS_STYLES[s.status])}>
-                        {SWAP_STATUS_LABELS[s.status]}
-                      </span>
+                      <StatusBadge status={s.status} className="shrink-0" />
                     </div>
                     <p className="text-xs font-medium text-slate-500 tabular-nums">
                       {s.shiftLine ? `Dienst ${s.shiftLine}` : 'Dienst onbekend'}
@@ -168,7 +134,7 @@ export function UserHistoryModal({
                       {` · aangevraagd ${s.createdAt.slice(0, 10)}`}
                     </p>
                     {s.reason && (
-                      <p className="text-xs font-normal italic text-slate-400 line-clamp-2">"{s.reason}"</p>
+                      <p className="text-xs font-normal italic text-slate-500 line-clamp-2">"{s.reason}"</p>
                     )}
                   </div>
                 );
@@ -179,9 +145,9 @@ export function UserHistoryModal({
 
         {/* Komende diensten */}
         <section className="space-y-3">
-          <h5 className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Komende diensten</h5>
+          <h5 className={microLabelClass}>Komende diensten</h5>
           {upcomingShifts.length === 0 ? (
-            <p className="text-sm italic text-slate-400">Geen geplande diensten.</p>
+            <p className="text-sm text-slate-500">Geen geplande diensten.</p>
           ) : (
             <div className="space-y-2">
               {upcomingShifts.slice(0, 10).map((s) => (
@@ -198,7 +164,7 @@ export function UserHistoryModal({
                 </div>
               ))}
               {upcomingShifts.length > 10 && (
-                <p className="text-xs italic text-slate-400 px-3">… en nog {upcomingShifts.length - 10} meer.</p>
+                <p className="text-xs text-slate-500 px-3">… en nog {upcomingShifts.length - 10} meer.</p>
               )}
             </div>
           )}
@@ -207,7 +173,7 @@ export function UserHistoryModal({
         {/* Laatste 5 voorbije diensten */}
         {pastShifts.length > 0 && (
           <section className="space-y-3">
-            <h5 className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Recent gewerkt</h5>
+            <h5 className={microLabelClass}>Recent gewerkt</h5>
             <div className="space-y-2">
               {pastShifts.slice(0, 5).map((s) => (
                 <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/40 opacity-80">

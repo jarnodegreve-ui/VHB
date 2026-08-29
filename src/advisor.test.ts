@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
+import { addDagenIso } from '../api/helpers';
 import {
   dagVenster,
-  addDagen,
   rustTovVorigeDag,
   rustTovVolgendeDag,
   dagenNaElkaarMet,
@@ -103,7 +103,7 @@ describe('dagenNaElkaarMet: de 6-dagenregel', () => {
   });
 
   it('rekent over een maandgrens heen', () => {
-    expect(addDagen('2026-08-01', -1)).toBe('2026-07-31');
+    expect(addDagenIso('2026-08-01', -1)).toBe('2026-07-31');
     const gewerkt = new Set(['2026-07-30', '2026-07-31']);
     expect(dagenNaElkaarMet(gewerkt, '2026-08-01')).toBe(3);
   });

@@ -3,7 +3,8 @@ import { CheckCircle2, Download, FileText, Trash2, Upload } from 'lucide-react';
 import type { User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
-import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
+import { notify, openPdfInNewTab } from '../../lib/ui';
+import { apiFetch } from '../../lib/api';
 import { Button, MicroLabel } from '../../components/primitives';
 import { formatDateHuman, prettySize } from '../../lib/format';
 import type { UserDocument } from '../DocumentsView';
@@ -21,7 +22,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
 
   const load = async () => {
     try {
-      const res = await fetch(`/api/documents?userId=${encodeURIComponent(user.id)}`, { headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch(`/api/documents?userId=${encodeURIComponent(user.id)}`);
       if (!res.ok) throw new Error();
       setDocs(await res.json());
     } catch {
@@ -46,9 +47,8 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
         r.onerror = () => reject(new Error('lezen mislukt'));
         r.readAsDataURL(file);
       });
-      const res = await fetch('/api/documents', {
+      const res = await apiFetch('/api/documents', {
         method: 'POST',
-        headers: { ...(await getSupabaseAuthHeaders()), 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, filename: file.name, category: category.trim() || undefined, dataUrl }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({})))?.error || 'upload mislukt');
@@ -64,7 +64,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
 
   const handleDelete = async (doc: UserDocument) => {
     try {
-      const res = await fetch(`/api/documents/${doc.id}`, { method: 'DELETE', headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch(`/api/documents/${doc.id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error();
       setDocs((cur) => cur.filter((d) => d.id !== doc.id));
     } catch {
@@ -104,7 +104,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             {loading ? (
               <p className="p-4 text-sm font-medium text-slate-500">Laden…</p>
             ) : docs.length === 0 ? (
-              <p className="p-4 text-sm font-medium text-slate-400">Nog geen documenten voor deze gebruiker.</p>
+              <p className="p-4 text-sm text-slate-500">Nog geen documenten voor deze gebruiker.</p>
             ) : (
               <div className="divide-y divide-slate-100">
                 {docs.map((doc) => (

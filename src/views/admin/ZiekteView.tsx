@@ -2,12 +2,13 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Plus, Thermometer } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
-import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Button, MicroLabel } from '../../components/primitives';
+import { apiFetch } from '../../lib/api';
+import { Button, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
@@ -119,9 +120,8 @@ export function ZiekteView({
     if (!naarId || wisselBezig) return;
     setWisselBezig(dienst.id);
     try {
-      const res = await fetch('/api/admin/shift-swap', {
+      const res = await apiFetch('/api/admin/shift-swap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({
           date: dienst.date,
           line: serviceNumberOf(dienst),
@@ -159,9 +159,8 @@ export function ZiekteView({
     if (diensten.length === 0 || batchLaden) return;
     setBatchLaden(true);
     try {
-      const res = await fetch('/api/coverage-advisor/batch', {
+      const res = await apiFetch('/api/coverage-advisor/batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({ items: diensten.slice(0, 40).map((d) => ({ date: d.date, code: serviceNumberOf(d) })) }),
       });
       const body = await res.json().catch(() => ({} as any));
@@ -216,9 +215,8 @@ export function ZiekteView({
       for (const dienst of diensten) {
         const naarId = vervangerPerDienst[dienst.id];
         try {
-          const res = await fetch('/api/admin/shift-swap', {
+          const res = await apiFetch('/api/admin/shift-swap', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
             body: JSON.stringify({
               date: dienst.date,
               line: serviceNumberOf(dienst),
@@ -279,7 +277,7 @@ export function ZiekteView({
   const [excelZiekteBusy, setExcelZiekteBusy] = useState<string | null>(null);
   const laadExcelZiekte = async () => {
     try {
-      const res = await fetch('/api/ziekte-zonder-registratie', { headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch('/api/ziekte-zonder-registratie');
       if (!res.ok) return;
       const body = await res.json().catch(() => ({} as any));
       if (Array.isArray(body?.reeksen)) setExcelZiekte(body.reeksen);
@@ -365,7 +363,7 @@ export function ZiekteView({
   );
 
   return (
-    <PageShell width="3xl">
+    <PageShell>
       <PageHeader
         title="Ziekte"
         description="Wie is er ziek gemeld, en welke diensten staan daardoor nog open. Gescheiden van het verlofbeheer — ziekte is geen aanvraag."
@@ -440,7 +438,7 @@ export function ZiekteView({
         <ModalHeader title="Ziekmelding registreren" description="De dag(en) staan meteen als onbeschikbaar in de planning; de andere planners krijgen een melding." onClose={sluitMelden} />
         <form onSubmit={verstuurMelding} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Chauffeur</label>
             <select
               aria-label="Chauffeur"
               value={meldForm.userId}
@@ -456,7 +454,7 @@ export function ZiekteView({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Van</label>
               <input
                 type="date"
                 aria-label="Startdatum ziekmelding"
@@ -466,7 +464,7 @@ export function ZiekteView({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Tot en met</label>
               <input
                 type="date"
                 aria-label="Einddatum ziekmelding"
@@ -478,7 +476,7 @@ export function ZiekteView({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Opmerking (optioneel)</label>
             <textarea
               aria-label="Opmerking ziekmelding"
               value={meldForm.comment}
@@ -514,7 +512,7 @@ export function ZiekteView({
                   {openDienstenLijst(detail).length > 0 && (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">
+                        <label className={cn(microLabelClass, 'ml-1')}>
                           Nog op naam ({openDienstenLijst(detail).length})
                         </label>
                         {/* Wizard: batch-advies vult per gat de beste passende
@@ -585,7 +583,7 @@ export function ZiekteView({
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Ziek tot en met</label>
+                    <label className={cn(microLabelClass, 'ml-1')}>Ziek tot en met</label>
                     <div className="flex gap-2">
                       <input
                         type="date"

@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { AlertTriangle, Zap, BatteryCharging, ChevronLeft, ChevronRight, Gauge, RefreshCw, X } from 'lucide-react';
-import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
+import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
+import { cn } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
 import { isoDate } from '../../lib/availability';
 import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal } from '../../lib/format';
+import { maandPlus } from '../../lib/datum';
 import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { OpsStat } from '../../components/ops';
 import { SkeletonTile } from '../../components/Skeleton';
-import { Badge, Button, MicroLabel, type BadgeTone } from '../../components/primitives';
+import { Badge, Button, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
+import { MaandNavigatie } from '../../components/MaandNavigatie';
 
 /** Termijn-schakelaar in exact de app-standaard segmented-maat (rail
- *  rounded-2xl p-1, knoppen px-3.5 py-2 text-xs — zie ScheduleView,
+ *  rounded-2xl p-1, knop-klassen uit `segItemClass` — zie ScheduleView,
  *  Dienstoverzicht, Gebruikersbeheer). Stond hier eerst als eigen mini-variant
  *  van 24 px hoog — te klein als raakvlak én de enige afwijkende toggle. */
 function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { label: string; waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void }) {
@@ -23,10 +26,7 @@ function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { lab
           type="button"
           onClick={() => onKies(o.id)}
           aria-pressed={waarde === o.id}
-          className={cn(
-            'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
-            waarde === o.id ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
-          )}
+          className={segItemClass(waarde === o.id)}
         >
           {o.label}
         </button>
@@ -59,7 +59,7 @@ function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
           {/* Dekkend chipje op kaartkleur: zonder achtergrond liep het label
               dwars door staven/curve en werd het onleesbaar. */}
           <span
-            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500"
+            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500"
             style={{ background: 'var(--tile-bg)' }}
           >
             {formatGetal(top * f)} {eenheid}
@@ -155,11 +155,6 @@ type Verbruik = {
 /** Wat de gebruiker koos: een kalendermaand (‹ ›) of een vrije periode van/tot. */
 type PeriodeKeuze = { modus: 'maand'; maand: string } | { modus: 'periode'; van: string; tot: string };
 /** "YYYY-MM" ± n maanden — zuiver op de string, zonder tijdzone-gedoe. */
-const maandPlus = (maand: string, delta: number): string => {
-  const [j, m] = maand.split('-').map(Number);
-  const d = new Date(Date.UTC(j, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-};
 const maandLabel = (maand: string): string => {
   const [j, m] = maand.split('-').map(Number);
   return `${MONTH_NAMES[m - 1] ?? maand} ${j}`;
@@ -226,7 +221,7 @@ export function OcpiDashboardView() {
   const load = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/ocpi/dashboard', { headers: await getSupabaseAuthHeaders() });
+      const response = await apiFetch('/api/ocpi/dashboard');
       if (!response.ok) throw new Error(String(response.status));
       setData(await response.json());
       setError(null);
@@ -256,7 +251,7 @@ export function OcpiDashboardView() {
       setVerbruikLaadt(true);
       try {
         const query = !keuze ? '' : keuze.modus === 'maand' ? `?maand=${keuze.maand}` : `?van=${keuze.van}&tot=${keuze.tot}`;
-        const response = await fetch(`/api/ocpi/verbruik${query}`, { headers: await getSupabaseAuthHeaders() });
+        const response = await apiFetch(`/api/ocpi/verbruik${query}`);
         if (!response.ok) throw new Error(String(response.status));
         const json = (await response.json()) as Verbruik;
         if (actueel) { setVerbruik(json); setVerbruikFout(null); }
@@ -475,7 +470,7 @@ export function OcpiDashboardView() {
   }, [data?.statusCounts]);
 
   return (
-    <PageShell width="5xl">
+    <PageShell>
       <PageHeader
         eyebrow="Laadinfrastructuur"
         title="Laadpalen (OCPI)"
@@ -603,7 +598,7 @@ export function OcpiDashboardView() {
                 })()}
                 <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                   {grafiek.dagen.map((d) => (
-                    <span key={d.date} className="flex-1 text-center text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                    <span key={d.date} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
                       {grafiek.dagen.length <= 7 ? WEEKDAY_SHORT_SUN[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
                     </span>
                   ))}
@@ -680,7 +675,7 @@ export function OcpiDashboardView() {
                                 chipje en met z-10 zodat de SVG-curve en de
                                 piekstip er niet doorheen tekenen. */}
                             <span
-                              className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400"
+                              className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400"
                               style={{ background: 'var(--tile-bg)' }}
                             >
                               maandpiek {tekstKw(Math.round(maandpiek))}
@@ -765,11 +760,11 @@ export function OcpiDashboardView() {
                 {vermogen.modus === 'dagen' ? (
                   <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                     {vermogen.staven.map((st) => (
-                      <span key={st.key} className="flex-1 text-center text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
+                      <span key={st.key} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-1 flex min-h-4 justify-between text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
+                  <div className="mt-1 flex min-h-4 justify-between text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
                     <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
                     <span>nu</span>
                   </div>
@@ -813,7 +808,7 @@ export function OcpiDashboardView() {
               const conn = gekozenPunt.connectors[0];
               const rij = (label: string, waarde: string) => (
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-b-0">
-                  <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</span>
+                  <span className={microLabelClass}>{label}</span>
                   <span className="text-sm font-semibold font-mono tabular-nums text-slate-800">{waarde}</span>
                 </div>
               );
@@ -832,7 +827,7 @@ export function OcpiDashboardView() {
                         type="button"
                         onClick={() => setGekozenPunt(null)}
                         aria-label="Sluiten"
-                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10"
+                        className="ios-pressable inline-flex h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                       >
                         <X size={16} />
                       </button>
@@ -1016,27 +1011,16 @@ export function OcpiDashboardView() {
                     onKies={wisselModus}
                   />
                   {periodeModus === 'maand' ? (
-                    <div className="flex items-center gap-2" role="group" aria-label="Maandkeuze">
-                      <button
-                        type="button"
-                        onClick={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, -1) })}
-                        disabled={!verbruik?.eersteDag || maandPlus(maandGekozen, -1) < verbruik.eersteDag.slice(0, 7)}
-                        aria-label="Vorige maand"
-                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
-                      >
-                        <ChevronLeft size={16} />
-                      </button>
-                      <span className="min-w-[8.5rem] text-center text-sm font-semibold text-slate-800" aria-live="polite">{maandLabel(maandGekozen)}</span>
-                      <button
-                        type="button"
-                        onClick={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, 1) })}
-                        disabled={!verbruik || maandGekozen >= verbruik.huidigeDag.slice(0, 7)}
-                        aria-label="Volgende maand"
-                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
+                    <MaandNavigatie
+                      role="group"
+                      aria-label="Maandkeuze"
+                      label={maandLabel(maandGekozen)}
+                      labelClassName="min-w-[8.5rem]"
+                      onVorige={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, -1) })}
+                      vorigeUit={!verbruik?.eersteDag || maandPlus(maandGekozen, -1) < verbruik.eersteDag.slice(0, 7)}
+                      onVolgende={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, 1) })}
+                      volgendeUit={!verbruik || maandGekozen >= verbruik.huidigeDag.slice(0, 7)}
+                    />
                   ) : (
                     // Vrije periode: twee datumvelden, begrensd op de eerste dag
                     // met sessies en vandaag. Volgorde-fouten worden stil
@@ -1049,7 +1033,7 @@ export function OcpiDashboardView() {
                         max={vandaag}
                         onChange={(e) => zetVan(e.target.value)}
                         aria-label="Van"
-                        className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
                       />
                       <span className="text-xs font-medium text-slate-400">t/m</span>
                       <input
@@ -1059,7 +1043,7 @@ export function OcpiDashboardView() {
                         max={vandaag}
                         onChange={(e) => zetTot(e.target.value)}
                         aria-label="Tot en met"
-                        className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
                       />
                     </div>
                   )}

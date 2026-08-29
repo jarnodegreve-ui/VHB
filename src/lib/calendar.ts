@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiJson } from './api';
 
 export type CalendarLinks = {
   /** https-URL van de persoonlijke .ics-feed (kopiëren/plakken) */
@@ -11,5 +11,5 @@ export type CalendarLinks = {
 
 /** Haalt de persoonlijke agenda-abonnee-links op voor de ingelogde gebruiker. */
 export function fetchCalendarLinks(): Promise<CalendarLinks> {
-  return apiFetch<CalendarLinks>('/api/calendar-url');
+  return apiJson<CalendarLinks>('/api/calendar-url');
 }

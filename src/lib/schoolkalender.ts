@@ -1,11 +1,16 @@
 import type { CoverageOverride } from './coverage';
+import { addDagen } from './datum';
+import { feestdagenVanJaar, VLAAMSE_SCHOOLVAKANTIES } from './typedag';
 
 /**
  * Belgische feestdagen + Vlaamse schoolvakanties als kant-en-klare
- * dekking-uitzonderingen. Bron van de datums: officiële schoolkalender
- * Vlaanderen 2026-2027 en de wettelijke feestdagen (geverifieerd 21-08-2026).
- * Zonder deze voorzet moest de planner elke vakantie en feestdag handmatig
- * als uitzondering intikken — één vergeten krokusvakantie = wéér fantoomgaten.
+ * dekking-uitzonderingen. De data komt uit typedag.ts — feestdagen berekend
+ * (vaste data + Gauss-computus), schoolvakanties uit dé dataset — zodat de
+ * dekking en de typedag-markering in het rooster nooit meer uiteenlopen (hier
+ * stond eerst een tweede, handmatige kopie; controle-ronde 27-08, bevinding
+ * 20). Zonder deze voorzet moest de planner elke vakantie en feestdag
+ * handmatig als uitzondering intikken — één vergeten krokusvakantie = wéér
+ * fantoomgaten.
  *
  * De zomervakantie zit hier bewust NIET in: die loopt via een weekdagperiode
  * (zoals het schooljaar-regime vanaf 01-09-2026), niet via uitzonderingen.
@@ -14,38 +19,19 @@ import type { CoverageOverride } from './coverage';
 export type KalenderFeestdag = { datum: string; naam: string };
 export type KalenderVakantie = { naam: string; van: string; tot: string };
 
-/** Wettelijke feestdagen nov 2026 t/m dec 2027. Op een feestdag rijdt De Lijn
- *  een zondagsdienst, óók als hij op zaterdag valt — alleen feestdagen die al
- *  op zondag vallen worden bij het voorzetten overgeslagen. */
-export const FEESTDAGEN: KalenderFeestdag[] = [
-  { datum: '2026-11-01', naam: 'Allerheiligen' },
-  { datum: '2026-11-11', naam: 'Wapenstilstand' },
-  { datum: '2026-12-25', naam: 'Kerstmis' },
-  { datum: '2027-01-01', naam: 'Nieuwjaar' },
-  { datum: '2027-03-29', naam: 'Paasmaandag' },
-  { datum: '2027-05-01', naam: 'Dag van de Arbeid' },
-  { datum: '2027-05-06', naam: 'O.L.H.-Hemelvaart' },
-  { datum: '2027-05-17', naam: 'Pinkstermaandag' },
-  { datum: '2027-07-21', naam: 'Nationale feestdag' },
-  { datum: '2027-08-15', naam: 'O.L.V.-Hemelvaart' },
-  { datum: '2027-11-01', naam: 'Allerheiligen' },
-  { datum: '2027-11-11', naam: 'Wapenstilstand' },
-  { datum: '2027-12-25', naam: 'Kerstmis' },
-];
+/** De jaren waarin de vakantiedataset een schooljaar laat beginnen: zo ver
+ *  lopen de feestdagen mee (2028 dus pas zodra de 2028-vakanties er staan). */
+const JAREN = [...new Set(VLAAMSE_SCHOOLVAKANTIES.map((v) => Number(v.van.slice(0, 4))))];
 
-/** Vlaamse schoolvakanties 2026-2027 (elke reeks loopt maandag t/m zondag). */
-export const SCHOOLVAKANTIES: KalenderVakantie[] = [
-  { naam: 'Herfstvakantie', van: '2026-11-02', tot: '2026-11-08' },
-  { naam: 'Kerstvakantie', van: '2026-12-21', tot: '2027-01-03' },
-  { naam: 'Krokusvakantie', van: '2027-02-08', tot: '2027-02-14' },
-  { naam: 'Paasvakantie', van: '2027-03-29', tot: '2027-04-11' },
-];
+/** Wettelijke feestdagen van die jaren, chronologisch. Op een feestdag rijdt
+ *  De Lijn een zondagsdienst, óók als hij op zaterdag valt — alleen feestdagen
+ *  die al op zondag vallen worden bij het voorzetten overgeslagen. */
+export const FEESTDAGEN: KalenderFeestdag[] = JAREN
+  .flatMap((jaar) => Object.entries(feestdagenVanJaar(jaar)).map(([datum, naam]) => ({ datum, naam })))
+  .sort((a, b) => a.datum.localeCompare(b.datum));
 
-const addDagen = (iso: string, n: number): string => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
+/** Vlaamse schoolvakanties zonder de zomer (elke reeks loopt maandag t/m zondag). */
+export const SCHOOLVAKANTIES: KalenderVakantie[] = VLAAMSE_SCHOOLVAKANTIES.filter((v) => v.naam !== 'Zomervakantie');
 
 const isZondag = (iso: string): boolean => new Date(`${iso}T00:00:00Z`).getUTCDay() === 0;
 

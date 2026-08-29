@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown, Pencil, ShieldAlert, ShieldCheck, Smartphone, Trash2, X } from 'lucide-react';
 import type { User } from '../../types';
-import { apiFetch } from '../../lib/api';
+import { apiJson } from '../../lib/api';
 import { getDeviceToken } from '../../lib/device';
 import { notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
@@ -37,7 +37,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
 
   const load = async () => {
     try {
-      setDevices(await apiFetch<Device[]>('/api/devices'));
+      setDevices(await apiJson<Device[]>('/api/devices'));
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Toestellen laden is mislukt.', 'error');
       setDevices([]);
@@ -52,7 +52,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   useEffect(() => {
     void (async () => {
       try {
-        const data = await apiFetch<{ enabled: boolean }>('/api/devices/gate');
+        const data = await apiJson<{ enabled: boolean }>('/api/devices/gate');
         setGateEnabled(data.enabled);
       } catch {
         setGateEnabled(true);
@@ -64,7 +64,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     const next = !gateEnabled;
     setIsTogglingGate(true);
     try {
-      await apiFetch('/api/devices/gate', { method: 'POST', body: JSON.stringify({ enabled: next }) });
+      await apiJson('/api/devices/gate', { method: 'POST', body: JSON.stringify({ enabled: next }) });
       setGateEnabled(next);
       notify(next
         ? 'Toestel-goedkeuring staat weer aan: nieuwe toestellen wachten op jouw akkoord.'
@@ -79,7 +79,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   const act = async (device: Device, action: 'approve' | 'revoke' | 'delete') => {
     setBusyKey(keyOf(device));
     try {
-      await apiFetch(`/api/devices/${action}`, {
+      await apiJson(`/api/devices/${action}`, {
         method: 'POST',
         body: JSON.stringify({ userId: device.userId, deviceToken: device.deviceToken }),
       });
@@ -98,7 +98,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   const submitRename = async () => {
     if (!renaming || !renameValue.trim()) { setRenaming(null); return; }
     try {
-      await apiFetch('/api/devices/rename', {
+      await apiJson('/api/devices/rename', {
         method: 'POST',
         body: JSON.stringify({ userId: renaming.userId, deviceToken: renaming.deviceToken, name: renameValue.trim() }),
       });
@@ -278,7 +278,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   };
 
   return (
-    <PageShell width="5xl">
+    <PageShell>
       <PageHeader
         title="Toestellen"
         description="Elk volgend toestel wacht hier op goedkeuring."

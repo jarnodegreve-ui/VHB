@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Activity, Bug, DownloadCloud, FlaskConical, Mail, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, downloadBlob, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 import { BUILD_INFO, getServiceWorkerVersion } from '../../lib/appVersion';
 import { isoDate } from '../../lib/availability';
@@ -70,9 +71,8 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     if (!pendingRestore) return;
     try {
       setIsRestoring(true);
-      const response = await fetch('/api/restore', {
+      const response = await apiFetch('/api/restore', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify(pendingRestore),
       });
       if (response.status === 413) {
@@ -112,20 +112,15 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
   const downloadBackup = async () => {
     try {
       setIsExporting(true);
-      const response = await fetch('/api/backup', { headers: await getSupabaseAuthHeaders() });
+      const response = await apiFetch('/api/backup');
       if (!response.ok) {
         const err = await response.json().catch(() => ({} as any));
         notify(err.details || err.error || `Back-up mislukt (${response.status}).`, 'error');
         return;
       }
-      const blob = await response.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `vhb-backup-${new Date().toISOString().slice(0, 10)}.json`;
-      a.click();
-      URL.revokeObjectURL(url);
-      notify('Back-up gedownload.', 'success');
+      // downloadBlob i.p.v. een handmatige <a download>: dezelfde iOS-share-
+      // route, revokeObjectURL en bevestigings-toast als de andere exports.
+      await downloadBlob(`vhb-backup-${new Date().toISOString().slice(0, 10)}.json`, await response.blob());
     } catch {
       notify('Back-up downloaden is mislukt.', 'error');
     } finally {
@@ -135,7 +130,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
   const fetchClientErrors = async () => {
     try {
-      const response = await fetch('/api/client-errors', { headers: await getSupabaseAuthHeaders() });
+      const response = await apiFetch('/api/client-errors');
       if (!response.ok) return;
       const data = await response.json();
       if (Array.isArray(data)) setClientErrors(data);
@@ -150,9 +145,8 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     setIsMailTesting(true);
     setMailTest(null);
     try {
-      const res = await fetch('/api/admin/test-email', {
+      const res = await apiFetch('/api/admin/test-email', {
         method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
       });
       const data = await res.json().catch(() => ({}));
       setMailTest(res.ok
@@ -171,7 +165,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       // Het publieke /api/health is bewust kaal (alleen status+tijd, geen
       // info-disclosure); de config-/tabelstatussen zitten in het admin-only
       // details-endpoint.
-      const response = await fetch('/api/health/details', { headers: await getSupabaseAuthHeaders() });
+      const response = await apiFetch('/api/health/details');
       const data = await response.json();
       setHealthData(data);
     } catch (error) {
@@ -186,9 +180,8 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       setIsTesting(true);
       setTestResult(null);
 
-      const testResponse = await fetch('/api/test', {
+      const testResponse = await apiFetch('/api/test', {
         method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({ test: true }),
       });
 
@@ -411,7 +404,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <OcpiCard />
 
-      <div className="surface-card p-8 rounded-3xl">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-slate-500/12 text-slate-600 dark:text-slate-300 rounded-2xl">
             <DownloadCloud size={24} />
@@ -428,7 +421,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       </div>
 
-      <div className="surface-card p-8 rounded-3xl border-2 border-red-100">
+      <div className="surface-card p-6 md:p-8 rounded-3xl border-2 border-red-100">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-red-500/12 text-red-600 dark:text-red-400 rounded-2xl">
             <UploadCloud size={24} />
@@ -452,7 +445,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       </div>
 
-      <div className="surface-card p-8 rounded-3xl">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-red-500/12 text-red-600 dark:text-red-400 rounded-2xl">
             <Bug size={24} />
@@ -486,7 +479,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       </div>
 
-      <div className="surface-card p-8 rounded-3xl">
+      <div className="surface-card p-6 md:p-8 rounded-3xl">
         <div className="flex items-start gap-4">
           <div className="p-3 bg-oker-500/15 text-oker-600 dark:text-oker-400 rounded-2xl">
             <FlaskConical size={24} />

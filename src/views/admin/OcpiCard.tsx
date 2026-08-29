@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Zap } from 'lucide-react';
-import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { notify } from '../../lib/ui';
+import { apiFetch } from '../../lib/api';
 import { Badge, Button, MicroLabel } from '../../components/primitives';
 
 type OcpiStatus = {
@@ -28,7 +29,7 @@ export function OcpiCard() {
   const fetchStatus = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/ocpi/status', { headers: await getSupabaseAuthHeaders() });
+      const response = await apiFetch('/api/ocpi/status');
       if (!response.ok) throw new Error(String(response.status));
       setStatus(await response.json());
     } catch {
@@ -45,9 +46,8 @@ export function OcpiCard() {
   const register = async () => {
     setIsRegistering(true);
     try {
-      const response = await fetch('/api/ocpi/register', {
+      const response = await apiFetch('/api/ocpi/register', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -66,9 +66,8 @@ export function OcpiCard() {
   const sync = async () => {
     setIsSyncing(true);
     try {
-      const response = await fetch('/api/ocpi/sync', {
+      const response = await apiFetch('/api/ocpi/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -87,7 +86,7 @@ export function OcpiCard() {
   };
 
   return (
-    <div className="surface-card p-8 rounded-3xl">
+    <div className="surface-card p-6 md:p-8 rounded-3xl">
       <div className="flex items-start gap-4">
         <div className="p-3 bg-slate-500/12 text-slate-600 dark:text-slate-300 rounded-2xl">
           <Zap size={24} />

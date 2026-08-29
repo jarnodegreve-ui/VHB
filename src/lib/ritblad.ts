@@ -1,4 +1,5 @@
-import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from './ui';
+import { notify, openPdfInNewTab } from './ui';
+import { apiFetch } from './api';
 
 /**
  * Het actuele ritblad openen zonder eerst naar de Ritbladen-pagina te gaan.
@@ -13,7 +14,7 @@ import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from './ui';
  */
 export async function openHuidigRitblad(): Promise<void> {
   try {
-    const res = await fetch('/api/ritblaadje', { headers: await getSupabaseAuthHeaders() });
+    const res = await apiFetch('/api/ritblaadje');
     if (!res.ok) throw new Error(`Server antwoordde ${res.status}`);
     const data = await res.json();
     if (!data?.url) {

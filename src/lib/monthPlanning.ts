@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiJson } from './api';
 
 /**
  * Read-only maandplanning — de geïmporteerde planning-matrix (chauffeur ×
@@ -38,5 +38,5 @@ export type MonthPlanning = {
 };
 
 export function fetchMonthPlanning(month: string): Promise<MonthPlanning> {
-  return apiFetch<MonthPlanning>(`/api/month-planning?month=${month}`);
+  return apiJson<MonthPlanning>(`/api/month-planning?month=${month}`);
 }

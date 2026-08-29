@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiJson } from './api';
 
 /**
  * Planner-assistent — chat met Claude als motor (server-side, POST
@@ -12,7 +12,7 @@ export type AssistentBericht = {
 };
 
 export function vraagAssistent(messages: AssistentBericht[]): Promise<{ antwoord: string }> {
-  return apiFetch<{ antwoord: string }>('/api/planner-chat', {
+  return apiJson<{ antwoord: string }>('/api/planner-chat', {
     method: 'POST',
     body: JSON.stringify({ messages }),
   });

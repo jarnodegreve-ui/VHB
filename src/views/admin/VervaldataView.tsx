@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, IdCard, RefreshCw, Search, UserX } from 'lucide-react';
 import type { User } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateHuman } from '../../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
@@ -31,7 +32,7 @@ export function VervaldataView({ users }: { users: User[] }) {
   const load = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('/api/user-expiries', { headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch('/api/user-expiries');
       if (!res.ok) throw new Error(String(res.status));
       const rows = await res.json();
       setExpiries(Array.isArray(rows) ? rows : []);
@@ -139,9 +140,8 @@ export function VervaldataView({ users }: { users: User[] }) {
       const oud = bestaand[soort] ?? '';
       if (nieuw === oud) continue;
       try {
-        const res = await fetch('/api/user-expiries', {
+        const res = await apiFetch('/api/user-expiries', {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
           body: JSON.stringify({ userId: bewerkt.id, soort, validUntil: nieuw || null }),
         });
         if (!res.ok) throw new Error(String(res.status));
@@ -159,7 +159,7 @@ export function VervaldataView({ users }: { users: User[] }) {
   };
 
   return (
-    <PageShell width="4xl">
+    <PageShell>
       <PageHeader
         eyebrow="Beheer"
         title="Vervaldata"
@@ -213,7 +213,7 @@ export function VervaldataView({ users }: { users: User[] }) {
         />
         <OpsStat
           icon={<IdCard size={16} />}
-          tone={tellers.binnen90 > 0 ? 'oker' : 'slate'}
+          tone={tellers.binnen90 > 0 ? 'amber' : 'slate'}
           label="Binnen 90 dagen"
           value={tellers.binnen90}
           sub="komt eraan"

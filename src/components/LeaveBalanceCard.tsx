@@ -1,5 +1,6 @@
 import type { LeaveBalance } from '../lib/leaveBalance';
 import { cn } from '../lib/ui';
+import { microLabelClass } from './primitives';
 
 /**
  * Visualisatie van de verlofbalans voor één gebruiker. Toont de
@@ -20,12 +21,12 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
     <div className={cn('rounded-3xl border border-slate-100 bg-white/55 p-5 space-y-4', compact && 'p-4 space-y-3')}>
       <div className="flex items-baseline justify-between gap-3">
         <h5 className={cn('font-bold text-slate-700 tracking-tight', compact ? 'text-sm' : 'text-base')}>Verlofbalans</h5>
-        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{year}</span>
+        <span className={microLabelClass}>{year}</span>
       </div>
 
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-3">
-          <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Betaald verlof</span>
+          <span className={microLabelClass}>Betaald verlof</span>
           <span className={cn('text-xs font-bold', overBudget ? 'text-red-500' : 'text-slate-600')}>
             <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.betaaldGebruikt}</span>
             <span className="text-slate-400"> / {balance.betaaldBudget} dagen</span>
