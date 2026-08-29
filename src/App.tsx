@@ -2242,7 +2242,11 @@ export default function App() {
         )}
         // Zachte uitloop zonder overshoot — de bounce voelde gedateerd en
         // botste met de verder stille motion-taal.
-        style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)' }}
+        // Landscape: iOS negeert de portrait-lock, dus met de notch links
+        // hoort de zijbalk de linker-inset te respecteren (dock en SlideOver
+        // deden dat al) — anders vallen logo en menu-items deels onder de
+        // notch (controle-ronde 27-08, nr. 35).
+        style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)', paddingLeft: 'env(safe-area-inset-left)' }}
       >
         <div className="shrink-0 px-5 pt-5 pb-4 flex items-center justify-center relative text-center">
           {/* Géén transform/transition-all op de logoknop: Safari rastert een

@@ -174,3 +174,42 @@ export function Td({ className, children }: { className?: string; children?: Rea
   // rij hoog genoeg als raakvlak.
   return <td className={cn('px-4 py-3 sm:pointer-fine:py-2.5 text-sm text-slate-700', className)}>{children}</td>;
 }
+
+// === Switch ===
+
+/**
+ * Schakelaar aan/uit — één dialect voor de hele app: oker = aan (zoals de
+ * segmented-control), rustige uit-stand mét dark-override, en een raakvlak
+ * van 44 px op touch (de zichtbare track blijft 24×44 px; met een muis krimpt
+ * het raakvlak naar de track). Voorheen drie varianten (emerald h-6, oker
+ * h-5, handgerold w-12) waarvan twee onder de 44 px zaten — controle-ronde
+ * 27-08, bevindingen 12+13.
+ */
+export function Switch({ checked, onChange, label, disabled, className }: {
+  checked: boolean;
+  onChange: (next: boolean) => void;
+  /** Toegankelijke naam (aria-label); het zichtbare label staat ernaast. */
+  label: string;
+  disabled?: boolean;
+  className?: string;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className={cn(
+        'ios-pressable inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center sm:pointer-fine:min-h-6',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        className,
+      )}
+    >
+      <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', checked ? 'bg-oker-500' : 'bg-slate-300 dark:bg-slate-600')}>
+        <span className={cn('inline-block h-5 w-5 rounded-full bg-surface-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+      </span>
+    </button>
+  );
+}

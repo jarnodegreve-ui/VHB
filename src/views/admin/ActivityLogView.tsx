@@ -28,7 +28,8 @@ function FilterPill({ active, onClick, children }: { active: boolean; onClick: (
       type="button"
       onClick={onClick}
       className={cn(
-        'ios-pressable rounded-full border px-3 py-1.5 text-2xs font-semibold transition-colors',
+        // min-h-11 op touch (44 px-regel, controle-ronde 27-08 nr. 12); met een muis de compacte pil.
+        'ios-pressable min-h-11 sm:pointer-fine:min-h-8 rounded-full border px-3 py-1.5 text-2xs font-semibold transition-colors',
         active
           ? 'border-oker-200 bg-oker-50 text-oker-700'
           : 'border-slate-200 bg-surface-row text-slate-500 hover:bg-surface-soft-hover hover:text-slate-700',

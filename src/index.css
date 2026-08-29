@@ -373,10 +373,12 @@ html.dark {
       0 8px 24px rgba(13, 13, 15, 0.04);
   }
 
+  /* Bewust GEEN backdrop-filter meer op het paneel: het is 95 % dekkend
+     achter een 40 %-donkere backdrop, dus de blur was onzichtbaar maar
+     hersampelde wel elke frame een bewegend (scale+y) paneel — hakkelig op
+     oudere iPhones (controle-ronde 27-08, nr. 11). Zelfde keuze als SlideOver. */
   .glass-modal {
     background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(24px) saturate(160%);
-    -webkit-backdrop-filter: blur(24px) saturate(160%);
     border: 1px solid rgba(228, 230, 232, 0.9);
     box-shadow:
       0 1px 2px rgba(13, 13, 15, 0.05),
@@ -422,34 +424,39 @@ html.dark {
     75%      { transform: translateY(-7px) rotate(2.5deg); }
   }
   .bus-sway {
-    animation: bus-sway 2.4s ease-in-out infinite;
+    /* Vier cycli (±10 s) en dan rust: een lege pagina die open blijft
+       staan hield anders eindeloos een transform-loop actief (batterij —
+       controle-ronde 27-08, nr. 37). */
+    animation: bus-sway 2.4s ease-in-out 4;
     transform-origin: center bottom;
   }
 
-  /* Skeleton-loader shimmer */
+  /* Skeleton-loader shimmer — als pseudo-element met translateX i.p.v. een
+     background-position-animatie: die repaintte élk skeleton-blok 60×/s op
+     de CPU; een transform wordt gecomposit (controle-ronde 27-08, nr. 37). */
   @keyframes shimmer {
-    0%   { background-position: -200% 0; }
-    100% { background-position: 200% 0; }
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
   }
   .skeleton {
-    background: linear-gradient(
-      90deg,
-      rgba(228, 230, 232, 0.55) 25%,
-      rgba(242, 243, 244, 0.95) 50%,
-      rgba(228, 230, 232, 0.55) 75%
-    );
-    background-size: 200% 100%;
-    animation: shimmer 1.4s linear infinite;
+    position: relative;
+    overflow: hidden;
+    background: rgba(228, 230, 232, 0.55);
     border-radius: 8px;
   }
+  .skeleton::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, transparent 0%, rgba(242, 243, 244, 0.95) 50%, transparent 100%);
+    animation: shimmer 1.4s linear infinite;
+    will-change: transform;
+  }
   .dark .skeleton {
-    background: linear-gradient(
-      90deg,
-      rgba(79, 87, 95, 0.25) 25%,
-      rgba(79, 87, 95, 0.45) 50%,
-      rgba(79, 87, 95, 0.25) 75%
-    );
-    background-size: 200% 100%;
+    background: rgba(79, 87, 95, 0.25);
+  }
+  .dark .skeleton::after {
+    background: linear-gradient(90deg, transparent 0%, rgba(79, 87, 95, 0.45) 50%, transparent 100%);
   }
 
   .control-input {
@@ -1118,10 +1125,6 @@ html.dark {
    Alleen nog voor de (kortstondige) modal-overlay. .panel en .topbar zijn
    bewust near-opaque ZONDER backdrop-filter (Windows/Android-scroll-perf) —
    deze mobile-override voegde de blur er stiekem weer aan toe. */
-@media (max-width: 767px) {
-  .glass-modal {
-    backdrop-filter: blur(14px) saturate(150%);
-    -webkit-backdrop-filter: blur(14px) saturate(150%);
-  }
-}
+/* (De mobile-override met blur(14px) op .glass-modal is weg — zie de
+   toelichting bij .glass-modal zelf.) */
 

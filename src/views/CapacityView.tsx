@@ -526,6 +526,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
+                enterKeyHint="search"
                 value={zoek}
                 onChange={(e) => setZoek(e.target.value)}
                 placeholder="Zoek chauffeur of dienst…"

@@ -6,7 +6,7 @@ import { getDeviceToken } from '../../lib/device';
 import { notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { Badge, Button, MicroLabel, Switch } from '../../components/primitives';
 
 type Device = {
   userId: string;
@@ -294,17 +294,12 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 : 'Aan — elk nieuw toestel (behalve het eerste per chauffeur) wacht op jouw goedkeuring voordat het toegang krijgt.'}
             </p>
           </div>
-          <button
-            type="button"
-            onClick={() => void toggleGate()}
-            role="switch"
-            aria-checked={gateEnabled !== false}
-            aria-label="Toestel-goedkeuring vereist"
+          <Switch
+            checked={gateEnabled !== false}
+            onChange={() => void toggleGate()}
+            label="Toestel-goedkeuring vereist"
             disabled={gateEnabled === null || isTogglingGate}
-            className={`ios-pressable relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors disabled:opacity-50 ${gateEnabled !== false ? 'bg-emerald-500' : 'bg-slate-300'}`}
-          >
-            <span className={`inline-block h-5 w-5 transform rounded-full bg-surface-white shadow transition-transform ${gateEnabled !== false ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
-          </button>
+          />
         </div>
         {gateEnabled === false && (
           <p className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-2.5 text-xs font-medium text-amber-800">

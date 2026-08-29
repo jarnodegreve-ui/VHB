@@ -172,6 +172,7 @@ export function VervaldataView({ users }: { users: User[] }) {
               </div>
               <input
                 type="search"
+                enterKeyHint="search"
                 aria-label="Zoek een chauffeur"
                 placeholder="Zoek chauffeur…"
                 value={zoek}

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { motion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 
@@ -135,6 +135,7 @@ export function Modal({
 
   if (typeof document === 'undefined' || !open) return null;
 
+  const reduceMotion = useReducedMotion();
   const widthClass = {
     sm: 'max-w-sm',
     md: 'max-w-md',
@@ -147,7 +148,7 @@ export function Modal({
     <motion.div
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      transition={{ duration: 0.16 }}
+      transition={{ duration: reduceMotion ? 0 : 0.16 }}
       onClick={dismissOnBackdrop ? onClose : undefined}
       // Op mobile: minimale padding zodat de modal bijna full-screen kan,
       // en respecteer safe-area (notch + home-indicator).
@@ -169,15 +170,19 @@ export function Modal({
         aria-modal="true"
         aria-label={ariaLabel}
         tabIndex={-1}
-        initial={{ opacity: 0, scale: 0.95, y: 20 }}
+        // Zelfde reduced-motion-respect als SlideOver (Modal miste het:
+        // de CSS-regel raakt alleen CSS-animaties, niet deze JS-animaties).
+        initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
         onClick={(e) => e.stopPropagation()}
-        // Op mobile: max-h volle viewport minus safe-area-padding, met
-        // iets minder agressieve rounded-hoeken (32px voelt overkill op
-        // bijna-full-screen). Op md+: zoals voorheen.
+        // Op mobile: max-h = viewport minus de safe-area-padding van de
+        // backdrop hierboven (dezelfde max(0.5rem, env(...))-termen), zodat een
+        // lange modal niet ±30 px in de home-indicator-zone zakt (controle-
+        // ronde 27-08, nr. 34); iets minder agressieve rounded-hoeken (32px
+        // voelt overkill op bijna-full-screen). Op md+: zoals voorheen.
         className={cn(
-          'glass-modal rounded-3xl md:rounded-3xl w-full overflow-y-auto overscroll-contain max-h-[calc(100dvh-1rem)] md:max-h-[88dvh]',
+          'glass-modal rounded-3xl md:rounded-3xl w-full overflow-y-auto overscroll-contain max-h-[calc(100dvh-max(0.5rem,env(safe-area-inset-top))-max(0.5rem,env(safe-area-inset-bottom)))] md:max-h-[88dvh]',
           widthClass,
           className,
         )}

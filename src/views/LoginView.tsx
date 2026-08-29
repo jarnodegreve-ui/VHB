@@ -159,10 +159,12 @@ export function LoginView({
       ? { title: 'Wachtwoord vergeten', description: 'Vul je e-mail in — we sturen een reset-link.' }
       : { title: 'Inloggen', description: 'Meld je aan om verder te gaan.' };
 
+  // min-h-dvh i.p.v. 100vh: in Safari (vóór "Zet op beginscherm") stond de
+  // absolute footer anders achter de Safari-balk (controle-ronde 27-08, nr. 35).
   return (
-    <div className="min-h-screen relative overflow-hidden login-bg-dark">
+    <div className="min-h-dvh relative overflow-hidden login-bg-dark">
       {/* Centrale wordmark + form-card, vertikaal gecentreerd. */}
-      <main className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
+      <main className="min-h-dvh flex flex-col items-center justify-center px-6 py-12">
         {/* Officieel VHB-logo boven het card. Login is donker (carbon), dus
             de reverse-variant (witte tekst + oker bus). */}
         <motion.div
