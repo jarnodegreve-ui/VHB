@@ -333,7 +333,14 @@ self.addEventListener('notificationclick', (event) => {
             const target = new URL(url, self.location.origin);
             const current = new URL(win.url);
             if (target.pathname !== current.pathname || target.search !== current.search) {
-              win.navigate?.(url);
+              // Geen herlaad: de app luistert naar dit bericht en wisselt
+              // zelf van view (App.tsx, deeplink) — een open formulier blijft
+              // staan. Zonder postMessage (oude client) blijft navigate over.
+              if (typeof win.postMessage === 'function') {
+                win.postMessage({ type: 'NAVIGATE', url: target.pathname + target.search });
+              } else {
+                win.navigate?.(url);
+              }
             }
           } catch (_) { /* URL-parse faalt → gewoon focussen */ }
           return win.focus();

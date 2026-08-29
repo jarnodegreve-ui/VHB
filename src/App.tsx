@@ -4,6 +4,7 @@
  */
 
 import { useCallback, Suspense, useState, useEffect, useRef } from 'react';
+import { viewUitUrl, zoekdeelVan } from './lib/deeplink';
 import {
   LayoutDashboard,
   MapPin,
@@ -105,6 +106,9 @@ const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMo
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
 
 
+// Alle views die voor minstens één rol bestaan — de whitelist voor deeplinks
+// (`?view=…`); de rol-guard doet daarna de fijne check.
+let ALLE_VIEWS: readonly string[] = [];
 const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
   chauffeur: ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'],
   planner: [
@@ -159,6 +163,7 @@ const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
     'beheer-debug',
   ],
 };
+ALLE_VIEWS = [...new Set(Object.values(ALLOWED_VIEWS_BY_ROLE).flat())];
 
 
 
@@ -172,6 +177,16 @@ export default function App() {
     // (meer) mag voor deze rol wordt door de allowedViews-guard hieronder alsnog
     // teruggezet naar 'dashboard', en bij uitloggen wordt hij sowieso gereset.
     try {
+      // Deeplink (`?view=…` uit een push-melding of externe link) wint van de
+      // onthouden pagina; de URL wordt daarna schoongemaakt zodat een refresh
+      // niet opnieuw "navigeert" (controle-ronde 27-08, voorstel 44).
+      if (typeof window !== 'undefined') {
+        const uitUrl = viewUitUrl(window.location.search, ALLE_VIEWS);
+        if (uitUrl) {
+          window.history.replaceState(null, '', window.location.pathname);
+          return uitUrl;
+        }
+      }
       const stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-current-view') : null;
       return (stored as View) || 'dashboard';
     } catch {
@@ -248,6 +263,20 @@ export default function App() {
     scrollContainerRef.current?.scrollTo({ top: 0 });
     setCurrentViewRaw(next);
   }, []);
+  // Deeplink terwijl het portaal al open staat: de service worker stuurt bij
+  // een tik op een melding een NAVIGATE-bericht i.p.v. het venster te
+  // herladen (zie sw.js notificationclick) — een open formulier blijft zo
+  // staan. Onbekende views negeren; de rol-guard doet de rest.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== 'NAVIGATE') return;
+      const view = viewUitUrl(zoekdeelVan(String(event.data.url ?? '')), ALLE_VIEWS);
+      if (view) setCurrentView(view);
+    };
+    navigator.serviceWorker.addEventListener('message', onMessage);
+    return () => navigator.serviceWorker.removeEventListener('message', onMessage);
+  }, [setCurrentView]);
   const ptrIndicatorRef = useRef<HTMLDivElement>(null);
   // Tijdstip van de laatste geslaagde dataload — chauffeurs zien zo hoe vers
   // hun rooster/omleidingen zijn (vooral offline of na een tijd weg).

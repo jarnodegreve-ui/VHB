@@ -140,6 +140,10 @@ if (!process.env.CALENDAR_FEED_SECRET) {
  *  het dashboard (Auth → Password) en hoort hier niet onder te liggen. */
 const WACHTWOORD_MIN = 10;
 
+/** Deeplink-URL voor een push-melding: de app opent op die pagina i.p.v. op
+ *  het dashboard (controle-ronde 27-08, voorstel 44; zie src/lib/deeplink.ts). */
+const viewUrl = (view: string) => `/?view=${view}`;
+
 const app = express();
 const PORT = 3000;
 
@@ -1356,7 +1360,7 @@ app.put("/api/planning-notes", authenticate, requireRole("planner", "admin"), as
     await sendPushToUsers([driverId], {
       title: "Notitie bij je dienst",
       body: `${date.split("-").reverse().join("/")}: ${note.slice(0, 120)}`,
-      url: "/",
+      url: viewUrl("rooster"),
     });
     res.json({ success: true });
   } catch (err) {
@@ -1628,7 +1632,7 @@ app.post("/api/planning-matrix/import", authenticate, requireRole("planner", "ad
     await sendPushToUsers(affectedDriverIds, {
       title: "Planning bijgewerkt",
       body: `Nieuwe planning geïmporteerd (${rows[0]?.source_date || "?"} t/m ${rows[rows.length - 1]?.source_date || "?"}). Bekijk je rooster.`,
-      url: "/",
+      url: viewUrl("rooster"),
     });
 
     res.json({
@@ -1904,7 +1908,7 @@ app.post("/api/planning/sync-from-matrix", authenticate, requireRole("planner", 
       await sendPushToUsers(gewijzigd, {
         title: "Rooster bijgewerkt",
         body: "Je rooster is gewijzigd — bekijk je diensten.",
-        url: "/",
+        url: viewUrl("rooster"),
       });
     }
     res.json({ success: true, ...generatedPlanning.summary, notifiedDrivers: gewijzigd.length });
@@ -2829,7 +2833,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
           await sendPushToUsers(planners, {
             title: `${gaten.length} openstaande dienst${gaten.length === 1 ? "" : "en"} komende 7 dagen`,
             body: regels[0].slice(0, 140),
-            url: "/",
+            url: viewUrl("dekking"),
           });
         }
         // Zelfde signaal ook naar de gekoppelde Telegram-chat, mét
@@ -3279,7 +3283,7 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
         await sendPushToUsers(chauffeurIds, {
           title: u.isUrgent ? "Belangrijke update" : "Nieuwe update",
           body: u.title,
-          url: "/",
+          url: viewUrl("updates"),
         });
       }
     }
@@ -4058,7 +4062,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             body: isTakeover
               ? `${userName(next.requesterId)} vraagt of je een dienst wil overnemen — zonder tegenprestatie.`
               : `${userName(next.requesterId)} wil een dienst met je ruilen.`,
-            url: "/",
+            url: viewUrl("ruil-verzoeken"),
           });
         }
         continue;
@@ -4082,7 +4086,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             body: next.status === "accepted"
               ? `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil — wacht op goedkeuring van de planner.`
               : `Dienstruil van ${userName(next.requesterId)}: ${prev.status} → ${next.status}.`,
-            url: "/",
+            url: viewUrl("ruil-verzoeken"),
           });
           // Geaccepteerd = er wacht een validatie op de planner — die kreeg
           // hier tot nu toe geen seintje van. Beslissers pushen (behalve de
@@ -4094,7 +4098,7 @@ app.post("/api/swaps", authenticate, async (req: AuthenticatedRequest, res) => {
             await sendPushToUsers(beslissers, {
               title: "Dienstruil wacht op validatie",
               body: `${userName(String(prev.targetDriverId ?? ""))} accepteerde de ruil van ${userName(next.requesterId)} — rij- en rusttijden checken.`,
-              url: "/",
+              url: viewUrl("ruil-verzoeken"),
             });
             await meldRuilTerValidatieTelegram({
               id: String(next.id),
@@ -4260,7 +4264,7 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
       body: status === "accepted"
         ? `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil — wacht op goedkeuring van de planner.`
         : `Dienstruil van ${userName(String(current.requesterId))}: ${current.status} → ${status}.`,
-      url: "/",
+      url: viewUrl("ruil-verzoeken"),
     });
     // Geaccepteerd = validatie nodig → beslissers een seintje (zie array-route)
     // en dezelfde melding mét goedkeurknoppen naar de Telegram-chat.
@@ -4271,7 +4275,7 @@ async function beslisRuilIntern(opts: { id: string; status: string; ifStatus: st
       await sendPushToUsers(beslissers, {
         title: "Dienstruil wacht op validatie",
         body: `${userName(String(current.targetDriverId ?? ""))} accepteerde de ruil van ${userName(String(current.requesterId))} — rij- en rusttijden checken.`,
-        url: "/",
+        url: viewUrl("ruil-verzoeken"),
       });
       await meldRuilTerValidatieTelegram({
         id: String(current.id),
@@ -4424,7 +4428,7 @@ app.post("/api/admin/shift-swap", authenticate, requireRole("admin"), async (req
     await sendPushToUsers([fromDriverId, toDriverId], {
       title: "Planning aangepast",
       body: `Dienst ${dienstLine} op ${date} is overgezet van ${fromUser.name} naar ${toUser.name}. Reden: ${reason}.`,
-      url: "/",
+      url: viewUrl("rooster"),
     });
 
     // Verse collectie-revisie zodat een volgende array-save van dezelfde
@@ -4562,7 +4566,7 @@ async function wijsDienstToeIntern(invoer: { date: unknown; serviceNumber: unkno
     await sendPushToUsers([driverId], {
       title: "Dienst toegewezen",
       body: `Je rijdt dienst ${service.serviceNumber} op ${date}. Bekijk je rooster.`,
-      url: "/",
+      url: viewUrl("rooster"),
     });
     return { rows: nieuweRijen.length, serviceNumber: String(service.serviceNumber), driverName: driver.name, date };
 }
@@ -4729,7 +4733,7 @@ async function registreerZiekmeldingIntern(
     await sendPushToUsers(beslissers.map((u) => String(u.id)), {
       title: "Ziekmelding",
       body: `${target.name} is ziek gemeld voor ${period}.`,
-      url: "/",
+      url: viewUrl("ziekte"),
     });
     // Ziekmelding ook naar de gekoppelde Telegram-chat, mét de diensten die
     // erdoor openvallen — dát is wat de planner meteen wil weten. Best-effort.
@@ -4943,7 +4947,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           await sendPushToUsers(beslissers, {
             title: "Nieuwe verlofaanvraag",
             body: `${userName(next.userId)} vroeg ${typeLabel} aan voor ${period}.`,
-            url: "/",
+            url: viewUrl("verlof"),
           });
           await meldVerlofAanvraagTelegram({ id: String(next.id), naam: userName(next.userId), typeLabel, start: String(next.startDate), eind: String(next.endDate) });
         }
@@ -4983,7 +4987,7 @@ app.post("/api/leave", authenticate, async (req: AuthenticatedRequest, res) => {
           await sendPushToUsers([String(next.userId)], {
             title: action,
             body: `${typeLabel} (${period}) — beslist door ${req.appUser.name || "Planning"}.`,
-            url: "/",
+            url: viewUrl("verlof"),
           });
         }
       }
@@ -5066,7 +5070,7 @@ async function beslisVerlofIntern(opts: { id: string; status: string; ifStatus: 
       await sendPushToUsers([String(current.userId)], {
         title: action,
         body: `${typeLabel} (${period}) — beslist door ${actor.name || "Planning"}.`,
-        url: "/",
+        url: viewUrl("verlof"),
       });
     }
     return { leave: updated, melding: `${action}: ${requesterName} — ${typeLabel} (${period}).` };
@@ -5120,7 +5124,7 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
   // Push naar álle actieve gebruikers (ook wie geen e-mail heeft) — best-effort.
   await sendPushToUsers(
     activeUsers.map((u) => String(u.id)).filter(Boolean),
-    { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: "/" },
+    { title: `🚨 ${update.title}`, body: String(update.content || "").slice(0, 180), url: viewUrl("updates") },
   );
 
   if (emails.length === 0) {
@@ -5387,7 +5391,7 @@ app.post("/api/documents", authenticate, requireRole("admin"), async (req: Authe
     await sendPushToUsers([userId], {
       title: "Nieuw document",
       body: `Er staat een nieuw document voor je klaar: ${filename}.`,
-      url: "/",
+      url: viewUrl("documenten"),
     });
     res.json({ success: true, document: doc });
   } catch (err) {
@@ -5432,7 +5436,7 @@ app.post("/api/documents/broadcast", authenticate, requireRole("admin"), async (
     await sendPushToUsers(chauffeurs.map((u) => String(u.id)), {
       title: "Nieuw document",
       body: `Er staat een nieuw document voor je klaar: ${filename}.`,
-      url: "/",
+      url: viewUrl("documenten"),
     });
     res.json({ success: true, count: done });
   } catch (err) {

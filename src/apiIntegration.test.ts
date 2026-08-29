@@ -41,6 +41,9 @@ const mem = vi.hoisted(() => ({
   // Ruwe planning-matrix (chauffeur × datum met codes) — bron voor de
   // 'vrij/bv/tk/ta'-check bij een ruil zonder tegenprestatie.
   planningMatrix: [] as any[],
+  importHistory: [] as any[],
+  snapshots: {} as Record<string, any>,
+  historiekFaalt: false,
   planningCodes: [] as any[],
   coverageExpectations: {} as Record<string, unknown>,
   activity: [] as any[],
@@ -69,6 +72,18 @@ vi.mock('../api/db.js', () => {
   return {
     supabase: {
       auth: {
+        // Lokale JWT-verificatie (verifieerToken): bekende tokens → claims;
+        // 'tok-storing'/'tok-auth-500' geven geen uitspraak (→ fallback
+        // getUser, die de 503-scheiding simuleert); onbekend → 401 zonder
+        // roundtrip; 'tok-verlopen' = AuthInvalidJwtError.
+        getClaims: async (token: string) => {
+          if (token === 'tok-storing' || token === 'tok-auth-500') return { data: null, error: { name: 'AuthRetryableFetchError', message: 'fetch failed', status: 0 } };
+          if (token === 'tok-verlopen') return { data: null, error: { name: 'AuthInvalidJwtError', message: 'JWT has expired', status: 400 } };
+          const email = tokenToEmail[token];
+          return email
+            ? { data: { claims: { sub: `auth-${token}`, email } }, error: null }
+            : { data: null, error: { name: 'AuthInvalidJwtError', message: 'invalid JWT', status: 401 } };
+        },
         getUser: async (token: string) => {
           // Simulatie-tokens voor de 401-vs-503-scheiding in de middleware.
           if (token === 'tok-storing') return { data: { user: null }, error: { message: 'fetch failed', status: 0 } };
@@ -259,7 +274,23 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     replacePlanningData: async (shifts: any[]) => { mem.planning = shifts; },
     replacePlanningAndMatrix: async (rows: any[], shifts: any[]) => { mem.planningMatrix = rows; mem.planning = shifts; },
-    savePlanningMatrixHistoryEntry: async () => {},
+    // Herstelpunt-keten (import → historiek + snapshot → restore), in-memory.
+    savePlanningMatrixHistoryEntry: async (entry: any) => {
+      if (mem.historiekFaalt) return false;
+      mem.importHistory.unshift(entry);
+      return true;
+    },
+    getPlanningMatrixHistory: async () => mem.importHistory,
+    storeImportSnapshot: async (snapshot: any) => {
+      const path = `snapshots/snap-${Object.keys(mem.snapshots).length + 1}.json`;
+      mem.snapshots[path] = JSON.parse(JSON.stringify(snapshot));
+      return path;
+    },
+    getImportSnapshot: async (path: string) => mem.snapshots[path] ?? null,
+    restorePlanningAndMatrixSnapshot: async (snapshot: any) => {
+      mem.planningMatrix = snapshot.matrixRows;
+      mem.planning = snapshot.planning;
+    },
     saveMatrixRowAssignments: async (rowId: string, assignments: Record<string, string>) => {
       mem.planningMatrix = mem.planningMatrix.map((r: any) => (String(r.id) === String(rowId) ? { ...r, assignments } : r));
     },
@@ -436,6 +467,9 @@ beforeEach(() => {
   mem.storedBackups = [];
   mem.pushSubscriptions = [];
   mem.pushesSent = [];
+  mem.importHistory = [];
+  mem.snapshots = {};
+  mem.historiekFaalt = false;
   mem.documents = [];
   mem.ritblaadje = null;
   // Beide chauffeurs hebben één goedgekeurd toestel ('dev-ok' — de default
@@ -3654,5 +3688,89 @@ describe('verbeterronde 22-08 — voorstel, batch-advies en maandoverzicht', () 
     expect(rijA).toMatchObject({ diensten: 1, dagen: 1 });
     expect(rijB).toMatchObject({ vrij: 1, dagen: 1 });
     expect((await api('GET', '/api/month-planning?month=2030-09&format=summary', { token: 'tok-a' })).status).toBe(403);
+  });
+});
+
+describe('planning-import — herstelpunt en terugzetten (controle-ronde 27-08, nr. 56 + 25)', () => {
+  const buildXlsx = async (dag: string, codeA: string, codeB = '') => {
+    const XLSX = await import('xlsx');
+    const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet([
+      ['datum', 'dagtype', 'Chauffeur A', 'Chauffeur B', 'aantal'],
+      [serial(dag), 'W', codeA, codeB, [codeA, codeB].filter(Boolean).length],
+    ]);
+    XLSX.utils.book_append_sheet(wb, ws, 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+  const oudeStand = () => {
+    mem.leave = [];
+    mem.swaps = [];
+    mem.planningMatrix = [{ id: 'm-oud', source_date: '2030-08-02', day_type: 'W', assignments: { '3': '12' }, raw_row: {} }];
+    mem.planning = [{ id: 'sh-oud', driverId: '3', date: '2030-08-02', line: '12' }];
+  };
+
+  it('een import legt een herstelpunt vast en een admin zet de vorige stand terug', async () => {
+    oudeStand();
+    const res = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: await buildXlsx('2030-08-03', '14'), filename: 'aug.xlsx' } });
+    expect(res.status).toBe(200);
+    expect(mem.importHistory).toHaveLength(1);
+    expect(mem.importHistory[0]).toMatchObject({ filename: 'aug.xlsx', importedBy: 'Pieter Planner' });
+    expect(mem.importHistory[0].snapshotPath).toBeTruthy();
+    expect(mem.planningMatrix.map((r: any) => r.source_date)).toEqual(['2030-08-03']);
+
+    const terug = await api('POST', '/api/planning-matrix/restore', { token: 'tok-admin', body: { historyId: mem.importHistory[0].id } });
+    expect(terug.status).toBe(200);
+    expect(terug.json).toMatchObject({ success: true, matrixDagen: 1, roosterregels: 1 });
+    expect(mem.planningMatrix.map((r: any) => r.source_date)).toEqual(['2030-08-02']);
+    expect(mem.planning.map((r: any) => r.id)).toEqual(['sh-oud']);
+  });
+
+  it('terugzetten is admin-only en faalt netjes op een onbekende of snapshot-loze import', async () => {
+    oudeStand();
+    expect((await api('POST', '/api/planning-matrix/restore', { token: 'tok-planner', body: { historyId: 'x' } })).status).toBe(403);
+    expect((await api('POST', '/api/planning-matrix/restore', { token: 'tok-admin', body: {} })).status).toBe(400);
+    expect((await api('POST', '/api/planning-matrix/restore', { token: 'tok-admin', body: { historyId: 'bestaat-niet' } })).status).toBe(404);
+    mem.importHistory = [{ id: 'oud-zonder', createdAt: '2026-08-01T08:00:00Z', snapshotPath: null }];
+    const zonder = await api('POST', '/api/planning-matrix/restore', { token: 'tok-admin', body: { historyId: 'oud-zonder' } });
+    expect(zonder.status).toBe(400);
+    expect(String(zonder.json.error)).toContain('geen herstelpunt');
+  });
+
+  it('weigert een leeg herstelpunt (stand van vóór de allereerste import)', async () => {
+    mem.leave = []; mem.swaps = []; mem.planningMatrix = []; mem.planning = [];
+    const res = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: await buildXlsx('2030-08-03', '14') } });
+    expect(res.status).toBe(200);
+    const terug = await api('POST', '/api/planning-matrix/restore', { token: 'tok-admin', body: { historyId: mem.importHistory[0].id } });
+    expect(terug.status).toBe(400);
+    expect(String(terug.json.error)).toContain('leeg');
+    expect(mem.planningMatrix).toHaveLength(1); // niets teruggezet
+  });
+
+  it('een mislukte historiek-insert komt als waarschuwing terug (import zelf slaagt)', async () => {
+    oudeStand();
+    mem.historiekFaalt = true;
+    const res = await api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: await buildXlsx('2030-08-03', '14') } });
+    expect(res.status).toBe(200);
+    expect(res.json.success).toBe(true);
+    expect(mem.planningMatrix.map((r: any) => r.source_date)).toEqual(['2030-08-03']);
+    expect((res.json.parserWaarschuwingen as string[]).some((w) => w.includes('Herstelpunt niet vastgelegd'))).toBe(true);
+    expect(mem.importHistory).toHaveLength(0);
+  });
+});
+
+describe('authenticate — lokale JWT-verificatie met getUser-fallback (controle-ronde 27-08, nr. 55)', () => {
+  it('geldig token → 200 via getClaims (geen roundtrip nodig)', async () => {
+    expect((await api('GET', '/api/me', { token: 'tok-a' })).status).toBe(200);
+  });
+  it('verlopen/ongeldig token → 401', async () => {
+    expect((await api('GET', '/api/me', { token: 'tok-verlopen' })).status).toBe(401);
+    expect((await api('GET', '/api/me', { token: 'tok-onbekend' })).status).toBe(401);
+  });
+  it('auth-dienst onbereikbaar → 503 (client houdt zijn sessie)', async () => {
+    const res = await api('GET', '/api/me', { token: 'tok-storing' });
+    expect(res.status).toBe(503);
+    expect(res.json.code).toBe('auth_unavailable');
+    expect((await api('GET', '/api/me', { token: 'tok-auth-500' })).status).toBe(503);
   });
 });

@@ -207,7 +207,9 @@ export interface ShiftRecord {
 }
 
 export type AuthenticatedRequest = express.Request & {
-  authUser?: SupabaseAuthUser;
+  /** Alleen id + e-mail: sinds de lokale JWT-verificatie (getClaims) is er
+   *  geen volledig Auth-User-object meer per request (controle-ronde 27-08, nr. 55). */
+  authUser?: Pick<SupabaseAuthUser, "id" | "email">;
   appUser?: AppUser;
   accessToken?: string;
 };
