@@ -5,7 +5,7 @@ import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
-import { Button, MicroLabel, StatusBadge, Badge } from '../components/primitives';
+import { Button, MicroLabel, microLabelClass, StatusBadge, Badge } from '../components/primitives';
 import { SlideOver } from '../components/SlideOver';
 import { verlofBalans, daysBetween } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
@@ -382,7 +382,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
       <div className="grid lg:grid-cols-12 gap-8">
         <div className="lg:col-span-8 space-y-6">
-          <div className="surface-card p-8 rounded-3xl">
+          <div className="surface-card p-6 md:p-8 rounded-3xl">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
               <div className="flex items-center gap-2">
                 <button
@@ -448,10 +448,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           </div>
 
           {selectedDate && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-8 rounded-3xl">
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-6 md:p-8 rounded-3xl">
               <div className="flex items-center justify-between mb-6">
                 <h4 className="font-bold tracking-tight text-slate-800">Afwezigheid op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
-                <button aria-label="Sluiten" onClick={() => setSelectedDate(null)} className="text-slate-400 hover:text-slate-600"><X size={20} /></button>
+                <button type="button" aria-label="Sluiten" onClick={() => setSelectedDate(null)} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"><X size={18} /></button>
               </div>
               <div className="space-y-3">
                 {getRequestsForDate(selectedDate).length > 0 ? getRequestsForDate(selectedDate).map((req) => {
@@ -462,7 +462,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         <div className="w-10 h-10 bg-surface-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
                         <div>
                           <p className="font-semibold text-slate-800 text-sm">{requester?.name}</p>
-                          <p className="text-2xs font-bold text-slate-400 uppercase tracking-[0.08em]">{formatLeaveType(req.type)}</p>
+                          <MicroLabel>{formatLeaveType(req.type)}</MicroLabel>
                         </div>
                       </div>
                       <div className="flex items-center gap-3">
@@ -479,7 +479,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       </div>
                     </div>
                   );
-                }) : <p className="text-center py-4 text-slate-400 font-medium">Geen afwezigen op deze dag.</p>}
+                }) : <p className="text-center py-4 text-sm text-slate-500">Geen afwezigen op deze dag.</p>}
               </div>
             </motion.div>
           )}
@@ -705,7 +705,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           className={cn(
                             'aspect-square rounded-xl text-xs font-semibold transition-colors flex items-center justify-center',
                             isPast && 'text-slate-300 cursor-not-allowed',
-                            !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
+                            !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50 dark:hover:bg-oker-500/10',
                             !isPast && inRange && !edge && 'bg-oker-100 text-oker-700',
                             !isPast && edge && 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30',
                             !isPast && isToday && !inRange && !edge && 'ring-1 ring-oker-300',
@@ -719,14 +719,14 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {/* tabIndex -1: puur weergavevelden — focus zou op iOS alleen maar inzoomen */}
-                  <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Startdatum</label><input type="text" readOnly tabIndex={-1} aria-label="Startdatum" value={formData.startDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
-                  <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Einddatum</label><input type="text" readOnly tabIndex={-1} aria-label="Einddatum" value={formData.endDate || 'Selecteer in kalender'} className="w-full px-4 py-3 rounded-2xl border border-slate-200 bg-slate-50/80 font-bold text-base sm:text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Startdatum</label><input type="text" readOnly tabIndex={-1} aria-label="Startdatum" value={formData.startDate || 'Selecteer in kalender'} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none" /></div>
+                  <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Einddatum</label><input type="text" readOnly tabIndex={-1} aria-label="Einddatum" value={formData.endDate || 'Selecteer in kalender'} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none" /></div>
                 </div>
                 <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-surface-soft-hover">
                   Periode wissen
                 </button>
-                <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Type verlof</label><select aria-label="Type verlof" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-surface-field"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
-                <div className="space-y-2"><label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking</label><textarea aria-label="Opmerking" value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
+                <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Type verlof</label><select aria-label="Type verlof" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-surface-field"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
+                <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Opmerking</label><textarea aria-label="Opmerking" value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
 
                 {/* Live impact-preview: budget + shift-conflicten */}
                 {requestPreview && (

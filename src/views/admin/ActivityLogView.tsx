@@ -1,13 +1,13 @@
-import { Fragment, useEffect, useMemo, useState, type ComponentProps, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Activity, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
-import { cn, downloadBlob, getSupabaseAuthHeaders } from '../../lib/ui';
+import { downloadBlob, getSupabaseAuthHeaders } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { formatDayLong } from '../../lib/format';
 import { AdminSubsectionHeader, EmptyState, ModalHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
   users: 'oker',
@@ -21,24 +21,6 @@ const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof
   swaps: 'blue',
   system: 'red',
 };
-
-function FilterPill({ active, onClick, children }: { active: boolean; onClick: () => void; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        // min-h-11 op touch (44 px-regel, controle-ronde 27-08 nr. 12); met een muis de compacte pil.
-        'ios-pressable min-h-11 sm:pointer-fine:min-h-8 rounded-full border px-3 py-1.5 text-2xs font-semibold transition-colors',
-        active
-          ? 'border-oker-200 bg-oker-50 text-oker-700'
-          : 'border-slate-200 bg-surface-row text-slate-500 hover:bg-surface-soft-hover hover:text-slate-700',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
 
 export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLogEntry[]; logins?: ActivityLogEntry[] }) {
   // Aanwezigheid: per dag het aantal unieke actieve gebruikers (distinct op
@@ -260,19 +242,19 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               />
             </label>
             <div className="flex flex-wrap gap-2">
-              <FilterPill active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterPill>
-              <FilterPill active={dateWindow === '7d'} onClick={() => setDateWindow('7d')}>7 dagen</FilterPill>
-              <FilterPill active={dateWindow === '30d'} onClick={() => setDateWindow('30d')}>30 dagen</FilterPill>
-              <FilterPill active={dateWindow === 'all'} onClick={() => setDateWindow('all')}>{isLoadingWindow && dateWindow === 'all' ? 'Alles…' : 'Alles'}</FilterPill>
+              <FilterChip active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterChip>
+              <FilterChip active={dateWindow === '7d'} onClick={() => setDateWindow('7d')}>7 dagen</FilterChip>
+              <FilterChip active={dateWindow === '30d'} onClick={() => setDateWindow('30d')}>30 dagen</FilterChip>
+              <FilterChip active={dateWindow === 'all'} onClick={() => setDateWindow('all')}>{isLoadingWindow && dateWindow === 'all' ? 'Alles…' : 'Alles'}</FilterChip>
             </div>
           </div>
           <div className="flex flex-wrap gap-2 lg:max-w-[32rem] lg:justify-end">
-            <FilterPill active={activeCategory === 'all'} onClick={() => setActiveCategory('all')}>Alles</FilterPill>
+            <FilterChip active={activeCategory === 'all'} onClick={() => setActiveCategory('all')}>Alles</FilterChip>
             {(Object.keys(categoryLabels) as ActivityLogEntry['category'][]).map((category) => (
               <Fragment key={category}>
-                <FilterPill active={activeCategory === category} onClick={() => setActiveCategory(category)}>
+                <FilterChip active={activeCategory === category} onClick={() => setActiveCategory(category)}>
                   {categoryLabels[category]}
-                </FilterPill>
+                </FilterChip>
               </Fragment>
             ))}
             <Button
@@ -356,7 +338,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-0.5">
               {openDayData.names.map((name) => (
                 <div key={name} className="flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 hover:bg-surface-soft-hover">
-                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-muted text-[10px] font-bold text-slate-500">
+                  <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-surface-muted text-2xs font-bold text-slate-500">
                     {name.split(' ').map((part) => part[0]).slice(0, 2).join('')}
                   </span>
                   <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{name}</span>

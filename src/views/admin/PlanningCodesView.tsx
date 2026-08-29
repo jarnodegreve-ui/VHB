@@ -114,7 +114,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         <OpsStat icon={<Bus size={16} />} tone="slate" label="Diensten" value={summary.service} sub="tellen als dienst" />
         <OpsStat icon={<Calendar size={16} />} tone="emerald" label="Verlof" value={summary.leave} sub="betaalde afwezigheid" />
         <OpsStat icon={<AlertTriangle size={16} />} tone="amber" label="Afwezigheid" value={summary.absence} sub="niet inzetbaar" />
-        <OpsStat icon={<Info size={16} />} tone={summary.unknown > 0 ? 'oker' : 'slate'} label="Onbekend" value={summary.unknown} sub="nog te verfijnen" />
+        <OpsStat icon={<Info size={16} />} tone={summary.unknown > 0 ? 'amber' : 'slate'} label="Onbekend" value={summary.unknown} sub="nog te verfijnen" />
       </div>
 
       <section className="surface-card rounded-3xl p-6">
@@ -264,13 +264,13 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                         <input
                           value={code.code}
                           onChange={(event) => updateCode(index, { code: event.target.value })}
-                          className="control-input rounded-xl px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
+                          className="control-input rounded-2xl px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
                           placeholder="Code"
                         />
                         <select
                           value={code.category}
                           onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
-                          className="control-input rounded-xl px-3 py-2.5 text-sm font-medium"
+                          className="control-input rounded-2xl px-3 py-2.5 text-sm font-medium"
                         >
                           <option value="service">Dienst</option>
                           <option value="absence">Afwezigheid</option>
@@ -282,7 +282,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                       <input
                         value={code.description}
                         onChange={(event) => updateCode(index, { description: event.target.value })}
-                        className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-medium"
+                        className="control-input w-full min-w-0 rounded-2xl px-2.5 py-2.5 text-sm font-medium"
                         placeholder="Beschrijving"
                       />
                       <div className="grid gap-3 sm:grid-cols-3">

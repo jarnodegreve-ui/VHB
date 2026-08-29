@@ -6,7 +6,7 @@ import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
@@ -548,34 +548,22 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             />
             {/* Snelfilter voor de uitrol: wie moet ik nog persoonlijk
                 meekrijgen? Alleen tonen als er zo iemand is. */}
-            {/* min-h-11: losse chips buiten de segmented-rail haalden het
-                44px-aanraakminimum niet. Blijven renderen zolang het filter
+            {/* FilterChip (44 px op touch): losse chips buiten de segmented-rail
+                haalden het aanraakminimum niet. Blijven renderen zolang het filter
                 aanstaat — anders kon een actieve filter zijn eigen knop laten
                 verdwijnen en bleef een lege tabel zonder uitweg achter
                 (controle-ronde 20-08). */}
             {(nooitIngelogd > 0 || alleenNooitIn) && (
-              <button
-                type="button"
-                onClick={() => setAlleenNooitIn((v) => !v)}
-                aria-pressed={alleenNooitIn}
-                className={segItemClass(alleenNooitIn, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
-              >
-                <LogIn size={13} />
+              <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} className="self-start" icon={<LogIn size={13} />}>
                 Nog nooit ingelogd ({nooitIngelogd})
-              </button>
+              </FilterChip>
             )}
             {/* Snelfilter: chauffeur-accounts zonder cel aan het einde van de
                 geïmporteerde planning — nieuwe collega of weggevallen kolom. */}
             {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
-              <button
-                type="button"
-                onClick={() => setAlleenNietInPlanning((v) => !v)}
-                aria-pressed={alleenNietInPlanning}
-                className={segItemClass(alleenNietInPlanning, 'self-start inline-flex min-h-11 items-center gap-1.5 rounded-2xl sm:pointer-fine:min-h-8')}
-              >
-                <CalendarOff size={13} />
+              <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} className="self-start" icon={<CalendarOff size={13} />}>
                 Niet in de planning ({aantalNietInPlanning})
-              </button>
+              </FilterChip>
             )}
           </div>
         </div>

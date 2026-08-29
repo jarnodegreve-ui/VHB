@@ -87,7 +87,7 @@ export function OcpiCard() {
   };
 
   return (
-    <div className="surface-card p-8 rounded-3xl">
+    <div className="surface-card p-6 md:p-8 rounded-3xl">
       <div className="flex items-start gap-4">
         <div className="p-3 bg-slate-500/12 text-slate-600 dark:text-slate-300 rounded-2xl">
           <Zap size={24} />

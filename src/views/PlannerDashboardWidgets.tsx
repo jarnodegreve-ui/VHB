@@ -46,7 +46,7 @@ import { ModalHeader } from '../components/ui';
 import { PreviewToggle } from '../components/PreviewToggle';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Button } from '../components/primitives';
+import { Button, microLabelClass } from '../components/primitives';
 import { cn, getSupabaseAuthHeaders, notify, telHref } from '../lib/ui';
 
 /**
@@ -1170,7 +1170,7 @@ export function PlannerDashboardWidgets({
           className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Chauffeur</label>
             <select
               aria-label="Chauffeur"
               value={sickForm.userId}
@@ -1186,7 +1186,7 @@ export function PlannerDashboardWidgets({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Van</label>
               <input
                 type="date"
                 aria-label="Startdatum ziekmelding"
@@ -1196,7 +1196,7 @@ export function PlannerDashboardWidgets({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Tot en met</label>
               <input
                 type="date"
                 aria-label="Einddatum ziekmelding"
@@ -1208,7 +1208,7 @@ export function PlannerDashboardWidgets({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Opmerking (optioneel)</label>
             <textarea
               aria-label="Opmerking ziekmelding"
               value={sickForm.comment}

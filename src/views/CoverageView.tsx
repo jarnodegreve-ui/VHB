@@ -3,7 +3,7 @@ import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertT
 import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Badge, Button, FilterChip, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
 import { formatShortDay, MONTH_NAMES } from '../lib/format';
@@ -466,7 +466,7 @@ export function CoverageView() {
               <Skeleton className="h-9 w-3/5" rounded="2xl" />
             </div>
           ) : config.services.length === 0 ? (
-            <p className="text-sm font-medium text-slate-400">Geen diensten in het dienstoverzicht om uit te kiezen.</p>
+            <EmptyState mascotte={false} title="Geen diensten in het dienstoverzicht om uit te kiezen." />
           ) : (
             <>
               {/* 1. Dag-types + verwachte diensten */}
@@ -478,7 +478,7 @@ export function CoverageView() {
                   </Button>
                 </div>
                 {dayTypes.length === 0 ? (
-                  <p className="text-sm font-medium text-slate-400">Nog geen dag-types. Klik op "Dag-type" om er een toe te voegen (bv. schooldag, vakantie, zaterdag, zondag).</p>
+                  <p className="text-sm text-slate-500">Nog geen dag-types. Klik op "Dag-type" om er een toe te voegen (bv. schooldag, vakantie, zaterdag, zondag).</p>
                 ) : (
                   <div className="space-y-3">
                     {dayTypes.map((dt, i) => {
@@ -513,17 +513,9 @@ export function CoverageView() {
                             {config.services.map((svc) => {
                               const on = selected.has(svc);
                               return (
-                                <button
-                                  key={svc}
-                                  type="button"
-                                  onClick={() => toggleService(i, svc)}
-                                  className={cn(
-                                    'rounded-lg px-2 py-1 text-2xs font-semibold tabular-nums ring-1 transition-colors',
-                                    on ? 'bg-oker-100 text-oker-700 ring-oker-300' : 'bg-surface-white text-slate-400 ring-slate-200 hover:text-slate-600 hover:ring-slate-300',
-                                  )}
-                                >
+                                <FilterChip key={svc} active={on} onClick={() => toggleService(i, svc)} className="tabular-nums">
                                   {svc}
-                                </button>
+                                </FilterChip>
                               );
                             })}
                           </div>
@@ -556,7 +548,7 @@ export function CoverageView() {
                   {voorstelLaden ? 'Berekenen…' : `Haal voorstel op (${MONTH_NAMES[monthIndex].toLowerCase()} ${year})`}
                 </Button>
                 {voorstellen !== null && (voorstellen.length === 0 ? (
-                  <p className="text-xs font-medium text-slate-400">Geen voorstel mogelijk — te weinig dagen per dag-type in deze maand.</p>
+                  <p className="text-sm text-slate-500">Geen voorstel mogelijk — te weinig dagen per dag-type in deze maand.</p>
                 ) : (
                   <div className="space-y-2">
                     {voorstellen.map((v) => {
@@ -610,7 +602,7 @@ export function CoverageView() {
                         value={weekdays[dow] || ''}
                         onChange={(e) => setWeekday(dow, e.target.value)}
                         aria-label={`Dag-type voor ${label}`}
-                        className="control-input rounded-lg px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                        className="control-input rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
                       >
                         <option value="">— geen —</option>
                         {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -653,7 +645,7 @@ export function CoverageView() {
                               value={p.weekdays[dow] || ''}
                               onChange={(e) => setPeriodWeekday(i, dow, e.target.value)}
                               aria-label={`Dag-type voor ${label} vanaf ${p.vanaf || 'de ingangsdatum'}`}
-                              className="control-input rounded-lg px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                              className="control-input rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
                             >
                               <option value="">— geen —</option>
                               {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -700,7 +692,7 @@ export function CoverageView() {
                   </div>
                 </div>
                 {overrides.length === 0 ? (
-                  <p className="text-xs font-medium text-slate-400">Geen uitzonderingen — elke dag volgt de weekdag-standaard.</p>
+                  <p className="text-sm text-slate-500">Geen uitzonderingen — elke dag volgt de weekdag-standaard.</p>
                 ) : (
                   <div className="space-y-2">
                     {gesorteerdeOverrides.map(({ o, i, verlopen }) => (
@@ -755,7 +747,7 @@ export function CoverageView() {
                         value={waarde}
                         onChange={(e) => zet(e.target.value)}
                         aria-label={`Dag-type voor ${label.toLowerCase()}`}
-                        className="control-input rounded-lg px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                        className="control-input rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
                       >
                         <option value="">— overslaan —</option>
                         {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
@@ -830,7 +822,7 @@ export function CoverageView() {
           message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
         />
       ) : visibleDays.length === 0 ? (
-        <div className="surface-card p-8 rounded-3xl text-center">
+        <div className="surface-card p-6 md:p-8 rounded-3xl text-center">
           <p className="text-sm font-bold text-emerald-600">Geen openstaande diensten in {MONTH_NAMES[monthIndex].toLowerCase()} {year}.</p>
         </div>
       ) : (
@@ -935,7 +927,7 @@ export function CoverageView() {
                   <p className="mt-0.5 text-xs font-semibold text-slate-500 tabular-nums">{segmentenLabel(advies.segmenten)}</p>
                 )}
               </div>
-              <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -948,7 +940,7 @@ export function CoverageView() {
             ) : adviesError ? (
               <p className="mt-5 text-sm font-semibold text-red-700">{adviesError}</p>
             ) : !advies || advies.kandidaten.length === 0 ? (
-              <p className="mt-5 text-sm font-medium text-slate-400">Niemand is vrij op deze dag (geen dienst én geen verlof).</p>
+              <p className="mt-5 text-sm text-slate-500">Niemand is vrij op deze dag (geen dienst én geen verlof).</p>
             ) : (() => {
               const passend = advies.kandidaten.filter((k) => k.past);
               const nietPassend = advies.kandidaten.filter((k) => !k.past);
@@ -1019,7 +1011,7 @@ export function CoverageView() {
 
                   {nietPassend.length > 0 && (
                     <div>
-                      <MicroLabel className="text-rose-600 tabular-nums">Vrij, maar past niet — {nietPassend.length}</MicroLabel>
+                      <MicroLabel className="text-rose-700 tabular-nums">Vrij, maar past niet — {nietPassend.length}</MicroLabel>
                       <div className="mt-2 flex flex-col gap-1.5">
                         {nietPassend.map((k) => (
                           <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-rose-50/60 ring-1 ring-rose-100 px-3 py-2">

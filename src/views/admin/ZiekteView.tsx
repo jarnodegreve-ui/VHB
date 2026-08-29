@@ -2,12 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Plus, Thermometer } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
-import { getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Button, MicroLabel } from '../../components/primitives';
+import { Button, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
@@ -440,7 +440,7 @@ export function ZiekteView({
         <ModalHeader title="Ziekmelding registreren" description="De dag(en) staan meteen als onbeschikbaar in de planning; de andere planners krijgen een melding." onClose={sluitMelden} />
         <form onSubmit={verstuurMelding} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Chauffeur</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Chauffeur</label>
             <select
               aria-label="Chauffeur"
               value={meldForm.userId}
@@ -456,7 +456,7 @@ export function ZiekteView({
           </div>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Van</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Van</label>
               <input
                 type="date"
                 aria-label="Startdatum ziekmelding"
@@ -466,7 +466,7 @@ export function ZiekteView({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Tot en met</label>
+              <label className={cn(microLabelClass, 'ml-1')}>Tot en met</label>
               <input
                 type="date"
                 aria-label="Einddatum ziekmelding"
@@ -478,7 +478,7 @@ export function ZiekteView({
             </div>
           </div>
           <div className="space-y-1.5">
-            <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Opmerking (optioneel)</label>
+            <label className={cn(microLabelClass, 'ml-1')}>Opmerking (optioneel)</label>
             <textarea
               aria-label="Opmerking ziekmelding"
               value={meldForm.comment}
@@ -514,7 +514,7 @@ export function ZiekteView({
                   {openDienstenLijst(detail).length > 0 && (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">
+                        <label className={cn(microLabelClass, 'ml-1')}>
                           Nog op naam ({openDienstenLijst(detail).length})
                         </label>
                         {/* Wizard: batch-advies vult per gat de beste passende
@@ -585,7 +585,7 @@ export function ZiekteView({
                     </div>
                   )}
                   <div className="space-y-1.5">
-                    <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1">Ziek tot en met</label>
+                    <label className={cn(microLabelClass, 'ml-1')}>Ziek tot en met</label>
                     <div className="flex gap-2">
                       <input
                         type="date"

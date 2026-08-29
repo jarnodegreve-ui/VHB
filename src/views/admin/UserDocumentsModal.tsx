@@ -104,7 +104,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
             {loading ? (
               <p className="p-4 text-sm font-medium text-slate-500">Laden…</p>
             ) : docs.length === 0 ? (
-              <p className="p-4 text-sm font-medium text-slate-400">Nog geen documenten voor deze gebruiker.</p>
+              <p className="p-4 text-sm text-slate-500">Nog geen documenten voor deze gebruiker.</p>
             ) : (
               <div className="divide-y divide-slate-100">
                 {docs.map((doc) => (

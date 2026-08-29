@@ -213,7 +213,7 @@ export function VervaldataView({ users }: { users: User[] }) {
         />
         <OpsStat
           icon={<IdCard size={16} />}
-          tone={tellers.binnen90 > 0 ? 'oker' : 'slate'}
+          tone={tellers.binnen90 > 0 ? 'amber' : 'slate'}
           label="Binnen 90 dagen"
           value={tellers.binnen90}
           sub="komt eraan"

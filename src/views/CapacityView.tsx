@@ -5,7 +5,7 @@ import { cn, downloadBlob, getSupabaseAuthHeaders, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { SkeletonRow } from '../components/Skeleton';
-import { Button, MicroLabel, Td, Th } from '../components/primitives';
+import { Button, MicroLabel, microLabelClass, Td, Th } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { typedagLabel } from '../lib/typedag';
 import { isoDate } from '../lib/availability';
@@ -607,9 +607,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
                           )}
                         >
-                          <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{h.letter}</div>
+                          <div className={microLabelClass}>{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
-                          <div className="mt-0.5 h-3 text-[10px] font-bold leading-3">
+                          <div className="mt-0.5 h-3 text-2xs font-bold leading-3">
                             {td && (
                               <span className={td.kort === 'F' ? 'text-oker-600' : 'text-slate-400'}>{td.kort}</span>
                             )}
@@ -635,7 +635,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               vandaag-markering, zodat die verticale gidsen
                               niet per sectie onderbroken worden. */}
                           <td className="mp-sticky sticky left-0 z-10 p-0 border-y border-slate-300 border-r-2 bg-slate-100/90">
-                            <div className="inline-flex items-center px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">
+                            <div className={cn('inline-flex items-center px-4 py-1.5', microLabelClass)}>
                               {section}
                             </div>
                           </td>
@@ -803,7 +803,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           className="absolute inset-0 rounded-xl bg-oker-500 shadow-sm shadow-oker-500/30"
                         />
                       )}
-                      <span className={cn('relative z-10 text-2xs font-semibold uppercase tracking-[0.08em] transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-400')}>
+                      <span className={cn('relative z-10 text-2xs font-medium uppercase tracking-[0.08em] transition-colors', gekozen ? 'text-slate-950/70' : 'text-slate-500')}>
                         {WEEKDAY_SHORT_MON[(d.getDay() + 6) % 7]}
                       </span>
                       {/* Vandaag (niet gekozen) = oker dagcijfer — hetzelfde
@@ -814,7 +814,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         {d.getDate()}
                       </span>
                       {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
-                      <span className={cn('relative z-10 h-3 text-[10px] font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
+                      <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
                         {td?.kort ?? ''}
                       </span>
                     </button>
@@ -848,7 +848,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 ) : dagRijen.secties.map((sectie) => (
                   <Fragment key={sectie.naam}>
                     {showSections && (
-                      <div className="bg-slate-100/80 px-4 py-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{sectie.naam}</div>
+                      <div className={cn('bg-slate-100/80 px-4 py-1.5', microLabelClass)}>{sectie.naam}</div>
                     )}
                     {sectie.rijen.map(({ drv, cell }) => {
                       if (!cell) return null;
@@ -893,7 +893,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       type="button"
                       onClick={() => setToonRust((v) => !v)}
                       aria-expanded={toonRust}
-                      className="w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                      className={cn('w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors', microLabelClass)}
                     >
                       <span>Vrij / afwezig · {dagRijen.rust.length}</span>
                       <ChevronRight size={14} className={cn('transition-transform', toonRust && 'rotate-90')} />
@@ -973,7 +973,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 <MicroLabel className="capitalize">{formatDateLong(selected.iso)}</MicroLabel>
                 <h3 className="mt-0.5 text-lg font-semibold tracking-tight text-slate-900 truncate">{selected.driverName}</h3>
               </div>
-              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 rounded-full border border-slate-200 bg-surface-white text-slate-400 hover:text-slate-700 hover:bg-surface-soft-hover flex items-center justify-center transition-colors">
+              <button type="button" onClick={() => setSelected(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
                 <X size={16} />
               </button>
             </div>
@@ -1038,7 +1038,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   ))}
                 </div>
               ) : (
-                <p className="mt-5 text-sm font-medium text-slate-400">Geen uren bekend voor deze dienst in het dienstoverzicht.</p>
+                <p className="mt-5 text-sm text-slate-500">Geen uren bekend voor deze dienst in het dienstoverzicht.</p>
               )
             ) : (
               <p className="mt-5 text-sm font-medium text-slate-500">
@@ -1065,7 +1065,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   <span className="font-semibold text-slate-700">{selected.driverName}</span> naar een andere chauffeur.
                 </p>
                 <div className="space-y-2">
-                  <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1" htmlFor="wissel-naar">Nieuwe chauffeur</label>
+                  <label className={cn(microLabelClass, 'ml-1')} htmlFor="wissel-naar">Nieuwe chauffeur</label>
                   <select
                     id="wissel-naar"
                     value={wisselNaar}
@@ -1091,7 +1091,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-2xs font-semibold text-slate-400 uppercase tracking-[0.08em] ml-1" htmlFor="wissel-reden">Reden</label>
+                  <label className={cn(microLabelClass, 'ml-1')} htmlFor="wissel-reden">Reden</label>
                   <select
                     id="wissel-reden"
                     value={wisselReden}

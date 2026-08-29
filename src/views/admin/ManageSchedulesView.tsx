@@ -560,7 +560,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-xs italic text-slate-400">Geen.</p>
+                        <p className="text-xs text-slate-500">Geen.</p>
                       )}
                       {ziekteSinds.length > 0 && (
                         <>
@@ -599,7 +599,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           ))}
                         </ul>
                       ) : (
-                        <p className="text-xs italic text-slate-400">Geen.</p>
+                        <p className="text-xs text-slate-500">Geen.</p>
                       )}
                     </div>
                   </div>
@@ -1105,19 +1105,19 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 <div className="grid gap-4 md:grid-cols-4">
                   <div className="surface-muted rounded-2xl p-4">
                     <MicroLabel>Dagen</MicroLabel>
-                    <p className="mt-2 text-2xl font-black text-slate-900 tabular-nums">{matrixPreview.importedDays}</p>
+                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.importedDays}</p>
                   </div>
                   <div className="surface-muted rounded-2xl p-4">
                     <MicroLabel>Chauffeurs</MicroLabel>
-                    <p className="mt-2 text-2xl font-black text-slate-900 tabular-nums">{matrixPreview.detectedDrivers}</p>
+                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.detectedDrivers}</p>
                   </div>
                   <div className="surface-muted rounded-2xl p-4">
                     <MicroLabel>Diensten</MicroLabel>
-                    <p className="mt-2 text-2xl font-black text-slate-900 tabular-nums">{matrixPreview.generatedShifts}</p>
+                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.generatedShifts}</p>
                   </div>
                   <div className="surface-muted rounded-2xl p-4">
                     <MicroLabel>Afwezigheden</MicroLabel>
-                    <p className="mt-2 text-2xl font-black text-slate-900 tabular-nums">{matrixPreview.skippedAbsences}</p>
+                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.skippedAbsences}</p>
                   </div>
                 </div>
 
@@ -1163,8 +1163,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
                   <div className="surface-card rounded-3xl p-5">
                     <MicroLabel>Impact op actieve planning</MicroLabel>
-                    <p className="mt-2 text-lg font-black text-slate-900 tabular-nums">
-                      {matrixOverwriteSummary?.affectedExistingShifts || 0} bestaande roosterregels geraakt
+                    <p className="mt-2 text-lg font-semibold text-slate-900">
+                      <span className="font-mono tabular-nums tracking-[-0.01em]">{matrixOverwriteSummary?.affectedExistingShifts || 0}</span> bestaande roosterregels geraakt
                     </p>
                     <p className="mt-2 text-sm font-medium text-slate-500">
                       {matrixOverwriteSummary?.currentShiftCount || 0} actieve regels in totaal; {matrixOverwriteSummary?.incomingShiftCount || 0} nieuwe komen binnen, {matrixOverwriteSummary?.retainedExistingShifts || 0} buiten het bereik blijven ongewijzigd.
@@ -1226,7 +1226,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         {matrixPreview.unknownCodes.length > 0 ? matrixPreview.unknownCodes.map((code) => (
                           <Fragment key={code}><Badge tone="red">{code}</Badge></Fragment>
                         )) : (
-                          <span className="text-sm font-medium text-slate-400">Geen onbekende codes.</span>
+                          <span className="text-sm text-slate-500">Geen onbekende codes.</span>
                         )}
                       </div>
                     </div>

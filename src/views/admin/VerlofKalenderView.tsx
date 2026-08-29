@@ -6,7 +6,7 @@ import { leaveSolid } from '../../lib/statusColors';
 import { cn, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { PageHeader, PageShell } from '../../components/ui';
-import { Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Button, MicroLabel, microLabelClass, TableShell, Td, Th } from '../../components/primitives';
 import { MONTH_NAMES, LEAVE_TYPE_LABELS } from '../../lib/format';
 
 const WEEKDAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
@@ -150,10 +150,10 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                         isToday(day) && 'bg-oker-50',
                       )}
                     >
-                      <div className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{weekdayLetter(day)}</div>
+                      <div className={microLabelClass}>{weekdayLetter(day)}</div>
                       <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                       {typedagLabel(dateIso(day)) && (
-                        <div className={cn('text-[10px] font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
                           {typedagLabel(dateIso(day))!.kort}
                         </div>
                       )}
@@ -206,7 +206,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 );
               })}
               {visibleUsers.length === 0 && (
-                <tr><td colSpan={daysInMonth + 1} className="px-4 py-8 text-center text-sm font-medium text-slate-400">Geen actieve chauffeurs gevonden.</td></tr>
+                <tr><td colSpan={daysInMonth + 1} className="px-4 py-8 text-center text-sm text-slate-500">Geen actieve chauffeurs gevonden.</td></tr>
               )}
             </tbody>
           </table>
@@ -241,7 +241,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 )}
               </div>
               {uniqueLeaves.length === 0 ? (
-                <div className="mt-2 text-xs font-medium text-slate-400">Geen afwezigheden deze maand.</div>
+                <div className="mt-2 text-sm text-slate-500">Geen afwezigheden deze maand.</div>
               ) : (
                 <ul className="mt-2 space-y-1.5">
                   {uniqueLeaves.map((leave) => {

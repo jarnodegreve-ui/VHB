@@ -57,7 +57,7 @@ import { addDays, isoDate } from './lib/availability';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
-import { Button } from './components/primitives';
+import { Button, MicroLabel } from './components/primitives';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { NavItem, NavSection, NavSubLabel } from './components/Navigation';
@@ -2237,7 +2237,7 @@ export default function App() {
               <div className="flex items-center gap-4">
                 <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
                 <div>
-                  <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Bezig</p>
+                  <MicroLabel>Bezig</MicroLabel>
                   <p className="text-sm font-semibold text-slate-800">Gegevens verwerken...</p>
                 </div>
               </div>
@@ -2303,7 +2303,7 @@ export default function App() {
         </div>
 
         <nav className="flex-1 min-h-0 px-3 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
-          {isPlanner && <div className="mb-1 px-3 pt-0.5 text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">Algemeen</div>}
+          {isPlanner && <MicroLabel className="mb-1 px-3 pt-0.5">Algemeen</MicroLabel>}
           <NavItem
             icon={<LayoutDashboard size={18} />}
             label="Dashboard"

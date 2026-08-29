@@ -8,10 +8,10 @@ import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
 import { OpsStat } from '../../components/ops';
 import { SkeletonTile } from '../../components/Skeleton';
-import { Badge, Button, MicroLabel, type BadgeTone } from '../../components/primitives';
+import { Badge, Button, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
 
 /** Termijn-schakelaar in exact de app-standaard segmented-maat (rail
- *  rounded-2xl p-1, knoppen px-3.5 py-2 text-xs — zie ScheduleView,
+ *  rounded-2xl p-1, knop-klassen uit `segItemClass` — zie ScheduleView,
  *  Dienstoverzicht, Gebruikersbeheer). Stond hier eerst als eigen mini-variant
  *  van 24 px hoog — te klein als raakvlak én de enige afwijkende toggle. */
 function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { label: string; waarde: T; opties: Array<{ id: T; label: string }>; onKies: (t: T) => void }) {
@@ -23,10 +23,7 @@ function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { lab
           type="button"
           onClick={() => onKies(o.id)}
           aria-pressed={waarde === o.id}
-          className={cn(
-            'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
-            waarde === o.id ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
-          )}
+          className={segItemClass(waarde === o.id)}
         >
           {o.label}
         </button>
@@ -59,7 +56,7 @@ function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
           {/* Dekkend chipje op kaartkleur: zonder achtergrond liep het label
               dwars door staven/curve en werd het onleesbaar. */}
           <span
-            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500"
+            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500"
             style={{ background: 'var(--tile-bg)' }}
           >
             {formatGetal(top * f)} {eenheid}
@@ -603,7 +600,7 @@ export function OcpiDashboardView() {
                 })()}
                 <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                   {grafiek.dagen.map((d) => (
-                    <span key={d.date} className="flex-1 text-center text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                    <span key={d.date} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
                       {grafiek.dagen.length <= 7 ? WEEKDAY_SHORT_SUN[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
                     </span>
                   ))}
@@ -680,7 +677,7 @@ export function OcpiDashboardView() {
                                 chipje en met z-10 zodat de SVG-curve en de
                                 piekstip er niet doorheen tekenen. */}
                             <span
-                              className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-[10px] font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400"
+                              className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400"
                               style={{ background: 'var(--tile-bg)' }}
                             >
                               maandpiek {tekstKw(Math.round(maandpiek))}
@@ -765,11 +762,11 @@ export function OcpiDashboardView() {
                 {vermogen.modus === 'dagen' ? (
                   <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                     {vermogen.staven.map((st) => (
-                      <span key={st.key} className="flex-1 text-center text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
+                      <span key={st.key} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-1 flex min-h-4 justify-between text-[10px] font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
+                  <div className="mt-1 flex min-h-4 justify-between text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
                     <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
                     <span>nu</span>
                   </div>
@@ -813,7 +810,7 @@ export function OcpiDashboardView() {
               const conn = gekozenPunt.connectors[0];
               const rij = (label: string, waarde: string) => (
                 <div className="flex items-center justify-between gap-3 border-b border-slate-100 py-2.5 last:border-b-0">
-                  <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-400">{label}</span>
+                  <span className={microLabelClass}>{label}</span>
                   <span className="text-sm font-semibold font-mono tabular-nums text-slate-800">{waarde}</span>
                 </div>
               );
@@ -832,7 +829,7 @@ export function OcpiDashboardView() {
                         type="button"
                         onClick={() => setGekozenPunt(null)}
                         aria-label="Sluiten"
-                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 items-center justify-center rounded-full text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-white/10"
+                        className="ios-pressable inline-flex h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
                       >
                         <X size={16} />
                       </button>
@@ -1049,7 +1046,7 @@ export function OcpiDashboardView() {
                         max={vandaag}
                         onChange={(e) => zetVan(e.target.value)}
                         aria-label="Van"
-                        className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
                       />
                       <span className="text-xs font-medium text-slate-400">t/m</span>
                       <input
@@ -1059,7 +1056,7 @@ export function OcpiDashboardView() {
                         max={vandaag}
                         onChange={(e) => zetTot(e.target.value)}
                         aria-label="Tot en met"
-                        className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
                       />
                     </div>
                   )}

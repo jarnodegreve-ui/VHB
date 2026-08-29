@@ -5,7 +5,7 @@ import { cn, downloadBlob, notify } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
-import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { OpsStat } from '../../components/ops';
 import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, suggestClosestName } from '../../lib/planning';
 
@@ -244,7 +244,7 @@ export function PlanningMatrixView({
         />
         <OpsStat
           icon={<Users size={16} />}
-          tone={derived.globalUnmatchedDrivers.length > 0 ? 'oker' : 'slate'}
+          tone={derived.globalUnmatchedDrivers.length > 0 ? 'amber' : 'slate'}
           label="Niet-Gematchte Chauffeurs"
           value={derived.globalUnmatchedDrivers.length}
           sub={derived.globalUnmatchedDrivers.length === 0 ? 'alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' • ')}
@@ -299,18 +299,11 @@ export function PlanningMatrixView({
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {derived.globalUnknownCodes.length > 0 ? derived.globalUnknownCodes.map((code) => (
-                <button
-                  key={`list-${code}`}
-                  onClick={() => setHighlightedCode(code)}
-                  className={cn(
-                    'ios-pressable min-h-11 sm:pointer-fine:min-h-8 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
-                    highlightedCode === code ? 'border-red-300 bg-red-100 text-red-800' : 'border-red-100 bg-white/80 text-red-700 hover:bg-red-100'
-                  )}
-                >
+                <FilterChip key={`list-${code}`} tone="red" active={highlightedCode === code} onClick={() => setHighlightedCode(code)}>
                   {code}
-                </button>
+                </FilterChip>
               )) : (
-                <span className="text-sm font-medium text-red-700">Geen onbekende codes gevonden.</span>
+                <span className="text-sm text-slate-500">Geen onbekende codes gevonden.</span>
               )}
             </div>
             {derived.globalUnknownCodes.length > 0 ? (
@@ -341,7 +334,7 @@ export function PlanningMatrixView({
                   </span>
                 );
               }) : (
-                <span className="text-sm font-medium text-amber-700">Alle chauffeurs zijn gekoppeld.</span>
+                <span className="text-sm text-slate-500">Alle chauffeurs zijn gekoppeld.</span>
               )}
             </div>
             {derived.globalUnmatchedDrivers.length > 0 ? (
@@ -481,7 +474,7 @@ export function PlanningMatrixView({
                       {unmatchedDriversForSelectedDay.length > 0 ? unmatchedDriversForSelectedDay.map((driver) => (
                         <Fragment key={driver}><Badge tone="amber" className="bg-white/80">{driver}</Badge></Fragment>
                       )) : (
-                        <span className="text-sm font-medium text-amber-700">Geen niet-gematchte chauffeurs voor deze dag.</span>
+                        <span className="text-sm text-slate-500">Geen niet-gematchte chauffeurs voor deze dag.</span>
                       )}
                     </div>
                     {unmatchedDriversForSelectedDay.length > 0 ? (

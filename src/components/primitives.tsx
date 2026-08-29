@@ -123,9 +123,15 @@ export function StatusBadge({ status, className }: { status: string; className?:
  *  eyebrow boven een PageHeader). Veldlabels en tabelkoppen zijn sentence-
  *  case (zie Th); als álles een eyebrow is, is niets het meer.
  *  slate-500 (niet -400): -400 haalt op wit maar ~2,8:1 contrast. */
+/** Dezelfde klassen als losse string — voor plekken waar een <p> niet past
+ *  (<label htmlFor>, <span> in een flex-kop, een knop). Zo blijft er één bron
+ *  i.p.v. ±35 ad-hoc kopieën in slate-400/font-bold (controle-ronde 27-08,
+ *  bevinding 14). */
+export const microLabelClass = 'text-2xs font-medium uppercase tracking-[0.08em] text-slate-500';
+
 export function MicroLabel({ className, children }: { className?: string; children: ReactNode }) {
   return (
-    <p className={cn('text-2xs font-medium uppercase tracking-[0.08em] text-slate-500', className)}>
+    <p className={cn(microLabelClass, className)}>
       {children}
     </p>
   );
@@ -145,6 +151,54 @@ export function segItemClass(actief: boolean, className?: string) {
     'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
     actief ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
     className,
+  );
+}
+
+// === FilterChip ===
+
+type FilterChipTone = 'oker' | 'red';
+
+const FILTER_CHIP_TONES: Record<FilterChipTone, { on: string; off: string }> = {
+  oker: {
+    on: 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30',
+    off: 'control-button-soft text-slate-600 hover:text-slate-900',
+  },
+  // Foutfilter (onbekende codes in de planningsmatrix): rood blijft rood,
+  // maar in dezelfde vorm als de gewone chip.
+  red: {
+    on: 'bg-red-600 text-white shadow-sm shadow-red-600/20',
+    off: 'border border-red-200 bg-white/90 text-red-700 hover:bg-red-50',
+  },
+};
+
+/**
+ * Losse filterchip (aan/uit) búiten een segmented-rail: snelfilters, categorie-
+ * pillen, dienstnummers in een dag-type. Eén dialect voor wat er vier waren
+ * (omlijnde oker-50-pil, gevulde rounded-2xl-pil, rounded-lg-ring-chip en een
+ * rode rounded-full) — controle-ronde 27-08, bevinding 18. Actief = oker
+ * gevuld met VHB Black-tekst (zoals de segmented-control), inactief = zachte
+ * secondary-knop. Raakvlak 44 px op touch, 32 px met een muis.
+ */
+export function FilterChip({ active, tone = 'oker', icon, className, children, type = 'button', ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & {
+  active: boolean;
+  tone?: FilterChipTone;
+  icon?: ReactNode;
+}) {
+  const t = FILTER_CHIP_TONES[tone];
+  return (
+    <button
+      type={type}
+      aria-pressed={active}
+      className={cn(
+        'ios-pressable inline-flex min-h-11 items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-all sm:pointer-fine:min-h-8',
+        active ? t.on : t.off,
+        className,
+      )}
+      {...rest}
+    >
+      {icon}
+      {children}
+    </button>
   );
 }
 
