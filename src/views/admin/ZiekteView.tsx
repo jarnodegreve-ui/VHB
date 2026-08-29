@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Plus, Thermometer } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../../types';
 import { isoDate } from '../../lib/availability';
-import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../../lib/vervangers';
 import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { Button, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
@@ -119,9 +120,8 @@ export function ZiekteView({
     if (!naarId || wisselBezig) return;
     setWisselBezig(dienst.id);
     try {
-      const res = await fetch('/api/admin/shift-swap', {
+      const res = await apiFetch('/api/admin/shift-swap', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({
           date: dienst.date,
           line: serviceNumberOf(dienst),
@@ -159,9 +159,8 @@ export function ZiekteView({
     if (diensten.length === 0 || batchLaden) return;
     setBatchLaden(true);
     try {
-      const res = await fetch('/api/coverage-advisor/batch', {
+      const res = await apiFetch('/api/coverage-advisor/batch', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({ items: diensten.slice(0, 40).map((d) => ({ date: d.date, code: serviceNumberOf(d) })) }),
       });
       const body = await res.json().catch(() => ({} as any));
@@ -216,9 +215,8 @@ export function ZiekteView({
       for (const dienst of diensten) {
         const naarId = vervangerPerDienst[dienst.id];
         try {
-          const res = await fetch('/api/admin/shift-swap', {
+          const res = await apiFetch('/api/admin/shift-swap', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
             body: JSON.stringify({
               date: dienst.date,
               line: serviceNumberOf(dienst),
@@ -279,7 +277,7 @@ export function ZiekteView({
   const [excelZiekteBusy, setExcelZiekteBusy] = useState<string | null>(null);
   const laadExcelZiekte = async () => {
     try {
-      const res = await fetch('/api/ziekte-zonder-registratie', { headers: await getSupabaseAuthHeaders() });
+      const res = await apiFetch('/api/ziekte-zonder-registratie');
       if (!res.ok) return;
       const body = await res.json().catch(() => ({} as any));
       if (Array.isArray(body?.reeksen)) setExcelZiekte(body.reeksen);
@@ -365,7 +363,7 @@ export function ZiekteView({
   );
 
   return (
-    <PageShell width="3xl">
+    <PageShell>
       <PageHeader
         title="Ziekte"
         description="Wie is er ziek gemeld, en welke diensten staan daardoor nog open. Gescheiden van het verlofbeheer — ziekte is geen aanvraag."

@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiJson } from './api';
 
 /**
  * Markeert de gegeven updates als gelezen door de ingelogde gebruiker.
@@ -7,7 +7,7 @@ import { apiFetch } from './api';
  */
 export function markUpdatesRead(updateIds: string[]): Promise<void> {
   if (updateIds.length === 0) return Promise.resolve();
-  return apiFetch<void>('/api/updates/read', {
+  return apiJson<void>('/api/updates/read', {
     method: 'POST',
     body: JSON.stringify({ updateIds }),
   });
@@ -22,5 +22,5 @@ export type UpdateReadCounts = {
 
 /** Haalt per update op hoeveel chauffeurs hem gelezen hebben (planner/admin). */
 export function fetchUpdateReadCounts(): Promise<UpdateReadCounts> {
-  return apiFetch<UpdateReadCounts>('/api/updates/read-counts');
+  return apiJson<UpdateReadCounts>('/api/updates/read-counts');
 }

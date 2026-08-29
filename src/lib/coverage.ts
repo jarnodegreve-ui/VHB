@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiJson } from './api';
 import type { DayGap } from './coverageGaps';
 
 export type { DayGap } from './coverageGaps';
@@ -38,18 +38,18 @@ export type CoverageGaps = {
 };
 
 export function fetchCoverageConfig(): Promise<CoverageConfig> {
-  return apiFetch<CoverageConfig>('/api/coverage-expectations');
+  return apiJson<CoverageConfig>('/api/coverage-expectations');
 }
 
 export function saveCoverageConfig(config: CoverageConfigInput): Promise<{ success: boolean }> {
-  return apiFetch<{ success: boolean }>('/api/coverage-expectations', {
+  return apiJson<{ success: boolean }>('/api/coverage-expectations', {
     method: 'PUT',
     body: JSON.stringify(config),
   });
 }
 
 export function fetchCoverageGaps(from: string, to: string): Promise<CoverageGaps> {
-  return apiFetch<CoverageGaps>(`/api/coverage-gaps?from=${from}&to=${to}`);
+  return apiJson<CoverageGaps>(`/api/coverage-gaps?from=${from}&to=${to}`);
 }
 
 export type ExpectationCheck = {
@@ -69,11 +69,11 @@ export type ExpectationVoorstel = {
 /** Lijstenvoorstel uit de praktijk: per dag-type de codes die op minstens de
  *  helft van de dagen echt gereden worden. */
 export function fetchExpectationVoorstel(from: string, to: string): Promise<ExpectationVoorstel> {
-  return apiFetch<ExpectationVoorstel>(`/api/coverage-expectations/voorstel?from=${from}&to=${to}`);
+  return apiJson<ExpectationVoorstel>(`/api/coverage-expectations/voorstel?from=${from}&to=${to}`);
 }
 
 /** Verwachtingen-vs-praktijk: verwachte diensten die in de periode nooit
  *  gereden worden + structureel gereden codes buiten de verwachting. */
 export function fetchExpectationCheck(from: string, to: string): Promise<ExpectationCheck> {
-  return apiFetch<ExpectationCheck>(`/api/coverage-expectation-check?from=${from}&to=${to}`);
+  return apiJson<ExpectationCheck>(`/api/coverage-expectation-check?from=${from}&to=${to}`);
 }

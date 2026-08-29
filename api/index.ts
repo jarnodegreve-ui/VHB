@@ -1,13 +1,10 @@
 import express from "express";
 import cors from "cors";
-import fs from "fs";
-import path from "path";
 import crypto from "node:crypto";
 import dotenv from "dotenv";
 
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
-import { addDagen } from "./advisor.js";
 
 import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
@@ -27,7 +24,7 @@ import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -1099,7 +1096,7 @@ async function draaiPlannerChat(
     const voerToolUit = async (naam: string, input: any): Promise<string> => {
       if (naam === "openstaande_diensten") {
         const vanaf = isoOf(input?.vanaf, vandaag);
-        const tot = isoOf(input?.tot, addDagen(vandaag, 13));
+        const tot = isoOf(input?.tot, addDagenIso(vandaag, 13));
         if (vanaf > tot) return JSON.stringify({ fout: "vanaf ligt na tot" });
         const dagen = await berekenDekkingsGaten(vanaf, tot);
         return JSON.stringify({
@@ -1769,7 +1766,7 @@ app.post("/api/planning-matrix/preview", authenticate, requireRole("planner", "a
     // bestand de hele bewaarde periode, dan vergelijken we met de oude versie
     // van de vervangen periode zelf (controle-ronde 20-08).
     const VERGELIJK_VENSTER_DAGEN = 60;
-    const vergelijkGrens = startDate ? addDagen(startDate, -VERGELIJK_VENSTER_DAGEN) : null;
+    const vergelijkGrens = startDate ? addDagenIso(startDate, -VERGELIJK_VENSTER_DAGEN) : null;
     let vergelijkRows = (bestaandeMatrix as any[]).filter((r) => {
       const d = String(r?.source_date ?? "");
       return Boolean(startDate && vergelijkGrens) && d >= vergelijkGrens! && d < startDate!;
@@ -2645,7 +2642,7 @@ app.get("/api/cron/telegram-briefing", async (req, res) => {
       return res.json({ success: true, skipped: "telegram niet geconfigureerd" });
     }
     const vandaag = brusselsDay(new Date().toISOString());
-    const morgen = addDagen(vandaag, 1);
+    const morgen = addDagenIso(vandaag, 1);
     const [dagenVandaag, dagenMorgen, matrixRows, expiries, usersVoorVerval] = await Promise.all([
       berekenDekkingsGaten(vandaag, vandaag),
       berekenDekkingsGaten(morgen, morgen),
@@ -2740,7 +2737,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
     try {
       const [expiries, alleUsers] = await Promise.all([getUserExpiries(), getUsersData()]);
       const actief = new Map(alleUsers.filter((u: any) => u.isActive !== false).map((u: any) => [String(u.id), u]));
-      const vandaag = new Date().toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+      const vandaag = brusselsDay(new Date().toISOString());
       const dagenTot = (d: string) => Math.round((Date.parse(d) - Date.parse(vandaag)) / 86400000);
       const rijen = expiries
         // Alleen bewaakte soorten (rijbewijs is er uit): een achtergebleven
@@ -2804,7 +2801,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
     let dekkingHtml = "";
     try {
       const vandaagBrussel = brusselsDay(new Date().toISOString());
-      const dagen = await berekenDekkingsGaten(vandaagBrussel, addDagen(vandaagBrussel, 6));
+      const dagen = await berekenDekkingsGaten(vandaagBrussel, addDagenIso(vandaagBrussel, 6));
       const gaten = dagen.flatMap((d) => d.missing.map((code) => ({ date: d.date, code })));
       if (gaten.length > 0) {
         const MAX_ADVIEZEN = 8;
@@ -5131,8 +5128,6 @@ app.post("/api/send-urgent-update-email", authenticate, requireRole("planner", "
     return res.json({ success: true, message: "No recipients with email found" });
   }
 
-  console.log(`Attempting to send urgent email for: ${update.title} to ${emails.length} recipients`);
-
   // Via de gedeelde sendEmail-helper (api/email.ts): één SMTP-configuratie
   // en één mock-pad i.p.v. een eigen transporter per route.
   const result = await sendEmail({
@@ -5472,7 +5467,7 @@ app.delete("/api/documents/:id", authenticate, requireRole("admin"), async (req:
 });
 
 app.all("/api/*", (req, res) => {
-  console.log(`API Route not found: ${req.method} ${req.url}`);
+  if (process.env.NODE_ENV !== "production") console.log(`API Route not found: ${req.method} ${req.url}`);
   res.status(404).json({ error: `Route ${req.method} ${req.url} not found on server` });
 });
 
@@ -5483,7 +5478,9 @@ app.use((err: any, req: any, res: any, next: any) => {
   res.status(500).json({ error: "Er ging iets mis op de server." });
 });
 
-// Vite middleware for development
+// Vite-middleware voor lokale ontwikkeling. Er is bewust géén productie-tak
+// (express.static + SPA-fallback): op Vercel serveert de platform-rewrite
+// (vercel.json) dist/ en index.html zelf en bereikt alleen /api/* deze functie.
 if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
   const startVite = async () => {
     const { createServer: createViteServer } = await import("vite");
@@ -5502,28 +5499,6 @@ if (process.env.NODE_ENV !== "production" && !process.env.VERCEL) {
     });
   };
   startVite();
-} else {
-  // Production mode
-  console.log("Starting in production mode...");
-  const distPath = path.join(process.cwd(), "dist");
-  
-  if (fs.existsSync(distPath)) {
-    app.use(express.static(distPath));
-    app.get("*", (req, res) => {
-      res.sendFile(path.join(distPath, "index.html"));
-    });
-  } else {
-    console.warn("Dist folder not found. Static serving disabled.");
-    app.get("*", (req, res) => {
-      res.status(404).send("Production build not found. Please run 'npm run build'.");
-    });
-  }
-
-  if (!process.env.VERCEL) {
-    app.listen(PORT, "0.0.0.0", () => {
-      console.log(`Server running on http://localhost:${PORT}`);
-    });
-  }
 }
 
 export default app;

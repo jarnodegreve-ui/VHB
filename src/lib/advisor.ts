@@ -1,4 +1,4 @@
-import { apiFetch } from './api';
+import { apiJson } from './api';
 
 /**
  * Advies bij één openstaande dienst — antwoord van /api/coverage-advisor.
@@ -50,7 +50,7 @@ export type CoverageAdvies = {
 };
 
 export function fetchCoverageAdvies(date: string, code: string): Promise<CoverageAdvies> {
-  return apiFetch<CoverageAdvies>(`/api/coverage-advisor?date=${date}&code=${encodeURIComponent(code)}`);
+  return apiJson<CoverageAdvies>(`/api/coverage-advisor?date=${date}&code=${encodeURIComponent(code)}`);
 }
 
 /** "8u" / "7u53" — zelfde notatie als de redenen-teksten van de server. */

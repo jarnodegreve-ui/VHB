@@ -1,14 +1,20 @@
-This contains everything you need to run your app locally.
+# VHB Portaal
 
-## Run Locally
+Personeelsportaal van busbedrijf VHB (onderaannemer De Lijn): rooster, verlof,
+dienstruilen, omleidingen, documenten en het laadpalen-dashboard voor
+chauffeurs en planners. iPhone-first PWA.
 
-**Prerequisites:**  Node.js
+**Stack:** Vite + React + TypeScript + Tailwind (`src/`), Express-API als één
+Vercel-functie (`api/`), Supabase (Postgres, Auth, Storage, Realtime).
 
+```bash
+npm install
+cp .env.example .env.local   # Supabase- en SMTP-waarden invullen
+npm run dev                  # API + Vite-middleware op http://localhost:3000
+npm run test                 # vitest (unit + API-integratie)
+npm run test:e2e             # Playwright (eenmalig: npx playwright install chromium)
+npm run lint                 # tsc --noEmit
+```
 
-1. Install dependencies:
-   `npm install`
-2. Configure Supabase and SMTP variables in `.env.local` based on `.env.example`.
-3. For browser auth, set both server and Vite variables:
-   `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`
-4. Run the app:
-   `npm run dev`
+Werkafspraken en architectuur: `CLAUDE.md`. Productcontext en gebruikers:
+`PRODUCT.md`. Back-up en herstel: `docs/RESTORE.md`.

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Clock, History } from 'lucide-react';
 import type { ActivityEntityType, ActivityLogEntry } from '../types';
-import { apiFetch } from '../lib/api';
+import { apiJson } from '../lib/api';
 import { cn } from '../lib/ui';
 import { Modal } from './Modal';
 import { EmptyState, ModalHeader } from './ui';
@@ -40,7 +40,7 @@ export function EntityHistoryModal({
     setError(null);
 
     let cancelled = false;
-    apiFetch<ActivityLogEntry[]>(`/api/activity/${entityType}/${encodeURIComponent(entityId)}`)
+    apiJson<ActivityLogEntry[]>(`/api/activity/${entityType}/${encodeURIComponent(entityId)}`)
       .then((data) => {
         if (!cancelled) setEntries(data);
       })

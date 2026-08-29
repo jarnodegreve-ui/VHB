@@ -3,6 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { db } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized } from "./middleware.js";
 import { logCronHeartbeat } from "./storage.js";
+import { addDagenIso, brusselsDay } from "./helpers.js";
 import type { AuthenticatedRequest } from "./types.js";
 
 /**
@@ -598,10 +599,13 @@ const selectAlles = async (bouw: (van: number, tot: number) => PromiseLike<{ dat
 // Kalenderdag in Europe/Brussels. De sessies starten juist rond middernacht
 // (depotladen), dus bucketen op de UTC-datum schoof een flink deel van het
 // nachtverbruik naar de verkeerde dag en liet "vandaag geladen" te laag staan.
+// Zelfde bron als de rest van de API (helpers.brusselsDay); alleen de guard
+// op ongeldige input ("" i.p.v. "Invalid Date") is OCPI-eigen, want de
+// CPO-data bevat soms lege of kapotte tijdstempels.
 const brusselseDag = (iso: unknown): string => {
-  const d = new Date(String(iso ?? ""));
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString("en-CA", { timeZone: "Europe/Brussels" });
+  const s = String(iso ?? "");
+  if (Number.isNaN(new Date(s).getTime())) return "";
+  return brusselsDay(s);
 };
 
 // Eén sessie per laadpunt: bij twee ACTIVE-sessies op dezelfde EVSE (stale
@@ -693,12 +697,9 @@ export const isGeldigeDag = (s: unknown): s is string => {
   return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
 };
 
-/** "YYYY-MM-DD" ± n dagen — kalenderrekenen op de datumstring (UTC), geen tijdzone. */
-export const dagPlus = (dag: string, delta: number): string => {
-  const d = new Date(`${dag}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + delta);
-  return d.toISOString().slice(0, 10);
-};
+/** "YYYY-MM-DD" ± n dagen — alias van helpers.addDagenIso; de OCPI-tests en
+ *  de sync spreken hem onder deze naam aan. */
+export const dagPlus = addDagenIso;
 
 /** "YYYY-MM" van een tijdstip in Europe/Brussels ("" bij ongeldige input). */
 export const brusselseMaand = (iso: unknown): string => brusselseDag(iso).slice(0, 7);
@@ -706,13 +707,6 @@ export const brusselseMaand = (iso: unknown): string => brusselseDag(iso).slice(
 /** De huidige kalenderdag / kalendermaand in Brussel. */
 export const huidigeBrusselseDag = (nu: Date = new Date()): string => brusselseDag(nu.toISOString());
 export const huidigeBrusselseMaand = (nu: Date = new Date()): string => brusselseMaand(nu.toISOString());
-
-/** "YYYY-MM" ± n maanden, over jaargrenzen heen. */
-export const maandPlus = (maand: string, delta: number): string => {
-  const [j, m] = maand.split("-").map(Number);
-  const d = new Date(Date.UTC(j, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
-};
 
 /** Eerste en laatste kalenderdag van een maand. */
 export const maandGrenzen = (maand: string): { van: string; tot: string } => {

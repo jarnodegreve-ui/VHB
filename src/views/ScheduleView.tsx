@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, FileText } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, FileText } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
@@ -7,13 +7,14 @@ import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType, serviceNumberOf } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { MaandNavigatie } from '../components/MaandNavigatie';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
 import { cn, downloadBlob } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { shiftCategory } from '../lib/shiftTime';
-import { formatShortDayPadded, formatSyncedTime } from '../lib/format';
+import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { buildCalendar, type IcsEvent } from '../lib/ics';
 import { openHuidigRitblad } from '../lib/ritblad';
 
@@ -275,8 +276,6 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
 
 // --- Subcomponent: persoonlijk maandgrid (diensten + verlof + typedagen) ---
 
-const WEEKDAY_HEAD = ['Ma', 'Di', 'Wo', 'Do', 'Vr', 'Za', 'Zo'];
-
 function MonthCalendar({
   groups,
   today,
@@ -352,30 +351,16 @@ function MonthCalendar({
           het glipte er structureel doorheen. Met de kleinere gap erbij zitten
           ze op ~44px. */}
       <div className="surface-card rounded-3xl p-3 md:p-4">
-        {/* Maandnavigatie */}
-        <div className="flex items-center justify-between">
-          <button
-            type="button"
-            onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
-            aria-label="Vorige maand"
-            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800"
-          >
-            <ChevronLeft size={16} />
-          </button>
-          <span className="text-sm font-semibold capitalize text-slate-800">{monthName}</span>
-          <button
-            type="button"
-            onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
-            aria-label="Volgende maand"
-            className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800"
-          >
-            <ChevronRight size={16} />
-          </button>
-        </div>
+        <MaandNavigatie
+          className="justify-between"
+          label={monthName}
+          onVorige={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
+          onVolgende={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
+        />
 
         {/* Grid */}
         <div className="mt-3 grid grid-cols-7 gap-0.5 md:gap-1">
-          {WEEKDAY_HEAD.map((d) => (
+          {WEEKDAY_SHORT_MON.map((d) => (
             <div key={d} className="py-1 text-center text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">
               {d}
             </div>

@@ -110,13 +110,10 @@ describe('periode-helpers', () => {
     expect(ocpi.periodeVenster('2026-08-04', '2026-08-05')).toEqual({ van: '2026-08-03T00:00:00.000Z', tot: '2026-08-07T00:00:00.000Z' });
     expect(ocpi.periodeVenster('2026-12-31', '2026-12-31')).toEqual({ van: '2026-12-30T00:00:00.000Z', tot: '2027-01-02T00:00:00.000Z' });
   });
-  it('dagPlus en maandPlus lopen over maand- en jaargrenzen heen', () => {
+  it('dagPlus loopt over maand- en jaargrenzen heen', () => {
     expect(ocpi.dagPlus('2026-12-31', 1)).toBe('2027-01-01');
     expect(ocpi.dagPlus('2026-03-01', -1)).toBe('2026-02-28');
     expect(ocpi.dagPlus('2026-08-04', 366)).toBe('2027-08-05');
-    expect(ocpi.maandPlus('2026-01', -1)).toBe('2025-12');
-    expect(ocpi.maandPlus('2026-12', 1)).toBe('2027-01');
-    expect(ocpi.maandPlus('2026-08', 0)).toBe('2026-08');
   });
   it('isGeldigeDag eist een bestaande kalenderdag in YYYY-MM-DD', () => {
     expect(ocpi.isGeldigeDag('2026-08-05')).toBe(true);

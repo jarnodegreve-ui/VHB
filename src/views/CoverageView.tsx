@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
-import { cn, getSupabaseAuthHeaders, notify } from '../lib/ui';
+import { cn, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
+import { apiFetch } from '../lib/api';
 import { Badge, Button, FilterChip, MicroLabel } from '../components/primitives';
 import { Modal } from '../components/Modal';
 import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
@@ -135,9 +136,8 @@ export function CoverageView() {
     if (!pick || assignBusy) return;
     setAssignBusy(kandidaat.id);
     try {
-      const res = await fetch('/api/planning/assign-service', {
+      const res = await apiFetch('/api/planning/assign-service', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({ date: pick.date, serviceNumber: pick.code, driverId: kandidaat.id }),
       });
       const body = await res.json().catch(() => ({} as any));
@@ -422,7 +422,7 @@ export function CoverageView() {
   };
 
   return (
-    <PageShell width="6xl">
+    <PageShell>
       <PageHeader
         title="Openstaande diensten"
         description="Diensten die nog niet ingevuld zijn per dag, t.o.v. de verwachte diensten per dag-type."

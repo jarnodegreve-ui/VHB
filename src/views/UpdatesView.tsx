@@ -31,7 +31,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
   };
 
   return (
-    <PageShell width="6xl">
+    <PageShell>
       <PageHeader
         title="Updates & nieuws"
         description="Berichten en mededelingen."

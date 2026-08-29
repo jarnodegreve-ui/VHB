@@ -1,4 +1,5 @@
 import type { Shift } from '../types';
+import { addDagen } from './datum';
 
 type Kandidaat = { id: string | number; name: string };
 
@@ -11,13 +12,6 @@ type Kandidaat = { id: string | number; name: string };
  * mee, maar zolang chauffeurs het portaal amper gebruiken staat die overal
  * op nul; de gewerkte dagen komen uit de geïmporteerde planning zelf.
  */
-
-/** ISO-dag ± n dagen (puur datumrekenen, geen tijdzones). */
-const addDagen = (iso: string, n: number): string => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
 
 /** Maandag van de week (ma–zo) waarin `iso` valt. */
 const maandagVan = (iso: string): string => {

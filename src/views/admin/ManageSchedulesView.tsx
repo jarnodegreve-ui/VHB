@@ -1,9 +1,10 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { Activity, AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
-import { cn, getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../../lib/ui';
+import { cn, notify, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { AdminSubsectionHeader, ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 import type { VerwachtingAfwijking } from '../../lib/coverageGaps';
@@ -125,9 +126,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
   const fetchChangesSince = async () => {
     try {
-      const response = await fetch('/api/planning-matrix/changes-since-import', {
-        headers: await getSupabaseAuthHeaders(),
-      });
+      const response = await apiFetch('/api/planning-matrix/changes-since-import');
       if (!response.ok) return;
       const data = await response.json();
       // Shape-guard: een afwijkende respons (fout-object, oude API) mag het
@@ -193,9 +192,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   };
 
   const fetchMatrixPreview = async (xlsxBase64: string, periode?: { van: string; tot: string }) => {
-    const response = await fetch('/api/planning-matrix/preview', {
+    const response = await apiFetch('/api/planning-matrix/preview', {
       method: 'POST',
-      headers: await getSupabaseAuthHeaders(),
       body: JSON.stringify(periode ? { xlsxBase64, periode } : { xlsxBase64 }),
     });
     const data = await response.json().catch(() => ({}));
@@ -244,9 +242,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     const sleutel = ziekteReeksSleutel(reeks);
     setZiekteRegBusy(sleutel);
     try {
-      const res = await fetch('/api/leave/sick-report', {
+      const res = await apiFetch('/api/leave/sick-report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', ...(await getSupabaseAuthHeaders()) },
         body: JSON.stringify({
           userId: reeks.userId,
           startDate: reeks.van,
@@ -317,9 +314,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     if (!restoreEntry) return;
     try {
       setIsRestoring(true);
-      const response = await fetch('/api/planning-matrix/restore', {
+      const response = await apiFetch('/api/planning-matrix/restore', {
         method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({ historyId: restoreEntry.id }),
       });
       const data = await response.json().catch(() => ({}));
@@ -342,9 +338,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
     try {
       setIsMatrixImporting(true);
-      const response = await fetch('/api/planning-matrix/import', {
+      const response = await apiFetch('/api/planning-matrix/import', {
         method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({
           xlsxBase64: pendingMatrixXlsxBase64,
           // Bestandsnaam mee voor de historiek ("welk bestand was dit ook
@@ -399,9 +394,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
     }
     try {
       setIsSyncing(true);
-      const response = await fetch('/api/planning/sync-from-matrix', {
+      const response = await apiFetch('/api/planning/sync-from-matrix', {
         method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
       });
       const text = await response.text();
       

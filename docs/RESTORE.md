@@ -55,7 +55,7 @@ het moment waarop je het onder stress nodig hebt.
    - Lege collectie in de back-up = bewust leegmaken; ontbrekende sleutel =
      onaangeroerd laten.
 3. Controleer daarna:
-   - `GET /api/health/schema` (Debug-view of curl met CRON_SECRET) → alles ok.
+   - `GET /api/health/schema` (curl met `Authorization: Bearer <CRON_SECRET>` — de Debug-view heeft hiervoor geen knop; die toont `/api/health/details`) → alles ok.
    - Steekproef: Maandplanning, verlofaanvragen, gebruikerslijst.
    - Laadpalen-dashboard: werkt OCPI nog? Zo niet → registratie opnieuw
      uitvoeren via de Debug-view.
@@ -65,7 +65,7 @@ het moment waarop je het onder stress nodig hebt.
 1. Nieuw Supabase-project; draai alle migraties uit `supabase/` in de SQL
    Editor (volgorde: setup_security eerst, daarna de rest; alles is idempotent).
 2. **Controleer het schema vóór je data terugzet**: `GET /api/health/schema`
-   (Debug-view of curl met CRON_SECRET). Die vergelijkt tegen
+   (curl met `Authorization: Bearer <CRON_SECRET>` — de Debug-view heeft hiervoor geen knop; die toont `/api/health/details`). Die vergelijkt tegen
    `api/schemaProbes.ts` en meldt elke ontbrekende kolom. Doe je dit niet, dan
    merk je een gat pas als een save faalt met `42703` — en dan zit je al met
    halve data. `setup_security.sql` is de basis, niet het volledige schema: de

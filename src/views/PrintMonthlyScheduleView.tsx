@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Shift, User } from '../types';
-import { getSupabaseAuthHeaders } from '../lib/ui';
 import { isoWeekNumber } from '../lib/week';
 import { shiftCategory } from '../lib/shiftTime';
 import { MONTH_NAMES, serviceNumberOf } from '../lib/format';
+import { apiFetch } from '../lib/api';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
@@ -75,7 +75,7 @@ export function PrintMonthlyScheduleView({
     (async () => {
       if (targets.length > 0) {
         try {
-          const res = await fetch(`/api/month-planning?month=${monthIso}`, { headers: await getSupabaseAuthHeaders() });
+          const res = await apiFetch(`/api/month-planning?month=${monthIso}`);
           if (res.ok && !cancelled) {
             const data = await res.json();
             const all: Record<string, Absence[]> = {};

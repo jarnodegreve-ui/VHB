@@ -2,43 +2,12 @@ import { Calendar, Clock, RotateCcw } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
-import { MicroLabel, microLabelClass } from '../../components/primitives';
-import { cn } from '../../lib/ui';
+import { MicroLabel, microLabelClass, StatusBadge } from '../../components/primitives';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
 import { formatLeaveType, serviceNumberOf } from '../../lib/format';
 
-
-const LEAVE_STATUS_LABELS: Record<LeaveRequest['status'], string> = {
-  pending: 'In behandeling',
-  approved: 'Goedgekeurd',
-  rejected: 'Afgewezen',
-  cancelled: 'Geannuleerd',
-};
-const LEAVE_STATUS_STYLES: Record<LeaveRequest['status'], string> = {
-  pending: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
-  approved: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
-  rejected: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
-  cancelled: 'bg-surface-muted text-slate-500 dark:bg-slate-500/15 dark:text-slate-400',
-};
-
-const SWAP_STATUS_LABELS: Record<SwapRequest['status'], string> = {
-  pending: 'In behandeling',
-  accepted: 'Wacht op planner',
-  approved: 'Goedgekeurd',
-  rejected: 'Afgewezen',
-  cancelled: 'Geannuleerd',
-  completed: 'Voltooid',
-};
-const SWAP_STATUS_STYLES: Record<SwapRequest['status'], string> = {
-  pending: 'bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400',
-  accepted: 'bg-blue-50 text-blue-700 dark:bg-blue-500/10 dark:text-blue-300',
-  approved: 'bg-emerald-50 text-emerald-600 dark:bg-emerald-500/10 dark:text-emerald-400',
-  rejected: 'bg-red-50 text-red-600 dark:bg-red-500/10 dark:text-red-400',
-  cancelled: 'bg-surface-muted text-slate-500 dark:bg-slate-500/15 dark:text-slate-400',
-  completed: 'bg-blue-50 text-blue-600 dark:bg-blue-500/10 dark:text-blue-400',
-};
 
 export function UserHistoryModal({
   user,
@@ -127,9 +96,7 @@ export function UserHistoryModal({
                     </p>
                     <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? ` — "${l.comment}"` : ''}</p>
                   </div>
-                  <span className={cn('px-3 py-1 rounded-full text-2xs font-semibold uppercase tracking-[0.08em] shrink-0', LEAVE_STATUS_STYLES[l.status])}>
-                    {LEAVE_STATUS_LABELS[l.status]}
-                  </span>
+                  <StatusBadge status={l.status} className="shrink-0" />
                 </div>
               ))}
             </div>
@@ -158,9 +125,7 @@ export function UserHistoryModal({
                         <span className="font-medium text-slate-500">{isRequester ? 'Aan' : 'Van'}</span>
                         <span className="font-semibold text-slate-800 truncate">{userName(counterpartId)}</span>
                       </div>
-                      <span className={cn('px-3 py-1 rounded-full text-2xs font-semibold uppercase tracking-[0.08em] shrink-0', SWAP_STATUS_STYLES[s.status])}>
-                        {SWAP_STATUS_LABELS[s.status]}
-                      </span>
+                      <StatusBadge status={s.status} className="shrink-0" />
                     </div>
                     <p className="text-xs font-medium text-slate-500 tabular-nums">
                       {s.shiftLine ? `Dienst ${s.shiftLine}` : 'Dienst onbekend'}

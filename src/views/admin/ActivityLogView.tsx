@@ -1,12 +1,13 @@
 import { Fragment, useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Activity, Download, Search, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
-import { downloadBlob, getSupabaseAuthHeaders } from '../../lib/ui';
+import { downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { formatDayLong } from '../../lib/format';
 import { AdminSubsectionHeader, EmptyState, ModalHeader, PageShell } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { Badge, Button, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
@@ -105,7 +106,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
     (async () => {
       setIsLoadingWindow(true);
       try {
-        const res = await fetch(`/api/activity?window=${serverWindow}`, { headers: await getSupabaseAuthHeaders() });
+        const res = await apiFetch(`/api/activity?window=${serverWindow}`);
         const data = await res.json();
         if (!cancelled && Array.isArray(data)) setWindowEntries(data);
       } catch {
@@ -175,7 +176,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   };
 
   return (
-    <PageShell width="5xl">
+    <PageShell>
       <section className="surface-card rounded-3xl p-6 md:p-8">
         <AdminSubsectionHeader
           eyebrow="Aanwezigheid"

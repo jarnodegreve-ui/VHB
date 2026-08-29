@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { AlertTriangle, Zap, BatteryCharging, ChevronLeft, ChevronRight, Gauge, RefreshCw, X } from 'lucide-react';
-import { cn, getSupabaseAuthHeaders } from '../../lib/ui';
+import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
+import { cn } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
 import { isoDate } from '../../lib/availability';
 import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal } from '../../lib/format';
+import { maandPlus } from '../../lib/datum';
 import { Modal } from '../../components/Modal';
 import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
+import { apiFetch } from '../../lib/api';
 import { OpsStat } from '../../components/ops';
 import { SkeletonTile } from '../../components/Skeleton';
 import { Badge, Button, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
+import { MaandNavigatie } from '../../components/MaandNavigatie';
 
 /** Termijn-schakelaar in exact de app-standaard segmented-maat (rail
  *  rounded-2xl p-1, knop-klassen uit `segItemClass` — zie ScheduleView,
@@ -152,11 +155,6 @@ type Verbruik = {
 /** Wat de gebruiker koos: een kalendermaand (‹ ›) of een vrije periode van/tot. */
 type PeriodeKeuze = { modus: 'maand'; maand: string } | { modus: 'periode'; van: string; tot: string };
 /** "YYYY-MM" ± n maanden — zuiver op de string, zonder tijdzone-gedoe. */
-const maandPlus = (maand: string, delta: number): string => {
-  const [j, m] = maand.split('-').map(Number);
-  const d = new Date(Date.UTC(j, m - 1 + delta, 1));
-  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`;
-};
 const maandLabel = (maand: string): string => {
   const [j, m] = maand.split('-').map(Number);
   return `${MONTH_NAMES[m - 1] ?? maand} ${j}`;
@@ -223,7 +221,7 @@ export function OcpiDashboardView() {
   const load = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/ocpi/dashboard', { headers: await getSupabaseAuthHeaders() });
+      const response = await apiFetch('/api/ocpi/dashboard');
       if (!response.ok) throw new Error(String(response.status));
       setData(await response.json());
       setError(null);
@@ -253,7 +251,7 @@ export function OcpiDashboardView() {
       setVerbruikLaadt(true);
       try {
         const query = !keuze ? '' : keuze.modus === 'maand' ? `?maand=${keuze.maand}` : `?van=${keuze.van}&tot=${keuze.tot}`;
-        const response = await fetch(`/api/ocpi/verbruik${query}`, { headers: await getSupabaseAuthHeaders() });
+        const response = await apiFetch(`/api/ocpi/verbruik${query}`);
         if (!response.ok) throw new Error(String(response.status));
         const json = (await response.json()) as Verbruik;
         if (actueel) { setVerbruik(json); setVerbruikFout(null); }
@@ -472,7 +470,7 @@ export function OcpiDashboardView() {
   }, [data?.statusCounts]);
 
   return (
-    <PageShell width="5xl">
+    <PageShell>
       <PageHeader
         eyebrow="Laadinfrastructuur"
         title="Laadpalen (OCPI)"
@@ -1013,27 +1011,16 @@ export function OcpiDashboardView() {
                     onKies={wisselModus}
                   />
                   {periodeModus === 'maand' ? (
-                    <div className="flex items-center gap-2" role="group" aria-label="Maandkeuze">
-                      <button
-                        type="button"
-                        onClick={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, -1) })}
-                        disabled={!verbruik?.eersteDag || maandPlus(maandGekozen, -1) < verbruik.eersteDag.slice(0, 7)}
-                        aria-label="Vorige maand"
-                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
-                      >
-                        <ChevronLeft size={16} />
-                      </button>
-                      <span className="min-w-[8.5rem] text-center text-sm font-semibold text-slate-800" aria-live="polite">{maandLabel(maandGekozen)}</span>
-                      <button
-                        type="button"
-                        onClick={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, 1) })}
-                        disabled={!verbruik || maandGekozen >= verbruik.huidigeDag.slice(0, 7)}
-                        aria-label="Volgende maand"
-                        className="ios-pressable flex h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 items-center justify-center rounded-xl border border-slate-200 text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-slate-500"
-                      >
-                        <ChevronRight size={16} />
-                      </button>
-                    </div>
+                    <MaandNavigatie
+                      role="group"
+                      aria-label="Maandkeuze"
+                      label={maandLabel(maandGekozen)}
+                      labelClassName="min-w-[8.5rem]"
+                      onVorige={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, -1) })}
+                      vorigeUit={!verbruik?.eersteDag || maandPlus(maandGekozen, -1) < verbruik.eersteDag.slice(0, 7)}
+                      onVolgende={() => setKeuze({ modus: 'maand', maand: maandPlus(maandGekozen, 1) })}
+                      volgendeUit={!verbruik || maandGekozen >= verbruik.huidigeDag.slice(0, 7)}
+                    />
                   ) : (
                     // Vrije periode: twee datumvelden, begrensd op de eerste dag
                     // met sessies en vandaag. Volgorde-fouten worden stil

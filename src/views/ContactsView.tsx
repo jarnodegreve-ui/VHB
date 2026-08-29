@@ -38,7 +38,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <PageShell width="6xl">
+    <PageShell>
       <PageHeader
         title="Contactlijst"
         description="Contactgegevens van alle medewerkers."

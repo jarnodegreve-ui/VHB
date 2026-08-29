@@ -49,6 +49,7 @@ import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, notify } from './lib/ui';
+import { apiFetch, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { reportHandledError, reportUserFeedback, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
@@ -794,11 +795,17 @@ export default function App() {
     return () => document.removeEventListener('visibilitychange', controleer);
   }, [session]);
 
-  // Auth-events uit de stand-alone apiFetch (src/lib/api.ts) — die heeft geen
-  // toegang tot deze React-state, dus een verlopen sessie/geblokkeerd toestel
-  // in bv. DevicesView of EntityHistoryModal loopt via window-events hierheen.
+  // Auth-events uit apiFetch (src/lib/api.ts) — die heeft geen toegang tot
+  // deze React-state, dus een verlopen sessie, gedeactiveerd account of
+  // geblokkeerd toestel komt via window-events hierheen; één plek voor álle
+  // API-calls, ook die van App zelf.
   useEffect(() => {
-    const onExpired = () => { void forceSignOut('Je sessie is verlopen. Log opnieuw in.'); };
+    const onExpired = (event: Event) => {
+      const reden = (event as CustomEvent<{ reden?: 'sessie' | 'account' }>).detail?.reden;
+      void forceSignOut(reden === 'account'
+        ? 'Je account is gedeactiveerd. Neem contact op met de planning.'
+        : 'Je sessie is verlopen. Log opnieuw in.');
+    };
     const onDeviceBlocked = (event: Event) => {
       const code = (event as CustomEvent<{ code?: string }>).detail?.code;
       setDeviceBlocked(code === 'device_revoked' ? 'revoked' : 'pending');
@@ -900,111 +907,13 @@ export default function App() {
     initializingUserIdRef.current = null;
   };
 
-  /** Verlopen token stil vernieuwen. Supabase ververst zelf op een timer,
-   *  maar die staat stil zolang de PWA in de app-switcher zit: bij hervatten
-   *  is het token verlopen en gaf de eerstvolgende call een 401 → uitgelogd.
-   *  Eén poging per 401, gedeeld door alle parallelle calls (dezelfde belofte
-   *  hergebruiken), en daarna één keer opnieuw proberen. */
-  const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
-  const vernieuwSessie = async (): Promise<string | null> => {
-    if (!supabase) return null;
-    if (!refreshPromiseRef.current) {
-      // Tijdslimiet: refreshSession() kan blijven hangen op de interne lock
-      // (zelfde Supabase-fenomeen waarvoor de bootstrap al een watchdog heeft).
-      // Zonder limiet bleef de app dan op "Profiel laden…" staan i.p.v. terug
-      // te vallen op opnieuw inloggen.
-      const metLimiet = <T,>(p: Promise<T>, ms: number): Promise<T | null> =>
-        Promise.race([p, new Promise<null>((resolve) => window.setTimeout(() => resolve(null), ms))]);
-      refreshPromiseRef.current = metLimiet(supabase.auth.refreshSession(), 5000)
-        .then((res) => {
-          if (!res || res.error || !res.data.session) return null;
-          setSession(res.data.session);
-          return res.data.session.access_token;
-        })
-        .catch(() => null)
-        .finally(() => {
-          // Pas ná deze tick vrijgeven, zodat gelijktijdige 401's dezelfde
-          // poging delen en er niet alsnog vijf refresh-calls vertrekken.
-          window.setTimeout(() => { refreshPromiseRef.current = null; }, 0);
-        });
-    }
-    return refreshPromiseRef.current;
-  };
-
-  // Twee aparte herkansings-vlaggen i.p.v. één: een 5xx/netwerk-retry en een
-  // 401-token-refresh zijn losse gebeurtenissen. Met één gedeelde vlag sloeg
-  // een GET die eerst 5xx kreeg (retry-vlag gezet) en daarna 401 antwoordde
-  // de stille token-refresh over en logde de gebruiker onnodig uit — precies
-  // de deploy-hik-plus-verlopen-token-samenloop.
-  const apiFetch = async (
-    url: string,
-    init: RequestInit = {},
-    accessToken = session?.access_token,
-    netwerkAlGeprobeerd = false,
-    authAlGeprobeerd = false,
-  ) => {
-    const headers = new Headers(init.headers || {});
-    if (!headers.has('Content-Type') && init.body) {
-      headers.set('Content-Type', 'application/json');
-    }
-    if (accessToken) {
-      headers.set('Authorization', `Bearer ${accessToken}`);
-    }
-    for (const [key, value] of Object.entries(deviceHeaders())) {
-      if (!headers.has(key)) headers.set(key, value);
-    }
-
-    // Eén stille herkansing bij een netwerkfout of een 5xx — dat zijn de
-    // gevallen die vanzelf overgaan: een tikje geen bereik, of het moment
-    // waarop een nieuwe versie wordt uitgerold en de functie kort
-    // onbereikbaar is. Alleen voor GET's: een POST/PUT opnieuw sturen kan
-    // dubbel wegschrijven. Zonder dit kreeg je vier rode meldingen voor één
-    // hik (gemeten 07-08 tijdens een uitrol).
-    const isLezen = !init.method || init.method.toUpperCase() === 'GET';
-    let response: Response;
-    try {
-      response = await fetch(url, { ...init, headers });
-    } catch (netwerkfout) {
-      if (!isLezen || netwerkAlGeprobeerd) throw netwerkfout;
-      await new Promise((r) => window.setTimeout(r, 600));
-      return apiFetch(url, init, accessToken, true, authAlGeprobeerd);
-    }
-    if (response.status >= 500 && isLezen && !netwerkAlGeprobeerd) {
-      await new Promise((r) => window.setTimeout(r, 600));
-      return apiFetch(url, init, accessToken, true, authAlGeprobeerd);
-    }
-    // 401 = sessie ongeldig/verlopen. Eerst stil vernieuwen en één keer
-    // opnieuw proberen; pas als dát faalt is de sessie écht op en volgt een
-    // relogin. 403 alleen forceren bij een gedeactiveerd account; een gewone
-    // "onvoldoende rechten"-403 is enkel een fout op die actie en mag de
-    // gebruiker niet uitloggen.
-    if (response.status === 401) {
-      if (!authAlGeprobeerd) {
-        const versToken = await vernieuwSessie();
-        if (versToken) return apiFetch(url, init, versToken, netwerkAlGeprobeerd, true);
-      }
-      void forceSignOut('Je sessie is verlopen. Log opnieuw in.');
-      throw new Error('Je sessie is verlopen.');
-    }
-    if (response.status === 403) {
-      const body = await response.clone().json().catch(() => ({} as any));
-      if (/gedeactiveerd/i.test(body?.error || '')) {
-        void forceSignOut('Je account is gedeactiveerd. Neem contact op met de planning.');
-        throw new Error('Je account is gedeactiveerd.');
-      }
-      // Toestel-whitelist: het toestel is (intussen) niet meer goedgekeurd →
-      // toon het geblokkeerd-scherm i.p.v. losse fout-toasts per call.
-      if (body?.code === 'device_pending' || body?.code === 'device_unknown' || body?.code === 'device_revoked') {
-        setDeviceBlocked(body.code === 'device_revoked' ? 'revoked' : 'pending');
-        throw new Error(body?.error || 'Dit toestel heeft geen toegang.');
-      }
-      throw new Error(body?.error || 'Je hebt geen toegang tot deze actie.');
-    }
-    return response;
-  };
+  // apiFetch + vernieuwSessie staan in src/lib/api.ts: één implementatie voor
+  // App én de losse views/lib-helpers (controle-ronde 27-08, bevinding 19).
+  // Verlopen sessie / gedeactiveerd account / geblokkeerd toestel komen via
+  // window-events terug (zie de listener hierboven).
 
   const fetchCurrentUser = async (accessToken = session?.access_token) => {
-    const response = await apiFetch('/api/me', {}, accessToken);
+    const response = await apiFetch('/api/me', { accessToken });
     // Zonder deze checks werd een JSON-errorbody ({error: ...}) als
     // gebruiker gezet → crash op currentUser.name verderop.
     if (!response.ok) {
@@ -1123,7 +1032,8 @@ export default function App() {
       void apiFetch('/api/auth/session', {
         method: 'POST',
         body: JSON.stringify({ action: 'resume' }),
-      }, accessToken).catch(() => {});
+        accessToken,
+      }).catch(() => {});
       void loadAppData(appUser, accessToken);
     } catch (error) {
       console.error('Error initializing app:', error);
@@ -1135,7 +1045,7 @@ export default function App() {
 
   const fetchUpdates = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/updates', {}, accessToken);
+      const response = await apiFetch('/api/updates', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setUpdates(data);
@@ -1201,7 +1111,7 @@ export default function App() {
 
   const fetchSwaps = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/swaps', {}, accessToken);
+      const response = await apiFetch('/api/swaps', { accessToken });
       captureRevision('swaps', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
@@ -1255,7 +1165,7 @@ export default function App() {
 
   const fetchLeave = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/leave', {}, accessToken);
+      const response = await apiFetch('/api/leave', { accessToken });
       captureRevision('leave', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
@@ -1272,7 +1182,7 @@ export default function App() {
   // dan het moment waarop de chauffeur de documentenweergave het laatst opende.
   const fetchUnseenDocuments = async (userId: string, accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/documents', {}, accessToken);
+      const response = await apiFetch('/api/documents', { accessToken });
       const data = await response.json();
       if (!Array.isArray(data)) return;
       let lastSeen: string | null = null;
@@ -1292,7 +1202,7 @@ export default function App() {
 
   const fetchPlanningMatrix = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/planning-matrix', {}, accessToken);
+      const response = await apiFetch('/api/planning-matrix', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) setPlanningMatrixRows(data);
     } catch (error) {
@@ -1302,7 +1212,7 @@ export default function App() {
 
   const fetchPlanningCodes = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/planning-codes', {}, accessToken);
+      const response = await apiFetch('/api/planning-codes', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setPlanningCodes(data);
@@ -1316,7 +1226,7 @@ export default function App() {
 
   const fetchPlanningMatrixHistory = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/planning-matrix/history', {}, accessToken);
+      const response = await apiFetch('/api/planning-matrix/history', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setPlanningMatrixHistory(data);
@@ -1341,7 +1251,7 @@ export default function App() {
 
   const fetchActivityLog = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/activity', {}, accessToken);
+      const response = await apiFetch('/api/activity', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setActivityLog(data);
@@ -1353,7 +1263,7 @@ export default function App() {
 
   const fetchLoginActivity = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/activity/logins', {}, accessToken);
+      const response = await apiFetch('/api/activity/logins', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data.logins)) {
         setLoginActivity(data.logins);
@@ -1621,7 +1531,7 @@ export default function App() {
       const from = new Date(); from.setDate(from.getDate() - 1);
       const to = new Date(); to.setDate(to.getDate() + 45);
       const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const response = await apiFetch(`/api/planning-notes?from=${iso(from)}&to=${iso(to)}`, {}, accessToken);
+      const response = await apiFetch(`/api/planning-notes?from=${iso(from)}&to=${iso(to)}`, { accessToken });
       const data = await response.json();
       if (Array.isArray(data)) setMyNotes(data.map((n: any) => ({ date: String(n.date), note: String(n.note) })));
     } catch { /* notities zijn nice-to-have */ }
@@ -1635,7 +1545,7 @@ export default function App() {
   const fetchServices = async (accessToken = session?.access_token) => {
     try {
       beginLoading();
-      const response = await apiFetch('/api/services', {}, accessToken);
+      const response = await apiFetch('/api/services', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setServices(data);
@@ -1692,7 +1602,7 @@ export default function App() {
 
   const fetchUsers = async (accessToken = session?.access_token) => {
     try {
-      const response = await apiFetch('/api/users', {}, accessToken);
+      const response = await apiFetch('/api/users', { accessToken });
       captureRevision('users', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
@@ -1763,7 +1673,7 @@ export default function App() {
       if (filters?.month) params.set('month', filters.month);
       const qs = params.toString();
       const url = qs ? `/api/planning?${qs}` : '/api/planning';
-      const response = await apiFetch(url, {}, accessToken);
+      const response = await apiFetch(url, { accessToken });
       // Revisie alleen bij een ongefilterde fetch (de server zet 'm ook
       // alleen dan) — een subset-revisie zou valse conflicten geven.
       if (!qs) captureRevision('planning', response);
@@ -1821,7 +1731,7 @@ export default function App() {
   const fetchDiversions = async (accessToken = session?.access_token, opts?: { silent?: boolean }) => {
     try {
       if (!opts?.silent) beginLoading();
-      const response = await apiFetch('/api/diversions', {}, accessToken);
+      const response = await apiFetch('/api/diversions', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
         setDiversions(data);
@@ -1875,7 +1785,8 @@ export default function App() {
     const response = await apiFetch('/api/auth/session', {
       method: 'POST',
       body: JSON.stringify({ action: 'start' }),
-    }, token);
+      accessToken: token,
+    });
     const text = await response.text();
     let user;
     try {

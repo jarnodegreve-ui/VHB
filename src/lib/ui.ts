@@ -18,6 +18,10 @@ export function notify(message: string, tone: 'success' | 'error' | 'info' = 'in
   window.dispatchEvent(new CustomEvent('vhb-toast', { detail: { message, tone } }));
 }
 
+/** Sessie- en toestel-headers als los object. Alleen nog voor plekken die
+ *  bewust búiten apiFetch (src/lib/api.ts) blijven: de foutrapportage
+ *  (monitoring.ts, mag nooit een uitlog triggeren) — alle gewone API-calls
+ *  gaan via apiFetch. */
 export async function getSupabaseAuthHeaders() {
   const accessToken = (await supabase?.auth.getSession())?.data.session?.access_token;
   return {

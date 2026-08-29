@@ -103,19 +103,28 @@ export function Badge({
   );
 }
 
+/** Toon + label per aanvraagstatus (verlof/ruil). Eén bron: de gebruikers-
+ *  historiek had een eigen kopie ('Voltooid' i.p.v. 'Afgerond') en de verlof-
+ *  historiek een losse accentkleur-map (controle-ronde 27-08, bevinding 22). */
+const STATUS_TONES: Record<string, { tone: BadgeTone; label: string }> = {
+  pending: { tone: 'amber', label: 'In behandeling' },
+  accepted: { tone: 'blue', label: 'Wacht op planner' },
+  approved: { tone: 'emerald', label: 'Goedgekeurd' },
+  rejected: { tone: 'red', label: 'Afgewezen' },
+  cancelled: { tone: 'slate', label: 'Geannuleerd' },
+  completed: { tone: 'emerald', label: 'Afgerond' },
+};
+const statusTone = (status: string) => STATUS_TONES[status] ?? { tone: 'slate' as BadgeTone, label: status };
+
 /** Status van een aanvraag (verlof/ruil) als consistente badge. */
 export function StatusBadge({ status, className }: { status: string; className?: string }) {
-  const map: Record<string, { tone: BadgeTone; label: string }> = {
-    pending: { tone: 'amber', label: 'In behandeling' },
-    accepted: { tone: 'blue', label: 'Wacht op planner' },
-    approved: { tone: 'emerald', label: 'Goedgekeurd' },
-    rejected: { tone: 'red', label: 'Afgewezen' },
-    cancelled: { tone: 'slate', label: 'Geannuleerd' },
-    completed: { tone: 'emerald', label: 'Afgerond' },
-  };
-  const m = map[status] ?? { tone: 'slate' as BadgeTone, label: status };
+  const m = statusTone(status);
   return <Badge tone={m.tone} dot className={className}>{m.label}</Badge>;
 }
+
+/** Accentkleur (bg-klasse) van een status — voor een statusstreep langs een
+ *  kaart; dezelfde tint als de dot van StatusBadge. */
+export const statusAccentClass = (status: string): string => BADGE_TONES[statusTone(status).tone].dot;
 
 // === MicroLabel ===
 

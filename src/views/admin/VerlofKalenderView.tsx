@@ -7,9 +7,8 @@ import { cn, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { PageHeader, PageShell } from '../../components/ui';
 import { Button, MicroLabel, microLabelClass, TableShell, Td, Th } from '../../components/primitives';
-import { MONTH_NAMES, LEAVE_TYPE_LABELS } from '../../lib/format';
+import { MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
 
-const WEEKDAY_LABELS = ['M', 'D', 'W', 'D', 'V', 'Z', 'Z'];
 
 
 // Kleuren uit de gedeelde statuskleurtaal (src/lib/statusColors.ts) — deze
@@ -44,7 +43,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
   const weekdayLetter = (day: number) => {
     const jsDay = new Date(year, monthIndex, day).getDay();
     const mondayIndex = jsDay === 0 ? 6 : jsDay - 1;
-    return WEEKDAY_LABELS[mondayIndex];
+    return WEEKDAY_LETTER_MON[mondayIndex];
   };
   const isWeekend = (day: number) => {
     const jsDay = new Date(year, monthIndex, day).getDay();
@@ -102,7 +101,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
   }
 
   return (
-    <PageShell width="6xl">
+    <PageShell>
       <PageHeader
         title="Verlof-kalender"
         description="Maandoverzicht van wie wanneer afwezig is. Eén oogopslag voor capaciteitsplanning."

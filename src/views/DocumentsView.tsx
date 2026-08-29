@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Download, FileText, IdCard } from 'lucide-react';
 import type { User } from '../types';
-import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../lib/ui';
+import { notify, openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { apiFetch } from '../lib/api';
 import { Badge, MicroLabel } from '../components/primitives';
 import { SkeletonRow } from '../components/Skeleton';
 import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
@@ -31,7 +32,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
     let cancelled = false;
     void (async () => {
       try {
-        const res = await fetch('/api/user-expiries', { headers: await getSupabaseAuthHeaders() });
+        const res = await apiFetch('/api/user-expiries');
         if (!res.ok) return;
         const rows = await res.json();
         if (!cancelled && Array.isArray(rows)) setVerval(rows);
@@ -48,7 +49,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch('/api/documents', { headers: await getSupabaseAuthHeaders() });
+        const res = await apiFetch('/api/documents');
         if (!res.ok) throw new Error('laden mislukt');
         const data = (await res.json()) as UserDocument[];
         if (!cancelled) setDocs(data);
@@ -121,9 +122,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                   if (!doc.url) return notify('Bestand is niet beschikbaar.', 'error');
                   // Leesbevestiging (fire-and-forget): de planner ziet zo dat
                   // dit document geopend is. Mag het openen nooit vertragen.
-                  void getSupabaseAuthHeaders()
-                    .then((headers) => fetch(`/api/documents/${encodeURIComponent(doc.id)}/opened`, { method: 'POST', headers }))
-                    .catch(() => {});
+                  void apiFetch(`/api/documents/${encodeURIComponent(doc.id)}/opened`, { method: 'POST' }).catch(() => {});
                   openPdfInNewTab(doc.url);
                 }}
                 aria-label={`Open ${doc.filename}`}

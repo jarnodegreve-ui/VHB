@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Download, FileText, Trash2, Upload } from 'lucide-react';
 import type { User } from '../types';
-import { getSupabaseAuthHeaders, notify, openPdfInNewTab } from '../lib/ui';
+import { notify, openPdfInNewTab } from '../lib/ui';
 import { prettySize } from '../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
+import { apiFetch } from '../lib/api';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Skeleton } from '../components/Skeleton';
 
@@ -95,7 +96,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   const fetchCurrent = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/ritblaadje', { headers: await getSupabaseAuthHeaders() });
+      const response = await apiFetch('/api/ritblaadje');
       if (!response.ok) throw new Error(`Server antwoordde ${response.status}`);
       const data = await response.json();
       if (!mountedRef.current) return;
@@ -163,9 +164,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         reader.readAsDataURL(file);
       });
 
-      const response = await fetch('/api/ritblaadje', {
+      const response = await apiFetch('/api/ritblaadje', {
         method: 'POST',
-        headers: await getSupabaseAuthHeaders(),
         body: JSON.stringify({ filename: file.name, dataUrl }),
       });
       const text = await response.text();
@@ -193,9 +193,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
 
   const handleDelete = async () => {
     try {
-      const response = await fetch('/api/ritblaadje', {
+      const response = await apiFetch('/api/ritblaadje', {
         method: 'DELETE',
-        headers: await getSupabaseAuthHeaders(),
       });
       if (!response.ok) {
         const text = await response.text();
@@ -213,7 +212,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
   };
 
   return (
-    <PageShell width="5xl">
+    <PageShell>
       <PageHeader
         title="Ritbladen"
         description="De actuele ritbladen."

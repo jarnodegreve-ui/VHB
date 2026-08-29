@@ -13,6 +13,8 @@
  * testen; de endpoint (/api/coverage-advisor) voert alleen de data aan.
  */
 
+import { addDagenIso } from "./helpers.js";
+
 export const MIN_RUST_UREN = 8;
 export const MAX_WERKDAGEN_NA_ELKAAR = 6;
 
@@ -52,13 +54,6 @@ export const dagVenster = (rijen: TijdRij[]): { start: number; eind: number } | 
   return start === null || eind === null ? null : { start, eind };
 };
 
-/** ISO-dag ± n dagen (puur datumrekenen in UTC-frame, geen tijdzones). */
-export const addDagen = (iso: string, n: number): string => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
-};
-
 /**
  * Rust in minuten tussen het einde van de vorige werkdag en het begin van de
  * aangeboden dienst. Beide staan in minuten t.o.v. hun éigen dienstdag-
@@ -82,8 +77,8 @@ export const rustTovVolgendeDag = (volgendeDag: TijdRij[], dienstEind: number): 
  *  (guard tegen ontsporen op een corrupte set). */
 export const dagenNaElkaarMet = (gewerkteDagen: Set<string>, datum: string): number => {
   let n = 1;
-  for (let d = addDagen(datum, -1), g = 0; gewerkteDagen.has(d) && g < 366; d = addDagen(d, -1), g++) n++;
-  for (let d = addDagen(datum, 1), g = 0; gewerkteDagen.has(d) && g < 366; d = addDagen(d, 1), g++) n++;
+  for (let d = addDagenIso(datum, -1), g = 0; gewerkteDagen.has(d) && g < 366; d = addDagenIso(d, -1), g++) n++;
+  for (let d = addDagenIso(datum, 1), g = 0; gewerkteDagen.has(d) && g < 366; d = addDagenIso(d, 1), g++) n++;
   return n;
 };
 
@@ -105,7 +100,7 @@ export const formatUren = (minuten: number): string => {
 /** Maandag van de week (ma–zo) waarin `iso` valt. */
 export const maandagVan = (iso: string): string => {
   const d = new Date(`${iso}T00:00:00Z`);
-  return addDagen(iso, -((d.getUTCDay() + 6) % 7));
+  return addDagenIso(iso, -((d.getUTCDay() + 6) % 7));
 };
 
 /** Gewerkte dagen in de week (ma–zo) van `datum`, de dag zelf niet meegeteld
@@ -114,7 +109,7 @@ export const dagenInWeekVan = (gewerkteDagen: Set<string>, datum: string): numbe
   const maandag = maandagVan(datum);
   let n = 0;
   for (let i = 0; i < 7; i++) {
-    const dag = addDagen(maandag, i);
+    const dag = addDagenIso(maandag, i);
     if (dag !== datum && gewerkteDagen.has(dag)) n++;
   }
   return n;

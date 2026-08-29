@@ -11,10 +11,6 @@ export function PageShell({
   className,
 }: {
   children: React.ReactNode;
-  /** @deprecated Eén canvasbreedte voor de hele app — de prop wordt
-   *  genegeerd. Bij het navigeren verspringt het frame zo nooit meer
-   *  (voorheen 3xl/4xl/5xl/6xl door elkaar). */
-  width?: '3xl' | '4xl' | '5xl' | '6xl';
   className?: string;
 }) {
   return <div className={cn('max-w-[1200px] mx-auto space-y-6 md:space-y-8', className)}>{children}</div>;
