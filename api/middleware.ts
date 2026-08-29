@@ -76,12 +76,70 @@ export const resolveOptionalUser = async (req: express.Request): Promise<AppUser
   const token = getBearerToken(req);
   if (!token || !supabase) return null;
   try {
-    const { data, error } = await supabase.auth.getUser(token);
-    if (error || !data.user) return null;
-    return await findUserByEmail(data.user.email);
+    const check = await verifieerToken(token);
+    if (check.ok === false) return null;
+    return await findUserByEmail(check.email);
   } catch {
     return null;
   }
+};
+
+type TokenCheck = { ok: true; id: string; email: string | null } | { ok: false; status: 401 | 503 };
+const is4xx = (e: unknown): boolean => {
+  const st = (e as { status?: unknown })?.status;
+  return typeof st === "number" && st >= 400 && st < 500;
+};
+
+/**
+ * Token → identiteit, zónder netwerk-roundtrip per request.
+ *
+ * 1) Lokaal: `getClaims` verifieert de handtekening tegen de JWKS van het
+ *    project (ES256; supabase-js cachet de sleutels) en controleert exp/nbf.
+ *    Voorheen ging élke API-call langs `getUser` (netwerk): een planner-boot
+ *    ≈ 11 parallelle Auth-roundtrips, en elke Auth-hik raakte élke call —
+ *    de 503-bursts van 29-30/07 (controle-ronde 27-08, voorstel 55).
+ * 2) Fallback: `getUser` met de bestaande 401/503-scheiding — als getClaims
+ *    niet kan (JWKS onbereikbaar, HS256-token, oude client-lib) of een
+ *    onduidelijke fout geeft. Een aantoonbaar ongeldig/verlopen token
+ *    (4xx of AuthInvalidJwtError) is meteen 401, zonder roundtrip.
+ */
+export const verifieerToken = async (token: string): Promise<TokenCheck> => {
+  if (!supabase) return { ok: false, status: 503 };
+  try {
+    const auth = supabase.auth as unknown as { getClaims?: (jwt: string) => Promise<{ data: { claims?: { sub?: unknown; email?: unknown } } | null; error: { name?: string; status?: number; message?: string } | null }> };
+    if (typeof auth.getClaims === "function") {
+      const { data, error } = await auth.getClaims(token);
+      const sub = data?.claims?.sub;
+      if (!error && typeof sub === "string" && sub) {
+        const email = data?.claims?.email;
+        return { ok: true, id: sub, email: typeof email === "string" ? email : null };
+      }
+      if (error && (is4xx(error) || error.name === "AuthInvalidJwtError")) return { ok: false, status: 401 };
+      // Anders: geen uitspraak → hieronder via getUser.
+    }
+  } catch (err) {
+    console.warn("[auth] lokale JWT-verificatie niet mogelijk, terugvallen op getUser:", (err as Error)?.message ?? err);
+  }
+
+  let authResult: Awaited<ReturnType<typeof supabase.auth.getUser>>;
+  try {
+    authResult = await supabase.auth.getUser(token);
+  } catch (err) {
+    console.error("Auth-check onbereikbaar (throw):", err);
+    return { ok: false, status: 503 };
+  }
+  const { data, error } = authResult;
+  if (error) {
+    // 4xx = het token zelf is verlopen/ongeldig → écht opnieuw aanmelden.
+    // status 0 (netwerk/AuthRetryableFetchError), 5xx of onbekend = storing:
+    // 503, zodat de client zijn sessie houdt en gewoon opnieuw probeert
+    // (elke fout was eerst 401 → alle toestellen tegelijk uitgelogd, 29-30/07).
+    if (is4xx(error)) return { ok: false, status: 401 };
+    console.error("Auth-check-storing:", (error as { status?: number }).status, error.message);
+    return { ok: false, status: 503 };
+  }
+  if (!data.user) return { ok: false, status: 401 };
+  return { ok: true, id: data.user.id, email: data.user.email ?? null };
 };
 
 const getBearerToken = (req: express.Request) => {
@@ -110,35 +168,17 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
     return res.status(401).json({ error: "Niet aangemeld." });
   }
 
-  // Token-validatie met onderscheid tussen "token ongeldig" en "auth-dienst
-  // onbereikbaar". Elke fout werd eerst een 401 — en de client logt op 401
-  // geforceerd uit, dus één hik in Supabase-auth gooide álle toestellen
-  // tegelijk uit het portaal (bursts op 29-30/07: iPhone + Windows binnen
-  // elf seconden). Een storing is nu 503: de client houdt zijn sessie en
-  // probeert gewoon opnieuw.
-  let authResult: Awaited<ReturnType<typeof supabase.auth.getUser>>;
-  try {
-    authResult = await supabase.auth.getUser(accessToken);
-  } catch (err) {
-    console.error("Auth-check onbereikbaar (throw):", err);
+  // Token-validatie: lokaal (getClaims/JWKS) met getUser als fallback — zie
+  // verifieerToken. 401 = token zelf ongeldig/verlopen (client logt uit),
+  // 503 = auth-dienst onbereikbaar (client houdt zijn sessie).
+  const check = await verifieerToken(accessToken);
+  if (check.ok === false) {
+    if (check.status === 401) return res.status(401).json({ error: "Ongeldige sessie." });
     return res.status(503).json({ error: "Aanmeldcontrole is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "auth_unavailable" });
   }
-  const { data, error } = authResult;
-  if (error) {
-    const status = (error as { status?: number }).status;
-    // 4xx = het token zelf is verlopen/ongeldig → écht opnieuw aanmelden.
-    if (status && status >= 400 && status < 500) {
-      return res.status(401).json({ error: "Ongeldige sessie." });
-    }
-    // status 0 (netwerk/AuthRetryableFetchError), 5xx of onbekend = storing.
-    console.error("Auth-check-storing:", status, error.message);
-    return res.status(503).json({ error: "Aanmeldcontrole is tijdelijk niet beschikbaar. Probeer het zo opnieuw.", code: "auth_unavailable" });
-  }
-  if (!data.user) {
-    return res.status(401).json({ error: "Ongeldige sessie." });
-  }
+  const authUser = { id: check.id, email: check.email ?? undefined };
 
-  const appUser = await findUserByEmail(data.user.email);
+  const appUser = await findUserByEmail(check.email);
   if (!appUser) {
     return res.status(403).json({ error: "Geen gebruikersprofiel gevonden voor dit account." });
   }
@@ -170,7 +210,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
       if (isMissingTableError(err)) {
         console.error("Toestel-tabel ontbreekt — gate tijdelijk overgeslagen:", err);
         req.accessToken = accessToken;
-        req.authUser = data.user;
+        req.authUser = authUser;
         req.appUser = appUser;
         return next();
       }
@@ -188,7 +228,7 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   }
 
   req.accessToken = accessToken;
-  req.authUser = data.user;
+  req.authUser = authUser;
   req.appUser = appUser;
   next();
 };
