@@ -124,6 +124,7 @@ export function AssistentView() {
         >
           <input
             value={invoer}
+            enterKeyHint="send"
             onChange={(e) => setInvoer(e.target.value)}
             placeholder="Bijv. wie kan zaterdag dienst 2603 rijden?"
             aria-label="Je vraag aan de planner-assistent"

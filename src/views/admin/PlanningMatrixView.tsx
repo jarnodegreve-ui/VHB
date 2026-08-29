@@ -303,7 +303,7 @@ export function PlanningMatrixView({
                   key={`list-${code}`}
                   onClick={() => setHighlightedCode(code)}
                   className={cn(
-                    'ios-pressable rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
+                    'ios-pressable min-h-11 sm:pointer-fine:min-h-8 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all',
                     highlightedCode === code ? 'border-red-300 bg-red-100 text-red-800' : 'border-red-100 bg-white/80 text-red-700 hover:bg-red-100'
                   )}
                 >

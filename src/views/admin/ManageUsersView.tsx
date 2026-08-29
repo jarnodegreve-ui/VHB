@@ -6,7 +6,7 @@ import { cn, getSupabaseAuthHeaders, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
@@ -539,6 +539,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             </div>
             <input
               type="search"
+              enterKeyHint="search"
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
               placeholder="Zoek op naam, personeelsnr of e-mail…"
@@ -791,6 +792,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <MicroLabel>Verlofbudget (dagen)</MicroLabel>
                   <input
                     type="number"
+                    inputMode="numeric"
                     min={0}
                     aria-label="Verlofbudget" value={editingUser.verlofBudget ?? ''}
                     onChange={(e) => {
@@ -825,16 +827,16 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               </div>
               <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
                 <div><p className="text-sm font-semibold text-slate-700">Account Actief</p><p className="text-2xs text-slate-400">Inactieve gebruikers kunnen niet inloggen.</p></div>
-                <button type="button" onClick={() => setEditingUser({ ...editingUser, isActive: editingUser.isActive === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.isActive !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-surface-white rounded-full transition-all', editingUser.isActive !== false ? 'left-7' : 'left-1')} /></button>
+                <Switch checked={editingUser.isActive !== false} onChange={(aan) => setEditingUser({ ...editingUser, isActive: aan })} label="Account actief" />
               </div>
               <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
                 <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-2xs text-slate-400">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
-                <button type="button" onClick={() => setEditingUser({ ...editingUser, showInContacts: editingUser.showInContacts === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.showInContacts !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-surface-white rounded-full transition-all', editingUser.showInContacts !== false ? 'left-7' : 'left-1')} /></button>
+                <Switch checked={editingUser.showInContacts !== false} onChange={(aan) => setEditingUser({ ...editingUser, showInContacts: aan })} label="Tonen in contactlijst" />
               </div>
               {editingUser.role === 'admin' && (
                 <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
                   <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-2xs text-slate-400">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
-                  <button type="button" onClick={() => setEditingUser({ ...editingUser, wantsSystemMail: editingUser.wantsSystemMail === false ? true : false })} className={cn('w-12 h-6 rounded-full transition-all relative', editingUser.wantsSystemMail !== false ? 'bg-emerald-500' : 'bg-slate-300')}><div className={cn('absolute top-1 w-4 h-4 bg-surface-white rounded-full transition-all', editingUser.wantsSystemMail !== false ? 'left-7' : 'left-1')} /></button>
+                  <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
                 </div>
               )}
               <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
