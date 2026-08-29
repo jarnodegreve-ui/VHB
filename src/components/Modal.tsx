@@ -44,6 +44,10 @@ export function Modal({
   boven?: boolean;
 }) {
   const idRef = useRef(Symbol('modal'));
+  // Vóór élke early return (hooks-volgorde): stond eerst ná `if (!open)
+  // return null`, waardoor het openen van een modal React liet crashen op
+  // "rendered more hooks" — de e2e-smoke ving dat (PR #403).
+  const reduceMotion = useReducedMotion();
   const isBovenste = () => modalStack[modalStack.length - 1] === idRef.current;
 
   useEffect(() => {
@@ -135,7 +139,6 @@ export function Modal({
 
   if (typeof document === 'undefined' || !open) return null;
 
-  const reduceMotion = useReducedMotion();
   const widthClass = {
     sm: 'max-w-sm',
     md: 'max-w-md',
