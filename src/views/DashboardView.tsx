@@ -10,7 +10,6 @@ import { hasShiftEnded, isShiftActiveAt } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
-import { PreviewToggle } from '../components/PreviewToggle';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
 import { Badge, Button } from '../components/primitives';
 import { ServiceChip } from '../components/ServiceChip';
@@ -29,9 +28,6 @@ export function DashboardView({ notes = [],
   leaveRequests = [],
   isInitialLoad = false,
   onNavigate,
-  canPreview = false,
-  previewActive = false,
-  onTogglePreview,
   onChangePassword,
 }: {
   user: User;
@@ -42,10 +38,6 @@ export function DashboardView({ notes = [],
   leaveRequests?: LeaveRequest[];
   isInitialLoad?: boolean;
   onNavigate?: (view: View) => void;
-  /** Admin-only: toon de 'bekijk als chauffeur'-switch. */
-  canPreview?: boolean;
-  previewActive?: boolean;
-  onTogglePreview?: () => void;
   /** Opent de wachtwoord-wijzigen-modal (voor de eenmalige welkomstkaart). */
   onChangePassword?: () => void;
 }) {
@@ -207,10 +199,6 @@ export function DashboardView({ notes = [],
 
   return (
     <div className="space-y-5">
-      {/* Admin-preview: zie components/PreviewToggle (staat ook op het
-          Operations Center, zodat een admin hem kán aanzetten). */}
-      {canPreview && onTogglePreview && <PreviewToggle active={previewActive} onToggle={onTogglePreview} />}
-
       {/* === Eenmalige welkomstkaart (eerste bezoek) === */}
       {showWelcome && (
         <div className="rounded-2xl border border-oker-200/70 bg-oker-50 p-5 space-y-3">

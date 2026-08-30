@@ -10,7 +10,7 @@ import {
   MapPin,
   Calendar,
   Bell,
-  LogOut,
+  Eye,
   Bus,
   AlertTriangle,
   FileText,
@@ -24,15 +24,9 @@ import {
   Map as MapIcon,
   Phone,
   Activity,
-  KeyRound,
   IdCard,
-  LifeBuoy,
-  Moon,
   ShieldAlert,
   Smartphone,
-  Sun,
-  BellRing,
-  BellOff,
   RefreshCw,
   WifiOff,
   Zap,
@@ -64,6 +58,8 @@ import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { NavItem, NavSection, NavSubLabel } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
+import { UserMenu } from './components/UserMenu';
+import { PreviewToggle } from './components/PreviewToggle';
 import { BrandSpinner } from './components/BrandSpinner';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -2326,72 +2322,11 @@ export default function App() {
           )}
         </nav>
 
-        {/* Safe-area onderaan: als mobiele "Meer"-sheet valt de onderrij
-            ("Uitloggen") anders deels in de home-indicator-zone van de
-            iPhone — tikken triggerde daar makkelijk de swipe-gesture. */}
-        <div
-          className="shrink-0 p-3 border-t fine-divider space-y-0.5"
-          style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
-        >
-          {/* User profile card */}
-          <div className="flex items-center gap-2.5 px-3 py-2 mb-1.5 rounded-xl bg-slate-100/60">
-            <div className="w-8 h-8 rounded-lg bg-oker-100 flex items-center justify-center text-oker-700 shrink-0 text-2xs font-bold">
-              {userInitials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-semibold text-slate-800 truncate leading-tight">{currentUser.name}</p>
-              <p className="text-2xs text-slate-500 font-medium capitalize">{currentUser.role}</p>
-            </div>
-          </div>
-          <button
-            onClick={toggleTheme}
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm"
-          >
-            <span className="text-slate-400 shrink-0">
-              {theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}
-            </span>
-            <span>{theme === 'light' ? 'Donkere modus' : 'Lichte modus'}</span>
-          </button>
-          {pushPublicKey && isPushSupported() && (
-            <button
-              onClick={togglePush}
-              className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm"
-            >
-              <span className="text-slate-400 shrink-0">
-                {pushEnabled ? <BellOff size={16} /> : <BellRing size={16} />}
-              </span>
-              <span>{pushEnabled ? 'Meldingen uitschakelen' : 'Meldingen inschakelen'}</span>
-            </button>
-          )}
-          <button
-            onClick={() => setShowChangePassword(true)}
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm"
-          >
-            <span className="text-slate-400 shrink-0">
-              <KeyRound size={16} />
-            </span>
-            <span>Wachtwoord wijzigen</span>
-          </button>
-          <button
-            onClick={() => { setProbleemTekst(''); setProbleemVerstuurd(false); setShowProbleemMelder(true); setIsSidebarOpen(false); }}
-            aria-haspopup="dialog"
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-slate-900 hover:bg-surface-soft-hover rounded-xl transition-colors duration-150 font-medium text-sm"
-          >
-            <span className="text-slate-400 shrink-0">
-              <LifeBuoy size={16} />
-            </span>
-            <span>Meld een probleem</span>
-          </button>
-          <button
-            onClick={handleLogout}
-            className="flex items-center gap-3 w-full px-3 py-2 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-xl transition-colors duration-150 font-medium text-sm"
-          >
-            <span className="text-slate-400 shrink-0">
-              <LogOut size={16} />
-            </span>
-            <span>Uitloggen</span>
-          </button>
-        </div>
+        {/* Accountacties (thema, meldingen, wachtwoord, probleem, uitloggen)
+            + het gebruikerskaartje verhuisden naar het avatar-menu in de
+            topbar (mock Jarno 30-08). Hier alleen nog safe-area-lucht zodat
+            het laatste nav-item op een iPhone boven de home-indicator blijft. */}
+        <div className="shrink-0" style={{ paddingBottom: 'max(0.5rem, env(safe-area-inset-bottom))' }} />
       </aside>
 
       {/* Main Content */}
@@ -2446,12 +2381,59 @@ export default function App() {
                     {currentMeta.title}
                   </h2>
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
+                <div className="flex items-center gap-1.5 shrink-0">
                   {/* Zoekknop bewust weg (Jarno: "vrij zinloos") — het
-                      command palette blijft bereikbaar via ⌘K. */}
-                  {/* Geen permanente "Online"-pill meer: rust is de standaard.
-                      Alleen een storing verdient een signaal — de offline-
-                      banner hieronder dekt dat op elk formaat. */}
+                      command palette blijft bereikbaar via ⌘K. Geen permanente
+                      "Online"-pill: alleen een storing verdient een signaal
+                      (offline-banner hieronder). */}
+                  {/* Topbar-inrichting = mock Jarno 30-08: preview-toggle,
+                      bel met attentie-stip, avatar-menu. De toggle stond
+                      eerst op beide dashboards; één vaste plek is rustiger.
+                      Op smal scherm een compacte oog-knop i.p.v. de pill. */}
+                  {isRealAdmin && (
+                    <>
+                      <span className="hidden md:inline-flex">
+                        <PreviewToggle active={previewChauffeur} onToggle={() => setPreviewChauffeur((v) => !v)} />
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewChauffeur((v) => !v)}
+                        aria-label={previewChauffeur ? 'Chauffeurs-weergave uit' : 'Bekijk als chauffeur'}
+                        aria-pressed={previewChauffeur}
+                        className={cn(
+                          'md:hidden p-2 rounded-lg transition-colors',
+                          previewChauffeur ? 'bg-oker-500/15 text-oker-600' : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800',
+                        )}
+                      >
+                        <Eye size={17} />
+                      </button>
+                    </>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setCurrentView('updates')}
+                    aria-label="Meldingen"
+                    title="Updates en meldingen"
+                    className="relative p-2 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg transition-colors"
+                  >
+                    <Bell size={17} />
+                    {/* Zelfde signaal als de app-icoon-badge: er wacht iets op jou. */}
+                    {appBadgeCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oker-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
+                    )}
+                  </button>
+                  <UserMenu
+                    user={currentUser}
+                    initials={userInitials}
+                    theme={theme}
+                    onToggleTheme={toggleTheme}
+                    pushBeschikbaar={!!pushPublicKey && isPushSupported()}
+                    pushEnabled={pushEnabled}
+                    onTogglePush={togglePush}
+                    onChangePassword={() => setShowChangePassword(true)}
+                    onProbleem={() => { setProbleemTekst(''); setProbleemVerstuurd(false); setShowProbleemMelder(true); }}
+                    onLogout={handleLogout}
+                  />
                 </div>
               </div>
             </header>
@@ -2505,13 +2487,10 @@ export default function App() {
                       ]);
                     }}
                     isInitialLoad={isInitialLoad}
-                    canPreview={isRealAdmin}
-                    previewActive={previewChauffeur}
-                    onTogglePreview={() => setPreviewChauffeur((v) => !v)}
                   />
                   </Suspense>
                 ) : (
-                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} canPreview={isRealAdmin} previewActive={previewChauffeur} onTogglePreview={() => setPreviewChauffeur((v) => !v)} onChangePassword={() => setShowChangePassword(true)} />
+                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} onChangePassword={() => setShowChangePassword(true)} />
                 )
               )}
               {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
