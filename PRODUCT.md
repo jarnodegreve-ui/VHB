@@ -64,8 +64,8 @@ planner dwingen zijn werkelijkheid te verminken om in het model te passen.
 
 ## Brand Commitments
 
-- Naam **VHB**; logo-assets in `brand/vhb-logo-redesign/` ("VHB Schakel", actief sinds
-  2026-07) en `public/vhb-logo*.svg`.
+- Naam **VHB**; definitief logo in `brand/vhb-final-logo-package/` (actief sinds
+  2026-08-30) — in de app via `src/components/BrandLogo.tsx`, iconen in `public/`.
 - Toon: nuchter, Vlaams, zonder corporate-jargon; de app spreekt de chauffeur aan zoals
   een collega dat doet.
 - **Voor dit redesign-voorbeeld heeft de eigenaar kleur én typografie expliciet

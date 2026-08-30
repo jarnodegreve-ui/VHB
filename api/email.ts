@@ -199,13 +199,13 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
 export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null }) => {
   const url = portalUrl();
   const setPassword = ctx.actionLink
-    ? { text: `Stel je wachtwoord in via deze link: ${ctx.actionLink}`, html: `<a href="${ctx.actionLink}" style="background-color: #E8A33D; color: #0D0D0F; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Wachtwoord instellen</a>` }
+    ? { text: `Stel je wachtwoord in via deze link: ${ctx.actionLink}`, html: `<a href="${ctx.actionLink}" style="background-color: #E2A323; color: #0D0D0F; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Wachtwoord instellen</a>` }
     : { text: `Stel je wachtwoord in via "Wachtwoord vergeten" op het loginscherm: ${url}`, html: `<p style="color: #475569; line-height: 1.6;">Stel je wachtwoord in via <strong>"Wachtwoord vergeten"</strong> op het <a href="${url}">loginscherm</a>.</p>` };
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
       <div style="background-color: #0D0D0F; color: white; padding: 22px 30px; text-align: center;">
-        <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: #E8A33D;">WELKOM</p>
+        <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: #E2A323;">WELKOM</p>
         <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">VHB Portaal</h1>
       </div>
       <div style="padding: 30px;">
@@ -267,12 +267,12 @@ export const sendExpiryReminderEmail = async (ctx: {
         : `verloopt over ${ctx.dagen} dagen`;
   const dringend = ctx.dagen <= 7;
   const bannerColor = dringend ? "#C2410C" : "#0D0D0F";
-  const accent = dringend ? "#C2410C" : "#E8A33D";
+  const accent = dringend ? "#C2410C" : "#E2A323";
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
       <div style="background-color: ${bannerColor}; color: white; padding: 22px 30px; text-align: center;">
-        <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: ${dringend ? "#FED7AA" : "#E8A33D"};">HERINNERING</p>
+        <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: ${dringend ? "#FED7AA" : "#E2A323"};">HERINNERING</p>
         <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">${escapeHtml(ctx.soortLabel)} ${escapeHtml(wanneer)}</h1>
       </div>
       <div style="padding: 30px;">
