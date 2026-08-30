@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
+import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
@@ -934,7 +935,7 @@ export function CoverageView() {
 
             {pickLoading ? (
               <div className="mt-5 flex items-center gap-3 text-slate-500">
-                <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+                <BrandSpinner size={16} />
                 <span className="text-sm font-bold">Advies berekenen…</span>
               </div>
             ) : adviesError ? (

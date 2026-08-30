@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Download, RotateCcw, Search, Table2, TriangleAlert, X } from 'lucide-react';
+import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, downloadBlob, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
@@ -1128,7 +1129,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         <div className="p-6 overflow-y-auto flex-1">
           {overzichtLaden ? (
             <div className="flex items-center gap-3 text-slate-500">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+              <BrandSpinner size={16} />
               <span className="text-sm font-bold">Overzicht berekenen…</span>
             </div>
           ) : overzicht && (
