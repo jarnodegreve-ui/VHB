@@ -1,12 +1,12 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="VHB">
-  <rect width="1024" height="1024" rx="200" ry="200" fill="#0D0D0F"/>
+  <rect width="1024" height="1024" rx="200" ry="200" fill="#E2A323"/>
   <g transform="translate(512 512) scale(1.58621) translate(-714 -348)">
     <g id="vhb-monogram">
-    <path d="M424 262 H462 L522 388 L583 262 H619 L535 434 H509 Z" fill="#FFFFFF"/>
-    <rect x="650" y="262" width="33" height="172" fill="#FFFFFF"/>
-    <path d="M683 352 L704 331 H766 L784 315 V340 L766 357 H704 L683 378 Z M728 336 H735 L719 352 H712 Z M751 336 H758 L742 352 H735 Z" fill="#E2A323" fill-rule="evenodd"/>
-    <rect x="784" y="262" width="33" height="172" fill="#FFFFFF"/>
-    <path fill="#FFFFFF" fill-rule="evenodd" d="
+    <path d="M424 262 H462 L522 388 L583 262 H619 L535 434 H509 Z" fill="#0D0D0F"/>
+    <rect x="650" y="262" width="33" height="172" fill="#0D0D0F"/>
+    <path d="M683 352 L704 331 H766 L784 315 V340 L766 357 H704 L683 378 Z M728 336 H735 L719 352 H712 Z M751 336 H758 L742 352 H735 Z" fill="#0D0D0F" fill-rule="evenodd"/>
+    <rect x="784" y="262" width="33" height="172" fill="#0D0D0F"/>
+    <path fill="#0D0D0F" fill-rule="evenodd" d="
     M873 262 H970
     C988 262 1000 278 1000 305
     C1000 328 995 342 990 349

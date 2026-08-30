@@ -7,7 +7,7 @@
 //   vhb-icoon.svg / -192.png / -512.png   afgeronde tegel (manifest "any")
 //   vhb-icoon-maskable.png (1024)          vol vlak, beeldmerk in de safe-zone
 //   apple-touch-icon-180.png               vol vlak (iOS rondt zelf af)
-//   vhb-favicon.svg / -64.png / favicon.ico tab-icoon: negatief monogram, geen lus
+//   vhb-favicon.svg / -64.png / favicon.ico tab-icoon: carbon monogram op goud
 // Rasteren gebeurt met de Playwright-Chromium die al als devDependency
 // aanwezig is (geen sharp/rsvg nodig).
 import { chromium } from '@playwright/test';
@@ -29,10 +29,13 @@ const MARK = { cx: 713.25, cy: 337.5, w: 967.5 };
 
 const master = fs.readFileSync(SRC, 'utf-8');
 const inner = master.slice(master.indexOf('</desc>') + '</desc>'.length, master.lastIndexOf('</svg>')).trim();
-// Alleen het monogram (V·H·B + gouden H-verbinding, negatief) voor het
-// tab-icoon: de lus met drie lettertjes erin is op 16–32 px een vlekje.
-// Keuze Jarno (30-08): wit/goud op de zwarte tegel, geen goud-tegel.
-const monogram = inner.slice(inner.indexOf('<g id="vhb-monogram">'));
+// Alleen het monogram (V·H·B + H-verbinding), voor het tab-icoon: de lus met
+// drie lettertjes erin is op 16–32 px een vlekje (Jarno 30-08). Eén kleur
+// (carbon, ook de H-verbinding — zoals VHB-beeldmerk-zwart.svg) op een goud-
+// tegel: leesbaar op 16 px en zichtbaar in lichte én donkere tabbalken, waar
+// een zwarte tegel wegvalt.
+const GOUD = '#E2A323';
+const monogram = inner.slice(inner.indexOf('<g id="vhb-monogram">')).replace(/#FFFFFF|#E2A323/g, TEGEL);
 const MONOGRAM = { cx: 714, cy: 348, w: 580 }; // bbox x 424–1004, y 262–434
 
 /** Tegel (1024²) met een merkteken gecentreerd op `markWidth` px breed. */
@@ -51,7 +54,7 @@ function tileSvg({ rx, markWidth, title, body = inner, geom = MARK, fill = TEGEL
 // maskable blijven vol — het OS maskeert die zelf. Maskable: safe-zone is een
 // cirkel van 80 % → een 2:1-beeldmerk past tot ±730 px, we houden 680.
 const ICOON = tileSvg({ rx: 224, markWidth: 760, title: 'VHB app-icoon' });
-const FAVICON = tileSvg({ rx: 200, markWidth: 920, title: 'VHB', body: monogram, geom: MONOGRAM });
+const FAVICON = tileSvg({ rx: 200, markWidth: 920, title: 'VHB', body: monogram, geom: MONOGRAM, fill: GOUD });
 const VOL = tileSvg({ rx: 0, markWidth: 760, title: 'VHB app-icoon' });
 const MASKABLE = tileSvg({ rx: 0, markWidth: 680, title: 'VHB app-icoon' });
 
