@@ -1,3 +1,5 @@
+> **Status (2026-08-30): vervangen.** Het definitieve logo staat in `brand/vhb-final-logo-package/`; dit pakket blijft alleen als historiek.
+
 # VHB Schakel — herwerkt logo
 
 `VHB Schakel` is een hertekening van het bestaande VHB-monogram. De gouden V, het carbonzwart en de voorwaartse beweging blijven herkenbaar, maar de lettervormen zijn opnieuw opgebouwd voor scherper digitaal gebruik.

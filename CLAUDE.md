@@ -16,10 +16,12 @@ Portaal voor het busbedrijf (GitHub-repo `jarnodegreve-ui/VHB`). Vite + React + 
 - Supabase met **quoted camelCase-identifiers** (anders dan snake_case elders). Migraties handmatig in SQL Editor, idempotent; hergebruik `public.set_updated_at()` en `current_app_user_role()` uit setup_security.sql. Kolomnamen moeten matchen met api/storage.ts + api/types.ts. Elke .sql eerst langs de `supabase-sql-reviewer` (hook doet dit automatisch).
 
 ## Huisstijl (bindend)
-- VHB Amber `#E8A33D` (tokens `oker-*`), VHB Black `#0D0D0F`, Graphite `#2C3137`, Light Grey `#F2F3F4`. `amber-*` = semantische waarschuwingskleur (bewust los van brand). Geen rauwe hex — altijd tokens.
-- Op amber-vlakken altijd VHB Black-tekst (`text-slate-950`), nooit wit (contrast 2,2:1).
-- Manrope (ExtraBold) koppen / Inter body. Bronpakket `brand/VHB-huisstijl/` + `brand/vhb-logo-redesign/` ("VHB Schakel", sinds 2026-07 het actieve logo — bewust niet in public/; logo's wel: vhb-logo.svg = portaal-lockup 740×160 (ratio 4.63:1), vhb-logo-wit.svg = reverse, vhb-logo-stacked.svg = login; outlined SVG's, geen font-afhankelijkheid).
-- sw.js: bij asset-wissels CACHE_NAME bumpen (cache-first). Dark mode: utilities met opacity-suffix (bv. `border-slate-200/70`) hebben eigen `.dark`-overrides nodig.
+- **Definitief logo** (pakket 2026-08): `brand/vhb-final-logo-package/` + `VHB-gebruiksrichtlijnen.md` — onderbroken ovale lus, VHB-monogram met gouden H-verbinding, naamregel als contouren. In de app uitsluitend via `<BrandLogo tone variant>` (inline SVG, kleuren bewust hard). Sizen op **breedte**: volledig logo ≥ 180 px (`w-48`/`w-56`), los beeldmerk (`variant="beeldmerk"`) ≥ 48 px. Niet vervormen, lus-onderbreking niet sluiten, geen schaduw/gloed/verloop.
+- Iconen/favicon in `public/` worden gegenereerd: `node scripts/brand-icons.mjs` (beeldmerk-negatief op carbon tegel) — niet met de hand bewerken.
+- Warm goud `#E2A323` (tokens `oker-*`, anker op 500), Carbonzwart `#14181B` (`slate-900`, dark-mode-basis, theme-color/manifest), Graphite `#2C3137`, Light Grey `#F2F3F4`. `amber-*` = semantische waarschuwingskleur (bewust los van brand). Geen rauwe hex — altijd tokens (enige uitzondering: het logo zelf).
+- Op goud-vlakken altijd carbon-tekst (`text-slate-950`), nooit wit (contrast ±2:1).
+- Manrope (ExtraBold) koppen / Inter body. `brand/VHB-huisstijl/` en `brand/vhb-logo-redesign/` ("VHB Schakel") zijn historisch — vervangen op 2026-08-30, niet meer gebruiken.
+- sw.js: cache-naam wordt per build gestempeld (vite.config.ts), handmatig bumpen hoeft niet. Dark mode: utilities met opacity-suffix (bv. `border-slate-200/70`) hebben eigen `.dark`-overrides nodig.
 
 ## Memory
 Evoluerende staat & deploy-/OCPI-lessen: auto-memory van dit project (MEMORY.md-index).

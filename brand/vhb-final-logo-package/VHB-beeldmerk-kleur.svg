@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1060" height="530" viewBox="180 72 1060 530" role="img" aria-labelledby="title desc">
+  <title id="title">VHB beeldmerk</title>
+  <desc id="desc">Onderbroken ovale lus met gecentreerd VHB-monogram.</desc>
+  
+  <g id="loop">
+    <path d="M926 160.5 H435 A177 177 0 0 0 258 337.5 A177 177 0 0 0 435 514.5 H991.5 A177 177 0 0 0 1166 307"
+          fill="none" stroke="#14181B" stroke-width="57" stroke-linecap="butt" stroke-linejoin="round"/>
+    <path d="M967 160.5 H991.5 A177 177 0 0 1 1157 268"
+          fill="none" stroke="#E2A323" stroke-width="57" stroke-linecap="butt" stroke-linejoin="round"/>
+  </g>
+  <g id="vhb-monogram">
+    <path d="M424 262 H462 L522 388 L583 262 H619 L535 434 H509 Z" fill="#14181B"/>
+    <rect x="650" y="262" width="33" height="172" fill="#14181B"/>
+    <path d="M683 352 L704 331 H766 L784 315 V340 L766 357 H704 L683 378 Z M728 336 H735 L719 352 H712 Z M751 336 H758 L742 352 H735 Z" fill="#E2A323" fill-rule="evenodd"/>
+    <rect x="784" y="262" width="33" height="172" fill="#14181B"/>
+    <path fill="#14181B" fill-rule="evenodd" d="
+      M873 262 H970
+      C988 262 1000 278 1000 305
+      C1000 328 995 342 990 349
+      C998 354 1004 369 1004 387
+      C1004 412 984 434 968 434
+      H855 V280 Z
+      M888 291 H947
+      C963 291 972 299 972 311
+      C972 323 963 332 950 336
+      H899 L888 347 Z
+      M888 358 H949
+      C965 358 974 368 974 381
+      C974 394 965 404 950 404
+      H888 Z"/>
+  </g>
+</svg>

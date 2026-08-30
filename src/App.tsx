@@ -1847,7 +1847,7 @@ export default function App() {
   if (!authReady) {
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-        <BrandLogo tone="donker" className="h-20 w-auto select-none" />
+        <BrandLogo tone="donker" className="w-56 h-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
           <span className="text-sm font-medium">Sessie laden…</span>
@@ -1928,7 +1928,7 @@ export default function App() {
     const revoked = deviceBlocked === 'revoked';
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <BrandLogo tone="donker" className="h-16 w-auto select-none" />
+        <BrandLogo tone="donker" className="w-56 h-auto select-none" />
         <div className="max-w-sm">
           <div className={cn(
             'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
@@ -1986,7 +1986,7 @@ export default function App() {
     if (session) {
       return (
         <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-          <BrandLogo tone="donker" className="h-20 w-auto select-none" />
+          <BrandLogo tone="donker" className="w-56 h-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
             <span className="text-sm font-medium">Profiel laden…</span>
@@ -2200,9 +2200,10 @@ export default function App() {
           >
             {/* Primary-lockup mét "Van Hoorebeke & Zoon" — op verzoek van
                 Jarno overal hetzelfde logo (was: sidebar-variant zonder
-                naamregel). h-16 houdt de naamregel leesbaar. */}
-            <BrandLogo tone="licht" className="h-16 w-auto mx-auto select-none block dark:hidden" />
-            <BrandLogo tone="donker" className="h-16 w-auto mx-auto select-none hidden dark:block" />
+                naamregel). w-48 (192 px) houdt de naamregel boven het
+                richtlijn-minimum van 180 px. */}
+            <BrandLogo tone="licht" className="w-48 h-auto mx-auto select-none block dark:hidden" />
+            <BrandLogo tone="donker" className="w-48 h-auto mx-auto select-none hidden dark:block" />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}

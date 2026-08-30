@@ -171,7 +171,7 @@ export async function downloadBlob(filename: string, blob: Blob) {
 export function applyThemeColorMeta(dark: boolean) {
   if (typeof document === 'undefined') return;
   const meta = document.querySelector('meta[name="theme-color"]');
-  if (meta) meta.setAttribute('content', dark ? '#0D0D0F' : '#F2F3F4');
+  if (meta) meta.setAttribute('content', dark ? '#14181B' : '#F2F3F4');
   // In een geïnstalleerde iOS-PWA stuurt DEZE meta de statusbalk aan, niet
   // theme-color. Hij stond hard op 'black', dus in lichte modus hield je
   // alsnog een zwarte strook boven een lichtgrijze app — precies wat de regel

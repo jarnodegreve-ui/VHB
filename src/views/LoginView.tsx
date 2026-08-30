@@ -166,7 +166,7 @@ export function LoginView({
       {/* Centrale wordmark + form-card, vertikaal gecentreerd. */}
       <main className="min-h-dvh flex flex-col items-center justify-center px-6 py-12">
         {/* Officieel VHB-logo boven het card. Login is donker (carbon), dus
-            de reverse-variant (witte tekst + oker bus). */}
+            de negatief-variant (wit + goud). */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
@@ -174,7 +174,7 @@ export function LoginView({
           className="flex flex-col items-center text-center mb-10"
         >
           {/* Primary-lockup mét naamregel — overal hetzelfde logo. */}
-          <BrandLogo tone="donker" className="h-16 sm:h-20 w-auto select-none" />
+          <BrandLogo tone="donker" className="w-56 sm:w-64 h-auto select-none" />
         </motion.div>
 
         {/* Stille form-card: één zachte entrance-fade, verder niets. */}
