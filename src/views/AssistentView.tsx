@@ -1,3 +1,4 @@
+import { BrandSpinner } from '../components/BrandSpinner';
 import { useEffect, useRef, useState } from 'react';
 import { Send, Sparkles } from 'lucide-react';
 import { cn } from '../lib/ui';
@@ -97,7 +98,7 @@ export function AssistentView() {
               {bezig && (
                 <div className="flex justify-start">
                   <div className="rounded-2xl bg-surface-field ring-1 ring-hairline px-4 py-2.5 flex items-center gap-2.5">
-                    <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+                    <BrandSpinner size={14} />
                     <span className="text-xs font-bold text-slate-500">De assistent zoekt het uit…</span>
                   </div>
                 </div>

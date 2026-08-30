@@ -64,6 +64,7 @@ import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { NavItem, NavSection, NavSubLabel } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
+import { BrandSpinner } from './components/BrandSpinner';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { Modal } from './components/Modal';
@@ -1847,9 +1848,9 @@ export default function App() {
   if (!authReady) {
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-        <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 h-auto select-none" />
+        <BrandLogo tone="donker" naamregelAfstand={26} className="w-40 sm:w-56 h-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
-          <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
+          <BrandSpinner size={16} tone="donker" />
           <span className="text-sm font-medium">Sessie laden…</span>
         </div>
       </div>
@@ -1928,7 +1929,7 @@ export default function App() {
     const revoked = deviceBlocked === 'revoked';
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 h-auto select-none" />
+        <BrandLogo tone="donker" naamregelAfstand={26} className="w-40 sm:w-56 h-auto select-none" />
         <div className="max-w-sm">
           <div className={cn(
             'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
@@ -1986,9 +1987,9 @@ export default function App() {
     if (session) {
       return (
         <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-          <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 h-auto select-none" />
+          <BrandLogo tone="donker" naamregelAfstand={26} className="w-40 sm:w-56 h-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
-            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
+            <BrandSpinner size={16} tone="donker" />
             <span className="text-sm font-medium">Profiel laden…</span>
           </div>
           <button
@@ -2146,7 +2147,7 @@ export default function App() {
           >
             <div className="rounded-2xl border border-slate-200/80 bg-white/95 px-5 py-4 shadow-xl">
               <div className="flex items-center gap-4">
-                <div className="h-7 w-7 animate-spin rounded-full border-[3px] border-slate-200 border-t-oker-500" />
+                <BrandSpinner size={24} />
                 <div>
                   <MicroLabel>Bezig</MicroLabel>
                   <p className="text-sm font-semibold text-slate-800">Gegevens verwerken...</p>
@@ -2201,9 +2202,10 @@ export default function App() {
             {/* Volledig logo mét naamregel op w-36 = 144 px — bewuste keuze
                 Jarno (30-08): op 192 px (richtlijn-minimum 180 px) te groot,
                 het beeldmerk zonder naamregel wilde hij niet. Naamregel 1,2×
-                en 26 eenheden lager (ook Jarno) voor leesbaarheid op deze maat. */}
-            <BrandLogo tone="licht" naamregelSchaal={1.2} naamregelAfstand={26} className="w-36 h-auto mx-auto select-none block dark:hidden" />
-            <BrandLogo tone="donker" naamregelSchaal={1.2} naamregelAfstand={26} className="w-36 h-auto mx-auto select-none hidden dark:block" />
+                en 26 eenheden lager (ook Jarno) voor leesbaarheid op deze
+                maat; op mobiel w-32 = 128 px ("iets kleiner", Jarno 30-08). */}
+            <BrandLogo tone="licht" naamregelSchaal={1.2} naamregelAfstand={26} className="w-32 lg:w-36 h-auto mx-auto select-none block dark:hidden" />
+            <BrandLogo tone="donker" naamregelSchaal={1.2} naamregelAfstand={26} className="w-32 lg:w-36 h-auto mx-auto select-none hidden dark:block" />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}

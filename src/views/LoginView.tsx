@@ -175,7 +175,8 @@ export function LoginView({
         >
           {/* Volledig logo mét naamregel; naamregel 26 eenheden lager dan het
               master (Jarno 30-08: iets meer lucht onder de lus). */}
-          <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 sm:w-64 h-auto select-none" />
+          {/* Op mobiel een stuk kleiner (w-40, Jarno 30-08); desktop w-64. */}
+          <BrandLogo tone="donker" naamregelAfstand={26} className="w-40 sm:w-64 h-auto select-none" />
         </motion.div>
 
         {/* Stille form-card: één zachte entrance-fade, verder niets. */}

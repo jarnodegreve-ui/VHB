@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CalendarPlus, Copy, Check, Download, ExternalLink, X, ShieldCheck } from 'lucide-react';
 import { Modal } from './Modal';
+import { BrandSpinner } from './BrandSpinner';
 import { MicroLabel } from './primitives';
 import { fetchCalendarLinks, type CalendarLinks } from '../lib/calendar';
 
@@ -72,7 +73,7 @@ export function CalendarSubscribeModal({
 
           {loading ? (
             <div className="mt-3 flex items-center gap-3 text-slate-500">
-              <div className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-oker-500" />
+              <BrandSpinner size={16} />
               <span className="text-sm font-bold">Link laden…</span>
             </div>
           ) : error ? (

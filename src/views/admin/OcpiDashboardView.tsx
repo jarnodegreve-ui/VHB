@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
-import { cn } from '../../lib/ui';
+import { Download, AlertTriangle, Zap, BatteryCharging, Gauge, RefreshCw, X } from 'lucide-react';
+import { cn, downloadBlob } from '../../lib/ui';
 import { busVoorLaadpunt } from '../../lib/laadplein';
 import { isoDate } from '../../lib/availability';
 import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal } from '../../lib/format';
@@ -267,6 +267,24 @@ export function OcpiDashboardView() {
   const periodeModus = keuze?.modus ?? 'maand';
   // In maand-modus: de gekozen maand, anders wat de server toonde.
   const maandGekozen = keuze?.modus === 'maand' ? keuze.maand : (verbruik?.maand ?? verbruik?.van.slice(0, 7) ?? vandaag.slice(0, 7));
+  // CSV-export van het verbruik per laadpunt (verbeterronde 30-08, nr. 3):
+  // puntkomma-gescheiden met decimale komma (Belgische Excel) en BOM zodat
+  // Excel de UTF-8 goed leest. Zelfde deel-/downloadpad als de Excel-export
+  // elders (downloadBlob → share sheet in de PWA).
+  const exporteerVerbruikCsv = () => {
+    if (!verbruik) return;
+    const label = periodeLabel(verbruik);
+    const naam = (p: Verbruik['punten'][number]) => p.physicalReference ?? p.evseId ?? p.evseUid;
+    const num = (n: number) => String(Math.round(n * 10) / 10).replace('.', ',');
+    const regels = [
+      ['Laadpunt', `kWh (${label})`, 'Sessies'],
+      ...verbruik.punten.map((p) => [naam(p), num(p.kwh), String(p.sessies)]),
+      ['Totaal', num(verbruik.totaalKwh), String(verbruik.totaalSessies)],
+    ];
+    const csv = '\ufeff' + regels.map((r) => r.map((v) => (/[";\n]/.test(v) ? `"${v.replaceAll('"', '""')}"` : v)).join(';')).join('\r\n');
+    void downloadBlob(`vhb-laadplein-${verbruik.maand ?? `${verbruik.van}_${verbruik.tot}`}.csv`, new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  };
+
   const periodeGekozen = keuze?.modus === 'periode' ? keuze : { van: verbruik?.van ?? `${vandaag.slice(0, 7)}-01`, tot: verbruik?.tot ?? vandaag };
   const wisselModus = (m: 'maand' | 'periode') => {
     if (m === periodeModus) return;
@@ -1047,6 +1065,15 @@ export function OcpiDashboardView() {
                       />
                     </div>
                   )}
+                  <Button
+                    variant="secondary"
+                    onClick={exporteerVerbruikCsv}
+                    disabled={!verbruik || verbruik.totaalSessies === 0}
+                    title="Verbruik per laadpunt downloaden als CSV"
+                  >
+                    <Download size={15} />
+                    <span className="ml-1.5">CSV</span>
+                  </Button>
                 </div>
               )}
             />
