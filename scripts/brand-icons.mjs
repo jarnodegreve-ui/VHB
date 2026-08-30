@@ -1,6 +1,6 @@
 // Genereert de app-/tab-iconen in public/ uit het officiële VHB-beeldmerk
 // (brand/vhb-final-logo-package/VHB-beeldmerk-negatief.svg): wit + goud op
-// een carbon tegel. Draaien na een logo-wissel:  node scripts/brand-icons.mjs
+// een VHB Black-tegel. Draaien na een logo-wissel:  node scripts/brand-icons.mjs
 //
 // Output (bestandsnamen blijven gelijk — manifest.json, index.html en sw.js
 // verwijzen ernaar; de SW-cache wordt per build gestempeld, dus geen bump):
@@ -19,7 +19,10 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SRC = path.join(ROOT, 'brand/vhb-final-logo-package/VHB-beeldmerk-negatief.svg');
 const OUT = path.join(ROOT, 'public');
 
-const CARBON = '#14181B';
+// Tegelkleur = VHB Black, gelijk aan manifest background_color/theme-color:
+// anders tekent de PWA-splash een net iets lichtere tegel op de donkere
+// achtergrond. Carbonzwart (#14181B) is de logo-inkt op licht, niet de tegel.
+const TEGEL = '#0D0D0F';
 // Buitenmaten van de lus in het master-coördinatenstelsel (stroke 57 →
 // halve lijndikte 28,5 buiten de paden): x 229,5–1197, y 132–543.
 const MARK = { cx: 713.25, cy: 337.5, w: 967.5 };
@@ -31,7 +34,7 @@ const inner = master.slice(master.indexOf('</desc>') + '</desc>'.length, master.
 function tileSvg({ rx, markWidth, title }) {
   const s = markWidth / MARK.w;
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-label="${title}">
-  <rect width="1024" height="1024" rx="${rx}" ry="${rx}" fill="${CARBON}"/>
+  <rect width="1024" height="1024" rx="${rx}" ry="${rx}" fill="${TEGEL}"/>
   <g transform="translate(512 512) scale(${s.toFixed(5)}) translate(${-MARK.cx} ${-MARK.cy})">
     ${inner.replace(/\n\s*/g, '\n    ')}
   </g>

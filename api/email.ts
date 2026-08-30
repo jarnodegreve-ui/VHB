@@ -199,12 +199,12 @@ export const sendLeaveDecisionEmail = async (ctx: LeaveDecisionEmailContext) => 
 export const sendWelcomeEmail = async (ctx: { to: string; name: string; actionLink?: string | null }) => {
   const url = portalUrl();
   const setPassword = ctx.actionLink
-    ? { text: `Stel je wachtwoord in via deze link: ${ctx.actionLink}`, html: `<a href="${ctx.actionLink}" style="background-color: #E2A323; color: #14181B; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Wachtwoord instellen</a>` }
+    ? { text: `Stel je wachtwoord in via deze link: ${ctx.actionLink}`, html: `<a href="${ctx.actionLink}" style="background-color: #E2A323; color: #0D0D0F; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Wachtwoord instellen</a>` }
     : { text: `Stel je wachtwoord in via "Wachtwoord vergeten" op het loginscherm: ${url}`, html: `<p style="color: #475569; line-height: 1.6;">Stel je wachtwoord in via <strong>"Wachtwoord vergeten"</strong> op het <a href="${url}">loginscherm</a>.</p>` };
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; border-radius: 12px; overflow: hidden;">
-      <div style="background-color: #14181B; color: white; padding: 22px 30px; text-align: center;">
+      <div style="background-color: #0D0D0F; color: white; padding: 22px 30px; text-align: center;">
         <p style="margin: 0; font-size: 12px; font-weight: 800; letter-spacing: 0.18em; color: #E2A323;">WELKOM</p>
         <h1 style="margin: 8px 0 0; font-size: 22px; font-weight: 800;">VHB Portaal</h1>
       </div>
@@ -266,7 +266,7 @@ export const sendExpiryReminderEmail = async (ctx: {
         ? "verloopt morgen"
         : `verloopt over ${ctx.dagen} dagen`;
   const dringend = ctx.dagen <= 7;
-  const bannerColor = dringend ? "#C2410C" : "#14181B";
+  const bannerColor = dringend ? "#C2410C" : "#0D0D0F";
   const accent = dringend ? "#C2410C" : "#E2A323";
 
   const html = `
@@ -283,7 +283,7 @@ export const sendExpiryReminderEmail = async (ctx: {
           geef de nieuwe datum door aan de planning, dan blijf je zonder onderbreking inzetbaar.
         </p>
         <div style="margin-top: 30px; text-align: center;">
-          <a href="${url}" style="background-color: ${accent}; color: ${dringend ? "white" : "#14181B"}; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Open het portaal</a>
+          <a href="${url}" style="background-color: ${accent}; color: ${dringend ? "white" : "#0D0D0F"}; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">Open het portaal</a>
         </div>
       </div>
       <div style="background-color: #f8fafc; padding: 14px 30px; text-align: center; font-size: 11px; color: #94a3b8;">

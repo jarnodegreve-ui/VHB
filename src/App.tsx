@@ -2198,12 +2198,12 @@ export default function App() {
             className="rounded-xl py-1 px-2 transition-opacity hover:opacity-80"
             title="Naar dashboard"
           >
-            {/* Primary-lockup mét "Van Hoorebeke & Zoon" — op verzoek van
-                Jarno overal hetzelfde logo (was: sidebar-variant zonder
-                naamregel). w-48 (192 px) houdt de naamregel boven het
-                richtlijn-minimum van 180 px. */}
-            <BrandLogo tone="licht" className="w-48 h-auto mx-auto select-none block dark:hidden" />
-            <BrandLogo tone="donker" className="w-48 h-auto mx-auto select-none hidden dark:block" />
+            {/* Los beeldmerk (zonder naamregel), w-36 = 144 px. Het volledige
+                logo mag volgens de richtlijn niet onder 180 px en vond Jarno
+                op die maat te groot in de sidebar (30-08). Het volledige logo
+                staat op login en de pre-app-schermen. */}
+            <BrandLogo variant="beeldmerk" tone="licht" className="w-36 h-auto mx-auto select-none block dark:hidden" />
+            <BrandLogo variant="beeldmerk" tone="donker" className="w-36 h-auto mx-auto select-none hidden dark:block" />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
