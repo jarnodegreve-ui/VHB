@@ -10,18 +10,21 @@
  * Geometrie is 1-op-1 brand/vhb-final-logo-package/VHB-hoofdlogo-kleur.svg
  * (onderbroken lus, monogram met de twee profieluitsparingen in de gouden
  * H-verbinding, naamregel als lettercontouren — geen font nodig). De
- * negatief-variant wisselt alleen carbon → wit, exact zoals
- * VHB-hoofdlogo-negatief.svg. Kleuren staan hier bewust hard (geen tokens):
- * de gebruiksrichtlijnen verbieden afwijkende logokleuren, dus het logo mag
- * niet meebewegen met een latere UI-retune.
+ * negatief-variant wisselt alleen carbon → wit, zoals
+ * VHB-hoofdlogo-negatief.svg — maar niet puur #FFFFFF: op het diepe zwart van
+ * dark mode/login vond Jarno dat te fel (30-08), dus het negatief staat op
+ * slate-200-wit. Verder staan de kleuren bewust hard (geen tokens): de
+ * gebruiksrichtlijnen verbieden afwijkende logokleuren, dus het logo mag niet
+ * meebewegen met een latere UI-retune.
  *
- * Maat: sizen op BREEDTE (w-48 e.d., h-auto), niet op hoogte — de richtlijn
- * vraagt minimaal 180 px breed voor het volledige logo, anders wordt de
- * naamregel onleesbaar. Het losse beeldmerk (variant="beeldmerk") mag vanaf 48 px.
+ * Maat: sizen op BREEDTE (w-36/w-56, h-auto), niet op hoogte. De richtlijn
+ * vraagt 180 px voor het volledige logo; de sidebar zit bewust op 144 px
+ * (keuze Jarno — naamregel ±6 px, op retina nog leesbaar), lager niet.
+ * Het losse beeldmerk (variant="beeldmerk") mag vanaf 48 px.
  */
 const CARBON = '#14181B';
 const GOUD = '#E2A323';
-const WIT = '#FFFFFF';
+const NEGATIEF = '#E4E6E8'; // slate-200-wit i.p.v. #FFFFFF, zie boven
 
 /* Naamregel "VAN HOOREBEKE & ZOON" als lettercontouren, letterlijk uit het masterbestand. */
 const NAAMREGEL =
@@ -37,13 +40,13 @@ export function BrandLogo({
   variant = 'volledig',
   className,
 }: {
-  /** 'licht' = carbon op lichte achtergrond; 'donker' = negatief (wit) op carbon/donker. */
+  /** 'licht' = carbon op lichte achtergrond; 'donker' = negatief (gedempt wit) op zwart/donker. */
   tone?: 'licht' | 'donker';
   /** 'volledig' = lus + monogram + naamregel; 'beeldmerk' = zonder naamregel. */
   variant?: 'volledig' | 'beeldmerk';
   className?: string;
 }) {
-  const ink = tone === 'donker' ? WIT : CARBON;
+  const ink = tone === 'donker' ? NEGATIEF : CARBON;
   const beeldmerk = variant === 'beeldmerk';
   return (
     <svg

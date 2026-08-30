@@ -2198,12 +2198,12 @@ export default function App() {
             className="rounded-xl py-1 px-2 transition-opacity hover:opacity-80"
             title="Naar dashboard"
           >
-            {/* Los beeldmerk (zonder naamregel), w-36 = 144 px. Het volledige
-                logo mag volgens de richtlijn niet onder 180 px en vond Jarno
-                op die maat te groot in de sidebar (30-08). Het volledige logo
-                staat op login en de pre-app-schermen. */}
-            <BrandLogo variant="beeldmerk" tone="licht" className="w-36 h-auto mx-auto select-none block dark:hidden" />
-            <BrandLogo variant="beeldmerk" tone="donker" className="w-36 h-auto mx-auto select-none hidden dark:block" />
+            {/* Volledig logo mét naamregel op w-36 = 144 px — bewuste keuze
+                Jarno (30-08): op 192 px (richtlijn-minimum 180 px) te groot,
+                het beeldmerk zonder naamregel wilde hij niet. De naamregel is
+                hier ±6 px hoog; op retina nog leesbaar, dus niet kleiner. */}
+            <BrandLogo tone="licht" className="w-36 h-auto mx-auto select-none block dark:hidden" />
+            <BrandLogo tone="donker" className="w-36 h-auto mx-auto select-none hidden dark:block" />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}
