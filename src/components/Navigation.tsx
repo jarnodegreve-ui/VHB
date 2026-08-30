@@ -51,8 +51,11 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
  */
 export function NavSection({ title, count, active = false, children }: { title: string; count: number; active?: boolean; children: React.ReactNode }) {
   const storageKey = `vhb-nav-${title}`;
+  // Standaard ópen (feedback Jarno 30-08): sinds de sidebar-voet naar het
+  // avatar-menu verhuisde mag het menu de volle hoogte gebruiken. Alleen wie
+  // een sectie zelf dichtklapt ('0') houdt hem dicht.
   const [open, setOpen] = useState(() => {
-    try { return localStorage.getItem(storageKey) === '1'; } catch { return false; }
+    try { return localStorage.getItem(storageKey) !== '0'; } catch { return true; }
   });
   const expanded = open || active;
   const toggle = () => {

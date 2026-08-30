@@ -1844,7 +1844,7 @@ export default function App() {
   if (!authReady) {
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-        <BrandLogo tone="donker" naamregelAfstand={26} className="w-40 sm:w-56 h-auto select-none" />
+        <BrandLogo tone="donker" naamregelAfstand={26} className="w-36 sm:w-44 h-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
           <BrandSpinner size={16} tone="donker" />
           <span className="text-sm font-medium">Sessie laden…</span>
@@ -1925,7 +1925,7 @@ export default function App() {
     const revoked = deviceBlocked === 'revoked';
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <BrandLogo tone="donker" naamregelAfstand={26} className="w-40 sm:w-56 h-auto select-none" />
+        <BrandLogo tone="donker" naamregelAfstand={26} className="w-36 sm:w-44 h-auto select-none" />
         <div className="max-w-sm">
           <div className={cn(
             'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
@@ -1983,7 +1983,7 @@ export default function App() {
     if (session) {
       return (
         <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-          <BrandLogo tone="donker" naamregelAfstand={26} className="w-40 sm:w-56 h-auto select-none" />
+          <BrandLogo tone="donker" naamregelAfstand={26} className="w-36 sm:w-44 h-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
             <BrandSpinner size={16} tone="donker" />
             <span className="text-sm font-medium">Profiel laden…</span>
