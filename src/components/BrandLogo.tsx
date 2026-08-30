@@ -24,7 +24,7 @@
  */
 const CARBON = '#14181B';
 const GOUD = '#E2A323';
-const NEGATIEF = '#E4E6E8'; // slate-200-wit i.p.v. #FFFFFF, zie boven
+const NEGATIEF = '#DCDFE2'; // gedempt wit (tussen slate-200 en -300) i.p.v. #FFFFFF, zie boven
 
 /* Naamregel "VAN HOOREBEKE & ZOON" als lettercontouren, letterlijk uit het masterbestand. */
 const NAAMREGEL =
@@ -32,30 +32,52 @@ const NAAMREGEL =
 
 // Strakke viewBoxen rond de inhoud (het master is 1512×754 met ruime marge):
 // lus-buitenrand x 229,5–1197 / y 132–543; naamregel y 589–631.
-const VIEWBOX_VOLLEDIG = '217 120 992 523';
 const VIEWBOX_BEELDMERK = '217 120 992 435';
+const VB_X = 217, VB_Y = 120, VB_W = 992, VB_MARGE = 12;
+// Naamregel-geometrie in master-eenheden: bovenrand, hoogte en middellijn.
+const NAAM_TOP = 589.34;
+const NAAM_HOOGTE = 41.67;
+const NAAM_CX = 719.5;
 
 export function BrandLogo({
   tone = 'licht',
   variant = 'volledig',
+  naamregelSchaal = 1,
+  naamregelAfstand = 0,
   className,
 }: {
   /** 'licht' = carbon op lichte achtergrond; 'donker' = negatief (gedempt wit) op zwart/donker. */
   tone?: 'licht' | 'donker';
   /** 'volledig' = lus + monogram + naamregel; 'beeldmerk' = zonder naamregel. */
   variant?: 'volledig' | 'beeldmerk';
+  /** Naamregel vergroten (om z'n boven-middenpunt). Wijkt af van het master —
+   *  alleen op vraag van Jarno (sidebar 1,2: leesbaarheid op 144 px). Boven
+   *  ±1,02 wordt de naamregel breder dan de lus; overflow staat daarom open. */
+  naamregelSchaal?: number;
+  /** Naamregel extra omlaag, in master-eenheden (lusdikte = 57). */
+  naamregelAfstand?: number;
   className?: string;
 }) {
   const ink = tone === 'donker' ? NEGATIEF : CARBON;
   const beeldmerk = variant === 'beeldmerk';
+  // Hoogte groeit mee met een lagere/grotere naamregel zodat de layout-box
+  // klopt (niets overlapt wat eronder staat); horizontaal mag hij uitsteken.
+  const hoogte = beeldmerk
+    ? 435
+    : Math.ceil(NAAM_TOP + naamregelAfstand + NAAM_HOOGTE * naamregelSchaal + VB_MARGE) - VB_Y;
+  const naamTransform =
+    naamregelSchaal === 1 && naamregelAfstand === 0
+      ? undefined
+      : `translate(${NAAM_CX} ${NAAM_TOP + naamregelAfstand}) scale(${naamregelSchaal}) translate(${-NAAM_CX} ${-NAAM_TOP})`;
   return (
     <svg
-      viewBox={beeldmerk ? VIEWBOX_BEELDMERK : VIEWBOX_VOLLEDIG}
-      width={992}
-      height={beeldmerk ? 435 : 523}
+      viewBox={beeldmerk ? VIEWBOX_BEELDMERK : `${VB_X} ${VB_Y} ${VB_W} ${hoogte}`}
+      width={VB_W}
+      height={hoogte}
       role="img"
       aria-label="VHB — Van Hoorebeke & Zoon"
       className={className}
+      style={{ overflow: 'visible' }}
     >
       {/* Onderbroken ovale lus: carbon/wit met het gouden segment rechtsboven. */}
       <g fill="none" strokeWidth={57} strokeLinecap="butt" strokeLinejoin="round">
@@ -78,7 +100,9 @@ export function BrandLogo({
         fill={GOUD}
         fillRule="evenodd"
       />
-      {!beeldmerk && <path d={NAAMREGEL} fill={ink} stroke={ink} strokeWidth={0.3} strokeLinejoin="round" />}
+      {!beeldmerk && (
+        <path d={NAAMREGEL} fill={ink} stroke={ink} strokeWidth={0.3} strokeLinejoin="round" transform={naamTransform} />
+      )}
     </svg>
   );
 }

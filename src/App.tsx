@@ -1847,7 +1847,7 @@ export default function App() {
   if (!authReady) {
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-        <BrandLogo tone="donker" className="w-56 h-auto select-none" />
+        <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 h-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
           <span className="text-sm font-medium">Sessie laden…</span>
@@ -1928,7 +1928,7 @@ export default function App() {
     const revoked = deviceBlocked === 'revoked';
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <BrandLogo tone="donker" className="w-56 h-auto select-none" />
+        <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 h-auto select-none" />
         <div className="max-w-sm">
           <div className={cn(
             'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
@@ -1986,7 +1986,7 @@ export default function App() {
     if (session) {
       return (
         <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-          <BrandLogo tone="donker" className="w-56 h-auto select-none" />
+          <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 h-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
             <div className="h-4 w-4 animate-spin rounded-full border-2 border-white/20 border-t-oker-500" />
             <span className="text-sm font-medium">Profiel laden…</span>
@@ -2200,10 +2200,10 @@ export default function App() {
           >
             {/* Volledig logo mét naamregel op w-36 = 144 px — bewuste keuze
                 Jarno (30-08): op 192 px (richtlijn-minimum 180 px) te groot,
-                het beeldmerk zonder naamregel wilde hij niet. De naamregel is
-                hier ±6 px hoog; op retina nog leesbaar, dus niet kleiner. */}
-            <BrandLogo tone="licht" className="w-36 h-auto mx-auto select-none block dark:hidden" />
-            <BrandLogo tone="donker" className="w-36 h-auto mx-auto select-none hidden dark:block" />
+                het beeldmerk zonder naamregel wilde hij niet. Naamregel 1,2×
+                en 26 eenheden lager (ook Jarno) voor leesbaarheid op deze maat. */}
+            <BrandLogo tone="licht" naamregelSchaal={1.2} naamregelAfstand={26} className="w-36 h-auto mx-auto select-none block dark:hidden" />
+            <BrandLogo tone="donker" naamregelSchaal={1.2} naamregelAfstand={26} className="w-36 h-auto mx-auto select-none hidden dark:block" />
           </button>
           <button
             onClick={() => setIsSidebarOpen(false)}

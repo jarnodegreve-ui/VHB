@@ -173,8 +173,9 @@ export function LoginView({
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center mb-10"
         >
-          {/* Primary-lockup mét naamregel — overal hetzelfde logo. */}
-          <BrandLogo tone="donker" className="w-56 sm:w-64 h-auto select-none" />
+          {/* Volledig logo mét naamregel; naamregel 26 eenheden lager dan het
+              master (Jarno 30-08: iets meer lucht onder de lus). */}
+          <BrandLogo tone="donker" naamregelAfstand={26} className="w-56 sm:w-64 h-auto select-none" />
         </motion.div>
 
         {/* Stille form-card: één zachte entrance-fade, verder niets. */}
