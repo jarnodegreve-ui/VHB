@@ -44,6 +44,15 @@
         ],
         "createdAt": "2026-08-20T21:24:26.487Z",
         "reason": "Bekende vals-positief: detector ziet de (witte/neutrale) tabelachtergrond niet; bestaande slate-400-regels verschoven enkel van regelnummer in verbeterronde 20-08"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/components/WerkvoorraadMenu.tsx"
+        ],
+        "createdAt": "2026-08-31T18:48:39.524Z",
+        "reason": "Huisstijl CLAUDE.md: op amber/goud altijd carbon-tekst (text-slate-950), nooit wit — zelfde pairing als ConfirmationModal-warning (#399)"
       }
     ]
   }

@@ -43,7 +43,7 @@ import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, notify } from './lib/ui';
-import { apiFetch, vernieuwSessie } from './lib/api';
+import { apiFetch, apiJson, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { reportHandledError, reportUserFeedback, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
@@ -60,6 +60,8 @@ import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { UserMenu } from './components/UserMenu';
 import { PreviewToggle } from './components/PreviewToggle';
+import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
+import { berekenWerkvoorraad, type PendingDevice, type VervaldataRij } from './lib/werkvoorraad';
 import { BrandSpinner } from './components/BrandSpinner';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -213,6 +215,35 @@ export default function App() {
   // Center van planner/admin. null = (nog) niet geladen — de cockpit toont
   // dan 'onbekend' i.p.v. een vals-groen 'volledig gedekt'.
   const [coverageDays, setCoverageDays] = useState<DayGap[] | null>(null);
+  // Voer voor de werkvoorraad-knop in de topbar én het Open taken-paneel op
+  // het dashboard: vervaldata (staf) en wachtende toestellen (admin-only API)
+  // komen uit eigen endpoints. Best-effort — de app mag hier nooit op breken.
+  const [vervaldata, setVervaldata] = useState<VervaldataRij[]>([]);
+  const [pendingDevices, setPendingDevices] = useState<PendingDevice[]>([]);
+  useEffect(() => {
+    const rol = currentUser?.role;
+    if (rol !== 'planner' && rol !== 'admin') { setVervaldata([]); return; }
+    let cancelled = false;
+    apiJson<VervaldataRij[]>('/api/user-expiries')
+      .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
+      .catch(() => { /* geen data = geen rijen */ });
+    return () => { cancelled = true; };
+  }, [currentUser?.role]);
+  useEffect(() => {
+    if (currentUser?.role !== 'admin') { setPendingDevices([]); return; }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await apiFetch('/api/devices');
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && Array.isArray(data)) setPendingDevices(data.filter((d: { status?: string }) => d.status === 'pending'));
+      } catch {
+        // stil: de werkvoorraad mag niet breken op een toestellen-fetch
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentUser?.role]);
   const [isLoading, setIsLoading] = useState(false);
   // Eerste data-fetch nog niet rond? Views kunnen dit gebruiken om
   // skeleton-loaders te tonen i.p.v. lege/mock-data.
@@ -2012,6 +2043,16 @@ export default function App() {
   const effectiveRole = previewingChauffeur ? 'chauffeur' : currentUser.role;
   const isPlanner = effectiveRole === 'planner' || effectiveRole === 'admin';
   const isAdmin = effectiveRole === 'admin';
+  // Werkvoorraad voor de topbar-knop — gedeelde berekening met het Open
+  // taken-paneel op het dashboard (lib/werkvoorraad), zodat badge en paneel
+  // nooit uiteenlopen. In chauffeur-preview verdwijnt de knop mee.
+  const werkvoorraad = isPlanner
+    ? berekenWerkvoorraad({
+        users, shifts, leaveRequests, swaps,
+        matrixHistory: planningMatrixHistory, coverageDays,
+        vervaldata, pendingDevices, now: new Date(),
+      })
+    : null;
   const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
   const resolvedCurrentView = allowedViews.includes(currentView) ? currentView : 'dashboard';
   const viewMeta: Record<string, { title: string; subtitle: string }> = {
@@ -2409,6 +2450,12 @@ export default function App() {
                       </button>
                     </>
                   )}
+                  {/* Werkvoorraad — tussen de preview-toggle en de bel (idee
+                      Jarno 31-08): open taken vanuit elk scherm zichtbaar;
+                      verving de statuspil op het planner-dashboard. */}
+                  {werkvoorraad && (
+                    <WerkvoorraadMenu werkvoorraad={werkvoorraad} onNavigate={setCurrentView} />
+                  )}
                   <button
                     type="button"
                     onClick={() => setCurrentView('updates')}
@@ -2473,6 +2520,8 @@ export default function App() {
                     matrixHistory={planningMatrixHistory}
                     activityLog={activityLog}
                     coverageDays={coverageDays}
+                    vervaldata={vervaldata}
+                    pendingDevices={pendingDevices}
                     onNavigate={(view) => setCurrentView(view)}
                     onSickReport={reportSick}
                     onShiftSwapped={async () => {
