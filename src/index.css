@@ -620,18 +620,19 @@ html.dark {
    glass-morphism classes above.
    ========================================================================== */
 
-/* Dark mode = login kleurschema: pure donker (#0D0D0F) met subtiele
-   oker vignet, geen indigo / koel-blauwe tinten meer. */
+/* Dark mode: pure donker (#0D0D0F) met een neutraal wit vignet voor diepte —
+   geen kleurzweem (oker noch indigo); goud leeft alleen in accenten.
+   Keuze Jarno 31-08: strak/professioneel zonder dood-plat zwart. */
 html.dark {
   background:
     radial-gradient(
       ellipse 1000px 800px at 50% 30%,
-      rgba(226, 163, 35, 0.05) 0%,
+      rgba(255, 255, 255, 0.03) 0%,
       transparent 60%
     ),
     radial-gradient(
       ellipse 700px 500px at 50% 95%,
-      rgba(196, 134, 27, 0.03) 0%,
+      rgba(255, 255, 255, 0.02) 0%,
       transparent 60%
     ),
     #0D0D0F;
@@ -639,10 +640,10 @@ html.dark {
 }
 
 :where(.dark) .parallax-bg {
-  /* Pure oker-vignet, geen indigo of pink meer. Statisch, zonder filter. */
+  /* Neutraal wit vignet, geen kleurzweem. Statisch, zonder filter. */
   background:
-    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(226, 163, 35, 0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(196, 134, 27, 0.07) 0%, transparent 55%);
+    radial-gradient(ellipse 700px 500px at 15% 18%, rgba(255, 255, 255, 0.05) 0%, transparent 55%),
+    radial-gradient(ellipse 600px 400px at 85% 70%, rgba(255, 255, 255, 0.035) 0%, transparent 55%);
 }
 
 :where(.dark) body {
@@ -1070,15 +1071,18 @@ html.dark {
    Past bij het carbon app-/tab-icoon en de carbon theme-color. */
 
 .login-bg-dark {
+  /* Zelfde neutrale vignet-taal als html.dark: eerst goud gehalveerd, daarna
+     op vraag van Jarno (31-08, verbeterronde nr. 7) volledig neutraal —
+     goud alleen nog in logo en accenten. */
   background:
     radial-gradient(
       ellipse 900px 700px at 50% 38%,
-      rgba(226, 163, 35, 0.07) 0%,
+      rgba(255, 255, 255, 0.03) 0%,
       transparent 55%
     ),
     radial-gradient(
       ellipse 600px 500px at 50% 95%,
-      rgba(196, 134, 27, 0.04) 0%,
+      rgba(255, 255, 255, 0.02) 0%,
       transparent 55%
     ),
     #0D0D0F;
@@ -1098,6 +1102,20 @@ html.dark {
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
     0 20px 60px rgba(0, 0, 0, 0.55),
     0 8px 20px rgba(0, 0, 0, 0.35);
+}
+
+/* CTA op de carbon-kaart: de amber gloed-schaduw van .btn-primary licht op
+   een donkere ondergrond op als halo — hier gedempt tot rim + contactschaduw
+   (verbeterronde 31-08, nr. 4). */
+.panel-login-dark .btn-primary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.2),
+    0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.panel-login-dark .btn-primary:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .control-input-dark {
