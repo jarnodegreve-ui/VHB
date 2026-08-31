@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { WACHTWOORD_HINT } from '../lib/wachtwoord';
+import { WACHTWOORD_HINT, WACHTWOORD_MIN } from '../lib/wachtwoord';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
 import { Button } from '../components/primitives';
@@ -34,9 +34,10 @@ export function LoginView({
 }) {
   const [mode, setMode] = useState<Mode>('login');
 
-  // Login is altijd licht, los van de globale theme-toggle. We removen
-  // de html.dark class tijdelijk (wordt herstelt op unmount na succesvol
-  // inloggen) zodat de hele login-context gegarandeerd licht is.
+  // De login stuurt zijn eigen carbon-donkere styling (login-bg-dark e.d.),
+  // los van de globale theme-toggle. We halen html.dark tijdelijk weg zodat
+  // de .dark-overrides van de app hier niet doorheen lekken; op unmount
+  // (na succesvol inloggen) wordt de klasse hersteld.
   useEffect(() => {
     if (typeof document === 'undefined') return;
     const html = document.documentElement;
@@ -228,7 +229,7 @@ export function LoginView({
                     }}
                     placeholder={WACHTWOORD_HINT}
                     required
-                    minLength={6}
+                    minLength={WACHTWOORD_MIN}
                     autoFocus
                   />
                   <FeedbackBlock error={error} info={info} />
@@ -297,9 +298,9 @@ export function LoginView({
                           setMode('forgot');
                           resetFeedback();
                         }}
-                        className="-my-2 inline-flex min-h-11 items-center text-2xs font-bold uppercase tracking-[0.08em] text-oker-600 hover:text-oker-700 transition-colors"
+                        className="-my-2 inline-flex min-h-11 items-center text-2xs font-bold uppercase tracking-[0.08em] text-slate-400 hover:text-oker-400 transition-colors"
                       >
-                        Vergeten?
+                        Wachtwoord vergeten?
                       </button>
                     }
                   />
@@ -309,21 +310,31 @@ export function LoginView({
               )}
 
           </div>{/* /panel */}
+
+          {/* Wie te bellen als het niet lukt — chauffeurs zijn geen
+              IT-publiek, dus dit staat er gewoon bij. */}
+          <motion.p
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.35, duration: 0.4 }}
+            className="mt-6 text-center text-xs text-slate-400"
+          >
+            Problemen met inloggen? Contacteer de planning.
+          </motion.p>
         </motion.div>
       </main>
 
-      {/* Footer — gepind aan de onderkant van de viewport.
-          Twee regels: "Intern gebruik" boven, copyright onder.
+      {/* Footer — gepind aan de onderkant van de viewport, één regel
+          ("& Zoon" conform de naamregel in het logo).
           Respecteert env(safe-area-inset-bottom) op iPhones. */}
       <motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-2xs font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6 space-y-1"
+        className="absolute inset-x-0 bottom-0 text-2xs font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
-        <div>Intern gebruik</div>
-        <div>© {new Date().getFullYear()} Van Hoorebeke en Zoon</div>
+        <div>Intern gebruik · © {new Date().getFullYear()} Van Hoorebeke & Zoon</div>
       </motion.div>
     </div>
   );
