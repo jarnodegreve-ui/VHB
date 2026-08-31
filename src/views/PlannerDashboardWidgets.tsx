@@ -11,6 +11,7 @@ import {
   KeyRound,
   MapPin,
   Phone,
+  Plus,
   Repeat,
   Settings,
   CheckCircle2,
@@ -505,24 +506,24 @@ export function PlannerDashboardWidgets({
             — die is vanuit elk scherm zichtbaar. Alleen de actie blijft. */}
         {/* Ziekmelding komt telefonisch binnen tijdens de rit, dus de planner
             moet er altijd bij kunnen — vandaar hier en niet achter een menu.
-            Dark: eigen afwerking i.p.v. de globale amber-overrides (modderig
-            bruin, feedback Jarno 31-08). Het raakvlak wordt met een
-            onzichtbare after-rand opgerekt tot ±44 px voor duimen (Apple HIG). */}
+            Zelfde primary-knop als op het Ziekte-blad (keuze Jarno 31-08):
+            de amber pil-vorm matchte de statuspil die nu weg is, en een
+            registratie is een gewone handeling, geen alarm. */}
         {onSickReport && (
-          <button
+          <Button
             ref={sickTriggerRef}
-            type="button"
+            variant="primary"
+            size="md"
+            icon={<Plus size={15} />}
             aria-haspopup="dialog"
             onClick={() => {
               setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
               setSickError('');
               setShowSickModal(true);
             }}
-            className="ios-pressable relative inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-2xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/15 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
           >
-            <AlertTriangle size={12} className="text-amber-600 dark:text-amber-300" />
             Ziek melden
-          </button>
+          </Button>
         )}
         </div>
       </div>
