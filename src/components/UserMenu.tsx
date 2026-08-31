@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
 import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react';
+import { motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import type { User } from '../types';
+import { useDropdown } from './useDropdown';
 
 /**
  * Avatar-menu in de topbar (mock Jarno 30-08): goud cirkeltje met initialen
@@ -35,24 +36,7 @@ export function UserMenu({
   onProbleem: () => void;
   onLogout: () => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const wortel = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const buiten = (e: PointerEvent) => {
-      if (wortel.current && !wortel.current.contains(e.target as Node)) setOpen(false);
-    };
-    const toets = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', buiten);
-    document.addEventListener('keydown', toets);
-    return () => {
-      document.removeEventListener('pointerdown', buiten);
-      document.removeEventListener('keydown', toets);
-    };
-  }, [open]);
+  const { open, setOpen, wortel } = useDropdown();
 
   const sluitEn = (fn: () => void) => () => { setOpen(false); fn(); };
 
@@ -77,9 +61,13 @@ export function UserMenu({
       </button>
 
       {open && (
-        <div
+        <motion.div
           role="menu"
           aria-label="Account"
+          initial={{ opacity: 0, scale: 0.97, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          style={{ transformOrigin: 'top right' }}
           className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-surface-white backdrop-blur-xl ring-1 ring-hairline shadow-xl p-1.5 z-50"
         >
           {/* Identiteit bovenaan — het kaartje dat eerst in de sidebar-voet stond. */}
@@ -118,7 +106,7 @@ export function UserMenu({
             <span className="text-slate-400 shrink-0"><LogOut size={16} /></span>
             <span>Uitloggen</span>
           </button>
-        </div>
+        </motion.div>
       )}
     </div>
   );

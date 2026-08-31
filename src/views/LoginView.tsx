@@ -174,11 +174,11 @@ export function LoginView({
           transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
           className="flex flex-col items-center text-center mb-10"
         >
-          {/* Volledig logo mét naamregel; naamregel 26 eenheden lager dan het
-              master (Jarno 30-08: iets meer lucht onder de lus). */}
+          {/* Volledig logo mét naamregel; naamregel 44 eenheden lager dan het
+              master (Jarno 30-08 → 26, 31-08 → 70: 44 was op loginformaat onzichtbaar). */}
           {/* Compact op elke maat (2× verkleind op vraag van Jarno 30-08):
               144 px mobiel / 176 px desktop. */}
-          <BrandLogo tone="donker" naamregelAfstand={26} className="w-36 sm:w-44 h-auto select-none" />
+          <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
         </motion.div>
 
         {/* Stille form-card: één zachte entrance-fade, verder niets. */}

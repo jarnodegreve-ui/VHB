@@ -1,18 +1,18 @@
-import { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Repeat, Smartphone, UserX } from 'lucide-react';
+import { motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
 import type { Werkvoorraad } from '../lib/werkvoorraad';
-import { formatShortDay } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
+import { useDropdown } from './useDropdown';
 
 /**
  * Werkvoorraad-knop in de topbar (idee Jarno 31-08): één plek die vanuit élk
  * scherm toont wat er open staat — de statuspil op het dashboard is hiermee
  * vervallen. Badge met teller zolang er iets open staat; uitklapmenu somt de
- * werkvoorraad per soort op en navigeert rechtstreeks naar het juiste scherm.
- *
- * Zelfde lichtgewicht dropdown-patroon als UserMenu: sluit op buiten-klik en
- * Escape, items zijn gewone buttons met role="menuitem".
+ * werkvoorraad per soort op (met een detail-subregel zodat je zonder
+ * doorklikken weet wát er speelt) en navigeert rechtstreeks naar het juiste
+ * scherm. Dropdown-gedrag gedeeld met UserMenu via useDropdown.
  */
 
 type Rij = {
@@ -20,35 +20,27 @@ type Rij = {
   icon: ReturnType<typeof AlertTriangle>;
   tone: 'red' | 'amber' | 'blue';
   label: string;
-  count?: number;
+  sub?: string;
   view: View;
 };
 
+/** "Naam A, Naam B +3" — compacte opsomming voor de subregel. */
+function somOp(namen: string[], max = 2): string {
+  const kop = namen.slice(0, max).join(', ');
+  return namen.length > max ? `${kop} +${namen.length - max}` : kop;
+}
+
 export function WerkvoorraadMenu({
   werkvoorraad,
+  userNaam,
   onNavigate,
 }: {
   werkvoorraad: Werkvoorraad;
+  /** Naam bij een user-id (App heeft de users-lijst). */
+  userNaam: (id: string) => string;
   onNavigate: (view: View) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const wortel = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const buiten = (e: PointerEvent) => {
-      if (wortel.current && !wortel.current.contains(e.target as Node)) setOpen(false);
-    };
-    const toets = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('pointerdown', buiten);
-    document.addEventListener('keydown', toets);
-    return () => {
-      document.removeEventListener('pointerdown', buiten);
-      document.removeEventListener('keydown', toets);
-    };
-  }, [open]);
+  const { open, setOpen, wortel } = useDropdown();
 
   const wv = werkvoorraad;
   const enkelvoud = (n: number, ev: string, mv: string) => `${n} ${n === 1 ? ev : mv}`;
@@ -70,31 +62,79 @@ export function WerkvoorraadMenu({
       view: 'beheer-roosters',
     });
   }
-  if (wv.importIssueCount > 0) {
-    rijen.push({ key: 'import', icon: <AlertTriangle size={15} />, tone: 'red', label: `Laatste import: ${enkelvoud(wv.importIssueCount, 'aandachtspunt', 'aandachtspunten')}`, view: 'beheer-roosters' });
+  if (wv.importIssueCount > 0 && wv.lastImport) {
+    rijen.push({
+      key: 'import',
+      icon: <AlertTriangle size={15} />,
+      tone: 'red',
+      label: `Laatste import: ${enkelvoud(wv.importIssueCount, 'aandachtspunt', 'aandachtspunten')}`,
+      sub: [
+        wv.lastImport.unknownCodes.length > 0 ? `${wv.lastImport.unknownCodes.length} onbekende codes` : null,
+        wv.lastImport.unmatchedDrivers.length > 0 ? `${wv.lastImport.unmatchedDrivers.length} niet-gematchte chauffeurs` : null,
+      ].filter(Boolean).join(' · '),
+      view: 'beheer-roosters',
+    });
   }
   if (wv.teHerverdelen.length > 0) {
-    rijen.push({ key: 'herverdeel', icon: <UserX size={15} />, tone: 'red', label: `${enkelvoud(wv.teHerverdelen.length, 'dienst', 'diensten')} te herverdelen`, count: wv.teHerverdelen.length, view: 'ziekte' });
+    rijen.push({
+      key: 'herverdeel',
+      icon: <UserX size={15} />,
+      tone: 'red',
+      label: `${enkelvoud(wv.teHerverdelen.length, 'dienst', 'diensten')} te herverdelen`,
+      sub: somOp(wv.herverdeelPerChauffeur.map((g) => `${g.naam} (${g.diensten.length})`)),
+      view: 'ziekte',
+    });
   }
   if (wv.gapDays.length > 0) {
-    rijen.push({ key: 'gaten', icon: <AlertTriangle size={15} />, tone: 'red', label: `Open diensten op ${enkelvoud(wv.gapDays.length, 'dag', 'dagen')}`, count: wv.gapDays.length, view: 'dekking' });
+    rijen.push({
+      key: 'gaten',
+      icon: <AlertTriangle size={15} />,
+      tone: 'red',
+      label: `Open diensten op ${enkelvoud(wv.gapDays.length, 'dag', 'dagen')}`,
+      sub: somOp(wv.gapDays.map((d) => `${formatShortDay(d.date)} · ${d.missing.length} open`)),
+      view: 'dekking',
+    });
   }
   if (wv.pendingLeave.length > 0) {
-    rijen.push({ key: 'verlof', icon: <CalendarDays size={15} />, tone: 'amber', label: enkelvoud(wv.pendingLeave.length, 'verlofaanvraag', 'verlofaanvragen'), count: wv.pendingLeave.length, view: 'verlof' });
+    rijen.push({
+      key: 'verlof',
+      icon: <CalendarDays size={15} />,
+      tone: 'amber',
+      label: enkelvoud(wv.pendingLeave.length, 'verlofaanvraag', 'verlofaanvragen'),
+      sub: somOp(wv.pendingLeave.map((r) => userNaam(r.userId))),
+      view: 'verlof',
+    });
   }
   if (wv.pendingSwaps.length > 0) {
-    rijen.push({ key: 'ruil', icon: <Repeat size={15} />, tone: 'blue', label: enkelvoud(wv.pendingSwaps.length, 'ruilverzoek', 'ruilverzoeken'), count: wv.pendingSwaps.length, view: 'ruil-verzoeken' });
+    rijen.push({
+      key: 'ruil',
+      icon: <Repeat size={15} />,
+      tone: 'blue',
+      label: enkelvoud(wv.pendingSwaps.length, 'ruilverzoek', 'ruilverzoeken'),
+      sub: somOp(wv.pendingSwaps.map((s) => userNaam(s.requesterId))),
+      view: 'ruil-verzoeken',
+    });
   }
   if (wv.pendingDevices.length > 0) {
-    rijen.push({ key: 'toestellen', icon: <Smartphone size={15} />, tone: 'amber', label: `${enkelvoud(wv.pendingDevices.length, 'toestel wacht', 'toestellen wachten')} op goedkeuring`, count: wv.pendingDevices.length, view: 'toestellen' });
+    rijen.push({
+      key: 'toestellen',
+      icon: <Smartphone size={15} />,
+      tone: 'amber',
+      label: `${enkelvoud(wv.pendingDevices.length, 'toestel wacht', 'toestellen wachten')} op goedkeuring`,
+      sub: somOp(wv.pendingDevices.map((d) => userNaam(d.userId))),
+      view: 'toestellen',
+    });
   }
   if (wv.vervalTaken.length > 0) {
+    const urgentste = wv.vervalTaken[0];
     rijen.push({
       key: 'vervaldata',
       icon: <IdCard size={15} />,
       tone: wv.vervalTaken.some((e) => e.dagen < 0) ? 'red' : 'amber',
       label: `${enkelvoud(wv.vervalTaken.length, 'vervaldatum', 'vervaldata')} binnen 30 dagen`,
-      count: wv.vervalTaken.length,
+      sub: `${EXPIRY_SOORT_LABELS[urgentste.soort] ?? urgentste.soort} · ${userNaam(urgentste.userId)} · ${
+        urgentste.dagen < 0 ? 'verlopen' : urgentste.dagen === 0 ? 'vandaag' : `over ${enkelvoud(urgentste.dagen, 'dag', 'dagen')}`
+      }`,
       view: 'vervaldata',
     });
   }
@@ -133,9 +173,13 @@ export function WerkvoorraadMenu({
       </button>
 
       {open && (
-        <div
+        <motion.div
           role="menu"
           aria-label="Open taken"
+          initial={{ opacity: 0, scale: 0.97, y: -4 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          transition={{ duration: 0.15, ease: 'easeOut' }}
+          style={{ transformOrigin: 'top right' }}
           className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-surface-white backdrop-blur-xl ring-1 ring-hairline shadow-xl p-1.5 z-50"
         >
           <div className="flex items-center justify-between px-3 py-2 mb-1 border-b fine-divider">
@@ -162,14 +206,19 @@ export function WerkvoorraadMenu({
                 key={r.key}
                 role="menuitem"
                 onClick={ga(r.view)}
-                className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm text-left"
+                className="flex items-start gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm text-left"
               >
-                <span className={cn('shrink-0', toonKleur[r.tone])}>{r.icon}</span>
-                <span className="flex-1 min-w-0 truncate">{r.label}</span>
+                <span className={cn('shrink-0 mt-0.5', toonKleur[r.tone])}>{r.icon}</span>
+                <span className="flex-1 min-w-0">
+                  <span className="block truncate">{r.label}</span>
+                  {r.sub && (
+                    <span className="block truncate text-xs font-normal text-slate-500">{r.sub}</span>
+                  )}
+                </span>
               </button>
             ))
           )}
-        </div>
+        </motion.div>
       )}
     </div>
   );

@@ -11,6 +11,7 @@ import {
   KeyRound,
   MapPin,
   Phone,
+  Plus,
   Repeat,
   Settings,
   CheckCircle2,
@@ -283,7 +284,7 @@ export function PlannerDashboardWidgets({
     planningStale, daysSinceImport, lastImport, importIssueCount,
     planningHorizon, horizonDagenOver, horizonKrap,
     gapDays, vervalTaken, herverdeelPerChauffeur,
-    pendingLeave, pendingSwaps, openTasks, attentionCount,
+    pendingLeave, pendingSwaps, attentionCount,
   } = berekenWerkvoorraad({ users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, now });
 
   // Verlopen omleidingen (einddatum in het verleden) tellen niet mee: de
@@ -505,37 +506,39 @@ export function PlannerDashboardWidgets({
             — die is vanuit elk scherm zichtbaar. Alleen de actie blijft. */}
         {/* Ziekmelding komt telefonisch binnen tijdens de rit, dus de planner
             moet er altijd bij kunnen — vandaar hier en niet achter een menu.
-            Dark: eigen afwerking i.p.v. de globale amber-overrides (modderig
-            bruin, feedback Jarno 31-08). Het raakvlak wordt met een
-            onzichtbare after-rand opgerekt tot ±44 px voor duimen (Apple HIG). */}
+            Zelfde primary-knop als op het Ziekte-blad (keuze Jarno 31-08):
+            de amber pil-vorm matchte de statuspil die nu weg is, en een
+            registratie is een gewone handeling, geen alarm. */}
         {onSickReport && (
-          <button
+          <Button
             ref={sickTriggerRef}
-            type="button"
+            variant="primary"
+            size="sm"
+            className="gap-1 px-2.5"
+            icon={<Plus size={13} />}
             aria-haspopup="dialog"
             onClick={() => {
               setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
               setSickError('');
               setShowSickModal(true);
             }}
-            className="ios-pressable relative inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-2xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/15 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
           >
-            <AlertTriangle size={12} className="text-amber-600 dark:text-amber-300" />
             Ziek melden
-          </button>
+          </Button>
         )}
         </div>
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling op elke breedte, voor 7 én 8 tegels (de
-          laadplein-tegel verschijnt alleen mét OCPI-data). Zonder laadplein:
-          md = 3 tegels à span-2 + 4 à span-3 (rijen 3/2/2). Mét laadplein:
-          md = 6 tegels à span-2 + 2 à span-3 (rijen 3/3/2) — voorheen bleef
-          de 8e tegel alleen achter met een gat van een halve rij ernaast.
-          Haal je hier een tegel weg of zet je er een bij, dan moeten deze
-          tellingen mee. */}
-      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-8' : 'xl:grid-cols-7')}>
+          Gat-vrije verdeling op elke breedte, voor 5 én 6 tegels (de
+          laadplein-tegel verschijnt alleen mét OCPI-data; de Aanvragen- en
+          Laatste import-tegels zijn 31-08 vervallen — dubbelop met de
+          werkvoorraad-knop in de topbar). Zonder laadplein: md = 3 à span-2
+          + 2 à span-3 (rijen 3/2), en op mobiel spant Omleidingen beide
+          kolommen (5 is oneven). Mét laadplein: md = 6 tegels à span-2
+          (rijen 3/3). Haal je hier een tegel weg of zet je er een bij, dan
+          moeten deze tellingen mee. */}
+      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-6' : 'xl:grid-cols-5')}>
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Bus size={16} />}
@@ -578,16 +581,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAbsent(true)}
         />
         <OpsStat
-          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
-          icon={<Inbox size={16} />}
-          tone={openTasks > 0 ? 'amber' : 'slate'}
-          label="Aanvragen"
-          value={openTasks}
-          sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
-          onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof')}
-        />
-        <OpsStat
-          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
+          className={cn(laadplein ? 'md:col-span-2' : 'col-span-2 md:col-span-3', 'xl:col-span-1')}
           icon={<MapPin size={16} />}
           tone="slate"
           label="Omleidingen"
@@ -595,27 +589,12 @@ export function PlannerDashboardWidgets({
           sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
           onClick={() => onNavigate('omleidingen')}
         />
-        <OpsStat
-          className={cn('md:col-span-3 xl:col-span-1', laadplein ? '' : 'col-span-2')}
-          icon={<CalendarClock size={16} />}
-          tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
-          label="Laatste import"
-          text={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
-          sub={
-            lastImport
-              ? importIssueCount > 0
-                ? `${importIssueCount} aandachtspunten`
-                : `${lastImport.importedDays} dagen verwerkt`
-              : 'nog geen import'
-          }
-          onClick={() => onNavigate('beheer-roosters')}
-        />
         {/* Laadplein-tegel — alleen zodra de OCPI-koppeling data levert.
             Doorklikken naar het volle OCPI-scherm kan alleen als admin;
             voor een planner is de tegel zelf de informatie. */}
         {laadplein && (
           <OpsStat
-            className="md:col-span-3 xl:col-span-1"
+            className="md:col-span-2 xl:col-span-1"
             icon={<Zap size={16} />}
             tone={laadplein.outOfOrder > 0 ? 'red' : laadplein.charging > 0 ? 'blue' : 'slate'}
             label="Aan de lader"

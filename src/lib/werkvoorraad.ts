@@ -29,7 +29,7 @@ export type Werkvoorraad = {
   vervalTaken: Array<VervaldataRij & { dagen: number }>;
   /** Diensten die nog op naam staan van iemand die afwezig gemeld is. */
   teHerverdelen: OpenstaandeDienst[];
-  herverdeelPerChauffeur: Array<{ driverId: string; reden: string; diensten: OpenstaandeDienst[] }>;
+  herverdeelPerChauffeur: Array<{ driverId: string; naam: string; reden: string; diensten: OpenstaandeDienst[] }>;
   pendingLeave: LeaveRequest[];
   pendingSwaps: SwapRequest[];
   pendingDevices: PendingDevice[];
@@ -78,14 +78,15 @@ export function berekenWerkvoorraad({
   const teHerverdelen = openstaandeDienstenVanAfwezigen(shifts, leaveRequests, today);
   // Per chauffeur gegroepeerd: bij een langere ziekte zijn het er al gauw
   // acht — het totaal hoort meteen in de rij (melding Jarno 14-08).
+  const naamVan = (id: string) => users.find((u) => String(u.id) === String(id))?.name || 'Onbekend';
   const herverdeelPerChauffeur = Array.from(
     teHerverdelen.reduce((map, s) => {
       const key = String(s.driverId);
-      const groep = map.get(key) ?? { driverId: key, reden: s.reden, diensten: [] as OpenstaandeDienst[] };
+      const groep = map.get(key) ?? { driverId: key, naam: naamVan(key), reden: s.reden, diensten: [] as OpenstaandeDienst[] };
       groep.diensten.push(s);
       map.set(key, groep);
       return map;
-    }, new Map<string, { driverId: string; reden: string; diensten: OpenstaandeDienst[] }>()).values(),
+    }, new Map<string, { driverId: string; naam: string; reden: string; diensten: OpenstaandeDienst[] }>()).values(),
   );
 
   // Dekking: null = niet geladen/fout — behandel als 'onbekend', nooit als

@@ -53,6 +53,15 @@
         ],
         "createdAt": "2026-08-31T18:48:39.524Z",
         "reason": "Huisstijl CLAUDE.md: op amber/goud altijd carbon-tekst (text-slate-950), nooit wit — zelfde pairing als ConfirmationModal-warning (#399)"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/components/UserMenu.tsx"
+        ],
+        "createdAt": "2026-08-31T19:29:58.357Z",
+        "reason": "Pre-existing gemergde stijl uit PR #408: gedempte slate-iconen op zachte hover-tinten + carbon op goud (huisstijl CLAUDE.md)"
       }
     ]
   }
