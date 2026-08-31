@@ -35,6 +35,7 @@ import type {
 import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
 import { isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
+import { berekenWerkvoorraad, type PendingDevice, type VervaldataRij } from '../lib/werkvoorraad';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
@@ -67,6 +68,8 @@ export function PlannerDashboardWidgets({
   matrixHistory,
   activityLog,
   coverageDays,
+  vervaldata,
+  pendingDevices,
   onNavigate,
   onSickReport,
   onShiftSwapped,
@@ -83,6 +86,10 @@ export function PlannerDashboardWidgets({
   activityLog: ActivityLogEntry[];
   /** null = dekking (nog) niet geladen — toon 'onbekend' i.p.v. vals-groen. */
   coverageDays: DayGap[] | null;
+  /** Vervaldata + wachtende toestellen worden sinds de topbar-werkvoorraad
+   *  in App gefetcht (de knop is er op elk scherm) en hier doorgegeven. */
+  vervaldata: VervaldataRij[];
+  pendingDevices: PendingDevice[];
   onNavigate: (view: View) => void;
   /** Ziekmelding registreren — woont hier i.p.v. in de verlofview, zie de
    *  toelichting bij LeaveManagementView. */
@@ -124,17 +131,6 @@ export function PlannerDashboardWidgets({
   // de fetch (OCPI niet geconfigureerd, storing), dan verdwijnt de tegel
   // gewoon — het dashboard mag er nooit op wachten of door breken.
   const [laadplein, setLaadplein] = useState<{ evses: number; charging: number; outOfOrder: number; totalPowerKw: number } | null>(null);
-  // Vervaldata (Code 95 / medische schifting): rijen in Open taken
-  // zodra iets binnen 30 dagen verloopt. Best-effort, net als de laad-tegel.
-  const [vervaldata, setVervaldata] = useState<Array<{ userId: string; soort: string; validUntil: string }>>([]);
-  useEffect(() => {
-    let cancelled = false;
-    apiJson<Array<{ userId: string; soort: string; validUntil: string }>>('/api/user-expiries')
-      .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
-      .catch(() => { /* geen data = geen rijen */ });
-    return () => { cancelled = true; };
-  }, [todayKey]);
-
   useEffect(() => {
     let cancelled = false;
     const haal = () => {
@@ -178,28 +174,6 @@ export function PlannerDashboardWidgets({
       });
     return () => { cancelled = true; };
   }, [todayKey]);
-
-  // Wachtende toestellen horen in de werkvoorraad: een collega zit te
-  // wachten tot hij de app in kan. Alleen voor admins (de devices-API is
-  // admin-only; planners zouden een 403 krijgen).
-  const [pendingDevices, setPendingDevices] = useState<Array<{ userId: string; name: string; createdAt: string }>>([]);
-  useEffect(() => {
-    if (currentUser.role !== 'admin') return;
-    let cancelled = false;
-    void (async () => {
-      try {
-        const res = await apiFetch('/api/devices');
-        if (!res.ok) return;
-        const data = await res.json();
-        if (!cancelled && Array.isArray(data)) {
-          setPendingDevices(data.filter((d: any) => d.status === 'pending'));
-        }
-      } catch {
-        // stil: dashboard mag niet breken op een toestellen-fetch
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [currentUser.role]);
 
   // Ziekmelding registreren (planner/admin). Komt telefonisch binnen, dus de
   // planner moet hem vanuit de cockpit kunnen invoeren zonder van scherm te
@@ -301,68 +275,23 @@ export function PlannerDashboardWidgets({
     u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder';
   const totalDrivers = users.filter(isRealDriver).length;
 
-  // Dekking: null = niet geladen/fout — behandel als 'onbekend', nooit
-  // als 'volledig gedekt' (vals-groen is erger dan geen data).
-  const knownDays = coverageDays ?? [];
-  // Dagen met een gat voeden de rijen in Open taken en de aandacht-teller.
-  // De losse tegel "Open diensten" is er op verzoek uit (03-08); de dekking
-  // zelf blijft dus gewoon meelopen.
-  const gapDays = knownDays.filter((d) => d.missing.length > 0);
+  // Werkvoorraad — gedeelde berekening met de topbar-knop (lib/werkvoorraad):
+  // één bron van waarheid voor de teller, de rijen in 'Open taken' en de
+  // empty-state. Alles wat als rij verschijnt telt mee — niets anders.
+  // (Omleidingen tellen bewust niet mee: informatief, geen openstaande taak.)
+  const {
+    planningStale, daysSinceImport, lastImport, importIssueCount,
+    planningHorizon, horizonDagenOver, horizonKrap,
+    gapDays, vervalTaken, herverdeelPerChauffeur,
+    pendingLeave, pendingSwaps, openTasks, attentionCount,
+  } = berekenWerkvoorraad({ users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, now });
 
   // Verlopen omleidingen (einddatum in het verleden) tellen niet mee: de
   // tegel zegt "actieve omleidingen" en moet dat dan ook zijn (gedeelde
   // helper — chauffeursdashboard gebruikt dezelfde).
   const activeDiversions = activeDiversionsOf(diversions).length;
 
-  const pendingLeave = leaveRequests.filter((r) => r.status === 'pending');
-  const pendingSwaps = swaps.filter((s) => s.status === 'pending' || s.status === 'accepted');
-  const openTasks = pendingLeave.length + pendingSwaps.length + pendingDevices.length;
-
-  const lastImport = matrixHistory[0] || null;
-  const importIssueCount = lastImport
-    ? lastImport.unknownCodes.length + lastImport.unmatchedDrivers.length
-    : 0;
-  const daysSinceImport = lastImport
-    ? Math.floor((now.getTime() - new Date(lastImport.createdAt).getTime()) / 86400000)
-    : null;
-  // Zachte herinnering: er wérd al eens geïmporteerd, maar al > een week niet
-  // meer. (Nooit geïmporteerd = niet naggen — kan een niet-import-opzet zijn.)
-  const STALE_PLANNING_DAYS = 7;
-  const planningStale = daysSinceImport !== null && daysSinceImport > STALE_PLANNING_DAYS;
-
-  // Eén bron van waarheid voor statuspil, teller én empty-state: alles wat
-  // als rij in 'Open taken' verschijnt telt mee — niets anders.
-  // (Omleidingen tellen bewust niet mee: een omleiding is informatief, geen
-  // openstaande taak.)
-  // Documenten die binnen 30 dagen verlopen (of al verlopen zijn) — alleen
-  // van actieve chauffeurs; gesorteerd op urgentie.
-  const isActiveUserId = (id: string) => users.some((u) => String(u.id) === id && u.isActive !== false);
-  const vervalTaken = vervaldata
-    .filter((e) => isActiveUserId(e.userId))
-    .map((e) => ({ ...e, dagen: Math.round((Date.parse(e.validUntil) - Date.parse(today)) / 86400000) }))
-    .filter((e) => Number.isFinite(e.dagen) && e.dagen <= 30)
-    .sort((a, b) => a.dagen - b.dagen);
-  // Diensten die nog op naam staan van iemand die die dag afwezig gemeld is.
-  // Ziek melden haalt de dienst niet uit de planning — zonder dit signaal zag
-  // je zo'n gat alleen door in de maandplanning de juiste cel aan te klikken.
-  // Alleen vandaag en verder: gisteren valt niets meer te herverdelen.
-  // (Geen useMemo: alle hooks moeten vóór de skeleton-return staan — zie de
-  //  waarschuwing daar. De lijst is klein en de berekening lineair.)
-  const teHerverdelen = openstaandeDienstenVanAfwezigen(shifts, leaveRequests, today);
   const werkdagen = werkdagenUitShifts(shifts);
-  // Per chauffeur groeperen i.p.v. één rij per dienst: bij een langere ziekte
-  // zijn dat er al gauw acht, terwijl de lijst er maar vier toonde. Je loste er
-  // vier op, de volgende vier schoven door, en het leek alsof de melding bleef
-  // hangen (melding Jarno 14-08). Nu staat het totaal meteen in de rij.
-  const herverdeelPerChauffeur = Array.from(
-    teHerverdelen.reduce((map, s) => {
-      const key = String(s.driverId);
-      const groep = map.get(key) ?? { driverId: key, reden: s.reden, diensten: [] as typeof teHerverdelen };
-      groep.diensten.push(s);
-      map.set(key, groep);
-      return map;
-    }, new Map<string, { driverId: string; reden: string; diensten: typeof teHerverdelen }>()).values(),
-  );
 
   /** Dienst uit de ziekmeld-vervolgstap overzetten naar de gekozen collega. */
   const zetDienstOver = async (d: OpenstaandeDienst) => {
@@ -391,18 +320,6 @@ export function PlannerDashboardWidgets({
     }
   };
 
-  // Horizon van de geladen planning: hoe lang kunnen chauffeurs nog vooruit
-  // kijken? "Al X dagen niet bijgewerkt" bestond al, maar zei niets over de
-  // vraag die telt: wanneer valt de planning stil? Waarschuwing vanaf 5 dagen
-  // vooraf; rood zodra de horizon vandaag of eerder eindigt.
-  const HORIZON_WAARSCHUWING_DAGEN = 5;
-  const planningHorizon = shifts.reduce((max, s) => (s.date > max ? s.date : max), '');
-  const horizonDagenOver = planningHorizon ? Math.round((Date.parse(planningHorizon) - Date.parse(today)) / 86400000) : null;
-  const horizonKrap = horizonDagenOver !== null && horizonDagenOver <= HORIZON_WAARSCHUWING_DAGEN;
-
-  const attentionCount =
-    (planningStale ? 1 : 0) + (importIssueCount > 0 ? 1 : 0) + (horizonKrap ? 1 : 0) + gapDays.length + openTasks + vervalTaken.length + teHerverdelen.length;
-  const needsAttention = attentionCount > 0;
   // Het paneel toont per soort een top-N (3 dekkingsdagen, 4 verlof, 4 ruil,
   // 3 toestellen); dit is wat daarbuiten valt, zodat de teller in de kop
   // eerlijk blijft.
@@ -583,37 +500,14 @@ export function PlannerDashboardWidgets({
           </p>
         </div>
         <div className="flex w-fit items-center gap-2">
-        {/* Dark krijgt een eigen, lichtere afwerking: de globale amber-
-            overrides (oranje op 14% + 38%-rand) maakten de pil modderig
-            bruin (feedback Jarno 31-08) — nu hairline + zachte tint. */}
-        <div
-          className={cn(
-            'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
-            needsAttention
-              ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
-              : 'border-emerald-100 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10',
-          )}
-        >
-          {/* Statische stip — permanente beweging voor "alles is normaal"
-              maakt van rust een alarm. */}
-          <span className={cn(
-            'inline-flex h-2 w-2 rounded-full',
-            needsAttention ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400',
-          )} />
-          <span className={cn(
-            'text-2xs font-semibold',
-            needsAttention ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300',
-          )}>
-            {needsAttention ? 'Open taken' : 'Operationeel'}
-          </span>
-        </div>
+        {/* De "Open taken/Operationeel"-statuspil die hier stond is 31-08
+            vervangen door de werkvoorraad-knop in de topbar (WerkvoorraadMenu)
+            — die is vanuit elk scherm zichtbaar. Alleen de actie blijft. */}
         {/* Ziekmelding komt telefonisch binnen tijdens de rit, dus de planner
             moet er altijd bij kunnen — vandaar hier en niet achter een menu.
-            Zelfde kleur en vorm als de "Open taken"-statuspil (keuze Jarno
-            04-08): de enige échte actie in de kop mag niet stiller zijn dan de
-            niet-klikbare readout ernaast. De pil blijft visueel gelijk in
-            hoogte met de statuspil; het raakvlak wordt met een onzichtbare
-            after-rand opgerekt tot ±44 px voor duimen (Apple HIG). */}
+            Dark: eigen afwerking i.p.v. de globale amber-overrides (modderig
+            bruin, feedback Jarno 31-08). Het raakvlak wordt met een
+            onzichtbare after-rand opgerekt tot ±44 px voor duimen (Apple HIG). */}
         {onSickReport && (
           <button
             ref={sickTriggerRef}
