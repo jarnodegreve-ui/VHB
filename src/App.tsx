@@ -220,19 +220,30 @@ export default function App() {
   // komen uit eigen endpoints. Best-effort — de app mag hier nooit op breken.
   const [vervaldata, setVervaldata] = useState<VervaldataRij[]>([]);
   const [pendingDevices, setPendingDevices] = useState<PendingDevice[]>([]);
+  // Ververst elke 10 min én bij tab-focus: het portaal staat bij de planner
+  // de hele dag open en de werkvoorraad-badge moet blijven kloppen.
   useEffect(() => {
     const rol = currentUser?.role;
     if (rol !== 'planner' && rol !== 'admin') { setVervaldata([]); return; }
     let cancelled = false;
-    apiJson<VervaldataRij[]>('/api/user-expiries')
-      .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
-      .catch(() => { /* geen data = geen rijen */ });
-    return () => { cancelled = true; };
+    const haal = () => {
+      apiJson<VervaldataRij[]>('/api/user-expiries')
+        .then((rows) => { if (!cancelled && Array.isArray(rows)) setVervaldata(rows); })
+        .catch(() => { /* geen data = geen rijen */ });
+    };
+    haal();
+    const timer = window.setInterval(haal, 10 * 60 * 1000);
+    window.addEventListener('focus', haal);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', haal);
+    };
   }, [currentUser?.role]);
   useEffect(() => {
     if (currentUser?.role !== 'admin') { setPendingDevices([]); return; }
     let cancelled = false;
-    void (async () => {
+    const haal = async () => {
       try {
         const res = await apiFetch('/api/devices');
         if (!res.ok) return;
@@ -241,8 +252,16 @@ export default function App() {
       } catch {
         // stil: de werkvoorraad mag niet breken op een toestellen-fetch
       }
-    })();
-    return () => { cancelled = true; };
+    };
+    void haal();
+    const timer = window.setInterval(haal, 10 * 60 * 1000);
+    const opFocus = () => { void haal(); };
+    window.addEventListener('focus', opFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', opFocus);
+    };
   }, [currentUser?.role]);
   const [isLoading, setIsLoading] = useState(false);
   // Eerste data-fetch nog niet rond? Views kunnen dit gebruiken om
@@ -1370,14 +1389,28 @@ export default function App() {
     ? swaps.filter((s) => s.status === 'pending' && s.targetDriverId === currentUser.id).length
     : 0;
 
+  // Werkvoorraad van de planner — gedeelde berekening (lib/werkvoorraad) voor
+  // de topbar-knop, de app-icoon-badge én het Open taken-paneel op het
+  // dashboard, zodat die drie nooit uiteenlopen. Op de échte rol berekend
+  // (data blijft kloppen in chauffeur-preview; de knop verdwijnt daar wel).
+  const isStafRol = currentUser?.role === 'planner' || currentUser?.role === 'admin';
+  const werkvoorraad = isStafRol
+    ? berekenWerkvoorraad({
+        users, shifts, leaveRequests, swaps,
+        matrixHistory: planningMatrixHistory, coverageDays,
+        vervaldata, pendingDevices, now: new Date(),
+      })
+    : null;
+
   // Badge op het app-icoon (iOS 16.4+ PWA, Chromium-desktop): wat op jou
   // wacht, zichtbaar zonder de app te openen. Chauffeur: ruilverzoeken aan
-  // hem + ongelezen documenten; planner/admin: de open werkvoorraad.
+  // hem + ongelezen documenten; planner/admin: de volledige werkvoorraad
+  // (zelfde teller als de topbar-knop — was alleen verlof+ruil).
   const appBadgeCount = !currentUser
     ? 0
     : currentUser.role === 'chauffeur'
       ? targetedSwapsCount + unseenDocuments
-      : pendingLeaveCount + pendingSwapsCount;
+      : werkvoorraad?.attentionCount ?? 0;
   useEffect(() => {
     const nav = navigator as any;
     if (typeof nav?.setAppBadge !== 'function') return;
@@ -2043,16 +2076,6 @@ export default function App() {
   const effectiveRole = previewingChauffeur ? 'chauffeur' : currentUser.role;
   const isPlanner = effectiveRole === 'planner' || effectiveRole === 'admin';
   const isAdmin = effectiveRole === 'admin';
-  // Werkvoorraad voor de topbar-knop — gedeelde berekening met het Open
-  // taken-paneel op het dashboard (lib/werkvoorraad), zodat badge en paneel
-  // nooit uiteenlopen. In chauffeur-preview verdwijnt de knop mee.
-  const werkvoorraad = isPlanner
-    ? berekenWerkvoorraad({
-        users, shifts, leaveRequests, swaps,
-        matrixHistory: planningMatrixHistory, coverageDays,
-        vervaldata, pendingDevices, now: new Date(),
-      })
-    : null;
   const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
   const resolvedCurrentView = allowedViews.includes(currentView) ? currentView : 'dashboard';
   const viewMeta: Record<string, { title: string; subtitle: string }> = {
@@ -2453,8 +2476,12 @@ export default function App() {
                   {/* Werkvoorraad — tussen de preview-toggle en de bel (idee
                       Jarno 31-08): open taken vanuit elk scherm zichtbaar;
                       verving de statuspil op het planner-dashboard. */}
-                  {werkvoorraad && (
-                    <WerkvoorraadMenu werkvoorraad={werkvoorraad} onNavigate={setCurrentView} />
+                  {isPlanner && werkvoorraad && (
+                    <WerkvoorraadMenu
+                      werkvoorraad={werkvoorraad}
+                      userNaam={(id) => users.find((u) => String(u.id) === String(id))?.name || 'Onbekend'}
+                      onNavigate={setCurrentView}
+                    />
                   )}
                   <button
                     type="button"
@@ -2464,8 +2491,10 @@ export default function App() {
                     className="relative p-2 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg transition-colors"
                   >
                     <Bell size={17} />
-                    {/* Zelfde signaal als de app-icoon-badge: er wacht iets op jou. */}
-                    {appBadgeCount > 0 && (
+                    {/* Stip alleen voor chauffeurs: bij staf draagt de
+                        werkvoorraad-knop hiernaast dit signaal al met een
+                        teller — dubbel signaleren maakt beide zwakker. */}
+                    {currentUser.role === 'chauffeur' && appBadgeCount > 0 && (
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oker-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
                     )}
                   </button>
