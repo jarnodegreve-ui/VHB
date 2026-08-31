@@ -467,10 +467,9 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
 function SubmitButton({ loading, children }: { loading: boolean; children: React.ReactNode }) {
   return (
     // btn-primary (via Button) = VHB Amber met VHB Black-tekst (huisstijl:
-    // nooit wit op amber — contrast 2,2:1). De login-CTA blijft bewust een
-    // maat groter (15px bold) dan de standaard lg-knop: hero-knop op het
-    // meest bekeken scherm.
-    <Button type="submit" variant="primary" size="lg" full disabled={loading} className="group mt-2 py-3.5 text-base font-bold">
+    // nooit wit op amber — contrast 2,2:1). Standaard md-maat: de hero-variant
+    // (py-3.5 text-base) vond Jarno te groot (31-08).
+    <Button type="submit" variant="primary" size="md" full disabled={loading} className="group mt-2 font-semibold">
       <span>{loading ? 'Even geduld…' : children}</span>
       {!loading && (
         <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
