@@ -467,13 +467,16 @@ function FeedbackBlock({ error, info }: { error: string; info: string }) {
 function SubmitButton({ loading, children }: { loading: boolean; children: React.ReactNode }) {
   return (
     // btn-primary (via Button) = VHB Amber met VHB Black-tekst (huisstijl:
-    // nooit wit op amber — contrast 2,2:1). Standaard md-maat: de hero-variant
-    // (py-3.5 text-base) vond Jarno te groot (31-08).
-    <Button type="submit" variant="primary" size="md" full disabled={loading} className="group mt-2 font-semibold">
-      <span>{loading ? 'Even geduld…' : children}</span>
-      {!loading && (
-        <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
-      )}
-    </Button>
+    // nooit wit op amber — contrast 2,2:1). Standaard md-maat, op inhouds-
+    // breedte gecentreerd: de vol-brede hero-variant vond Jarno te groot
+    // (31-08); px-8 houdt hem als CTA nog net iets royaler dan een gewone knop.
+    <div className="flex justify-center">
+      <Button type="submit" variant="primary" size="md" disabled={loading} className="group mt-2 px-8 font-semibold">
+        <span>{loading ? 'Even geduld…' : children}</span>
+        {!loading && (
+          <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" />
+        )}
+      </Button>
+    </div>
   );
 }
