@@ -284,7 +284,7 @@ export function PlannerDashboardWidgets({
     planningStale, daysSinceImport, lastImport, importIssueCount,
     planningHorizon, horizonDagenOver, horizonKrap,
     gapDays, vervalTaken, herverdeelPerChauffeur,
-    pendingLeave, pendingSwaps, openTasks, attentionCount,
+    pendingLeave, pendingSwaps, attentionCount,
   } = berekenWerkvoorraad({ users, shifts, leaveRequests, swaps, matrixHistory, coverageDays, vervaldata, pendingDevices, now });
 
   // Verlopen omleidingen (einddatum in het verleden) tellen niet mee: de
@@ -529,14 +529,15 @@ export function PlannerDashboardWidgets({
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling op elke breedte, voor 7 én 8 tegels (de
-          laadplein-tegel verschijnt alleen mét OCPI-data). Zonder laadplein:
-          md = 3 tegels à span-2 + 4 à span-3 (rijen 3/2/2). Mét laadplein:
-          md = 6 tegels à span-2 + 2 à span-3 (rijen 3/3/2) — voorheen bleef
-          de 8e tegel alleen achter met een gat van een halve rij ernaast.
+          Gat-vrije verdeling op elke breedte, voor 6 én 7 tegels (de
+          laadplein-tegel verschijnt alleen mét OCPI-data; de Aanvragen-tegel
+          is 31-08 vervallen — dubbelop met de werkvoorraad-knop in de
+          topbar). Zonder laadplein: md = 6 tegels à span-2 (rijen 3/3).
+          Mét laadplein: md = 3 à span-2 + 4 à span-3 (rijen 3/2/2), en op
+          mobiel spant de laadplein-tegel beide kolommen (7 is oneven).
           Haal je hier een tegel weg of zet je er een bij, dan moeten deze
           tellingen mee. */}
-      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-8' : 'xl:grid-cols-7')}>
+      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-7' : 'xl:grid-cols-6')}>
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Bus size={16} />}
@@ -568,7 +569,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAvailable(true)}
         />
         <OpsStat
-          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
+          className={cn(laadplein ? 'md:col-span-3' : 'md:col-span-2', 'xl:col-span-1')}
           icon={<CalendarClock size={16} />}
           tone={todayAbsent.some((a) => a.isSick) ? 'rose' : 'slate'}
           label="Vandaag afwezig"
@@ -579,16 +580,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAbsent(true)}
         />
         <OpsStat
-          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
-          icon={<Inbox size={16} />}
-          tone={openTasks > 0 ? 'amber' : 'slate'}
-          label="Aanvragen"
-          value={openTasks}
-          sub={`${pendingLeave.length} verlof · ${pendingSwaps.length} dienstruil`}
-          onClick={() => onNavigate(pendingSwaps.length > pendingLeave.length ? 'ruil-verzoeken' : 'verlof')}
-        />
-        <OpsStat
-          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
+          className={cn(laadplein ? 'md:col-span-3' : 'md:col-span-2', 'xl:col-span-1')}
           icon={<MapPin size={16} />}
           tone="slate"
           label="Omleidingen"
@@ -597,7 +589,7 @@ export function PlannerDashboardWidgets({
           onClick={() => onNavigate('omleidingen')}
         />
         <OpsStat
-          className={cn('md:col-span-3 xl:col-span-1', laadplein ? '' : 'col-span-2')}
+          className={cn(laadplein ? 'md:col-span-3' : 'md:col-span-2', 'xl:col-span-1')}
           icon={<CalendarClock size={16} />}
           tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
           label="Laatste import"
@@ -616,7 +608,7 @@ export function PlannerDashboardWidgets({
             voor een planner is de tegel zelf de informatie. */}
         {laadplein && (
           <OpsStat
-            className="md:col-span-3 xl:col-span-1"
+            className="col-span-2 md:col-span-3 xl:col-span-1"
             icon={<Zap size={16} />}
             tone={laadplein.outOfOrder > 0 ? 'red' : laadplein.charging > 0 ? 'blue' : 'slate'}
             label="Aan de lader"
