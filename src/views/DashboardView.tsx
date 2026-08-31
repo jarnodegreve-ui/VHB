@@ -237,16 +237,20 @@ export function DashboardView({ notes = [],
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
+        {/* Dark: eigen verfijnde afwerking i.p.v. de globale amber-overrides
+            (modderig bruin) — zelfde recept als de planner-statuspil. */}
         <div
           className={cn(
             'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
-            needsAttention ? 'border-amber-200 bg-amber-50' : 'border-emerald-100 bg-emerald-50',
+            needsAttention
+              ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
+              : 'border-emerald-100 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10',
           )}
         >
           {/* Statische stip — permanente beweging voor "alles is normaal"
               maakt van rust een alarm. */}
-          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
-          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
+          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400')} />
+          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>
             {needsAttention
               ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
               : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}

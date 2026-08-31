@@ -583,23 +583,26 @@ export function PlannerDashboardWidgets({
           </p>
         </div>
         <div className="flex w-fit items-center gap-2">
+        {/* Dark krijgt een eigen, lichtere afwerking: de globale amber-
+            overrides (oranje op 14% + 38%-rand) maakten de pil modderig
+            bruin (feedback Jarno 31-08) — nu hairline + zachte tint. */}
         <div
           className={cn(
             'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
             needsAttention
-              ? 'border-amber-200 bg-amber-50'
-              : 'border-emerald-100 bg-emerald-50',
+              ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
+              : 'border-emerald-100 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10',
           )}
         >
           {/* Statische stip — permanente beweging voor "alles is normaal"
               maakt van rust een alarm. */}
           <span className={cn(
             'inline-flex h-2 w-2 rounded-full',
-            needsAttention ? 'bg-amber-500' : 'bg-emerald-500',
+            needsAttention ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400',
           )} />
           <span className={cn(
             'text-2xs font-semibold',
-            needsAttention ? 'text-amber-700' : 'text-emerald-700',
+            needsAttention ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300',
           )}>
             {needsAttention ? 'Open taken' : 'Operationeel'}
           </span>
@@ -621,9 +624,9 @@ export function PlannerDashboardWidgets({
               setSickError('');
               setShowSickModal(true);
             }}
-            className="ios-pressable relative inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-2xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
+            className="ios-pressable relative inline-flex w-fit items-center gap-1.5 rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-2xs font-semibold text-amber-700 transition-colors hover:bg-amber-100 dark:border-amber-400/20 dark:bg-amber-400/10 dark:text-amber-300 dark:hover:bg-amber-400/15 after:absolute after:-inset-x-1 after:-inset-y-2 after:content-['']"
           >
-            <AlertTriangle size={12} className="text-amber-600" />
+            <AlertTriangle size={12} className="text-amber-600 dark:text-amber-300" />
             Ziek melden
           </button>
         )}
