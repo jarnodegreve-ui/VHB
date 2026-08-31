@@ -513,8 +513,8 @@ export function PlannerDashboardWidgets({
           <Button
             ref={sickTriggerRef}
             variant="primary"
-            size="md"
-            icon={<Plus size={15} />}
+            size="sm"
+            icon={<Plus size={13} />}
             aria-haspopup="dialog"
             onClick={() => {
               setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
@@ -529,15 +529,15 @@ export function PlannerDashboardWidgets({
       </div>
 
       {/* === Status-strip ===
-          Gat-vrije verdeling op elke breedte, voor 6 én 7 tegels (de
-          laadplein-tegel verschijnt alleen mét OCPI-data; de Aanvragen-tegel
-          is 31-08 vervallen — dubbelop met de werkvoorraad-knop in de
-          topbar). Zonder laadplein: md = 6 tegels à span-2 (rijen 3/3).
-          Mét laadplein: md = 3 à span-2 + 4 à span-3 (rijen 3/2/2), en op
-          mobiel spant de laadplein-tegel beide kolommen (7 is oneven).
-          Haal je hier een tegel weg of zet je er een bij, dan moeten deze
-          tellingen mee. */}
-      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-7' : 'xl:grid-cols-6')}>
+          Gat-vrije verdeling op elke breedte, voor 5 én 6 tegels (de
+          laadplein-tegel verschijnt alleen mét OCPI-data; de Aanvragen- en
+          Laatste import-tegels zijn 31-08 vervallen — dubbelop met de
+          werkvoorraad-knop in de topbar). Zonder laadplein: md = 3 à span-2
+          + 2 à span-3 (rijen 3/2), en op mobiel spant Omleidingen beide
+          kolommen (5 is oneven). Mét laadplein: md = 6 tegels à span-2
+          (rijen 3/3). Haal je hier een tegel weg of zet je er een bij, dan
+          moeten deze tellingen mee. */}
+      <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-6' : 'xl:grid-cols-5')}>
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Bus size={16} />}
@@ -569,7 +569,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAvailable(true)}
         />
         <OpsStat
-          className={cn(laadplein ? 'md:col-span-3' : 'md:col-span-2', 'xl:col-span-1')}
+          className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
           icon={<CalendarClock size={16} />}
           tone={todayAbsent.some((a) => a.isSick) ? 'rose' : 'slate'}
           label="Vandaag afwezig"
@@ -580,7 +580,7 @@ export function PlannerDashboardWidgets({
           onClick={() => setShowAbsent(true)}
         />
         <OpsStat
-          className={cn(laadplein ? 'md:col-span-3' : 'md:col-span-2', 'xl:col-span-1')}
+          className={cn(laadplein ? 'md:col-span-2' : 'col-span-2 md:col-span-3', 'xl:col-span-1')}
           icon={<MapPin size={16} />}
           tone="slate"
           label="Omleidingen"
@@ -588,27 +588,12 @@ export function PlannerDashboardWidgets({
           sub={activeDiversions === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
           onClick={() => onNavigate('omleidingen')}
         />
-        <OpsStat
-          className={cn(laadplein ? 'md:col-span-3' : 'md:col-span-2', 'xl:col-span-1')}
-          icon={<CalendarClock size={16} />}
-          tone={importIssueCount > 0 ? 'red' : planningStale ? 'amber' : 'slate'}
-          label="Laatste import"
-          text={daysSinceImport === null ? '—' : daysSinceImport === 0 ? 'Vandaag' : `${daysSinceImport}d`}
-          sub={
-            lastImport
-              ? importIssueCount > 0
-                ? `${importIssueCount} aandachtspunten`
-                : `${lastImport.importedDays} dagen verwerkt`
-              : 'nog geen import'
-          }
-          onClick={() => onNavigate('beheer-roosters')}
-        />
         {/* Laadplein-tegel — alleen zodra de OCPI-koppeling data levert.
             Doorklikken naar het volle OCPI-scherm kan alleen als admin;
             voor een planner is de tegel zelf de informatie. */}
         {laadplein && (
           <OpsStat
-            className="col-span-2 md:col-span-3 xl:col-span-1"
+            className="md:col-span-2 xl:col-span-1"
             icon={<Zap size={16} />}
             tone={laadplein.outOfOrder > 0 ? 'red' : laadplein.charging > 0 ? 'blue' : 'slate'}
             label="Aan de lader"
