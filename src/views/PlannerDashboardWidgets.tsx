@@ -514,6 +514,7 @@ export function PlannerDashboardWidgets({
             ref={sickTriggerRef}
             variant="primary"
             size="sm"
+            className="gap-1 px-2.5"
             icon={<Plus size={13} />}
             aria-haspopup="dialog"
             onClick={() => {
