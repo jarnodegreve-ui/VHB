@@ -1877,7 +1877,7 @@ export default function App() {
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
         <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
-          <BrandSpinner size={16} tone="donker" />
+          <BrandSpinner size={26} tone="donker" />
           <span className="text-sm font-medium">Sessie laden…</span>
         </div>
       </div>
@@ -2016,7 +2016,7 @@ export default function App() {
         <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
           <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
-            <BrandSpinner size={16} tone="donker" />
+            <BrandSpinner size={26} tone="donker" />
             <span className="text-sm font-medium">Profiel laden…</span>
           </div>
           <button
