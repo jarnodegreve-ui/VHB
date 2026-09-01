@@ -1,6 +1,8 @@
 // Genereert de app-/tab-iconen in public/ uit het officiële VHB-beeldmerk
-// (brand/vhb-final-logo-package/VHB-beeldmerk-negatief.svg): wit + goud op
-// een VHB Black-tegel. Draaien na een logo-wissel:  node scripts/brand-icons.mjs
+// (brand/vhb-final-logo-package/VHB-beeldmerk-negatief.svg). Sinds 01-09
+// (vraag Jarno) staan app-icoon én tab-icoon op de goud-tegel: het beeldmerk
+// in één kleur carbon-inkt (het wit+goud-negatief valt weg op goud).
+// Draaien na een logo-wissel:  node scripts/brand-icons.mjs
 //
 // Output (bestandsnamen blijven gelijk — manifest.json, index.html en sw.js
 // verwijzen ernaar; de SW-cache wordt per build gestempeld, dus geen bump):
@@ -50,13 +52,17 @@ function tileSvg({ rx, markWidth, title, body = inner, geom = MARK, fill = TEGEL
 `;
 }
 
+// App-icoon op de goud-tegel (01-09, match met het tab-icoon): het volledige
+// beeldmerk in carbon-inkt — op 180+ px is de lus wél leesbaar, dus die
+// blijft (het tab-icoon houdt het monogram, op 16–32 px is de lus een vlekje).
+const beeldmerkCarbon = inner.replace(/#FFFFFF|#E2A323/g, TEGEL);
 // Afgeronde hoeken op de tab-/app-iconen (iOS-achtige radius); apple-touch en
 // maskable blijven vol — het OS maskeert die zelf. Maskable: safe-zone is een
 // cirkel van 80 % → een 2:1-beeldmerk past tot ±730 px, we houden 680.
-const ICOON = tileSvg({ rx: 224, markWidth: 760, title: 'VHB app-icoon' });
+const ICOON = tileSvg({ rx: 224, markWidth: 760, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
 const FAVICON = tileSvg({ rx: 200, markWidth: 920, title: 'VHB', body: monogram, geom: MONOGRAM, fill: GOUD });
-const VOL = tileSvg({ rx: 0, markWidth: 760, title: 'VHB app-icoon' });
-const MASKABLE = tileSvg({ rx: 0, markWidth: 680, title: 'VHB app-icoon' });
+const VOL = tileSvg({ rx: 0, markWidth: 760, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
+const MASKABLE = tileSvg({ rx: 0, markWidth: 680, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
 
 fs.writeFileSync(path.join(OUT, 'vhb-icoon.svg'), ICOON);
 fs.writeFileSync(path.join(OUT, 'vhb-favicon.svg'), FAVICON);

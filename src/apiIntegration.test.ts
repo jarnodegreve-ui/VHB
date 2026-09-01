@@ -245,33 +245,17 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     updateUserSessionMeta: async () => {},
     bumpActiveSessions: async () => {},
     getPlanningMatrixRows: async () => mem.planningMatrix,
-    // Mini-versie van de matrix-heropbouw op mem: dienstcode matcht op
-    // services, al de rest telt als afwezigheid. De route-logica (guards,
-    // ruil-replay, save) draait onveranderd — alleen de generatie is mem.
-    buildPlanningFromMatrix: async (inputRows?: any[]) => {
-      const rows = inputRows ?? mem.planningMatrix;
-      const byName: Record<string, string> = { 'chauffeur a': '3', 'chauffeur b': '4' };
-      const shifts: any[] = [];
-      for (const row of rows) {
-        for (const [name, code] of Object.entries(row.assignments ?? {})) {
-          const driverId = byName[String(name).toLowerCase()];
-          const svc = mem.services.find((sv: any) => String(sv.serviceNumber) === String(code));
-          if (!driverId || !svc) continue;
-          shifts.push({
-            id: `${row.source_date}-${driverId}-${svc.serviceNumber}-1`,
-            date: row.source_date, startTime: svc.startTime, endTime: svc.endTime,
-            line: String(svc.serviceNumber), busNumber: '', loopnr: '', driverId,
-          });
-        }
-      }
-      return {
-        shifts,
-        summary: {
-          importedDays: rows.length, generatedShifts: shifts.length, matchedServices: shifts.length,
-          skippedAbsences: 0, unknownCodes: [], unmatchedDrivers: [], servicesWithoutSegments: [], perDriver: [],
-        },
-      };
-    },
+    // Sinds de golden import-keten-suite (01-09) draait hier de ÉCHTE
+    // opbouw-kern (bouwPlanningUitMatrix, pure functie) op de mem-store —
+    // een mini-mock verstopte precies de keten-bugs die deze tests moeten
+    // vangen (segmenten, absences, unknown codes, naam-botsingen).
+    buildPlanningFromMatrix: async (inputRows?: any[]) =>
+      orig.bouwPlanningUitMatrix({
+        rows: inputRows ?? mem.planningMatrix,
+        users: mem.users,
+        services: mem.services,
+        planningCodes: mem.planningCodes,
+      }),
     replacePlanningData: async (shifts: any[]) => { mem.planning = shifts; },
     replacePlanningAndMatrix: async (rows: any[], shifts: any[]) => { mem.planningMatrix = rows; mem.planning = shifts; },
     // Herstelpunt-keten (import → historiek + snapshot → restore), in-memory.
@@ -3772,5 +3756,171 @@ describe('authenticate — lokale JWT-verificatie met getUser-fallback (controle
     expect(res.status).toBe(503);
     expect(res.json.code).toBe('auth_unavailable');
     expect((await api('GET', '/api/me', { token: 'tok-auth-500' })).status).toBe(503);
+  });
+});
+
+describe('import-keten — golden end-to-end (echte praktijk-structuur)', () => {
+  // Grotere richting 01-09: de keten-bugs die Jarno echt raakten zaten
+  // allemaal NÁ de parser (valse kolom-waarschuwingen op het tellingen-blok,
+  // een verdwenen terugruil-been bij herimport, wegvallende chauffeurs) —
+  // deze suite laat een structuurgetrouwe praktijk-tab door de échte
+  // import-route lopen (parser → matrix → planning → ruil-replay) en
+  // controleert het eindresultaat, niet de tussenstappen.
+  const CHAUFFEURS = ['Testman Aa', 'Testman Ab', 'Testman Ac', 'Testman Ad', 'Testman Ae', 'Testman Af'];
+  const DAGEN = ['2030-09-01', '2030-09-02', '2030-09-03', '2030-09-04', '2030-09-05'];
+  // Expliciet codeplan (dag × chauffeur): dienstcodes met 3/2/1 tijdblokken,
+  // 'V' = verlofcode (absence), '' = vrije dag (lege cel).
+  const CODES: string[][] = [
+    ['2101', '2102', '2103', 'V',    '',     '2103'],
+    ['2102', '2101', 'V',    '2103', '2103', ''    ],
+    ['2103', '',     '2101', '2102', 'V',    '2103'],
+    ['V',    '2103', '2102', '2101', '2103', ''    ],
+    ['2101', '2103', '',     'V',    '2102', '2103'],
+  ];
+  const SEGMENTEN: Record<string, number> = { 2101: 3, 2102: 2, 2103: 1 };
+  const verwachteShifts = CODES.flat().reduce((n, c) => n + (SEGMENTEN[c] ?? 0), 0);
+  const verwachteAbsences = CODES.flat().filter((c) => c === 'V').length;
+
+  const seedKeten = () => {
+    mem.users.push(...CHAUFFEURS.map((name, i) => ({ id: String(10 + i), name, email: `t${i}@vhb.be`, role: 'chauffeur', isActive: true })));
+    mem.services = [
+      { id: 'g1', serviceNumber: '2101', startTime: '06:15', endTime: '09:05', startTime2: '12:10', endTime2: '14:30', startTime3: '16:00', endTime3: '18:45', loopnr: '4500', loopnr2: '4611', loopnr3: '4702' },
+      { id: 'g2', serviceNumber: '2102', startTime: '07:00', endTime: '10:00', startTime2: '15:00', endTime2: '19:00', loopnr: '4510', loopnr2: '4620' },
+      { id: 'g3', serviceNumber: '2103', startTime: '05:30', endTime: '13:30', loopnr: '4520' },
+    ];
+    mem.planningCodes = [
+      { code: 'V', category: 'leave', description: 'Verlof', countsAsShift: false, isPaidAbsence: true, isDayOff: false },
+    ];
+    mem.leave = [];
+    mem.swaps = [];
+    mem.planning = [];
+    mem.planningMatrix = [];
+  };
+
+  /** Structuurgetrouwe praktijk-tab: chauffeurs vóór "aantal", daarna het
+   *  tellingen-blok dat elke naam nóg drie keer als kopje herhaalt (de bron
+   *  van de 114 valse waarschuwingen op 25-08). */
+  const goldenXlsxBase64 = async (opts: { extraKolomNaAantal?: string } = {}) => {
+    const XLSX = await import('xlsx');
+    const serial = (iso: string) => Math.round((Date.parse(`${iso}T00:00:00Z`) - Date.parse('1899-12-30T00:00:00Z')) / 86400000);
+    const herhaald = opts.extraKolomNaAantal ? [...CHAUFFEURS, opts.extraKolomNaAantal] : CHAUFFEURS;
+    const header = ['datum', 'dagtype', ...CHAUFFEURS, 'aantal', ...herhaald, 'uur', ...herhaald, '', ...herhaald];
+    const rows: unknown[][] = [header];
+    DAGEN.forEach((iso, dag) => {
+      const codes = CODES[dag];
+      const aantal = codes.filter((c) => /^\d+$/.test(c)).length;
+      const tellingen = herhaald.map((_, i) => (codes[i] ? 1 : 0));
+      rows.push([serial(iso), 'W', ...codes, aantal, ...tellingen, '', ...tellingen, '', ...tellingen]);
+    });
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'praktijk');
+    return (XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }) as Buffer).toString('base64');
+  };
+
+  const importeer = async (base64: string) =>
+    api('POST', '/api/planning-matrix/import', { token: 'tok-planner', body: { xlsxBase64: base64, filename: 'golden.xlsx' } });
+
+  it('bouwt de volledige planning uit de golden Excel: segmenten, afwezigheden, historiek, herstelpunt', async () => {
+    seedKeten();
+    const res = await importeer(await goldenXlsxBase64());
+    expect(res.status).toBe(200);
+    expect(res.json).toMatchObject({
+      success: true,
+      importedDays: 5,
+      generatedShifts: verwachteShifts,
+      skippedAbsences: verwachteAbsences,
+      unknownCodes: [],
+      unmatchedDrivers: [],
+      servicesWithoutSegments: [],
+      startDate: '2030-09-01',
+      endDate: '2030-09-05',
+    });
+    // Het tellingen-blok ná "aantal" geeft géén valse waarschuwingen
+    // (regressie 25-08: 114 × "kolom ná aantal" op de chauffeurskopjes).
+    expect(res.json.parserWaarschuwingen ?? []).toEqual([]);
+
+    // Matrix: 5 dagen, alleen de niet-lege codes per dag.
+    expect(mem.planningMatrix).toHaveLength(5);
+    expect(mem.planningMatrix[0].assignments).toEqual({
+      'Testman Aa': '2101', 'Testman Ab': '2102', 'Testman Ac': '2103', 'Testman Ad': 'V', 'Testman Af': '2103',
+    });
+
+    // Planning: exact één rij per tijdblok. De gesplitste dienst 2101 van
+    // Testman Aa op 01-09 = drie rijen met de juiste tijden én loopnummers.
+    expect(mem.planning).toHaveLength(verwachteShifts);
+    const aaDag1 = mem.planning
+      .filter((r: any) => r.driverId === '10' && r.date === '2030-09-01')
+      .sort((a: any, b: any) => a.startTime.localeCompare(b.startTime));
+    expect(aaDag1.map((r: any) => [r.line, r.startTime, r.endTime, r.loopnr])).toEqual([
+      ['2101', '06:15', '09:05', '4500'],
+      ['2101', '12:10', '14:30', '4611'],
+      ['2101', '16:00', '18:45', '4702'],
+    ]);
+    // De verlofcode levert géén planning-rij op (Testman Ad op 01-09).
+    expect(mem.planning.some((r: any) => r.driverId === '13' && r.date === '2030-09-01')).toBe(false);
+
+    // Historiek + herstelpunt: één entry met werkend snapshot-pad.
+    expect(mem.importHistory).toHaveLength(1);
+    expect(mem.importHistory[0]).toMatchObject({ importedDays: 5, generatedShifts: verwachteShifts, filename: 'golden.xlsx' });
+    expect(mem.importHistory[0].snapshotPath).toBeTruthy();
+    expect(mem.snapshots[mem.importHistory[0].snapshotPath]).toBeTruthy();
+  });
+
+  it('waarschuwt over een échte chauffeurskolom ná "aantal" (maar blokkeert niet)', async () => {
+    seedKeten();
+    // 'Testman Nieuw' bestaat als gebruiker maar staat alléén ná "aantal" —
+    // vóór de waarschuwing (#386) viel zo'n chauffeur geruisloos uit de import.
+    mem.users.push({ id: '20', name: 'Testman Nieuw', email: 'nieuw@vhb.be', role: 'chauffeur', isActive: true });
+    const res = await importeer(await goldenXlsxBase64({ extraKolomNaAantal: 'Testman Nieuw' }));
+    expect(res.status).toBe(200);
+    const waarschuwingen: string[] = res.json.parserWaarschuwingen ?? [];
+    expect(waarschuwingen.length).toBeGreaterThan(0);
+    // …en élke waarschuwing gaat over de echte nieuwe kolom: de herhaalde
+    // kopjes van de bestaande chauffeurs in het tellingen-blok blijven stil
+    // (regressie 25-08: 114 valse meldingen).
+    expect(waarschuwingen.every((w) => w.includes('Testman Nieuw') && w.includes('aantal'))).toBe(true);
+  });
+
+  it('herimport voert een goedgekeurde 1-op-1-ruil opnieuw door — beide benen', async () => {
+    seedKeten();
+    await importeer(await goldenXlsxBase64());
+    // Aa (10) geeft zijn 2101 van 01-09 aan Ab (11) en neemt Ab's 2102 die
+    // dag terug. De Excel weet hier niets van — de replay moet het doen.
+    mem.swaps.push({
+      id: 'gs-1', shiftId: 'x', requesterId: '10', targetDriverId: '11', status: 'approved',
+      reason: '', createdAt: '2030-08-20T08:00:00Z', decidedAt: '2030-08-21T08:00:00Z',
+      shiftDate: '2030-09-01', shiftLine: '2101', returnDate: '2030-09-01', returnCode: '2102',
+    });
+    const res = await importeer(await goldenXlsxBase64());
+    expect(res.status).toBe(200);
+    // Heen: alle DRIE de segmenten van 2101/01-09 staan op Ab…
+    const heen = mem.planning.filter((r: any) => r.date === '2030-09-01' && r.line === '2101');
+    expect(heen).toHaveLength(3);
+    expect(heen.every((r: any) => r.driverId === '11')).toBe(true);
+    // …en terug: beide segmenten van 2102/01-09 op Aa (regressie: het
+    // terugruil-been verdween bij herimport — controle-ronde 27-08, nr. 8).
+    const terug = mem.planning.filter((r: any) => r.date === '2030-09-01' && r.line === '2102');
+    expect(terug).toHaveLength(2);
+    expect(terug.every((r: any) => r.driverId === '10')).toBe(true);
+    // De rest van de dag is onaangeraakt.
+    expect(mem.planning.filter((r: any) => r.date === '2030-09-01' && r.line === '2103').every((r: any) => ['12', '15'].includes(r.driverId))).toBe(true);
+  });
+
+  it('herimport met verlof dat intussen is goedgekeurd blokkeert met het juiste onderscheid', async () => {
+    seedKeten();
+    await importeer(await goldenXlsxBase64());
+    // Ná de eerste import keurt de planner verlof goed voor Testman Ab op
+    // 02-09 — een conflict dat wél in de Excel zit (Ab staat daar op 2101).
+    mem.leave = [
+      { id: 'gl-1', userId: '11', startDate: '2030-09-02', endDate: '2030-09-02', type: 'betaald_verlof', status: 'approved', comment: '', createdAt: '2030-08-25T08:00:00Z', decidedAt: '2030-08-26T08:00:00Z' },
+    ];
+    const res = await importeer(await goldenXlsxBase64());
+    expect(res.status).toBe(400);
+    expect(res.json.blocked).toBe(true);
+    expect(res.json.matrixVerlofConflicts).toHaveLength(1);
+    expect(res.json.matrixVerlofConflicts[0]).toMatchObject({ driverName: 'Testman Ab', date: '2030-09-02', serviceNumber: '2101' });
+    expect(res.json.ruilVerlofConflicts).toHaveLength(0);
+    // De bestaande planning is NIET vervangen door de geweigerde import.
+    expect(mem.planning).toHaveLength(verwachteShifts);
   });
 });

@@ -874,7 +874,22 @@ export const buildPlanningFromMatrix = async (inputRows?: PlanningMatrixRow[]) =
     getPlanningCodesData(),
   ]);
   const rows = inputRows ?? await getPlanningMatrixRows();
+  return bouwPlanningUitMatrix({ rows, users, services: services as ServiceRecord[], planningCodes });
+};
 
+/**
+ * Pure kern van de planning-opbouw (matrix × dienstoverzicht × codes →
+ * planning-rijen + samenvatting). Losgetrokken van de data-fetches zodat het
+ * integratieharnas de échte opbouw draait op zijn in-memory store — de
+ * keten-bugs (wegvallende chauffeurs, segmenten, absences) zaten hier, niet
+ * in de fetches.
+ */
+export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes }: {
+  rows: PlanningMatrixRow[];
+  users: AppUser[];
+  services: ServiceRecord[];
+  planningCodes: PlanningCodeRecord[];
+}) => {
   // Botsings-detectie: twee verschillende gebruikers die op dezelfde
   // naam-sleutel uitkomen (zelfde naam, of "Jan Karel" vs "Karel Jan" via de
   // gesorteerde token). Voorheen was dit laatste-wint → alle diensten van
