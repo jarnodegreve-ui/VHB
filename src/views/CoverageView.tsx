@@ -467,7 +467,7 @@ export function CoverageView() {
               <Skeleton className="h-9 w-3/5" rounded="2xl" />
             </div>
           ) : config.services.length === 0 ? (
-            <EmptyState mascotte={false} title="Geen diensten in het dienstoverzicht om uit te kiezen." />
+            <EmptyState title="Geen diensten in het dienstoverzicht om uit te kiezen." />
           ) : (
             <>
               {/* 1. Dag-types + verwachte diensten */}
@@ -817,7 +817,6 @@ export function CoverageView() {
         </div>
       ) : !anyExpectations ? (
         <EmptyState
-          mascotte={false}
           icon={<Settings2 size={28} />}
           title="Nog geen verwachte diensten ingesteld"
           message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'

@@ -447,6 +447,7 @@ export function PlannerDashboardWidgets({
         return {
           id: d.id,
           name: d.name,
+          phone: users.find((u) => String(u.id) === d.id)?.phone || undefined,
           lines: [...d.lineSet].join(' / ') || '•',
           // De losse blokken, niet één samengevoegde string: bij een dienst van
           // drie delen liep die tot tegen de dienstchip aan en las hij als één
@@ -1118,7 +1119,7 @@ const AFTEL_TOON: Record<AftelTone, string> = {
   verlet: 'text-blue-600 dark:text-blue-400',
 };
 
-function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; lines: string; segs: string[]; remaining?: string; remainingTone?: AftelTone }[]; emptyText: string }) {
+function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; phone?: string; lines: string; segs: string[]; remaining?: string; remainingTone?: AftelTone }[]; emptyText: string }) {
   if (items.length === 0) {
     return <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">{emptyText}</p>;
   }
@@ -1127,7 +1128,22 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
       {items.map((d) => (
         <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2">
           <span className="min-w-0 flex-1">
-            <span className="block truncate text-sm font-semibold text-slate-800">{d.name}</span>
+            <span className="flex items-center gap-1.5">
+              <span className="truncate text-sm font-semibold text-slate-800">{d.name}</span>
+              {/* Meteen kunnen bellen (ziekmelding komt telefonisch binnen):
+                  klein tel-doelwit, met marge-compensatie zodat de rij niet
+                  hoger wordt (vraag Jarno 01-09). */}
+              {d.phone && (
+                <a
+                  href={telHref(d.phone)}
+                  aria-label={`Bel ${d.name}`}
+                  title={d.phone}
+                  className="-my-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100/80 hover:text-oker-600"
+                >
+                  <Phone size={13} />
+                </a>
+              )}
+            </span>
             {/* Elk dienstblok als eigen element, met een stip ertussen en
                 flex-wrap: bij één of twee blokken staat het op één regel zoals
                 voorheen, bij drie wijkt het netjes uit naar een tweede regel

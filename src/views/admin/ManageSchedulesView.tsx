@@ -756,7 +756,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               </div>
             );
           }) : (
-            <EmptyState mascotte={false}
+            <EmptyState
               icon={<Activity size={28} />}
               title="Nog geen importhistoriek"
               message="Na je eerste bevestigde matrix-import verschijnt hier automatisch een historiek."
@@ -843,7 +843,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             .filter((s) => s.date && s.date >= today)
             .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime || '').localeCompare(String(b.startTime || '')));
           if (upcoming.length === 0) {
-            return <EmptyState mascotte={false} title="Geen actieve planning" message={shifts.length === 0 ? 'Er is nog geen planning geïmporteerd.' : 'Geen diensten vanaf vandaag — importeer of synchroniseer een planning.'} />;
+            return <EmptyState title="Geen actieve planning" message={shifts.length === 0 ? 'Er is nog geen planning geïmporteerd.' : 'Geen diensten vanaf vandaag — importeer of synchroniseer een planning.'} />;
           }
           const byDate = new Map<string, Shift[]>();
           for (const s of upcoming) {

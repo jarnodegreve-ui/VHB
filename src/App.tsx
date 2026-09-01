@@ -42,7 +42,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, notify } from './lib/ui';
+import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, notify, onthoudEffectiefThema } from './lib/ui';
 import { apiFetch, apiJson, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { reportHandledError, reportUserFeedback, setMonitoringUser } from './lib/monitoring';
@@ -167,6 +167,20 @@ ALLE_VIEWS = [...new Set(Object.values(ALLOWED_VIEWS_BY_ROLE).flat())];
 
 
 
+
+/**
+ * Zet html.login-donker zolang een carbon pre-app-scherm in beeld staat:
+ * Safari kleurt zijn status-/werkbalkzone met de páginakleur, en die was
+ * anders wit rond de donkere laadschermen (zelfde fix als LoginView, 01-09).
+ */
+function CarbonAchtergrond() {
+  useEffect(() => {
+    const html = document.documentElement;
+    html.classList.add('login-donker');
+    return () => html.classList.remove('login-donker');
+  }, []);
+  return null;
+}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -513,6 +527,7 @@ export default function App() {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', initial === 'dark');
       applyThemeColorMeta(initial === 'dark');
+      onthoudEffectiefThema(initial);
     }
   }, []);
 
@@ -578,6 +593,7 @@ export default function App() {
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', donker);
       applyThemeColorMeta(donker);
+      onthoudEffectiefThema(donker ? 'dark' : 'light');
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.id]);
@@ -637,6 +653,7 @@ export default function App() {
         }
         document.documentElement.classList.toggle('dark', next === 'dark');
         applyThemeColorMeta(next === 'dark');
+        onthoudEffectiefThema(next);
       }
       return next;
     });
@@ -1908,6 +1925,7 @@ export default function App() {
   if (!authReady) {
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
+        <CarbonAchtergrond />
         <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
         <div className="flex items-center gap-2.5 text-slate-300">
           <BrandSpinner size={26} tone="donker" />
@@ -1989,6 +2007,7 @@ export default function App() {
     const revoked = deviceBlocked === 'revoked';
     return (
       <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
+        <CarbonAchtergrond />
         <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
         <div className="max-w-sm">
           <div className={cn(
@@ -2047,6 +2066,7 @@ export default function App() {
     if (session) {
       return (
         <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
+        <CarbonAchtergrond />
           <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
           <div className="flex items-center gap-2.5 text-slate-300">
             <BrandSpinner size={26} tone="donker" />

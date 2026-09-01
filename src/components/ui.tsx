@@ -2,7 +2,6 @@ import React from 'react';
 import { AlertTriangle, Inbox, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { Button } from './primitives';
-import { BrandBus } from './BrandBus';
 import { Modal } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
 
@@ -176,39 +175,28 @@ export function ConfirmationModal({
 }
 
 /**
- * Empty-state: gedempte icoon-tegel + boodschap. Het busje (mascotte) is
- * sinds 01-09 niet meer de default (vraag Jarno: "alternatief voor het
- * busje") — wie hem wil, zet `mascotte` expliciet; zonder `icon` valt de
- * tegel terug op een inbox-icoon.
+ * Empty-state: gedempte icoon-tegel + boodschap; zonder `icon` valt de tegel
+ * terug op een inbox-icoon. Het busje (BrandBus-mascotte) is 01-09 volledig
+ * uitgefaseerd (vraag Jarno) — de git-historiek bewaart hem.
  */
 export function EmptyState({
   icon,
   title,
   message,
-  mascotte = false,
   action,
 }: {
   icon?: React.ReactNode;
   title: string;
   message?: string;
-  mascotte?: boolean;
   /** Optionele call-to-action (knop/link) onder de uitleg — lege schermen
    *  geven zo altijd een volgende stap. */
   action?: React.ReactNode;
 }) {
   return (
     <div className="text-center py-10 surface-card rounded-3xl !border-dashed">
-      {mascotte ? (
-        /* Bewust bescheiden: het busje is een accent bij de boodschap, geen
-           blikvanger (Jarno: "te aanwezig"). */
-        <div className="bus-sway mx-auto mb-3 inline-block">
-          <BrandBus width={88} />
-        </div>
-      ) : (
-        <div className="w-14 h-14 bg-surface-muted rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
-          {icon ?? <Inbox size={24} />}
-        </div>
-      )}
+      <div className="w-14 h-14 bg-surface-muted rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
+        {icon ?? <Inbox size={24} />}
+      </div>
       <h4 className="text-base font-bold text-slate-800 tracking-tight">{title}</h4>
       {message ? <p className="mt-1.5 text-sm font-normal text-slate-500 max-w-md mx-auto">{message}</p> : null}
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}

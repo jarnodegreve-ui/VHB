@@ -181,3 +181,17 @@ export function applyThemeColorMeta(dark: boolean) {
   const statusBar = document.querySelector('meta[name="apple-mobile-web-app-status-bar-style"]');
   if (statusBar) statusBar.setAttribute('content', dark ? 'black' : 'default');
 }
+
+/**
+ * Spiegel van het effectieve thema voor het boot-script in index.html: dat
+ * zet de dark-class vóór de eerste paint (anti-witflits, 01-09). De
+ * expliciete gebruikerskeuze blijft in 'vhb-theme'; deze sleutel volgt óók
+ * de rol-standaard (planner/admin = donker), die bewust geen keuze is.
+ */
+export function onthoudEffectiefThema(thema: 'light' | 'dark') {
+  try {
+    window.localStorage.setItem('vhb-theme-effectief', thema);
+  } catch {
+    // opslag geblokkeerd — dan blijft hooguit de flits
+  }
+}
