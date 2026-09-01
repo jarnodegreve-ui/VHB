@@ -408,7 +408,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
         {services.length === 0 && (
           <div className="p-6">
-            <EmptyState mascotte={false}
+            <EmptyState
               icon={<Clock size={28} />}
               title="Geen diensten geconfigureerd"
               message="Voeg handmatig een dienst toe of importeer een Excel-bestand."

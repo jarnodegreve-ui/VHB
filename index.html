@@ -6,6 +6,20 @@
     <title>VHB Portaal</title>
     <meta name="description" content="Intern operationeel portaal voor Van Hoorebeke en Zoon — planning, omleidingen, verlof en updates." />
 
+    <!-- Dark vóór de eerste paint: de bundel zet het thema pas ná het laden,
+         waardoor dark mode bij elke herlaad even wit flitste (Jarno 01-09).
+         vhb-theme = expliciete keuze; vhb-theme-effectief = wat er effectief
+         stond (ook de rol-standaard van planner/admin, die niet als keuze
+         wordt bewaard). -->
+    <script>
+      (function () {
+        try {
+          var t = localStorage.getItem('vhb-theme') || localStorage.getItem('vhb-theme-effectief');
+          if (t === 'dark') document.documentElement.classList.add('dark');
+        } catch (e) { /* privacy-modus: val terug op licht */ }
+      })();
+    </script>
+
     <!-- PWA manifest -->
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0D0D0F" />

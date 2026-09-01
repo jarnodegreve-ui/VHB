@@ -240,7 +240,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
           );
         })}
         {diversions.length === 0 && (
-          <EmptyState mascotte={false}
+          <EmptyState
             icon={<MapPin size={28} />}
             title="Geen actieve omleidingen"
             message="Er staan momenteel geen omleidingen in het systeem."

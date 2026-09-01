@@ -77,7 +77,7 @@ export function EntityHistoryModal({
               )}
 
               {entries && entries.length === 0 && (
-                <EmptyState mascotte={false} title="Nog geen wijzigingen geregistreerd." message="Geschiedenis wordt vanaf nu bijgehouden bij elke wijziging." />
+                <EmptyState title="Nog geen wijzigingen geregistreerd." message="Geschiedenis wordt vanaf nu bijgehouden bij elke wijziging." />
               )}
 
               {entries && entries.length > 0 && (

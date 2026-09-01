@@ -234,7 +234,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           <SkeletonRow className="px-5 py-4" />
         </div>
       ) : metDatums.length === 0 && zonderDatums.length === 0 ? (
-        <EmptyState mascotte={false} title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
+        <EmptyState title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
       ) : (
         <>
           {metDatums.length > 0 && (

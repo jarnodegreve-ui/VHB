@@ -422,23 +422,6 @@ html.dark {
      * radial-gradients zelf blijven; het verschil is stilstand, geen look. */
   }
 
-  /* Brand bus sway — voor empty state mascotte. Levendiger nu: dubbele
-     bounce per cyclus + heen-en-weer kanteling, alsof de bus over een
-     hobbelig weggetje rijdt. */
-  @keyframes bus-sway {
-    0%, 100% { transform: translateY(0) rotate(0deg); }
-    25%      { transform: translateY(-7px) rotate(-2.5deg); }
-    50%      { transform: translateY(-2px) rotate(0deg); }
-    75%      { transform: translateY(-7px) rotate(2.5deg); }
-  }
-  .bus-sway {
-    /* Vier cycli (±10 s) en dan rust: een lege pagina die open blijft
-       staan hield anders eindeloos een transform-loop actief (batterij —
-       controle-ronde 27-08, nr. 37). */
-    animation: bus-sway 2.4s ease-in-out 4;
-    transform-origin: center bottom;
-  }
-
   /* Skeleton-loader shimmer — als pseudo-element met translateX i.p.v. een
      background-position-animatie: die repaintte élk skeleton-blok 60×/s op
      de CPU; een transform wordt gecomposit (controle-ronde 27-08, nr. 37). */

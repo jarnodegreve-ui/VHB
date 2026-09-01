@@ -313,7 +313,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             </>
           ) : (
             <div className="p-6">
-              <EmptyState mascotte={false}
+              <EmptyState
                 icon={<Settings size={28} />}
                 title="Nog geen planningscodes"
                 message="Voeg hier de eerste matrixcodes toe zodat planners en admins hun betekenis centraal kunnen beheren."

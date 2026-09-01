@@ -87,3 +87,33 @@ for (const view of SCHERMEN) {
     expect(await witteVlakken(page), 'witte vlakken in donkere modus').toEqual([]);
   });
 }
+
+/**
+ * Anti-witflits: het inline boot-script in index.html moet de dark-class
+ * zetten vóórdat de bundel laadt. We blokkeren de JS-bundel volledig — als
+ * de class er dan tóch staat, kan hij alleen van het boot-script komen.
+ * (Zonder dit flitste dark mode bij elke herlaad even wit — Jarno 01-09.)
+ */
+test('dark staat al op <html> vóór de bundel laadt (boot-script)', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('vhb-theme', 'dark');
+  });
+  await page.route('**/assets/*.js', (route) => route.abort());
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+    .toBe(true);
+});
+
+/** Zelfde vangnet voor de rol-standaard: een planner die nooit zelf koos
+ *  heeft geen 'vhb-theme', maar wél de gespiegelde effectieve waarde. */
+test('boot-script leest ook vhb-theme-effectief (rol-standaard donker)', async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem('vhb-theme-effectief', 'dark');
+  });
+  await page.route('**/assets/*.js', (route) => route.abort());
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect
+    .poll(() => page.evaluate(() => document.documentElement.classList.contains('dark')))
+    .toBe(true);
+});

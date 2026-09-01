@@ -77,7 +77,9 @@ export function UserMenu({
             </span>
             <span className="min-w-0">
               <span className="block text-sm font-semibold text-slate-800 truncate leading-tight">{user.name}</span>
-              <span className="block text-2xs text-slate-500 font-medium capitalize">{user.role}</span>
+              <span className="block text-2xs text-slate-500 font-medium">
+                {{ admin: 'Beheerder', planner: 'Planner', chauffeur: 'Chauffeur' }[user.role] ?? user.role}
+              </span>
             </span>
           </div>
           <button role="menuitem" onClick={sluitEn(onToggleTheme)} className={item}>

@@ -874,7 +874,7 @@ export function OcpiDashboardView() {
           <div>
             <AdminSubsectionHeader title="Lopende sessies" />
             {data.activeSessions.length === 0 ? (
-              <EmptyState mascotte={false} title="Geen lopende sessies" message="Er wordt op dit moment niet geladen (of ze zijn nog niet gesynchroniseerd)." />
+              <EmptyState title="Geen lopende sessies" message="Er wordt op dit moment niet geladen (of ze zijn nog niet gesynchroniseerd)." />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {data.activeSessions.map((s) => {
@@ -916,7 +916,7 @@ export function OcpiDashboardView() {
           <div>
             <AdminSubsectionHeader title="Laadpalen per locatie" />
             {data.locations.length === 0 ? (
-              <EmptyState mascotte={false} title="Nog geen locaties" message="Klik in Systeem Status → OCPI-koppeling op 'Nu synchroniseren' om de laadpalen op te halen." />
+              <EmptyState title="Nog geen locaties" message="Klik in Systeem Status → OCPI-koppeling op 'Nu synchroniseren' om de laadpalen op te halen." />
             ) : (
               <div className="space-y-4">
                 {data.locations.map((loc) => (
@@ -1152,7 +1152,7 @@ export function OcpiDashboardView() {
           <div>
             <AdminSubsectionHeader title="Storingen (ChargEye)" />
             {storingen.length === 0 ? (
-              <EmptyState mascotte={false} title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
+              <EmptyState title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
             ) : (
               <div className="surface-card rounded-3xl overflow-hidden">
                 <div className="divide-y divide-slate-100">

@@ -408,7 +408,7 @@ export function PlanningMatrixView({
                 </button>
               );
             }) : (
-              <EmptyState mascotte={false}
+              <EmptyState
                 icon={<Calendar size={28} />}
                 title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
                 message={showOnlyIssues ? "Alle geüploade dagen zijn momenteel volledig herkenbaar." : "Upload eerst een matrix-CSV via Beheer Roosters om hier een overzicht te zien."}
@@ -564,7 +564,7 @@ export function PlanningMatrixView({
               </TableShell>
             </>
           ) : (
-            <EmptyState mascotte={false}
+            <EmptyState
               icon={<FileText size={28} />}
               title="Geen dag geselecteerd"
               message="Kies links een geüploade dag om de actuele matrixplanning te bekijken."

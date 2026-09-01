@@ -147,6 +147,11 @@ export function WerkvoorraadMenu({
 
   const ga = (view: View) => () => { setOpen(false); onNavigate(view); };
 
+  // Urgentie zichtbaar zonder het menu te openen: zit er een rode categorie
+  // in (herverdelen, open diensten, verlopen documenten, kapotte import),
+  // dan kleurt de teller-badge mee (vraag Jarno 01-09).
+  const heeftRood = rijen.some((r) => r.tone === 'red');
+
   return (
     <div ref={wortel} className="relative">
       <button
@@ -165,7 +170,12 @@ export function WerkvoorraadMenu({
         {wv.attentionCount > 0 && (
           <span
             aria-hidden="true"
-            className="absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full bg-amber-500 dark:bg-amber-400 text-[10px] font-bold text-slate-950 ring-2 ring-white dark:ring-slate-900"
+            className={cn(
+              'absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-white dark:ring-slate-900',
+              heeftRood
+                ? 'bg-red-600 dark:bg-red-500 text-white'
+                : 'bg-amber-500 dark:bg-amber-400 text-slate-950',
+            )}
           >
             {wv.attentionCount > 9 ? '9+' : wv.attentionCount}
           </span>

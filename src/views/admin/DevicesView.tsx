@@ -326,7 +326,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <p className="mt-4 text-sm font-medium text-slate-500">Laden…</p>
         ) : devices.length === 0 ? (
           <div className="mt-4">
-            <EmptyState mascotte={false}
+            <EmptyState
               icon={<Smartphone size={26} />}
               title="Nog geen toestellen"
               message="Toestellen verschijnen hier zodra gebruikers inloggen. Draai eerst de user_devices-migratie als deze lijst leeg blijft."
