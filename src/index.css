@@ -1070,6 +1070,14 @@ html.dark {
 /* === Dark login (carbon) — gebruikt door LoginView ===
    Past bij het carbon app-/tab-icoon en de carbon theme-color. */
 
+/* Safari (niet-standalone) kleurt de status- en werkbalkzone mee met de
+   páginakleur, niet met de content: zonder deze klasse waren die balken wit
+   terwijl de login carbon is (melding Jarno 01-09). LoginView zet hem op
+   <html> zolang het scherm getoond wordt. */
+html.login-donker {
+  background: #0D0D0F;
+}
+
 .login-bg-dark {
   /* Zelfde neutrale vignet-taal als html.dark: eerst goud gehalveerd, daarna
      op vraag van Jarno (31-08, verbeterronde nr. 7) volledig neutraal —

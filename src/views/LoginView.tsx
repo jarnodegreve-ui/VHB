@@ -43,10 +43,14 @@ export function LoginView({
     const html = document.documentElement;
     const wasDark = html.classList.contains('dark');
     html.classList.remove('dark');
-    // Statusbalk mee in carbon zolang de login in beeld is.
+    // Statusbalk mee in carbon zolang de login in beeld is. login-donker
+    // kleurt óók de <html>-achtergrond carbon: Safari tekent zijn status- en
+    // werkbalkzone in de paginakleur, en die was anders wit (01-09).
+    html.classList.add('login-donker');
     applyThemeColorMeta(true);
     return () => {
       if (wasDark) html.classList.add('dark');
+      html.classList.remove('login-donker');
       applyThemeColorMeta(wasDark);
     };
   }, []);

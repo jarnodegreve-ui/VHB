@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertTriangle, X } from 'lucide-react';
+import { AlertTriangle, Inbox, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { Button } from './primitives';
 import { BrandBus } from './BrandBus';
@@ -176,15 +176,16 @@ export function ConfirmationModal({
 }
 
 /**
- * Brand-empty-state met de VHB-busje-mascotte by default. Bestaande
- * EmptyState-aanroepen krijgen het busje automatisch — `icon` wordt
- * genegeerd tenzij je `mascotte={false}` zet (dan valt-back op icon).
+ * Empty-state: gedempte icoon-tegel + boodschap. Het busje (mascotte) is
+ * sinds 01-09 niet meer de default (vraag Jarno: "alternatief voor het
+ * busje") — wie hem wil, zet `mascotte` expliciet; zonder `icon` valt de
+ * tegel terug op een inbox-icoon.
  */
 export function EmptyState({
   icon,
   title,
   message,
-  mascotte = true,
+  mascotte = false,
   action,
 }: {
   icon?: React.ReactNode;
@@ -204,8 +205,8 @@ export function EmptyState({
           <BrandBus width={88} />
         </div>
       ) : (
-        <div className="w-14 h-14 bg-slate-100/80 rounded-full flex items-center justify-center mx-auto mb-4 text-slate-400">
-          {icon}
+        <div className="w-14 h-14 bg-surface-muted rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
+          {icon ?? <Inbox size={24} />}
         </div>
       )}
       <h4 className="text-base font-bold text-slate-800 tracking-tight">{title}</h4>
