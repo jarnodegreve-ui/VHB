@@ -1,5 +1,5 @@
 import { AlertTriangle, CalendarClock, CalendarDays, CheckCircle2, IdCard, ListChecks, Repeat, Smartphone, UserX } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import type { View } from '../types';
 import type { Werkvoorraad } from '../lib/werkvoorraad';
@@ -182,12 +182,14 @@ export function WerkvoorraadMenu({
         )}
       </button>
 
+      <AnimatePresence>
       {open && (
         <motion.div
           role="menu"
           aria-label="Open taken"
           initial={{ opacity: 0, scale: 0.97, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.97, y: -4 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
           style={{ transformOrigin: 'top right' }}
           /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt —
@@ -233,6 +235,7 @@ export function WerkvoorraadMenu({
           )}
         </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }

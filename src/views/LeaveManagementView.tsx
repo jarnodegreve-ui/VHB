@@ -48,6 +48,27 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
   const goToPrevMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() - 1, 1));
   const goToNextMonth = () => setViewMonth((d) => new Date(d.getFullYear(), d.getMonth() + 1, 1));
+  // Maand-swipe op touch (verbeterronde 01-09, nr. 3): veeg links/rechts over
+  // de kalender i.p.v. de kleine pijltjes te raken. Duidelijk horizontaal
+  // (>56 px en ~2× de verticale beweging) zodat gewoon scrollen niet bladert.
+  const swipeStart = useRef<{ x: number; y: number } | null>(null);
+  const swipeHandlers = {
+    onTouchStart: (e: React.TouchEvent) => {
+      const t = e.touches[0];
+      swipeStart.current = t ? { x: t.clientX, y: t.clientY } : null;
+    },
+    onTouchEnd: (e: React.TouchEvent) => {
+      const s = swipeStart.current;
+      swipeStart.current = null;
+      const t = e.changedTouches[0];
+      if (!s || !t) return;
+      const dx = t.clientX - s.x;
+      const dy = t.clientY - s.y;
+      if (Math.abs(dx) > 56 && Math.abs(dx) > 1.8 * Math.abs(dy)) {
+        if (dx < 0) goToNextMonth(); else goToPrevMonth();
+      }
+    },
+  };
   const goToCurrentMonth = () => {
     const now = new Date();
     setViewMonth(new Date(now.getFullYear(), now.getMonth(), 1));
@@ -387,7 +408,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           minmax(0,1fr) + min-w-0 klemt alles op de viewport. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="min-w-0 lg:col-span-8 space-y-6">
-          <div className="surface-card p-6 md:p-8 rounded-3xl">
+          <div className="surface-card p-6 md:p-8 rounded-3xl" {...swipeHandlers}>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
               <MaandNavigatie label={monthName} labelClassName="text-lg font-bold tracking-tight min-w-[160px]" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
                 {!isCurrentMonth && (
@@ -652,7 +673,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </p>
                 </div>
 
-                <div className="rounded-3xl border border-slate-200 bg-surface-white p-4 space-y-3">
+                <div className="rounded-3xl border border-slate-200 bg-surface-white p-4 space-y-3" {...swipeHandlers}>
                   <MaandNavigatie className="justify-between" label={monthName} onVorige={goToPrevMonth} onVolgende={goToNextMonth} />
                   <div className="grid grid-cols-7 gap-1">
                     {WEEKDAY_SHORT_MON.map((d) => (
