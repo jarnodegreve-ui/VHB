@@ -35,7 +35,7 @@ import type {
 } from '../types';
 import type { DayGap } from '../lib/coverage';
 import { getDaypartGreeting } from '../lib/interactive';
-import { isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
+import { addDays, isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
 import { berekenWerkvoorraad, type PendingDevice, type VervaldataRij } from '../lib/werkvoorraad';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
@@ -47,7 +47,7 @@ import { Modal } from '../components/Modal';
 import { ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Button, microLabelClass } from '../components/primitives';
+import { Button, microLabelClass, segItemClass } from '../components/primitives';
 import { cn, notify, telHref } from '../lib/ui';
 
 /**
@@ -111,6 +111,13 @@ export function PlannerDashboardWidgets({
   // "Vandaag afwezig" stond onterecht op 0 wanneer het verlof alleen in de
   // geïmporteerde matrix zat. Fout → stil terugvallen op de module-data.
   const todayKey = isoDate(now);
+  // Vandaag | Morgen: de bezetting-tegels en hun popups kunnen vooruitkijken
+  // — 's avonds plan je voor de volgende dag (verbeterronde 01-09, nr. 1).
+  // Alles wat live of werkvoorraad is (Chauffeurs actief, Open taken,
+  // ziekmelden) blijft altijd op vandaag/nu.
+  const [dagOffset, setDagOffset] = useState<0 | 1>(0);
+  const peilDag = isoDate(addDays(now, dagOffset));
+  const peilLabel = dagOffset === 0 ? 'Vandaag' : 'Morgen';
   // `absent` voedt de tegel/popup "Vandaag afwezig"; `busyNames` is breder — élke
   // matrix-cel van vandaag die géén vrije dag is (opleiding, een dienst zonder
   // bruikbare tijden, onbekende code…). Zonder dat onderscheid gold "niet in
@@ -147,11 +154,13 @@ export function PlannerDashboardWidgets({
   }, [todayKey]);
   useEffect(() => {
     let cancelled = false;
-    fetchMonthPlanning(todayKey.slice(0, 7))
+    // Peildag i.p.v. vandaag: de Vandaag|Morgen-schakelaar kijkt naar de
+    // matrixcellen van de gekozen dag (morgen kan in de volgende maand vallen).
+    fetchMonthPlanning(peilDag.slice(0, 7))
       .then((mp) => {
         if (cancelled || !Array.isArray(mp?.drivers)) return;
         const cells = mp.drivers
-          .map((drv) => ({ drv, cell: mp.cells?.[drv.id]?.[todayKey] }))
+          .map((drv) => ({ drv, cell: mp.cells?.[drv.id]?.[peilDag] }))
           .filter((x) => !!x.cell);
         // "Geen dienst" = een gewone vrije dag, geen afwezigheid — die
         // hoort niet in dit paneel (Jarno) en telt wél als beschikbaar.
@@ -174,7 +183,7 @@ export function PlannerDashboardWidgets({
         if (!cancelled) setMatrix({ absent: [], busyNames: [] });
       });
     return () => { cancelled = true; };
-  }, [todayKey]);
+  }, [peilDag]);
 
   // Ziekmelding registreren (planner/admin). Komt telefonisch binnen, dus de
   // planner moet hem vanuit de cockpit kunnen invoeren zonder van scherm te
@@ -252,14 +261,15 @@ export function PlannerDashboardWidgets({
     return gevonden;
   };
 
-  // === Operationele kerncijfers (alles uit echte data) ===
-  const ingeplandeIds = new Set(shifts.filter((s) => s.date === today).map((s) => String(s.driverId)));
+  // === Operationele kerncijfers (alles uit echte data; de bezetting volgt
+  // de Vandaag|Morgen-peildag, live cijfers blijven op nu) ===
+  const ingeplandeIds = new Set(shifts.filter((s) => s.date === peilDag).map((s) => String(s.driverId)));
   const driversActiveToday = ingeplandeIds.size;
   // Hoeveel van de ingeplanden zijn intussen afwezig gemeld? De tegel telt ze
   // bewust mee in het hoofdcijfer (ze stáán ingepland; de popup labelt ze),
   // maar de sub-regel maakt het gat meteen zichtbaar — anders las "30 / 45"
   // alsof er niets aan de hand was terwijl er drie ziek thuis zitten.
-  const ingeplandAfwezig = [...ingeplandeIds].filter((id) => afwezigOpDag(id, today)).length;
+  const ingeplandAfwezig = [...ingeplandeIds].filter((id) => afwezigOpDag(id, peilDag)).length;
   // Wie zit er nú effectief op de bus? Actuele tijd vs. de segmenttijden
   // (incl. nachtdiensten van gisteren die nog lopen); de 60s-klok hierboven
   // houdt dit cijfer live. Gesplitste diensten: pauze telt niet mee, en wie
@@ -347,7 +357,7 @@ export function PlannerDashboardWidgets({
   for (const l of leaveRequests) {
     if (l.status !== 'approved') continue;
     if (!isoDagRe.test(l.startDate) || !isoDagRe.test(l.endDate) || l.startDate > l.endDate) continue;
-    if (!(l.startDate <= today && today <= l.endDate)) continue;
+    if (!(l.startDate <= peilDag && peilDag <= l.endDate)) continue;
     const kandidaat = { id: l.id, name: userNameById(l.userId), label: ABSENCE_LABEL[l.type] ?? l.type, isSick: l.type === 'ziekte' };
     const bestaand = moduleAbsentByUser.get(String(l.userId));
     if (!bestaand || (kandidaat.isSick && !bestaand.isSick)) moduleAbsentByUser.set(String(l.userId), kandidaat);
@@ -379,7 +389,7 @@ export function PlannerDashboardWidgets({
     ...todayAbsent.map((a) => nameKey(a.name)),
     ...matrix.busyNames.map(nameKey),
   ]);
-  const todayShifts = shifts.filter((s) => s.date === today);
+  const todayShifts = shifts.filter((s) => s.date === peilDag);
   const workingTodayIds = new Set(todayShifts.map((s) => String(s.driverId)));
   // Ook wie nú nog op de bus zit met een dienst van gisteren is niet vrij.
   const drivingNowIds = new Set(
@@ -462,9 +472,12 @@ export function PlannerDashboardWidgets({
   // planning) nog op zijn dienst. De aftelling zou dan doodleuk "nog 2u"
   // tonen voor iemand die ziek thuis zit — vervang die door het afwezig-label.
   const scheduledToday = groupShiftsByDriver(todayShifts).map((d) => {
-    const afwezig = afwezigOpDag(d.id, today);
-    if (!afwezig) return d;
-    return { ...d, remaining: afwezig.label.toLowerCase(), remainingTone: afwezig.tone };
+    // Morgen: geen live-aftelling — die telt vanaf "nu" en zou voor morgen
+    // onzinnige uren tonen. Het afwezig-label blijft wél (dat is per dag).
+    const basis = dagOffset === 1 ? { ...d, remaining: undefined, remainingTone: undefined } : d;
+    const afwezig = afwezigOpDag(d.id, peilDag);
+    if (!afwezig) return basis;
+    return { ...basis, remaining: afwezig.label.toLowerCase(), remainingTone: afwezig.tone };
   });
   // Wie rijdt er nú? Zelfde filter als de teller op de tegel — over álle
   // shifts, want een nachtdienst van gisteren kan nu nog bezig zijn. De
@@ -476,7 +489,9 @@ export function PlannerDashboardWidgets({
     .filter(isRealDriver)
     .filter((u) =>
       !workingTodayIds.has(String(u.id)) &&
-      !drivingNowIds.has(String(u.id)) &&
+      // "Zit nú nog op de bus" telt alleen voor vandaag — morgen zegt de
+      // actuele rit niets over beschikbaarheid.
+      (dagOffset === 1 || !drivingNowIds.has(String(u.id))) &&
       !busyNameKeys.has(nameKey(u.name)))
     .sort((a, b) => a.name.localeCompare(b.name));
 
@@ -502,6 +517,21 @@ export function PlannerDashboardWidgets({
           </p>
         </div>
         <div className="flex w-fit items-center gap-2">
+        {/* Vandaag | Morgen: bezetting-tegels + popups kijken vooruit
+            (verbeterronde 01-09, nr. 1); live cijfers blijven op nu. */}
+        <div className="glass-segmented inline-flex rounded-2xl p-1">
+          {([0, 1] as const).map((offset) => (
+            <button
+              key={offset}
+              type="button"
+              onClick={() => setDagOffset(offset)}
+              aria-pressed={dagOffset === offset}
+              className={segItemClass(dagOffset === offset)}
+            >
+              {offset === 0 ? 'Vandaag' : 'Morgen'}
+            </button>
+          ))}
+        </div>
         {/* De "Open taken/Operationeel"-statuspil die hier stond is 31-08
             vervangen door de werkvoorraad-knop in de topbar (WerkvoorraadMenu)
             — die is vanuit elk scherm zichtbaar. Alleen de actie blijft. */}
@@ -555,7 +585,7 @@ export function PlannerDashboardWidgets({
           className="md:col-span-2 xl:col-span-1"
           icon={<Users size={16} />}
           tone="slate"
-          label="Vandaag ingepland"
+          label={`${peilLabel} ingepland`}
           value={driversActiveToday}
           suffix={totalDrivers > 0 ? ` / ${totalDrivers}` : undefined}
           sub={ingeplandAfwezig > 0 ? `waarvan ${ingeplandAfwezig} afwezig gemeld` : 'chauffeurs met dienst'}
@@ -567,14 +597,14 @@ export function PlannerDashboardWidgets({
           tone="slate"
           label="Beschikbaar"
           value={availableToday.length}
-          sub="vrij en inzetbaar vandaag"
+          sub={`vrij en inzetbaar ${peilLabel.toLowerCase()}`}
           onClick={() => setShowAvailable(true)}
         />
         <OpsStat
           className={cn(laadplein ? 'md:col-span-2' : 'md:col-span-3', 'xl:col-span-1')}
           icon={<CalendarClock size={16} />}
           tone={todayAbsent.some((a) => a.isSick) ? 'rose' : 'slate'}
-          label="Vandaag afwezig"
+          label={`${peilLabel} afwezig`}
           value={todayAbsent.length}
           sub={todayAbsent.length === 0
             ? 'iedereen inzetbaar'
@@ -809,7 +839,7 @@ export function PlannerDashboardWidgets({
         icon={<UserCheck size={17} />}
         iconClassName="bg-emerald-50 text-emerald-600"
         title="Beschikbare chauffeurs"
-        subtitle={`${formatDay(today)} · ${availableToday.length} ${availableToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
+        subtitle={`${formatDay(peilDag)} · ${availableToday.length} ${availableToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
         {availableToday.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">
@@ -859,8 +889,8 @@ export function PlannerDashboardWidgets({
         onClose={() => setShowAbsent(false)}
         icon={<CalendarClock size={17} />}
         iconClassName="bg-amber-50 text-amber-600"
-        title="Vandaag afwezig"
-        subtitle={`${formatDay(today)} · ${todayAbsent.length} ${todayAbsent.length === 1 ? 'collega' : "collega's"}`}
+        title={`${peilLabel} afwezig`}
+        subtitle={`${formatDay(peilDag)} · ${todayAbsent.length} ${todayAbsent.length === 1 ? 'collega' : "collega's"}`}
       >
         {todayAbsent.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">Iedereen inzetbaar vandaag.</p>
@@ -889,10 +919,10 @@ export function PlannerDashboardWidgets({
         onClose={() => setShowScheduled(false)}
         icon={<Users size={17} />}
         iconClassName="bg-surface-muted text-slate-600"
-        title="Vandaag ingepland"
-        subtitle={`${formatDay(today)} · ${scheduledToday.length} ${scheduledToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
+        title={`${peilLabel} ingepland`}
+        subtitle={`${formatDay(peilDag)} · ${scheduledToday.length} ${scheduledToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
-        <DriverShiftRows items={scheduledToday} emptyText="Niemand ingepland vandaag." />
+        <DriverShiftRows items={scheduledToday} emptyText={`Niemand ingepland ${peilLabel.toLowerCase()}.`} />
       </DashboardListModal>
 
       {/* === Popup: wie rijdt er op dit moment === */}

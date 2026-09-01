@@ -53,3 +53,18 @@ jobs:
 
       - name: E2E-smoke
         run: npm run test:e2e
+
+  # Secret-scanner (verbeterronde 01-09, nr. 5): de repo is publiek en er is
+  # al eens een bot-token gelekt (via een transcript, niet de repo — maar het
+  # vangnet ontbrak). gitleaks scant de gepushte commits op secrets en laat
+  # de check falen vóór iets publiek staat.
+  gitleaks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

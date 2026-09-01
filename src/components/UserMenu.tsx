@@ -1,5 +1,5 @@
 import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import type { User } from '../types';
 import { useDropdown } from './useDropdown';
@@ -60,12 +60,14 @@ export function UserMenu({
         <ChevronDown size={14} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
       </button>
 
+      <AnimatePresence>
       {open && (
         <motion.div
           role="menu"
           aria-label="Account"
           initial={{ opacity: 0, scale: 0.97, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.97, y: -4 }}
           transition={{ duration: 0.15, ease: 'easeOut' }}
           style={{ transformOrigin: 'top right' }}
           className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-surface-white backdrop-blur-xl ring-1 ring-hairline shadow-xl p-1.5 z-50"
@@ -110,6 +112,7 @@ export function UserMenu({
           </button>
         </motion.div>
       )}
+      </AnimatePresence>
     </div>
   );
 }
