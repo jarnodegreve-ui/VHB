@@ -3493,13 +3493,21 @@ const verlofConflictsIn = (
   naamVan: (id: string) => string,
 ): VerlofConflict[] => {
   const uit: VerlofConflict[] = [];
+  // Dedupe per (chauffeur, dag, dienst): een gesplitste dienst is meerdere
+  // planning-rijen en telde als 2-3 "conflicten" voor wat één dienst is —
+  // zelfde segmenten-zijn-geen-diensten-les als #389 (gevonden door de
+  // golden import-keten-test, 01-09).
+  const gezien = new Set<string>();
   for (const shift of shifts) {
+    const sleutel = `${shift.driverId}|${shift.date}|${toLookupToken(shift.line)}`;
+    if (gezien.has(sleutel)) continue;
     const overlap = approvedLeave.find((l) =>
       String(l.userId) === String(shift.driverId) &&
       l.startDate <= shift.date &&
       l.endDate >= shift.date,
     );
     if (overlap) {
+      gezien.add(sleutel);
       uit.push({
         driverId: shift.driverId,
         driverName: naamVan(shift.driverId),
