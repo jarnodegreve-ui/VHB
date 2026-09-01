@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { AlertTriangle, ArrowLeftRight, Clock, CalendarPlus, ChevronDown, FileText } from 'lucide-react';
+import { AlertTriangle, ArrowLeftRight, CalendarDays, Clock, CalendarPlus, ChevronDown, FileText } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
 import { typedagLabel } from '../lib/typedag';
@@ -232,7 +232,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </div>
       ) : upcoming.length === 0 && past.length === 0 ? (
-        <EmptyState title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
+        <EmptyState icon={<CalendarDays size={24} />} title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
       ) : weergave === 'maand' ? (
         <MonthCalendar
           groups={grouped}

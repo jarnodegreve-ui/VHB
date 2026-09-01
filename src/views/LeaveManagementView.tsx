@@ -381,8 +381,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         )}
       />
 
-      <div className="grid lg:grid-cols-12 gap-8">
-        <div className="lg:col-span-8 space-y-6">
+      {/* grid-cols-1 expliciet: de impliciete auto-track liet het breedste
+          kind (een niet-krimpbare rij) de héle kolom oprekken, waardoor de
+          kalender op mobiel rechts buiten beeld viel (melding Jarno 01-09).
+          minmax(0,1fr) + min-w-0 klemt alles op de viewport. */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        <div className="min-w-0 lg:col-span-8 space-y-6">
           <div className="surface-card p-6 md:p-8 rounded-3xl">
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
               <MaandNavigatie label={monthName} labelClassName="text-lg font-bold tracking-tight min-w-[160px]" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
@@ -469,7 +473,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           )}
         </div>
 
-        <div className="lg:col-span-4 space-y-8">
+        <div className="min-w-0 lg:col-span-4 space-y-8">
           <div className="space-y-2">
             <LeaveBalanceCard balance={verlofBalans(leaveRequests, user.id, new Date().getFullYear(), user.verlofBudget)} year={new Date().getFullYear()} compact />
             {/* Nieuw tabblad: de print-modus rendert een kale pagina in plaats

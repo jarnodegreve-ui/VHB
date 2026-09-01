@@ -62,6 +62,24 @@
         ],
         "createdAt": "2026-08-31T19:29:58.357Z",
         "reason": "Pre-existing gemergde stijl uit PR #408: gedempte slate-iconen op zachte hover-tinten + carbon op goud (huisstijl CLAUDE.md)"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/components/ui.tsx"
+        ],
+        "createdAt": "2026-09-01T18:40:17.067Z",
+        "reason": "Huisstijl: op amber altijd VHB Black/slate-950 (wit op amber < AA) — gedocumenteerd in code-comment ConfirmationModal, controle-ronde 27-08"
+      },
+      {
+        "rule": "gray-on-color",
+        "value": "*",
+        "files": [
+          "src/views/LeaveManagementView.tsx"
+        ],
+        "createdAt": "2026-09-01T18:40:51.638Z",
+        "reason": "Kalender-legende: slate-tekst staat naast een gekleurde stip (span-sibling), niet op een gekleurd vlak — detector-misparse"
       }
     ]
   }
