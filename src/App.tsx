@@ -2159,7 +2159,7 @@ export default function App() {
         <div className="p-6">
           {probleemVerstuurd ? (
             <div className="text-center py-4">
-              <p className="text-sm font-bold text-slate-800">Bedankt — je melding is verstuurd.</p>
+              <p className="text-sm font-bold text-slate-800">Bedankt, jouw melding is verstuurd!</p>
               <p className="mt-1.5 text-xs text-slate-500">De planning ziet hem in het systeemoverzicht.</p>
               <Button variant="primary" className="mt-5" onClick={() => setShowProbleemMelder(false)}>
                 Sluiten
