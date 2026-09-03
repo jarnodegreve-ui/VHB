@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Activity, Download, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
-import { downloadBlob } from '../../lib/ui';
+import { cn, downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { formatDayLong } from '../../lib/format';
-import { EmptyState, ModalHeader, PageShell } from '../../components/ui';
+import { EmptyState, ModalHeader, PageShell, PageHeader } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, FilterChip, MicroLabel, Td } from '../../components/primitives';
-import { Paginering, SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import { Paginering, SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
+import { useQueryParam } from '../../app/router';
 import { Card, CardHeader } from '../../components/Card';
 import { Select } from '../../components/Field';
 
@@ -43,6 +44,12 @@ const CATEGORY_LABELS: Record<ActivityLogEntry['category'], string> = {
  *  en die allemaal renderen maakte het scherm traag. Zoeken en filteren
  *  lopen over de hele set, de paginering over het resultaat. */
 const PER_PAGINA = 50;
+
+/** Uitschakelbare kolommen (Tijdstip en Actie blijven altijd). */
+const KOLOMMEN = [
+  { key: 'categorie', label: 'Categorie' },
+  { key: 'actor', label: 'Actor' },
+] as const;
 
 const formatTijdstip = (iso: string) => new Date(iso).toLocaleString('nl-BE', {
   day: '2-digit',
@@ -106,8 +113,11 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
   );
   const [activeCategory, setActiveCategory] = useState<'all' | ActivityLogEntry['category']>('all');
   const [dateWindow, setDateWindow] = useState<'all' | 'today' | '7d' | '30d'>('7d');
-  const [searchTerm, setSearchTerm] = useState('');
+  // Zoekterm in de URL (?zoek=…): refresh of gedeelde link behoudt de zoekopdracht.
+  const [searchTerm, setSearchTerm] = useQueryParam('zoek');
   const [pagina, setPagina] = useState(1);
+  // Rijdichtheid + kolomkeuze, onthouden per toestel.
+  const voorkeur = useTabelVoorkeur('activiteit', KOLOMMEN);
   // Nieuwste eerst, zoals de server ze levert; elke kolom is sorteerbaar.
   const sort = useSort<'tijd' | 'categorie' | 'actie' | 'actor'>('tijd', 'desc');
 
@@ -220,6 +230,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
 
   return (
     <PageShell>
+      <PageHeader title="Activiteit" description="Recente beheeracties en aanmeldingen in het portaal." />
       <Card as="section" padding="lg">
         <CardHeader
           size="lg"
@@ -277,6 +288,8 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           onZoek={setSearchTerm}
           placeholder="Zoek op actie, details of actor…"
           telling={`${sortedEntries.length} van ${sourceEntries.length}`}
+          dichtheid={voorkeur.dichtheid}
+          kolommen={voorkeur.kolommen}
           filters={(
             <>
               <FilterChip active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterChip>
@@ -317,30 +330,34 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             // wordt de wrapper `overflow-clip` zodat de kolomkop onder de
             // topbar blijft plakken (een scrollcontainer breekt sticky).
             <div className="surface-table rounded-3xl overflow-x-auto md:overflow-clip">
-              <table className="w-full min-w-[40rem] text-left border-collapse">
+              <table className={cn('w-full min-w-[40rem] text-left border-collapse', voorkeur.tabelClass)}>
                 <StickyThead>
                   <tr>
                     <SortTh kolom="tijd" sort={sort}>Tijdstip</SortTh>
-                    <SortTh kolom="categorie" sort={sort}>Categorie</SortTh>
+                    {voorkeur.zichtbaar('categorie') && <SortTh kolom="categorie" sort={sort}>Categorie</SortTh>}
                     <SortTh kolom="actie" sort={sort}>Actie</SortTh>
-                    <SortTh kolom="actor" sort={sort}>Actor</SortTh>
+                    {voorkeur.zichtbaar('actor') && <SortTh kolom="actor" sort={sort}>Actor</SortTh>}
                   </tr>
                 </StickyThead>
                 <tbody>
                   {paginaEntries.map((entry) => (
                     <tr key={entry.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors">
                       <Td className="whitespace-nowrap align-top text-slate-500 tabular-nums">{formatTijdstip(entry.createdAt)}</Td>
-                      <Td className="align-top">
-                        <Badge tone={CATEGORY_TONES[entry.category]}>{CATEGORY_LABELS[entry.category]}</Badge>
-                      </Td>
+                      {voorkeur.zichtbaar('categorie') && (
+                        <Td className="align-top">
+                          <Badge tone={CATEGORY_TONES[entry.category]}>{CATEGORY_LABELS[entry.category]}</Badge>
+                        </Td>
+                      )}
                       <Td className="align-top">
                         <p className="font-semibold text-slate-800">{entry.action}</p>
                         <p className="mt-0.5 text-xs font-normal leading-5 text-slate-500">{entry.details}</p>
                       </Td>
-                      <Td className="align-top whitespace-nowrap">
-                        <p className="font-semibold text-slate-800">{entry.actorName}</p>
-                        <MicroLabel className="mt-0.5">{entry.actorRole}</MicroLabel>
-                      </Td>
+                      {voorkeur.zichtbaar('actor') && (
+                        <Td className="align-top whitespace-nowrap">
+                          <p className="font-semibold text-slate-800">{entry.actorName}</p>
+                          <MicroLabel className="mt-0.5">{entry.actorRole}</MicroLabel>
+                        </Td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

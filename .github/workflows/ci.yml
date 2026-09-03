@@ -56,6 +56,9 @@ jobs:
       - name: Playwright-browser
         run: npx playwright install --with-deps chromium
 
+      # Twee projecten (playwright.config.ts): iPhone 13 voor de mobiele specs,
+      # "Desktop (chromium)" 1440×900 voor desktop.spec.ts; a11y.spec.ts (axe,
+      # WCAG 2.1 AA) draait op beide.
       - name: E2E-smoke
         run: npm run test:e2e
 
@@ -73,3 +76,79 @@ jobs:
       - uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Visuele regressie (verbeterronde 03-09, nr. 11): zes sleutelschermen op
+  # deze branch én op de basis-branch schieten (gemockte API) en per pixel
+  # vergelijken — scripts/visueel-ci.mjs. Boven 1,5 % per scherm faalt de
+  # job NIET: de tabel in de job-samenvatting en de diff-afbeeldingen in het
+  # artifact zijn een signaal voor de reviewer, geen blokkade.
+  visueel:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Zelfde dummy-env als de e2e-build: anders rendert de app de
+      # "configuratie ontbreekt"-melding i.p.v. de schermen.
+      VITE_SUPABASE_URL: http://localhost:4173
+      VITE_SUPABASE_ANON_KEY: e2e-dummy-anon-key
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: node_modules-cache
+        id: node-modules
+        uses: actions/cache@v4
+        with:
+          path: node_modules
+          key: node-modules-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Dependencies
+        if: steps.node-modules.outputs.cache-hit != 'true'
+        run: npm ci
+
+      - name: Playwright-browsers-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      # --with-deps ook bij een cache-hit: de systeembibliotheken (vooral
+      # voor WebKit) zitten niet in de cache.
+      - name: Playwright-browsers (chromium + webkit)
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Build (deze branch)
+        run: npm run build
+
+      - name: Basis-branch uitchecken
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: .visueel-basis
+
+      - name: Basis-branch bouwen
+        working-directory: .visueel-basis
+        run: |
+          npm ci
+          npm run build
+
+      - name: Screenshots (deze branch + basis)
+        run: |
+          node scripts/visueel-ci.mjs schiet --app . --out .visueel/kop
+          node scripts/visueel-ci.mjs schiet --app .visueel-basis --out .visueel/basis
+
+      - name: Vergelijken (drempel 1,5 % per scherm)
+        run: node scripts/visueel-ci.mjs vergelijk .visueel/basis .visueel/kop --out .visueel/verschil --drempel 1.5
+
+      - name: Diff-afbeeldingen als artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visuele-regressie
+          path: .visueel
+          retention-days: 14
+          if-no-files-found: ignore

@@ -68,7 +68,9 @@ export function BottomNav({
   const slots: NavSlot[] = isPlanner
     ? [tab('dashboard'), tab('dekking'), tab('verlof', pendingLeaveCount), tab('ruil-verzoeken', pendingSwapsCount), tab('vervaldata')]
     // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount).
-    : [tab('dashboard'), tab('rooster'), tab('omleidingen'), tab('ritblaadjes'), tab('verlof', unseenLeaveCount)];
+    // Mijn dag (03-09) neemt de plek van Ritbladen in: het ritblad van vandaag
+    // zit als knop ín Mijn dag, de Ritbladen-pagina blijft via "Meer".
+    : [tab('dashboard'), tab('mijn-dag'), tab('rooster'), tab('omleidingen'), tab('verlof', unseenLeaveCount)];
 
   return (
     <nav
@@ -111,7 +113,7 @@ export function BottomNav({
                   // blijft :hover na een tik plakken, waardoor een inactieve
                   // tab er permanent "half actief" uitzag.
                   'relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors',
-                  isActive ? 'text-oker-700' : 'text-slate-400 pointer-fine:hover:text-slate-700',
+                  isActive ? 'text-oker-800' : 'text-slate-500 pointer-fine:hover:text-slate-700',
                 )}
               >
                 {isActive && (
@@ -143,7 +145,7 @@ export function BottomNav({
             <button
               onClick={onMore}
               aria-label="Meer"
-              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors text-slate-400 pointer-fine:hover:text-slate-700"
+              className="relative flex flex-col items-center justify-center gap-0.5 w-full py-1 min-h-11 rounded-lg transition-colors text-slate-500 pointer-fine:hover:text-slate-700"
             >
               <span className="relative z-10">
                 <Menu size={18} />

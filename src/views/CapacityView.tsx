@@ -19,6 +19,7 @@ import type { User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR } from '../lib/motion';
+import { useRouteParam } from '../app/router';
 
 
 /** Maandag (ISO-datum) van de week waarin `iso` valt. */
@@ -35,6 +36,13 @@ const addDaysIso = (iso: string, n: number) => {
 };
 const monthOf = (iso: string) => iso.slice(0, 7);
 
+/** Hoofdmaand in de URL (`/maandplanning/2026-10`) — spiegel van `viewMonth`;
+ *  een ongeldige waarde wordt genegeerd. */
+const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
+const maandUitParam = (p: string | null): Date | null =>
+  p && MAAND_PARAM.test(p) ? new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1) : null;
+const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
 /** Vaste redenen voor een handmatige dienstwissel; bij 'Andere correctie' is
  *  de vrije toelichting verplicht (de server eist altijd een reden). */
 const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Andere correctie'] as const;
@@ -46,9 +54,10 @@ const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Andere correctie'] a
  */
 export function CapacityView({ currentUser }: { currentUser: User }) {
   const ownId = String(currentUser?.id ?? '');
+  const [maandParam, zetMaandParam] = useRouteParam(0);
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    return maandUitParam(maandParam) ?? new Date(now.getFullYear(), now.getMonth(), 1);
   });
   const [data, setData] = useState<MonthPlanning | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,7 +69,17 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // de maandag van de huidige week — ook als er al dagen voorbij zijn (vraag
   // Jarno 03-09). Het venster mag over een maandgrens lopen; de tweede maand
   // wordt er dan stil bij geladen (extraData).
-  const [windowStart, setWindowStart] = useState(() => mondayOf(isoDate(new Date())));
+  const [windowStart, setWindowStart] = useState(() => {
+    const dezeMaandag = mondayOf(isoDate(new Date()));
+    const uitUrl = maandUitParam(maandParam);
+    if (!uitUrl) return dezeMaandag;
+    // Maand uit de URL: valt de huidige week (ma–zo) erin, dan blijft het
+    // venster op deze week staan; anders start het op de eerste maandag
+    // van/vóór die maand.
+    const maand = maandNaarParam(uitUrl);
+    const dezeWeekInMaand = Array.from({ length: 7 }, (_, i) => addDaysIso(dezeMaandag, i)).some((d) => monthOf(d) === maand);
+    return dezeWeekInMaand ? dezeMaandag : mondayOf(`${maand}-01`);
+  });
   const [extraData, setExtraData] = useState<MonthPlanning | null>(null);
 
   const year = viewMonth.getFullYear();
@@ -251,6 +270,13 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const monthParam = `${year}-${String(monthIndex + 1).padStart(2, '0')}`;
   const todayIso = isoDate(new Date());
 
+  // Hoofdmaand → URL (replace, geen extra history-entry); de state blijft de
+  // bron. De huidige maand geeft een schone URL zonder parameter.
+  useEffect(() => {
+    const gewenst = monthParam === maandNaarParam(new Date()) ? null : monthParam;
+    if ((maandParam ?? null) !== gewenst) zetMaandParam(gewenst);
+  }, [monthParam, maandParam, zetMaandParam]);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
@@ -303,16 +329,20 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   // maandgrens); de hoofdmaand bepaalt de volgorde.
   const drivers = useMemo(() => {
     const basis = data?.drivers ?? [];
-    if (!extraData) return basis;
+    // Defensief: een lege/onverwachte respons voor de extra maand mag het
+    // scherm niet laten crashen (extraData zonder drivers).
+    const extra = extraData?.drivers ?? [];
+    if (extra.length === 0) return basis;
     const ids = new Set(basis.map((d) => d.id));
-    return [...basis, ...extraData.drivers.filter((d) => !ids.has(d.id))];
+    return [...basis, ...extra.filter((d) => !ids.has(d.id))];
   }, [data, extraData]);
   const cells = useMemo(() => {
     const basis = data?.cells ?? {};
-    if (!extraData) return basis;
+    const extraCells = extraData?.cells ?? {};
+    if (Object.keys(extraCells).length === 0) return basis;
     const merged: Record<string, Record<string, MonthCell>> = {};
-    for (const id of new Set([...Object.keys(basis), ...Object.keys(extraData.cells)])) {
-      merged[id] = { ...(extraData.cells[id] ?? {}), ...(basis[id] ?? {}) };
+    for (const id of new Set([...Object.keys(basis), ...Object.keys(extraCells)])) {
+      merged[id] = { ...(extraCells[id] ?? {}), ...(basis[id] ?? {}) };
     }
     return merged;
   }, [data, extraData]);
@@ -374,7 +404,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const formatDateLong = formatDayLong;
 
   // Ook een venster dat alleen in de extra maand planning heeft telt als data.
-  const hasData = (dates.length > 0 || (extraData?.dates.length ?? 0) > 0) && drivers.length > 0;
+  const hasData = (dates.length > 0 || (extraData?.dates?.length ?? 0) > 0) && drivers.length > 0;
 
   // Sectie-koppen tonen zodra minstens één chauffeur een sectie heeft (anders
   // gedraagt de lijst zich als voorheen — één alfabetische groep, geen koppen).
@@ -580,7 +610,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
         </Card>
       ) : !hasData ? (
         <EmptyState
-          title={`Geen planning voor ${MONTH_NAMES[monthIndex]} ${year}`}
+          title={`Geen planning voor ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}`}
           message="Zodra de planning voor deze maand geïmporteerd is, verschijnt ze hier."
         />
       ) : (
@@ -601,21 +631,28 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       // De Lijn-typedag: feestdag (F, oker) of schoolvakantie
                       // (V) subtiel in de dagkop — de regeling die rijdt.
                       const td = typedagLabel(iso);
+                      // Dag uit de ándere maand van het venster: leesbare
+                      // maandmarkering ("aug") i.p.v. de losse typedag-letter,
+                      // die onder "31" als een vreemd teken las.
+                      const andereMaand = monthOf(iso) !== monthParam;
+                      const maandKort = (MONTH_NAMES[Number(iso.slice(5, 7)) - 1] ?? '').slice(0, 3).toLowerCase();
                       return (
                         <th
                           key={iso}
                           title={td?.titel}
                           className={cn(
                             'sticky top-0 z-20 px-1 py-2 text-center font-medium border-b-2 border-slate-300',
-                            h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
+                            h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-slate-200',
                             today ? 'bg-oker-100' : h.weekend ? 'mp-weekend' : 'bg-surface-soft',
                           )}
                         >
                           <div className={microLabelClass}>{h.letter}</div>
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
                           <div className="mt-0.5 h-3 text-2xs font-bold leading-3">
-                            {td && (
-                              <span className={td.kort === 'F' ? 'text-oker-700' : 'text-slate-400'}>{td.kort}</span>
+                            {andereMaand ? (
+                              <span className={microLabelClass}>{maandKort}</span>
+                            ) : td && (
+                              <span className={td.kort === 'F' ? 'text-oker-700' : 'text-slate-500'}>{td.kort}</span>
                             )}
                           </div>
                         </th>
@@ -651,7 +688,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                 key={iso}
                                 className={cn(
                                   'p-0 border-y border-slate-300 bg-slate-100/80',
-                                  h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
+                                  h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-slate-200',
                                   today ? 'bg-oker-100/60' : h.weekend ? 'mp-hatch' : '',
                                 )}
                               />
@@ -684,7 +721,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                               key={iso}
                               className={cn(
                                 'p-0 text-center',
-                                h.isMonday ? 'border-l-2 border-l-slate-300' : 'border-l border-slate-200',
+                                h.isMonday ? 'border-l-2 border-l-slate-400' : 'border-l border-slate-200',
                                 // oker-100/60 i.p.v. 50/50: blijft ook zichtbaar
                                 // in je eigen rij (die zelf al bg-oker-50 heeft).
                                 today ? 'bg-oker-100/60' : h.weekend ? 'mp-weekend' : '',
@@ -749,7 +786,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 >
                   <ChevronLeft size={16} />
                 </IconButton>
-                <span className="text-sm font-semibold tracking-tight text-slate-800">{MONTH_NAMES[monthIndex]} {year}</span>
+                <span className="text-sm font-semibold tracking-tight text-slate-800 tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
                 <div className="flex items-center">
                   {/* Spring naar de eerstvolgende dag met een nog niet
                       herverdeelde dienst — scheelt dag voor dag vegen. */}
@@ -904,7 +941,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       type="button"
                       onClick={() => setToonRust((v) => !v)}
                       aria-expanded={toonRust}
-                      className={cn('w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 active:bg-black/[0.04] transition-colors', microLabelClass)}
+                      className={cn('w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 active:bg-black/[0.04] transition-colors tabular-nums', microLabelClass)}
                     >
                       <span>Vrij / afwezig · {dagRijen.rust.length}</span>
                       <ChevronRight size={14} className={cn('transition-transform', toonRust && 'rotate-90')} />

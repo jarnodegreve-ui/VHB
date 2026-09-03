@@ -117,5 +117,41 @@ export function useRoute() {
   return { view: route.view, params: route.params, navigeer: navigeerNaar };
 }
 
+/**
+ * Eén route-parameter (positioneel segment na het pad) lezen én schrijven —
+ * bv. de maand op /openstaande-diensten/2026-10. Schrijven vervangt de
+ * history-entry (geen extra terugstap per maandwissel). `null` wist hem.
+ */
+export function useRouteParam(index = 0): [string | null, (waarde: string | null) => void] {
+  const { view, params, navigeer } = useRoute();
+  const huidig = params[index] ?? null;
+  const zet = useCallback((waarde: string | null) => {
+    const volgende = [...params];
+    if (waarde == null) volgende.splice(index);
+    else volgende[index] = waarde;
+    navigeer(view, { params: volgende, replace: true });
+  }, [index, navigeer, params, view]);
+  return [huidig, zet];
+}
+
+/** Querystring-parameter (?zoek=jan) lezen/schrijven, replace-only. */
+export function useQueryParam(naam: string): [string, (waarde: string) => void] {
+  const [, force] = useState(0);
+  useEffect(() => {
+    const sync = () => force((n) => n + 1);
+    window.addEventListener('popstate', sync);
+    window.addEventListener(ROUTE_EVENT, sync);
+    return () => { window.removeEventListener('popstate', sync); window.removeEventListener(ROUTE_EVENT, sync); };
+  }, []);
+  const huidig = typeof window === 'undefined' ? '' : (new URLSearchParams(window.location.search).get(naam) ?? '');
+  const zet = useCallback((waarde: string) => {
+    const url = new URL(window.location.href);
+    if (waarde) url.searchParams.set(naam, waarde); else url.searchParams.delete(naam);
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
+  }, [naam]);
+  return [huidig, zet];
+}
+
 /** Routes die in het command palette horen (alles behalve verborgen). */
 export const paletteRoutes = () => ROUTES.filter((r) => !r.verborgen);

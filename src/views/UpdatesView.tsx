@@ -1,24 +1,21 @@
 import { useEffect, useRef, useState } from 'react';
-import { ChevronRight, Clock, Info } from 'lucide-react';
+import { Bell, ChevronRight, Clock, Info } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
 import { markUpdatesRead } from '../lib/updateReads';
 import { formatUpdateDate } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, MicroLabel } from '../components/primitives';
-import { Card, CardHeader } from '../components/Card';
-import { useMinWidth } from '../lib/useMinWidth';
+import { Badge } from '../components/primitives';
+import { Card } from '../components/Card';
+import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 
 /**
- * Breekpunt als React-state (Tailwind `lg` = 1024 px). Onder `lg` de
- * kaartlijst met "Lees meer"; daarboven master-detail (titels links, volledige
- * tekst rechts). Lokaal — een gedeelde useMediaQuery ontbreekt nog in src/lib.
+ * Titels links, het volledige bericht in het gedeelde DetailPaneel: op
+ * desktop rechts naast de lijst, op mobiel in een SlideOver.
  */
-
 export function UpdatesView({ updates }: { updates: Update[] }) {
-  const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const lg = useMinWidth(1024);
+  const inline = useInlinePaneel();
 
   // Openen van de Updates-weergave = gelezen. Markeer elke nog niet gemelde
   // update (los van het actieve filter) zodat de planner 'X/Y gelezen' ziet.
@@ -34,15 +31,11 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
     });
   }, [updates]);
 
-  const toggleExpanded = (id: string) => {
-    setExpandedUpdateIds((current) => (
-      current.includes(id) ? current.filter((item) => item !== id) : [...current, id]
-    ));
-  };
-
   // Desktop: het nieuwste bericht staat standaard open; verdwijnt de keuze
-  // (bericht verwijderd), dan valt het paneel terug op het eerste.
-  const detail = lg ? updates.find((u) => u.id === selectedId) ?? updates[0] ?? null : null;
+  // (bericht verwijderd), dan valt het paneel terug op het eerste. Mobiel:
+  // alleen wat de chauffeur zelf opentikte.
+  const gekozen = updates.find((u) => u.id === selectedId) ?? null;
+  const detail = inline ? gekozen ?? updates[0] ?? null : gekozen;
 
   return (
     <PageShell>
@@ -57,119 +50,75 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
           title="Geen updates"
           message="Er zijn nog geen berichten geplaatst."
         />
-      ) : lg ? (
-        /* Master-detail vanaf lg: lijst met titels/datum links (38 %), het
-           volledige bericht rechts. */
-        <div className="lg:grid lg:grid-cols-[minmax(0,38%)_1fr] lg:items-start lg:gap-5">
-          <ul className="space-y-2" aria-label="Berichten">
-            {updates.map((update) => {
-              const isCurrent = detail?.id === update.id;
-              return (
-                <Card
-                  key={update.id}
-                  as="li"
-                  padding="none"
-                  interactive
-                  aria-current={isCurrent ? 'true' : undefined}
-                  className={cn('relative overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
-                >
-                  <div className={cn('absolute top-0 left-0 w-1 h-full', update.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
-                  {/* rauw: lijstrij van het master-detail (kaart als knop: titel + datum + dringend-badge) */}
-                  <button
-                    type="button"
-                    onClick={() => setSelectedId(update.id)}
-                    className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-slate-50/50"
-                  >
-                    <div className="min-w-0">
-                      <p className="text-card-title truncate">{update.title}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
-                          <Clock size={12} className="text-slate-300" />
-                          {formatUpdateDate(update.date)}
-                        </span>
-                        {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
-                      </div>
-                    </div>
-                    <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
-                  </button>
-                </Card>
-              );
-            })}
-          </ul>
-
-          {/* Detailpaneel: blijft in beeld terwijl de lijst scrolt. */}
-          <div className="lg:sticky lg:top-16" aria-live="polite">
-            {detail ? (
-              <Card key={detail.id} as="article" padding="lg" className="relative overflow-hidden" aria-label={detail.title}>
-                <div className={cn('absolute top-0 left-0 w-1 h-full', detail.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <MicroLabel>Bericht</MicroLabel>
-                    {detail.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
-                  </div>
-                  <div className="flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
-                    <Clock size={12} className="text-slate-300" />
-                    {formatUpdateDate(detail.date)}
-                  </div>
-                </div>
-                <h2 className="mt-3 text-section-title">{detail.title}</h2>
-                <p className="mt-4 max-w-2xl text-sm font-normal leading-relaxed text-slate-600 whitespace-pre-wrap">{detail.content}</p>
-              </Card>
-            ) : (
-              <Card tone="dashed" padding="lg" className="text-center">
-                <p className="text-sm text-slate-500">Kies een bericht</p>
-              </Card>
-            )}
-          </div>
-        </div>
       ) : (
-        <div className="grid grid-cols-1 gap-5">
-          {updates.map(update => {
-            const isExpanded = expandedUpdateIds.includes(update.id);
-            const shouldTruncate = update.content.length > 220;
-            const visibleContent = shouldTruncate && !isExpanded
-              ? `${update.content.slice(0, 220).trimEnd()}…`
-              : update.content;
-
-            return (
-            <Card key={update.id} interactive className="relative overflow-hidden group duration-300">
-              <div className={cn(
-                "absolute top-0 left-0 w-1 h-full",
-                update.isUrgent ? "bg-red-500" : "bg-slate-300"
-              )} />
-
-              <div className="flex justify-between items-center mb-4 gap-3">
-                {/* Lege wrapper wanneer niet dringend: houdt de datum rechts
-                    (justify-between) zonder categorie-badge. */}
-                <div className="flex flex-wrap gap-2">
-                  {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
-                </div>
-                <div className="flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
-                  <Clock size={12} className="text-slate-300" />
-                  {formatUpdateDate(update.date)}
-                </div>
-              </div>
-
-              <CardHeader title={update.title} className="mb-3" />
-              <p className="text-sm font-normal text-slate-600 leading-relaxed whitespace-pre-wrap">{visibleContent}</p>
-
-              {shouldTruncate ? (
-                <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleExpanded(update.id)}
-                    className="-mr-3 text-oker-700 hover:text-oker-700"
+        <MasterDetail
+          lijst={(
+            <ul className="space-y-2" aria-label="Berichten">
+              {updates.map((update) => {
+                const isCurrent = detail?.id === update.id;
+                return (
+                  <Card
+                    key={update.id}
+                    as="li"
+                    padding="none"
+                    interactive
+                    aria-current={isCurrent ? 'true' : undefined}
+                    className={cn('relative overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
                   >
-                    {isExpanded ? 'Toon minder' : 'Lees meer'}
-                    <ChevronRight size={14} className={cn("transition-transform", isExpanded && "rotate-90")} />
-                  </Button>
-                </div>
-              ) : null}
-            </Card>
-          );
-          })}
-        </div>
+                    <div className={cn('absolute top-0 left-0 w-1 h-full', update.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
+                    {/* rauw: lijstrij van het master-detail (kaart als knop: titel + datum + dringend-badge + eerste regel) */}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(update.id)}
+                      className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-slate-50/50"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-card-title truncate">{update.title}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
+                            <Clock size={12} className="text-slate-300" />
+                            {formatUpdateDate(update.date)}
+                          </span>
+                          {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
+                        </div>
+                        {/* Eerste regel als voorproef — op mobiel scan je zo de
+                            lijst zonder elk bericht te openen. */}
+                        <p className="mt-1 truncate text-xs font-normal text-slate-500">{update.content}</p>
+                      </div>
+                      <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
+                    </button>
+                  </Card>
+                );
+              })}
+            </ul>
+          )}
+          paneel={(
+            <DetailPaneel
+              open={!!detail}
+              onClose={() => setSelectedId(null)}
+              title={detail?.title ?? 'Bericht'}
+              subtitle={detail ? formatUpdateDate(detail.date) : undefined}
+              sleutel={detail?.id}
+              leegTekst="Kies een bericht."
+              icon={(
+                <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', detail?.isUrgent ? 'bg-red-500/12 text-red-700' : 'bg-slate-500/12 text-slate-600')}>
+                  <Bell size={16} />
+                </span>
+              )}
+            >
+              {detail && (
+                <article className="space-y-4" aria-label={detail.title}>
+                  {detail.isUrgent && (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="red" dot>Dringend</Badge>
+                    </div>
+                  )}
+                  <p className="max-w-2xl text-sm font-normal leading-relaxed text-slate-600 whitespace-pre-wrap">{detail.content}</p>
+                </article>
+              )}
+            </DetailPaneel>
+          )}
+        />
       )}
     </PageShell>
   );

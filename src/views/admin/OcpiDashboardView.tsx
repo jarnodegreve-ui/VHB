@@ -504,7 +504,7 @@ export function OcpiDashboardView() {
       />
 
       {error && (
-        <div className="p-4 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-100">{error}</div>
+        <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>
       )}
 
       {isLoading && !data && !error && (
@@ -527,7 +527,8 @@ export function OcpiDashboardView() {
               icon={<BatteryCharging size={16} />}
               tone={kpi.laden > 0 ? 'blue' : 'slate'}
               label="Aan de lader"
-              text={`${kpi.laden} / ${data.totals.evses}`}
+              value={kpi.laden}
+              suffix={` / ${data.totals.evses}`}
               sub={data.totals.totalPowerKw > 0 ? `${tekstKw(data.totals.totalPowerKw)} nu` : 'geen vermogen nu'}
             />
             <OpsStat
@@ -548,7 +549,8 @@ export function OcpiDashboardView() {
               icon={<Gauge size={16} />}
               tone="slate"
               label="Vandaag geladen"
-              text={tekstKwh(Math.round(grafiek.dagen.at(-1)?.kwh ?? 0))}
+              text={fmtKwh(grafiek.dagen.at(-1)?.kwh ?? 0)}
+              suffix=" kWh"
               sub={`30 d: ${tekstKwh(kwh30)} · ${data.totals.sessions30d} sessies`}
             />
           </div>
@@ -567,7 +569,7 @@ export function OcpiDashboardView() {
               <TermijnKeuze
                 label="Termijn verbruiksgrafiek"
                 waarde={verbruikTermijn}
-                opties={[{ id: '7d', label: '7 d' }, { id: '30d', label: '30 d' }, { id: 'maand', label: 'maand' }]}
+                opties={[{ id: '7d', label: '7 d' }, { id: '30d', label: '30 d' }, { id: 'maand', label: 'Maand' }]}
                 onKies={(t) => { setVerbruikTermijn(t); setGekozenDag(null); }}
               />
             </div>
@@ -649,7 +651,7 @@ export function OcpiDashboardView() {
               <TermijnKeuze
                 label="Termijn vermogensgrafiek"
                 waarde={vermogenTermijn}
-                opties={[{ id: '24u', label: '24 u' }, { id: '7d', label: '7 d' }, { id: 'maand', label: 'maand' }]}
+                opties={[{ id: '24u', label: '24 u' }, { id: '7d', label: '7 d' }, { id: 'maand', label: 'Maand' }]}
                 onKies={(t) => { setVermogenTermijn(t); setGekozenSlot(null); }}
               />
             </div>
@@ -895,8 +897,8 @@ export function OcpiDashboardView() {
                             <Badge tone={st.vol ? 'emerald' : 'blue'} className="shrink-0 font-mono tabular-nums">{st.soc}%</Badge>
                           )}
                         </div>
-                        <p className="mt-0.5 text-2xs text-slate-500">
-                          sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString() : '—'}
+                        <p className="mt-0.5 text-2xs text-slate-500 tabular-nums">
+                          sinds {s.start_date_time ? new Date(s.start_date_time).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—'}
                           {typeof s.kwh === 'number' ? ` · ${tekstKwh(s.kwh)} geladen` : ''}
                         </p>
                       </div>
@@ -916,7 +918,7 @@ export function OcpiDashboardView() {
           <div>
             <CardHeader size="lg" title="Laadpalen per locatie" />
             {data.locations.length === 0 ? (
-              <EmptyState title="Nog geen locaties" message="Klik in Systeem Status → OCPI-koppeling op 'Nu synchroniseren' om de laadpalen op te halen." />
+              <EmptyState title="Nog geen locaties" message='Klik in Systeemstatus → OCPI-koppeling op "Nu synchroniseren" om de laadpalen op te halen.' />
             ) : (
               <div className="space-y-4">
                 {data.locations.map((loc) => (
@@ -925,7 +927,7 @@ export function OcpiDashboardView() {
                       className="mb-4"
                       title={loc.name ?? loc.id}
                       description={loc.city || undefined}
-                      aside={<span className="text-2xs text-slate-500">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>}
+                      aside={<span className="text-2xs font-medium tabular-nums text-slate-500">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>}
                     />
                     {loc.evses.length === 0 ? (
                       <p className="text-sm text-slate-500">Geen laadpunten.</p>
@@ -1079,7 +1081,7 @@ export function OcpiDashboardView() {
               )}
             />
             {verbruikFout ? (
-              <div className="p-4 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-100">{verbruikFout}</div>
+              <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{verbruikFout}</Card>
             ) : !verbruik ? (
               <SkeletonTile />
             ) : (() => {

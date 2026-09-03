@@ -10,7 +10,7 @@ import { SidebarNav } from './app/SidebarNav';
 import { SessieLaden, ProfielLaden, PrintLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
 import { ProbleemMelder } from './app/ProbleemMelder';
 import { useAppData } from './app/useAppData';
-import { InstellingenView } from './views/InstellingenView';
+import { AppDataProvider } from './app/AppDataContext';
 import { CalendarSubscribeModal } from './components/CalendarSubscribeModal';
 import { downloadRoosterIcs } from './lib/roosterIcs';
 import { ViewFout } from './app/ViewFout';
@@ -18,12 +18,19 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useHistoryDismiss } from './lib/useHistoryDismiss';
 import {
   Bell,
+  CalendarPlus,
   Eye,
+  KeyRound,
+  LifeBuoy,
+  LogOut,
   Menu,
-  X,
+  Moon,
   RefreshCw,
-  WifiOff,
   Search,
+  Sun,
+  UserRound,
+  WifiOff,
+  X,
 } from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
@@ -33,6 +40,7 @@ import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema } from './lib/ui';
 import { apiFetch, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
+import { VIEW_LOADERS, prefetchView } from './app/viewLoaders';
 import { reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
@@ -52,16 +60,7 @@ import { BrandSpinner } from './components/BrandSpinner';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
-import { ContactsView } from './views/ContactsView';
-import { DashboardView } from './views/DashboardView';
 import { useRealtimeSync } from './lib/realtime';
-import { DiversionsView } from './views/DiversionsView';
-import { ScheduleView } from './views/ScheduleView';
-import { UpdatesView } from './views/UpdatesView';
-import { SwapRequestsView } from './views/SwapRequestsView';
-import { RitblaadjesView } from './views/RitblaadjesView';
-import { DocumentsView } from './views/DocumentsView';
-import { CapacityView } from './views/CapacityView';
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
 // géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
@@ -85,6 +84,19 @@ const LazyLeaveManagementView = lazyWithRetry(() => import('./views/LeaveManagem
 // Ook lazy (planner/admin-only, maar stond eager in de hoofdbundel): de
 // ops-cockpit sleept ops/coverage/monthPlanning mee die een chauffeur nooit
 // nodig heeft; het dienstoverzicht idem.
+// Chauffeursviews ook lazy (nr. 12, 03-09): de startbundel is alleen nog de
+// schil; SidebarNav/BottomNav prefetchen bij hover/aanraken (viewLoaders).
+const LazyContactsView = lazyWithRetry(() => VIEW_LOADERS['contacten']().then((m) => ({ default: (m as typeof import('./views/ContactsView')).ContactsView })));
+const LazyDashboardView = lazyWithRetry(() => VIEW_LOADERS['dashboard']().then((m) => ({ default: (m as typeof import('./views/DashboardView')).DashboardView })));
+const LazyMijnDagView = lazyWithRetry(() => VIEW_LOADERS['mijn-dag']().then((m) => ({ default: (m as typeof import('./views/MijnDagView')).MijnDagView })));
+const LazyDiversionsView = lazyWithRetry(() => VIEW_LOADERS['omleidingen']().then((m) => ({ default: (m as typeof import('./views/DiversionsView')).DiversionsView })));
+const LazyScheduleView = lazyWithRetry(() => VIEW_LOADERS['rooster']().then((m) => ({ default: (m as typeof import('./views/ScheduleView')).ScheduleView })));
+const LazyUpdatesView = lazyWithRetry(() => VIEW_LOADERS['updates']().then((m) => ({ default: (m as typeof import('./views/UpdatesView')).UpdatesView })));
+const LazySwapRequestsView = lazyWithRetry(() => VIEW_LOADERS['ruil-verzoeken']().then((m) => ({ default: (m as typeof import('./views/SwapRequestsView')).SwapRequestsView })));
+const LazyRitblaadjesView = lazyWithRetry(() => VIEW_LOADERS['ritblaadjes']().then((m) => ({ default: (m as typeof import('./views/RitblaadjesView')).RitblaadjesView })));
+const LazyDocumentsView = lazyWithRetry(() => VIEW_LOADERS['documenten']().then((m) => ({ default: (m as typeof import('./views/DocumentsView')).DocumentsView })));
+const LazyCapacityView = lazyWithRetry(() => VIEW_LOADERS['bezetting']().then((m) => ({ default: (m as typeof import('./views/CapacityView')).CapacityView })));
+const LazyInstellingenView = lazyWithRetry(() => VIEW_LOADERS['instellingen']().then((m) => ({ default: (m as typeof import('./views/InstellingenView')).InstellingenView })));
 const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('./views/PlannerDashboardWidgets').then((module) => ({ default: module.PlannerDashboardWidgets })));
 const LazyServicesView = lazyWithRetry(() => import('./views/ServicesView').then((module) => ({ default: module.ServicesView })));
 const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMonthlyScheduleView').then((module) => ({ default: module.PrintMonthlyScheduleView })));
@@ -172,18 +184,12 @@ export default function App() {
     loadingCountRef.current = Math.max(0, loadingCountRef.current - 1);
     if (loadingCountRef.current === 0) setIsLoading(false);
   };
-  // Datalaag (src/app/useAppData.ts). showToast/meldLaadfout staan verderop
-  // als const — de wrappers roepen ze pas aan op het moment van gebruik.
-  const {
-    shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
-    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
-    isInitialLoad, setIsInitialLoad, lastSyncedAt, setLastSyncedAt,
-    loadAppData, refreshAll, resetAll,
-    fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, markDocumentsSeen,
-    fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog,
-    savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
-    saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
-  } = useAppData({
+  // Datalaag (src/app/useAppData.ts, per domein in src/app/data/*).
+  // showToast/meldLaadfout staan verderop als const — de wrappers roepen ze
+  // pas aan op het moment van gebruik. `appData` gaat ook als geheel de
+  // AppDataProvider in (rond de schil), zodat views het via
+  // useAppDataContext() kunnen lezen i.p.v. via een stapel props.
+  const appData = useAppData({
     session,
     currentUser,
     currentView,
@@ -192,6 +198,17 @@ export default function App() {
     beginLoading,
     endLoading,
   });
+  const {
+    shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
+    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
+    isInitialLoad, setIsInitialLoad, lastSyncedAt, setLastSyncedAt,
+    loadAppData, refreshAll, resetAll,
+    fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, markDocumentsSeen,
+    fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog,
+    savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
+    saveServices, fetchUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
+    saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
+  } = appData;
   // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
   // verwijderde dan twee meldingen tegelijk).
   const toastIdRef = useRef(0);
@@ -920,8 +937,11 @@ export default function App() {
     if (!currentUser || isInitialLoad) return;
     const w = window as any;
     const cb = () => {
-      void import('./views/LeaveManagementView');
-      if (currentUser.role !== 'chauffeur') void import('./views/admin/VerlofKalenderView');
+      // De schermen die hierna het vaakst geopend worden (per rol), stil.
+      const volgende: View[] = currentUser.role === 'chauffeur'
+        ? ['rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
+        : ['verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
+      volgende.forEach((v) => prefetchView(v));
     };
     const idleId = typeof w.requestIdleCallback === 'function'
       ? w.requestIdleCallback(cb, { timeout: 5000 })
@@ -1122,7 +1142,7 @@ export default function App() {
     .toUpperCase() || '?';
 
   return (
-    <>
+    <AppDataProvider value={appData}>
       {/* Parallax-laag: fixed gekleurde blobs die trager scrollen dan content */}
       <div className="parallax-bg" aria-hidden="true" />
 
@@ -1397,51 +1417,34 @@ export default function App() {
                 sessie en context staan; de key reset de grens bij een
                 viewwissel of "Opnieuw proberen". */}
             <ErrorBoundary key={`${resolvedCurrentView}-${viewFoutReset}`} fallback={<ViewFout onRetry={() => setViewFoutReset((n) => n + 1)} />}>
+            {/* Eén Suspense voor alle (lazy) views + een zachte inloop van 150 ms
+                bij een viewwissel (view-in in index.css; respecteert reduced motion). */}
+            <Suspense fallback={<ViewLoader />}>
+            <div key={resolvedCurrentView} className="view-in">
               {resolvedCurrentView === 'dashboard' && (
                 isPlanner ? (
                   /* Planner/admin: Operations Center — één operationele cockpit
                      i.p.v. een dubbel dashboard. */
                   <Suspense fallback={<ViewLoader />}>
+                  {/* Data (collecties, ziekmelding, verversen) leest de
+                      cockpit zelf uit de AppDataContext. */}
                   <LazyPlannerDashboardWidgets
                     currentUser={currentUser!}
-                    users={users}
-                    shifts={shifts}
-                    diversions={diversions}
-                    updates={updates}
-                    leaveRequests={leaveRequests}
-                    swaps={swaps}
-                    matrixHistory={planningMatrixHistory}
-                    activityLog={activityLog}
-                    coverageDays={coverageDays}
-                    vervaldata={vervaldata}
-                    pendingDevices={pendingDevices}
                     onNavigate={(view) => setCurrentView(view)}
-                    onSickReport={reportSick}
-                    onShiftSwapped={async () => {
-                      // Wissel vanuit de ziekmeld-flow: planning, ruilen en
-                      // dekking meteen mee verversen zodat het dashboard niet
-                      // een oude "nog te herverdelen"-rij blijft tonen.
-                      await Promise.all([
-                        // Planner/admin-scherm: altijd de volledige planning.
-                        fetchPlanning(undefined, undefined, { silent: true }),
-                        fetchSwaps(),
-                        refreshCoverageGaps(),
-                      ]);
-                    }}
-                    isInitialLoad={isInitialLoad}
                   />
                   </Suspense>
                 ) : (
-                  <DashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} onChangePassword={() => setShowChangePassword(true)} />
+                  <LazyDashboardView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} users={users} leaveRequests={leaveRequests} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} onChangePassword={() => setShowChangePassword(true)} />
                 )
               )}
-              {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <DiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
-              {resolvedCurrentView === 'rooster' && <ScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
+              {resolvedCurrentView === 'mijn-dag' && <LazyMijnDagView user={previewingChauffeur ? { ...currentUser!, role: 'chauffeur' } : currentUser!} notes={myNotes} shifts={shifts} diversions={diversions} isInitialLoad={isInitialLoad} onNavigate={setCurrentView} />}
+              {resolvedCurrentView === 'omleidingen' && (isInitialLoad ? <ViewLoader /> : <LazyDiversionsView diversions={diversions} lastSyncedAt={lastSyncedAt} />)}
+              {resolvedCurrentView === 'rooster' && <LazyScheduleView user={currentUser!} notes={myNotes} shifts={shifts} users={users} leaveRequests={leaveRequests} swaps={swaps} isInitialLoad={isInitialLoad} lastSyncedAt={lastSyncedAt} onRequestSwap={(shiftId) => { setSwapPreselectShiftId(shiftId); setCurrentView('ruil-verzoeken'); }} />}
               {resolvedCurrentView === 'dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyServicesView services={services} /></Suspense>)}
-              {resolvedCurrentView === 'ritblaadjes' && <RitblaadjesView currentUser={currentUser!} />}
-              {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
-              {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
-              {resolvedCurrentView === 'contacten' && (isInitialLoad ? <ViewLoader /> : <ContactsView users={users} currentUser={currentUser!} />)}
+              {resolvedCurrentView === 'ritblaadjes' && <LazyRitblaadjesView currentUser={currentUser!} />}
+              {resolvedCurrentView === 'documenten' && <LazyDocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
+              {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <LazyUpdatesView updates={updates} />)}
+              {resolvedCurrentView === 'contacten' && (isInitialLoad ? <ViewLoader /> : <LazyContactsView users={users} currentUser={currentUser!} />)}
               {resolvedCurrentView === 'beheer-roosters' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
@@ -1472,12 +1475,12 @@ export default function App() {
               {resolvedCurrentView === 'planning-codes' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense>)}
               {resolvedCurrentView === 'beheer-updates' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
+                  <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSaveUpdate={saveUpdate} onCreateUpdate={createUpdate} onDeleteUpdate={deleteUpdate} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
                 </Suspense>
               ))}
               {resolvedCurrentView === 'gebruikers' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
+                  <LazyManageUsersView currentUser={currentUser!} />
                 </Suspense>
               ))}
               {resolvedCurrentView === 'toestellen' && (
@@ -1488,10 +1491,10 @@ export default function App() {
               {resolvedCurrentView === 'activiteit' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>)}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
-              {resolvedCurrentView === 'beheer-omleidingen' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} /></Suspense>)}
+              {resolvedCurrentView === 'beheer-omleidingen' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} onSaveDiversion={saveDiversion} onCreateDiversion={createDiversion} onDeleteDiversion={deleteDiversion} /></Suspense>)}
               {resolvedCurrentView === 'beheer-dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>)}
-              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
-              {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
+              {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <LazySwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
+              {resolvedCurrentView === 'bezetting' && <LazyCapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
               {resolvedCurrentView === 'assistent' && <Suspense fallback={<ViewLoader />}><LazyAssistentView /></Suspense>}
               {resolvedCurrentView === 'verlof-kalender' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>)}
@@ -1529,7 +1532,7 @@ export default function App() {
                 </Suspense>
               ))}
               {resolvedCurrentView === 'instellingen' && (
-                <InstellingenView
+                <LazyInstellingenView
                   user={currentUser}
                   theme={theme}
                   onToggleTheme={toggleTheme}
@@ -1548,6 +1551,8 @@ export default function App() {
                   <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
                 </Suspense>
               ))}
+            </div>
+            </Suspense>
             </ErrorBoundary>
           </div>
         </div>
@@ -1573,8 +1578,29 @@ export default function App() {
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
         role={effectiveRole}
+        acties={[
+          { id: 'actie-verlof', label: 'Verlof aanvragen', hint: 'Opent het aanvraagformulier', icon: <CalendarPlus size={16} />, keywords: 'verlof aanvragen vakantie nieuw', action: () => { setCurrentView('verlof'); window.history.replaceState(window.history.state, '', '/verlof?nieuw=1'); } },
+          { id: 'actie-thema', label: theme === 'light' ? 'Donkere modus' : 'Lichte modus', hint: 'Thema wisselen', icon: theme === 'light' ? <Moon size={16} /> : <Sun size={16} />, keywords: 'thema donker licht dark light', action: toggleTheme },
+          { id: 'actie-agenda', label: 'Agenda-koppeling', hint: 'Rooster in je agenda', icon: <CalendarPlus size={16} />, keywords: 'agenda ics abonneren kalender', action: () => setShowAgenda(true) },
+          { id: 'actie-wachtwoord', label: 'Wachtwoord wijzigen', icon: <KeyRound size={16} />, keywords: 'wachtwoord password', action: () => setShowChangePassword(true) },
+          { id: 'actie-probleem', label: 'Meld een probleem', icon: <LifeBuoy size={16} />, keywords: 'probleem bug melden feedback', action: () => setShowProbleemMelder(true) },
+          { id: 'actie-uitloggen', label: 'Uitloggen', icon: <LogOut size={16} />, keywords: 'uitloggen afmelden logout', action: () => { void handleLogout(); } },
+          // Collega zoeken: alleen bij een zoekterm (anders overspoelt de lijst).
+          ...users.filter((u) => u.isActive !== false).map((u) => ({
+            id: `persoon-${u.id}`,
+            label: u.name,
+            hint: isRealAdmin ? 'Gebruiker openen' : 'Contact',
+            icon: <UserRound size={16} />,
+            keywords: `chauffeur collega persoon ${u.role ?? ''}`,
+            alleenBijZoeken: true,
+            action: () => {
+              if (isRealAdmin) { setCurrentView('gebruikers'); window.history.replaceState(window.history.state, '', `/beheer/gebruikers?zoek=${encodeURIComponent(u.name)}`); }
+              else setCurrentView('contacten');
+            },
+          })),
+        ]}
       />
-    </>
+    </AppDataProvider>
   );
 }
 

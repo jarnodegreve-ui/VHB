@@ -23,21 +23,11 @@ import {
   Zap,
 } from 'lucide-react';
 import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
-import type {
-  ActivityLogEntry,
-  Diversion,
-  LeaveRequest,
-  PlanningMatrixImportHistory,
-  Shift,
-  SwapRequest,
-  Update,
-  User,
-  View,
-} from '../types';
-import type { DayGap } from '../lib/coverage';
+import type { ActivityLogEntry, LeaveRequest, Shift, User, View } from '../types';
+import { useAppDataContext } from '../app/AppDataContext';
 import { getDaypartGreeting } from '../lib/interactive';
 import { addDays, isoDate, openstaandeDienstenVanAfwezigen, type OpenstaandeDienst } from '../lib/availability';
-import { berekenWerkvoorraad, type PendingDevice, type VervaldataRij } from '../lib/werkvoorraad';
+import { berekenWerkvoorraad } from '../lib/werkvoorraad';
 import { kandidaatLabel, rangschikKandidaten, vrijOpDatum, werkdagenUitShifts } from '../lib/vervangers';
 import { activeDiversions as activeDiversionsOf } from '../lib/diversions';
 import { formatRemaining, formatStartsIn, isShiftActiveAt, isValidBusvakTime, minutesUntilShiftEnd, minutesUntilShiftStart } from '../lib/shiftTime';
@@ -63,45 +53,34 @@ import { cn, notify, telHref } from '../lib/ui';
  */
 export function PlannerDashboardWidgets({
   currentUser,
-  users,
-  shifts,
-  diversions,
-  updates,
-  leaveRequests,
-  swaps,
-  matrixHistory,
-  activityLog,
-  coverageDays,
-  vervaldata,
-  pendingDevices,
   onNavigate,
-  onSickReport,
-  onShiftSwapped,
-  isInitialLoad = false,
 }: {
   currentUser: User;
-  users: User[];
-  shifts: Shift[];
-  diversions: Diversion[];
-  updates: Update[];
-  leaveRequests: LeaveRequest[];
-  swaps: SwapRequest[];
-  matrixHistory: PlanningMatrixImportHistory[];
-  activityLog: ActivityLogEntry[];
-  /** null = dekking (nog) niet geladen — toon 'onbekend' i.p.v. vals-groen. */
-  coverageDays: DayGap[] | null;
-  /** Vervaldata + wachtende toestellen worden sinds de topbar-werkvoorraad
-   *  in App gefetcht (de knop is er op elk scherm) en hier doorgegeven. */
-  vervaldata: VervaldataRij[];
-  pendingDevices: PendingDevice[];
   onNavigate: (view: View) => void;
-  /** Ziekmelding registreren — woont hier i.p.v. in de verlofview, zie de
-   *  toelichting bij LeaveManagementView. */
-  onSickReport?: (payload: { userId: string; startDate?: string; endDate?: string; comment?: string }) => Promise<boolean>;
-  /** Ververst planning + verlof na een dienstwissel vanuit de ziekmeld-flow. */
-  onShiftSwapped?: () => Promise<void> | void;
-  isInitialLoad?: boolean;
 }) {
+  // Alles wat uit de datalaag komt, leest de cockpit zelf uit de context:
+  // de collecties, de dekking (null = nog niet geladen → 'onbekend' i.p.v.
+  // vals-groen), vervaldata + wachtende toestellen (gefetcht in de datalaag
+  // omdat de werkvoorraad-knop op elk scherm staat), de ziekmelding (woont
+  // hier i.p.v. in de verlofview, zie de toelichting bij LeaveManagementView)
+  // en de fetchers om na een dienstwissel te verversen.
+  const {
+    users, shifts, diversions, updates, leaveRequests, swaps,
+    planningMatrixHistory: matrixHistory, activityLog, coverageDays, vervaldata, pendingDevices,
+    isInitialLoad, reportSick: onSickReport,
+    fetchPlanning, fetchSwaps, refreshCoverageGaps,
+  } = useAppDataContext();
+  /** Wissel vanuit de ziekmeld-flow: planning, ruilen en dekking meteen mee
+   *  verversen zodat het dashboard niet een oude "nog te herverdelen"-rij
+   *  blijft tonen. */
+  const onShiftSwapped = async () => {
+    await Promise.all([
+      // Planner/admin-scherm: altijd de volledige planning.
+      fetchPlanning(undefined, undefined, { silent: true }),
+      fetchSwaps(),
+      refreshCoverageGaps(),
+    ]);
+  };
   // Klok voor de header (60s-tick is ruim voldoende voor een dagdeel-groet).
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -328,7 +307,7 @@ export function PlannerDashboardWidgets({
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) { notify(body.error || 'Overzetten is mislukt.', 'error'); return; }
       setAfgehandeld((cur) => ({ ...cur, [d.id]: userNameById(naarId) }));
-      await onShiftSwapped?.();
+      await onShiftSwapped();
     } catch {
       notify('Overzetten is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
     } finally {
@@ -573,23 +552,21 @@ export function PlannerDashboardWidgets({
             Zelfde primary-knop als op het Ziekte-blad (keuze Jarno 31-08):
             de amber pil-vorm matchte de statuspil die nu weg is, en een
             registratie is een gewone handeling, geen alarm. */}
-        {onSickReport && (
-          <Button
-            ref={sickTriggerRef}
-            variant="primary"
-            size="sm"
-            className="gap-1 px-2.5"
-            icon={<Plus size={14} />}
-            aria-haspopup="dialog"
-            onClick={() => {
-              setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
-              setSickFouten({});
-              setShowSickModal(true);
-            }}
-          >
-            Ziek melden
-          </Button>
-        )}
+        <Button
+          ref={sickTriggerRef}
+          variant="primary"
+          size="sm"
+          className="gap-1 px-2.5"
+          icon={<Plus size={14} />}
+          aria-haspopup="dialog"
+          onClick={() => {
+            setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
+            setSickFouten({});
+            setShowSickModal(true);
+          }}
+        >
+          Ziek melden
+        </Button>
         </div>
       </div>
 
@@ -939,7 +916,7 @@ export function PlannerDashboardWidgets({
       >
         {availableToday.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">
-            Niemand beschikbaar vandaag — iedereen rijdt of is afwezig.
+            Niemand beschikbaar {peilLabel.toLowerCase()} — iedereen rijdt of is afwezig.
           </p>
         ) : (
           <ul className="space-y-0.5">
@@ -989,7 +966,7 @@ export function PlannerDashboardWidgets({
         subtitle={`${formatDay(peilDag)} · ${todayAbsent.length} ${todayAbsent.length === 1 ? 'collega' : "collega's"}`}
       >
         {todayAbsent.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">Iedereen inzetbaar vandaag.</p>
+          <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">Iedereen inzetbaar {peilLabel.toLowerCase()}.</p>
         ) : (
           <ul className="space-y-0.5">
             {todayAbsent.map((a) => (
@@ -1043,7 +1020,7 @@ export function PlannerDashboardWidgets({
               <AlertTriangle size={16} />
             </span>
           }
-          eyebrow={ziekVervolg ? 'ziekmelding geregistreerd' : 'meteen onbeschikbaar'}
+          eyebrow={ziekVervolg ? 'Ziekmelding geregistreerd' : 'Meteen onbeschikbaar'}
           title={ziekVervolg ? 'Wie neemt de dienst over?' : 'Ziekmelding registreren'}
           onClose={closeSickModal}
         />
@@ -1129,7 +1106,7 @@ export function PlannerDashboardWidgets({
         <form
           onSubmit={async (e) => {
             e.preventDefault();
-            if (isSubmittingSick || !onSickReport) return;
+            if (isSubmittingSick) return;
             const startDate = sickForm.startDate || todayKey;
             const endDate = sickForm.endDate || startDate;
             const fouten: { userId?: string; endDate?: string } = {};

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, ArrowLeftRight, CalendarDays, Clock, CalendarPlus, ChevronDown, FileText } from 'lucide-react';
 import type { LeaveRequest, Shift, SwapRequest, User } from '../types';
 import { isoWeekOf } from '../lib/week';
@@ -19,6 +19,14 @@ import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../li
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openHuidigRitblad } from '../lib/ritblad';
 import { useMinWidth } from '../lib/useMinWidth';
+import { useRouteParam } from '../app/router';
+
+/** Maand in de URL (`/rooster/2026-10`, maandweergave) — spiegel van de
+ *  kalendermaand; een ongeldige waarde wordt genegeerd. */
+const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
+const maandUitParam = (p: string | null): Date | null =>
+  p && MAAND_PARAM.test(p) ? new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1) : null;
+const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 /**
  * Dagdeel-chip. Stond met alle drie op 'slate': dezelfde grijze badge voor
@@ -78,7 +86,11 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
   const [calendarOpen, setCalendarOpen] = useState(false);
   // Lijst of maandgrid — de keuze blijft bewaard (localStorage kan in
   // privacy-modus geblokkeerd zijn, vandaar de try/catch).
+  // Maand in de URL: een gedeelde link (`/rooster/2026-10`) opent meteen de
+  // maandweergave op die maand, ook als de bewaarde keuze "lijst" is.
+  const [maandParam, zetMaandParam] = useRouteParam(0);
   const [weergave, setWeergaveState] = useState<'lijst' | 'maand'>(() => {
+    if (maandUitParam(maandParam)) return 'maand';
     try {
       return window.localStorage.getItem('vhb-rooster-weergave') === 'maand' ? 'maand' : 'lijst';
     } catch {
@@ -214,7 +226,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </div>
         {lastSyncedAt && (
-          <p className="text-2xs font-medium text-slate-500">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+          <p className="text-2xs font-medium text-slate-500 tabular-nums">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
         )}
       </div>
 
@@ -270,6 +282,8 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
               leaves={leaveRequests.filter((l) => l.userId === user.id)}
               noteFor={(d) => notes.find((n) => n.date === d)?.note}
               onRequestSwap={onRequestSwap}
+              maandParam={maandParam}
+              onMaandParam={zetMaandParam}
             />
           )}
         </div>
@@ -286,17 +300,29 @@ function MonthCalendar({
   leaves,
   noteFor,
   onRequestSwap,
+  maandParam,
+  onMaandParam,
 }: {
   groups: GroupedShift[];
   today: string;
   leaves: LeaveRequest[];
   noteFor: (date: string) => string | undefined;
   onRequestSwap?: (shiftId: string) => void;
+  /** Maand uit de URL (`YYYY-MM` of null) en de schrijver ervan (replace). */
+  maandParam: string | null;
+  onMaandParam: (waarde: string | null) => void;
 }) {
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    return maandUitParam(maandParam) ?? new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  // Maand → URL (replace, geen extra history-entry); de state blijft de bron.
+  // De huidige maand geeft een schone URL zonder parameter.
+  const monthParam = maandNaarParam(viewMonth);
+  useEffect(() => {
+    const gewenst = monthParam === maandNaarParam(new Date()) ? null : monthParam;
+    if ((maandParam ?? null) !== gewenst) onMaandParam(gewenst);
+  }, [monthParam, maandParam, onMaandParam]);
   const [selected, setSelected] = useState<string>(today);
 
   // Planning-horizon: de periode waarvoor er überhaupt planning voor deze
@@ -405,7 +431,7 @@ function MonthCalendar({
                   </span>
                 )}
                 {dayGroups.length > 0 ? (
-                  <span className={cn('max-w-full truncate text-2xs font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-700')}>
+                  <span className={cn('max-w-full truncate text-2xs font-mono font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-700')}>
                     {dayGroups[0].line}
                     {dayGroups.length > 1 && '+'}
                   </span>
@@ -428,7 +454,7 @@ function MonthCalendar({
 
         {/* Legende */}
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-2xs font-medium text-slate-500">
-          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold tabular-nums text-oker-700">2101</span> dienst</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-mono font-bold tabular-nums text-oker-700">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-oker-700">F</span> feestdag</span>
@@ -438,7 +464,7 @@ function MonthCalendar({
 
       {/* Detail van de geselecteerde dag */}
       <Card padding="sm">
-        <MicroLabel className={cn(selected === today && 'text-oker-700')}>
+        <MicroLabel className={cn('tabular-nums', selected === today && 'text-oker-700')}>
           {selected === today ? 'Vandaag' : `Wk ${isoWeekOf(selected)}`}
         </MicroLabel>
         <p className="mt-0.5 text-sm font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
@@ -466,7 +492,7 @@ function MonthCalendar({
           selectedGroups.map((g) => (
             <div key={g.key} className="mt-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-base font-semibold tabular-nums text-oker-700">{g.line}</span>
+                <span className="text-base font-mono font-semibold tabular-nums text-oker-700">{g.line}</span>
                 {g.hasConflict && (
                   <Badge tone="red" icon={<AlertTriangle size={12} />}>Verlof-conflict</Badge>
                 )}
@@ -478,7 +504,7 @@ function MonthCalendar({
                 {g.segments.map((s) => (
                   <div key={s.id} className="flex items-center gap-2 text-sm">
                     <Clock size={12} className="shrink-0 text-slate-400" />
-                    <span className="font-medium tabular-nums text-slate-700">
+                    <span className="font-mono font-medium tabular-nums text-slate-700">
                       {s.startTime} – {s.endTime}
                     </span>
                     {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
@@ -562,9 +588,9 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                   <Td className="px-6 py-4">
                     <div className="inline-flex items-center gap-2">
                       <Badge tone={pill.tone}>{pill.label}</Badge>
-                      <span className="text-lg font-semibold text-oker-700 tabular-nums">{g.line}</span>
+                      <span className="text-lg font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
-                        <span className="text-2xs font-medium text-slate-500">
+                        <span className="text-2xs font-medium text-slate-500 tabular-nums">
                           ({g.segments.length} blokken)
                         </span>
                       )}
@@ -575,7 +601,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                       {g.segments.map((s) => (
                         <div key={s.id} className="flex items-center gap-3 font-medium text-slate-700">
                           <Clock size={14} className="text-oker-400 shrink-0" />
-                          <span className="tabular-nums">
+                          <span className="font-mono tabular-nums">
                             {s.startTime} – {s.endTime}
                           </span>
                           {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
@@ -642,7 +668,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <Badge tone={pill.tone}>{pill.label}</Badge>
-                  <span className="text-base font-semibold text-oker-700 tabular-nums">{g.line}</span>
+                  <span className="text-base font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
                 </div>
               </div>
 
@@ -651,7 +677,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                 {g.segments.map((s) => (
                   <div key={s.id} className="flex items-center gap-2 text-sm">
                     <Clock size={12} className="text-slate-400 shrink-0" />
-                    <span className="font-medium text-slate-700 tabular-nums">
+                    <span className="font-mono font-medium text-slate-700 tabular-nums">
                       {s.startTime} – {s.endTime}
                     </span>
                     {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
