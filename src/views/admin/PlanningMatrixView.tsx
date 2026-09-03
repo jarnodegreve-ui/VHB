@@ -1,5 +1,5 @@
 import { Fragment, useDeferredValue, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Calendar, Clock, Download, FileText, Users } from 'lucide-react';
+import { AlertTriangle, Clock, Download, Users } from 'lucide-react';
 import type { PlanningCode, PlanningMatrixRow, Service, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
@@ -401,7 +401,7 @@ export function PlanningMatrixView({
               );
             }) : (
               <EmptyState
-                icon={<Calendar size={24} />}
+                variant={showOnlyIssues ? 'klaar' : 'leeg'}
                 title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
                 message={showOnlyIssues ? 'Alle geüploade dagen zijn volledig herkend.' : 'Upload eerst een Excel-matrix via Beheer roosters om hier een overzicht te zien.'}
               />
@@ -550,7 +550,6 @@ export function PlanningMatrixView({
             </>
           ) : (
             <EmptyState
-              icon={<FileText size={24} />}
               title="Geen dag geselecteerd"
               message="Kies links een geüploade dag om de actuele matrixplanning te bekijken."
             />

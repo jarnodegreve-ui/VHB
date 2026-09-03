@@ -865,7 +865,6 @@ export function CoverageView() {
         </div>
       ) : !anyExpectations ? (
         <EmptyState
-          icon={<Settings2 size={24} />}
           title="Nog geen verwachte diensten ingesteld"
           message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
         />

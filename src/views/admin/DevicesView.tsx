@@ -262,7 +262,6 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         ) : devices.length === 0 ? (
           <div className="mt-4">
             <EmptyState
-              icon={<Smartphone size={24} />}
               title="Nog geen toestellen"
               message="Toestellen verschijnen hier zodra gebruikers inloggen. Blijft de lijst leeg, draai dan eerst de user_devices-migratie."
             />
@@ -286,7 +285,6 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             {zichtbaar.length === 0 ? (
               <div className="mt-4">
                 <EmptyState
-                  icon={<Smartphone size={24} />}
                   title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Geen toestellen met deze status'}
                   message="Pas de zoekterm of het statusfilter aan."
                   action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filter wissen</Button>}

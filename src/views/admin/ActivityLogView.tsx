@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
-import { Activity, Download, Users } from 'lucide-react';
+import { Download } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { cn, downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
@@ -12,6 +12,7 @@ import { Badge, Button, FilterChip, MicroLabel, Td } from '../../components/prim
 import { Paginering, SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
 import { Card, CardHeader } from '../../components/Card';
+import { Avatar } from '../../components/Avatar';
 import { Select } from '../../components/Field';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
@@ -240,7 +241,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         />
         {logins.length === 0 ? (
           <div className="mt-5">
-            <EmptyState icon={<Users size={24} />} title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
+            <EmptyState title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
           </div>
         ) : (
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -262,6 +263,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
               <div className="space-y-0.5 max-h-44 overflow-y-auto pr-1">
                 {recentLogins.map((e) => (
                   <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1 hover:bg-surface-soft-hover">
+                    <Avatar naam={e.actorName} size="sm" />
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{e.actorName}</span>
                     <span className="shrink-0 text-2xs font-medium text-slate-500 tabular-nums">
                       {new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
@@ -354,8 +356,13 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                       </Td>
                       {voorkeur.zichtbaar('actor') && (
                         <Td className="align-top whitespace-nowrap">
-                          <p className="font-semibold text-slate-800">{entry.actorName}</p>
-                          <MicroLabel className="mt-0.5">{entry.actorRole}</MicroLabel>
+                          <div className="flex items-center gap-2.5">
+                            <Avatar naam={entry.actorName} size="md" />
+                            <div>
+                              <p className="font-semibold text-slate-800">{entry.actorName}</p>
+                              <MicroLabel className="mt-0.5">{entry.actorRole}</MicroLabel>
+                            </div>
+                          </div>
                         </Td>
                       )}
                     </tr>
@@ -372,14 +379,12 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             </div>
           ) : filterActief ? (
             <EmptyState
-              icon={<Activity size={24} />}
               title={searchTerm.trim() ? `Geen resultaten voor “${searchTerm.trim()}”` : 'Geen activiteit in deze categorie'}
               message="Pas de zoekterm, de categorie of het tijdvenster aan."
               action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en categorie wissen</Button>}
             />
           ) : (
             <EmptyState
-              icon={<Activity size={24} />}
               title={sourceEntries.length > 0 ? 'Geen activiteit in dit tijdvenster' : 'Nog geen activiteit gelogd'}
               message={sourceEntries.length > 0 ? 'Kies een ruimer tijdvenster om oudere activiteit te zien.' : 'Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch.'}
               action={sourceEntries.length > 0 && dateWindow !== 'all' ? <Button variant="secondary" onClick={() => setDateWindow('all')}>Alles tonen</Button> : undefined}

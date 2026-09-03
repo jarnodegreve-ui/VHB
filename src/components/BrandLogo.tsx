@@ -25,7 +25,7 @@ import { useEffect, useRef, useState } from 'react';
  * Het losse beeldmerk (variant="beeldmerk") mag vanaf 48 px.
  */
 const CARBON = '#14181B';
-const GOUD = '#E2A323';
+export const GOUD = '#E2A323';
 const NEGATIEF = '#DCDFE2'; // gedempt wit (tussen slate-200 en -300) i.p.v. #FFFFFF, zie boven
 
 /* Laadstand: het gouden segment reist over de gesloten hartlijn van de lus
