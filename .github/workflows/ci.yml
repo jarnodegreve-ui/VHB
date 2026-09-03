@@ -36,6 +36,11 @@ jobs:
       - name: Typecheck
         run: npm run lint
 
+      # Design-systeem-bewaking (fase A, 03-09-2026): geen dark:-utilities,
+      # rauwe knoppen, off-ladder maten/radii — zie scripts/design-lint.mjs.
+      - name: Design-lint
+        run: npm run lint:design
+
       - name: Unit-tests
         run: npm test
 

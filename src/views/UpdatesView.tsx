@@ -5,7 +5,8 @@ import { cn } from '../lib/ui';
 import { markUpdatesRead } from '../lib/updateReads';
 import { formatUpdateDate } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge } from '../components/primitives';
+import { Badge, Button } from '../components/primitives';
+import { Card, CardHeader } from '../components/Card';
 
 export function UpdatesView({ updates }: { updates: Update[] }) {
   const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);
@@ -47,7 +48,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
               : update.content;
 
             return (
-            <div key={update.id} className="surface-card surface-card-hover p-5 md:p-6 rounded-3xl relative overflow-hidden group duration-300">
+            <Card key={update.id} interactive className="relative overflow-hidden group duration-300">
               <div className={cn(
                 "absolute top-0 left-0 w-1 h-full",
                 update.isUrgent ? "bg-red-500" : "bg-slate-300"
@@ -65,28 +66,29 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 </div>
               </div>
 
-              <h4 className="text-lg font-bold tracking-tight text-slate-800 mb-3 leading-tight">{update.title}</h4>
+              <CardHeader title={update.title} className="mb-3" />
               <p className="text-sm font-normal text-slate-600 leading-relaxed whitespace-pre-wrap">{visibleContent}</p>
 
               {shouldTruncate ? (
                 <div className="mt-4 pt-4 border-t border-slate-100 flex justify-end">
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => toggleExpanded(update.id)}
-                    className="ios-pressable flex items-center gap-1.5 py-2.5 -my-2.5 text-xs font-semibold text-oker-600 hover:text-oker-700 transition-colors"
+                    className="-mr-3 text-oker-700 hover:text-oker-700"
                   >
                     {isExpanded ? 'Toon minder' : 'Lees meer'}
                     <ChevronRight size={14} className={cn("transition-transform", isExpanded && "rotate-90")} />
-                  </button>
+                  </Button>
                 </div>
               ) : null}
-            </div>
+            </Card>
           );
           })
         ) : (
           <div className="lg:col-span-2">
             <EmptyState
-              icon={<Info size={28} />}
+              icon={<Info size={24} />}
               title="Geen updates"
               message="Er zijn nog geen berichten geplaatst."
             />

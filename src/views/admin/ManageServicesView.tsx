@@ -5,7 +5,8 @@ import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { cn, notify, downloadBlob } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -349,9 +350,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   </Td>
                   <Td className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
-                      <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
-                      {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
+                      <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryService(s)}><History size={16} /></IconButton>
+                      <IconButton label="Dienst bewerken" variant="ghost" size="sm" onClick={() => handleEdit(s)}><Pencil size={16} /></IconButton>
+                      {canAdminOverride ? <IconButton label="Dienst verwijderen" variant="danger" size="sm" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></IconButton> : null}
                     </div>
                   </Td>
                 </tr>
@@ -365,11 +366,11 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           {services.map(s => (
             <div key={s.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors">
               <div className="flex justify-between items-center">
-                <span className="text-lg font-bold text-slate-800 tracking-tight">{s.serviceNumber}</span>
+                <span className="text-card-title">{s.serviceNumber}</span>
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
-                  <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
-                  {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
+                  <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryService(s)}><History size={16} /></IconButton>
+                  <IconButton label="Dienst bewerken" variant="ghost" size="sm" onClick={() => handleEdit(s)}><Pencil size={16} /></IconButton>
+                  {canAdminOverride ? <IconButton label="Dienst verwijderen" variant="danger" size="sm" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></IconButton> : null}
                 </div>
               </div>
 
@@ -409,7 +410,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         {services.length === 0 && (
           <div className="p-6">
             <EmptyState
-              icon={<Clock size={28} />}
+              icon={<Clock size={24} />}
               title="Geen diensten geconfigureerd"
               message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
             />
@@ -420,96 +421,96 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex flex-col !p-0">
         <ModalHeader title={editingId ? 'Dienst bewerken' : 'Nieuwe dienst'} onClose={() => setShowModal(false)} />
         <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5">
-          <div className="space-y-2">
-            <MicroLabel className="ml-1">Dienstnummer</MicroLabel>
-            <input
+          <Field label="Dienstnummer" htmlFor="dienst-nummer">
+            <Input
+              id="dienst-nummer"
               type="text" required value={formData.serviceNumber}
               onChange={(e) => setFormData({...formData, serviceNumber: e.target.value})}
-              className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm"
+              className="font-semibold"
             />
-          </div>
+          </Field>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Starttijd (Deel 1)</MicroLabel>
-              <input
+            <Field label="Starttijd (Deel 1)" htmlFor="dienst-start1">
+              <Input
+                id="dienst-start1"
                 type="text" required inputMode="numeric" placeholder="04:36" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime}
                 onChange={(e) => setFormData({...formData, startTime: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Eindtijd (Deel 1)</MicroLabel>
-              <input
+            </Field>
+            <Field label="Eindtijd (Deel 1)" htmlFor="dienst-eind1">
+              <Input
+                id="dienst-eind1"
                 type="text" required inputMode="numeric" placeholder="26:16" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime}
                 onChange={(e) => setFormData({...formData, endTime: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Loopnummer (Deel 1)</MicroLabel>
-              <input
+            </Field>
+            <Field label="Loopnummer (Deel 1)" htmlFor="dienst-loop1">
+              <Input
+                id="dienst-loop1"
                 type="text" inputMode="numeric" value={formData.loopnr}
                 onChange={(e) => setFormData({...formData, loopnr: e.target.value})}
                 placeholder="bv. 12"
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
+            </Field>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Starttijd (Deel 2)</MicroLabel>
-              <input
+            <Field label="Starttijd (Deel 2)" htmlFor="dienst-start2">
+              <Input
+                id="dienst-start2"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime2}
                 onChange={(e) => setFormData({...formData, startTime2: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Eindtijd (Deel 2)</MicroLabel>
-              <input
+            </Field>
+            <Field label="Eindtijd (Deel 2)" htmlFor="dienst-eind2">
+              <Input
+                id="dienst-eind2"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime2}
                 onChange={(e) => setFormData({...formData, endTime2: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Loopnummer (Deel 2)</MicroLabel>
-              <input
+            </Field>
+            <Field label="Loopnummer (Deel 2)" htmlFor="dienst-loop2">
+              <Input
+                id="dienst-loop2"
                 type="text" inputMode="numeric" value={formData.loopnr2}
                 onChange={(e) => setFormData({...formData, loopnr2: e.target.value})}
                 placeholder="bv. 12"
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
+            </Field>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Starttijd (Deel 3)</MicroLabel>
-              <input
+            <Field label="Starttijd (Deel 3)" htmlFor="dienst-start3">
+              <Input
+                id="dienst-start3"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime3}
                 onChange={(e) => setFormData({...formData, startTime3: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Eindtijd (Deel 3)</MicroLabel>
-              <input
+            </Field>
+            <Field label="Eindtijd (Deel 3)" htmlFor="dienst-eind3">
+              <Input
+                id="dienst-eind3"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime3}
                 onChange={(e) => setFormData({...formData, endTime3: e.target.value})}
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
-            <div className="space-y-2">
-              <MicroLabel className="ml-1">Loopnummer (Deel 3)</MicroLabel>
-              <input
+            </Field>
+            <Field label="Loopnummer (Deel 3)" htmlFor="dienst-loop3">
+              <Input
+                id="dienst-loop3"
                 type="text" inputMode="numeric" value={formData.loopnr3}
                 onChange={(e) => setFormData({...formData, loopnr3: e.target.value})}
                 placeholder="bv. 12"
-                className="control-input w-full px-4 py-3 rounded-2xl outline-none transition-all font-semibold text-sm tabular-nums"
+                className="tabular-nums"
               />
-            </div>
+            </Field>
           </div>
           <Button type="submit" variant="primary" size="lg" full className="mt-4" disabled={isSaving}>
             {editingId ? 'Dienst bijwerken' : 'Dienst toevoegen'}

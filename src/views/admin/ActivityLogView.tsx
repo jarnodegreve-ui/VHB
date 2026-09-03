@@ -6,9 +6,11 @@ import { csvTekst } from '../../lib/csv';
 import { Modal } from '../../components/Modal';
 import { isoDate } from '../../lib/availability';
 import { formatDayLong } from '../../lib/format';
-import { AdminSubsectionHeader, EmptyState, ModalHeader, PageShell } from '../../components/ui';
+import { EmptyState, ModalHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Input } from '../../components/Field';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
   users: 'oker',
@@ -50,6 +52,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
    *  alle-dagen-popup. Klik opent de namen-popup van die dag: inline chips
    *  werden met tientallen actieve gebruikers een muur onder de balk. */
   const renderDayRow = (d: { day: string; count: number; names: string[] }) => (
+    // rauw: hele dagrij (datum + staaf + teller) is de knop; eigen layout, geen knop-uiterlijk
     <button
       key={d.day}
       type="button"
@@ -177,15 +180,16 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
 
   return (
     <PageShell>
-      <section className="surface-card rounded-3xl p-6 md:p-8">
-        <AdminSubsectionHeader
+      <Card as="section" padding="lg">
+        <CardHeader
+          size="lg"
           eyebrow="Aanwezigheid"
           title="Actieve gebruikers en aanmeldingen"
           description="Wie het portaal gebruikte per dag — ook zonder opnieuw in te loggen — en recente aanmeldingen (laatste 30 dagen)."
         />
         {logins.length === 0 ? (
           <div className="mt-5">
-            <EmptyState icon={<Users size={28} />} title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
+            <EmptyState icon={<Users size={24} />} title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
           </div>
         ) : (
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -197,13 +201,9 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 {dailyActive.slice(0, 7).map(renderDayRow)}
               </div>
               {dailyActive.length > 7 && (
-                <button
-                  type="button"
-                  onClick={() => setShowDailyModal(true)}
-                  className="ios-pressable mt-2 w-full rounded-xl py-2 text-center text-xs font-semibold text-oker-700 hover:text-oker-800 hover:bg-surface-soft-hover transition-colors"
-                >
+                <Button variant="ghost" size="sm" full className="mt-2 text-oker-700 hover:text-oker-800" onClick={() => setShowDailyModal(true)}>
                   Alle dagen bekijken ({dailyActive.length})
-                </button>
+                </Button>
               )}
             </div>
             <div>
@@ -221,10 +221,11 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             </div>
           </div>
         )}
-      </section>
+      </Card>
 
-      <section className="surface-card rounded-3xl p-6 md:p-8">
-        <AdminSubsectionHeader
+      <Card as="section" padding="lg">
+        <CardHeader
+          size="lg"
           eyebrow="Auditspoor"
           title="Recente activiteit"
           description="Alleen admins zien hier recente beheeracties en belangrijke wijzigingen."
@@ -233,15 +234,18 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
 
         <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
           <div className="space-y-4">
-            <label className="surface-muted flex items-center gap-3 rounded-2xl px-4 py-3">
-              <Search size={18} className="text-slate-400" />
-              <input
+            <div className="relative">
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Input
+                type="search"
+                enterKeyHint="search"
+                aria-label="Zoek in activiteit"
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
                 placeholder="Zoek op actie, details of actor..."
-                className="w-full bg-transparent text-base md:text-sm font-medium text-slate-700 outline-none placeholder:text-slate-400"
+                className="pl-9"
               />
-            </label>
+            </div>
             <div className="flex flex-wrap gap-2">
               <FilterChip active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterChip>
               <FilterChip active={dateWindow === '7d'} onClick={() => setDateWindow('7d')}>7 dagen</FilterChip>
@@ -312,13 +316,13 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             </TableShell>
           ) : (
             <EmptyState
-              icon={<Activity size={28} />}
+              icon={<Activity size={24} />}
               title={entries.length > 0 ? 'Geen resultaten voor deze filter' : 'Nog geen activiteit gelogd'}
               message={entries.length > 0 ? 'Pas je categorie of zoekterm aan om andere activiteiten te tonen.' : 'Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch.'}
             />
           )}
         </div>
-      </section>
+      </Card>
       <Modal open={showDailyModal} onClose={() => setShowDailyModal(false)} maxWidth="sm" className="flex max-h-[80dvh] flex-col !overflow-hidden !p-0">
         <ModalHeader title="Actieve gebruikers per dag" description="Klik op een dag voor de namen" onClose={() => setShowDailyModal(false)} />
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-4 py-3 space-y-1">

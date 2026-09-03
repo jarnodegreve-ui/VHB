@@ -3,7 +3,9 @@ import { ArrowLeftRight, ChevronDown, ChevronRight, Handshake, History, X, Check
 import type { LeaveRequest, Shift, SwapRequest, SwapType, User } from '../types';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Modal } from '../components/Modal';
-import { Badge, Button, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
+import { Card } from '../components/Card';
+import { Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { fetchAvailability, isoDate, addDays } from '../lib/availability';
@@ -16,7 +18,7 @@ type ReturnOption = { date: string; code: string; isFree: boolean };
 /** Vaste visuele identiteit van de overname (ruil zonder tegenprestatie) —
  *  overal dezelfde badge i.p.v. losse blauwe tekstregels per lijst. */
 const TakeoverBadge = ({ compact = false }: { compact?: boolean }) => (
-  <Badge tone="blue" icon={<Handshake size={11} />}>
+  <Badge tone="blue" icon={<Handshake size={12} />}>
     {compact ? 'Overname' : 'Overname — geen tegenprestatie'}
   </Badge>
 );
@@ -416,7 +418,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 const target = users.find(u => u.id === swap.targetDriverId);
                 const open = expandedSwapIds.includes(swap.id);
                 return (
-                  <div key={swap.id} className="surface-card rounded-3xl overflow-hidden">
+                  <Card key={swap.id} padding="none" className="overflow-hidden">
+                    {/* rauw: hele uitklaprij is de knop (dienst + datum + statusbadge + chevron) */}
                     <button
                       type="button"
                       onClick={() => toggleSwapExpanded(swap.id)}
@@ -429,7 +432,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <StatusBadge status={swap.status} />
-                        <ChevronDown size={15} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                        <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                       </div>
                     </button>
                     {open && (
@@ -443,7 +446,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         {isTakeoverSwap(swap) ? (
                           <div className="mt-1.5"><TakeoverBadge /></div>
                         ) : returnLabel(swap) && (
-                          <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">In ruil: {returnLabel(swap)}</p>
+                          <p className="text-xs font-medium text-blue-700 mt-1">In ruil: {returnLabel(swap)}</p>
                         )}
                         {/* Intrekken zolang de ruil nog niet door de planner is
                             goedgekeurd — verlof kon dit al, dienstruil dwong
@@ -467,13 +470,13 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         )}
                       </div>
                     )}
-                  </div>
+                  </Card>
                 );
               })}
             </div>
           ) : (
             <EmptyState
-              icon={<ArrowLeftRight size={28} />}
+              icon={<ArrowLeftRight size={24} />}
               title="Nog geen ruilverzoeken"
               message='Wil je een dienst wisselen met een collega? Klik op "Dienstruil aanvragen" — je collega en de planner keuren daarna goed.'
             />
@@ -488,7 +491,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               const requester = users.find(u => u.id === swap.requesterId);
               const canRespond = canRespondToSwap(user, swap);
               return (
-                <div key={swap.id} className="surface-card p-5 rounded-3xl space-y-4">
+                <Card key={swap.id} className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <MicroLabel>Dienst {info.line}</MicroLabel>
@@ -500,7 +503,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {isTakeoverSwap(swap) ? (
                         <div className="mt-1.5"><TakeoverBadge /></div>
                       ) : returnLabel(swap) && (
-                        <p className="text-xs font-medium text-blue-600 dark:text-blue-400 mt-1">Jij geeft: {returnLabel(swap)}</p>
+                        <p className="text-xs font-medium text-blue-700 mt-1">Jij geeft: {returnLabel(swap)}</p>
                       )}
                     </div>
                     <span className="shrink-0">
@@ -510,15 +513,15 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
                   {canRespond ? (
                     <div className="flex gap-2 pt-1">
-                      <Button variant="success" className="flex-1" icon={<Check size={15} />} onClick={() => handleAccept(swap.id)}>
+                      <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAccept(swap.id)}>
                         Accepteren
                       </Button>
-                      <Button variant="danger" className="flex-1" icon={<X size={15} />} onClick={() => handleDecline(swap.id)}>
+                      <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleDecline(swap.id)}>
                         Weigeren
                       </Button>
                     </div>
                   ) : swap.status === 'accepted' && swap.targetDriverId === user.id ? (
-                    <p className="text-xs font-medium text-blue-600 dark:text-blue-400">Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).</p>
+                    <p className="text-xs font-medium text-blue-700">Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).</p>
                   ) : swap.status === 'approved' && swap.targetDriverId === user.id && !swap.targetSeenAt ? (
                     /* Doorgevoerd maar nog niet bevestigd: dé plek waar de
                        chauffeur laat weten dat hij de wijziging gezien heeft
@@ -526,19 +529,19 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     <Button
                       variant="success"
                       full
-                      icon={<Check size={15} />}
+                      icon={<Check size={16} />}
                       disabled={isConfirmingSeen === swap.id}
                       onClick={() => void bevestigGezien(swap.id)}
                     >
                       {isConfirmingSeen === swap.id ? 'Bevestigen…' : 'Begrepen — ik rijd deze dienst'}
                     </Button>
                   ) : null}
-                </div>
+                </Card>
               );
             })
           ) : (
             <EmptyState
-              icon={<ArrowLeftRight size={28} />}
+              icon={<ArrowLeftRight size={24} />}
               title="Geen openstaande dienstruilen"
               message="Stelt een collega jou een ruil voor, dan verschijnt die hier en krijg je een melding."
             />
@@ -575,7 +578,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             <div className="space-y-4 pt-8">
               <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
               <EmptyState
-                icon={<ArrowLeftRight size={28} />}
+                icon={<ArrowLeftRight size={24} />}
                 title="Geen dienstruilen om te beoordelen"
                 message="Zodra een chauffeur een ruil aanvraagt en zijn collega akkoord gaat, verschijnt die hier."
               />
@@ -605,6 +608,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       return (
                         <tr key={swap.id} className="hover:bg-slate-50/60 transition-colors">
                           <Td>
+                            {/* rauw: tabelrij-knop met naam + doelcollega + chevron (opent het beoordelingspaneel) */}
                             <button
                               type="button"
                               onClick={() => setReviewSwap(swap)}
@@ -626,7 +630,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
-                              <span className="block text-2xs font-medium text-blue-600 dark:text-blue-400 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
+                              <span className="block text-2xs font-medium text-blue-700 mt-0.5">↔ in ruil: {returnLabel(swap)}</span>
                             )}
                           </Td>
                           <Td>
@@ -636,7 +640,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   dát de vraag die telt (push bereikt weinigen). */}
                               {swap.status === 'approved' && swap.targetDriverId && (
                                 swap.targetSeenAt
-                                  ? <Badge tone="emerald" icon={<Check size={11} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>gezien</Badge>
+                                  ? <Badge tone="emerald" icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>gezien</Badge>
                                   : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">niet bevestigd</Badge>
                               )}
                             </span>
@@ -682,6 +686,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     <div key={swap.id} className="p-5 space-y-3">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
+                          {/* rauw: rij-knop met naam + doelcollega + chevron (opent het beoordelingspaneel) */}
                           <button
                             type="button"
                             onClick={() => setReviewSwap(swap)}
@@ -699,14 +704,14 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           {isTakeoverSwap(swap) ? (
                             <div className="mt-1"><TakeoverBadge compact /></div>
                           ) : returnLabel(swap) && (
-                            <p className="text-2xs font-medium text-blue-600 dark:text-blue-400 mt-1">↔ in ruil: {returnLabel(swap)}</p>
+                            <p className="text-2xs font-medium text-blue-700 mt-1">↔ in ruil: {returnLabel(swap)}</p>
                           )}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1">
                           <StatusBadge status={swap.status} />
                           {swap.status === 'approved' && swap.targetDriverId && (
                             swap.targetSeenAt
-                              ? <Badge tone="emerald" icon={<Check size={11} />}>gezien</Badge>
+                              ? <Badge tone="emerald" icon={<Check size={12} />}>gezien</Badge>
                               : <Badge tone="slate">niet bevestigd</Badge>
                           )}
                         </span>
@@ -714,20 +719,20 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       <div className="flex gap-2 pt-1">
                         {swap.status === 'accepted' && (
                           <>
-                            <Button variant="success" className="flex-1" icon={<Check size={15} />} onClick={() => handleStatusUpdate(swap.id, 'approved')}>
+                            <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleStatusUpdate(swap.id, 'approved')}>
                               Goedkeuren
                             </Button>
-                            <Button variant="danger" className="flex-1" icon={<X size={15} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                            <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
                               Afwijzen
                             </Button>
                           </>
                         )}
                         {swap.status === 'pending' && (isAdmin ? (
                           <>
-                            <Button variant="success" className="flex-1" icon={<Check size={15} />} onClick={() => handleAdminForceApprove(swap.id)}>
+                            <Button variant="success" className="flex-1" icon={<Check size={16} />} onClick={() => handleAdminForceApprove(swap.id)}>
                               Goedkeuren
                             </Button>
-                            <Button variant="danger" className="flex-1" icon={<X size={15} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
+                            <Button variant="danger" className="flex-1" icon={<X size={16} />} onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
                               Afwijzen
                             </Button>
                           </>
@@ -764,14 +769,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   scripts/mobile-audit.mjs, dat nooit een modal opent. */}
               <ModalHeader
                 leading={wizardStep > 1 ? (
-                  <button
-                    type="button"
-                    onClick={() => setWizardStep((s) => (s === 3 ? 2 : 1))}
-                    aria-label="Vorige stap"
-                    className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover"
-                  >
+                  <IconButton label="Vorige stap" variant="secondary" size="md" onClick={() => setWizardStep((s) => (s === 3 ? 2 : 1))}>
                     <ChevronRight size={18} className="rotate-180" />
-                  </button>
+                  </IconButton>
                 ) : undefined}
                 eyebrow={`Stap ${wizardStep} van 3`}
                 title={wizardStep === 1 ? 'Welke dienst wil je ruilen?' : wizardStep === 2 ? 'Met welke collega?' : 'Hoe wil je ruilen?'}
@@ -787,6 +787,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   ) : (
                     <div className="space-y-2">
                       {(showAllShifts ? myShifts : myShifts.slice(0, 8)).map((s) => (
+                        /* rauw: wizard-keuzekaart (datum + dienst + chevron), eigen layout via cnCard */
                         <button
                           key={s.id}
                           type="button"
@@ -801,9 +802,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         </button>
                       ))}
                       {!showAllShifts && myShifts.length > 8 && (
-                        <button type="button" onClick={() => setShowAllShifts(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11">
+                        <Button variant="ghost" size="sm" full className="text-oker-700 hover:text-oker-800" onClick={() => setShowAllShifts(true)}>
                           Meer tonen ({myShifts.length - 8} extra)
-                        </button>
+                        </Button>
                       )}
                     </div>
                   )
@@ -829,6 +830,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               // "vrij" — en zegt meteen of een overname kan.
                               const code = takeoverCodeFor(u.id);
                               return (
+                                /* rauw: wizard-keuzekaart (naam + beschikbaarheidsbadge + chevron), eigen layout via cnCard */
                                 <button
                                   key={u.id}
                                   type="button"
@@ -859,9 +861,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             })}
                         </div>
                         {freeForDate && !showBusyColleagues && eligibleTargetDrivers.some((u) => !isAvailableOnShiftDate(u.id)) && (
-                          <button type="button" onClick={() => setShowBusyColleagues(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11">
+                          <Button variant="ghost" size="sm" full className="text-oker-700 hover:text-oker-800" onClick={() => setShowBusyColleagues(true)}>
                             Toon ook bezette collega's ({eligibleTargetDrivers.filter((u) => !isAvailableOnShiftDate(u.id)).length})
-                          </button>
+                          </Button>
                         )}
                         {freeForDate && freeCount === 0 && !showBusyColleagues && (
                           <p className="text-xs font-medium text-slate-400 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
@@ -913,20 +915,22 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
                       {/* Vorm van de aanvraag: 1-op-1 of zonder tegenprestatie. */}
                       <div className="space-y-2">
+                        {/* rauw: keuzekaart ruilvorm (icoon + titel + uitleg + radio-vinkje), eigen layout via cnCard */}
                         <button
                           type="button"
                           onClick={() => setSwapType('ruil')}
                           className={cnCard(!isTakeover)}
                         >
                           <span className="min-w-0 flex items-start gap-2.5">
-                            <ArrowLeftRight size={15} className="mt-0.5 shrink-0 text-oker-500" />
+                            <ArrowLeftRight size={16} className="mt-0.5 shrink-0 text-oker-500" />
                             <span className="min-w-0">
                               <span className="block text-sm font-bold text-slate-800">Ruilen (1-op-1)</span>
                               <span className="block text-xs font-medium text-slate-500">Jij neemt een dienst of vrije dag van {voornaam} over</span>
                             </span>
                           </span>
-                          {!isTakeover ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                          {!isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
                         </button>
+                        {/* rauw: keuzekaart ruilvorm (icoon + titel + uitleg + radio-vinkje), eigen layout via cnCard */}
                         <button
                           type="button"
                           disabled={!takeoverCode}
@@ -934,7 +938,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           className={`${cnCard(isTakeover)} disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-surface-row-hover`}
                         >
                           <span className="min-w-0 flex items-start gap-2.5">
-                            <Handshake size={15} className="mt-0.5 shrink-0 text-blue-500" />
+                            <Handshake size={16} className="mt-0.5 shrink-0 text-blue-500" />
                             <span className="min-w-0">
                               <span className="block text-sm font-bold text-slate-800">Zonder tegenprestatie</span>
                               <span className="block text-xs font-medium text-slate-500">
@@ -944,7 +948,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               </span>
                             </span>
                           </span>
-                          {isTakeover ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                          {isTakeover ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
                         </button>
                       </div>
 
@@ -962,6 +966,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               const val = `${o.date}|${o.code}`;
                               const selected = returnPick === val;
                               return (
+                                /* rauw: wizard-keuzekaart (datum + dienst/vrij + radio-vinkje), eigen layout via cnCard */
                                 <button
                                   key={val}
                                   type="button"
@@ -972,43 +977,46 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                     <span className="block text-sm font-bold text-slate-800 capitalize">{formatDateHuman(o.date)}</span>
                                     <span className="block text-xs font-medium text-slate-500">{o.isFree ? 'Vrije dag van de collega' : `Dienst ${o.code}`}</span>
                                   </span>
-                                  {selected ? <Check size={16} className="shrink-0 text-oker-600" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
+                                  {selected ? <Check size={16} className="shrink-0 text-oker-700" /> : <span className="shrink-0 h-4 w-4 rounded-full border border-slate-300" />}
                                 </button>
                               );
                             })}
                           </div>
                           {!showAllReturns && (pickable.length > 8 || conflicted.length > 0) && (
-                            <button type="button" onClick={() => setShowAllReturns(true)} className="w-full text-center text-xs font-semibold text-oker-700 hover:text-oker-800 py-3 min-h-11">
+                            <Button variant="ghost" size="sm" full className="text-oker-700 hover:text-oker-800" onClick={() => setShowAllReturns(true)}>
                               Meer tonen{pickable.length > 8 ? ` (${pickable.length - 8} extra)` : ''}
-                            </button>
+                            </Button>
                           )}
                           {showAllReturns && conflicted.length > 0 && (
                             <div className="space-y-2">
                               <MicroLabel className="text-slate-400">Niet mogelijk — jij bent die dag al ingepland</MicroLabel>
                               {conflicted.map((o) => (
-                                <div key={`${o.date}|${o.code}`} className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/60 px-4 py-3 opacity-60">
+                                <Card key={`${o.date}|${o.code}`} tone="muted" padding="none" className="flex items-center justify-between gap-3 px-4 py-3 opacity-60">
                                   <span className="min-w-0">
                                     <span className="block text-sm font-semibold text-slate-500 capitalize">{formatDateHuman(o.date)}</span>
                                     <span className="block text-xs font-medium text-slate-400">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`} — {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
                                   </span>
-                                </div>
+                                </Card>
                               ))}
                             </div>
                           )}
                         </>
                       )}
-                      <div className="space-y-2 pt-1">
-                        <MicroLabel className="ml-1">Info voor je collega (optioneel)</MicroLabel>
-                        {/* onFocus: houd het veld boven het iOS-toetsenbord —
-                            zonder scroll verdween de verstuurknop erachter. */}
-                        <textarea
-                          aria-label="Reden voor de ruil" value={reason}
-                          onChange={(e) => setReason(e.target.value)}
-                          onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
-                          className="control-input w-full px-4 py-3 rounded-2xl font-medium text-sm outline-none h-14 resize-none"
-                          placeholder="Waarom wil je ruilen?"
-                        />
-                      </div>
+                      <Field label="Info voor je collega (optioneel)" className="pt-1">
+                        {({ id }) => (
+                          /* onFocus: houd het veld boven het iOS-toetsenbord —
+                             zonder scroll verdween de verstuurknop erachter. */
+                          <Textarea
+                            id={id}
+                            rows={2}
+                            value={reason}
+                            onChange={(e) => setReason(e.target.value)}
+                            onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
+                            className="h-14"
+                            placeholder="Waarom wil je ruilen?"
+                          />
+                        )}
+                      </Field>
                       {isTakeover ? (
                         <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
                           Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — <strong>zonder tegenprestatie</strong>.
@@ -1042,8 +1050,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         title={reviewSwap ? (users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend') : 'Dienstruil'}
         subtitle={reviewSwap ? `Aangevraagd op ${formatDateHuman(reviewSwap.createdAt)}` : undefined}
         icon={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
-            <ArrowLeftRight size={17} />
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
+            <ArrowLeftRight size={16} />
           </span>
         }
         footer={reviewSwap ? (
@@ -1070,7 +1078,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="success"
                   size="lg"
                   className="flex-1"
-                  icon={<Check size={15} />}
+                  icon={<Check size={16} />}
                   onClick={() => { handleStatusUpdate(reviewSwap.id, 'approved', reviewSwap.status); setReviewSwap(null); }}
                 >
                   Goedkeuren
@@ -1091,7 +1099,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   variant="success"
                   size="lg"
                   className="flex-1"
-                  icon={<Check size={15} />}
+                  icon={<Check size={16} />}
                   onClick={() => { handleAdminForceApprove(reviewSwap.id); setReviewSwap(null); }}
                 >
                   Goedkeuren
@@ -1137,7 +1145,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {isTakeoverSwap(reviewSwap) && <TakeoverBadge compact />}
               </div>
 
-              <div className="surface-muted rounded-xl p-4">
+              <Card tone="muted" padding="sm">
                 <MicroLabel className="text-slate-500">{isTakeoverSwap(reviewSwap) ? 'Overname' : 'Ruil'}</MicroLabel>
                 <p className="mt-1.5 text-sm font-semibold text-slate-800">
                   {requester?.name ?? 'Onbekend'}
@@ -1145,11 +1153,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                   {target?.name ?? 'open verzoek'}
                 </p>
                 {isTakeoverSwap(reviewSwap) ? (
-                  <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">De collega neemt de dienst over, zonder tegenprestatie.</p>
+                  <p className="mt-1 text-xs font-medium text-blue-700">De collega neemt de dienst over, zonder tegenprestatie.</p>
                 ) : returnLabel(reviewSwap) && (
-                  <p className="mt-1 text-xs font-medium text-blue-600 dark:text-blue-400">↔ in ruil: {returnLabel(reviewSwap)}</p>
+                  <p className="mt-1 text-xs font-medium text-blue-700">↔ in ruil: {returnLabel(reviewSwap)}</p>
                 )}
-              </div>
+              </Card>
 
               {reviewSwap.reason && (
                 <div>

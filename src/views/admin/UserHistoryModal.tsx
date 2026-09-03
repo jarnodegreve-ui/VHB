@@ -3,6 +3,7 @@ import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
 import { MicroLabel, microLabelClass, StatusBadge } from '../../components/primitives';
+import { Card } from '../../components/Card';
 import { isoDate } from '../../lib/availability';
 import { verlofBalans } from '../../lib/leaveBalance';
 import { LeaveBalanceCard } from '../../components/LeaveBalanceCard';
@@ -64,21 +65,21 @@ export function UserHistoryModal({
 
         {/* Stats overview */}
         <div className="grid grid-cols-3 gap-3">
-          <div className="surface-muted rounded-2xl p-4">
+          <Card tone="muted" padding="sm">
             <MicroLabel>Diensten</MicroLabel>
             <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{allShifts.length}</p>
             <p className="text-2xs font-medium text-slate-400 mt-1">{upcomingShifts.length} komende</p>
-          </div>
-          <div className="surface-muted rounded-2xl p-4">
+          </Card>
+          <Card tone="muted" padding="sm">
             <MicroLabel>Verlof</MicroLabel>
             <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{approvedLeaveCount}</p>
             <p className="text-2xs font-medium text-slate-400 mt-1">goedgekeurd</p>
-          </div>
-          <div className="surface-muted rounded-2xl p-4">
+          </Card>
+          <Card tone="muted" padding="sm">
             <MicroLabel>Dienstruilen</MicroLabel>
             <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{userSwaps.length}</p>
             <p className="text-2xs font-medium text-slate-400 mt-1">totaal</p>
-          </div>
+          </Card>
         </div>
 
         {/* Verlof */}
@@ -89,7 +90,7 @@ export function UserHistoryModal({
           ) : (
             <div className="space-y-2">
               {userLeave.map((l) => (
-                <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/55">
+                <Card key={l.id} tone="muted" padding="sm" className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800">
                       {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
@@ -97,7 +98,7 @@ export function UserHistoryModal({
                     <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? ` — "${l.comment}"` : ''}</p>
                   </div>
                   <StatusBadge status={l.status} className="shrink-0" />
-                </div>
+                </Card>
               ))}
             </div>
           )}
@@ -118,7 +119,7 @@ export function UserHistoryModal({
                 // over "wie moest hoe vaak inspringen" wil kunnen teruglezen.
                 const handmatig = (s.reason || '').startsWith('Handmatige wissel door');
                 return (
-                  <div key={s.id} className="p-3 rounded-2xl border border-slate-100 bg-white/55 space-y-1.5">
+                  <Card key={s.id} tone="muted" padding="sm" className="space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 flex items-center gap-2 text-sm">
                         <RotateCcw size={14} className="text-slate-400 shrink-0" />
@@ -136,7 +137,7 @@ export function UserHistoryModal({
                     {s.reason && (
                       <p className="text-xs font-normal italic text-slate-500 line-clamp-2">"{s.reason}"</p>
                     )}
-                  </div>
+                  </Card>
                 );
               })}
             </div>
@@ -151,7 +152,7 @@ export function UserHistoryModal({
           ) : (
             <div className="space-y-2">
               {upcomingShifts.slice(0, 10).map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/55">
+                <Card key={s.id} tone="muted" padding="sm" className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
                     <span className="text-sm font-semibold text-slate-800">{s.date}</span>
@@ -161,7 +162,7 @@ export function UserHistoryModal({
                     <Clock size={12} />
                     {s.startTime} - {s.endTime}
                   </span>
-                </div>
+                </Card>
               ))}
               {upcomingShifts.length > 10 && (
                 <p className="text-xs text-slate-500 px-3">… en nog {upcomingShifts.length - 10} meer.</p>
@@ -176,7 +177,7 @@ export function UserHistoryModal({
             <h5 className={microLabelClass}>Recent gewerkt</h5>
             <div className="space-y-2">
               {pastShifts.slice(0, 5).map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/40 opacity-80">
+                <Card key={s.id} tone="muted" padding="sm" className="flex items-center justify-between gap-3 opacity-80">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
                     <span className="text-sm font-semibold text-slate-700">{s.date}</span>
@@ -186,7 +187,7 @@ export function UserHistoryModal({
                     <Clock size={12} />
                     {s.startTime} - {s.endTime}
                   </span>
-                </div>
+                </Card>
               ))}
             </div>
           </section>

@@ -47,7 +47,9 @@ import { Modal } from '../components/Modal';
 import { ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Button, microLabelClass, segItemClass } from '../components/primitives';
+import { Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
+import { Card } from '../components/Card';
+import { Field, Input, Select, Textarea } from '../components/Field';
 import { cn, notify, telHref } from '../lib/ui';
 
 /**
@@ -220,12 +222,12 @@ export function PlannerDashboardWidgets({
           <SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-3xl p-5 surface-card">
+          <Card padding="md" className="lg:col-span-2">
             <SkeletonRow /><SkeletonRow /><SkeletonRow />
-          </div>
-          <div className="rounded-3xl p-5 surface-card">
+          </Card>
+          <Card padding="md">
             <SkeletonRow /><SkeletonRow />
-          </div>
+          </Card>
         </div>
       </section>
     );
@@ -507,8 +509,8 @@ export function PlannerDashboardWidgets({
       {/* === Operationele header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-[-0.02em] text-slate-900">
-            {greeting}, <span className="text-oker-600">{firstName}</span>
+          <h1 className="text-page-title">
+            {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
           <p className="mt-0.5 text-sm font-normal text-slate-500">
             Actuele status op{' '}
@@ -521,6 +523,7 @@ export function PlannerDashboardWidgets({
             (verbeterronde 01-09, nr. 1); live cijfers blijven op nu. */}
         <div className="glass-segmented inline-flex rounded-2xl p-1">
           {([0, 1] as const).map((offset) => (
+            // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
             <button
               key={offset}
               type="button"
@@ -546,7 +549,7 @@ export function PlannerDashboardWidgets({
             variant="primary"
             size="sm"
             className="gap-1 px-2.5"
-            icon={<Plus size={13} />}
+            icon={<Plus size={14} />}
             aria-haspopup="dialog"
             onClick={() => {
               setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
@@ -651,7 +654,7 @@ export function PlannerDashboardWidgets({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Open taken — gecombineerde werkvoorraad */}
         <OpsPanel
-          icon={<Inbox size={15} />}
+          icon={<Inbox size={16} />}
           title="Open taken"
           aside={attentionCount > 0 ? `${attentionCount} ${attentionCount === 1 ? 'item' : 'items'}` : undefined}
         >
@@ -659,7 +662,7 @@ export function PlannerDashboardWidgets({
             {planningStale && (
               <OpsRow
                 tone="amber"
-                icon={<CalendarClock size={15} />}
+                icon={<CalendarClock size={16} />}
                 primary={`Planning al ${daysSinceImport} dagen niet bijgewerkt`}
                 secondary="Upload je laatste Excel zodat de planning actueel blijft."
                 onClick={() => onNavigate('beheer-roosters')}
@@ -668,7 +671,7 @@ export function PlannerDashboardWidgets({
             {horizonKrap && (
               <OpsRow
                 tone={horizonDagenOver! <= 0 ? 'red' : 'amber'}
-                icon={<CalendarClock size={15} />}
+                icon={<CalendarClock size={16} />}
                 primary={horizonDagenOver! <= 0
                   ? 'De geladen planning is op'
                   : `Planning geladen t/m ${formatDay(planningHorizon)} — nog ${horizonDagenOver} ${horizonDagenOver === 1 ? 'dag' : 'dagen'}`}
@@ -679,7 +682,7 @@ export function PlannerDashboardWidgets({
             {importIssueCount > 0 && lastImport && (
               <OpsRow
                 tone="red"
-                icon={<AlertTriangle size={15} />}
+                icon={<AlertTriangle size={16} />}
                 primary="Laatste import heeft aandachtspunten"
                 secondary={[
                   lastImport.unknownCodes.length > 0 ? `${lastImport.unknownCodes.length} onbekende codes` : null,
@@ -692,7 +695,7 @@ export function PlannerDashboardWidgets({
               <Fragment key={`${e.userId}:${e.soort}`}>
               <OpsRow
                 tone={e.dagen < 0 ? 'red' : 'amber'}
-                icon={<IdCard size={15} />}
+                icon={<IdCard size={16} />}
                 primary={`${EXPIRY_SOORT_LABELS[e.soort] ?? e.soort} · ${userNameById(e.userId)}`}
                 secondary={e.dagen < 0
                   ? `Verlopen sinds ${e.validUntil}`
@@ -707,7 +710,7 @@ export function PlannerDashboardWidgets({
               <Fragment key={`herverdeel:${g.driverId}`}>
               <OpsRow
                 tone="red"
-                icon={<UserX size={15} />}
+                icon={<UserX size={16} />}
                 primary={`${g.diensten.length} ${g.diensten.length === 1 ? 'dienst' : 'diensten'} nog niet herverdeeld — ${userNameById(g.driverId)}`}
                 secondary={`${g.reden} · ${g.diensten.slice(0, 4).map((s) => `${formatDay(s.date)} (${serviceNumberOf(s)})`).join(', ')}${g.diensten.length > 4 ? `, +${g.diensten.length - 4}` : ''}`}
                 // Ziekte-blad, niet de maandplanning: dáár staan de
@@ -720,7 +723,7 @@ export function PlannerDashboardWidgets({
               <Fragment key={d.date}>
               <OpsRow
                 tone="red"
-                icon={<AlertTriangle size={15} />}
+                icon={<AlertTriangle size={16} />}
                 primary={`${d.missing.length} open ${d.missing.length === 1 ? 'dienst' : 'diensten'} — ${formatDay(d.date)}`}
                 secondary={`Dienst ${d.missing.slice(0, 6).join(', ')}${d.missing.length > 6 ? '…' : ''}`}
                 onClick={() => onNavigate('dekking')}
@@ -731,7 +734,7 @@ export function PlannerDashboardWidgets({
               <Fragment key={`${d.userId}:${d.name}:${d.createdAt}`}>
               <OpsRow
                 tone="amber"
-                icon={<Smartphone size={15} />}
+                icon={<Smartphone size={16} />}
                 primary={`Toestel wacht op goedkeuring · ${userNameById(d.userId)}`}
                 secondary={d.name}
                 meta={relTime(d.createdAt)}
@@ -743,7 +746,7 @@ export function PlannerDashboardWidgets({
               <Fragment key={req.id}>
               <OpsRow
                 tone="amber"
-                icon={<CalendarDays size={15} />}
+                icon={<CalendarDays size={16} />}
                 primary={`Verlofaanvraag · ${userNameById(req.userId)}`}
                 secondary={`${req.startDate}${req.startDate !== req.endDate ? ` → ${req.endDate}` : ''} · ${req.type === 'betaald_verlof' ? 'betaald verlof' : 'klein verlet'}`}
                 meta={relTime(req.createdAt)}
@@ -755,7 +758,7 @@ export function PlannerDashboardWidgets({
               <Fragment key={swap.id}>
               <OpsRow
                 tone="blue"
-                icon={<Repeat size={15} />}
+                icon={<Repeat size={16} />}
                 primary={`${swap.swapType === 'overname' ? 'Overname' : 'Dienstruil'} · ${swap.targetDriverId
                   ? `${userNameById(swap.requesterId)} → ${userNameById(swap.targetDriverId)}`
                   : userNameById(swap.requesterId)}`}
@@ -773,15 +776,15 @@ export function PlannerDashboardWidgets({
               </p>
             )}
             {attentionCount === 0 && (
-              <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+              <Card tone="success" padding="none" className="flex items-center gap-3 px-4 py-3.5">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
                   <CheckCircle2 size={16} />
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Alles ok</p>
                   <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
                 </div>
-              </div>
+              </Card>
             )}
           </div>
         </OpsPanel>
@@ -794,7 +797,7 @@ export function PlannerDashboardWidgets({
           {isAdmin && activityLog.length > 0 ? (
             <OpsPanel
               className="flex-1"
-              icon={<Activity size={15} />}
+              icon={<Activity size={16} />}
               title="Live activiteit"
               aside="laatste acties"
               onSeeAll={() => onNavigate('activiteit')}
@@ -810,7 +813,7 @@ export function PlannerDashboardWidgets({
             updates.length > 0 && (
               <OpsPanel
                 className="flex-1"
-                icon={<Bell size={15} />}
+                icon={<Bell size={16} />}
                 title="Recente updates"
                 onSeeAll={() => onNavigate('updates')}
                 seeAllLabel="Alle updates"
@@ -819,7 +822,7 @@ export function PlannerDashboardWidgets({
                   {updates.slice(0, 3).map((u) => (
                     <OpsRow
                       tone={u.isUrgent ? 'red' : 'slate'}
-                      icon={<Bell size={15} />}
+                      icon={<Bell size={16} />}
                       primary={u.title}
                       secondary={u.date}
                       onClick={() => onNavigate('updates')}
@@ -836,8 +839,8 @@ export function PlannerDashboardWidgets({
       <DashboardListModal
         open={showAvailable}
         onClose={() => setShowAvailable(false)}
-        icon={<UserCheck size={17} />}
-        iconClassName="bg-emerald-50 text-emerald-600"
+        icon={<UserCheck size={16} />}
+        iconClassName="bg-emerald-50 text-emerald-700"
         title="Beschikbare chauffeurs"
         subtitle={`${formatDay(peilDag)} · ${availableToday.length} ${availableToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
@@ -860,7 +863,7 @@ export function PlannerDashboardWidgets({
                       {u.phone || 'geen nummer bekend'}
                     </span>
                   </span>
-                  {href && <Phone size={15} className="shrink-0 text-emerald-600" />}
+                  {href && <Phone size={16} className="shrink-0 text-emerald-700" />}
                 </>
               );
               return (
@@ -887,8 +890,8 @@ export function PlannerDashboardWidgets({
       <DashboardListModal
         open={showAbsent}
         onClose={() => setShowAbsent(false)}
-        icon={<CalendarClock size={17} />}
-        iconClassName="bg-amber-50 text-amber-600"
+        icon={<CalendarClock size={16} />}
+        iconClassName="bg-amber-50 text-amber-700"
         title={`${peilLabel} afwezig`}
         subtitle={`${formatDay(peilDag)} · ${todayAbsent.length} ${todayAbsent.length === 1 ? 'collega' : "collega's"}`}
       >
@@ -899,25 +902,21 @@ export function PlannerDashboardWidgets({
             {todayAbsent.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5">
                 <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{a.name}</span>
-                <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-2xs font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-600 dark:text-rose-400' : 'bg-surface-muted text-slate-600')}>{a.label}</span>
+                <Chip mono={false} tone={a.isSick ? 'rose' : 'slate'}>{a.label}</Chip>
               </li>
             ))}
           </ul>
         )}
-        <button
-          type="button"
-          onClick={() => { setShowAbsent(false); onNavigate('verlof-kalender'); }}
-          className="ios-pressable mt-2 w-full rounded-xl border border-slate-200 py-2.5 text-center text-xs font-semibold text-slate-600 hover:bg-surface-soft-hover"
-        >
+        <Button variant="secondary" size="md" full className="mt-2" onClick={() => { setShowAbsent(false); onNavigate('verlof-kalender'); }}>
           Volledige kalender openen
-        </button>
+        </Button>
       </DashboardListModal>
 
       {/* === Popup: wie is er vandaag ingepland, met hun dienst(en) === */}
       <DashboardListModal
         open={showScheduled}
         onClose={() => setShowScheduled(false)}
-        icon={<Users size={17} />}
+        icon={<Users size={16} />}
         iconClassName="bg-surface-muted text-slate-600"
         title={`${peilLabel} ingepland`}
         subtitle={`${formatDay(peilDag)} · ${scheduledToday.length} ${scheduledToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
@@ -929,8 +928,8 @@ export function PlannerDashboardWidgets({
       <DashboardListModal
         open={showDriving}
         onClose={() => setShowDriving(false)}
-        icon={<Bus size={17} />}
-        iconClassName="bg-emerald-50 text-emerald-600"
+        icon={<Bus size={16} />}
+        iconClassName="bg-emerald-50 text-emerald-700"
         title="Chauffeurs actief"
         subtitle={`nu aan het rijden · ${drivingNow.length} ${drivingNow.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
@@ -947,8 +946,8 @@ export function PlannerDashboardWidgets({
       >
         <ModalHeader
           leading={
-            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-600">
-              <AlertTriangle size={17} />
+            <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-50 text-red-700">
+              <AlertTriangle size={16} />
             </span>
           }
           eyebrow={ziekVervolg ? 'ziekmelding geregistreerd' : 'meteen onbeschikbaar'}
@@ -967,7 +966,7 @@ export function PlannerDashboardWidgets({
                 scrol je makkelijk over de laatste heen — dan lijkt het klaar
                 terwijl er nog diensten open staan (melding Jarno 14-08). */}
             {isAdmin && (
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">
+              <p className={cn(microLabelClass, 'tabular-nums')}>
                 {Object.keys(afgehandeld).length} van {ziekVervolg.diensten.length} overgezet
                 {Object.keys(afgehandeld).length < ziekVervolg.diensten.length
                   ? ` · nog ${ziekVervolg.diensten.length - Object.keys(afgehandeld).length} te doen`
@@ -978,24 +977,24 @@ export function PlannerDashboardWidgets({
               {ziekVervolg.diensten.map((d) => {
                 const klaar = afgehandeld[d.id];
                 return (
-                  <div key={d.id} className="rounded-2xl bg-surface-soft px-3.5 py-3 space-y-2.5">
+                  <Card key={d.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-semibold text-slate-800 tabular-nums">
                         Dienst {serviceNumberOf(d)}
                       </span>
-                      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">{formatDay(d.date)}</span>
+                      <span className={cn(microLabelClass, 'tabular-nums')}>{formatDay(d.date)}</span>
                     </div>
                     {klaar ? (
-                      <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                      <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
                         <CheckCircle2 size={14} /> Overgezet naar {klaar}
                       </p>
                     ) : isAdmin ? (
                       <div className="flex flex-col gap-2 sm:flex-row">
-                        <select
+                        <Select
                           aria-label={`Vervanger voor dienst ${serviceNumberOf(d)} op ${d.date}`}
                           value={vervangerPerDienst[d.id] ?? ''}
                           onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [d.id]: e.target.value }))}
-                          className="control-input min-w-0 flex-1 rounded-2xl px-3.5 py-2.5 text-base sm:text-sm font-semibold outline-none bg-surface-field"
+                          className="min-w-0 flex-1"
                         >
                           <option value="">Kies een chauffeur…</option>
                           {/* Vrij die dag bovenaan, daarbinnen minst gewerkt
@@ -1007,7 +1006,7 @@ export function PlannerDashboardWidgets({
                             werkdagen,
                             d.date,
                           ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
-                        </select>
+                        </Select>
                         <Button
                           variant="primary"
                           size="md"
@@ -1018,7 +1017,7 @@ export function PlannerDashboardWidgets({
                         </Button>
                       </div>
                     ) : null}
-                  </div>
+                  </Card>
                 );
               })}
             </div>
@@ -1062,56 +1061,57 @@ export function PlannerDashboardWidgets({
           }}
           className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
-          <div className="space-y-1.5">
-            <label className={cn(microLabelClass, 'ml-1')}>Chauffeur</label>
-            <select
-              aria-label="Chauffeur"
-              value={sickForm.userId}
-              onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickError(''); }}
-              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
-            >
-              <option value="">Kies een chauffeur…</option>
-              {users
-                .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
+          <Field label="Chauffeur">
+            {({ id }) => (
+              <Select
+                id={id}
+                value={sickForm.userId}
+                onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickError(''); }}
+              >
+                <option value="">Kies een chauffeur…</option>
+                {users
+                  .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </Select>
+            )}
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={cn(microLabelClass, 'ml-1')}>Van</label>
-              <input
-                type="date"
-                aria-label="Startdatum ziekmelding"
-                value={sickForm.startDate}
-                onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })}
-                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className={cn(microLabelClass, 'ml-1')}>Tot en met</label>
-              <input
-                type="date"
-                aria-label="Einddatum ziekmelding"
-                value={sickForm.endDate}
-                min={sickForm.startDate}
-                onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })}
-                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
-              />
-            </div>
+            <Field label="Van">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={sickForm.startDate}
+                  onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })}
+                />
+              )}
+            </Field>
+            <Field label="Tot en met">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={sickForm.endDate}
+                  min={sickForm.startDate}
+                  onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })}
+                />
+              )}
+            </Field>
           </div>
-          <div className="space-y-1.5">
-            <label className={cn(microLabelClass, 'ml-1')}>Opmerking (optioneel)</label>
-            <textarea
-              aria-label="Opmerking ziekmelding"
-              value={sickForm.comment}
-              onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
-              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-surface-field"
-              placeholder="bv. gemeld via telefoon om 6u"
-            />
-          </div>
+          <Field label="Opmerking (optioneel)">
+            {({ id }) => (
+              <Textarea
+                id={id}
+                value={sickForm.comment}
+                onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
+                className="h-20"
+                placeholder="bv. gemeld via telefoon om 6u"
+              />
+            )}
+          </Field>
           {sickError && (
-            <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{sickError}</p>
+            <p role="alert" className="text-xs font-semibold text-red-700">{sickError}</p>
           )}
           <p className="text-2xs font-medium text-slate-500">
             De dag(en) komen meteen als onbeschikbaar in de planning; de andere planners krijgen een melding.
@@ -1144,9 +1144,9 @@ const AFTEL_TOON: Record<AftelTone, string> = {
   bezig: 'text-oker-700',
   straks: 'text-slate-500',
   klaar: 'text-slate-500',
-  ziek: 'text-rose-600 dark:text-rose-400',
-  verlof: 'text-emerald-600 dark:text-emerald-400',
-  verlet: 'text-blue-600 dark:text-blue-400',
+  ziek: 'text-rose-700',
+  verlof: 'text-emerald-700',
+  verlet: 'text-blue-700',
 };
 
 function DriverShiftRows({ items, emptyText }: { items: { id: string; name: string; phone?: string; lines: string; segs: string[]; remaining?: string; remainingTone?: AftelTone }[]; emptyText: string }) {
@@ -1168,9 +1168,9 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
                   href={telHref(d.phone)}
                   aria-label={`Bel ${d.name}`}
                   title={d.phone}
-                  className="-my-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100/80 hover:text-oker-600"
+                  className="-my-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100/80 hover:text-oker-700"
                 >
-                  <Phone size={13} />
+                  <Phone size={14} />
                 </a>
               )}
             </span>
@@ -1260,23 +1260,23 @@ function DashboardListModal({
 // === Subcomponents ===
 
 const FEED_ICONS: Partial<Record<ActivityLogEntry['category'], ReactNode>> = {
-  users: <Users size={13} />,
-  planning: <CalendarClock size={13} />,
-  planning_codes: <Settings size={13} />,
-  services: <CalendarClock size={13} />,
-  diversions: <MapPin size={13} />,
-  updates: <Bell size={13} />,
-  auth: <KeyRound size={13} />,
-  leave: <CalendarDays size={13} />,
-  swaps: <Repeat size={13} />,
+  users: <Users size={14} />,
+  planning: <CalendarClock size={14} />,
+  planning_codes: <Settings size={14} />,
+  services: <CalendarClock size={14} />,
+  diversions: <MapPin size={14} />,
+  updates: <Bell size={14} />,
+  auth: <KeyRound size={14} />,
+  leave: <CalendarDays size={14} />,
+  swaps: <Repeat size={14} />,
 };
 
 /** Activiteit-feedregel: wie deed wat, hoelang geleden. */
 function FeedRow({ entry }: { entry: ActivityLogEntry }) {
   return (
     <div className="flex items-start gap-2.5 rounded-lg px-1.5 py-2">
-      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-500/12 text-slate-500 dark:text-slate-300">
-        {FEED_ICONS[entry.category] ?? <Activity size={13} />}
+      <span className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-slate-500/12 text-slate-500">
+        {FEED_ICONS[entry.category] ?? <Activity size={14} />}
       </span>
       <div className="min-w-0 flex-1">
         {/* Twee regels i.p.v. truncate: de details zijn juist het interessante

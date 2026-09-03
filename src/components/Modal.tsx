@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
+import { DUR, EASE } from '../lib/motion';
 
 // Stapel van open modals (module-scope): bij een dialoog bóven een dialoog
 // (bv. verwijder-bevestiging boven Gebruikersbeheer-modal) mogen ESC en de
@@ -157,7 +158,7 @@ export function Modal({
       // en respecteer safe-area (notch + home-indicator).
       // Op md+: 1rem padding rondom de modal.
       className={cn(
-        'fixed inset-0 flex items-center justify-center p-2 md:p-4 bg-slate-900/40 backdrop-blur-sm',
+        'fixed inset-0 flex items-center justify-center p-2 md:p-4 bg-ink/40 backdrop-blur-sm',
         boven ? 'z-[120]' : 'z-[100]',
       )}
       style={{
@@ -177,7 +178,7 @@ export function Modal({
         // de CSS-regel raakt alleen CSS-animaties, niet deze JS-animaties).
         initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+        transition={reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE }}
         onClick={(e) => e.stopPropagation()}
         // Op mobile: max-h = viewport minus de safe-area-padding van de
         // backdrop hierboven (dezelfde max(0.5rem, env(...))-termen), zodat een

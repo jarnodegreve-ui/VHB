@@ -6,6 +6,7 @@ import { prettySize } from '../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
 import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Card } from '../components/Card';
 import { Skeleton } from '../components/Skeleton';
 
 type RitblaadjeMeta = {
@@ -239,7 +240,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
       />
 
       {isLoading ? (
-        <div className="surface-card p-5 md:p-6 rounded-3xl space-y-4">
+        <Card className="space-y-4">
           <div className="flex items-center gap-3">
             <Skeleton rounded="xl" className="w-10 h-10 shrink-0" />
             <div className="flex-1 space-y-2">
@@ -248,27 +249,27 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
             </div>
           </div>
           <Skeleton rounded="2xl" className="w-full h-[320px]" />
-        </div>
+        </Card>
       ) : !current ? (
         <EmptyState
-          icon={<FileText size={28} />}
+          icon={<FileText size={24} />}
           title="Nog geen ritblad beschikbaar"
           message={canEdit ? 'Upload een PDF om te delen met alle chauffeurs.' : 'Zodra er een nieuw ritblad is, verschijnt het hier.'}
         />
       ) : (
         <div className="space-y-6">
-          <div className="surface-card rounded-3xl p-6 md:p-8">
+          <Card padding="lg">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-oker-50 text-oker-600 ring-1 ring-oker-100 flex items-center justify-center shrink-0">
-                  <FileText size={22} />
+                <div className="w-12 h-12 rounded-2xl bg-oker-50 text-oker-700 ring-1 ring-oker-100 flex items-center justify-center shrink-0">
+                  <FileText size={20} />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <MicroLabel>Huidige ritbladen</MicroLabel>
                     {fromCache && <Badge tone="amber" dot>Offline</Badge>}
                   </div>
-                  <h4 className="mt-1 text-lg font-semibold text-slate-900 tracking-tight break-all">{current.filename}</h4>
+                  <h4 className="mt-1 text-section-title break-all">{current.filename}</h4>
                   <p className="mt-1 text-xs font-medium text-slate-500">
                     Geüpload {current.uploadedBy ? `door ${current.uploadedBy} ` : ''}op {formatUploadedAt(current.uploadedAt)}
                     {current.sizeBytes ? ` · ${prettySize(current.sizeBytes)}` : ''}
@@ -286,15 +287,14 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                     waardoor de PWA in standalone wegnavigeert. Openen in een
                     (nieuw) tabblad laat de gebruiker daar bewaren, met
                     same-window-fallback in standalone. */}
-                <button
-                  type="button"
+                <Button
+                  variant="secondary"
                   disabled={!current.url}
                   onClick={() => current.url && openPdfInNewTab(current.url)}
-                  className="control-button-soft ios-pressable inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 hover:text-slate-900 transition-all"
+                  icon={<Download size={16} />}
                 >
-                  <Download size={16} />
                   Openen
-                </button>
+                </Button>
                 {canDelete && (
                   <Button
                     variant="danger"
@@ -308,20 +308,21 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 )}
               </div>
             </div>
-          </div>
+          </Card>
 
-          <div className="surface-card rounded-3xl overflow-hidden">
+          <Card padding="none" className="overflow-hidden">
             {current.url && touchToestel ? (
-              /* Grote open-kaart: opent het vólledige PDF via openPdfInNewTab
-                 (met standalone-fallback) — de iframe-preview toont op iOS
-                 alleen pagina 1, zonder enige hint dat er meer is. */
+              /* Opent het vólledige PDF via openPdfInNewTab (met standalone-
+                 fallback); de iframe-preview toont op iOS alleen pagina 1,
+                 zonder enige hint dat er meer is. */
+              /* rauw: grote open-kaart met eigen layout (icoontegel + titel + uitleg) */
               <button
                 type="button"
                 onClick={() => openPdfInNewTab(current.url!)}
                 className="ios-pressable flex w-full flex-col items-center justify-center gap-3 px-8 py-14 text-center"
               >
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-600 dark:text-oker-400">
-                  <FileText size={22} />
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-700">
+                  <FileText size={20} />
                 </span>
                 <span className="text-base font-semibold text-slate-800">Bekijk ritblad</span>
                 <span className="max-w-sm text-sm font-normal leading-relaxed text-slate-500">
@@ -341,7 +342,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 <p className="text-sm font-medium text-slate-500">Het ritblad is offline nog niet beschikbaar op dit toestel. Open het één keer met internet, daarna werkt het ook offline.</p>
               </div>
             )}
-          </div>
+          </Card>
 
           {!touchToestel && (
             <p className="text-xs font-medium text-slate-400 text-center">

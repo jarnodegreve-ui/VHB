@@ -5,24 +5,31 @@ import { cn } from '../lib/ui';
  * Primitieven van het VHB design-systeem.
  *
  * Eén bron van waarheid voor knoppen, badges, micro-labels en tabellen —
- * views componeren deze i.p.v. eigen className-soep te brouwen. Alle
- * kleurklassen hier hebben een dark-override in index.css.
+ * views componeren deze i.p.v. eigen className-soep te brouwen. Kleuren
+ * volgen automatisch de omgekeerde schalen in dark mode (index.css).
+ *
+ * Regel: geen rauwe <button> in views — Button, IconButton, FilterChip of
+ * Switch. Kaarten via <Card>, velden via <Field>/<Input> (Card.tsx, Field.tsx).
  */
 
 // === Button ===
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'success' | 'danger' | 'dangerSolid';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'success' | 'warning' | 'danger' | 'dangerSolid' | 'ink';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary: 'btn-primary',
   secondary: 'control-button-soft text-slate-700 hover:text-slate-900',
   ghost: 'text-slate-500 hover:text-slate-800 hover:bg-slate-100/70',
-  success: 'bg-emerald-700 text-white hover:bg-emerald-800 shadow-lg shadow-emerald-700/20',
-  danger: 'bg-white/90 border border-red-200 text-red-600 hover:bg-red-50',
+  success: 'bg-emerald-600 text-white hover:bg-emerald-600/90 shadow-lg shadow-emerald-600/20',
+  danger: 'bg-paper/90 border border-red-200 text-red-700 hover:bg-red-50',
   // red-600 als basis: wit op red-500 haalt maar ~3,8:1 — onder AA voor
   // 13-14px tekst, uitgerekend op de "Verwijderen"-knoppen.
-  dangerSolid: 'bg-red-600 text-white hover:bg-red-700 shadow-lg shadow-red-600/20',
+  dangerSolid: 'bg-red-600 text-white hover:bg-red-600/90 shadow-lg shadow-red-600/20',
+  // warning = semantisch amber (callout-knoppen), altijd carbon-tekst op amber.
+  warning: 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-sm shadow-amber-500/20',
+  // ink = altijd-donkere solide knop (print, agenda-koppeling) — flipt niet.
+  ink: 'bg-ink text-white hover:bg-ink-soft shadow-sm',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
@@ -136,7 +143,7 @@ export const statusAccentClass = (status: string): string => BADGE_TONES[statusT
  *  (<label htmlFor>, <span> in een flex-kop, een knop). Zo blijft er één bron
  *  i.p.v. ±35 ad-hoc kopieën in slate-400/font-bold (controle-ronde 27-08,
  *  bevinding 14). */
-export const microLabelClass = 'text-2xs font-medium uppercase tracking-[0.08em] text-slate-500';
+export const microLabelClass = 'text-micro';
 
 export function MicroLabel({ className, children }: { className?: string; children: ReactNode }) {
   return (
@@ -176,7 +183,7 @@ const FILTER_CHIP_TONES: Record<FilterChipTone, { on: string; off: string }> = {
   // maar in dezelfde vorm als de gewone chip.
   red: {
     on: 'bg-red-600 text-white shadow-sm shadow-red-600/20',
-    off: 'border border-red-200 bg-white/90 text-red-700 hover:bg-red-50',
+    off: 'border border-red-200 bg-paper/90 text-red-700 hover:bg-red-50',
   },
 };
 
@@ -208,6 +215,90 @@ export function FilterChip({ active, tone = 'oker', icon, className, children, t
       {icon}
       {children}
     </button>
+  );
+}
+
+// === IconButton ===
+
+type IconButtonVariant = 'ghost' | 'secondary' | 'danger' | 'success' | 'primary';
+type IconButtonSize = 'sm' | 'md';
+
+const ICON_BUTTON_VARIANTS: Record<IconButtonVariant, string> = {
+  ghost: 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
+  secondary: 'control-button-soft text-slate-600 hover:text-slate-900',
+  danger: 'text-slate-400 hover:bg-red-50 hover:text-red-700',
+  success: 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-700',
+  primary: 'bg-oker-500 text-slate-950 hover:bg-oker-400 shadow-sm shadow-oker-500/30',
+};
+
+const ICON_BUTTON_SIZES: Record<IconButtonSize, string> = {
+  // Raakvlak altijd 44 px op touch; met een muis krimpt de knop naar 32/36.
+  sm: 'h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 rounded-lg',
+  md: 'h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 rounded-xl',
+};
+
+/**
+ * Knop met alléén een icoon. `label` is verplicht en wordt de toegankelijke
+ * naam (aria-label) én de native tooltip. Vervangt de ±50 handgeschreven
+ * `h-11 w-11 rounded-xl`-knoppen (sluiten, bewerken, verwijderen, historiek).
+ */
+export const IconButton = forwardRef<HTMLButtonElement, Omit<ButtonHTMLAttributes<HTMLButtonElement>, 'children'> & {
+  label: string;
+  variant?: IconButtonVariant;
+  size?: IconButtonSize;
+  children: ReactNode;
+}>(function IconButton({ label, variant = 'ghost', size = 'md', className, children, type = 'button', ...rest }, ref) {
+  return (
+    <button
+      ref={ref}
+      type={type}
+      aria-label={label}
+      title={rest.title ?? label}
+      className={cn(
+        'ios-pressable inline-flex shrink-0 items-center justify-center transition-colors',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        ICON_BUTTON_VARIANTS[variant],
+        ICON_BUTTON_SIZES[size],
+        className,
+      )}
+      {...rest}
+    >
+      {children}
+    </button>
+  );
+});
+
+// === Chip (code) ===
+
+type ChipTone = 'slate' | 'oker' | 'emerald' | 'red' | 'amber' | 'blue' | 'rose';
+
+const CHIP_TONES: Record<ChipTone, string> = {
+  slate: 'bg-surface-muted text-slate-700',
+  oker: 'bg-oker-500/15 text-oker-700',
+  emerald: 'bg-emerald-50 text-emerald-700',
+  red: 'bg-red-50 text-red-700',
+  amber: 'bg-amber-50 text-amber-700',
+  blue: 'bg-blue-50 text-blue-700',
+  rose: 'bg-rose-50 text-rose-700',
+};
+
+/**
+ * Compacte code-chip: een getal of code in monospace (dienst-/loopnummer,
+ * teller, matrixcode) — de derde chipvorm naast Badge (status, pil) en
+ * FilterChip (aan/uit). Radius md (6 px), geen rand; `ServiceChip` is de
+ * domeinvariant hiervan voor dienstnummers.
+ */
+export function Chip({ tone = 'slate', mono = true, className, title, children }: {
+  tone?: ChipTone;
+  mono?: boolean;
+  className?: string;
+  title?: string;
+  children: ReactNode;
+}) {
+  return (
+    <span title={title} className={cn('inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums', mono && 'font-mono', CHIP_TONES[tone], className)}>
+      {children}
+    </span>
   );
 }
 
@@ -270,7 +361,7 @@ export function Switch({ checked, onChange, label, disabled, className }: {
         className,
       )}
     >
-      <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', checked ? 'bg-oker-500' : 'bg-slate-300 dark:bg-slate-600')}>
+      <span className={cn('relative inline-flex h-6 w-11 items-center rounded-full transition-colors', checked ? 'bg-oker-500' : 'bg-slate-300')}>
         <span className={cn('inline-block h-5 w-5 rounded-full bg-surface-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
       </span>
     </button>

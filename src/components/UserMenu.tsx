@@ -1,8 +1,10 @@
 import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
+import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import type { User } from '../types';
 import { useDropdown } from './useDropdown';
+import { DUR } from '../lib/motion';
 
 /**
  * Avatar-menu in de topbar (mock Jarno 30-08): goud cirkeltje met initialen
@@ -13,6 +15,28 @@ import { useDropdown } from './useDropdown';
  * Eigen lichtgewicht dropdown (geen lib): sluit op buiten-klik en Escape;
  * items zijn gewone buttons met role="menuitem".
  */
+
+/** Menurij: icoon-slot links, label, links uitgelijnd. Eén rauwe knop voor
+ *  alle vijf de items i.p.v. vijf kopieën van het recept. */
+function MenuItem({ icon, danger, className, children, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { icon: ReactNode; danger?: boolean }) {
+  return (
+    // rauw: dropdown-menurij (role=menuitem) met eigen rij-layout — links uitgelijnd,
+    // font-medium, 40 px hoog; Button centreert en dwingt min-h-11/semibold af.
+    <button
+      type="button"
+      role="menuitem"
+      className={cn(
+        'flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 rounded-xl transition-colors duration-150 font-medium text-sm',
+        danger ? 'hover:text-red-700 hover:bg-red-50/70' : 'hover:text-slate-900 hover:bg-slate-100/70',
+        className,
+      )}
+      {...rest}
+    >
+      <span className="text-slate-400 shrink-0">{icon}</span>
+      <span>{children}</span>
+    </button>
+  );
+}
 export function UserMenu({
   user,
   initials,
@@ -40,11 +64,10 @@ export function UserMenu({
 
   const sluitEn = (fn: () => void) => () => { setOpen(false); fn(); };
 
-  const item =
-    'flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-slate-900 hover:bg-slate-100/70 rounded-xl transition-colors duration-150 font-medium text-sm';
-
   return (
     <div ref={wortel} className="relative">
+      {/* rauw: avatar-trigger (goud cirkel + chevron, rounded-full) — geen knop die
+          eruitziet als een knop; IconButton/Button hebben geen avatar-vorm. */}
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -68,7 +91,7 @@ export function UserMenu({
           initial={{ opacity: 0, scale: 0.97, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.97, y: -4 }}
-          transition={{ duration: 0.15, ease: 'easeOut' }}
+          transition={{ duration: DUR.fast, ease: 'easeOut' }}
           style={{ transformOrigin: 'top right' }}
           className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-surface-white backdrop-blur-xl ring-1 ring-hairline shadow-xl p-1.5 z-50"
         >
@@ -84,32 +107,23 @@ export function UserMenu({
               </span>
             </span>
           </div>
-          <button role="menuitem" onClick={sluitEn(onToggleTheme)} className={item}>
-            <span className="text-slate-400 shrink-0">{theme === 'light' ? <Moon size={16} /> : <Sun size={16} />}</span>
-            <span>{theme === 'light' ? 'Donkere modus' : 'Lichte modus'}</span>
-          </button>
+          <MenuItem icon={theme === 'light' ? <Moon size={16} /> : <Sun size={16} />} onClick={sluitEn(onToggleTheme)}>
+            {theme === 'light' ? 'Donkere modus' : 'Lichte modus'}
+          </MenuItem>
           {pushBeschikbaar && (
-            <button role="menuitem" onClick={sluitEn(onTogglePush)} className={item}>
-              <span className="text-slate-400 shrink-0">{pushEnabled ? <BellOff size={16} /> : <BellRing size={16} />}</span>
-              <span>{pushEnabled ? 'Meldingen uitschakelen' : 'Meldingen inschakelen'}</span>
-            </button>
+            <MenuItem icon={pushEnabled ? <BellOff size={16} /> : <BellRing size={16} />} onClick={sluitEn(onTogglePush)}>
+              {pushEnabled ? 'Meldingen uitschakelen' : 'Meldingen inschakelen'}
+            </MenuItem>
           )}
-          <button role="menuitem" onClick={sluitEn(onChangePassword)} className={item}>
-            <span className="text-slate-400 shrink-0"><KeyRound size={16} /></span>
-            <span>Wachtwoord wijzigen</span>
-          </button>
-          <button role="menuitem" onClick={sluitEn(onProbleem)} aria-haspopup="dialog" className={item}>
-            <span className="text-slate-400 shrink-0"><LifeBuoy size={16} /></span>
-            <span>Meld een probleem</span>
-          </button>
-          <button
-            role="menuitem"
-            onClick={sluitEn(onLogout)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-xl transition-colors duration-150 font-medium text-sm"
-          >
-            <span className="text-slate-400 shrink-0"><LogOut size={16} /></span>
-            <span>Uitloggen</span>
-          </button>
+          <MenuItem icon={<KeyRound size={16} />} onClick={sluitEn(onChangePassword)}>
+            Wachtwoord wijzigen
+          </MenuItem>
+          <MenuItem icon={<LifeBuoy size={16} />} onClick={sluitEn(onProbleem)} aria-haspopup="dialog">
+            Meld een probleem
+          </MenuItem>
+          <MenuItem icon={<LogOut size={16} />} onClick={sluitEn(onLogout)} danger>
+            Uitloggen
+          </MenuItem>
         </motion.div>
       )}
       </AnimatePresence>

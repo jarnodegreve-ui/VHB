@@ -4,6 +4,7 @@ import { isoWeekNumber } from '../lib/week';
 import { shiftCategory } from '../lib/shiftTime';
 import { MONTH_NAMES, serviceNumberOf } from '../lib/format';
 import { apiFetch } from '../lib/api';
+import { Button } from '../components/primitives';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
@@ -149,12 +150,9 @@ export function PrintMonthlyScheduleView({
               {skipped > 0 ? ` · ${skipped} zonder diensten of afwezigheden overgeslagen` : ''}
             </p>
           )}
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.08em] hover:bg-slate-800 transition-colors"
-          >
+          <Button variant="primary" onClick={() => window.print()}>
             Print / Opslaan als PDF
-          </button>
+          </Button>
         </div>
 
         {bulk && ready && printable.length === 0 ? (
@@ -274,7 +272,7 @@ function DriverMonthSheet({
     <div className={newSheet ? 'print-new-sheet mt-16 print:mt-0' : undefined}>
       {/* Header */}
       <header className="border-b-2 border-slate-900 pb-5 mb-7">
-        <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">
+        <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">
           VHB · Maldegem · Maandrooster
         </p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
@@ -303,8 +301,8 @@ function DriverMonthSheet({
             </div>
             {absences.length > 0 && (
               <div className="pl-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-600">Afwezig</p>
-                <p className="mt-1 text-xl font-black text-oker-600 tabular-nums leading-none">{absences.length}</p>
+                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-700">Afwezig</p>
+                <p className="mt-1 text-xl font-black text-oker-700 tabular-nums leading-none">{absences.length}</p>
               </div>
             )}
           </div>
@@ -348,7 +346,7 @@ function DriverMonthSheet({
                     >
                       {/* Datum */}
                       <div>
-                        <p className={`text-xs font-black uppercase tracking-[0.08em] ${isWeekend ? 'text-oker-600' : 'text-slate-400'}`}>
+                        <p className={`text-xs font-black uppercase tracking-[0.08em] ${isWeekend ? 'text-oker-700' : 'text-slate-400'}`}>
                           {dayName.slice(0, 3)}
                         </p>
                         <p className="mt-0.5 text-sm font-black text-slate-900 tabular-nums">{dayLabel}</p>

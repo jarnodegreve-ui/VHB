@@ -4,6 +4,8 @@ import { Send, Sparkles } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { PageShell } from '../components/ui';
 import { Button, MicroLabel } from '../components/primitives';
+import { Card } from '../components/Card';
+import { Input } from '../components/Field';
 import { vraagAssistent, type AssistentBericht } from '../lib/assistent';
 
 /**
@@ -51,13 +53,13 @@ export function AssistentView() {
 
   return (
     <PageShell>
-      <div className="surface-card rounded-3xl flex flex-col overflow-hidden">
+      <Card padding="none" className="flex flex-col overflow-hidden">
         {/* Gespreksvlak */}
         <div className="flex-1 min-h-[45dvh] max-h-[62dvh] overflow-y-auto p-5 space-y-3">
           {berichten.length === 0 && !fout ? (
             <div className="h-full flex flex-col items-center justify-center text-center gap-4 py-10">
               <div className="w-12 h-12 rounded-2xl bg-oker-50/70 ring-1 ring-oker-100 flex items-center justify-center text-oker-700">
-                <Sparkles size={22} />
+                <Sparkles size={20} />
               </div>
               <div>
                 <p className="text-sm font-bold text-slate-800">Stel je planningsvraag</p>
@@ -67,14 +69,9 @@ export function AssistentView() {
               </div>
               <div className="flex flex-wrap justify-center gap-2">
                 {SUGGESTIES.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => void verstuur(s)}
-                    className="ios-pressable rounded-xl bg-surface-field ring-1 ring-hairline px-3 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900 hover:ring-slate-300 transition-colors"
-                  >
+                  <Button key={s} variant="secondary" size="sm" onClick={() => void verstuur(s)}>
                     {s}
-                  </button>
+                  </Button>
                 ))}
               </div>
             </div>
@@ -123,20 +120,20 @@ export function AssistentView() {
           className="border-t border-slate-100 p-3 flex items-center gap-2"
           onSubmit={(e) => { e.preventDefault(); void verstuur(invoer); }}
         >
-          <input
+          <Input
             value={invoer}
             enterKeyHint="send"
             onChange={(e) => setInvoer(e.target.value)}
             placeholder="Bijv. wie kan zaterdag dienst 2603 rijden?"
             aria-label="Je vraag aan de planner-assistent"
-            className="control-input flex-1 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none"
+            className="flex-1 font-semibold"
             disabled={bezig}
           />
-          <Button type="submit" variant="primary" size="md" className="shrink-0" disabled={bezig || !invoer.trim()} icon={<Send size={15} />}>
+          <Button type="submit" variant="primary" size="md" className="shrink-0" disabled={bezig || !invoer.trim()} icon={<Send size={16} />}>
             Vraag
           </Button>
         </form>
-      </div>
+      </Card>
 
       <p className="text-2xs font-medium text-slate-400 px-1">
         De assistent baseert zich op de actuele planning maar kan fouten maken — controleer het advies vóór je toewijst. Gesprekken worden niet bewaard.

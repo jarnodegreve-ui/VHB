@@ -5,48 +5,10 @@ import { notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { Badge, Button, IconButton } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Field, Input, Textarea } from '../../components/Field';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-
-function Input({
-  label,
-  type,
-  placeholder,
-  options,
-  value,
-  onChange,
-}: {
-  label: string;
-  type: string;
-  placeholder?: string;
-  options?: { label: string; value: string }[];
-  value?: any;
-  onChange?: (e: any) => void;
-}) {
-  return (
-    <div className="space-y-2">
-      <MicroLabel className="ml-1">{label}</MicroLabel>
-      {type === 'select' ? (
-        <select aria-label={label} value={value} onChange={onChange} className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all bg-surface-field">
-          {options?.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-      ) : (
-        <input
-          type={type}
-          aria-label={label}
-          placeholder={placeholder}
-          value={value}
-          onChange={onChange}
-          className="control-input w-full px-4 py-3 rounded-2xl font-semibold text-sm outline-none transition-all"
-        />
-      )}
-    </div>
-  );
-}
 
 export function ManageUpdatesView({
   updates,
@@ -161,13 +123,17 @@ export function ManageUpdatesView({
   return (
     <PageShell>
       <PageHeader eyebrow="Beheer" title="Beheer updates" />
-      <div ref={formRef} className="surface-card p-5 md:p-6 rounded-3xl scroll-mt-4">
-        <h3 className="text-lg font-bold mb-6 flex items-center gap-3 tracking-tight">
-          <Bell size={24} className="text-oker-500" />
-          {editingId ? 'Update bewerken' : 'Nieuwe update publiceren'}
-        </h3>
-        <form onSubmit={handlePublish} className="space-y-6">
-          <Input label="Titel" type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
+      {/* Wrapper-div voor de scroll-ref: Card geeft (nog) geen ref door. */}
+      <div ref={formRef} className="scroll-mt-4">
+      <Card>
+        <CardHeader
+          icon={<Bell size={16} />}
+          title={editingId ? 'Update bewerken' : 'Nieuwe update publiceren'}
+        />
+        <form onSubmit={handlePublish} className="mt-6 space-y-6">
+          <Field label="Titel" htmlFor="update-titel">
+            <Input id="update-titel" type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
+          </Field>
 
           <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
             {canSendUrgentEmail ? (
@@ -175,7 +141,7 @@ export function ManageUpdatesView({
                 <input
                   type="checkbox"
                   id="isUrgent"
-                  className="w-5 h-5 rounded border-red-300 dark:border-red-500/60 text-red-600 focus:ring-red-500"
+                  className="w-5 h-5 rounded border-red-300 text-red-700 focus:ring-red-500"
                   checked={updateForm.isUrgent}
                   onChange={(e) => setUpdateForm({ ...updateForm, isUrgent: e.target.checked })}
                 />
@@ -188,22 +154,23 @@ export function ManageUpdatesView({
                 <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
                   <AlertTriangle size={16} /> Dringende verzending admin-only
                 </p>
-                <p className="mt-2 text-sm font-medium text-red-700/80 dark:text-red-300/80">
+                <p className="mt-2 text-sm font-medium text-red-700/80">
                   Planners kunnen updates publiceren, maar geen dringende e-mails uitsturen naar alle gebruikers.
                 </p>
               </div>
             )}
           </div>
 
-          <div>
-            <MicroLabel className="mb-3">Inhoud van het bericht</MicroLabel>
-            <textarea
-              className="w-full px-6 py-4 rounded-2xl border border-slate-200 focus:outline-none focus:ring-4 focus:ring-oker-500/10 focus:border-oker-500 transition-all min-h-[180px] bg-slate-50/50 font-medium text-slate-700"
+          <Field label="Inhoud van het bericht" htmlFor="update-inhoud">
+            <Textarea
+              id="update-inhoud"
+              rows={7}
+              className="min-h-[180px]"
               placeholder="Schrijf hier het bericht voor de chauffeurs…"
               value={updateForm.content}
               onChange={(e) => setUpdateForm({ ...updateForm, content: e.target.value })}
             />
-          </div>
+          </Field>
 
           <div className="mt-6 flex flex-col gap-3 sm:flex-row">
             <Button type="submit" variant="primary" size="lg" full disabled={isPublishing}>
@@ -216,25 +183,23 @@ export function ManageUpdatesView({
             ) : null}
           </div>
         </form>
+      </Card>
       </div>
 
-      <div className="surface-card p-5 md:p-6 rounded-3xl">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h3 className="text-lg font-bold tracking-tight">Bestaande updates</h3>
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              Beheer gepubliceerde berichten en verwijder updates die niet meer zichtbaar mogen zijn.
-            </p>
-          </div>
-          <Badge tone="slate" className="shrink-0 tabular-nums">{updates.length} zichtbaar</Badge>
-        </div>
+      <Card>
+        <CardHeader
+          title="Bestaande updates"
+          description="Beheer gepubliceerde berichten en verwijder updates die niet meer zichtbaar mogen zijn."
+          aside={<Badge tone="slate" className="shrink-0 tabular-nums">{updates.length} zichtbaar</Badge>}
+        />
 
         <div className="mt-5 max-h-[480px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
           {updates.length > 0 ? updates.map((update) => {
             const open = expandedIds.includes(update.id);
             return (
-            <div key={update.id} className="surface-card rounded-2xl overflow-hidden">
+            <Card key={update.id} padding="none" className="rounded-2xl overflow-hidden">
               <div className="flex items-center justify-between gap-2 p-3 pl-4">
+                {/* rauw: hele uitklaprij is de knop (titel + badge + datum + chevron) */}
                 <button
                   type="button"
                   onClick={() => toggleExpanded(update.id)}
@@ -244,12 +209,12 @@ export function ManageUpdatesView({
                   <span className="min-w-0 truncate text-sm font-bold tracking-tight text-slate-800">{update.title}</span>
                   {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                   <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">{formatUpdateDate(update.date)}</span>
-                  <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                 </button>
                 <div className="flex shrink-0 items-center gap-0.5">
-                  <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<History size={14} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistoryUpdate(update)} />
-                  <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Pencil size={14} />} aria-label="Bewerk" title="Bewerk" onClick={() => handleEdit(update)} />
-                  <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Verwijder" title="Verwijder" disabled={deletingId === update.id} onClick={() => setConfirmDeleteId(update.id)} />
+                  <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setHistoryUpdate(update)}><History size={14} /></IconButton>
+                  <IconButton label="Bewerk" variant="ghost" onClick={() => handleEdit(update)}><Pencil size={14} /></IconButton>
+                  <IconButton label="Verwijder" variant="danger" disabled={deletingId === update.id} onClick={() => setConfirmDeleteId(update.id)}><Trash2 size={14} /></IconButton>
                 </div>
               </div>
               {open && (
@@ -263,7 +228,7 @@ export function ManageUpdatesView({
                   <p className="whitespace-pre-wrap text-sm font-medium leading-7 text-slate-600">{update.content}</p>
                 </div>
               )}
-            </div>
+            </Card>
             );
           }) : (
             <EmptyState
@@ -272,7 +237,7 @@ export function ManageUpdatesView({
             />
           )}
         </div>
-      </div>
+      </Card>
 
       <EntityHistoryModal
         open={!!historyUpdate}

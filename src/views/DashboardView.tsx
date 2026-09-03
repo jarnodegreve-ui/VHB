@@ -11,7 +11,8 @@ import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
-import { Badge, Button } from '../components/primitives';
+import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Card, CardHeader } from '../components/Card';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -177,16 +178,16 @@ export function DashboardView({ notes = [],
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl p-5 surface-card">
+          <Card>
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
-          </div>
-          <div className="rounded-3xl p-5 surface-card">
+          </Card>
+          <Card>
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
-          </div>
+          </Card>
         </div>
       </div>
     );
@@ -202,25 +203,19 @@ export function DashboardView({ notes = [],
       {/* === Eenmalige welkomstkaart (eerste bezoek) === */}
       {showWelcome && (
         <div className="rounded-2xl border border-oker-200/70 bg-oker-50 p-5 space-y-3">
-          <div>
-            <h2 className="text-base font-bold tracking-tight text-slate-900">Welkom bij het VHB Portaal 👋</h2>
-            <p className="mt-1 text-sm font-medium text-slate-600 leading-relaxed">
-              Hier vind je je <strong>rooster</strong>, vraag je <strong>verlof</strong> aan, stel je een <strong>dienstruil</strong> voor aan een collega en lees je <strong>omleidingen en updates</strong>. Op je telefoon staan de belangrijkste knoppen onderaan.
-            </p>
-          </div>
+          <CardHeader
+            title="Welkom bij het VHB Portaal 👋"
+            description={<>Hier vind je je <strong>rooster</strong>, vraag je <strong>verlof</strong> aan, stel je een <strong>dienstruil</strong> voor aan een collega en lees je <strong>omleidingen en updates</strong>. Op je telefoon staan de belangrijkste knoppen onderaan.</>}
+          />
           <div className="flex flex-col sm:flex-row gap-2">
             {onChangePassword && (
               <Button variant="primary" onClick={() => { dismissWelcome(); onChangePassword(); }}>
                 Kies eerst je eigen wachtwoord
               </Button>
             )}
-            <button
-              type="button"
-              onClick={dismissWelcome}
-              className="ios-pressable rounded-xl border border-slate-200 bg-surface-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-surface-soft-hover min-h-11"
-            >
+            <Button variant="secondary" onClick={dismissWelcome}>
               Aan de slag
-            </button>
+            </Button>
           </div>
           <p className="text-2xs font-medium text-slate-400">Kreeg je een tijdelijk wachtwoord van de planning? Kies dan nu meteen een eigen wachtwoord.</p>
         </div>
@@ -229,8 +224,8 @@ export function DashboardView({ notes = [],
       {/* === Persoonlijke header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-[-0.02em] text-slate-900">
-            {greeting}, <span className="text-oker-600">{firstName}</span>
+          <h1 className="text-page-title">
+            {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
           <p className="mt-0.5 text-sm font-normal text-slate-500">
             {formatDayLong(isoDate(now))} ·{' '}
@@ -243,14 +238,14 @@ export function DashboardView({ notes = [],
           className={cn(
             'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
             needsAttention
-              ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
-              : 'border-emerald-100 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10',
+              ? 'border-amber-200 bg-amber-50'
+              : 'border-emerald-100 bg-emerald-50',
           )}
         >
           {/* Statische stip — permanente beweging voor "alles is normaal"
               maakt van rust een alarm. */}
-          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400')} />
-          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>
+          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
+          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
             {needsAttention
               ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
               : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
@@ -333,7 +328,7 @@ export function DashboardView({ notes = [],
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <OpsPanel
           className="lg:col-span-2"
-          icon={<Calendar size={15} />}
+          icon={<Calendar size={16} />}
           title="Komende diensten"
           aside={thisMonthShiftCount > 0 ? `${thisMonthShiftCount} deze maand` : undefined}
           onSeeAll={onNavigate ? () => onNavigate('rooster') : undefined}
@@ -341,7 +336,7 @@ export function DashboardView({ notes = [],
         >
           {upcomingShifts.length === 0 ? (
             <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
                 <Clock size={16} />
               </span>
               <div>
@@ -355,7 +350,7 @@ export function DashboardView({ notes = [],
                 <Fragment key={shift.id}>
                   <OpsRow
                     tone="oker"
-                    icon={<Calendar size={15} />}
+                    icon={<Calendar size={16} />}
                     primary={formatShortDayPadded(shift.date)}
                     secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
                     trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone="oker" />}
@@ -368,14 +363,14 @@ export function DashboardView({ notes = [],
         </OpsPanel>
 
         <OpsPanel
-          icon={<MapPin size={15} />}
+          icon={<MapPin size={16} />}
           title="Omleidingen"
           aside={liveDiversions.length > 0 ? `${liveDiversions.length} actief` : undefined}
           onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
         >
           {newestDiversions.length === 0 ? (
             <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
                 <MapPin size={16} />
               </span>
               <div>
@@ -389,7 +384,7 @@ export function DashboardView({ notes = [],
                 <Fragment key={div.id}>
                   <OpsRow
                     tone="amber"
-                    icon={<AlertTriangle size={15} />}
+                    icon={<AlertTriangle size={16} />}
                     primary={div.title}
                     secondary={div.description}
                     meta={div.line}
@@ -420,8 +415,8 @@ export function DashboardView({ notes = [],
         title={openDiversion?.title ?? 'Omleiding'}
         subtitle={openDiversion ? lineLabel(openDiversion.line) : undefined}
         icon={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
-            <MapPin size={17} />
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
+            <MapPin size={16} />
           </span>
         }
       >
@@ -430,28 +425,23 @@ export function DashboardView({ notes = [],
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="slate">{lineLabel(openDiversion.line)}</Badge>
             </div>
-            <div className="surface-muted rounded-xl p-4">
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
+            <Card tone="muted" padding="sm">
+              <MicroLabel>Periode</MicroLabel>
               <p className="mt-1.5 text-sm font-mono font-semibold text-slate-800 tabular-nums">
                 {formatDateHuman(openDiversion.startDate)}
                 {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
               </p>
-            </div>
+            </Card>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
+              <MicroLabel>Omschrijving</MicroLabel>
               <p className="mt-2 whitespace-pre-wrap text-sm font-normal leading-relaxed text-slate-700">
                 {openDiversion.description}
               </p>
             </div>
             {openDiversion.pdfUrl && (
-              <button
-                type="button"
-                onClick={() => openPdfInNewTab(openDiversion.pdfUrl)}
-                className="control-button-soft ios-pressable inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all"
-              >
-                <FileText size={15} />
+              <Button variant="secondary" onClick={() => openPdfInNewTab(openDiversion.pdfUrl)} icon={<FileText size={16} />}>
                 Bijlage openen (PDF)
-              </button>
+              </Button>
             )}
           </div>
         )}

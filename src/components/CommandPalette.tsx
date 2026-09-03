@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { View, Role } from '../types';
 import { cn } from '../lib/ui';
+import { DUR, EASE } from '../lib/motion';
 
 type Command = {
   id: string;
@@ -272,19 +273,19 @@ export function CommandPalette({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: DUR.fast, ease: EASE }}
           className="fixed inset-0 z-[120] flex items-start justify-center px-4"
           onClick={onClose}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" />
 
           {/* Panel */}
           <motion.div
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: DUR.base, ease: EASE }}
             className="glass-modal relative mt-[12vh] w-full max-w-xl rounded-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -298,7 +299,7 @@ export function CommandPalette({
                 placeholder="Zoek scherm of actie…"
                 className="no-focus-ring flex-1 bg-transparent outline-none text-base text-slate-900 placeholder:text-slate-400"
               />
-              <kbd className="hidden sm:inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+              <kbd className="hidden sm:inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                 esc
               </kbd>
             </div>
@@ -313,6 +314,8 @@ export function CommandPalette({
                 filtered.map((cmd, i) => {
                   const isActive = i === selectedIdx;
                   return (
+                    // rauw: resultaatrij van het command palette (icoon + label + hint,
+                    // toetsenbord-actieve staat) — navigatie-item, geen knop-uiterlijk.
                     <button
                       key={cmd.id}
                       onClick={() => {
@@ -330,7 +333,7 @@ export function CommandPalette({
                       <span
                         className={cn(
                           'shrink-0 flex items-center justify-center',
-                          isActive ? 'text-oker-600' : 'text-slate-400',
+                          isActive ? 'text-oker-700' : 'text-slate-400',
                         )}
                       >
                         {cmd.icon}
@@ -350,24 +353,24 @@ export function CommandPalette({
             {/* Footer */}
             <div className="flex items-center gap-3 border-t border-slate-200/70 px-4 py-2 text-2xs text-slate-400">
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   ↑
                 </kbd>
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   ↓
                 </kbd>
                 navigeren
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   ↵
                 </kbd>
                 openen
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   esc
                 </kbd>
                 sluiten

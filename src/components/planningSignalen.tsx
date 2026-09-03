@@ -13,7 +13,7 @@ import type { VerwachtingAfwijking } from '../lib/coverageGaps';
 /** Afwijkingen tussen de dag-type-verwachtingen en de gereden praktijk. */
 export function VerwachtingAfwijkingLijst({ afwijkingen }: { afwijkingen: VerwachtingAfwijking[] }) {
   return (
-    <ul className="mt-3 space-y-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
+    <ul className="mt-3 space-y-1.5 text-xs font-medium text-amber-900">
       {afwijkingen.map((a) => (
         <li key={a.dayType} className="flex items-start gap-2">
           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
@@ -61,7 +61,7 @@ export function ZiekteReeksRij({ reeks, bezig, klaar, disabled, onRegistreer }: 
   onRegistreer: (reeks: ZiekteReeks) => void;
 }) {
   return (
-    <li className="flex min-h-11 flex-wrap items-center gap-2 rounded-xl bg-surface-white ring-1 ring-amber-200/70 px-3 py-2 dark:ring-amber-500/30">
+    <li className="flex min-h-11 flex-wrap items-center gap-2 rounded-xl bg-surface-white ring-1 ring-amber-200/70 px-3 py-2">
       <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
         <span className="font-bold">{reeks.naam}</span>
         {' — ziek '}

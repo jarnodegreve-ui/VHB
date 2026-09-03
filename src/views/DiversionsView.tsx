@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Calendar, ChevronDown, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
+import { Calendar, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import { isExpiredDiversion } from '../lib/diversions';
 import type { Diversion } from '../types';
 import { formatDateHuman, formatSyncedTime } from '../lib/format';
-import { openPdfInNewTab, safeDocumentHref } from '../lib/ui';
+import { cn, openPdfInNewTab, safeDocumentHref } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button } from '../components/primitives';
-
+import { Badge, Button, IconButton } from '../components/primitives';
+import { Card } from '../components/Card';
+import { Input, Select } from '../components/Field';
 
 
 export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions: Diversion[]; lastSyncedAt?: number | null }) {
@@ -41,40 +42,39 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
         description="Actuele omleidingen."
         actions={(
           <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
-            <div className="relative group">
-              <select
-                value={selectedLine}
-                onChange={(e) => setSelectedLine(e.target.value)}
-                className="control-input appearance-none w-full sm:w-40 pl-4 pr-10 py-3 rounded-2xl focus:outline-none transition-all font-semibold text-sm cursor-pointer"
-              >
-                <option value="all">Alle Lijnen</option>
-                {uniqueLines.map(line => (
-                  <option key={line} value={line}>Lijn {line}</option>
-                ))}
-              </select>
-              <div className="absolute inset-y-0 right-0 pr-4 flex items-center pointer-events-none text-slate-400">
-                <ChevronDown size={16} />
-              </div>
-            </div>
+            <Select
+              value={selectedLine}
+              onChange={(e) => setSelectedLine(e.target.value)}
+              aria-label="Filter op lijn"
+              className="sm:w-40 font-semibold cursor-pointer"
+            >
+              <option value="all">Alle Lijnen</option>
+              {uniqueLines.map(line => (
+                <option key={line} value={line}>Lijn {line}</option>
+              ))}
+            </Select>
             <div className="relative flex-1 md:w-72 group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
               </div>
-              <input
+              <Input
                 type="text"
                 placeholder="Zoek..."
+                aria-label="Zoek in omleidingen"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
+                className={cn('pl-9', searchQuery && 'pr-11')}
               />
               {searchQuery && (
-                <button
+                <IconButton
+                  label="Wis zoekopdracht"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => setSearchQuery('')}
-                  aria-label="Wis zoekopdracht"
-                  className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-300 hover:text-slate-500"
+                  className="absolute right-1 top-1/2 -translate-y-1/2 text-slate-300 hover:text-slate-500"
                 >
                   <X size={16} />
-                </button>
+                </IconButton>
               )}
             </div>
           </div>
@@ -88,7 +88,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
       <div className="space-y-2">
         {filteredDiversions.length > 0 ? (
           filteredDiversions.map(div => (
-            <div key={div.id} className={`surface-card surface-card-hover rounded-2xl overflow-hidden group duration-300 ${isExpiredDiversion(div) ? 'opacity-60' : ''}`}>
+            <Card key={div.id} padding="none" interactive className={cn('overflow-hidden group duration-300', isExpiredDiversion(div) && 'opacity-60')}>
             {/* Compacte rij (verzoek Jarno): kleiner icoon, één titelregel,
                 geen "Tik voor meer info"-hulpregel — de chevron is de
                 affordance. Het uitklapdetail blijft ongewijzigd. */}
@@ -97,11 +97,11 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
               className="px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl border border-oker-100 bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">
-                  <MapPin size={17} />
+                <div className="w-9 h-9 rounded-xl border border-oker-100 bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">
+                  <MapPin size={16} />
                 </div>
                 <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                  <h4 className="font-bold text-base text-slate-800 tracking-tight leading-snug">{div.title}</h4>
+                  <h4 className="text-card-title leading-snug">{div.title}</h4>
                   <Badge tone="slate">{div.line}</Badge>
                   {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
                 </div>
@@ -120,7 +120,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden bg-white/35 border-t border-white/60"
+                  className="overflow-hidden bg-paper/35 border-t border-rim"
                 >
                   <div className="p-5 md:p-6 space-y-6">
                     <div className="grid md:grid-cols-2 gap-8">
@@ -161,9 +161,9 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                             </a>
                           </div>
                         ) : (
-                          <div className="p-4 bg-surface-soft rounded-2xl border border-dashed border-slate-200 text-center">
+                          <Card tone="dashed" padding="sm" className="text-center">
                             <p className="text-sm text-slate-500">Geen PDF bijlage beschikbaar</p>
-                          </div>
+                          </Card>
                         )}
                       </div>
 
@@ -172,11 +172,11 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                 </motion.div>
               )}
             </AnimatePresence>
-          </div>
+          </Card>
         ))
       ) : (
         <EmptyState
-          icon={<Search size={28} />}
+          icon={<Search size={24} />}
           title={searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}
           message={searchQuery ? `Geen omleidingen gevonden voor "${searchQuery}"` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
           action={searchQuery ? (

@@ -2,10 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { WACHTWOORD_HINT, WACHTWOORD_MIN } from '../lib/wachtwoord';
 import { motion, AnimatePresence } from 'motion/react';
 import { AlertTriangle, ArrowUp, CheckCircle, ArrowRight, Eye, EyeOff, Lock, Mail, ShieldCheck } from 'lucide-react';
-import { Button } from '../components/primitives';
+import { Button, IconButton, microLabelClass } from '../components/primitives';
+import { cn } from '../lib/ui';
 import { supabase } from '../lib/supabase';
 import { applyThemeColorMeta, LOGIN_MELDING_KEY } from '../lib/ui';
 import { BrandLogo } from '../components/BrandLogo';
+import { DUR, EASE } from '../lib/motion';
 
 
 type Mode = 'login' | 'forgot';
@@ -175,7 +177,7 @@ export function LoginView({
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: DUR.entrance, ease: EASE }}
           className="flex flex-col items-center text-center mb-10"
         >
           {/* Volledig logo mét naamregel; naamregel 44 eenheden lager dan het
@@ -189,7 +191,7 @@ export function LoginView({
         <motion.div
           initial={{ opacity: 0, y: 14 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.55, delay: 0.15, ease: [0.22, 1, 0.36, 1] }}
+          transition={{ duration: DUR.entrance, ease: EASE, delay: 0.15 }}
           className="w-full max-w-[440px]"
         >
           <div className="panel-login-dark relative w-full rounded-3xl p-7 sm:p-9">
@@ -199,7 +201,7 @@ export function LoginView({
                   initial={{ opacity: 0, x: 6 }}
                   animate={{ opacity: 1, x: 0 }}
                   exit={{ opacity: 0, x: -6 }}
-                  transition={{ duration: 0.22 }}
+                  transition={{ duration: DUR.base, ease: EASE }}
                   className="mb-7 text-center"
                 >
                   <h2 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
@@ -215,7 +217,7 @@ export function LoginView({
                   niets stuk, je moet alleen opnieuw inloggen. */}
               {uitlogReden && !recoveryMode && (
                 <div className="mb-6 flex items-start gap-2.5 rounded-2xl border border-oker-500/25 bg-oker-500/12 px-4 py-3">
-                  <ShieldCheck size={15} className="mt-px shrink-0 text-oker-400" />
+                  <ShieldCheck size={16} className="mt-px shrink-0 text-oker-400" />
                   <p className="text-sm font-medium leading-relaxed text-oker-100">{uitlogReden}</p>
                 </div>
               )}
@@ -256,13 +258,16 @@ export function LoginView({
                   />
                   <FeedbackBlock error={error} info={info} />
                   <SubmitButton loading={isSubmitting}>Verstuur reset-link</SubmitButton>
+                  {/* rauw: tekstlink op de carbon-login — Button ghost hovert met een
+                      licht slate-vlak dat hier als vlek zou opvallen. `!`-kleur: .text-micro
+                      staat ná de utilities in de cascade en wint anders van text-slate-400. */}
                   <button
                     type="button"
                     onClick={() => {
                       setMode('login');
                       resetFeedback();
                     }}
-                    className="w-full text-center text-xs font-bold uppercase tracking-[0.08em] text-slate-400 hover:text-white transition-colors pt-2"
+                    className={cn(microLabelClass, 'w-full text-center !text-slate-400 hover:!text-white transition-colors pt-2')}
                   >
                     ← Terug naar inloggen
                   </button>
@@ -296,13 +301,15 @@ export function LoginView({
                     required
                     autoComplete="current-password"
                     rightSlot={
+                      // rauw: tekstlink naast het veldlabel op de carbon-login (zie de
+                      // "Terug naar inloggen"-knop hieronder voor de motivatie).
                       <button
                         type="button"
                         onClick={() => {
                           setMode('forgot');
                           resetFeedback();
                         }}
-                        className="-my-2 inline-flex min-h-11 items-center text-2xs font-bold uppercase tracking-[0.08em] text-slate-400 hover:text-oker-400 transition-colors"
+                        className={cn(microLabelClass, '-my-2 inline-flex min-h-11 items-center !text-slate-400 hover:!text-oker-400 transition-colors')}
                       >
                         Wachtwoord vergeten?
                       </button>
@@ -320,7 +327,7 @@ export function LoginView({
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.35, duration: 0.4 }}
+            transition={{ delay: 0.35, duration: DUR.slow }}
             className="mt-6 text-center text-xs text-slate-400"
           >
             Problemen met inloggen? Contacteer de planning.
@@ -394,11 +401,11 @@ function FieldInput({
                 initial={{ opacity: 0, x: 6 }}
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: 6 }}
-                transition={{ duration: 0.18 }}
-                className="inline-flex items-center gap-1 text-2xs font-bold uppercase tracking-[0.08em] text-amber-600"
+                transition={{ duration: DUR.base, ease: EASE }}
+                className={cn(microLabelClass, 'inline-flex items-center gap-1 !text-amber-700')}
                 title="Caps Lock staat aan"
               >
-                <ArrowUp size={10} strokeWidth={3} />
+                <ArrowUp size={12} strokeWidth={3} />
                 Caps Lock
               </motion.span>
             )}
@@ -435,15 +442,17 @@ function FieldInput({
           }`}
         />
         {isPassword && (
-          <button
-            type="button"
-            onClick={() => setRevealed((r) => !r)}
-            aria-label={revealed ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
+          <IconButton
+            label={revealed ? 'Wachtwoord verbergen' : 'Wachtwoord tonen'}
+            variant="ghost"
+            size="sm"
             tabIndex={-1}
-            className="absolute right-1.5 top-1/2 -translate-y-1/2 inline-flex h-11 w-11 items-center justify-center text-slate-400 hover:text-white rounded-lg transition-colors z-10"
+            onClick={() => setRevealed((r) => !r)}
+            // Carbon-veld: geen licht hover-vlak, alleen de icoonkleur wisselt.
+            className="absolute right-1.5 top-1/2 z-10 -translate-y-1/2 text-slate-400 hover:bg-transparent hover:text-white"
           >
             {revealed ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
+          </IconButton>
         )}
       </div>
     </div>

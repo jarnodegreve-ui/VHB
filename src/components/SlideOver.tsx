@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { DUR, EASE } from '../lib/motion';
 
 /**
  * Premium slide-over side panel (rechts) — het standaard detailvenster van
@@ -117,7 +118,7 @@ export function SlideOver({
             exit={{ opacity: 0 }}
             transition={{ duration: reduceMotion ? 0 : 0.2 }}
             onClick={onClose}
-            className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-sm"
+            className="fixed inset-0 z-[100] bg-ink/40 backdrop-blur-sm"
             aria-hidden="true"
           />
           <motion.div
@@ -133,14 +134,14 @@ export function SlideOver({
             transition={
               reduceMotion
                 ? { duration: 0 }
-                : { duration: 0.3, ease: [0.22, 1, 0.36, 1] }
+                : { duration: DUR.slow, ease: EASE }
             }
             className={cn(
               // Bewust géén backdrop-filter op het geanimeerde paneel zelf
               // (blur + transform op één element geeft compositing-glitches);
               // near-opaque oppervlak heeft het ook niet nodig.
               'fixed inset-y-0 right-0 z-[101] flex h-full w-full flex-col outline-none sm:rounded-l-2xl',
-              'bg-white/95 border-l border-slate-200/80 shadow-[0_0_80px_rgba(13,13,15,0.25)]',
+              'bg-paper/95 border-l border-slate-200/80 shadow-2xl shadow-ink/20',
               widthClass,
             )}
           >

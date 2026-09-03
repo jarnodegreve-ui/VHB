@@ -37,7 +37,7 @@ export const leaveDot = (status: LeaveStatus | undefined, type?: LeaveType): str
 };
 
 /** Zachte chip: vlak + tekst (dagdetail in Mijn rooster). Bewust zonder eigen
- *  dark:-varianten — de blanket-overrides in index.css klappen deze tinten al
+ *  — de blanket-overrides in index.css klappen deze tinten al
  *  om, net als bij leaveDayTint. Deze keten stond met de hand uitgeschreven in
  *  ScheduleView, met een nét andere donkere tint dan de dagcel er vlak boven. */
 export const leaveChip = (status: LeaveStatus | undefined, type?: LeaveType): string => {

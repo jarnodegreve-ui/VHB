@@ -5,7 +5,9 @@ import { cn, notify } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
-import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { Badge, Button, IconButton } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Field, Input, Textarea } from '../../components/Field';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
@@ -170,28 +172,30 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         title="Beheer omleidingen"
       />
 
-      <div className="surface-card p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h4 className="text-lg font-bold text-slate-800 tracking-tight">Nieuwe omleiding</h4>
-          <p className="text-xs text-slate-500 font-medium mt-1">Voeg een omleiding toe voor de chauffeurs.</p>
-        </div>
-        <Button variant="primary" size="lg" icon={<Plus size={16} />} className="w-full sm:w-auto" onClick={handleOpenAdd}>
-          Toevoegen
-        </Button>
-      </div>
+      <Card>
+        <CardHeader
+          title="Nieuwe omleiding"
+          description="Voeg een omleiding toe voor de chauffeurs."
+          aside={(
+            <Button variant="primary" size="lg" icon={<Plus size={16} />} className="w-full sm:w-auto" onClick={handleOpenAdd}>
+              Toevoegen
+            </Button>
+          )}
+        />
+      </Card>
 
       <div className="grid grid-cols-1 gap-4">
         {sortedDiversions.map(div => {
           const expired = isExpired(div);
           return (
-          <div key={div.id} className={cn('surface-card surface-card-hover p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group', expired && 'opacity-60')}>
+          <Card key={div.id} interactive className={cn('flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group', expired && 'opacity-60')}>
             <div className="flex items-start gap-5">
-              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-surface-muted text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-600')}>
-                <MapPin size={28} />
+              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-surface-muted text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-700')}>
+                <MapPin size={24} />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h4 className="font-bold text-slate-800 text-lg tracking-tight leading-tight">{div.title}</h4>
+                  <h4 className="text-card-title leading-tight">{div.title}</h4>
                   <Badge tone="slate">Lijn {div.line}</Badge>
                   {expired && <Badge tone="slate">Verlopen</Badge>}
                 </div>
@@ -209,39 +213,17 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     <FileText size={18} />
                   </div>
                 )}
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<History size={18} />}
-                  aria-label="Wijzigingsgeschiedenis"
-                  title="Wijzigingsgeschiedenis"
-                  onClick={() => setHistoryDiversion(div)}
-                />
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  icon={<Pencil size={18} />}
-                  aria-label="Bewerken"
-                  title="Bewerken"
-                  onClick={() => handleOpenEdit(div)}
-                />
+                <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryDiversion(div)}><History size={18} /></IconButton>
+                <IconButton label="Bewerken" variant="ghost" size="sm" onClick={() => handleOpenEdit(div)}><Pencil size={18} /></IconButton>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                icon={<Trash2 size={18} />}
-                className="text-red-700 hover:text-red-700 hover:bg-red-50"
-                aria-label="Verwijderen"
-                title="Verwijderen"
-                onClick={() => setConfirmDeleteId(div.id)}
-              />
+              <IconButton label="Verwijderen" variant="danger" size="sm" onClick={() => setConfirmDeleteId(div.id)}><Trash2 size={18} /></IconButton>
             </div>
-          </div>
+          </Card>
           );
         })}
         {diversions.length === 0 && (
           <EmptyState
-            icon={<MapPin size={28} />}
+            icon={<MapPin size={24} />}
             title="Geen actieve omleidingen"
             message="Er staan momenteel geen omleidingen in het systeem."
           />
@@ -256,71 +238,60 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                 onClose={() => setShowModal(false)}
               />
               <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5 overflow-y-auto flex-1">
-                <div className="space-y-2">
-                  <MicroLabel className="ml-1">Lijn(en)</MicroLabel>
-                  <input
+                <Field label="Lijn(en)" htmlFor="omleiding-lijn">
+                  <Input
+                    id="omleiding-lijn"
                     type="text"
                     required
-                    aria-label="Lijn(en)"
                     value={formData.line}
                     onChange={(e) => setFormData({...formData, line: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     placeholder="bijv. 1, 2 of Alle"
                   />
-                </div>
+                </Field>
 
-                <div className="space-y-2">
-                  <MicroLabel className="ml-1">Titel</MicroLabel>
-                  <input 
-                    type="text" 
+                <Field label="Titel" htmlFor="omleiding-titel">
+                  <Input
+                    id="omleiding-titel"
+                    type="text"
                     required
-                    aria-label="Titel"
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     placeholder="bijv. Wegwerkzaamheden N70"
                   />
-                </div>
+                </Field>
 
-                <div className="space-y-2">
-                  <MicroLabel className="ml-1">Omschrijving</MicroLabel>
-                  <textarea 
+                <Field label="Omschrijving" htmlFor="omleiding-omschrijving">
+                  <Textarea
+                    id="omleiding-omschrijving"
                     required
                     rows={3}
-                    aria-label="Omschrijving"
                     value={formData.description}
                     onChange={(e) => setFormData({...formData, description: e.target.value})}
-                    className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm resize-none"
                     placeholder="Beschrijf de omleiding…"
                   />
-                </div>
+                </Field>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <MicroLabel className="ml-1">Startdatum</MicroLabel>
-                    <input 
-                      type="date" 
+                  <Field label="Startdatum" htmlFor="omleiding-start">
+                    <Input
+                      id="omleiding-start"
+                      type="date"
                       required
-                      aria-label="Startdatum"
                       value={formData.startDate}
                       onChange={(e) => setFormData({...formData, startDate: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     />
-                  </div>
-                  <div className="space-y-2">
-                    <MicroLabel className="ml-1">Einddatum (Optioneel)</MicroLabel>
-                    <input 
-                      type="date" 
-                      aria-label="Einddatum"
+                  </Field>
+                  <Field label="Einddatum (Optioneel)" htmlFor="omleiding-eind">
+                    <Input
+                      id="omleiding-eind"
+                      type="date"
                       value={formData.endDate || ''}
                       onChange={(e) => setFormData({...formData, endDate: e.target.value})}
-                      className="w-full px-4 py-3 rounded-2xl border border-slate-200 focus:ring-4 focus:ring-oker-500/10 focus:border-oker-400 outline-none transition-all font-bold text-base md:text-sm"
                     />
-                  </div>
+                  </Field>
                 </div>
 
-                <div className="space-y-2">
-                  <MicroLabel className="ml-1">PDF Bestand {editingId && '(Optioneel)'}</MicroLabel>
+                <Field label={<>PDF Bestand {editingId && '(Optioneel)'}</>} htmlFor="pdf-upload">
                   <div className="relative">
                     <input
                       type="file"
@@ -329,6 +300,8 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                       className="hidden"
                       id="pdf-upload"
                     />
+                    {/* Label-als-knop voor het verborgen file-input: de native
+                        bestandskiezer opent via het label, niet via een knop. */}
                     <label
                       htmlFor="pdf-upload"
                       className="ios-pressable control-button-soft inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900"
@@ -339,7 +312,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                       </span>
                     </label>
                   </div>
-                </div>
+                </Field>
 
                 <div className="pt-4 flex gap-3">
                   <Button variant="secondary" size="lg" className="flex-1" onClick={() => setShowModal(false)}>

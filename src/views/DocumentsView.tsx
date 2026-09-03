@@ -4,7 +4,8 @@ import type { User } from '../types';
 import { notify, openPdfInNewTab } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
-import { Badge, MicroLabel } from '../components/primitives';
+import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Card } from '../components/Card';
 import { SkeletonRow } from '../components/Skeleton';
 import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
 
@@ -68,13 +69,13 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
       <PageHeader title="Mijn documenten" description="Documenten die de planning voor jou klaarzet vind je hier terug." />
 
       {verval.length > 0 && (
-        <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
           {verval.map((e) => {
             const dagen = dagenTot(e.validUntil);
             const urgent = Number.isFinite(dagen) && dagen <= 30;
             return (
               <div key={e.soort} className="flex items-center gap-4 px-5 py-4">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${urgent ? 'bg-red-50 text-red-600' : 'bg-oker-50 text-oker-600'}`}>
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${urgent ? 'bg-red-50 text-red-700' : 'bg-oker-50 text-oker-700'}`}>
                   <IdCard size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -89,22 +90,22 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
               </div>
             );
           })}
-        </div>
+        </Card>
       )}
 
       {loading ? (
-        <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
-        </div>
+        </Card>
       ) : docs.length === 0 ? (
-        <EmptyState icon={<FileText size={22} />} title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
+        <EmptyState icon={<FileText size={20} />} title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
       ) : (
-        <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
           {docs.map((doc) => (
             <div key={doc.id} className="flex items-center gap-4 px-5 py-4">
-              <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">
                 <FileText size={20} />
               </div>
               <div className="min-w-0 flex-1">
@@ -116,8 +117,9 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                   {formatDateHuman(doc.uploadedAt)}{doc.sizeBytes != null ? ` · ${prettySize(doc.sizeBytes)}` : ''}
                 </MicroLabel>
               </div>
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                className="shrink-0"
                 onClick={() => {
                   if (!doc.url) return notify('Bestand is niet beschikbaar.', 'error');
                   // Leesbevestiging (fire-and-forget): de planner ziet zo dat
@@ -126,13 +128,13 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                   openPdfInNewTab(doc.url);
                 }}
                 aria-label={`Open ${doc.filename}`}
-                className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-2xl border border-slate-200 bg-surface-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
+                icon={<Download size={16} className="text-oker-500" />}
               >
-                <Download size={16} className="text-oker-500" /> Openen
-              </button>
+                Openen
+              </Button>
             </div>
           ))}
-        </div>
+        </Card>
       )}
     </PageShell>
   );

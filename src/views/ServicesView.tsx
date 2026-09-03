@@ -4,7 +4,8 @@ import type { Service } from '../types';
 import { cn, downloadBlob } from '../lib/ui';
 import { dienstoverzichtCsv } from '../lib/dienstoverzichtExport';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, Chip, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { Input } from '../components/Field';
 
 export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -62,14 +63,18 @@ export function ServicesView({ services }: { services: Service[] }) {
         actions={(
           <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
             <div className="glass-segmented inline-flex p-1 rounded-2xl">
+              {/* rauw: segmented control op de glass-rail, klassen via segItemClass */}
               <button
+                type="button"
                 onClick={() => toggleSort('number')}
                 className={segItemClass(sortBy === 'number', 'inline-flex items-center justify-center gap-2')}
               >
                 Dienst #
                 {sortBy === 'number' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
               </button>
+              {/* rauw: segmented control op de glass-rail, klassen via segItemClass */}
               <button
+                type="button"
                 onClick={() => toggleSort('time')}
                 className={segItemClass(sortBy === 'time', 'inline-flex items-center justify-center gap-2')}
               >
@@ -86,15 +91,16 @@ export function ServicesView({ services }: { services: Service[] }) {
               <span className="hidden sm:inline">CSV</span>
             </Button>
             <div className="relative flex-1 md:w-64 group">
-              <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                <Search size={18} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
+              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
               </div>
-              <input
+              <Input
                 type="text"
                 placeholder="Zoek op dienst- of loopnummer..."
+                aria-label="Zoek op dienst- of loopnummer"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="control-input w-full pl-11 pr-4 py-3 rounded-2xl focus:outline-none transition-all font-medium text-sm"
+                className="pl-9"
               />
             </div>
           </div>
@@ -142,6 +148,7 @@ export function ServicesView({ services }: { services: Service[] }) {
             const isExpanded = expandedIds.has(s.id);
             return (
               <div key={s.id} className="hover:bg-slate-50/60 transition-colors">
+                {/* rauw: hele uitklaprij is de knop (dienstnummer + badge + chevron) */}
                 <button
                   type="button"
                   onClick={() => toggleExpanded(s.id)}
@@ -197,7 +204,7 @@ export function ServicesView({ services }: { services: Service[] }) {
         {filteredServices.length === 0 && (
           <div className="px-6 py-6">
             <EmptyState
-              icon={<Clock size={28} />}
+              icon={<Clock size={24} />}
               title="Geen diensten gevonden"
               message={searchQuery ? `Geen diensten gevonden voor "${searchQuery}".` : 'Er zijn nog geen diensten beschikbaar.'}
             />
@@ -213,9 +220,7 @@ export function ServicesView({ services }: { services: Service[] }) {
 function LoopChip({ loopnr }: { loopnr?: string }) {
   if (!loopnr?.trim()) return null;
   return (
-    <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
-      loop {loopnr.trim()}
-    </span>
+    <Chip>loop {loopnr.trim()}</Chip>
   );
 }
 

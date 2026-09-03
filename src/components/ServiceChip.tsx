@@ -26,9 +26,9 @@ export function ServiceChip({
       className={cn(
         // font-mono: dienst- en loopnummers zijn operationele codes — het
         // monospace-accent maakt ze in één oogopslag herkenbaar (dispatch).
-        'inline-flex shrink-0 items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-mono font-semibold tabular-nums',
+        'inline-flex shrink-0 items-center gap-1 rounded-md px-2 py-0.5 text-xs font-mono font-semibold tabular-nums',
         tone === 'oker'
-          ? 'bg-oker-500/15 text-oker-700 dark:text-oker-400'
+          ? 'bg-oker-500/15 text-oker-700'
           : 'bg-surface-muted text-slate-700',
         className,
       )}

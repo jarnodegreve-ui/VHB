@@ -6,11 +6,13 @@ import { isoDate } from '../../lib/availability';
 import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal } from '../../lib/format';
 import { maandPlus } from '../../lib/datum';
 import { Modal } from '../../components/Modal';
-import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
+import { PageHeader, PageShell, EmptyState } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { OpsStat } from '../../components/ops';
 import { SkeletonTile } from '../../components/Skeleton';
-import { Badge, Button, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Input } from '../../components/Field';
 import { MaandNavigatie } from '../../components/MaandNavigatie';
 
 /** Termijn-schakelaar in exact de app-standaard segmented-maat (rail
@@ -21,6 +23,7 @@ function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { lab
   return (
     <div role="group" aria-label={label} className="glass-segmented inline-flex shrink-0 rounded-2xl p-1">
       {opties.map((o) => (
+        // rauw: segmented control op de glass-rail, klassen via segItemClass
         <button
           key={o.id}
           type="button"
@@ -55,11 +58,11 @@ function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
     <div className="pointer-events-none absolute inset-0" aria-hidden="true">
       {[1, 0.5].map((f) => (
         <div key={f} className="absolute inset-x-0" style={{ bottom: `${f * 100}%` }}>
-          <div className="border-t border-slate-200/80 dark:border-white/10" />
+          <div className="border-t border-slate-200/80" />
           {/* Dekkend chipje op kaartkleur: zonder achtergrond liep het label
               dwars door staven/curve en werd het onleesbaar. */}
           <span
-            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-slate-400 dark:text-slate-500"
+            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-slate-400"
             style={{ background: 'var(--tile-bg)' }}
           >
             {formatGetal(top * f)} {eenheid}
@@ -494,9 +497,8 @@ export function OcpiDashboardView() {
         title="Laadpalen (OCPI)"
         description="Read-only monitoring van de Kempower-laadpalen via ChargEye."
         actions={(
-          <Button variant="secondary" onClick={() => { load(); setHerlaad((n) => n + 1); }} disabled={isLoading}>
-            <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
-            <span className="ml-1.5">Ververs</span>
+          <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => { load(); setHerlaad((n) => n + 1); }} disabled={isLoading}>
+            Ververs
           </Button>
         )}
       />
@@ -559,7 +561,7 @@ export function OcpiDashboardView() {
               vast laag blok i.p.v. één rij per dag (dat werd een muur van 30
               regels). Ontbrekende dagen tellen als 0 zodat het weekritme
               klopt; maandagen krijgen een dagnummer als anker. */}
-          <div className="surface-card p-6 rounded-3xl">
+          <Card>
             <div className="mb-4 flex items-center justify-between gap-3">
               <MicroLabel>Verbruik (kWh)</MicroLabel>
               <TermijnKeuze
@@ -594,6 +596,7 @@ export function OcpiDashboardView() {
                           const gekozen = gekozenDag === d.date;
                           const isPiek = d.kwh > 0 && d.kwh === grafiek.piek;
                           return (
+                            // rauw: grafiekstaaf (tik-vlak, aria-hidden) — geen knop-uiterlijk
                             <button
                               key={d.date}
                               type="button"
@@ -604,7 +607,7 @@ export function OcpiDashboardView() {
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
                               <div
-                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
+                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900' : isPiek ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500'}
                                 style={{ height: d.kwh > 0 ? `${Math.max(3, Math.round((d.kwh / asTop) * 100))}%` : '2px' }}
                               />
                             </button>
@@ -616,7 +619,7 @@ export function OcpiDashboardView() {
                 })()}
                 <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                   {grafiek.dagen.map((d) => (
-                    <span key={d.date} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                    <span key={d.date} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500">
                       {grafiek.dagen.length <= 7 ? WEEKDAY_SHORT_SUN[d.dow] : d.dow === 1 ? Number(d.date.slice(8)) : ''}
                     </span>
                   ))}
@@ -624,7 +627,7 @@ export function OcpiDashboardView() {
                 {(() => {
                   const dag = grafiek.dagen.find((d) => d.date === gekozenDag);
                   return dag ? (
-                    <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
+                    <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700">
                       {new Date(`${dag.date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · {tekstKwh(dag.kwh)} · {dag.sessions} sessie{dag.sessions === 1 ? '' : 's'}
                     </p>
                   ) : (
@@ -635,12 +638,12 @@ export function OcpiDashboardView() {
                 })()}
               </>
             )}
-          </div>
+          </Card>
 
           {/* Vermogen — de kwartierpiek bepaalt in België het capaciteits-
               tarief. 24u toont de ruwe kwartier-slots; 7d/maand tonen per dag
               de dágpiek en wanneer die viel. Gevoed door de sync-snapshots. */}
-          <div className="surface-card p-6 rounded-3xl">
+          <Card>
             <div className="mb-4 flex items-center justify-between gap-3">
               <MicroLabel>Vermogen (kW)</MicroLabel>
               <TermijnKeuze
@@ -693,7 +696,7 @@ export function OcpiDashboardView() {
                                 chipje en met z-10 zodat de SVG-curve en de
                                 piekstip er niet doorheen tekenen. */}
                             <span
-                              className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-oker-700 dark:text-oker-400"
+                              className="absolute left-0 bottom-1 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-oker-700"
                               style={{ background: 'var(--tile-bg)' }}
                             >
                               maandpiek {tekstKw(Math.round(maandpiek))}
@@ -701,26 +704,27 @@ export function OcpiDashboardView() {
                           </div>
                         )}
                         <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute inset-0 h-full w-full" aria-hidden="true">
-                          <path d={vlak} className="fill-slate-500/12 dark:fill-slate-400/15" />
-                          <path d={lijn} fill="none" vectorEffect="non-scaling-stroke" strokeWidth={1.5} className="stroke-slate-600 dark:stroke-slate-300" />
+                          <path d={vlak} className="fill-slate-500/12" />
+                          <path d={lijn} fill="none" vectorEffect="non-scaling-stroke" strokeWidth={1.5} className="stroke-slate-600" />
                           {piekIndex >= 0 && (
                             <circle
                               cx={(piekIndex + 0.5) * w}
                               cy={y(vermogen.staven[piekIndex].kw)}
                               r={2.2}
                               vectorEffect="non-scaling-stroke"
-                              className="fill-oker-500 stroke-white dark:stroke-slate-900"
+                              className="fill-oker-500 stroke-white"
                               strokeWidth={1}
                             />
                           )}
                           {gekozenIndex >= 0 && (
-                            <rect x={gekozenIndex * w} y={0} width={w} height={100} className="fill-slate-900/10 dark:fill-white/10" />
+                            <rect x={gekozenIndex * w} y={0} width={w} height={100} className="fill-slate-900/10" />
                           )}
                         </svg>
                         {/* Onzichtbare tik-vlakken bovenop de curve: zelfde
                             tap-selectie als de staafvariant. */}
                         <div className="absolute inset-0 flex">
                           {vermogen.staven.map((st) => (
+                            // rauw: onzichtbaar tik-vlak op de curve (aria-hidden)
                             <button
                               key={st.key}
                               type="button"
@@ -751,6 +755,7 @@ export function OcpiDashboardView() {
                         {vermogen.staven.map((st) => {
                           const gekozen = gekozenSlot === st.key;
                           return (
+                            // rauw: grafiekstaaf (tik-vlak, aria-hidden) — geen knop-uiterlijk
                             <button
                               key={st.key}
                               type="button"
@@ -761,7 +766,7 @@ export function OcpiDashboardView() {
                               className="flex h-full flex-1 cursor-pointer flex-col justify-end"
                             >
                               <div
-                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900 dark:bg-white' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-600 dark:bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500 dark:bg-slate-400'}
+                                className={gekozen ? 'w-full rounded-t-[3px] bg-slate-900' : st.isPiek ? 'w-full rounded-t-[3px] bg-oker-500' : 'w-full rounded-t-[3px] bg-slate-500'}
                                 style={{ height: st.kw > 0 ? `${Math.max(3, Math.round((st.kw / asTop) * 100))}%` : '2px' }}
                               />
                             </button>
@@ -778,11 +783,11 @@ export function OcpiDashboardView() {
                 {vermogen.modus === 'dagen' ? (
                   <div className="mt-1 flex min-h-4 gap-[3px]" aria-hidden="true">
                     {vermogen.staven.map((st) => (
-                      <span key={st.key} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">{st.asLabel}</span>
+                      <span key={st.key} className="flex-1 text-center text-2xs font-medium font-mono tabular-nums text-slate-500">{st.asLabel}</span>
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-1 flex min-h-4 justify-between text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400" aria-hidden="true">
+                  <div className="mt-1 flex min-h-4 justify-between text-2xs font-medium font-mono tabular-nums text-slate-500" aria-hidden="true">
                     <span>{vermogen.staven.length > 0 ? uurLabel(vermogen.staven[0].key) : ''}</span>
                     <span>nu</span>
                   </div>
@@ -794,7 +799,7 @@ export function OcpiDashboardView() {
                       ? uurLabel(st.key)
                       : `${new Date(`${st.key}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'short', day: 'numeric', month: 'short' })} · piek om ${uurLabel(st.ts || st.key)}`;
                     return (
-                      <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700 dark:text-slate-200">
+                      <p className="mt-2 min-h-4 truncate text-2xs font-semibold font-mono tabular-nums text-slate-700">
                         {kop} · {tekstKw(st.kw)} · {st.charging} sessie{st.charging === 1 ? '' : 's'}
                       </p>
                     );
@@ -807,7 +812,7 @@ export function OcpiDashboardView() {
                 })()}
               </>
             )}
-          </div>
+          </Card>
 
           </div>
 
@@ -833,7 +838,7 @@ export function OcpiDashboardView() {
               return (
                 <div className="p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <h3 className="min-w-0 truncate text-base font-bold text-slate-800">
+                    <h3 className="min-w-0 truncate text-card-title">
                       Laadpunt {gekozenPunt.evse_id ?? gekozenPunt.uid}{bus ? ` · bus ${bus}` : ''}
                     </h3>
                     <span className="flex shrink-0 items-center gap-2">
@@ -841,14 +846,9 @@ export function OcpiDashboardView() {
                       {/* Expliciete sluitknop: tik-buiten en ESC bestaan, maar
                           een popup zonder zichtbare uitgang is op een telefoon
                           een raadsel. */}
-                      <button
-                        type="button"
-                        onClick={() => setGekozenPunt(null)}
-                        aria-label="Sluiten"
-                        className="ios-pressable inline-flex h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                      >
+                      <IconButton label="Sluiten" variant="ghost" size="sm" onClick={() => setGekozenPunt(null)}>
                         <X size={16} />
-                      </button>
+                      </IconButton>
                     </span>
                   </div>
                   <div>
@@ -872,7 +872,7 @@ export function OcpiDashboardView() {
 
           {/* Live sessies */}
           <div>
-            <AdminSubsectionHeader title="Lopende sessies" />
+            <CardHeader size="lg" title="Lopende sessies" />
             {data.activeSessions.length === 0 ? (
               <EmptyState title="Geen lopende sessies" message="Er wordt op dit moment niet geladen (of ze zijn nog niet gesynchroniseerd)." />
             ) : (
@@ -885,7 +885,7 @@ export function OcpiDashboardView() {
                   const nummer = (s.evse_uid && nummerByUid.get(s.evse_uid)) || s.evse_uid || 'Onbekende paal';
                   const bus = busVoorLaadpunt(nummer);
                   return (
-                    <div key={s.id} className="surface-card p-4 rounded-2xl flex items-center justify-between gap-3">
+                    <Card key={s.id} padding="sm" className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-sm font-semibold text-slate-800">
@@ -905,7 +905,7 @@ export function OcpiDashboardView() {
                       <Badge tone={st.vol ? 'emerald' : 'blue'} dot className="shrink-0 whitespace-nowrap">
                         {st.label ?? 'Laden'}
                       </Badge>
-                    </div>
+                    </Card>
                   );
                 })}
               </div>
@@ -914,20 +914,19 @@ export function OcpiDashboardView() {
 
           {/* Stations + laadpunten */}
           <div>
-            <AdminSubsectionHeader title="Laadpalen per locatie" />
+            <CardHeader size="lg" title="Laadpalen per locatie" />
             {data.locations.length === 0 ? (
               <EmptyState title="Nog geen locaties" message="Klik in Systeem Status → OCPI-koppeling op 'Nu synchroniseren' om de laadpalen op te halen." />
             ) : (
               <div className="space-y-4">
                 {data.locations.map((loc) => (
-                  <div key={loc.id} className="surface-card p-6 rounded-3xl">
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                      <div>
-                        <h3 className="text-base font-bold text-slate-800">{loc.name ?? loc.id}</h3>
-                        {loc.city && <p className="text-xs text-slate-500">{loc.city}</p>}
-                      </div>
-                      <span className="text-2xs text-slate-400">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>
-                    </div>
+                  <Card key={loc.id}>
+                    <CardHeader
+                      className="mb-4"
+                      title={loc.name ?? loc.id}
+                      description={loc.city || undefined}
+                      aside={<span className="text-2xs text-slate-400">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>}
+                    />
                     {loc.evses.length === 0 ? (
                       <p className="text-sm text-slate-500">Geen laadpunten.</p>
                     ) : (
@@ -946,7 +945,7 @@ export function OcpiDashboardView() {
                             <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
                               <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
                                 <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
-                                <span className="text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                                <span className="text-2xs font-medium font-mono tabular-nums text-slate-500">
                                   {laden > 0 ? `${laden} aan het laden` : `${cpu.evses.length} punten`}
                                 </span>
                               </div>
@@ -962,13 +961,14 @@ export function OcpiDashboardView() {
                                   const sessie = sessieByEvse.get(evse.uid);
                                   const s = laadStatus(evse.status, sessie);
                                   return (
+                                    // rauw: hele laadpuntrij (nummer · bus · pillen) is de knop naar de detail-popup
                                     <button
                                       key={evse.uid}
                                       type="button"
                                       onClick={() => setGekozenPunt(evse)}
                                       aria-haspopup="dialog"
                                       title="Tik voor details (max. vermogen, connector)"
-                                      className="ios-pressable flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-surface-soft-hover dark:hover:bg-white/5"
+                                      className="ios-pressable flex min-h-11 w-full items-center justify-between gap-2 rounded-lg px-1 text-left transition-colors hover:bg-surface-soft-hover"
                                     >
                                       {/* shrink-0 i.p.v. min-w-0: met min-w-0 werd
                                           deze groep bij krappe kolombreedte
@@ -979,7 +979,7 @@ export function OcpiDashboardView() {
                                         <span className="w-11 shrink-0 text-sm font-semibold font-mono tabular-nums text-slate-700">{evse.evse_id ?? evse.uid}</span>
                                         {/* Busnummer is dé operationele sleutel van dit
                                             scherm — niet in de zwakste tint zetten. */}
-                                        <span className="w-14 shrink-0 text-2xs font-medium font-mono tabular-nums text-slate-600 dark:text-slate-300">
+                                        <span className="w-14 shrink-0 text-2xs font-medium font-mono tabular-nums text-slate-600">
                                           {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
                                         </span>
                                         {s.soc !== null && (
@@ -1002,7 +1002,7 @@ export function OcpiDashboardView() {
                         })}
                       </div>
                     )}
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -1017,7 +1017,8 @@ export function OcpiDashboardView() {
               Oker = het punt met het hoogste totaal, net als de piek in de
               grafieken. */}
           <div>
-            <AdminSubsectionHeader
+            <CardHeader
+              size="lg"
               title="Verbruik per laadpunt"
               description="Geleverde energie per laadpunt, per maand of per vrij gekozen periode, uit de laadsessies van ChargEye."
               aside={(
@@ -1044,35 +1045,35 @@ export function OcpiDashboardView() {
                     // met sessies en vandaag. Volgorde-fouten worden stil
                     // rechtgezet (zie zetVan/zetTot) i.p.v. met een foutmelding.
                     <div className="flex items-center gap-2" role="group" aria-label="Periodekeuze">
-                      <input
+                      <Input
                         type="date"
                         value={periodeGekozen.van}
                         min={verbruik?.eersteDag ?? undefined}
                         max={vandaag}
                         onChange={(e) => zetVan(e.target.value)}
                         aria-label="Van"
-                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
+                        className="w-auto px-3 py-2"
                       />
                       <span className="text-xs font-medium text-slate-400">t/m</span>
-                      <input
+                      <Input
                         type="date"
                         value={periodeGekozen.tot}
                         min={verbruik?.eersteDag ?? undefined}
                         max={vandaag}
                         onChange={(e) => zetTot(e.target.value)}
                         aria-label="Tot en met"
-                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
+                        className="w-auto px-3 py-2"
                       />
                     </div>
                   )}
                   <Button
                     variant="secondary"
+                    icon={<Download size={16} />}
                     onClick={exporteerVerbruikCsv}
                     disabled={!verbruik || verbruik.totaalSessies === 0}
                     title="Verbruik per laadpunt downloaden als CSV"
                   >
-                    <Download size={15} />
-                    <span className="ml-1.5">CSV</span>
+                    CSV
                   </Button>
                 </div>
               )}
@@ -1089,7 +1090,7 @@ export function OcpiDashboardView() {
               })));
               const label = periodeLabel(verbruik);
               return (
-                <div className={cn('surface-card p-6 rounded-3xl transition-opacity', verbruikLaadt && 'opacity-60')} aria-busy={verbruikLaadt}>
+                <Card className={cn('transition-opacity', verbruikLaadt && 'opacity-60')} aria-busy={verbruikLaadt}>
                   {/* Eén regel die zegt wáárover de cijfers gaan — in periode-
                       modus staat het label nergens anders voluit. */}
                   <p className="mb-4 text-2xs font-medium font-mono tabular-nums text-slate-500">
@@ -1106,7 +1107,7 @@ export function OcpiDashboardView() {
                           <div key={cpu.key} className="rounded-2xl border border-slate-100 p-3.5">
                             <div className="mb-2.5 flex items-baseline justify-between gap-2 border-b border-slate-100 pb-2">
                               <span className="text-sm font-bold text-slate-800">{cpu.label}</span>
-                              <span className="text-2xs font-medium font-mono tabular-nums text-slate-500 dark:text-slate-400">{fmtKwh(cpuKwh)} kWh</span>
+                              <span className="text-2xs font-medium font-mono tabular-nums text-slate-500">{fmtKwh(cpuKwh)} kWh</span>
                             </div>
                             <div className="space-y-1">
                               {cpu.evses.map((p) => {
@@ -1121,10 +1122,10 @@ export function OcpiDashboardView() {
                                     {/* Zelfde kolombreedtes als de statuslijst (w-11 / w-14),
                                         zodat nummer en bus in beide kaarten op één lijn staan. */}
                                     <span className="w-11 shrink-0 text-sm font-semibold font-mono tabular-nums text-slate-700">{p.evse_id ?? p.uid}</span>
-                                    <span className="w-14 shrink-0 text-2xs font-medium font-mono tabular-nums text-slate-600 dark:text-slate-300">{bus ? `bus ${bus}` : ''}</span>
-                                    <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/70 dark:bg-white/10" aria-hidden="true">
+                                    <span className="w-14 shrink-0 text-2xs font-medium font-mono tabular-nums text-slate-600">{bus ? `bus ${bus}` : ''}</span>
+                                    <div className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-slate-200/70" aria-hidden="true">
                                       <div
-                                        className={cn('h-full rounded-full', isPiek ? 'bg-oker-600 dark:bg-oker-500' : 'bg-slate-500 dark:bg-slate-400')}
+                                        className={cn('h-full rounded-full', isPiek ? 'bg-oker-500' : 'bg-slate-500')}
                                         style={{ width: max > 0 && p.kwh > 0 ? `${Math.max(2, Math.round((p.kwh / max) * 100))}%` : '0%' }}
                                       />
                                     </div>
@@ -1140,7 +1141,7 @@ export function OcpiDashboardView() {
                       })}
                     </div>
                   )}
-                </div>
+                </Card>
               );
             })()}
           </div>
@@ -1150,11 +1151,11 @@ export function OcpiDashboardView() {
               afgelopen 7 dagen. Dit maakt het "stekker in maar laadt niet"-
               scenario zichtbaar dat anders alleen in de ruwe data stond. */}
           <div>
-            <AdminSubsectionHeader title="Storingen (ChargEye)" />
+            <CardHeader size="lg" title="Storingen (ChargEye)" />
             {storingen.length === 0 ? (
               <EmptyState title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
             ) : (
-              <div className="surface-card rounded-3xl overflow-hidden">
+              <Card padding="none" className="overflow-hidden">
                 <div className="divide-y divide-slate-100">
                   {(alleStoringen ? storingen : storingen.slice(0, 5)).map((st, i) => {
                     const nummer = st.evseUid ? nummerByUid.get(st.evseUid) ?? st.evseUid : null;
@@ -1179,16 +1180,11 @@ export function OcpiDashboardView() {
                   })}
                 </div>
                 {storingen.length > 5 && (
-                  <button
-                    type="button"
-                    onClick={() => setAlleStoringen((v) => !v)}
-                    aria-expanded={alleStoringen}
-                    className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-xs font-semibold text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-700 dark:hover:bg-white/5"
-                  >
+                  <Button variant="ghost" size="sm" full className="rounded-none border-t border-slate-100" aria-expanded={alleStoringen} onClick={() => setAlleStoringen((v) => !v)}>
                     {alleStoringen ? 'Toon minder' : `Toon alle ${storingen.length} storingen`}
-                  </button>
+                  </Button>
                 )}
-              </div>
+              </Card>
             )}
           </div>
         </div>

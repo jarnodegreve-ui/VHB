@@ -6,6 +6,7 @@ import { leaveSolid } from '../../lib/statusColors';
 import { cn, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
 import { PageHeader, PageShell } from '../../components/ui';
+import { Card } from '../../components/Card';
 import { Button, MicroLabel, microLabelClass, TableShell, Td, Th } from '../../components/primitives';
 import { MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
 
@@ -152,12 +153,12 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                       <div className={microLabelClass}>{weekdayLetter(day)}</div>
                       <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                       {typedagLabel(dateIso(day)) && (
-                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-700' : 'text-slate-400')}>
                           {typedagLabel(dateIso(day))!.kort}
                         </div>
                       )}
                       {absenceCountPerDay[day] > 0 && (
-                        <div className="text-2xs font-semibold text-emerald-600 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
+                        <div className="text-2xs font-semibold text-emerald-700 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
                       )}
                     </Th>
                   </Fragment>
@@ -170,6 +171,8 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                 return (
                   <tr key={u.id} className="border-b border-slate-100 hover:bg-slate-50/40 transition-colors">
                     <Td className="sticky left-0 z-10 bg-surface-white py-2 text-sm font-semibold text-slate-800 min-w-[180px] truncate">
+                      {/* rauw: naam-als-link in een dichte tabelcel (tekst + printer-icoon,
+                          geen knopvorm) — een Button zou de rijhoogte van het grid oprekken */}
                       <button
                         type="button"
                         onClick={() => openJaaroverzicht(u.id)}
@@ -213,7 +216,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
 
       {/* Mobile: per-chauffeur lijst met afwezigheden in deze maand.
           Veel compacter dan een mini-grid; meest relevante info eerst. */}
-      <div className="md:hidden surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
+      <Card padding="none" className="md:hidden overflow-hidden divide-y divide-slate-100">
         {visibleUsers.map((u) => {
           const userMap = leaveByUserDay.get(u.id);
           // userMap heeft één entry per dag van een leave — dedup naar
@@ -225,6 +228,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
           return (
             <div key={u.id} className="p-4">
               <div className="flex items-baseline justify-between gap-2">
+                {/* rauw: naam-als-link in de lijstkop (tekst + printer-icoon, geen knopvorm) */}
                 <button
                   type="button"
                   onClick={() => openJaaroverzicht(u.id)}
@@ -274,32 +278,32 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
             Geen actieve chauffeurs gevonden.
           </div>
         )}
-      </div>
+      </Card>
 
       {/* Legende */}
-      <div className="surface-card rounded-3xl p-5 flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
+      <Card padding="md" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">
         <MicroLabel className="text-slate-500">Legende</MicroLabel>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-3 rounded-sm bg-emerald-500" />
+          <div className="w-4 h-3 rounded bg-emerald-500" />
           <span className="font-medium text-slate-600">Betaald verlof goedgekeurd</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-3 rounded-sm bg-blue-400" />
+          <div className="w-4 h-3 rounded bg-blue-400" />
           <span className="font-medium text-slate-600">Klein verlet goedgekeurd</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-3 rounded-sm bg-rose-500" />
+          <div className="w-4 h-3 rounded bg-rose-500" />
           <span className="font-medium text-slate-600">Ziekte</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-3 rounded-sm bg-amber-400" />
+          <div className="w-4 h-3 rounded bg-amber-400" />
           <span className="font-medium text-slate-600">In behandeling</span>
         </div>
         <div className="flex items-center gap-2">
-          <div className="w-4 h-3 rounded-sm bg-slate-300" />
+          <div className="w-4 h-3 rounded bg-slate-300" />
           <span className="font-medium text-slate-600">Geannuleerd</span>
         </div>
-      </div>
+      </Card>
     </PageShell>
   );
 }

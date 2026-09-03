@@ -8,7 +8,9 @@ import { daysBetween } from '../../lib/leaveBalance';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../../lib/format';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Button, MicroLabel, microLabelClass } from '../../components/primitives';
+import { Button, Chip, MicroLabel, microLabelClass } from '../../components/primitives';
+import { Card } from '../../components/Card';
+import { Field, Input, Select, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
@@ -316,6 +318,7 @@ export function ZiekteView({
   const Rij = ({ r, toonOpen }: { r: LeaveRequest; toonOpen?: boolean }) => {
     const open = toonOpen ? openDienstenVan(r) : 0;
     return (
+      // rauw: hele rij klikbaar (naam + periode + teller) — kaart-als-knop met eigen layout
       <button
         type="button"
         onClick={() => openDetail(r)}
@@ -325,7 +328,7 @@ export function ZiekteView({
           <span className="flex items-center gap-2">
             <span className="truncate text-sm font-semibold text-slate-800">{naamVan(r.userId)}</span>
             {r.status === 'cancelled' && (
-              <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold text-slate-500">ingetrokken</span>
+              <Chip tone="slate" mono={false}>ingetrokken</Chip>
             )}
           </span>
           <span className="mt-px block truncate text-xs font-normal text-slate-500 tabular-nums">
@@ -340,9 +343,9 @@ export function ZiekteView({
           </span>
         </span>
         {toonOpen && open > 0 && (
-          <span className="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-2xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+          <Chip tone="amber" mono={false}>
             {open} {open === 1 ? 'dienst' : 'diensten'} op naam
-          </span>
+          </Chip>
         )}
       </button>
     );
@@ -368,7 +371,7 @@ export function ZiekteView({
         title="Ziekte"
         description="Wie is er ziek gemeld, en welke diensten staan daardoor nog open. Gescheiden van het verlofbeheer — ziekte is geen aanvraag."
         actions={(
-          <Button variant="primary" size="md" icon={<Plus size={15} />} onClick={() => setMeldOpen(true)}>
+          <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setMeldOpen(true)}>
             Ziek melden
           </Button>
         )}
@@ -377,14 +380,14 @@ export function ZiekteView({
       {/* Excel zegt ziek, portaal weet van niets — vóór de secties, want dit
           is precies het geval waarin de secties hieronder leeg blijven. */}
       {excelZiekte.length > 0 && (
-        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+        <Card tone="warning" padding="md">
           <div className="flex items-start gap-3">
             {/* Zelfde banner-anatomie als de dekking (icoon-chip + tekst) —
                 één signaalvorm voor "Excel en portaal lopen uiteen". */}
-            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
             <div className="min-w-0 flex-1">
-              <MicroLabel className="text-amber-700 dark:text-amber-400">In de planning als ziek, hier niet geregistreerd</MicroLabel>
-              <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+              <MicroLabel className="text-amber-700">In de planning als ziek, hier niet geregistreerd</MicroLabel>
+              <p className="mt-1 text-sm font-medium text-amber-900">
                 Deze chauffeurs staan in de geïmporteerde planning als "ziek", maar hebben geen ziekteperiode in het portaal — meldingen, dekking en dit blad kennen die afwezigheid dan niet.
               </p>
               {/* Zelfde rij-component als de import-preview: één presentatie. */}
@@ -401,7 +404,7 @@ export function ZiekteView({
               </ul>
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {ziektes.length === 0 ? (
@@ -420,14 +423,14 @@ export function ZiekteView({
                 <MicroLabel className="text-slate-500">Ziektedagen in {jaar}</MicroLabel>
                 <MicroLabel className="tabular-nums">{dagenDitJaar.reduce((n, d) => n + d.dagen, 0)} totaal</MicroLabel>
               </div>
-              <div className="surface-card rounded-2xl divide-y divide-slate-100">
+              <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
                 {dagenDitJaar.map((d) => (
                   <div key={d.userId} className="flex items-center justify-between gap-3 px-3.5 py-2.5">
                     <span className="min-w-0 truncate text-sm font-medium text-slate-700">{naamVan(d.userId)}</span>
                     <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-800">{d.dagen} {d.dagen === 1 ? 'dag' : 'dagen'}</span>
                   </div>
                 ))}
-              </div>
+              </Card>
             </div>
           )}
         </div>
@@ -437,55 +440,56 @@ export function ZiekteView({
       <Modal open={meldOpen} onClose={sluitMelden} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
         <ModalHeader title="Ziekmelding registreren" description="De dag(en) staan meteen als onbeschikbaar in de planning; de andere planners krijgen een melding." onClose={sluitMelden} />
         <form onSubmit={verstuurMelding} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
-          <div className="space-y-1.5">
-            <label className={cn(microLabelClass, 'ml-1')}>Chauffeur</label>
-            <select
-              aria-label="Chauffeur"
-              value={meldForm.userId}
-              onChange={(e) => { setMeldForm({ ...meldForm, userId: e.target.value }); setMeldFout(''); }}
-              className="control-input w-full rounded-2xl bg-surface-field px-4 py-3 text-base font-bold outline-none sm:text-sm"
-            >
-              <option value="">Kies een chauffeur…</option>
-              {users
-                .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
-            </select>
-          </div>
+          <Field label="Chauffeur">
+            {({ id }) => (
+              <Select
+                id={id}
+                value={meldForm.userId}
+                onChange={(e) => { setMeldForm({ ...meldForm, userId: e.target.value }); setMeldFout(''); }}
+              >
+                <option value="">Kies een chauffeur…</option>
+                {users
+                  .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((d) => <option key={d.id} value={String(d.id)}>{d.name}</option>)}
+              </Select>
+            )}
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={cn(microLabelClass, 'ml-1')}>Van</label>
-              <input
-                type="date"
-                aria-label="Startdatum ziekmelding"
-                value={meldForm.startDate}
-                onChange={(e) => setMeldForm({ ...meldForm, startDate: e.target.value, endDate: meldForm.endDate && meldForm.endDate < e.target.value ? e.target.value : meldForm.endDate })}
-                className="control-input w-full rounded-2xl bg-surface-field px-4 py-3 text-base font-bold outline-none sm:text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className={cn(microLabelClass, 'ml-1')}>Tot en met</label>
-              <input
-                type="date"
-                aria-label="Einddatum ziekmelding"
-                value={meldForm.endDate}
-                min={meldForm.startDate || undefined}
-                onChange={(e) => setMeldForm({ ...meldForm, endDate: e.target.value })}
-                className="control-input w-full rounded-2xl bg-surface-field px-4 py-3 text-base font-bold outline-none sm:text-sm"
-              />
-            </div>
+            <Field label="Van">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={meldForm.startDate}
+                  onChange={(e) => setMeldForm({ ...meldForm, startDate: e.target.value, endDate: meldForm.endDate && meldForm.endDate < e.target.value ? e.target.value : meldForm.endDate })}
+                />
+              )}
+            </Field>
+            <Field label="Tot en met">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={meldForm.endDate}
+                  min={meldForm.startDate || undefined}
+                  onChange={(e) => setMeldForm({ ...meldForm, endDate: e.target.value })}
+                />
+              )}
+            </Field>
           </div>
-          <div className="space-y-1.5">
-            <label className={cn(microLabelClass, 'ml-1')}>Opmerking (optioneel)</label>
-            <textarea
-              aria-label="Opmerking ziekmelding"
-              value={meldForm.comment}
-              onChange={(e) => setMeldForm({ ...meldForm, comment: e.target.value })}
-              placeholder="bv. gemeld via telefoon om 6u"
-              className="control-input h-20 w-full resize-none rounded-2xl bg-surface-field px-4 py-3 text-base font-bold outline-none sm:text-sm"
-            />
-          </div>
-          {meldFout && <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{meldFout}</p>}
+          <Field label="Opmerking (optioneel)">
+            {({ id }) => (
+              <Textarea
+                id={id}
+                value={meldForm.comment}
+                onChange={(e) => setMeldForm({ ...meldForm, comment: e.target.value })}
+                placeholder="bv. gemeld via telefoon om 6u"
+                className="h-20"
+              />
+            )}
+          </Field>
+          {meldFout && <p role="alert" className="text-xs font-semibold text-red-700">{meldFout}</p>}
           <Button type="submit" variant="primary" size="lg" full disabled={isMelden}>
             {isMelden ? 'Registreren…' : 'Ziekmelding registreren'}
           </Button>
@@ -512,9 +516,9 @@ export function ZiekteView({
                   {openDienstenLijst(detail).length > 0 && (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <label className={cn(microLabelClass, 'ml-1')}>
+                        <MicroLabel className="ml-1">
                           Nog op naam ({openDienstenLijst(detail).length})
-                        </label>
+                        </MicroLabel>
                         {/* Wizard: batch-advies vult per gat de beste passende
                             kandidaat voor; "Verdeel alles" voert de gekozen
                             wissels in één keer door (met bevestiging). */}
@@ -536,13 +540,13 @@ export function ZiekteView({
                         {openDienstenLijst(detail).map((dienst) => {
                           const klaar = overgezet[dienst.id];
                           return (
-                            <div key={dienst.id} className="rounded-2xl bg-surface-soft px-3.5 py-3 space-y-2.5">
+                            <Card key={dienst.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
                               <div className="flex items-center justify-between gap-3">
                                 <span className="text-sm font-semibold text-slate-800 tabular-nums">Dienst {serviceNumberOf(dienst)}</span>
-                                <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">{formatShortDay(dienst.date)}</span>
+                                <span className={cn(microLabelClass, 'tabular-nums')}>{formatShortDay(dienst.date)}</span>
                               </div>
                               {klaar ? (
-                                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Overgezet naar {klaar}</p>
+                                <p className="text-xs font-semibold text-emerald-700">Overgezet naar {klaar}</p>
                               ) : isAdmin ? (
                                 <>
                                 {batchAdvies[adviesSleutel(dienst)]?.samenvatting && (
@@ -551,14 +555,14 @@ export function ZiekteView({
                                 {verdeelFouten[dienst.id] && (
                                   // red, niet rose: rose is hier de zíekte-statuskleur;
                                   // dit is een fout en hoort de fouttaal te spreken.
-                                  <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{verdeelFouten[dienst.id]}</p>
+                                  <p role="alert" className="text-xs font-semibold text-red-700">{verdeelFouten[dienst.id]}</p>
                                 )}
                                 <div className="flex flex-col gap-2 sm:flex-row">
-                                  <select
+                                  <Select
                                     aria-label={`Vervanger voor dienst ${serviceNumberOf(dienst)} op ${dienst.date}`}
                                     value={vervangerPerDienst[dienst.id] ?? ''}
                                     onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [dienst.id]: e.target.value }))}
-                                    className="control-input min-w-0 flex-1 rounded-2xl bg-surface-field px-3.5 py-2.5 text-base font-semibold outline-none sm:text-sm"
+                                    className="min-w-0 flex-1"
                                   >
                                     <option value="">Kies een chauffeur…</option>
                                     {rangschikKandidaten(
@@ -567,7 +571,7 @@ export function ZiekteView({
                                       werkdagen,
                                       dienst.date,
                                     ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
-                                  </select>
+                                  </Select>
                                   <Button variant="primary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id || verdeelBezig} onClick={() => void zetOver(detail, dienst)}>
                                     {wisselBezig === dienst.id ? 'Bezig…' : 'Zet over'}
                                   </Button>
@@ -576,29 +580,30 @@ export function ZiekteView({
                               ) : (
                                 <p className="text-xs font-medium text-slate-500">Een admin kan deze dienst overzetten.</p>
                               )}
-                            </div>
+                            </Card>
                           );
                         })}
                       </div>
                     </div>
                   )}
-                  <div className="space-y-1.5">
-                    <label className={cn(microLabelClass, 'ml-1')}>Ziek tot en met</label>
-                    <div className="flex gap-2">
-                      <input
-                        type="date"
-                        aria-label="Nieuwe einddatum"
-                        value={nieuwEinde}
-                        min={detail.startDate}
-                        onChange={(e) => setNieuwEinde(e.target.value)}
-                        className="control-input min-w-0 flex-1 rounded-2xl bg-surface-field px-4 py-3 text-base font-bold outline-none sm:text-sm"
-                      />
-                      <Button variant="primary" size="md" disabled={isOpslaan || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate} onClick={() => void bewaarEinde(nieuwEinde)}>
-                        Opslaan
-                      </Button>
-                    </div>
-                    <p className="ml-1 text-2xs font-medium text-slate-400">Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug.</p>
-                  </div>
+                  <Field label="Ziek tot en met" hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug.">
+                    {({ id, describedBy }) => (
+                      <div className="flex gap-2">
+                        <Input
+                          id={id}
+                          aria-describedby={describedBy}
+                          type="date"
+                          value={nieuwEinde}
+                          min={detail.startDate}
+                          onChange={(e) => setNieuwEinde(e.target.value)}
+                          className="min-w-0 flex-1"
+                        />
+                        <Button variant="primary" size="md" disabled={isOpslaan || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate} onClick={() => void bewaarEinde(nieuwEinde)}>
+                          Opslaan
+                        </Button>
+                      </div>
+                    )}
+                  </Field>
                   {detail.endDate >= today && detail.startDate <= today && (
                     <Button variant="secondary" size="md" full icon={<Thermometer size={14} />} disabled={isOpslaan} onClick={() => void bewaarEinde(today)}>
                       Hersteld — vandaag was de laatste ziektedag

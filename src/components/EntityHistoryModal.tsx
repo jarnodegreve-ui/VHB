@@ -4,6 +4,8 @@ import type { ActivityEntityType, ActivityLogEntry } from '../types';
 import { apiJson } from '../lib/api';
 import { cn } from '../lib/ui';
 import { Modal } from './Modal';
+import { Card } from './Card';
+import { Skeleton } from './Skeleton';
 import { EmptyState, ModalHeader } from './ui';
 import { MicroLabel, microLabelClass } from './primitives';
 
@@ -57,7 +59,7 @@ export function EntityHistoryModal({
     <Modal open={open} onClose={onClose} maxWidth="lg" ariaLabel="Wijzigingsgeschiedenis" boven>
       <div className="flex max-h-[80dvh] flex-col overflow-hidden">
             <ModalHeader
-              leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center"><History size={18} /></div>}
+              leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center"><History size={18} /></div>}
               title="Wijzigingsgeschiedenis"
               description={title}
               onClose={onClose}
@@ -65,13 +67,13 @@ export function EntityHistoryModal({
 
             <div className="p-6 md:p-7 overflow-y-auto flex-1">
               {error && (
-                <p className="text-sm text-red-600 font-medium">{error}</p>
+                <p className="text-sm text-red-700 font-medium">{error}</p>
               )}
 
               {entries === null && !error && (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-16 rounded-2xl bg-slate-100/60 animate-pulse" />
+                    <Skeleton key={i} rounded="2xl" className="h-16" />
                   ))}
                 </div>
               )}
@@ -85,14 +87,14 @@ export function EntityHistoryModal({
                   {entries.map((entry, i) => (
                     <li key={entry.id} className="relative">
                       <span className={cn(
-                        'absolute -left-[1.65rem] top-2 w-3 h-3 rounded-full ring-4 ring-white',
+                        'absolute -left-[1.65rem] top-2 w-3 h-3 rounded-full ring-4 ring-paper',
                         i === 0 ? 'bg-oker-500' : 'bg-slate-300',
                       )} />
-                      <div className="rounded-2xl border border-slate-100 bg-surface-field p-3.5">
+                      <Card tone="muted" padding="sm">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-800">{entry.action}</p>
                           <span className={cn(microLabelClass, 'shrink-0')}>
-                            <Clock size={10} className="inline -mt-0.5 mr-1" />
+                            <Clock size={12} className="inline -mt-0.5 mr-1" />
                             {new Date(entry.createdAt).toLocaleString('nl-BE', {
                               day: '2-digit',
                               month: 'short',
@@ -105,7 +107,7 @@ export function EntityHistoryModal({
                         <MicroLabel className="mt-2">
                           {entry.actorName} · {entry.actorRole}
                         </MicroLabel>
-                      </div>
+                      </Card>
                     </li>
                   ))}
                 </ol>

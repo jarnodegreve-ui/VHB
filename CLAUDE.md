@@ -21,7 +21,7 @@ Portaal voor het busbedrijf (GitHub-repo `jarnodegreve-ui/VHB`). Vite + React + 
 - Warm goud `#E2A323` (tokens `oker-*`, anker op 500); Carbonzwart `#14181B` = logo-inkt en `slate-900` (tekst op licht); VHB Black `#0D0D0F` blijft de basis van dark mode, login, theme-color/manifest en de icoon-tegel (Jarno 30-08: de carbon-variant oogde minder mooi); Graphite `#2C3137`, Light Grey `#F2F3F4`. `amber-*` = semantische waarschuwingskleur (bewust los van brand). Geen rauwe hex — altijd tokens (enige uitzondering: het logo zelf).
 - Op goud-vlakken altijd carbon-tekst (`text-slate-950`), nooit wit (contrast ±2:1).
 - Manrope (ExtraBold) koppen / Inter body. De oude brandpakketten (`brand/vhb-logo-redesign/` "VHB Schakel", `brand/VHB-huisstijl/`) zijn op 2026-08-30 uit de repo verwijderd (git-historiek heeft ze) — het enige bronpakket is `brand/vhb-final-logo-package/`.
-- sw.js: cache-naam wordt per build gestempeld (vite.config.ts), handmatig bumpen hoeft niet. Dark mode: utilities met opacity-suffix (bv. `border-slate-200/70`) hebben eigen `.dark`-overrides nodig.
+- sw.js: cache-naam wordt per build gestempeld (vite.config.ts), handmatig bumpen hoeft niet. Dark mode werkt via **omgekeerde kleurenschalen** in `html.dark` (index.css): slate 50↔900 spiegelt, statusfamilies 50-300 = transparante tint, 400-600 ongewijzigd (solide vlakken), 700-900 = lichte tekst. Gevolg: tekst in een statuskleur gebruikt ≥700, solide knoppen/dots ≤600; witte vlakken zijn `bg-paper/NN` (nooit `bg-white/NN`), altijd-donkere vlakken `bg-ink`. Géén `dark:`-utilities en géén `.dark`-overrides op utility-klassen meer schrijven — het flipt vanzelf.
 
 ## Memory
 Evoluerende staat & deploy-/OCPI-lessen: auto-memory van dit project (MEMORY.md-index).

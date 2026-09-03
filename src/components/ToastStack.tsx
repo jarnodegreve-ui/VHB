@@ -1,6 +1,8 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { Button, IconButton } from './primitives';
+import { DUR, EASE } from '../lib/motion';
 
 export type Toast = {
   id: number;
@@ -14,19 +16,17 @@ export type Toast = {
 const TONE_STYLES = {
   success: {
     icon: CheckCircle2,
-    chip: 'bg-emerald-500/12 text-emerald-600 dark:text-emerald-400',
+    chip: 'bg-emerald-500/12 text-emerald-700',
   },
   error: {
     icon: AlertTriangle,
-    chip: 'bg-red-500/12 text-red-600 dark:text-red-400',
+    chip: 'bg-red-500/12 text-red-700',
   },
   info: {
     icon: Info,
-    chip: 'bg-oker-500/15 text-oker-600 dark:text-oker-400',
+    chip: 'bg-oker-500/15 text-oker-700',
   },
 } as const;
-
-const EASE_OUT = [0.22, 1, 0.36, 1] as const;
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
@@ -75,8 +75,8 @@ export function ToastStack({
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
-              transition={{ duration: 0.24, ease: EASE_OUT }}
-              className="rounded-2xl border border-slate-200 bg-white/95 px-4 py-3 shadow-lg backdrop-blur-sm touch-pan-y"
+              transition={{ duration: DUR.base, ease: EASE }}
+              className="rounded-2xl border border-slate-200 bg-paper/95 px-4 py-3 shadow-lg backdrop-blur-sm touch-pan-y"
             >
               <div className="flex items-start gap-3">
                 <div
@@ -85,7 +85,7 @@ export function ToastStack({
                     tone.chip
                   )}
                 >
-                  <ToneIcon size={15} strokeWidth={2} />
+                  <ToneIcon size={16} strokeWidth={2} />
                 </div>
                 <div className="min-w-0 flex-1 pt-1">
                   <p className="text-sm font-medium leading-snug text-slate-800">{toast.message}</p>
@@ -94,22 +94,25 @@ export function ToastStack({
                       min-h-11 met negatieve marge zodat het raakvlak groeit
                       zonder de toast hoger te maken. */}
                   {toast.action && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => { toast.action!.run(); onDismiss(toast.id); }}
-                      className="ios-pressable -mx-2 -my-1 mt-0.5 inline-flex min-h-11 items-center rounded-lg px-2 py-1 text-sm font-semibold text-oker-700 underline-offset-2 hover:underline dark:text-oker-500 sm:pointer-fine:min-h-0 sm:pointer-fine:mt-1.5"
+                      className="-mx-2 -my-1 mt-0.5 px-2 py-1 text-sm text-oker-700 underline-offset-2 hover:text-oker-700 hover:underline sm:pointer-fine:min-h-0 sm:pointer-fine:mt-1.5"
                     >
                       {toast.action.label}
-                    </button>
+                    </Button>
                   )}
                 </div>
-                <button
+                <IconButton
+                  label="Sluit melding"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => onDismiss(toast.id)}
-                  className="-m-1.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 sm:pointer-fine:-m-0 sm:pointer-fine:h-7 sm:pointer-fine:w-7"
-                  aria-label="Sluit melding"
+                  className="-m-1.5 text-slate-400 sm:pointer-fine:-m-0"
                 >
-                  <X size={15} />
-                </button>
+                  <X size={16} />
+                </IconButton>
               </div>
             </motion.div>
           );

@@ -1,5 +1,6 @@
 import type { LeaveBalance } from '../lib/leaveBalance';
 import { cn } from '../lib/ui';
+import { Card, CardHeader } from './Card';
 import { microLabelClass } from './primitives';
 
 /**
@@ -18,16 +19,15 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
   const overBudget = balance.betaaldGebruikt > balance.betaaldBudget;
 
   return (
-    <div className={cn('rounded-3xl border border-slate-100 bg-white/55 p-5 space-y-4', compact && 'p-4 space-y-3')}>
-      <div className="flex items-baseline justify-between gap-3">
-        <h5 className={cn('font-bold text-slate-700 tracking-tight', compact ? 'text-sm' : 'text-base')}>Verlofbalans</h5>
-        <span className={microLabelClass}>{year}</span>
-      </div>
+    <Card padding={compact ? 'sm' : 'md'} className={compact ? 'space-y-3' : 'space-y-4'}>
+      {/* flex-row/items-baseline: CardHeader stapelt titel en aside op mobiel;
+          voor dit smalle kaartje horen ze op één regel. */}
+      <CardHeader title="Verlofbalans" aside={<span className={microLabelClass}>{year}</span>} className="flex-row items-baseline" />
 
       <div className="space-y-2">
         <div className="flex items-baseline justify-between gap-3">
           <span className={microLabelClass}>Betaald verlof</span>
-          <span className={cn('text-xs font-bold', overBudget ? 'text-red-500' : 'text-slate-600')}>
+          <span className={cn('text-xs font-bold', overBudget ? 'text-red-700' : 'text-slate-600')}>
             <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.betaaldGebruikt}</span>
             <span className="text-slate-400"> / {balance.betaaldBudget} dagen</span>
           </span>
@@ -46,12 +46,12 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
       </div>
 
       <div className="flex items-baseline justify-between gap-3 pt-2 border-t border-slate-100">
-        <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Klein verlet</span>
+        <span className={microLabelClass}>Klein verlet</span>
         <span className="text-xs font-bold text-slate-600">
           <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.kleinVerletDagen}</span>
           <span className="text-slate-400"> {balance.kleinVerletDagen === 1 ? 'dag' : 'dagen'}</span>
         </span>
       </div>
-    </div>
+    </Card>
   );
 }
