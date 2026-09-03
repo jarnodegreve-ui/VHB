@@ -820,7 +820,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         {d.getDate()}
                       </span>
                       {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
-                      <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-400')}>
+                      <span className={cn('relative z-10 h-3 text-2xs font-bold leading-3 transition-colors', td?.kort === 'F' && !gekozen ? 'text-oker-700' : gekozen ? 'text-slate-950/60' : 'text-slate-500')}>
                         {td?.kort ?? ''}
                       </span>
                     </button>
@@ -848,7 +848,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 </div>
 
                 {dagRijen.secties.length === 0 ? (
-                  <p className="px-4 py-6 text-sm font-medium text-slate-400">
+                  <p className="px-4 py-6 text-sm font-medium text-slate-500">
                     {zoekTerm ? 'Geen chauffeurs gevonden voor deze zoekterm.' : 'Geen diensten op deze dag.'}
                   </p>
                 ) : dagRijen.secties.map((sectie) => (
@@ -879,7 +879,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             {isOwn && <span className={cn(microLabelClass, 'ml-1.5 text-oker-700')}>jij</span>}
                           </span>
                           {/* Uren compact rechts; bij een open dienst de melding. */}
-                          <span className="shrink-0 text-xs font-medium text-slate-400 tabular-nums">
+                          <span className="shrink-0 text-xs font-medium text-slate-500 tabular-nums">
                             {cell.hiddenService ? `dienst ${cell.hiddenService} open` : (cell.segments[0] ?? '')}
                           </span>
                           {cell.hiddenService && (
@@ -918,7 +918,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                             {drv.name}
                             {isOwn && <span className={cn(microLabelClass, 'ml-1.5 text-oker-700')}>jij</span>}
                           </span>
-                          <span className="shrink-0 text-xs font-medium text-slate-400">{cell?.label ?? ''}</span>
+                          <span className="shrink-0 text-xs font-medium text-slate-500">{cell?.label ?? ''}</span>
                         </>
                       );
                       const rijCls = cn(

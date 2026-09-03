@@ -184,7 +184,7 @@ export function Modal({
         transition={reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE }}
         onClick={(e) => e.stopPropagation()}
         // Op mobile: max-h = viewport minus de safe-area-padding van de
-        // backdrop hierboven (dezelfde max(0.5rem, env(...))-termen), zodat een
+        // backdrop hierboven (dezelfde max(0.5rem, env(…))-termen), zodat een
         // lange modal niet ±30 px in de home-indicator-zone zakt (controle-
         // ronde 27-08, nr. 34); iets minder agressieve rounded-hoeken (32px
         // voelt overkill op bijna-full-screen). Op md+: zoals voorheen.

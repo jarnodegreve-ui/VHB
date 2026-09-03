@@ -7,14 +7,14 @@ import { Modal } from '../components/Modal';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge, statusAccentClass } from '../components/primitives';
 import { Card } from '../components/Card';
-import { Field, Input, Select, Textarea } from '../components/Field';
+import { Field, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { SlideOver } from '../components/SlideOver';
 import { verlofBalans, daysBetween } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
-import { formatDateHuman } from '../lib/format';
+import { formatDateHuman, formatShortDay } from '../lib/format';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
 import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 
@@ -39,6 +39,9 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   // Historiek standaard gecapt op 5 — de volledige lijst groeide onbegrensd.
   const [formData, setFormData] = useState({ startDate: '', endDate: '', type: 'betaald_verlof' as LeaveRequest['type'], comment: '' });
+  // Validatiefout bij de periode (fase C15): staat bij het veld, niet in een
+  // toast. Verdwijnt zodra de periode opnieuw gekozen of gewist wordt.
+  const [periodeFout, setPeriodeFout] = useState('');
   // Voor wie vraag je aan? Alleen zichtbaar voor planner/admin: in de
   // testfase belt of zegt een deel van de chauffeurs zijn verlof gewoon door,
   // en dan kon de planning dat nergens kwijt. Leeg = voor jezelf.
@@ -104,15 +107,17 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
     e.preventDefault();
     if (isSubmitting) return;
     if (!formData.startDate || !formData.endDate) {
+      setPeriodeFout('Kies eerst een start- en einddatum in de kalender.');
       return;
     }
     // Een planner die verlof achteraf registreert mag wél in het verleden
     // boeken (de chauffeur belde het vorige week door); een eigen aanvraag
     // niet.
     if (formData.startDate < today && !namensIemandAnders) {
-      notify('Je kan geen verlof aanvragen in het verleden.', 'error');
+      setPeriodeFout('Je kan geen verlof aanvragen in het verleden.');
       return;
     }
+    setPeriodeFout('');
     // Pas sluiten/wissen ná een geslaagde save — bij een fout blijft de
     // aanvraag ingevuld staan zodat de chauffeur niet opnieuw moet beginnen.
     setIsSubmitting(true);
@@ -187,6 +192,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       return;
     }
 
+    setPeriodeFout('');
     setFormData((current) => {
       // Geen actief bereik (nog niets, of allebei al gevuld) → start een nieuw bereik.
       if (!current.startDate || current.endDate) {
@@ -397,7 +403,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         description={isPlanner ? 'Beheer verlofaanvragen en bekijk de bezetting.' : 'Vraag verlof aan en volg je aanvragen op.'}
         actions={(
           <div className="flex items-center gap-2">
-            <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={() => setShowRequestModal(true)}>
+            <Button variant="primary" size="lg" icon={<Plus size={18} />} onClick={() => { setPeriodeFout(''); setShowRequestModal(true); }}>
               Verlof aanvragen
             </Button>
           </div>
@@ -477,7 +483,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-2xs font-medium text-slate-400 tabular-nums">{req.startDate} – {req.endDate}</span>
+                          <span className="text-2xs font-medium text-slate-500 tabular-nums">{req.startDate} – {req.endDate}</span>
                           {isPlanner && (
                             <Button variant="danger" size="sm" onClick={() => handleCancel(req.id)}>
                               Annuleren
@@ -713,18 +719,34 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     })}
                   </div>
                 </Card>
-                <div className="grid grid-cols-2 gap-4">
-                  {/* tabIndex -1: puur weergavevelden — focus zou op iOS alleen maar inzoomen */}
-                  <Field label="Startdatum">
-                    {({ id }) => <Input id={id} type="text" readOnly tabIndex={-1} value={formData.startDate || 'Selecteer in kalender'} />}
-                  </Field>
-                  <Field label="Einddatum">
-                    {({ id }) => <Input id={id} type="text" readOnly tabIndex={-1} value={formData.endDate || 'Selecteer in kalender'} />}
-                  </Field>
+                {/* Gekozen periode als selectieweergave, geen (nep-)invoervelden:
+                    de datums komen uit de kalender hierboven. De aria-labels
+                    "Startdatum"/"Einddatum" + data-datum zijn contract met
+                    e2e/verlof.spec.ts. Fout bij het veld (fase C15). */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-label">Gekozen periode</span>
+                    {(formData.startDate || formData.endDate) && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        icon={<X size={14} />}
+                        onClick={() => { setPeriodeFout(''); setFormData((current) => ({ ...current, startDate: '', endDate: '' })); }}
+                      >
+                        Periode wissen
+                      </Button>
+                    )}
+                  </div>
+                  <div role="group" aria-label="Gekozen periode" className="grid grid-cols-2 gap-3">
+                    <PeriodeVak label="Van" naam="Startdatum" iso={formData.startDate} actief={!formData.startDate} fout={!!periodeFout} />
+                    <PeriodeVak label="Tot" naam="Einddatum" iso={formData.endDate} actief={!!formData.startDate && !formData.endDate} fout={!!periodeFout} />
+                  </div>
+                  {periodeFout ? (
+                    <p role="alert" className="text-xs font-medium text-red-700">{periodeFout}</p>
+                  ) : (
+                    <p className="text-xs text-slate-500">Kies de dagen in de kalender — dezelfde dag twee keer voor één dag verlof.</p>
+                  )}
                 </div>
-                <Button variant="secondary" size="md" full onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))}>
-                  Periode wissen
-                </Button>
                 <Field label="Type verlof">
                   {({ id }) => (
                     <Select id={id} value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })}>
@@ -741,7 +763,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
                       onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
                       className="h-24"
-                      placeholder="Optionele toelichting..."
+                      placeholder="Optionele toelichting…"
                     />
                   )}
                 </Field>
@@ -790,7 +812,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </div>
                 )}
 
-                <Button type="submit" variant="primary" size="lg" full disabled={!formData.startDate || !formData.endDate || isSubmitting}>{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</Button>
+                <div className="space-y-2">
+                  <Button type="submit" variant="primary" size="lg" full disabled={!formData.startDate || !formData.endDate || isSubmitting}>{isSubmitting ? 'Versturen…' : 'Aanvraag indienen'}</Button>
+                  {/* Reden waarom de knop nog uit staat — anders lijkt hij kapot. */}
+                  {(!formData.startDate || !formData.endDate) && !periodeFout && (
+                    <p className="text-center text-xs text-slate-500">
+                      {!formData.startDate ? 'Kies eerst een startdatum in de kalender.' : 'Kies nu de einddatum in de kalender.'}
+                    </p>
+                  )}
+                </div>
               </form>
       </Modal>
 
@@ -960,6 +990,27 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   );
 }
 
+/** Eén helft van de "Van — Tot"-selectieweergave in de aanvraag-modal.
+ *  Geen input: de waarde komt uit de kalender. `naam` is de toegankelijke
+ *  naam (aria-label), `data-datum` de ISO-datum voor tests. */
+function PeriodeVak({ label, naam, iso, actief, fout }: { label: string; naam: string; iso: string; actief: boolean; fout: boolean }) {
+  return (
+    <div
+      aria-label={naam}
+      data-datum={iso || undefined}
+      className={cn(
+        'min-h-11 rounded-xl border px-3.5 py-2',
+        fout ? 'border-red-300 bg-red-50' : iso ? 'border-oker-200 bg-oker-50' : actief ? 'border-dashed border-oker-300 bg-surface-white' : 'border-dashed border-slate-200 bg-surface-soft',
+      )}
+    >
+      <span className="text-micro">{label}</span>
+      <span className={cn('mt-0.5 block text-sm font-semibold tabular-nums', iso ? 'text-slate-900' : 'text-slate-500')}>
+        {iso ? formatShortDay(iso) : actief ? 'Kies in de kalender' : '—'}
+      </span>
+    </div>
+  );
+}
+
 function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, onWithdraw }: { title: string; count: number; emptyText: string; requests: LeaveRequest[]; isNew?: (r: LeaveRequest) => boolean; onCancel?: (id: string) => void; onWithdraw?: (id: string) => void }) {
   // Compacte, uitklapbare rijen in een eigen scrollcontainer: de historiek
   // groeit onbegrensd mee, dus de dichte kaarten werden onoverzichtelijk
@@ -991,7 +1042,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
               >
                 <div className="min-w-0 flex items-baseline gap-2.5">
                   <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap">{new Date(`${req.startDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })} – {new Date(`${req.endDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' })}</span>
-                  <span className="text-2xs font-medium text-slate-400 truncate">{formatLeaveType(req.type)}</span>
+                  <span className="text-2xs font-medium text-slate-500 truncate">{formatLeaveType(req.type)}</span>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {fresh && <Badge tone="oker">Nieuw</Badge>}
@@ -1001,7 +1052,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
               </button>
               {open && (
                 <div className="px-4 pb-4 pt-0.5">
-                  <p className="text-2xs font-medium text-slate-400">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
+                  <p className="text-2xs font-medium text-slate-500">Aangevraagd op {formatDateHuman(req.createdAt)}</p>
                   {req.comment && <p className="text-xs text-slate-500 italic mt-2">"{req.comment}"</p>}
                   {onCancel && req.status === 'approved' && (
                     <Button variant="danger" size="sm" full className="mt-3" onClick={() => onCancel(req.id)}>
@@ -1019,7 +1070,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
           );
         }) : (
           <Card padding="md" className="text-center">
-            <p className="text-slate-400 font-medium text-sm">{emptyText}</p>
+            <p className="text-slate-500 font-medium text-sm">{emptyText}</p>
           </Card>
         )}
       </div>

@@ -273,6 +273,9 @@ export function CoverageView() {
   // Standaard dicht, zoals de dag-type-kaarten (#385): het Instellen-paneel
   // moet scanbaar blijven — dit is een af-en-toe-actie, geen dagelijks werk.
   const [kalenderOpen, setKalenderOpen] = useState(false);
+  // Validatiefout van de kalender-voorzet, inline bij de keuzes (fase C15)
+  // — voorheen een toast die verdween voor je las wat er mis was.
+  const [kalFout, setKalFout] = useState('');
   useEffect(() => {
     if (!config) return;
     const namen = (config.dayTypes || []).map((d) => d.name);
@@ -295,9 +298,10 @@ export function CoverageView() {
       vanafDatum: vandaag,
     });
     if (uitzonderingen.length === 0) {
-      notify(overgeslagen > 0 ? 'Alles uit de kalender staat al in de lijst.' : 'Kies eerst waar de feestdagen en vakantiedagen naartoe moeten.', 'error');
+      setKalFout(overgeslagen > 0 ? 'Alles uit de kalender staat al in de lijst.' : 'Kies eerst bij minstens één groep een dag-type.');
       return;
     }
+    setKalFout('');
     setOverrides((prev) => [...prev, ...uitzonderingen]);
     notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''} — controleer de lijst en klik op Opslaan.`, 'success');
   };
@@ -631,15 +635,22 @@ export function CoverageView() {
                   </div>
                   {weekdayPeriods.map((p, i) => (
                     <Card key={i} tone="muted" padding="sm" className="space-y-3">
-                      <div className="flex items-center gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
                         <MicroLabel className="text-slate-500">Vanaf</MicroLabel>
                         <Input
                           type="date"
                           value={p.vanaf}
                           onChange={(e) => setPeriodVanaf(i, e.target.value)}
                           aria-label="Ingangsdatum van deze weekdag-toewijzing"
+                          aria-describedby={!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf) ? `periode-${i}-fout` : undefined}
+                          invalid={!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf)}
                           className="w-auto"
                         />
+                        {/* Zonder ingangsdatum wordt de periode bij Opslaan
+                            stil weggelaten — zeg dat bij het veld. */}
+                        {!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf) && (
+                          <span id={`periode-${i}-fout`} className="text-xs font-medium text-red-700">Kies een ingangsdatum — anders wordt de periode niet opgeslagen.</span>
+                        )}
                         <IconButton label="Periode verwijderen" variant="danger" size="sm" className="ml-auto" onClick={() => removeWeekdayPeriod(i)}><X size={16} /></IconButton>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -701,20 +712,31 @@ export function CoverageView() {
                   <p className="text-sm text-slate-500">Geen uitzonderingen — elke dag volgt de weekdag-standaard.</p>
                 ) : (
                   <div className="space-y-2">
-                    {gesorteerdeOverrides.map(({ o, i, verlopen }) => (
-                      <div key={i} className="flex flex-wrap items-center gap-2">
-                        <Input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="w-auto" />
-                        <span className="text-2xs font-bold text-slate-400">t/m</span>
-                        <Input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="w-auto" />
-                        <span className="text-slate-400 font-semibold">→</span>
-                        <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" className="w-auto">
-                          <option value="">— kies type —</option>
-                          {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                        </Select>
-                        {verlopen && <Badge tone="slate">Verlopen</Badge>}
-                        <IconButton label="Uitzondering verwijderen" variant="danger" size="sm" onClick={() => removeOverride(i)}><X size={16} /></IconButton>
-                      </div>
-                    ))}
+                    {gesorteerdeOverrides.map(({ o, i, verlopen }) => {
+                      // Onvolledige rijen worden bij Opslaan stil weggelaten —
+                      // zeg dat bij de rij zelf (fase C15), niet pas achteraf.
+                      const onvolledig = !o.from || !o.to || !o.dayType;
+                      const omgekeerd = !!o.from && !!o.to && o.to < o.from;
+                      const rijFout = omgekeerd ? 'Tot en met ligt vóór Van.' : onvolledig ? 'Onvolledig — wordt niet opgeslagen.' : '';
+                      const foutId = rijFout ? `uitzondering-${i}-fout` : undefined;
+                      return (
+                        <div key={i} className="space-y-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" aria-describedby={foutId} invalid={!o.from || omgekeerd} className="w-auto" />
+                            <span className="text-2xs font-bold text-slate-500">t/m</span>
+                            <Input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" aria-describedby={foutId} invalid={!o.to || omgekeerd} className="w-auto" />
+                            <span className="text-slate-400 font-semibold">→</span>
+                            <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" aria-describedby={foutId} invalid={!o.dayType} className="w-auto">
+                              <option value="">— kies type —</option>
+                              {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
+                            </Select>
+                            {verlopen && <Badge tone="slate">Verlopen</Badge>}
+                            <IconButton label="Uitzondering verwijderen" variant="danger" size="sm" onClick={() => removeOverride(i)}><X size={16} /></IconButton>
+                          </div>
+                          {rijFout && <p id={foutId} className="text-xs font-medium text-red-700">{rijFout}</p>}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
                 </>
@@ -748,12 +770,14 @@ export function CoverageView() {
                     { label: 'Vakantie donderdag', waarde: kalDo, zet: setKalDo },
                     { label: 'Vakantie vrijdag', waarde: kalVr, zet: setKalVr },
                   ] as const).map(({ label, waarde, zet }) => (
-                    <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
+                    <div key={label} className={cn('flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 px-3 py-2', kalFout && !waarde ? 'ring-red-200' : 'ring-hairline')}>
                       <span className="text-sm font-bold text-slate-700">{label}</span>
                       <Select
                         value={waarde}
-                        onChange={(e) => zet(e.target.value)}
+                        onChange={(e) => { zet(e.target.value); setKalFout(''); }}
                         aria-label={`Dag-type voor ${label.toLowerCase()}`}
+                        aria-describedby={kalFout ? 'kalender-fout' : undefined}
+                        invalid={!!kalFout && !waarde}
                         className="w-auto max-w-[55%]"
                       >
                         <option value="">— overslaan —</option>
@@ -762,6 +786,9 @@ export function CoverageView() {
                     </div>
                   ))}
                 </div>
+                {kalFout && (
+                  <p id="kalender-fout" role="alert" className="text-xs font-medium text-red-700">{kalFout}</p>
+                )}
                 <Button variant="secondary" size="sm" icon={<CalendarPlus size={14} />} onClick={voegKalenderToe}>
                   Zet voor in de lijst
                 </Button>
@@ -769,7 +796,7 @@ export function CoverageView() {
                 )}
               </div>
 
-              <p className="text-2xs font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
+              <p className="text-2xs font-medium text-slate-500">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
             </>
           )}
         </Card>
@@ -990,7 +1017,7 @@ export function CoverageView() {
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm font-medium text-slate-400">
+                    <p className="text-sm font-medium text-slate-500">
                       Niemand bij wie deze dienst zonder meer past — hieronder wie wél vrij is, met wat er wringt.
                     </p>
                   )}
@@ -1008,7 +1035,7 @@ export function CoverageView() {
                           </div>
                         ))}
                       </div>
-                      <p className="mt-1.5 text-2xs font-medium text-slate-400">Uitvoeren: zet de dienst over via de cel in de Maandplanning en wijs daarna dienst {pick.code} hier toe.</p>
+                      <p className="mt-1.5 text-2xs font-medium text-slate-500">Uitvoeren: zet de dienst over via de cel in de Maandplanning en wijs daarna dienst {pick.code} hier toe.</p>
                     </div>
                   )}
 
@@ -1038,7 +1065,7 @@ export function CoverageView() {
                     </div>
                   )}
 
-                  <p className="text-2xs font-medium text-slate-400">
+                  <p className="text-2xs font-medium text-slate-500">
                     Passend = die dag vrij, minstens {advies.minRustUren}u rust t.o.v. de aansluitende werkdagen, maximaal {advies.maxDagenNaElkaar} werkdagen na elkaar en geen schoolvervoerchauffeur. Kortste reeks werkdagen bovenaan, daarna wie dit jaar het minst inviel; toewijzen zet de dienst meteen in de planning en meldt het aan de chauffeur.
                   </p>
                 </div>

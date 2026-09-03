@@ -253,17 +253,21 @@ export function ZiekteView({
   // --- Ziek melden (zelfde flow als het dashboard: onSickReport) ------------
   const [meldOpen, setMeldOpen] = useState(false);
   const [meldForm, setMeldForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
-  const [meldFout, setMeldFout] = useState('');
+  // Validatiefouten per veld (fase C15): bij het veld, niet onderaan of in
+  // een toast. Server-/netwerkfouten blijven via onSickReport → notify.
+  const [meldFouten, setMeldFouten] = useState<{ userId?: string; endDate?: string }>({});
   const [isMelden, setIsMelden] = useState(false);
-  const sluitMelden = () => { setMeldOpen(false); setMeldForm({ userId: '', startDate: '', endDate: '', comment: '' }); setMeldFout(''); };
+  const sluitMelden = () => { setMeldOpen(false); setMeldForm({ userId: '', startDate: '', endDate: '', comment: '' }); setMeldFouten({}); };
   const verstuurMelding = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isMelden) return;
-    if (!meldForm.userId) { setMeldFout('Kies de chauffeur die ziek is.'); return; }
     const startDate = meldForm.startDate || today;
     const endDate = meldForm.endDate || startDate;
-    if (endDate < startDate) { setMeldFout('De einddatum ligt vóór de startdatum.'); return; }
-    setMeldFout('');
+    const fouten: { userId?: string; endDate?: string } = {};
+    if (!meldForm.userId) fouten.userId = 'Kies de chauffeur die ziek is.';
+    if (endDate < startDate) fouten.endDate = 'De einddatum ligt vóór de startdatum.';
+    setMeldFouten(fouten);
+    if (fouten.userId || fouten.endDate) return;
     setIsMelden(true);
     const ok = await onSickReport({ userId: meldForm.userId, startDate, endDate, comment: meldForm.comment })
       .finally(() => setIsMelden(false));
@@ -358,7 +362,7 @@ export function ZiekteView({
         <MicroLabel className="tabular-nums">{items.length}</MicroLabel>
       </div>
       {items.length === 0 ? (
-        <p className="rounded-xl bg-surface-soft px-3.5 py-3 text-xs font-medium text-slate-400">{leeg}</p>
+        <p className="rounded-xl bg-surface-soft px-3.5 py-3 text-xs font-medium text-slate-500">{leeg}</p>
       ) : (
         <div className="space-y-1.5">{items.map((r) => <Rij key={r.id} r={r} toonOpen={toonOpen} />)}</div>
       )}
@@ -440,12 +444,14 @@ export function ZiekteView({
       <Modal open={meldOpen} onClose={sluitMelden} maxWidth="md" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
         <ModalHeader title="Ziekmelding registreren" description="De dag(en) staan meteen als onbeschikbaar in de planning; de andere planners krijgen een melding." onClose={sluitMelden} />
         <form onSubmit={verstuurMelding} className="flex-1 space-y-4 overflow-y-auto overscroll-contain p-6">
-          <Field label="Chauffeur">
-            {({ id }) => (
+          <Field label="Chauffeur" required error={meldFouten.userId}>
+            {({ id, describedBy, invalid }) => (
               <Select
                 id={id}
+                aria-describedby={describedBy}
+                invalid={invalid}
                 value={meldForm.userId}
-                onChange={(e) => { setMeldForm({ ...meldForm, userId: e.target.value }); setMeldFout(''); }}
+                onChange={(e) => { setMeldForm({ ...meldForm, userId: e.target.value }); setMeldFouten((f) => ({ ...f, userId: undefined })); }}
               >
                 <option value="">Kies een chauffeur…</option>
                 {users
@@ -456,24 +462,27 @@ export function ZiekteView({
             )}
           </Field>
           <div className="grid grid-cols-2 gap-3">
-            <Field label="Van">
-              {({ id }) => (
+            <Field label="Van" hint="Leeg = vandaag.">
+              {({ id, describedBy }) => (
                 <Input
                   id={id}
+                  aria-describedby={describedBy}
                   type="date"
                   value={meldForm.startDate}
-                  onChange={(e) => setMeldForm({ ...meldForm, startDate: e.target.value, endDate: meldForm.endDate && meldForm.endDate < e.target.value ? e.target.value : meldForm.endDate })}
+                  onChange={(e) => { setMeldForm({ ...meldForm, startDate: e.target.value, endDate: meldForm.endDate && meldForm.endDate < e.target.value ? e.target.value : meldForm.endDate }); setMeldFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>
-            <Field label="Tot en met">
-              {({ id }) => (
+            <Field label="Tot en met" error={meldFouten.endDate} hint="Leeg = één dag.">
+              {({ id, describedBy, invalid }) => (
                 <Input
                   id={id}
+                  aria-describedby={describedBy}
+                  invalid={invalid}
                   type="date"
                   value={meldForm.endDate}
                   min={meldForm.startDate || undefined}
-                  onChange={(e) => setMeldForm({ ...meldForm, endDate: e.target.value })}
+                  onChange={(e) => { setMeldForm({ ...meldForm, endDate: e.target.value }); setMeldFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>
@@ -489,7 +498,6 @@ export function ZiekteView({
               />
             )}
           </Field>
-          {meldFout && <p role="alert" className="text-xs font-semibold text-red-700">{meldFout}</p>}
           <Button type="submit" variant="primary" size="lg" full disabled={isMelden}>
             {isMelden ? 'Registreren…' : 'Ziekmelding registreren'}
           </Button>
@@ -586,12 +594,17 @@ export function ZiekteView({
                       </div>
                     </div>
                   )}
-                  <Field label="Ziek tot en met" hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug.">
-                    {({ id, describedBy }) => (
+                  <Field
+                    label="Ziek tot en met"
+                    hint="Langer ziek: schuif de datum op. Eerder hersteld: zet hem terug."
+                    error={nieuwEinde && nieuwEinde < detail.startDate ? `De einddatum ligt vóór de startdatum (${formatShortDay(detail.startDate)}).` : undefined}
+                  >
+                    {({ id, describedBy, invalid }) => (
                       <div className="flex gap-2">
                         <Input
                           id={id}
                           aria-describedby={describedBy}
+                          invalid={invalid}
                           type="date"
                           value={nieuwEinde}
                           min={detail.startDate}

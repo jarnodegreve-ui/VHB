@@ -1,5 +1,7 @@
 /**
- * Mobiele audit: laadt elk scherm als iPhone (WebKit) en Android (Chromium),
+ * Visuele audit/regressie: laadt elk scherm als iPhone (WebKit), Android
+ * (Chromium) en — met VISUEEL_DESKTOP=1 — als desktop (1440×900), in licht
+ * én donker, schiet screenshots en meet per pagina:
  * schiet full-page screenshots en meet per pagina:
  *  - horizontale overflow (+ de breedste boosdoeners)
  *  - zichtbare interactieve elementen kleiner dan 40×40 px
@@ -11,6 +13,11 @@ import { chromium, webkit, devices } from '@playwright/test';
 import fs from 'node:fs';
 
 const OUT = process.env.AUDIT_OUT || '/tmp/mobiel-audit';
+// Poort van de preview-server (npm run preview -- --port <PORT>); zie ook
+// scripts/screenshot-diff.py voor het vergelijken van twee uitvoermappen.
+const PORT = process.env.AUDIT_PORT || '4173';
+const DESKTOP = process.env.VISUEEL_DESKTOP === '1';
+const ALLE_THEMAS = process.env.VISUEEL_ALLE_THEMAS === '1';
 fs.mkdirSync(OUT, { recursive: true });
 
 const SESSION_KEY = 'sb-localhost-auth-token';
@@ -89,12 +96,13 @@ function apiFixtures(user) {
   };
 }
 
-const CHAUFFEUR_VIEWS = ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'];
+const CHAUFFEUR_VIEWS = ['dashboard', 'instellingen', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'];
 const ADMIN_VIEWS = ['dashboard', 'verlof', 'verlof-kalender', 'dekking', 'beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'beheer-updates', 'beheer-omleidingen', 'gebruikers', 'toestellen', 'activiteit', 'beheer-debug'];
 
 const PROFILES = [
+  ...(DESKTOP ? [{ key: 'desktop', browser: chromium, device: { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 } }] : []),
   { key: 'iphone', browser: webkit, device: devices['iPhone 13'] },
-  { key: 'android', browser: chromium, device: devices['Pixel 7'] },
+  ...(DESKTOP ? [] : [{ key: 'android', browser: chromium, device: devices['Pixel 7'] }]),
 ];
 
 const results = [];
@@ -113,7 +121,7 @@ async function auditPage(context, role, user, view, profileKey, dark) {
   }, [SESSION_KEY, user, view, dark]);
   await page.route('**/api/**', apiFixtures(user));
 
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle' });
+  await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(1200);
 
   const metrics = await page.evaluate(() => {
@@ -147,7 +155,7 @@ async function auditPage(context, role, user, view, profileKey, dark) {
   });
 
   const shot = `${OUT}/${profileKey}-${role}-${view}${dark ? '-dark' : ''}.png`;
-  await page.screenshot({ path: shot, fullPage: true });
+  await page.screenshot({ path: shot, fullPage: profileKey !== 'desktop' });
   results.push({ profile: profileKey, role, view, dark, ...metrics, errors: errors.slice(0, 4), shot });
   await page.close();
 }
@@ -158,13 +166,18 @@ for (const profile of PROFILES) {
 
   for (const view of CHAUFFEUR_VIEWS) await auditPage(context, 'chauffeur', CHAUFFEUR, view, profile.key, false);
   for (const view of ADMIN_VIEWS) await auditPage(context, 'admin', ADMIN, view, profile.key, false);
-  // Dark-mode spot-checks op de belangrijkste schermen
-  for (const view of ['dashboard', 'rooster', 'verlof']) await auditPage(context, 'chauffeur', CHAUFFEUR, view, profile.key, true);
+  // Dark-mode: spot-checks, of (VISUEEL_ALLE_THEMAS=1) álle schermen.
+  if (ALLE_THEMAS) {
+    for (const view of CHAUFFEUR_VIEWS) await auditPage(context, 'chauffeur', CHAUFFEUR, view, profile.key, true);
+    for (const view of ADMIN_VIEWS) await auditPage(context, 'admin', ADMIN, view, profile.key, true);
+  } else {
+    for (const view of ['dashboard', 'rooster', 'verlof']) await auditPage(context, 'chauffeur', CHAUFFEUR, view, profile.key, true);
+  }
 
   // Login-scherm (zonder sessie)
   const page = await context.newPage();
   await page.route('**/api/**', apiFixtures(CHAUFFEUR));
-  await page.goto('http://localhost:4173/', { waitUntil: 'networkidle' });
+  await page.goto(`http://localhost:${PORT}/`, { waitUntil: 'networkidle' });
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${OUT}/${profile.key}-login.png`, fullPage: true });
   await page.close();

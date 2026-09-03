@@ -328,7 +328,7 @@ export function LoginView({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.35, duration: DUR.slow }}
-            className="mt-6 text-center text-xs text-slate-400"
+            className="mt-6 text-center text-xs text-slate-500"
           >
             Problemen met inloggen? Contacteer de planning.
           </motion.p>
@@ -342,7 +342,7 @@ export function LoginView({
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ delay: 0.5 }}
-        className="absolute inset-x-0 bottom-0 text-2xs font-medium text-slate-400 uppercase tracking-[0.08em] text-center px-6"
+        className="absolute inset-x-0 bottom-0 text-2xs font-medium text-slate-500 uppercase tracking-[0.08em] text-center px-6"
         style={{ paddingBottom: 'max(0.75rem, env(safe-area-inset-bottom))' }}
       >
         <div>Intern gebruik · © {new Date().getFullYear()} Van Hoorebeke & Zoon</div>

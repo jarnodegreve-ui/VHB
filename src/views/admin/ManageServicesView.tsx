@@ -5,7 +5,8 @@ import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { cn, notify, downloadBlob } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, IconButton, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, Td, Th } from '../../components/primitives';
+import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
 import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -37,6 +38,26 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     loopnr3: ''
   });
   const [isImporting, setIsImporting] = useState(false);
+  // Zoeken op dienst- of loopnummer; sorteren per kolom. Standaard blijft de
+  // volgorde van de lijst zelf (zoals geïmporteerd/opgeslagen) — 'volgorde'
+  // is die onzichtbare standaardsleutel.
+  const [zoek, setZoek] = useState('');
+  const sort = useSort<'volgorde' | 'dienst' | 'loop1' | 'start'>('volgorde');
+  const zoekTerm = zoek.trim().toLowerCase();
+  const gefilterd = zoekTerm
+    ? services.filter((s) => [s.serviceNumber, s.loopnr, s.loopnr2, s.loopnr3].filter(Boolean).join(' ').toLowerCase().includes(zoekTerm))
+    : services;
+  const volgorde = new Map(services.map((s, i) => [s.id, i]));
+  const gesorteerd = sort.sorteer(gefilterd, (s, k) => {
+    switch (k) {
+      case 'volgorde': return volgorde.get(s.id) ?? 0;
+      case 'dienst': return s.serviceNumber;
+      case 'loop1': return s.loopnr || null;
+      case 'start': return s.startTime || null;
+    }
+  });
+  /** "04:36–07:52" — en-dash, zoals de chauffeursweergave. */
+  const tijdvak = (van: string, tot: string) => `${van}–${tot}`;
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canAdminOverride) {
@@ -272,14 +293,14 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                   title="Importeer vanuit Excel"
                 >
                   <Upload size={16} />
-                  {isImporting ? 'Importeren...' : 'Excel Import'}
+                  {isImporting ? 'Importeren…' : 'Excel importeren'}
                 </label>
               </>
             ) : (
-              <Badge tone="slate">Excel import admin-only</Badge>
+              <Badge tone="slate">Excel-import alleen voor admins</Badge>
             )}
             <Button variant="secondary" icon={<Download size={16} />} onClick={downloadCSV} title="Download als CSV">
-              Download CSV
+              CSV downloaden
             </Button>
             <Button
               variant="primary"
@@ -306,67 +327,80 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 setShowModal(true);
               }}
             >
-              Nieuwe Dienst
+              Nieuwe dienst
             </Button>
           </div>
         )}
       />
 
-      <TableShell>
-        {/* Desktop Table View */}
-        <div className="hidden md:block">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50">
-                {/* Zelfde indeling als het totaaloverzicht van de planning
-                    en als de chauffeurs-weergave: loop vóór de uren. */}
-                <Th>Dienst</Th>
-                <Th>Loop 1</Th>
-                <Th>Deel 1</Th>
-                <Th>Loop 2</Th>
-                <Th>Deel 2</Th>
-                <Th>Loop 3</Th>
-                <Th>Deel 3</Th>
-                <Th className="text-right">Acties</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {services.map(s => (
-                <tr key={s.id} className="border-t border-slate-100 hover:bg-slate-50/50 transition-colors">
-                  <Td className="font-semibold text-slate-800">{s.serviceNumber}</Td>
-                  <Td className="tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
-                  <Td className="tabular-nums">{s.startTime} - {s.endTime}</Td>
-                  <Td className="tabular-nums font-semibold text-slate-700">
-                    {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 ? s.loopnr2 : <span className="font-normal text-slate-300">—</span>}
-                  </Td>
-                  <Td className="tabular-nums">
-                    {hasValidTime(s.startTime2, s.endTime2) ? `${s.startTime2} - ${s.endTime2}` : ''}
-                  </Td>
-                  <Td className="tabular-nums font-semibold text-slate-700">
-                    {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 ? s.loopnr3 : <span className="font-normal text-slate-300">—</span>}
-                  </Td>
-                  <Td className="tabular-nums">
-                    {hasValidTime(s.startTime3, s.endTime3) ? `${s.startTime3} - ${s.endTime3}` : ''}
-                  </Td>
-                  <Td className="text-right">
-                    <div className="flex items-center justify-end gap-1">
-                      <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryService(s)}><History size={16} /></IconButton>
-                      <IconButton label="Dienst bewerken" variant="ghost" size="sm" onClick={() => handleEdit(s)}><Pencil size={16} /></IconButton>
-                      {canAdminOverride ? <IconButton label="Dienst verwijderen" variant="danger" size="sm" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></IconButton> : null}
-                    </div>
-                  </Td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+      {/* `overflow-clip` i.p.v. TableShell: die maakt een scrollcontainer en
+          dan plakt de kolomkop niet meer onder de topbar. De tabel is
+          desktop-only (mobiel = kaartlijst), dus horizontaal scrollen hoeft niet. */}
+      <div className="surface-table rounded-3xl overflow-clip">
+        <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
+          <TableToolbar
+            zoek={zoek}
+            onZoek={setZoek}
+            placeholder="Zoek op dienst- of loopnummer…"
+            telling={`${gesorteerd.length} van ${services.length}`}
+          />
         </div>
 
-        {/* Mobile Card View */}
+        {gesorteerd.length > 0 && (
+          <div className="hidden md:block">
+            <table className="w-full text-left border-collapse">
+              <StickyThead>
+                <tr>
+                  {/* Zelfde indeling als het totaaloverzicht van de planning
+                      en als de chauffeurs-weergave: loop vóór de uren. */}
+                  <SortTh kolom="dienst" sort={sort}>Dienst</SortTh>
+                  <SortTh kolom="loop1" sort={sort}>Loop 1</SortTh>
+                  <SortTh kolom="start" sort={sort}>Deel 1</SortTh>
+                  <Th>Loop 2</Th>
+                  <Th>Deel 2</Th>
+                  <Th>Loop 3</Th>
+                  <Th>Deel 3</Th>
+                  <Th className="text-right">Acties</Th>
+                </tr>
+              </StickyThead>
+              <tbody>
+                {gesorteerd.map(s => (
+                  <tr key={s.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/50 transition-colors">
+                    <Td className="font-semibold text-slate-800 tabular-nums">{s.serviceNumber}</Td>
+                    <Td className="tabular-nums font-semibold text-slate-700">{s.loopnr || <span className="font-normal text-slate-300">—</span>}</Td>
+                    <Td className="tabular-nums whitespace-nowrap">{tijdvak(s.startTime, s.endTime)}</Td>
+                    <Td className="tabular-nums font-semibold text-slate-700">
+                      {hasValidTime(s.startTime2, s.endTime2) && s.loopnr2 ? s.loopnr2 : <span className="font-normal text-slate-300">—</span>}
+                    </Td>
+                    <Td className="tabular-nums whitespace-nowrap">
+                      {hasValidTime(s.startTime2, s.endTime2) ? tijdvak(s.startTime2!, s.endTime2!) : ''}
+                    </Td>
+                    <Td className="tabular-nums font-semibold text-slate-700">
+                      {hasValidTime(s.startTime3, s.endTime3) && s.loopnr3 ? s.loopnr3 : <span className="font-normal text-slate-300">—</span>}
+                    </Td>
+                    <Td className="tabular-nums whitespace-nowrap">
+                      {hasValidTime(s.startTime3, s.endTime3) ? tijdvak(s.startTime3!, s.endTime3!) : ''}
+                    </Td>
+                    <Td className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryService(s)}><History size={16} /></IconButton>
+                        <IconButton label="Dienst bewerken" variant="ghost" size="sm" onClick={() => handleEdit(s)}><Pencil size={16} /></IconButton>
+                        {canAdminOverride ? <IconButton label="Dienst verwijderen" variant="danger" size="sm" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></IconButton> : null}
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {/* Mobiel: kaart per dienst */}
         <div className="md:hidden divide-y divide-slate-100">
-          {services.map(s => (
+          {gesorteerd.map(s => (
             <div key={s.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors">
               <div className="flex justify-between items-center">
-                <span className="text-card-title">{s.serviceNumber}</span>
+                <span className="text-card-title tabular-nums">{s.serviceNumber}</span>
                 <div className="flex items-center gap-1">
                   <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryService(s)}><History size={16} /></IconButton>
                   <IconButton label="Dienst bewerken" variant="ghost" size="sm" onClick={() => handleEdit(s)}><Pencil size={16} /></IconButton>
@@ -376,29 +410,29 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
 
               <div className="grid grid-cols-1 gap-3">
                 <div className="flex flex-col gap-1">
-                  <MicroLabel>Deel 1</MicroLabel>
+                  <MicroLabel>Deel 1{s.loopnr ? ` · loop ${s.loopnr}` : ''}</MicroLabel>
                   <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
                     <Clock size={14} className="text-oker-500" />
-                    {s.startTime} - {s.endTime}
+                    {tijdvak(s.startTime, s.endTime)}
                   </div>
                 </div>
 
                 {hasValidTime(s.startTime2, s.endTime2) && (
                   <div className="flex flex-col gap-1">
-                    <MicroLabel>Deel 2</MicroLabel>
+                    <MicroLabel>Deel 2{s.loopnr2 ? ` · loop ${s.loopnr2}` : ''}</MicroLabel>
                     <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
                       <Clock size={14} className="text-oker-500" />
-                      {s.startTime2} - {s.endTime2}
+                      {tijdvak(s.startTime2!, s.endTime2!)}
                     </div>
                   </div>
                 )}
 
                 {hasValidTime(s.startTime3, s.endTime3) && (
                   <div className="flex flex-col gap-1">
-                    <MicroLabel>Deel 3</MicroLabel>
+                    <MicroLabel>Deel 3{s.loopnr3 ? ` · loop ${s.loopnr3}` : ''}</MicroLabel>
                     <div className="flex items-center gap-2 text-slate-700 font-semibold text-sm tabular-nums">
                       <Clock size={14} className="text-oker-500" />
-                      {s.startTime3} - {s.endTime3}
+                      {tijdvak(s.startTime3!, s.endTime3!)}
                     </div>
                   </div>
                 )}
@@ -407,16 +441,26 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           ))}
         </div>
 
-        {services.length === 0 && (
+        {gesorteerd.length === 0 && (
           <div className="p-6">
-            <EmptyState
-              icon={<Clock size={24} />}
-              title="Geen diensten geconfigureerd"
-              message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
-            />
+            {zoekTerm ? (
+              <EmptyState
+                icon={<Clock size={24} />}
+                title={`Geen resultaten voor “${zoek.trim()}”`}
+                message="Zoek op dienstnummer of loopnummer."
+                action={<Button variant="secondary" onClick={() => setZoek('')}>Zoekterm wissen</Button>}
+              />
+            ) : (
+              <EmptyState
+                icon={<Clock size={24} />}
+                title="Nog geen diensten"
+                message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
+                action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => { setEditingId(null); setFormData(emptyForm); setShowModal(true); }}>Nieuwe dienst</Button>}
+              />
+            )}
           </div>
         )}
-      </TableShell>
+      </div>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex flex-col !p-0">
         <ModalHeader title={editingId ? 'Dienst bewerken' : 'Nieuwe dienst'} onClose={() => setShowModal(false)} />
@@ -430,7 +474,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             />
           </Field>
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Starttijd (Deel 1)" htmlFor="dienst-start1">
+            <Field label="Starttijd (deel 1)" htmlFor="dienst-start1">
               <Input
                 id="dienst-start1"
                 type="text" required inputMode="numeric" placeholder="04:36" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime}
@@ -438,7 +482,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Eindtijd (Deel 1)" htmlFor="dienst-eind1">
+            <Field label="Eindtijd (deel 1)" htmlFor="dienst-eind1">
               <Input
                 id="dienst-eind1"
                 type="text" required inputMode="numeric" placeholder="26:16" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime}
@@ -446,7 +490,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Loopnummer (Deel 1)" htmlFor="dienst-loop1">
+            <Field label="Loopnummer (deel 1)" htmlFor="dienst-loop1">
               <Input
                 id="dienst-loop1"
                 type="text" inputMode="numeric" value={formData.loopnr}
@@ -458,7 +502,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Starttijd (Deel 2)" htmlFor="dienst-start2">
+            <Field label="Starttijd (deel 2)" htmlFor="dienst-start2">
               <Input
                 id="dienst-start2"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime2}
@@ -466,7 +510,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Eindtijd (Deel 2)" htmlFor="dienst-eind2">
+            <Field label="Eindtijd (deel 2)" htmlFor="dienst-eind2">
               <Input
                 id="dienst-eind2"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime2}
@@ -474,7 +518,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Loopnummer (Deel 2)" htmlFor="dienst-loop2">
+            <Field label="Loopnummer (deel 2)" htmlFor="dienst-loop2">
               <Input
                 id="dienst-loop2"
                 type="text" inputMode="numeric" value={formData.loopnr2}
@@ -486,7 +530,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-            <Field label="Starttijd (Deel 3)" htmlFor="dienst-start3">
+            <Field label="Starttijd (deel 3)" htmlFor="dienst-start3">
               <Input
                 id="dienst-start3"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.startTime3}
@@ -494,7 +538,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Eindtijd (Deel 3)" htmlFor="dienst-eind3">
+            <Field label="Eindtijd (deel 3)" htmlFor="dienst-eind3">
               <Input
                 id="dienst-eind3"
                 type="text" inputMode="numeric" placeholder="—" pattern="\\d{1,2}:\\d{2}" title="UU:MM — na middernacht als 24:00+ (bv. 26:16)" value={formData.endTime3}
@@ -502,7 +546,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 className="tabular-nums"
               />
             </Field>
-            <Field label="Loopnummer (Deel 3)" htmlFor="dienst-loop3">
+            <Field label="Loopnummer (deel 3)" htmlFor="dienst-loop3">
               <Input
                 id="dienst-loop3"
                 type="text" inputMode="numeric" value={formData.loopnr3}

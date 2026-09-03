@@ -1,13 +1,14 @@
 import { Fragment, useState } from 'react';
 import { typedagLabel } from '../../lib/typedag';
-import { ChevronLeft, ChevronRight, Printer } from 'lucide-react';
+import { CalendarOff, ChevronLeft, ChevronRight, Printer, Users } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
 import { leaveSolid } from '../../lib/statusColors';
 import { cn, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
-import { PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Card } from '../../components/Card';
-import { Button, MicroLabel, microLabelClass, TableShell, Td, Th } from '../../components/primitives';
+import { Button, FilterChip, MicroLabel, microLabelClass, TableShell, Td, Th } from '../../components/primitives';
+import { SortTh, TableToolbar, useSort } from '../../components/Table';
 import { MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
 
 
@@ -36,9 +37,14 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
   };
 
   // Toon enkel actieve chauffeurs en planners (niet de admin/beheerder).
-  const visibleUsers = users
+  const alleUsers = users
     .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder' && (u.role === 'chauffeur' || u.role === 'planner'))
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+  // Zoeken op naam + "alleen met afwezigheid deze maand"; de naamkolom
+  // sorteert op- of aflopend (standaard oplopend, zoals voorheen).
+  const [zoek, setZoek] = useState('');
+  const [alleenAfwezig, setAlleenAfwezig] = useState(false);
+  const sort = useSort<'naam'>('naam');
 
   const dateIso = (day: number) => `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
   const weekdayLetter = (day: number) => {
@@ -101,10 +107,29 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
     }
   }
 
+  const zoekTerm = zoek.trim().toLowerCase();
+  const visibleUsers = sort.sorteer(
+    alleUsers
+      .filter((u) => !zoekTerm || u.name.toLowerCase().includes(zoekTerm))
+      .filter((u) => !alleenAfwezig || (leaveByUserDay.get(u.id)?.size ?? 0) > 0),
+    (u) => u.name,
+  );
+  const wisFilters = () => { setZoek(''); setAlleenAfwezig(false); };
+  const legeStaat = alleUsers.length === 0
+    ? <EmptyState icon={<Users size={24} />} title="Geen actieve chauffeurs" message="Zodra er chauffeurs of planners in het systeem staan, verschijnen ze hier." />
+    : (
+      <EmptyState
+        icon={<CalendarOff size={24} />}
+        title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Niemand afwezig deze maand'}
+        message={zoekTerm ? 'Pas de zoekterm aan.' : 'Zet het filter uit om iedereen te zien.'}
+        action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filter wissen</Button>}
+      />
+    );
+
   return (
     <PageShell>
       <PageHeader
-        title="Verlof-kalender"
+        title="Verlofkalender"
         description="Maandoverzicht van wie wanneer afwezig is. Eén oogopslag voor capaciteitsplanning."
         actions={(
           <div className="flex items-center gap-2">
@@ -130,16 +155,32 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
         )}
       />
 
+      <TableToolbar
+        zoek={zoek}
+        onZoek={setZoek}
+        placeholder="Zoek chauffeur…"
+        telling={`${visibleUsers.length} van ${alleUsers.length}`}
+        filters={(
+          <FilterChip active={alleenAfwezig} onClick={() => setAlleenAfwezig((v) => !v)} icon={<CalendarOff size={14} />}>
+            Alleen met afwezigheid
+          </FilterChip>
+        )}
+      />
+
+      {visibleUsers.length === 0 ? legeStaat : (
+      <>
       {/* Desktop: volle 31-koloms kalender. Op mobile is dit onbruikbaar
           (~6px per dag-cel), dus tonen we hieronder een per-chauffeur
-          stacked list. */}
+          stacked list. De kalender blijft in TableShell (horizontaal
+          scrollen bij 31 kolommen); een sticky kolomkop kan daar niet bij
+          omdat de scrollcontainer de sticky-context wordt. */}
       <TableShell className="hidden md:block">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-slate-50/60 border-b border-slate-100">
-                <Th className="sticky left-0 z-10 bg-surface-soft min-w-[180px]">
+                <SortTh kolom="naam" sort={sort} className="sticky left-0 z-10 bg-surface-soft min-w-[180px]">
                   Chauffeur
-                </Th>
+                </SortTh>
                 {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => (
                   <Fragment key={day}>
                     <Th
@@ -207,9 +248,6 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                   </tr>
                 );
               })}
-              {visibleUsers.length === 0 && (
-                <tr><td colSpan={daysInMonth + 1} className="px-4 py-8 text-center text-sm text-slate-500">Geen actieve chauffeurs gevonden.</td></tr>
-              )}
             </tbody>
           </table>
       </TableShell>
@@ -273,12 +311,9 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
             </div>
           );
         })}
-        {visibleUsers.length === 0 && (
-          <div className="p-6 text-center text-sm font-medium text-slate-400">
-            Geen actieve chauffeurs gevonden.
-          </div>
-        )}
       </Card>
+      </>
+      )}
 
       {/* Legende */}
       <Card padding="md" className="flex flex-wrap items-center gap-x-6 gap-y-3 text-xs">

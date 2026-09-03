@@ -2,7 +2,7 @@ import { BrandSpinner } from '../components/BrandSpinner';
 import { useEffect, useRef, useState } from 'react';
 import { Send, Sparkles } from 'lucide-react';
 import { cn } from '../lib/ui';
-import { PageShell } from '../components/ui';
+import { PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Input } from '../components/Field';
@@ -53,6 +53,7 @@ export function AssistentView() {
 
   return (
     <PageShell>
+      <PageHeader title="Assistent" description="Stel je planningsvraag — advies op basis van de actuele planning, het verlof en het invaladvies." />
       <Card padding="none" className="flex flex-col overflow-hidden">
         {/* Gespreksvlak */}
         <div className="flex-1 min-h-[45dvh] max-h-[62dvh] overflow-y-auto p-5 space-y-3">
@@ -124,7 +125,7 @@ export function AssistentView() {
             value={invoer}
             enterKeyHint="send"
             onChange={(e) => setInvoer(e.target.value)}
-            placeholder="Bijv. wie kan zaterdag dienst 2603 rijden?"
+            placeholder="Bv. wie kan zaterdag dienst 2603 rijden?"
             aria-label="Je vraag aan de planner-assistent"
             className="flex-1 font-semibold"
             disabled={bezig}
@@ -135,7 +136,7 @@ export function AssistentView() {
         </form>
       </Card>
 
-      <p className="text-2xs font-medium text-slate-400 px-1">
+      <p className="text-2xs font-medium text-slate-500 px-1">
         De assistent baseert zich op de actuele planning maar kan fouten maken — controleer het advies vóór je toewijst. Gesprekken worden niet bewaard.
       </p>
     </PageShell>

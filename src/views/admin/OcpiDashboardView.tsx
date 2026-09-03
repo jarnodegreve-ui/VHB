@@ -62,7 +62,7 @@ function GridLijnen({ top, eenheid }: { top: number; eenheid: string }) {
           {/* Dekkend chipje op kaartkleur: zonder achtergrond liep het label
               dwars door staven/curve en werd het onleesbaar. */}
           <span
-            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-slate-400"
+            className="absolute right-0 top-0.5 z-10 rounded px-1 py-0.5 text-2xs font-medium font-mono tabular-nums leading-none text-slate-500"
             style={{ background: 'var(--tile-bg)' }}
           >
             {formatGetal(top * f)} {eenheid}
@@ -925,7 +925,7 @@ export function OcpiDashboardView() {
                       className="mb-4"
                       title={loc.name ?? loc.id}
                       description={loc.city || undefined}
-                      aside={<span className="text-2xs text-slate-400">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>}
+                      aside={<span className="text-2xs text-slate-500">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>}
                     />
                     {loc.evses.length === 0 ? (
                       <p className="text-sm text-slate-500">Geen laadpunten.</p>
@@ -1054,7 +1054,7 @@ export function OcpiDashboardView() {
                         aria-label="Van"
                         className="w-auto px-3 py-2"
                       />
-                      <span className="text-xs font-medium text-slate-400">t/m</span>
+                      <span className="text-xs font-medium text-slate-500">t/m</span>
                       <Input
                         type="date"
                         value={periodeGekozen.tot}
@@ -1129,7 +1129,7 @@ export function OcpiDashboardView() {
                                         style={{ width: max > 0 && p.kwh > 0 ? `${Math.max(2, Math.round((p.kwh / max) * 100))}%` : '0%' }}
                                       />
                                     </div>
-                                    <span className={cn('w-20 shrink-0 text-right text-sm font-semibold font-mono tabular-nums', p.kwh > 0 ? 'text-slate-800' : 'text-slate-400')}>
+                                    <span className={cn('w-20 shrink-0 text-right text-sm font-semibold font-mono tabular-nums', p.kwh > 0 ? 'text-slate-800' : 'text-slate-500')}>
                                       {fmtKwh(p.kwh)} kWh
                                     </span>
                                   </div>

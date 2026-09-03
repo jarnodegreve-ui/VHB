@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState, type ComponentProps } from 'react';
-import { Activity, Download, Search, Users } from 'lucide-react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
+import { Activity, Download, Users } from 'lucide-react';
 import type { ActivityLogEntry } from '../../types';
 import { downloadBlob } from '../../lib/ui';
 import { csvTekst } from '../../lib/csv';
@@ -8,9 +8,10 @@ import { isoDate } from '../../lib/availability';
 import { formatDayLong } from '../../lib/format';
 import { EmptyState, ModalHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
+import { Badge, Button, FilterChip, MicroLabel, Td } from '../../components/primitives';
+import { Paginering, SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
 import { Card, CardHeader } from '../../components/Card';
-import { Input } from '../../components/Field';
+import { Select } from '../../components/Field';
 
 const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof Badge>['tone']> = {
   users: 'oker',
@@ -24,6 +25,32 @@ const CATEGORY_TONES: Record<ActivityLogEntry['category'], ComponentProps<typeof
   swaps: 'blue',
   system: 'red',
 };
+
+const CATEGORY_LABELS: Record<ActivityLogEntry['category'], string> = {
+  users: 'Gebruikers',
+  planning: 'Planning',
+  planning_codes: 'Planningscodes',
+  services: 'Diensten',
+  diversions: 'Omleidingen',
+  updates: 'Updates',
+  auth: 'Authenticatie',
+  leave: 'Verlof',
+  swaps: 'Dienstruilen',
+  system: 'Systeem',
+};
+
+/** 50 rijen per pagina: 30 dagen of "alles" zijn al snel duizenden regels,
+ *  en die allemaal renderen maakte het scherm traag. Zoeken en filteren
+ *  lopen over de hele set, de paginering over het resultaat. */
+const PER_PAGINA = 50;
+
+const formatTijdstip = (iso: string) => new Date(iso).toLocaleString('nl-BE', {
+  day: '2-digit',
+  month: '2-digit',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+});
 
 export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLogEntry[]; logins?: ActivityLogEntry[] }) {
   // Aanwezigheid: per dag het aantal unieke actieve gebruikers (distinct op
@@ -77,21 +104,12 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
     () => logins.filter((e) => e.action === 'Aangemeld').sort((a, b) => b.createdAt.localeCompare(a.createdAt)).slice(0, 30),
     [logins],
   );
-  const categoryLabels: Record<ActivityLogEntry['category'], string> = {
-    users: 'Gebruikers',
-    planning: 'Planning',
-    planning_codes: 'Planningscodes',
-    services: 'Diensten',
-    diversions: 'Omleidingen',
-    updates: 'Updates',
-    auth: 'Authenticatie',
-    leave: 'Verlof',
-    swaps: 'Dienstruilen',
-    system: 'Systeem',
-  };
   const [activeCategory, setActiveCategory] = useState<'all' | ActivityLogEntry['category']>('all');
   const [dateWindow, setDateWindow] = useState<'all' | 'today' | '7d' | '30d'>('7d');
   const [searchTerm, setSearchTerm] = useState('');
+  const [pagina, setPagina] = useState(1);
+  // Nieuwste eerst, zoals de server ze levert; elke kolom is sorteerbaar.
+  const sort = useSort<'tijd' | 'categorie' | 'actie' | 'actor'>('tijd', 'desc');
 
   // De centrale fetch in App levert het 7-dagen-venster (genoeg voor het
   // dashboard). Kiest de admin hier "30 dagen" of "Alles", dan halen we dat
@@ -150,17 +168,39 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         return true;
       }
 
-      const haystack = [entry.action, entry.details, entry.actorName, categoryLabels[entry.category]]
+      const haystack = [entry.action, entry.details, entry.actorName, CATEGORY_LABELS[entry.category]]
         .join(' ')
         .toLowerCase();
       return haystack.includes(normalizedSearch);
     });
-  }, [activeCategory, categoryLabels, dateWindow, sourceEntries, searchTerm]);
+  }, [activeCategory, dateWindow, sourceEntries, searchTerm]);
+
+  const sortedEntries = useMemo(
+    () => sort.sorteer(filteredEntries, (e, k) => {
+      switch (k) {
+        case 'tijd': return e.createdAt;
+        case 'categorie': return CATEGORY_LABELS[e.category];
+        case 'actie': return e.action;
+        case 'actor': return e.actorName;
+      }
+    }),
+    [filteredEntries, sort.sorteer],
+  );
+
+  // Terug naar pagina 1 zodra het resultaat verandert (filter, zoekterm,
+  // venster of sortering) — anders sta je op een lege pagina 7.
+  useEffect(() => { setPagina(1); }, [activeCategory, dateWindow, searchTerm, sourceEntries, sort.key, sort.dir]);
+  const paginas = Math.max(1, Math.ceil(sortedEntries.length / PER_PAGINA));
+  const huidigePagina = Math.min(pagina, paginas);
+  const paginaEntries = sortedEntries.slice((huidigePagina - 1) * PER_PAGINA, huidigePagina * PER_PAGINA);
+
+  const filterActief = activeCategory !== 'all' || searchTerm.trim() !== '';
+  const wisFilters = () => { setActiveCategory('all'); setSearchTerm(''); };
 
   const exportFilteredActivity = () => {
-    const rows = filteredEntries.map((entry) => [
+    const rows = sortedEntries.map((entry) => [
       entry.createdAt,
-      categoryLabels[entry.category],
+      CATEGORY_LABELS[entry.category],
       entry.action,
       entry.actorName,
       entry.actorRole,
@@ -212,7 +252,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                 {recentLogins.map((e) => (
                   <div key={e.id} className="flex items-center justify-between gap-3 rounded-lg px-2.5 py-1 hover:bg-surface-soft-hover">
                     <span className="min-w-0 flex-1 truncate text-sm font-semibold text-slate-800">{e.actorName}</span>
-                    <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">
+                    <span className="shrink-0 text-2xs font-medium text-slate-500 tabular-nums">
                       {new Date(e.createdAt).toLocaleString('nl-BE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
@@ -228,84 +268,76 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
           size="lg"
           eyebrow="Auditspoor"
           title="Recente activiteit"
-          description="Alleen admins zien hier recente beheeracties en belangrijke wijzigingen."
-          aside={<Badge tone="slate">{filteredEntries.length} items</Badge>}
+          description="Beheeracties en belangrijke wijzigingen; alleen zichtbaar voor admins."
         />
 
-        <div className="mt-6 grid gap-4 lg:grid-cols-[1fr_auto] lg:items-start">
-          <div className="space-y-4">
-            <div className="relative">
-              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-              <Input
-                type="search"
-                enterKeyHint="search"
-                aria-label="Zoek in activiteit"
-                value={searchTerm}
-                onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Zoek op actie, details of actor..."
-                className="pl-9"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
+        <TableToolbar
+          className="mt-5"
+          zoek={searchTerm}
+          onZoek={setSearchTerm}
+          placeholder="Zoek op actie, details of actor…"
+          telling={`${sortedEntries.length} van ${sourceEntries.length}`}
+          filters={(
+            <>
               <FilterChip active={dateWindow === 'today'} onClick={() => setDateWindow('today')}>Vandaag</FilterChip>
               <FilterChip active={dateWindow === '7d'} onClick={() => setDateWindow('7d')}>7 dagen</FilterChip>
-              <FilterChip active={dateWindow === '30d'} onClick={() => setDateWindow('30d')}>30 dagen</FilterChip>
+              <FilterChip active={dateWindow === '30d'} onClick={() => setDateWindow('30d')}>{isLoadingWindow && dateWindow === '30d' ? '30 dagen…' : '30 dagen'}</FilterChip>
               <FilterChip active={dateWindow === 'all'} onClick={() => setDateWindow('all')}>{isLoadingWindow && dateWindow === 'all' ? 'Alles…' : 'Alles'}</FilterChip>
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-2 lg:max-w-[32rem] lg:justify-end">
-            <FilterChip active={activeCategory === 'all'} onClick={() => setActiveCategory('all')}>Alles</FilterChip>
-            {(Object.keys(categoryLabels) as ActivityLogEntry['category'][]).map((category) => (
-              <Fragment key={category}>
-                <FilterChip active={activeCategory === category} onClick={() => setActiveCategory(category)}>
-                  {categoryLabels[category]}
-                </FilterChip>
-              </Fragment>
-            ))}
+              {/* Tien categorieën als losse chips maakten de toolbar drie
+                  regels hoog; een keuzelijst houdt hem op één rij. */}
+              <Select
+                aria-label="Categorie"
+                value={activeCategory}
+                onChange={(e) => setActiveCategory(e.target.value as typeof activeCategory)}
+                className="!w-auto min-h-11 sm:pointer-fine:min-h-8 !py-1.5 !text-xs font-semibold"
+              >
+                <option value="all">Alle categorieën</option>
+                {(Object.keys(CATEGORY_LABELS) as ActivityLogEntry['category'][]).map((category) => (
+                  <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
+                ))}
+              </Select>
+            </>
+          )}
+          acties={(
             <Button
               variant="secondary"
               size="sm"
               icon={<Download size={14} />}
               onClick={exportFilteredActivity}
-              disabled={filteredEntries.length === 0}
+              disabled={sortedEntries.length === 0}
             >
-              Exporteer CSV
+              CSV exporteren
             </Button>
-          </div>
-        </div>
+          )}
+        />
 
-        <div className="mt-6">
-          {filteredEntries.length > 0 ? (
-            <TableShell>
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/60 border-b border-slate-100">
-                    <Th>Tijdstip</Th>
-                    <Th>Categorie</Th>
-                    <Th>Actie</Th>
-                    <Th className="text-right">Actor</Th>
+        <div className="mt-5">
+          {sortedEntries.length > 0 ? (
+            // Op mobiel scrollt de tabel horizontaal; vanaf md past hij en
+            // wordt de wrapper `overflow-clip` zodat de kolomkop onder de
+            // topbar blijft plakken (een scrollcontainer breekt sticky).
+            <div className="surface-table rounded-3xl overflow-x-auto md:overflow-clip">
+              <table className="w-full min-w-[40rem] text-left border-collapse">
+                <StickyThead>
+                  <tr>
+                    <SortTh kolom="tijd" sort={sort}>Tijdstip</SortTh>
+                    <SortTh kolom="categorie" sort={sort}>Categorie</SortTh>
+                    <SortTh kolom="actie" sort={sort}>Actie</SortTh>
+                    <SortTh kolom="actor" sort={sort}>Actor</SortTh>
                   </tr>
-                </thead>
+                </StickyThead>
                 <tbody>
-                  {filteredEntries.map((entry) => (
+                  {paginaEntries.map((entry) => (
                     <tr key={entry.id} className="border-b border-slate-100 last:border-b-0 hover:bg-slate-50/40 transition-colors">
-                      <Td className="whitespace-nowrap align-top text-slate-500 tabular-nums">
-                        {new Date(entry.createdAt).toLocaleString('nl-BE', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          year: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </Td>
+                      <Td className="whitespace-nowrap align-top text-slate-500 tabular-nums">{formatTijdstip(entry.createdAt)}</Td>
                       <Td className="align-top">
-                        <Badge tone={CATEGORY_TONES[entry.category]}>{categoryLabels[entry.category]}</Badge>
+                        <Badge tone={CATEGORY_TONES[entry.category]}>{CATEGORY_LABELS[entry.category]}</Badge>
                       </Td>
                       <Td className="align-top">
                         <p className="font-semibold text-slate-800">{entry.action}</p>
                         <p className="mt-0.5 text-xs font-normal leading-5 text-slate-500">{entry.details}</p>
                       </Td>
-                      <Td className="align-top text-right">
+                      <Td className="align-top whitespace-nowrap">
                         <p className="font-semibold text-slate-800">{entry.actorName}</p>
                         <MicroLabel className="mt-0.5">{entry.actorRole}</MicroLabel>
                       </Td>
@@ -313,12 +345,27 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
                   ))}
                 </tbody>
               </table>
-            </TableShell>
+              <Paginering
+                className="border-t border-slate-100"
+                totaal={sortedEntries.length}
+                perPagina={PER_PAGINA}
+                pagina={huidigePagina}
+                onPagina={setPagina}
+              />
+            </div>
+          ) : filterActief ? (
+            <EmptyState
+              icon={<Activity size={24} />}
+              title={searchTerm.trim() ? `Geen resultaten voor “${searchTerm.trim()}”` : 'Geen activiteit in deze categorie'}
+              message="Pas de zoekterm, de categorie of het tijdvenster aan."
+              action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en categorie wissen</Button>}
+            />
           ) : (
             <EmptyState
               icon={<Activity size={24} />}
-              title={entries.length > 0 ? 'Geen resultaten voor deze filter' : 'Nog geen activiteit gelogd'}
-              message={entries.length > 0 ? 'Pas je categorie of zoekterm aan om andere activiteiten te tonen.' : 'Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch.'}
+              title={sourceEntries.length > 0 ? 'Geen activiteit in dit tijdvenster' : 'Nog geen activiteit gelogd'}
+              message={sourceEntries.length > 0 ? 'Kies een ruimer tijdvenster om oudere activiteit te zien.' : 'Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch.'}
+              action={sourceEntries.length > 0 && dateWindow !== 'all' ? <Button variant="secondary" onClick={() => setDateWindow('all')}>Alles tonen</Button> : undefined}
             />
           )}
         </div>

@@ -44,7 +44,7 @@ function LaadRegel({ tekst }: { tekst: string }) {
 function CarbonLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     // rauw: tekstlink op het carbon pre-app-scherm.
-    <button type="button" onClick={onClick} className="text-xs font-semibold text-slate-400 hover:text-white transition-colors">
+    <button type="button" onClick={onClick} className="text-xs font-semibold text-slate-500 hover:text-white transition-colors">
       {children}
     </button>
   );

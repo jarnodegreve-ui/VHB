@@ -7,6 +7,7 @@ import { KIND_BADGE_TONE } from '../../lib/planningKind';
 import { EmptyState, PageHeader } from '../../components/ui';
 import { Badge, Button, Chip, FilterChip, MicroLabel, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
+import { InfoTip } from '../../components/InfoTip';
 import { OpsStat } from '../../components/ops';
 import { normalizePlanningToken, resolvePlanningAssignment, sortedNameToken, suggestClosestName } from '../../lib/planning';
 
@@ -223,6 +224,7 @@ export function PlanningMatrixView({
     return (
     <div className="space-y-6">
       <PageHeader
+        eyebrow="Planning"
         title="Planningsoverzicht"
         description="Controleer de geïmporteerde matrix en los onbekende codes of niet-gematchte chauffeurs op."
       />
@@ -232,38 +234,38 @@ export function PlanningMatrixView({
         <OpsStat
           icon={<Clock size={16} />}
           tone="emerald"
-          label="Gegenereerde Diensten"
+          label="Gegenereerde diensten"
           value={derived.totalGeneratedServices}
           sub="gematcht vanuit Dienstoverzicht"
         />
         <OpsStat
           icon={<AlertTriangle size={16} />}
           tone={derived.globalUnknownCodes.length > 0 ? 'amber' : 'slate'}
-          label="Onbekende Codes"
+          label="Onbekende codes"
           value={derived.globalUnknownCodes.length}
-          sub={derived.globalUnknownCodes.length === 0 ? 'alles herkend' : derived.globalUnknownCodes.slice(0, 3).join(' • ')}
+          sub={derived.globalUnknownCodes.length === 0 ? 'alles herkend' : derived.globalUnknownCodes.slice(0, 3).join(' · ')}
         />
         <OpsStat
           icon={<Users size={16} />}
           tone={derived.globalUnmatchedDrivers.length > 0 ? 'amber' : 'slate'}
-          label="Niet-Gematchte Chauffeurs"
+          label="Niet-gematchte chauffeurs"
           value={derived.globalUnmatchedDrivers.length}
-          sub={derived.globalUnmatchedDrivers.length === 0 ? 'alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' • ')}
+          sub={derived.globalUnmatchedDrivers.length === 0 ? 'alles gekoppeld' : derived.globalUnmatchedDrivers.slice(0, 2).join(' · ')}
         />
       </div>
 
       <Card as="section">
         <CardHeader
-          title="Controlefilters"
-          description="Filter op probleemdagen of klik een onbekende code om enkel die assignments te bekijken."
+          title="Controlepunten"
+          description="Klik een onbekende code om enkel die toewijzingen te bekijken."
           aside={(
             <>
               <FilterChip active={showOnlyIssues} onClick={() => setShowOnlyIssues((current) => !current)}>
-                {showOnlyIssues ? 'Alleen Probleemdagen' : 'Toon Alle Dagen'}
+                {showOnlyIssues ? 'Alleen probleemdagen' : 'Alle dagen'}
               </FilterChip>
               {highlightedCode ? (
-                <Button size="sm" variant="secondary" onClick={() => setHighlightedCode(null)}>
-                  Reset Codefilter
+                <Button size="sm" variant="ghost" onClick={() => setHighlightedCode(null)}>
+                  Codefilter wissen
                 </Button>
               ) : null}
               <Button
@@ -273,17 +275,19 @@ export function PlanningMatrixView({
                 onClick={exportProblemReport}
                 disabled={derived.globalUnknownCodes.length === 0 && derived.globalUnmatchedDrivers.length === 0}
               >
-                Exporteer Problemen
+                Exporteer problemen
               </Button>
             </>
           )}
         />
 
+        {/* Neutrale vlakken; de teller-badge is het enige accent (rood =
+            onbekende code, amber = niet-gematchte chauffeur). */}
         <div className="mt-5 grid gap-4 lg:grid-cols-2">
-          <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
+          <Card tone="muted" padding="sm">
             <div className="flex items-center justify-between gap-3">
-              <MicroLabel className="text-red-700">Onbekende Codes</MicroLabel>
-              <Badge tone="red">{derived.globalUnknownCodes.length}</Badge>
+              <MicroLabel>Onbekende codes</MicroLabel>
+              <Badge tone={derived.globalUnknownCodes.length > 0 ? 'red' : 'slate'} className="tabular-nums">{derived.globalUnknownCodes.length}</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {derived.globalUnknownCodes.length > 0 ? derived.globalUnknownCodes.map((code) => (
@@ -296,27 +300,27 @@ export function PlanningMatrixView({
             </div>
             {derived.globalUnknownCodes.length > 0 ? (
               <div className="mt-4 flex flex-wrap gap-2">
-                <Button size="sm" variant="danger" onClick={onOpenPlanningCodes}>
-                  Open Planningscodes
+                <Button size="sm" variant="secondary" onClick={onOpenPlanningCodes}>
+                  Open planningscodes
                 </Button>
-                <Button size="sm" variant="danger" onClick={onOpenServiceOverview}>
-                  Open Dienstoverzicht
+                <Button size="sm" variant="ghost" onClick={onOpenServiceOverview}>
+                  Open dienstoverzicht
                 </Button>
               </div>
             ) : null}
-          </div>
+          </Card>
 
-          <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
+          <Card tone="muted" padding="sm">
             <div className="flex items-center justify-between gap-3">
-              <MicroLabel className="text-amber-700">Niet-Gematchte Chauffeurs</MicroLabel>
-              <Badge tone="amber">{derived.globalUnmatchedDrivers.length}</Badge>
+              <MicroLabel>Niet-gematchte chauffeurs</MicroLabel>
+              <Badge tone={derived.globalUnmatchedDrivers.length > 0 ? 'amber' : 'slate'} className="tabular-nums">{derived.globalUnmatchedDrivers.length}</Badge>
             </div>
             <div className="mt-3 flex flex-wrap gap-2">
               {derived.globalUnmatchedDrivers.length > 0 ? derived.globalUnmatchedDrivers.map((driver) => {
                 // Fuzzy-suggestie: "Duysbergh Pascal" (typo) → "≈ Duysburgh Pascal?"
                 const suggestion = suggestClosestName(driver, users.map((u) => ({ id: String(u.id), name: u.name })));
                 return (
-                  <Badge key={driver} tone="amber" className="bg-paper/80">
+                  <Badge key={driver} tone="amber">
                     {driver}
                     {suggestion && <span className="font-normal text-amber-700/90">≈ {suggestion.name}?</span>}
                   </Badge>
@@ -329,14 +333,14 @@ export function PlanningMatrixView({
               <div className="mt-4">
                 {canOpenUserManagement ? (
                   <Button size="sm" variant="secondary" onClick={onOpenUserManagement}>
-                    Open Gebruikersbeheer
+                    Open gebruikers
                   </Button>
                 ) : (
-                  <Badge tone="amber" className="bg-paper/80">Gebruikersbeheer admin-only</Badge>
+                  <Badge tone="slate">Gebruikers: alleen admin</Badge>
                 )}
               </div>
             ) : null}
-          </div>
+          </Card>
         </div>
       </Card>
 
@@ -344,8 +348,13 @@ export function PlanningMatrixView({
         <Card as="section">
           <CardHeader
             className="mb-5"
-            title="Geuploade Dagen"
-            description={<>{visibleRows.length} getoond, {derived.rowsWithAssignments.length} met effectieve assignments en {derived.rowsWithIssues.length} met controlepunten.</>}
+            title="Geüploade dagen"
+            description={<>{visibleRows.length} getoond, {derived.rowsWithIssues.length} met controlepunten.</>}
+            aside={(
+              <InfoTip label="Uitleg bij de dagen" align="right">
+                {derived.rowsWithAssignments.length} van de {deferredRows.length} dagen hebben effectieve toewijzingen. Kies een dag om de codes per chauffeur te bekijken; dagen met onbekende codes of niet-gematchte chauffeurs zijn gemarkeerd.
+              </InfoTip>
+            )}
           />
           <div className="max-h-[70vh] space-y-3 overflow-y-auto pr-2">
             {visibleDayRows.length > 0 ? visibleDayRows.map((row) => {
@@ -368,11 +377,11 @@ export function PlanningMatrixView({
                   <p className="text-sm font-semibold text-slate-800 tabular-nums">
                     {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
-                  <div className="mt-1.5 flex items-center justify-between text-2xs font-medium text-slate-400 tabular-nums">
+                  <div className="mt-1.5 flex items-center justify-between text-2xs font-medium text-slate-500 tabular-nums">
                     <span>Dagtype {row.day_type || '-'}</span>
                     <span>{assignmentCount} codes</span>
                   </div>
-                  <div className="mt-0.5 flex items-center justify-between text-2xs font-medium text-slate-400 tabular-nums">
+                  <div className="mt-0.5 flex items-center justify-between text-2xs font-medium text-slate-500 tabular-nums">
                     <span>{generatedServices} diensten</span>
                     {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
                       ? <span className="font-semibold text-amber-700">controle nodig</span>
@@ -394,7 +403,7 @@ export function PlanningMatrixView({
               <EmptyState
                 icon={<Calendar size={24} />}
                 title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
-                message={showOnlyIssues ? "Alle geüploade dagen zijn momenteel volledig herkenbaar." : "Upload eerst een matrix-CSV via Beheer Roosters om hier een overzicht te zien."}
+                message={showOnlyIssues ? 'Alle geüploade dagen zijn volledig herkend.' : 'Upload eerst een Excel-matrix via Beheer roosters om hier een overzicht te zien.'}
               />
             )}
             {visibleRows.length > visibleDayRows.length ? (
@@ -404,7 +413,7 @@ export function PlanningMatrixView({
                 full
                 onClick={() => setVisibleDayCount((current) => current + 60)}
               >
-                Toon Meer Dagen ({visibleRows.length - visibleDayRows.length} resterend)
+                Toon meer dagen ({visibleRows.length - visibleDayRows.length} resterend)
               </Button>
             ) : null}
           </div>
@@ -414,11 +423,9 @@ export function PlanningMatrixView({
           {selectedRow ? (
             <>
               <CardHeader
-                size="lg"
-                className="mb-6"
+                className="mb-5"
                 title={new Date(selectedRow.source_date).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                description={<>Dagtype {selectedRow.day_type || '-'} met {assignments.length} ingevulde chauffeurcodes.</>}
-                aside={<Badge tone="oker">Matrix staging</Badge>}
+                description={<>Dagtype {selectedRow.day_type || '-'} · {assignments.length} ingevulde chauffeurcodes.</>}
               />
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">
@@ -432,26 +439,29 @@ export function PlanningMatrixView({
                 <OpsStat
                   icon={<Clock size={16} />}
                   tone="emerald"
-                  label="Herkende Diensten"
+                  label="Herkende diensten"
                   value={serviceAssignments}
                   sub="gematcht met Dienstoverzicht"
                 />
                 <OpsStat
                   icon={<AlertTriangle size={16} />}
                   tone={unknownAssignments > 0 ? 'amber' : 'slate'}
-                  label="Onbekende Codes"
+                  label="Onbekende codes"
                   value={unknownAssignments}
                   sub={unknownAssignments === 0 ? 'alles herkend' : 'nog te mappen'}
                 />
               </div>
 
               {(unknownAssignments > 0 || unmatchedDriversForSelectedDay.length > 0 || highlightedCode) ? (
-                <div className="mt-6 grid gap-4 lg:grid-cols-2">
-                  <div className="rounded-2xl border border-amber-100 bg-amber-50/80 p-5">
-                    <MicroLabel className="text-amber-700">Niet-Gematchte Chauffeurs</MicroLabel>
+                <div className="mt-5 grid gap-4 lg:grid-cols-2">
+                  <Card tone="muted" padding="sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <MicroLabel>Niet-gematchte chauffeurs</MicroLabel>
+                      <Badge tone={unmatchedDriversForSelectedDay.length > 0 ? 'amber' : 'slate'} className="tabular-nums">{unmatchedDriversForSelectedDay.length}</Badge>
+                    </div>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {unmatchedDriversForSelectedDay.length > 0 ? unmatchedDriversForSelectedDay.map((driver) => (
-                        <Fragment key={driver}><Badge tone="amber" className="bg-paper/80">{driver}</Badge></Fragment>
+                        <Fragment key={driver}><Badge tone="amber">{driver}</Badge></Fragment>
                       )) : (
                         <span className="text-sm text-slate-500">Geen niet-gematchte chauffeurs voor deze dag.</span>
                       )}
@@ -460,40 +470,41 @@ export function PlanningMatrixView({
                       <div className="mt-4">
                         {canOpenUserManagement ? (
                           <Button size="sm" variant="secondary" onClick={onOpenUserManagement}>
-                            Open Gebruikersbeheer
+                            Open gebruikers
                           </Button>
                         ) : (
-                          <Badge tone="amber" className="bg-paper/80">Gebruikersbeheer admin-only</Badge>
+                          <Badge tone="slate">Gebruikers: alleen admin</Badge>
                         )}
                       </div>
                     ) : null}
-                  </div>
-                  <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
-                    <MicroLabel className="text-red-700">
-                      {unknownAssignments > 0 ? 'Onbekende Codes' : 'Codefilter'}
-                    </MicroLabel>
-                    <p className="mt-3 text-sm font-medium text-red-700">
+                  </Card>
+                  <Card tone="muted" padding="sm">
+                    <div className="flex items-center justify-between gap-3">
+                      <MicroLabel>{unknownAssignments > 0 ? 'Onbekende codes' : 'Codefilter'}</MicroLabel>
+                      {unknownAssignments > 0 ? <Badge tone="red" className="tabular-nums">{unknownAssignments}</Badge> : null}
+                    </div>
+                    <p className="mt-3 text-sm text-slate-600">
                       {unknownAssignments > 0
-                        ? `${unknownAssignments} assignment${unknownAssignments === 1 ? '' : 's'} op deze dag vragen nog interpretatie via Planningscodes of Dienstoverzicht.`
+                        ? `${unknownAssignments} toewijzing${unknownAssignments === 1 ? '' : 'en'} op deze dag ${unknownAssignments === 1 ? 'vraagt' : 'vragen'} nog interpretatie via Planningscodes of Dienstoverzicht.`
                         : highlightedCode
-                          ? `Je bekijkt nu enkel assignments met code ${highlightedCode}.`
+                          ? `Je bekijkt nu enkel toewijzingen met code ${highlightedCode}.`
                           : 'Geen actieve codefilter.'}
                     </p>
                     {unknownAssignments > 0 ? (
                       <div className="mt-4 flex flex-wrap gap-2">
-                        <Button size="sm" variant="danger" onClick={onOpenPlanningCodes}>
-                          Open Planningscodes
+                        <Button size="sm" variant="secondary" onClick={onOpenPlanningCodes}>
+                          Open planningscodes
                         </Button>
-                        <Button size="sm" variant="danger" onClick={onOpenServiceOverview}>
-                          Open Dienstoverzicht
+                        <Button size="sm" variant="ghost" onClick={onOpenServiceOverview}>
+                          Open dienstoverzicht
                         </Button>
                       </div>
                     ) : null}
-                  </div>
+                  </Card>
                 </div>
               ) : null}
 
-              <TableShell className="mt-6">
+              <TableShell className="mt-5">
                 <div className="hidden md:block">
                   <table className="w-full text-left">
                     <thead className="bg-slate-50/60">
@@ -549,16 +560,14 @@ export function PlanningMatrixView({
     </div>
     );
   } catch (error) {
-    console.error('Planning Overzicht renderfout:', error);
+    console.error('Planningsoverzicht renderfout:', error);
     return (
-      <Card>
-        <div className="rounded-2xl border border-red-100 bg-red-50/80 p-5">
-          <MicroLabel className="text-red-700">Schermfout</MicroLabel>
-          <h3 className="mt-3 text-section-title">Planning Overzicht kon niet geladen worden</h3>
-          <p className="mt-2 text-sm font-medium text-slate-600">
-            {error instanceof Error ? error.message : 'Onbekende renderfout'}
-          </p>
-        </div>
+      <Card tone="danger">
+        <MicroLabel className="text-red-700">Schermfout</MicroLabel>
+        <h3 className="mt-2 text-card-title">Planningsoverzicht kon niet geladen worden</h3>
+        <p className="mt-1.5 text-sm text-slate-600">
+          {error instanceof Error ? error.message : 'Onbekende renderfout'}
+        </p>
       </Card>
     );
   }

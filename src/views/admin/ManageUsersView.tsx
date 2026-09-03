@@ -7,7 +7,9 @@ import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, FilterChip, IconButton, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, MicroLabel, segItemClass, Td, Th, Switch } from '../../components/primitives';
+import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import { InfoTip } from '../../components/InfoTip';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Select } from '../../components/Field';
 import { Modal } from '../../components/Modal';
@@ -146,13 +148,13 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const activeAdmins = users.filter((u) => u.role === 'admin' && u.isActive !== false);
   const isProtectedAdmin = (user: User) => user.role === 'admin' && user.isActive !== false && activeAdmins.length === 1;
 
-  const filteredUsers = users
-    .filter((u) => {
-      const isBeheerder = u.name.toLowerCase() === 'beheerder';
-      const isMe = u.id === currentUser.id;
-      if (isBeheerder && !isMe) return false;
-      return true;
-    })
+  // Het technische 'beheerder'-account blijft verborgen tenzij je het zelf bent.
+  const zichtbareUsers = users.filter((u) => {
+    const isBeheerder = u.name.toLowerCase() === 'beheerder';
+    const isMe = u.id === currentUser.id;
+    return !isBeheerder || isMe;
+  });
+  const filteredUsers = zichtbareUsers
     .filter((u) => roleFilter === 'all' || u.role === roleFilter)
     .filter((u) => !alleenNooitIn || (u.role === 'chauffeur' && u.isActive !== false && !u.lastLogin))
     .filter((u) => !alleenNietInPlanning || nietInPlanning(u))
@@ -161,7 +163,21 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       if (!q) return true;
       return [u.name, u.employeeId, u.email ?? ''].join(' ').toLowerCase().includes(q);
     })
-    .sort((a, b) => a.name.localeCompare(b.name));
+    .sort((a, b) => a.name.localeCompare(b.name, 'nl'));
+  // Sorteerbare kolommen; standaard op naam (zoals voorheen). De naam-
+  // volgorde hierboven blijft de secundaire orde (stabiele sort).
+  const sort = useSort<'naam' | 'status' | 'meldingen' | 'laatst' | 'sessies'>('naam');
+  const sortedUsers = sort.sorteer(filteredUsers, (u, k) => {
+    switch (k) {
+      case 'naam': return u.name;
+      case 'status': return u.isActive !== false ? 0 : 1;
+      case 'meldingen': return pushUserIds.has(String(u.id)) ? 0 : 1;
+      case 'laatst': return u.lastLogin || null;
+      case 'sessies': return u.activeSessions || 0;
+    }
+  });
+  const filterActief = roleFilter !== 'all' || alleenNooitIn || alleenNietInPlanning || userSearch.trim() !== '';
+  const wisFilters = () => { setRoleFilter('all'); setAlleenNooitIn(false); setAlleenNietInPlanning(false); setUserSearch(''); };
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
   // Naam-botsing-poort: de planning koppelt matrixcellen aan accounts op naam
@@ -180,7 +196,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     e.preventDefault();
     if (isSubmittingUser) return;
     if (!newUser.name) return;
-    if (!newUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
+    if (!newUser.email) return notify('Een e-mailadres is verplicht om te kunnen inloggen.', 'error');
     if (newUser.password.length < WACHTWOORD_MIN) return notify(`Gebruik een tijdelijk wachtwoord van minstens ${WACHTWOORD_MIN} tekens.`, 'error');
 
     const userToAdd: UserDraft = {
@@ -219,7 +235,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
     e.preventDefault();
     if (isSubmittingUser) return;
     if (!editingUser) return;
-    if (!editingUser.email) return notify('Een e-mailadres is verplicht voor Supabase login.', 'error');
+    if (!editingUser.email) return notify('Een e-mailadres is verplicht om te kunnen inloggen.', 'error');
     if (editingUser.password && editingUser.password.length < WACHTWOORD_MIN) return notify(`Een nieuw wachtwoord moet minstens ${WACHTWOORD_MIN} tekens hebben.`, 'error');
 
     const originalUser = users.find((u) => u.id === editingUser.id);
@@ -483,34 +499,43 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       <PageHeader
         eyebrow="Gebruikersbeheer"
         title={title}
-        description="Beheer medewerkers, rollen en accountacties vanuit beheershell."
+        description="Medewerkers, rollen en accountacties."
         actions={(
           <>
-            <label className={cn('control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900', isImporting && 'cursor-not-allowed opacity-50')}>
-              <Upload size={16} />
-              {isImporting ? 'Bezig…' : 'Excel importeren'}
-              <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
-            </label>
+            <span className="inline-flex items-center gap-1">
+              <label className={cn('control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900', isImporting && 'cursor-not-allowed opacity-50')}>
+                <Upload size={16} />
+                {isImporting ? 'Bezig…' : 'Excel importeren'}
+                <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
+              </label>
+              <InfoTip label="Uitleg bij de Excel-import" align="right">
+                Gebruik bij voorkeur de kolommen <span className="font-mono font-semibold text-slate-800">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-semibold text-slate-800">Wachtwoord</span> toevoegen, zodat er meteen een login aangemaakt wordt. Bestaande gebruikers worden op naam bijgewerkt; hun wachtwoord blijft ongemoeid.
+              </InfoTip>
+            </span>
             <Button variant="secondary" icon={<Send size={16} />} onClick={() => setShowBroadcast(true)}>
               Document naar iedereen
             </Button>
             <Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>
-              Gebruiker Toevoegen
+              Gebruiker toevoegen
             </Button>
           </>
         )}
       />
 
-      <div className="grid gap-4 xl:grid-cols-[1.2fr_0.9fr]">
-        <Card>
+      {/* Eén tabelkaart: kop met uitrol-tellers, toolbar (zoeken/filters/
+          telling), bulk-balk en de tabel zelf. De aparte "Werkset"- en
+          Excel-kaarten erboven zijn weg — de uitleg zit in de (i) naast de
+          importknop, de filters horen bij de tabel. `overflow-clip` i.p.v.
+          TableShell: die maakt een scrollcontainer en dan plakt de kolomkop
+          niet meer onder de topbar (de tabel is desktop-only, past dus). */}
+      <div className="surface-table rounded-3xl overflow-clip">
+        <div className="space-y-4 border-b border-slate-200/70 px-5 py-4 md:px-6">
           <CardHeader
             size="lg"
-            eyebrow="Werkset"
-            title="Zichtbare gebruikers"
-            description="Filter de huidige lijst per rol voordat je wijzigingen doorvoert."
+            title="Gebruikerslijst"
+            description="Status, meldingen en sessies per medewerker."
             aside={(
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone="slate">{filteredUsers.length} zichtbaar</Badge>
                 {/* Uitrol-teller: hoeveel actieve medewerkers kunnen de
                     meldingen die de app verstuurt écht ontvangen? */}
                 <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} icon={<Bell size={12} />}>
@@ -531,170 +556,163 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               </div>
             )}
           />
-          <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
-            <div className="glass-segmented inline-flex rounded-2xl p-1 self-start">
-              {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-                // rauw: segmented control op de glass-rail, klassen via segItemClass
-                <button key={role} type="button" onClick={() => setRoleFilter(role)} className={segItemClass(roleFilter === role, 'capitalize')}>
-                  {role === 'all' ? 'Alles' : role}
-                </button>
-              ))}
-            </div>
-            <Input
-              type="search"
-              enterKeyHint="search"
-              value={userSearch}
-              onChange={(e) => setUserSearch(e.target.value)}
-              placeholder="Zoek op naam, personeelsnr of e-mail…"
-              aria-label="Zoek gebruiker"
-              className="sm:max-w-xs"
-            />
-            {/* Snelfilter voor de uitrol: wie moet ik nog persoonlijk
-                meekrijgen? Alleen tonen als er zo iemand is. */}
-            {/* FilterChip (44 px op touch): losse chips buiten de segmented-rail
-                haalden het aanraakminimum niet. Blijven renderen zolang het filter
-                aanstaat — anders kon een actieve filter zijn eigen knop laten
-                verdwijnen en bleef een lege tabel zonder uitweg achter
-                (controle-ronde 20-08). */}
-            {(nooitIngelogd > 0 || alleenNooitIn) && (
-              <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} className="self-start" icon={<LogIn size={14} />}>
-                Nog nooit ingelogd ({nooitIngelogd})
-              </FilterChip>
+          <TableToolbar
+            zoek={userSearch}
+            onZoek={setUserSearch}
+            placeholder="Zoek op naam, personeelsnr of e-mail…"
+            telling={`${sortedUsers.length} van ${zichtbareUsers.length}`}
+            filters={(
+              <>
+                <div className="glass-segmented inline-flex rounded-2xl p-1">
+                  {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
+                    // rauw: segmented control op de glass-rail, klassen via segItemClass
+                    <button key={role} type="button" onClick={() => setRoleFilter(role)} className={segItemClass(roleFilter === role, 'capitalize')}>
+                      {role === 'all' ? 'Alles' : role}
+                    </button>
+                  ))}
+                </div>
+                {/* Snelfilters voor de uitrol. Blijven renderen zolang het
+                    filter aanstaat — anders kon een actieve filter zijn eigen
+                    knop laten verdwijnen en bleef een lege tabel zonder uitweg
+                    achter (controle-ronde 20-08). */}
+                {(nooitIngelogd > 0 || alleenNooitIn) && (
+                  <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} icon={<LogIn size={14} />}>
+                    Nog nooit ingelogd ({nooitIngelogd})
+                  </FilterChip>
+                )}
+                {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
+                  <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} icon={<CalendarOff size={14} />}>
+                    Niet in de planning ({aantalNietInPlanning})
+                  </FilterChip>
+                )}
+              </>
             )}
-            {/* Snelfilter: chauffeur-accounts zonder cel aan het einde van de
-                geïmporteerde planning — nieuwe collega of weggevallen kolom. */}
-            {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
-              <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} className="self-start" icon={<CalendarOff size={14} />}>
-                Niet in de planning ({aantalNietInPlanning})
-              </FilterChip>
-            )}
-          </div>
-        </Card>
-
-        <div className="rounded-3xl border border-oker-100 bg-oker-50/80 p-5 text-sm">
-          <MicroLabel className="text-oker-700">Bronimport</MicroLabel>
-          <p className="mt-3 font-bold tracking-tight text-oker-800">Excel Instructies</p>
-          <p className="mt-2 text-sm text-oker-700">Gebruik bij voorkeur de kolommen <span className="font-mono font-semibold">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-semibold">Wachtwoord</span> toevoegen zodat Supabase meteen een login kan aanmaken.</p>
-        </div>
-      </div>
-
-      {selectedIds.size > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-oker-200/70 bg-oker-500/10 px-4 py-2.5">
-          <span className="text-sm font-semibold text-slate-700">{selectedIds.size} geselecteerd</span>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" icon={<Pause size={16} />} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
-            <Button variant="secondary" size="sm" icon={<Play size={16} />} onClick={() => bulkSetActive(true)}>Activeren</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={16} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
-            <Button variant="ghost" size="sm" onClick={clearSelection}>Wissen</Button>
-          </div>
-        </div>
-      )}
-
-      <TableShell>
-        <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
-          <CardHeader
-            size="lg"
-            eyebrow="Overzicht"
-            title="Gebruikerslijst"
-            description="Controleer status, sessies en accountacties per medewerker."
           />
+          <BulkBar aantal={selectedIds.size} onWis={clearSelection}>
+            <Button variant="secondary" size="sm" icon={<Pause size={14} />} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
+            <Button variant="secondary" size="sm" icon={<Play size={14} />} onClick={() => bulkSetActive(true)}>Activeren</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
+          </BulkBar>
         </div>
-        <div className="hidden md:block">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50/50">
-                <Th className="w-10"><input type="checkbox" aria-label="Alles selecteren" checked={allSelected} onChange={toggleSelectAll} className="h-4 w-4 rounded border-slate-300 accent-oker-500 cursor-pointer" /></Th>
-                <Th>Medewerker</Th>
-                <Th>Status</Th>
-                <Th title="Heeft deze medewerker meldingen aan staan op minstens één toestel?">Meldingen</Th>
-                <Th>Laatst Actief</Th>
-                <Th className="text-center">Sessies</Th>
-                <Th className="text-right">Acties</Th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredUsers.map((u) => (
-                <tr key={u.id} className={cn('group transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
-                  <Td className="w-10"><input type="checkbox" aria-label={`Selecteer ${u.name}`} checked={selectedIds.has(u.id)} disabled={isBulkProtected(u)} onChange={() => toggleSelect(u.id)} className="h-4 w-4 rounded border-slate-300 accent-oker-500 cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed" /></Td>
-                  <Td>
-                    <div className="font-bold tracking-tight text-slate-800">{u.name}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                      <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
-                      {nietInPlanning(u) && (
-                        <Badge
-                          tone="amber"
-                          icon={<CalendarOff size={12} />}
-                          title={laatsteInPlanning(u)
-                            ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
-                            : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
-                        >
-                          Niet in planning
-                        </Badge>
-                      )}
-                    </div>
-                  </Td>
-                  <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>
-                  {/* Zonder abonnement komt géén enkele melding aan. */}
-                  <Td>
-                    {pushUserIds.has(String(u.id))
-                      ? <Badge tone="emerald" icon={<Bell size={12} />}>Aan</Badge>
-                      : <Badge tone="slate" icon={<BellOff size={12} />}>Uit</Badge>}
-                  </Td>
-                  <Td className="tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>
-                  <Td className="text-center"><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-surface-soft text-slate-400')}>{u.activeSessions || 0}</span></Td>
-                  <Td className="text-right">
-                    <div className="relative flex items-center justify-end gap-1.5">
-                      <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                      <IconButton
-                        label="Meer acties"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setMenuUserId(menuUserId === u.id ? null : u.id)}
-                        aria-expanded={menuUserId === u.id}
-                      >
-                        <MoreHorizontal size={16} />
-                      </IconButton>
-                      {menuUserId === u.id && (
-                        <>
-                          {/* rauw: onzichtbaar klik-buiten-vlak dat het menu sluit */}
-                          <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
-                          <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-surface-white p-1.5 shadow-xl text-left">
-                            <RowMenuItem icon={<Info size={16} />} label="Verlof- & dienstruil-historiek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
-                            <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
-                            <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
-                            <RowMenuItem icon={<RotateCcw size={16} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
-                            <RowMenuItem
-                              icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />}
-                              label={u.isActive !== false ? 'Pauzeer gebruiker' : 'Activeer gebruiker'}
-                              disabled={u.isActive !== false && isProtectedAdmin(u)}
-                              onClick={() => { setMenuUserId(null); void quickToggleActive(u); }}
-                            />
-                            <div className="my-1 border-t border-slate-100" />
-                            <RowMenuItem
-                              icon={<Trash2 size={16} />}
-                              label="Verwijder gebruiker"
-                              tone="danger"
-                              disabled={isProtectedAdmin(u)}
-                              onClick={() => { setMenuUserId(null); setConfirmDeleteId(u.id); }}
-                            />
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </Td>
+        {sortedUsers.length > 0 && (
+          <div className="hidden md:block">
+            <table className="w-full text-left border-collapse">
+              <StickyThead>
+                <tr>
+                  <Th className="w-12 !py-1">
+                    <Checkbox
+                      checked={allSelected}
+                      indeterminate={selectedIds.size > 0 && !allSelected}
+                      onChange={toggleSelectAll}
+                      label="Alles selecteren"
+                    />
+                  </Th>
+                  <SortTh kolom="naam" sort={sort}>Medewerker</SortTh>
+                  <SortTh kolom="status" sort={sort}>Status</SortTh>
+                  <SortTh kolom="meldingen" sort={sort} title="Heeft deze medewerker meldingen aan staan op minstens één toestel?">Meldingen</SortTh>
+                  <SortTh kolom="laatst" sort={sort}>Laatst actief</SortTh>
+                  <SortTh kolom="sessies" sort={sort}>Sessies</SortTh>
+                  <Th className="text-right">Acties</Th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </StickyThead>
+              <tbody>
+                {sortedUsers.map((u) => (
+                  <tr key={u.id} className={cn('group border-b border-slate-100 last:border-b-0 transition-colors hover:bg-slate-50/60', selectedIds.has(u.id) && 'bg-oker-50/40')}>
+                    <Td className="w-12 !py-1">
+                      <Checkbox
+                        checked={selectedIds.has(u.id)}
+                        disabled={isBulkProtected(u)}
+                        onChange={() => toggleSelect(u.id)}
+                        label={`Selecteer ${u.name}`}
+                        className={cn(isBulkProtected(u) && 'opacity-30 cursor-not-allowed')}
+                      />
+                    </Td>
+                    <Td>
+                      <div className="font-semibold text-slate-800">{u.name}</div>
+                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                        <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
+                        {nietInPlanning(u) && (
+                          <Badge
+                            tone="amber"
+                            icon={<CalendarOff size={12} />}
+                            title={laatsteInPlanning(u)
+                              ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                              : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
+                          >
+                            Niet in planning
+                          </Badge>
+                        )}
+                      </div>
+                    </Td>
+                    <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>
+                    {/* Zonder abonnement komt géén enkele melding aan. */}
+                    <Td>
+                      {pushUserIds.has(String(u.id))
+                        ? <Badge tone="emerald" icon={<Bell size={12} />}>Aan</Badge>
+                        : <Badge tone="slate" icon={<BellOff size={12} />}>Uit</Badge>}
+                    </Td>
+                    <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>
+                    <Td><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-surface-soft text-slate-400')}>{u.activeSessions || 0}</span></Td>
+                    <Td className="text-right">
+                      <div className="relative flex items-center justify-end gap-1.5">
+                        <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
+                        <IconButton
+                          label="Meer acties"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setMenuUserId(menuUserId === u.id ? null : u.id)}
+                          aria-expanded={menuUserId === u.id}
+                        >
+                          <MoreHorizontal size={16} />
+                        </IconButton>
+                        {menuUserId === u.id && (
+                          <>
+                            {/* rauw: onzichtbaar klik-buiten-vlak dat het menu sluit */}
+                            <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
+                            <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-surface-white p-1.5 shadow-xl text-left">
+                              <RowMenuItem icon={<Info size={16} />} label="Verlof- en dienstruilhistoriek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
+                              <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
+                              <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
+                              <RowMenuItem icon={<RotateCcw size={16} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
+                              <RowMenuItem
+                                icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />}
+                                label={u.isActive !== false ? 'Gebruiker pauzeren' : 'Gebruiker activeren'}
+                                disabled={u.isActive !== false && isProtectedAdmin(u)}
+                                onClick={() => { setMenuUserId(null); void quickToggleActive(u); }}
+                              />
+                              <div className="my-1 border-t border-slate-100" />
+                              <RowMenuItem
+                                icon={<Trash2 size={16} />}
+                                label="Gebruiker verwijderen"
+                                tone="danger"
+                                disabled={isProtectedAdmin(u)}
+                                onClick={() => { setMenuUserId(null); setConfirmDeleteId(u.id); }}
+                              />
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="md:hidden divide-y divide-slate-100">
-          {filteredUsers.map((u) => (
-            <div key={u.id} className="p-5 space-y-4 active:bg-slate-50 transition-colors">
+          {sortedUsers.map((u) => (
+            <div key={u.id} className={cn('p-5 space-y-4 active:bg-slate-50 transition-colors', selectedIds.has(u.id) && 'bg-oker-50/40')}>
               <div className="flex justify-between items-start gap-3">
-                <div className="flex items-start gap-3">
-                  <input type="checkbox" aria-label={`Selecteer ${u.name}`} checked={selectedIds.has(u.id)} disabled={isBulkProtected(u)} onChange={() => toggleSelect(u.id)} className="mt-1 h-4 w-4 rounded border-slate-300 accent-oker-500 disabled:opacity-30" />
+                <div className="flex items-start gap-2">
+                  <Checkbox
+                    checked={selectedIds.has(u.id)}
+                    disabled={isBulkProtected(u)}
+                    onChange={() => toggleSelect(u.id)}
+                    label={`Selecteer ${u.name}`}
+                    className={cn('-ml-3 -mt-3', isBulkProtected(u) && 'opacity-30')}
+                  />
                   <div>
-                    <div className="font-bold tracking-tight text-slate-800 leading-tight">{u.name}</div>
+                    <div className="font-semibold text-slate-800 leading-tight">{u.name}</div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
                       {nietInPlanning(u) && (
@@ -711,22 +729,40 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <Card tone="muted" padding="sm"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Laatst actief</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></Card>
                 <Card tone="muted" padding="sm"><MicroLabel>Sessies</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.activeSessions || 0}</p></Card>
               </div>
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                <IconButton label="Verlof- en dienstruil-historiek" variant="ghost" onClick={() => setViewingHistoryUser(u)}><Info size={18} /></IconButton>
+                <IconButton label="Verlof- en dienstruilhistoriek" variant="ghost" onClick={() => setViewingHistoryUser(u)}><Info size={18} /></IconButton>
                 <IconButton label="Documenten beheren" variant="ghost" onClick={() => setDocumentsUser(u)}><FolderOpen size={18} /></IconButton>
                 <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setViewingChangeLogUser(u)}><History size={18} /></IconButton>
-                <IconButton label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} variant="danger" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)}><Trash2 size={18} /></IconButton>
-                <IconButton label="Stel nieuw tijdelijk wachtwoord in" variant="ghost" onClick={() => setConfirmResetUser(u)}><RotateCcw size={18} /></IconButton>
+                <IconButton label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Gebruiker verwijderen'} variant="danger" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)}><Trash2 size={18} /></IconButton>
+                <IconButton label="Nieuw tijdelijk wachtwoord instellen" variant="ghost" onClick={() => setConfirmResetUser(u)}><RotateCcw size={18} /></IconButton>
               </div>
             </div>
           ))}
         </div>
-        {filteredUsers.length === 0 && <div className="p-6"><EmptyState icon={<Users size={24} />} title="Geen gebruikers gevonden" message="Pas je filter aan of voeg een nieuwe gebruiker toe." /></div>}
-      </TableShell>
+        {sortedUsers.length === 0 && (
+          <div className="p-6">
+            {filterActief ? (
+              <EmptyState
+                icon={<Users size={24} />}
+                title={userSearch.trim() ? `Geen resultaten voor “${userSearch.trim()}”` : 'Geen gebruikers voor deze filter'}
+                message="Pas de zoekterm of de filters aan."
+                action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filters wissen</Button>}
+              />
+            ) : (
+              <EmptyState
+                icon={<Users size={24} />}
+                title="Nog geen gebruikers"
+                message="Voeg een medewerker toe of importeer een Excel-bestand."
+                action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>Gebruiker toevoegen</Button>}
+              />
+            )}
+          </div>
+        )}
+      </div>
 
       <ConfirmationModal isOpen={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
       <ConfirmationModal isOpen={confirmBulkDelete} onClose={() => setConfirmBulkDelete(false)} onConfirm={handleBulkDelete} title="Gebruikers verwijderen" message={`Weet je zeker dat je ${selectedIds.size} geselecteerde gebruiker(s) wilt verwijderen? Beschermde accounts (jezelf, de laatste actieve admin) worden overgeslagen. Dit kan niet ongedaan worden gemaakt.`} confirmText="Verwijderen" variant="warning" />
@@ -734,22 +770,22 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       <ConfirmationModal isOpen={!!confirmNaamBotsing} onClose={() => setConfirmNaamBotsing(null)} onConfirm={() => { const poort = confirmNaamBotsing; setConfirmNaamBotsing(null); poort?.doorgaan(); }} title="Naam bestaat al" message={confirmNaamBotsing?.melding ?? ''} confirmText="Toch opslaan" variant="warning" />
 
       <Modal open={showAddModal} onClose={() => setShowAddModal(false)} className="flex flex-col !p-0">
-        <ModalHeader title="Nieuwe Gebruiker" description="Voeg handmatig een medewerker toe." />
+        <ModalHeader title="Nieuwe gebruiker" description="Voeg handmatig een medewerker toe." />
         <form onSubmit={handleAddUser} className="p-6 md:p-7 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <Field
-              label="Volledige Naam"
+              label="Volledige naam"
               htmlFor="nieuw-naam"
               className="sm:col-span-2"
               hint={vindNaamBotsingen(newUser.name, users).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</span> : undefined}
             >
-              <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} placeholder="bijv. Jan Janssen" />
+              <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} placeholder="bv. Jan Janssen" />
             </Field>
             <Field label="Rol" htmlFor="nieuw-rol"><Select id="nieuw-rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
             <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr"><Input id="nieuw-personeelsnr" type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} placeholder="Optioneel" /></Field>
-            <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2"><Input id="nieuw-email" type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="bijv. jan@voorbeeld.be" /></Field>
-            <Field label="Tijdelijk Wachtwoord" htmlFor="nieuw-wachtwoord"><Input id="nieuw-wachtwoord" type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} placeholder="Minstens 6 tekens" /></Field>
-            <Field label="GSM Nummer" htmlFor="nieuw-gsm"><Input id="nieuw-gsm" type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
+            <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2"><Input id="nieuw-email" type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
+            <Field label="Tijdelijk wachtwoord" htmlFor="nieuw-wachtwoord"><Input id="nieuw-wachtwoord" type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} /></Field>
+            <Field label="GSM-nummer" htmlFor="nieuw-gsm"><Input id="nieuw-gsm" type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
           </div>
           <div className="flex gap-3 pt-2">
             <Button variant="ghost" className="flex-1" onClick={() => setShowAddModal(false)}>Annuleren</Button>
@@ -761,11 +797,11 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       <Modal open={!!editingUser} onClose={() => setEditingUser(null)} maxWidth="lg" className="flex flex-col !p-0">
         {editingUser && (
           <>
-            <ModalHeader title="Gebruiker Bewerken" description={`Pas de gegevens van ${editingUser.name} aan.`} />
+            <ModalHeader title="Gebruiker bewerken" description={`Pas de gegevens van ${editingUser.name} aan.`} />
             <form onSubmit={handleUpdateUser} className="p-6 md:p-7 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
                 <Field
-                  label="Volledige Naam"
+                  label="Volledige naam"
                   htmlFor="bewerk-naam"
                   className="sm:col-span-2"
                   hint={vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</span> : undefined}
@@ -774,11 +810,11 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 </Field>
                 <Field label="Rol" htmlFor="bewerk-rol"><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
                 <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr"><Input id="bewerk-personeelsnr" type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} /></Field>
-                <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2"><Input id="bewerk-email" type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} placeholder="bijv. jan@voorbeeld.be" /></Field>
-                <Field label="Nieuw Wachtwoord" htmlFor="bewerk-wachtwoord"><Input id="bewerk-wachtwoord" type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} placeholder="Optioneel" /></Field>
-                <Field label="GSM Nummer" htmlFor="bewerk-gsm"><Input id="bewerk-gsm" type="tel" autoComplete="tel" inputMode="tel" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
+                <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2"><Input id="bewerk-email" type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
+                <Field label="Nieuw wachtwoord" htmlFor="bewerk-wachtwoord"><Input id="bewerk-wachtwoord" type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} placeholder="Optioneel" /></Field>
+                <Field label="GSM-nummer" htmlFor="bewerk-gsm"><Input id="bewerk-gsm" type="tel" autoComplete="tel" inputMode="tel" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
                 {editingUser.role === 'chauffeur' && (
-                  <Field label="Sectie (Maandplanning)" htmlFor="bewerk-sectie"><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
+                  <Field label="Sectie (maandplanning)" htmlFor="bewerk-sectie"><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
                 )}
                 <Field label="In dienst sinds" htmlFor="bewerk-startdatum" hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><Input id="bewerk-startdatum" type="date" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} /></Field>
                 <Field label="Verlofbudget (dagen)" htmlFor="bewerk-verlofbudget" className="sm:col-span-2" hint="Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).">
@@ -815,24 +851,24 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 )}
               </div>
               <Card tone="muted" padding="sm" className="flex items-center justify-between">
-                <div><p className="text-sm font-semibold text-slate-700">Account Actief</p><p className="text-2xs text-slate-400">Inactieve gebruikers kunnen niet inloggen.</p></div>
+                <div><p className="text-sm font-semibold text-slate-700">Account actief</p><p className="text-2xs text-slate-500">Inactieve gebruikers kunnen niet inloggen.</p></div>
                 <Switch checked={editingUser.isActive !== false} onChange={(aan) => setEditingUser({ ...editingUser, isActive: aan })} label="Account actief" />
               </Card>
               <Card tone="muted" padding="sm" className="flex items-center justify-between">
-                <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-2xs text-slate-400">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
+                <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-2xs text-slate-500">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <Switch checked={editingUser.showInContacts !== false} onChange={(aan) => setEditingUser({ ...editingUser, showInContacts: aan })} label="Tonen in contactlijst" />
               </Card>
               {editingUser.role === 'admin' && (
                 <Card tone="muted" padding="sm" className="flex items-center justify-between">
-                  <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-2xs text-slate-400">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
+                  <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-2xs text-slate-500">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
                   <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
                 </Card>
               )}
-              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></Card></div>
+              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Actieve sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></Card></div>
               {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
                   daar geen slot voor, dus links in de knoppenrij (zelfde
                   gedrag, zelfde bescherming; controle-ronde 27-08). */}
-              <div className="flex gap-3 pt-2"><IconButton label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} variant="danger" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)}><Trash2 size={16} /></IconButton><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
+              <div className="flex gap-3 pt-2"><IconButton label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Gebruiker verwijderen'} variant="danger" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)}><Trash2 size={16} /></IconButton><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
             </form>
           </>
         )}
@@ -844,7 +880,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <ModalHeader title="Wachtwoord resetten" description={`Stel een nieuw tijdelijk wachtwoord in voor ${confirmResetUser.name}.`} />
             <div className="p-6 md:p-7 space-y-4">
               <Field label="Tijdelijk wachtwoord" htmlFor="reset-wachtwoord" hint="De gebruiker logt daarna in met dit nieuwe wachtwoord.">
-                <Input id="reset-wachtwoord" type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} placeholder="Minstens 6 tekens" autoFocus />
+                <Input id="reset-wachtwoord" type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} autoFocus />
               </Field>
               <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>Annuleren</Button><Button variant="primary" className="flex-1" onClick={handleResetPassword} disabled={isResettingPassword}>{isResettingPassword ? 'Bezig…' : 'Resetten'}</Button></div>
             </div>

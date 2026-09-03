@@ -12,7 +12,7 @@ import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
 import { Badge, Button, MicroLabel } from '../components/primitives';
-import { Card, CardHeader } from '../components/Card';
+import { Card } from '../components/Card';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -200,25 +200,28 @@ export function DashboardView({ notes = [],
 
   return (
     <div className="space-y-5">
-      {/* === Eenmalige welkomstkaart (eerste bezoek) === */}
+      {/* === Eenmalige welkomstkaart (eerste bezoek) ===
+          Compact: één regel uitleg + de twee knoppen, zodat "de dienst van
+          vandaag" ook op een telefoon boven de vouw blijft (productprincipe 1). */}
       {showWelcome && (
-        <div className="rounded-2xl border border-oker-200/70 bg-oker-50 p-5 space-y-3">
-          <CardHeader
-            title="Welkom bij het VHB Portaal 👋"
-            description={<>Hier vind je je <strong>rooster</strong>, vraag je <strong>verlof</strong> aan, stel je een <strong>dienstruil</strong> voor aan een collega en lees je <strong>omleidingen en updates</strong>. Op je telefoon staan de belangrijkste knoppen onderaan.</>}
-          />
-          <div className="flex flex-col sm:flex-row gap-2">
+        <Card tone="accent" padding="sm" className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-slate-900">Welkom, {firstName}</p>
+            <p className="mt-0.5 text-sm text-slate-600">
+              {onChangePassword ? 'Kies eerst een eigen wachtwoord; daarna vind je hier je rooster, verlof, dienstruil en omleidingen.' : 'Hier vind je je rooster, verlof, dienstruil en omleidingen.'}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
             {onChangePassword && (
-              <Button variant="primary" onClick={() => { dismissWelcome(); onChangePassword(); }}>
-                Kies eerst je eigen wachtwoord
+              <Button variant="primary" size="sm" onClick={() => { dismissWelcome(); onChangePassword(); }}>
+                Wachtwoord kiezen
               </Button>
             )}
-            <Button variant="secondary" onClick={dismissWelcome}>
-              Aan de slag
+            <Button variant="secondary" size="sm" onClick={dismissWelcome}>
+              {onChangePassword ? 'Later' : 'Aan de slag'}
             </Button>
           </div>
-          <p className="text-2xs font-medium text-slate-400">Kreeg je een tijdelijk wachtwoord van de planning? Kies dan nu meteen een eigen wachtwoord.</p>
-        </div>
+        </Card>
       )}
 
       {/* === Persoonlijke header === */}
@@ -397,9 +400,10 @@ export function DashboardView({ notes = [],
         </OpsPanel>
       </div>
 
-      {/* === Snelle acties === */}
+      {/* === Snelle acties (alleen zonder zijbalk: op desktop staan dezelfde
+          schermen al links, dus daar zijn ze dubbel) === */}
       {onNavigate && (
-        <div className="grid grid-cols-2 gap-3 xl:grid-flow-col xl:auto-cols-fr">
+        <div className="grid grid-cols-2 gap-3 lg:hidden">
           <QuickAction icon={<Calendar size={16} />} label="Mijn rooster" sub="Diensten en agenda" onClick={() => onNavigate('rooster')} />
           <QuickAction icon={<Plane size={16} />} label="Verlof aanvragen" sub="Saldo en aanvragen" onClick={() => onNavigate('verlof')} />
           <QuickAction icon={<RefreshCw size={16} />} label="Dienstruil" sub="Ruilen met een collega" onClick={() => onNavigate('ruil-verzoeken')} />
