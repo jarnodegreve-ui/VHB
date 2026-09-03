@@ -70,7 +70,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
               aria-label="Filter op lijn"
               className="sm:w-40 font-semibold cursor-pointer"
             >
-              <option value="all">Alle Lijnen</option>
+              <option value="all">Alle lijnen</option>
               {uniqueLines.map(line => (
                 <option key={line} value={line}>Lijn {line}</option>
               ))}
