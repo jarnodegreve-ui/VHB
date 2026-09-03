@@ -73,11 +73,19 @@ async function schiet({ out, app = '.', port = '4173' }) {
   fs.mkdirSync(out, { recursive: true });
 
   const url = `http://localhost:${port}/`;
-  const server = spawn('npx', ['vite', 'preview', '--port', String(port), '--strictPort'], { cwd: appMap, stdio: ['ignore', 'pipe', 'pipe'] });
+  // Vite direct starten (niet via npx): npx spawnt vite als kindproces en bij
+  // een SIGTERM op npx bleef vite leven, hield de stdio-pipes open en liet dit
+  // script nooit eindigen (CI hing 25 min en werd gecancelled, 03-09). Eigen
+  // procesgroep + de hele groep afsluiten.
+  const viteBin = path.join(appMap, 'node_modules', '.bin', 'vite');
+  const server = spawn(fs.existsSync(viteBin) ? viteBin : 'vite', ['preview', '--port', String(port), '--strictPort'], { cwd: appMap, stdio: ['ignore', 'pipe', 'pipe'], detached: true });
   let serverLog = '';
   server.stdout.on('data', (d) => { serverLog += d; });
   server.stderr.on('data', (d) => { serverLog += d; });
-  const stop = () => { if (!server.killed) server.kill('SIGTERM'); };
+  const stop = () => {
+    try { process.kill(-server.pid, 'SIGTERM'); } catch { /* al weg */ }
+    try { if (!server.killed) server.kill('SIGTERM'); } catch { /* al weg */ }
+  };
   process.on('exit', stop);
 
   try {
@@ -199,8 +207,8 @@ function vergelijk({ basis, kop, out, drempel = DREMPEL_STANDAARD }) {
 const { los, opties } = argumenten(process.argv.slice(2));
 const [modus, ...rest] = los;
 try {
-  if (modus === 'schiet') await schiet({ out: opties.out, app: opties.app, port: opties.port });
-  else if (modus === 'vergelijk') vergelijk({ basis: rest[0], kop: rest[1], out: opties.out, drempel: opties.drempel ? Number(opties.drempel) : undefined });
+  if (modus === 'schiet') { await schiet({ out: opties.out, app: opties.app, port: opties.port }); process.exit(0); }
+  else if (modus === 'vergelijk') { vergelijk({ basis: rest[0], kop: rest[1], out: opties.out, drempel: opties.drempel ? Number(opties.drempel) : undefined }); process.exit(0); }
   else {
     console.error('gebruik: visueel-ci.mjs schiet --out <map> [--app <map>] [--port 4173]\n        visueel-ci.mjs vergelijk <basis-map> <kop-map> --out <diff-map> [--drempel 1.5]');
     process.exit(2);
