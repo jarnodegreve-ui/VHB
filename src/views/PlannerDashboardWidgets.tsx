@@ -374,6 +374,17 @@ export function PlannerDashboardWidgets({
     ...matrix.busyNames.map(nameKey),
   ]);
   const todayShifts = shifts.filter((s) => s.date === peilDag);
+  // Eerste dienst van de peildag (voor de morgen-variant van de actief-tegel):
+  // vroegste starttijd, afwezig gemelde chauffeurs uitgesloten.
+  const eersteStartMorgen = (() => {
+    // timeMin staat verderop (const) — eigen mini-parser i.p.v. TDZ.
+    const minuten = (t: string) => { const [h, m] = String(t).split(':'); return (Number(h) || 0) * 60 + (Number(m) || 0); };
+    const kandidaten = todayShifts
+      .filter((s) => isValidBusvakTime(String(s.startTime ?? '')) && !afwezigOpDag(String(s.driverId), s.date))
+      .sort((a, b) => minuten(a.startTime) - minuten(b.startTime));
+    const eerste = kandidaten[0];
+    return eerste ? { tijd: eerste.startTime, naam: userNameById(String(eerste.driverId)), dienst: String(eerste.line || '—') } : null;
+  })();
   const workingTodayIds = new Set(todayShifts.map((s) => String(s.driverId)));
   // Ook wie nú nog op de bus zit met een dienst van gisteren is niet vrij.
   const drivingNowIds = new Set(
@@ -595,17 +606,32 @@ export function PlannerDashboardWidgets({
         />
       )}
       <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-6' : 'xl:grid-cols-5')}>
-        <OpsStat
-          className="md:col-span-2 xl:col-span-1"
-          icon={<Bus size={16} />}
-          // Oker = er rijdt nú iemand (het enige merk-accent in de strip);
-          // een lege ochtend is rusttoestand en blijft slate.
-          tone={driversDrivingNow > 0 ? 'oker' : 'slate'}
-          label="Chauffeurs actief"
-          value={driversDrivingNow}
-          sub="nu aan het rijden"
-          onClick={() => setShowDriving(true)}
-        />
+        {dagOffset === 1 ? (
+          // Morgen: "nu aan het rijden" is een vandaag-cijfer — het bleef staan
+          // en las als "morgen zijn er al mensen actief" (melding Jarno 03-09).
+          // Toon in plaats daarvan de eerste start van morgen.
+          <OpsStat
+            className="md:col-span-2 xl:col-span-1"
+            icon={<Bus size={16} />}
+            tone="slate"
+            label="Eerste start morgen"
+            text={eersteStartMorgen ? eersteStartMorgen.tijd : '—'}
+            sub={eersteStartMorgen ? `${eersteStartMorgen.naam} · dienst ${eersteStartMorgen.dienst}` : 'nog geen diensten ingepland'}
+            onClick={() => setShowScheduled(true)}
+          />
+        ) : (
+          <OpsStat
+            className="md:col-span-2 xl:col-span-1"
+            icon={<Bus size={16} />}
+            // Oker = er rijdt nú iemand (het enige merk-accent in de strip);
+            // een lege ochtend is rusttoestand en blijft slate.
+            tone={driversDrivingNow > 0 ? 'oker' : 'slate'}
+            label="Chauffeurs actief"
+            value={driversDrivingNow}
+            sub="nu aan het rijden"
+            onClick={() => setShowDriving(true)}
+          />
+        )}
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
           icon={<Users size={16} />}
