@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
-  Hash, HeartPulse, IdCard, LayoutDashboard, Map as MapIcon, MapPin, Phone, Plus, RotateCcw, Settings, Smartphone,
+  Hash, HeartPulse, IdCard, LayoutDashboard, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
   Sparkles, Sunrise, Thermometer, Users, Zap,
 } from 'lucide-react';
 import type { Role, View } from '../types';
@@ -73,6 +73,7 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'toestellen', pad: 'beheer/toestellen', label: 'Toestellen', omschrijving: 'Keur toestellen goed of blokkeer ze.', icoon: Smartphone, sectie: 'systeem', rollen: ADMIN, zoek: 'devices goedkeuren' },
   { view: 'activiteit', pad: 'beheer/activiteit', label: 'Activiteit', omschrijving: 'Recente beheeracties en aanmeldingen.', icoon: Activity, sectie: 'systeem', rollen: ADMIN, zoek: 'log audit' },
   { view: 'ocpi-monitoring', pad: 'beheer/laadpalen', label: 'Laadpalen (OCPI)', kort: 'Laadpalen', omschrijving: 'Status, sessies en verbruik van de laadpalen.', icoon: Zap, sectie: 'systeem', rollen: ADMIN, zoek: 'ocpi kempower laden' },
+  { view: 'designsysteem', pad: 'beheer/designsysteem', label: 'Designsysteem', omschrijving: 'Alle bouwstenen, tokens en toestanden op één pagina.', icoon: Palette, sectie: 'systeem', rollen: ADMIN, zoek: 'huisstijl componenten tokens primitieven' },
   { view: 'beheer-debug', pad: 'beheer/systeemstatus', label: 'Systeemstatus', omschrijving: 'Koppelingen, tabellen en health checks.', icoon: HeartPulse, sectie: 'systeem', rollen: ADMIN, zoek: 'debug health' },
   // — Account —
   { view: 'instellingen', pad: 'instellingen', label: 'Instellingen', omschrijving: 'Thema, meldingen, wachtwoord en agenda-koppeling.', icoon: Settings, sectie: 'account', rollen: IEDEREEN, zoek: 'voorkeuren thema donker meldingen wachtwoord agenda', verborgen: true },
