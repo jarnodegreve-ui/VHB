@@ -44,6 +44,7 @@ export function BrandLogo({
   variant = 'volledig',
   naamregelSchaal = 1,
   naamregelAfstand = 0,
+  laden = false,
   className,
 }: {
   /** 'licht' = carbon op lichte achtergrond; 'donker' = negatief (gedempt wit) op zwart/donker. */
@@ -56,6 +57,10 @@ export function BrandLogo({
   naamregelSchaal?: number;
   /** Naamregel extra omlaag, in master-eenheden (lusdikte = 57). */
   naamregelAfstand?: number;
+  /** Laadstand: het gouden segment reist over de lus (het logo ís de
+   *  spinner). Alleen voor laadmomenten — het statische logo blijft het
+   *  masterbestand. */
+  laden?: boolean;
   className?: string;
 }) {
   const ink = tone === 'donker' ? NEGATIEF : CARBON;
@@ -82,7 +87,20 @@ export function BrandLogo({
       {/* Onderbroken ovale lus: carbon/wit met het gouden segment rechtsboven. */}
       <g fill="none" strokeWidth={57} strokeLinecap="butt" strokeLinejoin="round">
         <path d="M926 160.5 H435 A177 177 0 0 0 258 337.5 A177 177 0 0 0 435 514.5 H991.5 A177 177 0 0 0 1166 307" stroke={ink} />
-        <path d="M967 160.5 H991.5 A177 177 0 0 1 1157 268" stroke={GOUD} />
+        {laden ? (
+          // Laadstand: het goud reist als segment over de gesloten hartlijn van
+          // de lus (zelfde keyframes als BrandSpinner: vhb-lus-loop).
+          <path
+            d="M435 160.5 H991.5 A177 177 0 0 1 991.5 514.5 H435 A177 177 0 0 1 435 160.5 Z"
+            stroke={GOUD}
+            strokeLinecap="round"
+            pathLength={100}
+            strokeDasharray="9 91"
+            className="vhb-lus-loop"
+          />
+        ) : (
+          <path d="M967 160.5 H991.5 A177 177 0 0 1 1157 268" stroke={GOUD} />
+        )}
       </g>
       {/* Monogram V · H · B */}
       <g fill={ink}>

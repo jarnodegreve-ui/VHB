@@ -8,6 +8,7 @@ import { useRoute, routeUitUrl } from './app/router';
 import { magView, routeVan } from './app/routes';
 import { SidebarNav } from './app/SidebarNav';
 import { SessieLaden, ProfielLaden, PrintLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
+import { AppSkeleton, heeftOpgeslagenSessie } from './app/AppSkeleton';
 import { ProbleemMelder } from './app/ProbleemMelder';
 import { useAppData } from './app/useAppData';
 import { AppDataProvider } from './app/AppDataContext';
@@ -53,7 +54,6 @@ import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { UserMenu } from './components/UserMenu';
-import { PreviewToggle } from './components/PreviewToggle';
 import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
 import { berekenWerkvoorraad } from './lib/werkvoorraad';
 import { BrandSpinner } from './components/BrandSpinner';
@@ -111,6 +111,8 @@ const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYea
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  // Eén keer bij het opstarten bepaald: warme start = er is al een sessie.
+  const [warmeStart] = useState(() => typeof window !== 'undefined' && heeftOpgeslagenSessie());
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   // Waar we zijn = de URL (src/app/router.ts): terugknop, deeplinks en
   // refresh-op-dezelfde-plek werken daardoor vanzelf.
@@ -1019,7 +1021,9 @@ export default function App() {
     }
   };
 
-  if (!authReady) return <SessieLaden />;
+  // Warme start (opgeslagen sessie): meteen de skeleton-schil; koude start: het
+  // carbon laadscherm — dat wordt zo het inlogscherm.
+  if (!authReady) return warmeStart ? <AppSkeleton /> : <SessieLaden />;
 
   // Print-modus: kale weergave zonder sidebar/header. Vereist authenticated
   // planner/admin sessie zodat we de shifts kunnen lezen.
@@ -1113,7 +1117,7 @@ export default function App() {
     // Wél een sessie maar (nog) geen profiel: toon een laadscherm met
     // retry i.p.v. het loginformulier aan een al-ingelogde gebruiker
     // (de 8s-watchdog kon hier anders een login-flits veroorzaken).
-    if (session) return <ProfielLaden />;
+    if (session) return warmeStart ? <AppSkeleton /> : <ProfielLaden />;
     // uitlogMelding als prop: sessionStorage alleen is niet genoeg, want bij
     // een gedwongen uitlog kan LoginView al gemonteerd zijn vóórdat de vlag
     // geschreven is — dan zou de uitleg nooit verschijnen (viel om in e2e).
@@ -1329,22 +1333,21 @@ export default function App() {
                       bel met attentie-stip, avatar-menu. De toggle stond
                       eerst op beide dashboards; één vaste plek is rustiger.
                       Op smal scherm een compacte oog-knop i.p.v. de pill. */}
+                  {/* Alleen het oogje, op elk formaat (vraag Jarno 03-09): de
+                      pill met tekst + schakelaar was op desktop het drukste
+                      element van de balk. Actief = oker gevuld. */}
                   {isRealAdmin && (
-                    <>
-                      <span className="hidden md:inline-flex">
-                        <PreviewToggle active={previewChauffeur} onToggle={() => setPreviewChauffeur((v) => !v)} />
-                      </span>
-                      <IconButton
-                        label={previewChauffeur ? 'Chauffeurs-weergave uit' : 'Bekijk als chauffeur'}
-                        variant="ghost"
-                        size="sm"
-                        aria-pressed={previewChauffeur}
-                        onClick={() => setPreviewChauffeur((v) => !v)}
-                        className={cn('md:hidden', previewChauffeur && 'bg-oker-500/15 text-oker-700 hover:bg-oker-500/15 hover:text-oker-700')}
-                      >
-                        <Eye size={16} />
-                      </IconButton>
-                    </>
+                    <IconButton
+                      label={previewChauffeur ? 'Chauffeurs-weergave uit' : 'Bekijk als chauffeur'}
+                      title={previewChauffeur ? 'Chauffeurs-weergave uit' : 'Bekijk als chauffeur'}
+                      variant="ghost"
+                      size="sm"
+                      aria-pressed={previewChauffeur}
+                      onClick={() => setPreviewChauffeur((v) => !v)}
+                      className={cn(previewChauffeur && 'bg-oker-500/15 text-oker-700 hover:bg-oker-500/15 hover:text-oker-700')}
+                    >
+                      <Eye size={16} />
+                    </IconButton>
                   )}
                   {/* Werkvoorraad — tussen de preview-toggle en de bel (idee
                       Jarno 31-08): open taken vanuit elk scherm zichtbaar;
