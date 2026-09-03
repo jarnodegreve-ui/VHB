@@ -195,7 +195,7 @@ export function WerkvoorraadMenu({
           /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt —
              absoluut verankerd aan de knop viel het links buiten beeld
              (melding Jarno 01-09); top-auto = de plek onder de knop. */
-          className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-surface-white backdrop-blur-xl ring-1 ring-hairline shadow-xl p-1.5 z-50 max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
+          className="absolute right-0 top-full mt-2 w-80 rounded-2xl bg-surface-white ring-1 ring-hairline shadow-xl p-1.5 z-50 max-sm:fixed max-sm:inset-x-3 max-sm:top-auto max-sm:w-auto"
         >
           <div className="flex items-center justify-between px-3 py-2 mb-1 border-b fine-divider">
             <span className="text-sm font-semibold text-slate-800">Open taken</span>

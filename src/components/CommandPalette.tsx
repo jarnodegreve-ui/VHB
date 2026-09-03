@@ -133,6 +133,9 @@ export function CommandPalette({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: DUR.base, ease: EASE }}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Zoek scherm of actie"
             className="glass-modal relative mt-[12vh] w-full max-w-xl rounded-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -144,6 +147,11 @@ export function CommandPalette({
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 placeholder="Zoek scherm of actie…"
+                role="combobox"
+                aria-expanded="true"
+                aria-controls="palette-resultaten"
+                aria-activedescendant={filtered[selectedIdx] ? `palette-${filtered[selectedIdx].id}` : undefined}
+                aria-autocomplete="list"
                 className="no-focus-ring flex-1 bg-transparent outline-none text-base text-slate-900 placeholder:text-slate-400"
               />
               <kbd className="hidden sm:inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
@@ -152,7 +160,7 @@ export function CommandPalette({
             </div>
 
             {/* Results */}
-            <div className="max-h-[50vh] overflow-y-auto p-2">
+            <div id="palette-resultaten" role="listbox" aria-label="Resultaten" className="max-h-[50vh] overflow-y-auto p-2">
               {filtered.length === 0 ? (
                 <div className="py-8 text-center text-sm text-slate-500">
                   Geen resultaten voor "{query}"
@@ -165,6 +173,9 @@ export function CommandPalette({
                     // toetsenbord-actieve staat) — navigatie-item, geen knop-uiterlijk.
                     <button
                       key={cmd.id}
+                      id={`palette-${cmd.id}`}
+                      role="option"
+                      aria-selected={isActive}
                       onClick={() => {
                         cmd.action();
                         onClose();

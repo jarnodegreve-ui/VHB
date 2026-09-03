@@ -22,7 +22,9 @@ import {
   Menu,
   X,
   RefreshCw,
-  WifiOff,} from 'lucide-react';
+  WifiOff,
+  Search,
+} from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
@@ -242,6 +244,12 @@ export default function App() {
 
   // Terugknop/swipe-back sluit de mobiele zijbalk i.p.v. de app te verlaten.
   useHistoryDismiss(isSidebarOpen && !isDesktopNav, () => setIsSidebarOpen(false));
+  useEffect(() => {
+    if (!isSidebarOpen || isDesktopNav) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setIsSidebarOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isSidebarOpen, isDesktopNav]);
 
   // ⌘K / Ctrl+K opent het command palette
   useCommandPaletteShortcut(() => setIsCommandPaletteOpen(true));
@@ -1151,6 +1159,14 @@ export default function App() {
       {/* h-dvh i.p.v. h-screen (100vh): vóór installatie in een Safari-tab is
           100vh de hoogte mét uitgeklapte toolbar, waardoor de onderrand achter
           de balk viel. dvh volgt de zichtbare viewport. */}
+      {/* rauw: skip-link voor toetsenbord/VoiceOver — springt langs de zijbalk naar de inhoud. */}
+      <a
+        href="#hoofdinhoud"
+        onClick={(e) => { e.preventDefault(); document.getElementById('hoofdinhoud')?.focus(); }}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[130] focus:rounded-xl focus:bg-oker-500 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-slate-950"
+      >
+        Naar de inhoud
+      </a>
       <div className="flex h-dvh w-full bg-transparent text-slate-900 font-sans overflow-hidden">
       {/* Sidebar Overlay */}
       <AnimatePresence>
@@ -1167,6 +1183,7 @@ export default function App() {
 
       {/* Sidebar — vaste rail, full-height, haarlijn rechts */}
       <aside
+        aria-label="Zijbalk"
         inert={!isSidebarOpen && !isDesktopNav}
         className={cn(
           "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
@@ -1228,7 +1245,8 @@ export default function App() {
       </aside>
 
       {/* Main Content */}
-      <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative">
+      {/* Mobiele lade open: de inhoud is inert (focus blijft in de lade). */}
+      <main className="flex-1 min-w-0 flex flex-col overflow-hidden relative" inert={isSidebarOpen && !isDesktopNav}>
         {/* Scroll container met sticky-header — header zit BINNEN de scroll
             zodat content er onderdoor schuift en de panel-blur natuurlijk
             werkt (echte iOS-vibe i.p.v. harde rand). */}
@@ -1318,6 +1336,11 @@ export default function App() {
                       onNavigate={setCurrentView}
                     />
                   )}
+                  {/* Zoeken: op desktop via ⌘K (knop bewust weg, Jarno); op
+                      een telefoon is er geen sneltoets, dus daar wél een knop. */}
+                  <IconButton label="Zoeken" variant="ghost" size="sm" className="lg:hidden" onClick={() => setIsCommandPaletteOpen(true)}>
+                    <Search size={16} />
+                  </IconButton>
                   <IconButton
                     label="Meldingen"
                     title="Updates en meldingen"
@@ -1369,7 +1392,7 @@ export default function App() {
               animatie op de hele view (mode="wait" = exit + enter, ~0.56s op
               een grote DOM) veroorzaakte hapering bij het wisselen van pagina's
               op tragere Windows-pc's. Instant = sneller en jank-vrij. */}
-          <div className="mx-auto w-full max-w-[1200px]">
+          <div id="hoofdinhoud" tabIndex={-1} className="mx-auto w-full max-w-[1200px] outline-none">
             {/* Foutgrens per view: een crash in één scherm laat sidebar,
                 sessie en context staan; de key reset de grens bij een
                 viewwissel of "Opnieuw proberen". */}
