@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Calendar, ChevronRight, FileText, History, MapPin, Plus, Trash2, Upload } from 'lucide-react';
 import type { Diversion } from '../../types';
 import { cn, notify } from '../../lib/ui';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, IconButton } from '../../components/primitives';
 import { Card } from '../../components/Card';
@@ -46,7 +46,6 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   }, [diversions]);
   const activeCount = useMemo(() => diversions.filter((d) => !isExpired(d)).length, [diversions]);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [historyDiversion, setHistoryDiversion] = useState<Diversion | null>(null);
 
   const [formData, setFormData] = useState<Partial<Diversion>>({
@@ -177,10 +176,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     sluitPaneel();
   };
 
-  const handleDelete = async () => {
-    if (!confirmDeleteId) return;
-    const id = confirmDeleteId;
-    setConfirmDeleteId(null);
+  // Geen bevestigingsmodal: meteen verwijderen, de datalaag toont 6 s een
+  // toast met "Ongedaan maken" (idee 1 Jarno, 03-09).
+  const handleDelete = async (id: string) => {
     if (onDeleteDiversion) {
       if (!(await onDeleteDiversion(id))) return;
     } else {
@@ -262,7 +260,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
           {bewerkte && (
             <>
               <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setHistoryDiversion(bewerkte)}><History size={16} /></IconButton>
-              <IconButton label="Verwijderen" variant="danger" onClick={() => setConfirmDeleteId(bewerkte.id)}><Trash2 size={16} /></IconButton>
+              <IconButton label="Verwijderen" variant="danger" onClick={() => { void handleDelete(bewerkte.id); }}><Trash2 size={16} /></IconButton>
             </>
           )}
           <Button variant="secondary" size="lg" className="flex-1" onClick={sluitPaneel}>
@@ -372,14 +370,6 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       />
 
       <MasterDetail lijst={lijst} paneel={paneel} />
-
-      <ConfirmationModal
-        isOpen={!!confirmDeleteId}
-        onClose={() => setConfirmDeleteId(null)}
-        onConfirm={handleDelete}
-        title="Omleiding verwijderen?"
-        message="De omleiding verdwijnt voor alle chauffeurs. Dit kan niet ongedaan gemaakt worden."
-      />
 
       <EntityHistoryModal
         open={!!historyDiversion}
