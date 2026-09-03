@@ -198,7 +198,7 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
       )}
       {filters ? <div className="flex flex-wrap items-center gap-1.5">{filters}</div> : null}
       <div className="flex items-center gap-2.5 md:ml-auto">
-        {telling ? <span className="text-xs font-medium tabular-nums text-slate-500">{telling}</span> : null}
+        {telling ? <span className="shrink-0 whitespace-nowrap text-xs font-medium tabular-nums text-slate-500">{telling}</span> : null}
         {dichtheid ? <DichtheidSchakelaar {...dichtheid} /> : null}
         {kolommen ? <KolommenMenu {...kolommen} /> : null}
         {acties}
