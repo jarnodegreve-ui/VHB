@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from 'react';
+
 /**
  * Het definitieve VHB-logo (pakket 2026-08) als ínline SVG i.p.v. <img src="…svg">.
  *
@@ -25,6 +27,45 @@
 const CARBON = '#14181B';
 const GOUD = '#E2A323';
 const NEGATIEF = '#DCDFE2'; // gedempt wit (tussen slate-200 en -300) i.p.v. #FFFFFF, zie boven
+
+/* Laadstand: het gouden segment reist over de gesloten hartlijn van de lus
+ * (pathLength 100 → alles in procenten van de omloop). LUS_THUIS = waar het
+ * gouden boogje van het master begint (x 967 op de bovenrand, 23,9 % van de
+ * omloop); LUS_SEGMENT = de lengte van dat boogje (10,4 %). Het reizende
+ * segment heeft dus exact de vorm van het statische — zodra het thuis is,
+ * kan het geruisloos door het masterboogje vervangen worden.
+ *
+ * Eén gedeelde tijdbasis (lusT0) zodat álle laad-logo's in fase lopen en een
+ * logo dat ná het laden verschijnt (zijbalk, login) precies weet waar het
+ * segment op dat moment zat: het loopt dan door tot thuis en remt af
+ * (`landing`) i.p.v. abrupt naar de master-positie te springen. Web
+ * Animations API i.p.v. een CSS-keyframe: de startTime is expliciet, dus na
+ * een blokkerende hoofdthread springt het segment naar de juiste fase in
+ * plaats van te blijven hangen. */
+const LUS_OMLOOP_MS = 1100;
+const LUS_THUIS = 23.909;
+const LUS_SEGMENT = 10.434;
+const LUS_LANDING_MIN = 30; // minstens 30 % doorlopen, anders is de afremming een schokje
+const LUS_LANDING_REK = 1.6; // landing duurt 1,6× de lineaire tijd: zelfde startsnelheid, dan uitlopen
+let lusT0: number | null = null;
+let ladenActief = 0; // aantal gemonteerde laad-logo's (voor de landing-beslissing)
+
+function lusNu(): number {
+  return typeof document !== 'undefined' && document.timeline?.currentTime != null
+    ? Number(document.timeline.currentTime)
+    : performance.now();
+}
+function lusStart(): number {
+  if (lusT0 === null) lusT0 = lusNu();
+  return lusT0;
+}
+/** Huidige positie van het reizende segment, in % van de omloop. */
+function lusPositie(): number {
+  return (((lusNu() - lusStart()) % LUS_OMLOOP_MS) / LUS_OMLOOP_MS) * 100;
+}
+function minderBeweging(): boolean {
+  return typeof window !== 'undefined' && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
 
 /* Naamregel "VAN HOOREBEKE & ZOON" als lettercontouren, letterlijk uit het masterbestand. */
 const NAAMREGEL =
@@ -65,6 +106,58 @@ export function BrandLogo({
 }) {
   const ink = tone === 'donker' ? NEGATIEF : CARBON;
   const beeldmerk = variant === 'beeldmerk';
+  const lusRef = useRef<SVGPathElement>(null);
+  // Landing: een statisch logo dat verschijnt terwijl er (nog) een laad-logo
+  // staat — of dit logo zelf net uit de laadstand komt — laat het segment
+  // eerst thuiskomen. 'nee' = gewoon het master-boogje.
+  const [landing, setLanding] = useState<{ stand: 'nee' | 'bezig' | 'klaar'; van: number }>(() =>
+    !laden && ladenActief > 0 && !minderBeweging() ? { stand: 'bezig', van: lusPositie() } : { stand: 'nee', van: LUS_THUIS },
+  );
+  const vorigeLaden = useRef(laden);
+  useEffect(() => {
+    if (vorigeLaden.current && !laden) setLanding(minderBeweging() ? { stand: 'nee', van: LUS_THUIS } : { stand: 'bezig', van: lusPositie() });
+    if (laden) setLanding({ stand: 'nee', van: LUS_THUIS });
+    vorigeLaden.current = laden;
+  }, [laden]);
+  useEffect(() => {
+    if (!laden) return;
+    ladenActief += 1;
+    return () => {
+      ladenActief -= 1;
+    };
+  }, [laden]);
+  // Reizen (laadstand): oneindige lus op de gedeelde tijdbasis.
+  useEffect(() => {
+    const el = lusRef.current;
+    if (!laden || !el || typeof el.animate !== 'function' || minderBeweging()) return;
+    const reis = el.animate([{ strokeDashoffset: '0' }, { strokeDashoffset: '-100' }], {
+      duration: LUS_OMLOOP_MS,
+      iterations: Infinity,
+      easing: 'linear',
+    });
+    reis.startTime = lusStart();
+    return () => reis.cancel();
+  }, [laden]);
+  // Landen: vanaf de huidige positie op dezelfde snelheid door tot thuis, uitlopend.
+  useEffect(() => {
+    const el = lusRef.current;
+    if (landing.stand !== 'bezig' || !el) return;
+    if (typeof el.animate !== 'function') {
+      setLanding({ stand: 'klaar', van: LUS_THUIS });
+      return;
+    }
+    const van = lusPositie();
+    let afstand = (((LUS_THUIS - van) % 100) + 100) % 100;
+    if (afstand < LUS_LANDING_MIN) afstand += 100;
+    const land = el.animate([{ strokeDashoffset: `${-van}` }, { strokeDashoffset: `${-(van + afstand)}` }], {
+      duration: (afstand / 100) * LUS_OMLOOP_MS * LUS_LANDING_REK,
+      easing: 'cubic-bezier(0.25, 0.4, 0.5, 1)', // startsnelheid = reissnelheid (1,6), eindsnelheid 0
+      fill: 'forwards',
+    });
+    land.onfinish = () => setLanding({ stand: 'klaar', van: LUS_THUIS });
+    return () => land.cancel();
+  }, [landing.stand]);
+  const reizend = laden || landing.stand === 'bezig';
   // Hoogte groeit mee met een lagere/grotere naamregel zodat de layout-box
   // klopt (niets overlapt wat eronder staat); horizontaal mag hij uitsteken.
   const hoogte = beeldmerk
@@ -87,16 +180,22 @@ export function BrandLogo({
       {/* Onderbroken ovale lus: carbon/wit met het gouden segment rechtsboven. */}
       <g fill="none" strokeWidth={57} strokeLinecap="butt" strokeLinejoin="round">
         <path d="M926 160.5 H435 A177 177 0 0 0 258 337.5 A177 177 0 0 0 435 514.5 H991.5 A177 177 0 0 0 1166 307" stroke={ink} />
-        {laden ? (
-          // Laadstand: het goud reist als segment over de gesloten hartlijn van
-          // de lus (zelfde keyframes als BrandSpinner: vhb-lus-loop).
+        {reizend ? (
+          // Laadstand/landing: het goud reist als segment (vorm = masterboogje)
+          // over de gesloten hartlijn van de lus; zonder animatie (reduced
+          // motion, nog niet gestart) rust het op de master-positie.
           <path
+            ref={lusRef}
             d="M435 160.5 H991.5 A177 177 0 0 1 991.5 514.5 H435 A177 177 0 0 1 435 160.5 Z"
             stroke={GOUD}
-            strokeLinecap="round"
             pathLength={100}
-            strokeDasharray="9 91"
-            className="vhb-lus-loop"
+            strokeDasharray={`${LUS_SEGMENT} ${100 - LUS_SEGMENT}`}
+            // Basiswaarde vóór de animatie start: reizend = thuis (reduced
+            // motion), landend = de positie op het moment van renderen (geen
+            // flits van het thuis-boogje in het eerste frame — WebKit).
+            style={{ strokeDashoffset: laden ? -LUS_THUIS : -landing.van }}
+            className="vhb-lus-reis"
+            data-lus={laden ? 'reist' : 'landt'}
           />
         ) : (
           <path d="M967 160.5 H991.5 A177 177 0 0 1 1157 268" stroke={GOUD} />
