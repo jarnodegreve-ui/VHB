@@ -1,17 +1,33 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Info, Undo2, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { Button, IconButton } from './primitives';
 import { DUR, EASE } from '../lib/motion';
 
-export type Toast = {
+export type ToastOpties = {
+  /** Zichtbaarheid in ms. Standaard 4,2 s; fout-toasts 10 s. */
+  duurMs?: number;
+  /** Ongedaan-variant (Gmail/Linear-gevoel): de actie is al gebeurd, de
+   *  toast is dé weg terug. 6 s zichtbaar met een aflopende hairline,
+   *  pauzeert zolang de muis erop staat of de knop focus heeft; de toast
+   *  telt zelf af (ToastStack), niet de showToast-timer in App. */
+  ongedaan?: boolean;
+};
+
+export type Toast = ToastOpties & {
   id: number;
   message: string;
   tone?: 'success' | 'error' | 'info';
   /** Optionele actie in de melding zelf — bv. "Opnieuw proberen" bij een
-   *  mislukte laadbeurt, zodat je niet de hele pagina hoeft te vernieuwen. */
+   *  mislukte laadbeurt, zodat je niet de hele pagina hoeft te vernieuwen.
+   *  Bij `ongedaan` is dit de "Ongedaan maken"-knop. */
   action?: { label: string; run: () => void };
 };
+
+/** Zichtbaarheid van een ongedaan-toast: lang genoeg om te lezen én te
+ *  reageren, kort genoeg om niet in de weg te hangen. */
+export const ONGEDAAN_DUUR_MS = 6000;
 
 const TONE_STYLES = {
   success: {
@@ -35,6 +51,127 @@ const prefersReducedMotion = () =>
 /** Maximaal zichtbaar tegelijk — een salvo meldingen bedekte anders het
  *  halve scherm; de oudste vallen weg, de nieuwste blijven. */
 const MAX_VISIBLE = 2;
+
+/**
+ * Aftellen voor een ongedaan-toast, met pauze. `resterend` is de tijd die
+ * nog over is; `loopt` zegt of de klok tikt. De hairline volgt dezelfde
+ * klok: loopt hij, dan glijdt de lijn in `resterend` ms naar nul; staat hij
+ * stil, dan bevriest de lijn op de huidige fractie.
+ */
+function useAftellen(duurMs: number, onKlaar: () => void) {
+  const resterendRef = useRef(duurMs);
+  const startRef = useRef<number | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const onKlaarRef = useRef(onKlaar);
+  onKlaarRef.current = onKlaar;
+  const [klok, setKlok] = useState({ loopt: false, resterend: duurMs });
+
+  const hervat = useCallback(() => {
+    if (timerRef.current !== null) return;
+    startRef.current = performance.now();
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      onKlaarRef.current();
+    }, resterendRef.current);
+    setKlok({ loopt: true, resterend: resterendRef.current });
+  }, []);
+
+  const pauzeer = useCallback(() => {
+    if (timerRef.current === null) return;
+    window.clearTimeout(timerRef.current);
+    timerRef.current = null;
+    const verstreken = performance.now() - (startRef.current ?? performance.now());
+    resterendRef.current = Math.max(0, resterendRef.current - verstreken);
+    setKlok({ loopt: false, resterend: resterendRef.current });
+  }, []);
+
+  useEffect(() => {
+    // Eerst één frame op de volle lijn schilderen, dan pas de transitie
+    // starten — anders is er niets om vanaf te glijden.
+    const raf = typeof requestAnimationFrame === 'function'
+      ? requestAnimationFrame(hervat)
+      : window.setTimeout(hervat, 0);
+    return () => {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
+      window.clearTimeout(raf);
+      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
+      timerRef.current = null;
+    };
+  }, [hervat]);
+
+  return { klok, pauzeer, hervat };
+}
+
+/** Ongedaan-variant: eigen klok (pauze bij hover/focus) + hairline die afloopt. */
+function OngedaanToast({ toast, reduced, onDismiss }: { toast: Toast; reduced: boolean; onDismiss: (id: number) => void }) {
+  const duur = toast.duurMs ?? ONGEDAAN_DUUR_MS;
+  const { klok, pauzeer, hervat } = useAftellen(duur, () => onDismiss(toast.id));
+  // Muis én focus kunnen los van elkaar pauzeren; de klok loopt pas weer
+  // als allebei weg zijn.
+  const hoverRef = useRef(false);
+  const focusRef = useRef(false);
+  const bijwerken = () => {
+    if (hoverRef.current || focusRef.current) pauzeer();
+    else hervat();
+  };
+  const fractie = klok.loopt ? 0 : klok.resterend / duur;
+  const tone = TONE_STYLES[toast.tone ?? 'success'];
+  const ToneIcon = tone.icon;
+
+  return (
+    <div
+      className="relative"
+      onMouseEnter={() => { hoverRef.current = true; bijwerken(); }}
+      onMouseLeave={() => { hoverRef.current = false; bijwerken(); }}
+      onFocus={() => { focusRef.current = true; bijwerken(); }}
+      onBlur={(e) => {
+        if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+        focusRef.current = false;
+        bijwerken();
+      }}
+    >
+      <div className="flex items-center gap-3">
+        <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', tone.chip)}>
+          <ToneIcon size={16} strokeWidth={2} />
+        </div>
+        <p className="min-w-0 flex-1 text-sm font-medium leading-snug text-slate-800">{toast.message}</p>
+        {toast.action && (
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Undo2 size={14} />}
+            onClick={() => { toast.action!.run(); onDismiss(toast.id); }}
+            className="shrink-0"
+          >
+            {toast.action.label}
+          </Button>
+        )}
+        <IconButton
+          label="Sluit melding"
+          variant="ghost"
+          size="sm"
+          onClick={() => onDismiss(toast.id)}
+          className="-m-1.5 text-slate-400 sm:pointer-fine:-m-0"
+        >
+          <X size={16} />
+        </IconButton>
+      </div>
+      {/* Aflopende hairline in oker op de onderrand: de resterende tijd,
+          zonder cijfers. Bij reduced motion geen glijdende lijn. */}
+      {!reduced && (
+        <div aria-hidden className="pointer-events-none absolute inset-x-0 -bottom-3 h-px overflow-hidden">
+          <div
+            className="h-full origin-left bg-oker-500"
+            style={{
+              transform: `scaleX(${fractie})`,
+              transition: klok.loopt ? `transform ${klok.resterend}ms linear` : 'none',
+            }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export function ToastStack({
   toasts,
@@ -78,6 +215,9 @@ export function ToastStack({
               transition={{ duration: DUR.base, ease: EASE }}
               className="rounded-2xl border border-slate-200 bg-paper/95 px-4 py-3 shadow-lg backdrop-blur-sm touch-pan-y"
             >
+              {toast.ongedaan ? (
+                <OngedaanToast toast={toast} reduced={reduced} onDismiss={onDismiss} />
+              ) : (
               <div className="flex items-start gap-3">
                 <div
                   className={cn(
@@ -114,6 +254,7 @@ export function ToastStack({
                   <X size={16} />
                 </IconButton>
               </div>
+              )}
             </motion.div>
           );
         })}

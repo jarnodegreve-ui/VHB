@@ -2,7 +2,7 @@ import { useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { User } from '../../types';
 import { apiFetch } from '../../lib/api';
-import type { Toast } from '../../components/ToastStack';
+import type { Toast, ToastOpties } from '../../components/ToastStack';
 
 /**
  * Gedeelde kern van de datalaag: wat elke domeinmodule (planning, verlof,
@@ -17,7 +17,7 @@ import type { Toast } from '../../components/ToastStack';
  * circulaire imports tussen de domeinen.
  */
 
-export type ShowToast = (message: string, tone?: Toast['tone'], action?: Toast['action']) => void;
+export type ShowToast = (message: string, tone?: Toast['tone'], action?: Toast['action'], opties?: ToastOpties) => void;
 
 export type DataBasis = {
   session: Session | null;

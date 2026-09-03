@@ -2,6 +2,7 @@ import { clsx, type ClassValue } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 import { deviceHeaders } from './device';
 import { supabase } from './supabase';
+import type { Toast, ToastOpties } from '../components/ToastStack';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -13,9 +14,22 @@ export function cn(...inputs: ClassValue[]) {
  *  leeg formulier. Waarde: 'sessie' of 'account'. */
 export const LOGIN_MELDING_KEY = 'vhb-login-melding';
 
-export function notify(message: string, tone: 'success' | 'error' | 'info' = 'info') {
+/** Inhoud van het `vhb-toast`-event (App.tsx luistert en roept showToast). */
+export type ToastEventDetail = {
+  message: string;
+  tone?: Toast['tone'];
+  action?: Toast['action'];
+  opties?: ToastOpties;
+};
+
+export function notify(
+  message: string,
+  tone: 'success' | 'error' | 'info' = 'info',
+  extra?: Pick<ToastEventDetail, 'action' | 'opties'>,
+) {
   if (typeof window === 'undefined') return;
-  window.dispatchEvent(new CustomEvent('vhb-toast', { detail: { message, tone } }));
+  const detail: ToastEventDetail = { message, tone, ...extra };
+  window.dispatchEvent(new CustomEvent('vhb-toast', { detail }));
 }
 
 /** Sessie- en toestel-headers als los object. Alleen nog voor plekken die

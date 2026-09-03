@@ -4,7 +4,7 @@ import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, IconButton, Switch } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Textarea } from '../../components/Field';
@@ -123,15 +123,14 @@ export function ManageUpdatesView({
     setUpdateForm(emptyUpdateForm);
   };
 
-  // Eén misklik naast 'Bewerk' verwijderde een update direct en definitief —
-  // nu eerst bevestigen, zoals in alle andere beheer-views.
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
+  // Geen bevestigingsmodal meer: verwijderen gaat meteen en de datalaag
+  // toont 6 s een toast met "Ongedaan maken" (idee 1 Jarno, 03-09). Alleen
+  // de collectie-terugval (zonder onDeleteUpdate) meldt hier nog zelf.
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     const success = onDeleteUpdate ? await onDeleteUpdate(id) : await onSave(updates.filter((update) => update.id !== id));
     if (success) {
-      notify('Update verwijderd.', 'success');
+      if (!onDeleteUpdate) notify('Update verwijderd.', 'success');
       if (id === editingId) handleCancelEdit();
     } else if (!onDeleteUpdate) {
       notify('Update kon niet worden verwijderd.', 'error');
@@ -222,7 +221,7 @@ export function ManageUpdatesView({
           {bewerkte && (
             <>
               <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setHistoryUpdate(bewerkte)}><History size={16} /></IconButton>
-              <IconButton label="Verwijder" variant="danger" disabled={deletingId === bewerkte.id} onClick={() => setConfirmDeleteId(bewerkte.id)}><Trash2 size={16} /></IconButton>
+              <IconButton label="Verwijder" variant="danger" disabled={deletingId === bewerkte.id} onClick={() => { void handleDelete(bewerkte.id); }}><Trash2 size={16} /></IconButton>
             </>
           )}
           <Button variant="secondary" size="lg" className="flex-1" onClick={handleCancelEdit}>
@@ -300,15 +299,6 @@ export function ManageUpdatesView({
         entityType="update"
         entityId={historyUpdate?.id ?? ''}
         title={historyUpdate?.title}
-      />
-
-      <ConfirmationModal
-        isOpen={!!confirmDeleteId}
-        onClose={() => setConfirmDeleteId(null)}
-        onConfirm={() => { if (confirmDeleteId) handleDelete(confirmDeleteId); }}
-        title="Update verwijderen?"
-        message="Deze update verdwijnt definitief voor alle chauffeurs. Dit kan niet ongedaan gemaakt worden."
-        confirmText="Verwijderen"
       />
     </PageShell>
   );
