@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
-import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
+import type { User } from '../../types';
+import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
@@ -32,25 +33,19 @@ const KOLOMMEN = [
   { key: 'sessies', label: 'Sessies' },
 ] as const;
 
-export function ManageUsersView({ users, onSave, onSaveUser, onCreateUser, onDeleteUser, title = 'Gebruikersbeheer', currentUser, shifts = [], leaveRequests = [], swaps = [] }: {
-  users: User[];
-  /** Collectie-saver (hele lijst): blijft het pad voor de Excel-import en de
-   *  bulkacties op een selectie (één atomaire save mét revisie- en
-   *  massa-verwijder-vangrail; per record in een lus zou N× de volledige
-   *  Auth-sync draaien en halverwege kunnen stranden). */
-  onSave: (u: UserDraft[]) => Promise<boolean>;
-  /** Per record (PUT/POST one/DELETE, useAppData) voor bewerken, toevoegen,
-   *  verwijderen en de snelle pauzeer/activeer-knop. Optioneel tot App ze
-   *  doorgeeft; zonder valt de view terug op onSave. */
-  onSaveUser?: (u: UserDraft) => Promise<boolean>;
-  onCreateUser?: (u: UserDraft) => Promise<boolean>;
-  onDeleteUser?: (id: string) => Promise<boolean>;
+export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   title?: string;
   currentUser: User;
-  shifts?: Shift[];
-  leaveRequests?: LeaveRequest[];
-  swaps?: SwapRequest[];
 }) {
+  // Gebruikers, savers en de collecties voor de historiek-modal komen uit de
+  // datalaag (AppDataContext). Twee opslagpaden, bewust:
+  // - `saveUsers` (hele lijst) blijft het pad voor de Excel-import en de
+  //   bulkacties op een selectie: één atomaire save mét revisie- en
+  //   massa-verwijder-vangrail (per record in een lus zou N× de volledige
+  //   Auth-sync draaien en halverwege kunnen stranden).
+  // - `saveUser`/`createUser`/`deleteUser` (PUT/POST one/DELETE) voor
+  //   bewerken, toevoegen, verwijderen en de snelle pauzeer/activeer-knop.
+  const { users, saveUsers: onSave, saveUser: onSaveUser, createUser: onCreateUser, deleteUser: onDeleteUser, shifts, leaveRequests, swaps } = useAppDataContext();
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
@@ -251,7 +246,7 @@ export function ManageUsersView({ users, onSave, onSaveUser, onCreateUser, onDel
 
   const voerToevoegenUit = async (userToAdd: UserDraft) => {
     setIsSubmittingUser(true);
-    const success = await (onCreateUser ? onCreateUser(userToAdd) : onSave([...users, userToAdd])).finally(() => setIsSubmittingUser(false));
+    const success = await onCreateUser(userToAdd).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     setShowAddModal(false);
     setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
@@ -289,7 +284,7 @@ export function ManageUsersView({ users, onSave, onSaveUser, onCreateUser, onDel
   const voerBijwerkenUit = async () => {
     if (!editingUser) return;
     setIsSubmittingUser(true);
-    const success = await (onSaveUser ? onSaveUser(editingUser) : onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u)))).finally(() => setIsSubmittingUser(false));
+    const success = await onSaveUser(editingUser).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten.
     const bestaand = userExpiries[editingUser.id] ?? {};
@@ -324,7 +319,7 @@ export function ManageUsersView({ users, onSave, onSaveUser, onCreateUser, onDel
       setConfirmDeleteId(null);
       return;
     }
-    const success = await (onDeleteUser ? onDeleteUser(confirmDeleteId) : onSave(users.filter((u) => u.id !== confirmDeleteId)));
+    const success = await onDeleteUser(confirmDeleteId);
     if (!success) return;
     if (editingUser?.id === confirmDeleteId) setEditingUser(null);
     setConfirmDeleteId(null);
@@ -348,8 +343,7 @@ export function ManageUsersView({ users, onSave, onSaveUser, onCreateUser, onDel
   const quickToggleActive = async (u: User) => {
     if (u.isActive !== false && isProtectedAdmin(u)) return notify('Je kunt de laatste actieve admin niet pauzeren.', 'error');
     const gewijzigd = { ...u, isActive: u.isActive === false };
-    if (onSaveUser) await onSaveUser(gewijzigd);
-    else await onSave(users.map((x) => (x.id === u.id ? gewijzigd : x)));
+    await onSaveUser(gewijzigd);
   };
   const handleBulkDelete = async () => {
     const targetIds = new Set([...selectedIds].filter((id) => { const u = users.find((x) => x.id === id); return !!u && !isBulkProtected(u); }));

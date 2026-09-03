@@ -10,6 +10,7 @@ import { SidebarNav } from './app/SidebarNav';
 import { SessieLaden, ProfielLaden, PrintLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
 import { ProbleemMelder } from './app/ProbleemMelder';
 import { useAppData } from './app/useAppData';
+import { AppDataProvider } from './app/AppDataContext';
 import { CalendarSubscribeModal } from './components/CalendarSubscribeModal';
 import { downloadRoosterIcs } from './lib/roosterIcs';
 import { ViewFout } from './app/ViewFout';
@@ -183,19 +184,12 @@ export default function App() {
     loadingCountRef.current = Math.max(0, loadingCountRef.current - 1);
     if (loadingCountRef.current === 0) setIsLoading(false);
   };
-  // Datalaag (src/app/useAppData.ts). showToast/meldLaadfout staan verderop
-  // als const — de wrappers roepen ze pas aan op het moment van gebruik.
-  const {
-    shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
-    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
-    isInitialLoad, setIsInitialLoad, lastSyncedAt, setLastSyncedAt,
-    loadAppData, refreshAll, resetAll,
-    fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, markDocumentsSeen,
-    fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog,
-    savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
-    saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
-    saveUser, createUser, deleteUser, saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
-  } = useAppData({
+  // Datalaag (src/app/useAppData.ts, per domein in src/app/data/*).
+  // showToast/meldLaadfout staan verderop als const — de wrappers roepen ze
+  // pas aan op het moment van gebruik. `appData` gaat ook als geheel de
+  // AppDataProvider in (rond de schil), zodat views het via
+  // useAppDataContext() kunnen lezen i.p.v. via een stapel props.
+  const appData = useAppData({
     session,
     currentUser,
     currentView,
@@ -204,6 +198,17 @@ export default function App() {
     beginLoading,
     endLoading,
   });
+  const {
+    shifts, users, diversions, services, updates, swaps, leaveRequests, lastSeenLeaveDecisionAt, unseenDocuments, myNotes,
+    planningMatrixRows, planningCodes, planningMatrixHistory, activityLog, loginActivity, coverageDays, vervaldata, pendingDevices,
+    isInitialLoad, setIsInitialLoad, lastSyncedAt, setLastSyncedAt,
+    loadAppData, refreshAll, resetAll,
+    fetchUpdates, saveUpdates, sendUrgentEmail, fetchSwaps, saveSwaps, fetchLeave, markDocumentsSeen,
+    fetchPlanningMatrix, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog,
+    savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
+    saveServices, fetchUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
+    saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
+  } = appData;
   // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
   // verwijderde dan twee meldingen tegelijk).
   const toastIdRef = useRef(0);
@@ -1137,7 +1142,7 @@ export default function App() {
     .toUpperCase() || '?';
 
   return (
-    <>
+    <AppDataProvider value={appData}>
       {/* Parallax-laag: fixed gekleurde blobs die trager scrollen dan content */}
       <div className="parallax-bg" aria-hidden="true" />
 
@@ -1421,33 +1426,11 @@ export default function App() {
                   /* Planner/admin: Operations Center — één operationele cockpit
                      i.p.v. een dubbel dashboard. */
                   <Suspense fallback={<ViewLoader />}>
+                  {/* Data (collecties, ziekmelding, verversen) leest de
+                      cockpit zelf uit de AppDataContext. */}
                   <LazyPlannerDashboardWidgets
                     currentUser={currentUser!}
-                    users={users}
-                    shifts={shifts}
-                    diversions={diversions}
-                    updates={updates}
-                    leaveRequests={leaveRequests}
-                    swaps={swaps}
-                    matrixHistory={planningMatrixHistory}
-                    activityLog={activityLog}
-                    coverageDays={coverageDays}
-                    vervaldata={vervaldata}
-                    pendingDevices={pendingDevices}
                     onNavigate={(view) => setCurrentView(view)}
-                    onSickReport={reportSick}
-                    onShiftSwapped={async () => {
-                      // Wissel vanuit de ziekmeld-flow: planning, ruilen en
-                      // dekking meteen mee verversen zodat het dashboard niet
-                      // een oude "nog te herverdelen"-rij blijft tonen.
-                      await Promise.all([
-                        // Planner/admin-scherm: altijd de volledige planning.
-                        fetchPlanning(undefined, undefined, { silent: true }),
-                        fetchSwaps(),
-                        refreshCoverageGaps(),
-                      ]);
-                    }}
-                    isInitialLoad={isInitialLoad}
                   />
                   </Suspense>
                 ) : (
@@ -1497,7 +1480,7 @@ export default function App() {
               ))}
               {resolvedCurrentView === 'gebruikers' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
-                  <LazyManageUsersView users={users} onSave={saveUsers} onSaveUser={saveUser} onCreateUser={createUser} onDeleteUser={deleteUser} currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
+                  <LazyManageUsersView currentUser={currentUser!} />
                 </Suspense>
               ))}
               {resolvedCurrentView === 'toestellen' && (
@@ -1617,7 +1600,7 @@ export default function App() {
           })),
         ]}
       />
-    </>
+    </AppDataProvider>
   );
 }
 
