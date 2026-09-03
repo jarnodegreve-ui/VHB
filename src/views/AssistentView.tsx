@@ -2,7 +2,7 @@ import { BrandSpinner } from '../components/BrandSpinner';
 import { useEffect, useRef, useState } from 'react';
 import { Send, Sparkles } from 'lucide-react';
 import { cn } from '../lib/ui';
-import { PageShell } from '../components/ui';
+import { PageHeader, PageShell } from '../components/ui';
 import { Button, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Input } from '../components/Field';
@@ -53,6 +53,7 @@ export function AssistentView() {
 
   return (
     <PageShell>
+      <PageHeader title="Assistent" description="Stel je planningsvraag — advies op basis van de actuele planning, het verlof en het invaladvies." />
       <Card padding="none" className="flex flex-col overflow-hidden">
         {/* Gespreksvlak */}
         <div className="flex-1 min-h-[45dvh] max-h-[62dvh] overflow-y-auto p-5 space-y-3">
