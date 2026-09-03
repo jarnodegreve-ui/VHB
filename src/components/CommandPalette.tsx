@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { Search } from 'lucide-react';
@@ -9,14 +9,22 @@ import type { View, Role } from '../types';
 import { cn } from '../lib/ui';
 import { DUR, EASE } from '../lib/motion';
 
-type Command = {
+export type Command = {
   id: string;
   label: string;
   hint?: string;
   icon: ReactNode;
   keywords: string;
   roles?: Role[];
+  /** Alleen tonen zodra er gezocht wordt (bv. personen — anders overspoelt de lijst). */
+  alleenBijZoeken?: boolean;
   action: () => void;
+};
+
+const RECENT_KEY = 'vhb-palette-recent';
+const leesRecent = (): string[] => { try { return JSON.parse(localStorage.getItem(RECENT_KEY) || '[]'); } catch { return []; } };
+const onthoudRecent = (id: string) => {
+  try { localStorage.setItem(RECENT_KEY, JSON.stringify([id, ...leesRecent().filter((x) => x !== id)].slice(0, 5))); } catch { /* privémodus */ }
 };
 
 /**
@@ -32,11 +40,14 @@ export function CommandPalette({
   onClose,
   onNavigate,
   role,
+  acties = [],
 }: {
   open: boolean;
   onClose: () => void;
   onNavigate: (view: View) => void;
   role: Role;
+  /** Acties naast de navigatie (verlof aanvragen, thema, personen, …) — uit App. */
+  acties?: Command[];
 }) {
   const [query, setQuery] = useState('');
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -46,7 +57,7 @@ export function CommandPalette({
   // mag zien is vindbaar, mét zoekwoorden. Eerder stond hier een handlijst
   // die acht views miste.
   const commands = useMemo<Command[]>(
-    () => paletteRoutes().map((r) => {
+    () => paletteRoutes().map((r): Command => {
       const Icoon = r.icoon;
       return {
         id: `goto-${r.view}`,
@@ -57,19 +68,32 @@ export function CommandPalette({
         roles: [...r.rollen],
         action: () => onNavigate(r.view),
       };
-    }),
-    [onNavigate],
+    }).concat(acties),
+    [onNavigate, acties],
   );
 
   // Filter on role + query
+  const [recent, setRecent] = useState<string[]>(() => leesRecent());
   const filtered = useMemo(() => {
     const scoped = commands.filter((c) => !c.roles || c.roles.includes(role));
     const q = query.trim().toLowerCase();
-    if (!q) return scoped;
+    if (!q) {
+      // Recent gebruikte bovenaan, dan de rest in tabelvolgorde; personen niet.
+      const zichtbaar = scoped.filter((c) => !c.alleenBijZoeken);
+      const recente = recent.map((id) => zichtbaar.find((c) => c.id === id)).filter((c): c is Command => !!c);
+      return [...recente, ...zichtbaar.filter((c) => !recent.includes(c.id))];
+    }
     return scoped.filter((c) =>
       `${c.label} ${c.keywords} ${c.hint ?? ''}`.toLowerCase().includes(q),
     );
-  }, [commands, role, query]);
+  }, [commands, role, query, recent]);
+  const aantalRecent = query.trim() ? 0 : recent.filter((id) => filtered.some((c) => c.id === id)).length;
+  const voerUit = (cmd: Command) => {
+    onthoudRecent(cmd.id);
+    setRecent(leesRecent());
+    cmd.action();
+    onClose();
+  };
 
   // Reset selection bij query-wijziging
   useEffect(() => {
@@ -81,6 +105,7 @@ export function CommandPalette({
     if (open) {
       setQuery('');
       setSelectedIdx(0);
+      setRecent(leesRecent());
       setTimeout(() => inputRef.current?.focus(), 50);
     }
   }, [open]);
@@ -101,10 +126,7 @@ export function CommandPalette({
       } else if (e.key === 'Enter') {
         e.preventDefault();
         const cmd = filtered[selectedIdx];
-        if (cmd) {
-          cmd.action();
-          onClose();
-        }
+        if (cmd) voerUit(cmd);
       }
     };
     window.addEventListener('keydown', onKey);
@@ -168,18 +190,17 @@ export function CommandPalette({
               ) : (
                 filtered.map((cmd, i) => {
                   const isActive = i === selectedIdx;
+                  const groepLabel = aantalRecent > 0 && (i === 0 ? 'Recent' : i === aantalRecent ? 'Alles' : null);
                   return (
+                    <Fragment key={cmd.id}>
+                    {groepLabel && <p className="text-micro px-3 pb-1 pt-2 first:pt-1">{groepLabel}</p>}
                     // rauw: resultaatrij van het command palette (icoon + label + hint,
                     // toetsenbord-actieve staat) — navigatie-item, geen knop-uiterlijk.
                     <button
-                      key={cmd.id}
                       id={`palette-${cmd.id}`}
                       role="option"
                       aria-selected={isActive}
-                      onClick={() => {
-                        cmd.action();
-                        onClose();
-                      }}
+                      onClick={() => voerUit(cmd)}
                       onMouseEnter={() => setSelectedIdx(i)}
                       className={cn(
                         'w-full flex items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-medium transition-colors',
@@ -203,6 +224,7 @@ export function CommandPalette({
                         </span>
                       )}
                     </button>
+                    </Fragment>
                   );
                 })
               )}
