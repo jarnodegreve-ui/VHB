@@ -4,60 +4,43 @@
  */
 
 import { useCallback, Suspense, useState, useEffect, useRef } from 'react';
-import { viewUitUrl, zoekdeelVan } from './lib/deeplink';
+import { useRoute, routeUitUrl } from './app/router';
+import { magView, routeVan } from './app/routes';
+import { SidebarNav } from './app/SidebarNav';
+import { SessieLaden, ProfielLaden, PrintLaden, ConfigOntbreekt, ToestelGeblokkeerd } from './app/PreAppScreens';
+import { ProbleemMelder } from './app/ProbleemMelder';
+import { InstellingenView } from './views/InstellingenView';
+import { CalendarSubscribeModal } from './components/CalendarSubscribeModal';
+import { downloadRoosterIcs } from './lib/roosterIcs';
+import { ViewFout } from './app/ViewFout';
+import { ErrorBoundary } from './components/ErrorBoundary';
+import { useHistoryDismiss } from './lib/useHistoryDismiss';
 import {
-  LayoutDashboard,
-  MapPin,
-  Calendar,
   Bell,
   Eye,
-  Bus,
-  AlertTriangle,
-  FileText,
-  FolderOpen,
-  Plus,
-  Users,
-  RotateCcw,
   Menu,
-  CalendarCheck,
   X,
-  Map as MapIcon,
-  Phone,
-  Activity,
-  IdCard,
-  ShieldAlert,
-  Smartphone,
   RefreshCw,
-  WifiOff,
-  Zap,
-  CalendarCog,
-  Hash,
-  ClipboardList,
-  HeartPulse,
-  Thermometer,
-  Sparkles
-} from 'lucide-react';
+  WifiOff,} from 'lucide-react';
 import { formatSyncedTime } from './lib/format';
 import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
-import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry, Role } from './types';
+import { View, User, Shift, Update, Diversion, Service, SwapRequest, LeaveRequest, PlanningMatrixRow, PlanningCode, PlanningMatrixImportHistory, ActivityLogEntry } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
 import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, notify, onthoudEffectiefThema } from './lib/ui';
 import { apiFetch, apiJson, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
-import { reportHandledError, reportUserFeedback, setMonitoringUser } from './lib/monitoring';
+import { reportHandledError, setMonitoringUser } from './lib/monitoring';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { fetchCoverageGaps, type DayGap } from './lib/coverage';
 import { addDays, isoDate } from './lib/availability';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
-import { Button, IconButton, MicroLabel } from './components/primitives';
-import { Card, CardHeader } from './components/Card';
-import { Field, Textarea } from './components/Field';
+import { IconButton, MicroLabel } from './components/primitives';
+import { Card } from './components/Card';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
-import { NavItem, NavSection, NavSubLabel } from './components/Navigation';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { UserMenu } from './components/UserMenu';
@@ -67,7 +50,6 @@ import { berekenWerkvoorraad, type PendingDevice, type VervaldataRij } from './l
 import { BrandSpinner } from './components/BrandSpinner';
 import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
-import { Modal } from './components/Modal';
 import { LoginView } from './views/LoginView';
 import { ContactsView } from './views/ContactsView';
 import { DashboardView } from './views/DashboardView';
@@ -108,107 +90,18 @@ const LazyPrintMonthlyScheduleView = lazyWithRetry(() => import('./views/PrintMo
 const LazyPrintLeaveYearView = lazyWithRetry(() => import('./views/PrintLeaveYearView').then((module) => ({ default: module.PrintLeaveYearView })));
 
 
-// Alle views die voor minstens één rol bestaan — de whitelist voor deeplinks
-// (`?view=…`); de rol-guard doet daarna de fijne check.
-let ALLE_VIEWS: readonly string[] = [];
-const ALLOWED_VIEWS_BY_ROLE: Record<Role, View[]> = {
-  chauffeur: ['dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'],
-  planner: [
-    'dashboard',
-    'rooster',
-    'omleidingen',
-    'dienstoverzicht',
-    'ritblaadjes',
-    'contacten',
-    'updates',
-    'ruil-verzoeken',
-    'bezetting',
-    'dekking',
-    'assistent',
-    'verlof',
-    'verlof-kalender',
-    'beheer-roosters',
-    'planning-matrix',
-    'planning-codes',
-    'beheer-updates',
-    'beheer-omleidingen',
-    'beheer-dienstoverzicht',
-    'vervaldata',
-    'ziekte',
-  ],
-  admin: [
-    'dashboard',
-    'rooster',
-    'omleidingen',
-    'dienstoverzicht',
-    'ritblaadjes',
-    'contacten',
-    'updates',
-    'ruil-verzoeken',
-    'bezetting',
-    'dekking',
-    'assistent',
-    'verlof',
-    'verlof-kalender',
-    'beheer-roosters',
-    'planning-matrix',
-    'planning-codes',
-    'beheer-updates',
-    'beheer-omleidingen',
-    'beheer-dienstoverzicht',
-    'vervaldata',
-    'ziekte',
-    'gebruikers',
-    'toestellen',
-    'activiteit',
-    'ocpi-monitoring',
-    'beheer-debug',
-  ],
-};
-ALLE_VIEWS = [...new Set(Object.values(ALLOWED_VIEWS_BY_ROLE).flat())];
 
 
 
 
-/**
- * Zet html.login-donker zolang een carbon pre-app-scherm in beeld staat:
- * Safari kleurt zijn status-/werkbalkzone met de páginakleur, en die was
- * anders wit rond de donkere laadschermen (zelfde fix als LoginView, 01-09).
- */
-function CarbonAchtergrond() {
-  useEffect(() => {
-    const html = document.documentElement;
-    html.classList.add('login-donker');
-    return () => html.classList.remove('login-donker');
-  }, []);
-  return null;
-}
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
-  const [currentView, setCurrentViewRaw] = useState<View>(() => {
-    // Onthoud de laatst geopende pagina over een refresh heen. Een view die niet
-    // (meer) mag voor deze rol wordt door de allowedViews-guard hieronder alsnog
-    // teruggezet naar 'dashboard', en bij uitloggen wordt hij sowieso gereset.
-    try {
-      // Deeplink (`?view=…` uit een push-melding of externe link) wint van de
-      // onthouden pagina; de URL wordt daarna schoongemaakt zodat een refresh
-      // niet opnieuw "navigeert" (controle-ronde 27-08, voorstel 44).
-      if (typeof window !== 'undefined') {
-        const uitUrl = viewUitUrl(window.location.search, ALLE_VIEWS);
-        if (uitUrl) {
-          window.history.replaceState(null, '', window.location.pathname);
-          return uitUrl;
-        }
-      }
-      const stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-current-view') : null;
-      return (stored as View) || 'dashboard';
-    } catch {
-      return 'dashboard';
-    }
-  });
+  // Waar we zijn = de URL (src/app/router.ts): terugknop, deeplinks en
+  // refresh-op-dezelfde-plek werken daardoor vanzelf.
+  const { view: currentView, navigeer } = useRoute();
   // Start leeg (geen mock-data): tot de eerste fetch klaar is gate't
   // isInitialLoad de skeleton-staat. Geen risico meer dat mock-diensten/
   // gebruikers stilletjes als echte data getoond worden.
@@ -306,11 +199,9 @@ export default function App() {
   // "Meld een probleem" (testfase): vrije tekst → client_errors met bron
   // 'gebruikersmelding', zichtbaar in Systeem Status en de dagoverzicht-mail.
   const [showProbleemMelder, setShowProbleemMelder] = useState(false);
-  const [probleemTekst, setProbleemTekst] = useState('');
-  const [probleemVerstuurd, setProbleemVerstuurd] = useState(false);
-  const [probleemBezig, setProbleemBezig] = useState(false);
-  const [probleemFout, setProbleemFout] = useState(false);
+  const [showAgenda, setShowAgenda] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
+  const [viewFoutReset, setViewFoutReset] = useState(0);
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const isPasswordRecoveryRef = useRef(false);
   // Overlay-logica: meerdere fetches kunnen parallel lopen — een boolean
@@ -323,10 +214,10 @@ export default function App() {
   // bevinding 10). Reset hier, vóór de nieuwe view rendert, zodat een view
   // die bij het openen zelf scrolt (assistent naar het laatste bericht) het
   // laatste woord houdt. Dezelfde tab nog eens kiezen = ook naar boven.
-  const setCurrentView = useCallback((next: View | ((prev: View) => View)) => {
+  const setCurrentView = useCallback((next: View) => {
     scrollContainerRef.current?.scrollTo({ top: 0 });
-    setCurrentViewRaw(next);
-  }, []);
+    navigeer(next);
+  }, [navigeer]);
   // Deeplink terwijl het portaal al open staat: de service worker stuurt bij
   // een tik op een melding een NAVIGATE-bericht i.p.v. het venster te
   // herladen (zie sw.js notificationclick) — een open formulier blijft zo
@@ -335,12 +226,12 @@ export default function App() {
     if (typeof navigator === 'undefined' || !('serviceWorker' in navigator)) return;
     const onMessage = (event: MessageEvent) => {
       if (event.data?.type !== 'NAVIGATE') return;
-      const view = viewUitUrl(zoekdeelVan(String(event.data.url ?? '')), ALLE_VIEWS);
-      if (view) setCurrentView(view);
+      const route = routeUitUrl(String(event.data.url ?? ''));
+      if (route) { scrollContainerRef.current?.scrollTo({ top: 0 }); navigeer(route.view, { params: route.params }); }
     };
     navigator.serviceWorker.addEventListener('message', onMessage);
     return () => navigator.serviceWorker.removeEventListener('message', onMessage);
-  }, [setCurrentView]);
+  }, [navigeer]);
   const ptrIndicatorRef = useRef<HTMLDivElement>(null);
   // Tijdstip van de laatste geslaagde dataload — chauffeurs zien zo hoe vers
   // hun rooster/omleidingen zijn (vooral offline of na een tijd weg).
@@ -432,6 +323,9 @@ export default function App() {
     mq.addEventListener('change', luister);
     return () => mq.removeEventListener('change', luister);
   }, []);
+
+  // Terugknop/swipe-back sluit de mobiele zijbalk i.p.v. de app te verlaten.
+  useHistoryDismiss(isSidebarOpen && !isDesktopNav, () => setIsSidebarOpen(false));
 
   // ⌘K / Ctrl+K opent het command palette
   useCommandPaletteShortcut(() => setIsCommandPaletteOpen(true));
@@ -896,22 +790,13 @@ export default function App() {
       return;
     }
 
-    const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
-    if (!allowedViews.includes(currentView)) {
-      setCurrentView('dashboard');
+    if (!magView(currentUser.role, currentView)) {
+      navigeer('dashboard', { replace: true });
       showToast('Dit scherm is niet beschikbaar voor jouw rol.', 'info');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, currentView]);
 
-  // Onthoud de huidige pagina zodat een refresh op dezelfde plek blijft
-  // (i.p.v. terug naar het dashboard te springen).
-  useEffect(() => {
-    try {
-      window.localStorage.setItem('vhb-current-view', currentView);
-    } catch {
-      // localStorage geblokkeerd (privacy-modus) — dan geen herinnering, geen probleem.
-    }
-  }, [currentView]);
 
   useEffect(() => {
     if (!currentUser) {
@@ -1924,18 +1809,7 @@ export default function App() {
     }
   };
 
-  if (!authReady) {
-    return (
-      <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-        <CarbonAchtergrond />
-        <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
-        <div className="flex items-center gap-2.5 text-slate-300">
-          <BrandSpinner size={26} tone="donker" />
-          <span className="text-sm font-medium">Sessie laden…</span>
-        </div>
-      </div>
-    );
-  }
+  if (!authReady) return <SessieLaden />;
 
   // Print-modus: kale weergave zonder sidebar/header. Vereist authenticated
   // planner/admin sessie zodat we de shifts kunnen lezen.
@@ -1948,20 +1822,20 @@ export default function App() {
     // shifts moeten er zijn vóór de auto-print afgaat.
     if (printDriverId === 'alle') {
       if (isInitialLoad) {
-        return <div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
+        return <PrintLaden />;
       }
       const bulkDrivers = users
         .filter((u) => u.isActive !== false && u.name.toLowerCase() !== 'beheerder')
         .sort((a, b) => a.name.localeCompare(b.name));
       return (
-        <Suspense fallback={<div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+        <Suspense fallback={<PrintLaden />}>
           <LazyPrintMonthlyScheduleView drivers={bulkDrivers} monthIso={printMonth} shifts={shifts} />
         </Suspense>
       );
     }
     const driver = users.find((u) => String(u.id) === String(printDriverId)) || null;
     return (
-      <Suspense fallback={<div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+      <Suspense fallback={<PrintLaden />}>
         <LazyPrintMonthlyScheduleView driver={driver} monthIso={printMonth} shifts={shifts} />
       </Suspense>
     );
@@ -1979,20 +1853,18 @@ export default function App() {
       // Pas renderen als de collecties er zijn: de view print automatisch,
       // en dat mag niet gebeuren met een nog lege verloflijst.
       if (isInitialLoad) {
-        return <div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
+        return <PrintLaden />;
       }
       const driver = isSelf ? currentUser : users.find((u) => String(u.id) === String(printVerlofDriverId)) || null;
       return (
-        <Suspense fallback={<div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>}>
+        <Suspense fallback={<PrintLaden />}>
           <LazyPrintLeaveYearView driver={driver} year={printVerlofJaar} leaves={leaveRequests} />
         </Suspense>
       );
     }
   }
 
-  if (!isSupabaseConfigured || !supabase) {
-    return <div className="min-h-screen bg-oker-50 flex items-center justify-center p-6 text-center text-slate-700 font-bold">Supabase client-configuratie ontbreekt. Voeg `VITE_SUPABASE_URL` en `VITE_SUPABASE_ANON_KEY` toe in Vercel en lokaal.</div>;
-  }
+  if (!isSupabaseConfigured || !supabase) return <ConfigOntbreekt />;
 
   if (isPasswordRecovery) {
     return (
@@ -2006,60 +1878,24 @@ export default function App() {
 
   // Toestel-whitelist: ingelogd, maar dit toestel is (nog) niet goedgekeurd.
   if (deviceBlocked && session) {
-    const revoked = deviceBlocked === 'revoked';
     return (
-      <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
-        <CarbonAchtergrond />
-        <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
-        <div className="max-w-sm">
-          <div className={cn(
-            'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
-            revoked ? 'bg-red-500/15 text-red-300' : 'bg-oker-500/15 text-oker-400',
-          )}>
-            {revoked ? <ShieldAlert size={24} /> : <Smartphone size={24} />}
-          </div>
-          <h1 className="mt-4 text-xl font-black text-white tracking-tight">
-            {revoked ? 'Dit toestel is geblokkeerd' : 'Toestel wacht op goedkeuring'}
-          </h1>
-          <p className="mt-2 text-sm font-medium leading-6 text-slate-300">
-            {revoked
-              ? 'De toegang voor dit toestel is ingetrokken. Neem contact op met de planning als dit niet klopt.'
-              : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen — zodra het toestel is goedgekeurd kun je verder. Tip: zet je de app op je beginscherm, dan kan die één keer apart goedgekeurd moeten worden.'}
-          </p>
-          {!revoked && (
-            <Button
-              variant="primary"
-              className="mt-5"
-              onClick={async () => {
-                if (!session?.access_token) return;
-                const status = await registerThisDevice(session.access_token);
-                if (status === 'approved' || status === null) {
-                  setDeviceBlocked(null);
-                  initializedUserIdRef.current = null;
-                  initializingUserIdRef.current = null;
-                  void initializeAuthenticatedApp(session.access_token, session.user?.id);
-                } else {
-                  setDeviceBlocked(status);
-                  showToast('Nog niet goedgekeurd — vraag de planning om dit toestel goed te keuren.', 'info');
-                }
-              }}
-            >
-              Opnieuw controleren
-            </Button>
-          )}
-          <div className="mt-4">
-            {/* rauw: tekstlink op het carbon pre-app-scherm — Button ghost hovert met
-                een licht slate-vlak dat hier als vlek zou opvallen. */}
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-            >
-              Afmelden
-            </button>
-          </div>
-        </div>
-      </div>
+      <ToestelGeblokkeerd
+        revoked={deviceBlocked === 'revoked'}
+        onLogout={handleLogout}
+        onRetry={async () => {
+          if (!session?.access_token) return;
+          const status = await registerThisDevice(session.access_token);
+          if (status === 'approved' || status === null) {
+            setDeviceBlocked(null);
+            initializedUserIdRef.current = null;
+            initializingUserIdRef.current = null;
+            void initializeAuthenticatedApp(session.access_token, session.user?.id);
+          } else {
+            setDeviceBlocked(status);
+            showToast('Nog niet goedgekeurd — vraag de planning om dit toestel goed te keuren.', 'info');
+          }
+        }}
+      />
     );
   }
 
@@ -2067,26 +1903,7 @@ export default function App() {
     // Wél een sessie maar (nog) geen profiel: toon een laadscherm met
     // retry i.p.v. het loginformulier aan een al-ingelogde gebruiker
     // (de 8s-watchdog kon hier anders een login-flits veroorzaken).
-    if (session) {
-      return (
-        <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-5">
-        <CarbonAchtergrond />
-          <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
-          <div className="flex items-center gap-2.5 text-slate-300">
-            <BrandSpinner size={26} tone="donker" />
-            <span className="text-sm font-medium">Profiel laden…</span>
-          </div>
-          {/* rauw: tekstlink op het carbon pre-app-scherm (zie "Afmelden" hierboven). */}
-          <button
-            type="button"
-            onClick={() => window.location.reload()}
-            className="text-xs font-semibold text-slate-400 hover:text-white transition-colors"
-          >
-            Duurt het te lang? Vernieuw de pagina
-          </button>
-        </div>
-      );
-    }
+    if (session) return <ProfielLaden />;
     // uitlogMelding als prop: sessionStorage alleen is niet genoeg, want bij
     // een gedwongen uitlog kan LoginView al gemonteerd zijn vóórdat de vlag
     // geschreven is — dan zou de uitleg nooit verschijnen (viel om in e2e).
@@ -2101,39 +1918,9 @@ export default function App() {
   const effectiveRole = previewingChauffeur ? 'chauffeur' : currentUser.role;
   const isPlanner = effectiveRole === 'planner' || effectiveRole === 'admin';
   const isAdmin = effectiveRole === 'admin';
-  const allowedViews = ALLOWED_VIEWS_BY_ROLE[currentUser.role] || ['dashboard'];
-  const resolvedCurrentView = allowedViews.includes(currentView) ? currentView : 'dashboard';
-  const viewMeta: Record<string, { title: string; subtitle: string }> = {
-    // Bewust zonder subtitle (verzoek Jarno): de begroeting + statuspill op
-    // het dashboard zelf zeggen al wat dit scherm is.
-    dashboard: { title: 'Dashboard', subtitle: '' },
-    omleidingen: { title: 'Omleidingen', subtitle: 'Actuele omleidingen.' },
-    rooster: { title: 'Mijn rooster', subtitle: 'Je komende diensten en export naar agenda.' },
-    dienstoverzicht: { title: 'Dienstoverzicht', subtitle: 'Alle diensten, uren en blokken in een compact overzicht.' },
-    ritblaadjes: { title: 'Ritbladen', subtitle: 'Actuele rit-informatie als PDF voor alle chauffeurs.' },
-    documenten: { title: 'Mijn documenten', subtitle: 'Documenten die de planning voor jou klaarzet vind je hier terug.' },
-    contacten: { title: 'Contactlijst', subtitle: 'Bereik collega’s en planners sneller vanuit een centrale lijst.' },
-    updates: { title: 'Updates', subtitle: 'Nieuws, veiligheidsmeldingen en technische mededelingen.' },
-    'ruil-verzoeken': { title: 'Dienstruil', subtitle: 'Beheer openstaande dienstruilen en aanbiedingen.' },
-    bezetting: { title: 'Maandplanning', subtitle: 'Wie rijdt welke dienst en wie heeft verlof — handig voor wissels.' },
-    dekking: { title: 'Openstaande diensten', subtitle: 'Niet-ingevulde diensten per dag t.o.v. de verwachte diensten.' },
-    assistent: { title: 'Planner-assistent', subtitle: 'Stel je planningsvraag — advies op basis van de actuele planning.' },
-    verlof: { title: 'Verlof', subtitle: 'Vraag verlof aan en volg je aanvragen op.' },
-    ziekte: { title: 'Ziekte', subtitle: 'Ziekmeldingen en de diensten die daardoor open staan.' },
-    'verlof-kalender': { title: 'Verlof-kalender', subtitle: 'Maandoverzicht van alle afwezigheden in één tabel.' },
-    'beheer-roosters': { title: 'Beheer roosters', subtitle: 'Importeer, synchroniseer en beheer planning centraal.' },
-    'planning-matrix': { title: 'Planningsoverzicht', subtitle: 'Controleer de actuele geüploade matrixplanning per dag en chauffeur.' },
-    'planning-codes': { title: 'Planningscodes', subtitle: 'Beheer de betekenis van matrixcodes zonder SQL of handmatige scripts.' },
-    activiteit: { title: 'Activiteit', subtitle: 'Recente beheeracties en wijzigingen in het portaal.' },
-    'beheer-updates': { title: 'Beheer updates', subtitle: 'Publiceer, controleer en verwijder updates en dringende meldingen.' },
-    gebruikers: { title: 'Gebruikers', subtitle: 'Beheer accounts, rollen en toegangsrechten.' },
-    toestellen: { title: 'Toestellen', subtitle: 'Keur toestellen goed of blokkeer ze — logins werken alleen op goedgekeurde toestellen.' },
-    'beheer-omleidingen': { title: 'Beheer Omleidingen', subtitle: 'Voeg routewijzigingen en bijlagen toe voor chauffeurs.' },
-    'beheer-dienstoverzicht': { title: 'Beheer Dienstoverzicht', subtitle: 'Onderhoud het dienstschema en importeer uit Excel.' },
-    'ocpi-monitoring': { title: 'Laadpalen (OCPI)', subtitle: 'Status, sessies en verbruik van de Kempower-laadpalen.' },
-    'beheer-debug': { title: 'Systeem Status', subtitle: 'Controleer koppelingen, tabellen en health checks.' },
-  };
-  const currentMeta = viewMeta[resolvedCurrentView] || { title: 'VHB Portaal', subtitle: 'Interne operationele omgeving.' };
+  const resolvedCurrentView: View = magView(currentUser.role, currentView) ? currentView : 'dashboard';
+  // Titel in de topbar = het label uit de routetabel (één naam per scherm).
+  const currentMeta = { title: routeVan(resolvedCurrentView).label };
   // Volledige initialen ("Jarno De Greve" → JDG), gecapt op 4 voor extreem
   // lange namen (avatar is maar 32px breed).
   const userInitials = currentUser.name
@@ -2157,65 +1944,8 @@ export default function App() {
         onClose={() => setShowChangePassword(false)}
         email={currentUser?.email || session?.user?.email || ''}
       />
-      {/* Probleem-melder (testfase): tekst + scherm-context → client_errors,
-          bron 'gebruikersmelding'. Geen aparte tabel of mailstroom nodig —
-          het komt in Systeem Status en het dagoverzicht terecht. */}
-      <Modal open={showProbleemMelder} onClose={() => setShowProbleemMelder(false)} maxWidth="sm" ariaLabel="Meld een probleem">
-        <div className="p-6">
-          {probleemVerstuurd ? (
-            <div className="text-center py-4">
-              <p className="text-sm font-bold text-slate-800">Bedankt, jouw melding is verstuurd!</p>
-              <p className="mt-1.5 text-xs text-slate-500">De planning ziet hem in het systeemoverzicht.</p>
-              <Button variant="primary" className="mt-5" onClick={() => setShowProbleemMelder(false)}>
-                Sluiten
-              </Button>
-            </div>
-          ) : (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                const tekst = probleemTekst.trim();
-                if (!tekst || probleemBezig) return;
-                // Pas "verstuurd" tonen als de server de melding écht heeft:
-                // een stil weggevallen POST kreeg voorheen ook een "Bedankt!".
-                setProbleemBezig(true);
-                setProbleemFout(false);
-                void reportUserFeedback(tekst, { view: currentView }).then((ok) => {
-                  setProbleemBezig(false);
-                  if (ok) setProbleemVerstuurd(true);
-                  else setProbleemFout(true);
-                });
-              }}
-            >
-              <CardHeader
-                title="Meld een probleem"
-                description="Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee."
-              />
-              <Field label="Wat ging er mis?" htmlFor="probleem-tekst" className="mt-4">
-                <Textarea
-                  id="probleem-tekst"
-                  value={probleemTekst}
-                  onChange={(e) => setProbleemTekst(e.target.value)}
-                  maxLength={900}
-                  rows={4}
-                  placeholder="Bijv. de aftelling bij Chris klopt niet — hij is al klaar…"
-                />
-              </Field>
-              {probleemFout && (
-                <p className="mt-2 text-xs font-semibold text-red-700">Versturen lukte niet — controleer je verbinding en probeer opnieuw.</p>
-              )}
-              <div className="mt-4 flex justify-end gap-2.5">
-                <Button variant="ghost" onClick={() => setShowProbleemMelder(false)}>
-                  Annuleren
-                </Button>
-                <Button type="submit" variant="primary" disabled={!probleemTekst.trim() || probleemBezig}>
-                  {probleemBezig ? 'Versturen…' : 'Versturen'}
-                </Button>
-              </div>
-            </form>
-          )}
-        </div>
-      </Modal>
+      <ProbleemMelder open={showProbleemMelder} onClose={() => setShowProbleemMelder(false)} view={currentView} />
+      <CalendarSubscribeModal open={showAgenda} onClose={() => setShowAgenda(false)} onDownload={() => downloadRoosterIcs(currentUser.name, shifts.filter((s) => String(s.driverId) === String(currentUser.id)))} />
       <AnimatePresence>
         {isLoading && !isInitialLoad && (
           <motion.div
@@ -2268,7 +1998,7 @@ export default function App() {
         // notch (controle-ronde 27-08, nr. 35).
         style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)', paddingLeft: 'env(safe-area-inset-left)' }}
       >
-        <div className="shrink-0 px-5 pt-5 pb-4 flex items-center justify-center relative text-center">
+        <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-center relative text-center">
           {/* Géén transform/transition-all op de logoknop: Safari rastert een
               element met schaal-animatie als bitmap-laag en schaalt die —
               dat maakte de logo-randen kartelig op retina (melding Jarno). */}
@@ -2297,115 +2027,16 @@ export default function App() {
           </IconButton>
         </div>
 
-        <nav className="flex-1 min-h-0 px-3 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
-          {isPlanner && <MicroLabel className="mb-1 px-3 pt-0.5">Algemeen</MicroLabel>}
-          <NavItem
-            icon={<LayoutDashboard size={18} />}
-            label="Dashboard"
-            active={currentView === 'dashboard'} 
-            onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }} 
-          />
-          <NavItem 
-            icon={<Calendar size={18} />} 
-            label="Rooster" 
-            active={currentView === 'rooster'} 
-            onClick={() => { setCurrentView('rooster'); setIsSidebarOpen(false); }} 
-          />
-          <NavItem 
-            icon={<MapPin size={18} />} 
-            label="Omleidingen" 
-            active={currentView === 'omleidingen'} 
-            onClick={() => { setCurrentView('omleidingen'); setIsSidebarOpen(false); }} 
-          />
-          <NavItem
-            icon={<FileText size={18} />}
-            label="Ritbladen"
-            active={currentView === 'ritblaadjes'}
-            onClick={() => { setCurrentView('ritblaadjes'); setIsSidebarOpen(false); }}
-          />
-          {!isPlanner && (
-            <NavItem
-              icon={<FolderOpen size={18} />}
-              label="Documenten"
-              active={currentView === 'documenten'}
-              badge={unseenDocuments}
-              onClick={() => { setCurrentView('documenten'); setIsSidebarOpen(false); markDocumentsSeen(); }}
-            />
-          )}
-          <NavItem
-            icon={<RotateCcw size={18} />}
-            label="Dienstruil"
-            active={currentView === 'ruil-verzoeken'}
-            onClick={() => { setCurrentView('ruil-verzoeken'); setIsSidebarOpen(false); }}
-            badge={isPlanner ? pendingSwapsCount : (targetedSwapsCount || undefined)}
-          />
-          <NavItem
-            icon={<CalendarCheck size={18} />}
-            label="Verlof"
-            active={currentView === 'verlof'}
-            onClick={() => { setCurrentView('verlof'); setIsSidebarOpen(false); }}
-            badge={isPlanner ? pendingLeaveCount : unseenLeaveDecisionCount}
-          />
-          <NavItem 
-            icon={<Bell size={18} />} 
-            label="Updates" 
-            active={currentView === 'updates'} 
-            onClick={() => { setCurrentView('updates'); setIsSidebarOpen(false); }} 
-          />
-          <NavItem
-            icon={<Phone size={18} />}
-            label="Contacten"
-            active={currentView === 'contacten'}
-            onClick={() => { setCurrentView('contacten'); setIsSidebarOpen(false); }}
-          />
-          {/* "Maandplanning" — zelfde term als de paginatitel; de nav zei
-              eerst "Maandrooster" en dat waren twee namen voor één scherm. */}
-          <NavItem
-            icon={<Users size={18} />}
-            label="Maandplanning"
-            active={currentView === 'bezetting'}
-            onClick={() => { setCurrentView('bezetting'); setIsSidebarOpen(false); }}
-          />
-
-          {isPlanner && (
-            <NavSection
-              title="Beheer"
-              count={11}
-              active={['beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'dekking', 'assistent', 'verlof-kalender', 'ziekte', 'vervaldata', 'beheer-updates', 'beheer-omleidingen'].includes(currentView)}
-            >
-              {/* Drie subgroepen + uniek icoon per item: Settings/Bus stonden
-                  elk 2× in deze lijst en dat sloopte de scanbaarheid van juist
-                  de langste sectie. */}
-              <NavSubLabel>Planning</NavSubLabel>
-              <NavItem icon={<CalendarCog size={18} />} label="Beheer roosters" active={currentView === 'beheer-roosters'} onClick={() => { setCurrentView('beheer-roosters'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<FileText size={18} />} label="Planningsoverzicht" active={currentView === 'planning-matrix'} onClick={() => { setCurrentView('planning-matrix'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Hash size={18} />} label="Planningscodes" active={currentView === 'planning-codes'} onClick={() => { setCurrentView('planning-codes'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Bus size={18} />} label="Dienstoverzicht" active={currentView === 'dienstoverzicht'} onClick={() => { setCurrentView('dienstoverzicht'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<ClipboardList size={18} />} label="Beheer dienstoverzicht" active={currentView === 'beheer-dienstoverzicht'} onClick={() => { setCurrentView('beheer-dienstoverzicht'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<AlertTriangle size={18} />} label="Openstaande diensten" active={currentView === 'dekking'} onClick={() => { setCurrentView('dekking'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Sparkles size={18} />} label="Assistent" active={currentView === 'assistent'} onClick={() => { setCurrentView('assistent'); setIsSidebarOpen(false); }} />
-              <NavSubLabel>Mensen</NavSubLabel>
-              <NavItem icon={<Calendar size={18} />} label="Verlof-kalender" active={currentView === 'verlof-kalender'} onClick={() => { setCurrentView('verlof-kalender'); setIsSidebarOpen(false); }} />
-              {/* Eigen blad, bewust los van Verlof: ziekte is geen aanvraag
-                  (keuze Jarno 15-08). */}
-              <NavItem icon={<Thermometer size={18} />} label="Ziekte" active={currentView === 'ziekte'} onClick={() => { setCurrentView('ziekte'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<IdCard size={18} />} label="Vervaldata" active={currentView === 'vervaldata'} onClick={() => { setCurrentView('vervaldata'); setIsSidebarOpen(false); }} />
-              <NavSubLabel>Communicatie</NavSubLabel>
-              <NavItem icon={<Plus size={18} />} label="Beheer updates" active={currentView === 'beheer-updates'} onClick={() => { setCurrentView('beheer-updates'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<MapIcon size={18} />} label="Beheer omleidingen" active={currentView === 'beheer-omleidingen'} onClick={() => { setCurrentView('beheer-omleidingen'); setIsSidebarOpen(false); }} />
-            </NavSection>
-          )}
-
-          {isAdmin && (
-            <NavSection title="Systeem" count={5} active={['gebruikers', 'toestellen', 'activiteit', 'ocpi-monitoring', 'beheer-debug'].includes(currentView)}>
-              <NavItem icon={<Users size={18} />} label="Gebruikers" active={currentView === 'gebruikers'} onClick={() => { setCurrentView('gebruikers'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Smartphone size={18} />} label="Toestellen" active={currentView === 'toestellen'} onClick={() => { setCurrentView('toestellen'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Activity size={18} />} label="Activiteit" active={currentView === 'activiteit'} onClick={() => { setCurrentView('activiteit'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<Zap size={18} />} label="Laadpalen (OCPI)" active={currentView === 'ocpi-monitoring'} onClick={() => { setCurrentView('ocpi-monitoring'); setIsSidebarOpen(false); }} />
-              <NavItem icon={<HeartPulse size={18} />} label="Systeemstatus" active={currentView === 'beheer-debug'} onClick={() => { setCurrentView('beheer-debug'); setIsSidebarOpen(false); }} />
-            </NavSection>
-          )}
-        </nav>
+        <SidebarNav
+          rol={effectiveRole}
+          currentView={currentView}
+          badges={{
+            documenten: unseenDocuments,
+            'ruil-verzoeken': isPlanner ? pendingSwapsCount : targetedSwapsCount,
+            verlof: isPlanner ? pendingLeaveCount : unseenLeaveDecisionCount,
+          }}
+          onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); if (v === 'documenten') markDocumentsSeen(); }}
+        />
 
         {/* Accountacties (thema, meldingen, wachtwoord, probleem, uitloggen)
             + het gebruikerskaartje verhuisden naar het avatar-menu in de
@@ -2460,7 +2091,12 @@ export default function App() {
                       subtitel dupliceerde de PageHeader-description eronder,
                       en het identiteitsblok stond al in de sidebar-footer —
                       dubbele titeling boven de vouw is weg. */}
-                  <h2 className="text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate">
+                  {/* Titel verschijnt pas zodra de paginakop (h1) weggescrold
+                      is — anders stond dezelfde naam twee keer boven de vouw. */}
+                  <h2
+                    aria-hidden={!isScrolled || undefined}
+                    className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-200', isScrolled ? 'opacity-100' : 'opacity-0')}
+                  >
                     {currentMeta.title}
                   </h2>
                 </div>
@@ -2525,8 +2161,9 @@ export default function App() {
                     pushEnabled={pushEnabled}
                     onTogglePush={togglePush}
                     onChangePassword={() => setShowChangePassword(true)}
-                    onProbleem={() => { setProbleemTekst(''); setProbleemVerstuurd(false); setShowProbleemMelder(true); }}
+                    onProbleem={() => setShowProbleemMelder(true)}
                     onLogout={handleLogout}
+                    onInstellingen={() => setCurrentView('instellingen')}
                   />
                 </div>
               </div>
@@ -2551,6 +2188,10 @@ export default function App() {
               een grote DOM) veroorzaakte hapering bij het wisselen van pagina's
               op tragere Windows-pc's. Instant = sneller en jank-vrij. */}
           <div className="mx-auto w-full max-w-[1200px]">
+            {/* Foutgrens per view: een crash in één scherm laat sidebar,
+                sessie en context staan; de key reset de grens bij een
+                viewwissel of "Opnieuw proberen". */}
+            <ErrorBoundary key={`${resolvedCurrentView}-${viewFoutReset}`} fallback={<ViewFout onRetry={() => setViewFoutReset((n) => n + 1)} />}>
               {resolvedCurrentView === 'dashboard' && (
                 isPlanner ? (
                   /* Planner/admin: Operations Center — één operationele cockpit
@@ -2682,11 +2323,27 @@ export default function App() {
                   />
                 </Suspense>
               ))}
+              {resolvedCurrentView === 'instellingen' && (
+                <InstellingenView
+                  user={currentUser}
+                  theme={theme}
+                  onToggleTheme={toggleTheme}
+                  pushBeschikbaar={!!pushPublicKey && isPushSupported()}
+                  pushEnabled={pushEnabled}
+                  onTogglePush={togglePush}
+                  onChangePassword={() => setShowChangePassword(true)}
+                  onAgenda={() => setShowAgenda(true)}
+                  onProbleem={() => setShowProbleemMelder(true)}
+                  onLogout={handleLogout}
+                  onNavigate={setCurrentView}
+                />
+              )}
               {resolvedCurrentView === 'beheer-debug' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
                 </Suspense>
               )}
+            </ErrorBoundary>
           </div>
         </div>
       </main>
@@ -2710,7 +2367,7 @@ export default function App() {
         open={isCommandPaletteOpen}
         onClose={() => setIsCommandPaletteOpen(false)}
         onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
-        role={currentUser.role}
+        role={effectiveRole}
       />
     </>
   );
