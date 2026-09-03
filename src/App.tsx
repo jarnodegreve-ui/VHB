@@ -61,6 +61,8 @@ import { CommandPalette, useCommandPaletteShortcut } from './components/CommandP
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
 import { useRealtimeSync } from './lib/realtime';
+import { SpeedInsights } from '@vercel/speed-insights/react';
+import { WatIsNieuwKaart } from './components/WatIsNieuwKaart';
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
 // géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
@@ -1151,6 +1153,8 @@ export default function App() {
       <div className="parallax-bg" aria-hidden="true" />
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      {/* Web-vitals (LCP/INP/CLS) per scherm naar Vercel Speed Insights; route = view-naam, niet de URL met parameters. */}
+      <SpeedInsights route={`/${resolvedCurrentView}`} />
       <OfflineBanner />
       <InstallPrompt />
       <ChangePasswordModal
@@ -1429,6 +1433,7 @@ export default function App() {
                   /* Planner/admin: Operations Center — één operationele cockpit
                      i.p.v. een dubbel dashboard. */
                   <Suspense fallback={<ViewLoader />}>
+                  <WatIsNieuwKaart rol={currentUser!.role} onNavigate={setCurrentView} className="mb-5" />
                   {/* Data (collecties, ziekmelding, verversen) leest de
                       cockpit zelf uit de AppDataContext. */}
                   <LazyPlannerDashboardWidgets

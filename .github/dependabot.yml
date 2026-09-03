@@ -1,0 +1,40 @@
+# Dependabot: één gebundelde PR per maand voor npm (minor + patch samen,
+# majors apart) en één voor GitHub Actions. Bewust maandelijks en gebundeld:
+# elke PR kost een Vercel Agent Review, dus liever weinig, dikke PR's dan
+# veel kleine. De CI-audit (npm audit, high/critical) blijft het vangnet
+# tussendoor.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: monthly
+      day: monday
+      time: "06:00"
+      timezone: Europe/Brussels
+    open-pull-requests-limit: 2
+    labels: [dependencies]
+    commit-message:
+      prefix: "Deps"
+    groups:
+      minor-en-patch:
+        update-types: [minor, patch]
+      majors:
+        update-types: [major]
+    ignore:
+      # Vite-major en React-major bewust met de hand (breaking changes in
+      # build/config), niet via een automatische PR.
+      - dependency-name: vite
+        update-types: [version-update:semver-major]
+      - dependency-name: react
+        update-types: [version-update:semver-major]
+      - dependency-name: react-dom
+        update-types: [version-update:semver-major]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 1
+    labels: [dependencies]
+    commit-message:
+      prefix: "CI"

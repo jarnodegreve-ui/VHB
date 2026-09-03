@@ -13,6 +13,7 @@ import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
 import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
+import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -223,6 +224,9 @@ export function DashboardView({ notes = [],
           </div>
         </Card>
       )}
+
+      {/* Na een release: één dismissbare kaart met wat er nieuw is (src/app/watIsNieuw.ts). */}
+      {!showWelcome && <WatIsNieuwKaart rol={user.role} onNavigate={onNavigate} />}
 
       {/* === Persoonlijke header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
