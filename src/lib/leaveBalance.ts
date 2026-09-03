@@ -31,7 +31,14 @@ const clipToYear = (iso: string, year: number, fallback: 'start' | 'end') => {
 
 export interface LeaveBalance {
   betaaldGebruikt: number;
+  /** Nog niet beoordeelde aanvragen (betaald verlof) in dit jaar — zit niet
+   *  in `betaaldGebruikt`, maar een chauffeur wil wel weten wat er nog
+   *  "onderweg" is voor hij een volgende aanvraag doet. */
+  betaaldAangevraagd: number;
+  /** Budget min opgenomen (goedgekeurd). */
   betaaldResterend: number;
+  /** Budget min opgenomen én aangevraagd: wat je nog vrij kunt aanvragen. */
+  betaaldVrij: number;
   betaaldBudget: number;
   kleinVerletDagen: number;
 }
@@ -41,12 +48,12 @@ export function verlofBalans(leaves: LeaveRequest[], userId: string, year: numbe
   const yearEnd = `${year}-12-31`;
   const budget = typeof customBudget === 'number' && customBudget >= 0 ? customBudget : BETAALD_VERLOF_BUDGET;
 
-  const relevant = leaves.filter((l) =>
-    l.userId === userId &&
-    l.status === 'approved' &&
-    l.startDate <= yearEnd &&
-    l.endDate >= yearStart,
-  );
+  const inJaar = leaves.filter((l) => l.userId === userId && l.startDate <= yearEnd && l.endDate >= yearStart);
+  const relevant = inJaar.filter((l) => l.status === 'approved');
+  const dagenIn = (l: LeaveRequest) => daysBetween(clipToYear(l.startDate, year, 'start'), clipToYear(l.endDate, year, 'end'));
+  const betaaldAangevraagd = inJaar
+    .filter((l) => l.status === 'pending' && l.type === 'betaald_verlof')
+    .reduce((sum, l) => sum + dagenIn(l), 0);
 
   const betaaldGebruikt = relevant
     .filter((l) => l.type === 'betaald_verlof')
@@ -58,7 +65,9 @@ export function verlofBalans(leaves: LeaveRequest[], userId: string, year: numbe
 
   return {
     betaaldGebruikt,
+    betaaldAangevraagd,
     betaaldResterend: Math.max(0, budget - betaaldGebruikt),
+    betaaldVrij: Math.max(0, budget - betaaldGebruikt - betaaldAangevraagd),
     betaaldBudget: budget,
     kleinVerletDagen,
   };
