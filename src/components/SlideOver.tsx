@@ -4,6 +4,7 @@ import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { DUR, EASE } from '../lib/motion';
+import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 
 /**
  * Premium slide-over side panel (rechts) — het standaard detailvenster van
@@ -36,6 +37,8 @@ export function SlideOver({
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
   const reduceMotion = useReducedMotion();
+  // Terugknop/swipe-back sluit het paneel i.p.v. de app te verlaten.
+  useHistoryDismiss(open, onClose);
 
   // Escape sluit — listener alleen actief terwijl het paneel open is.
   useEffect(() => {

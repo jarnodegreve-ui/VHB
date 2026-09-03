@@ -1,4 +1,4 @@
-import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Sun } from 'lucide-react';
+import { BellOff, BellRing, ChevronDown, KeyRound, LifeBuoy, LogOut, Moon, Settings, Sun } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../lib/ui';
@@ -48,6 +48,7 @@ export function UserMenu({
   onChangePassword,
   onProbleem,
   onLogout,
+  onInstellingen,
 }: {
   user: User;
   initials: string;
@@ -59,6 +60,7 @@ export function UserMenu({
   onChangePassword: () => void;
   onProbleem: () => void;
   onLogout: () => void;
+  onInstellingen: () => void;
 }) {
   const { open, setOpen, wortel } = useDropdown();
 
@@ -117,6 +119,9 @@ export function UserMenu({
           )}
           <MenuItem icon={<KeyRound size={16} />} onClick={sluitEn(onChangePassword)}>
             Wachtwoord wijzigen
+          </MenuItem>
+          <MenuItem icon={<Settings size={16} />} onClick={sluitEn(onInstellingen)}>
+            Instellingen
           </MenuItem>
           <MenuItem icon={<LifeBuoy size={16} />} onClick={sluitEn(onProbleem)} aria-haspopup="dialog">
             Meld een probleem

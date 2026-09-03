@@ -1,20 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
-import {
-  LayoutDashboard,
-  Calendar,
-  MapPin,
-  Bell,
-  Settings,
-  Users,
-  FileText,
-  Activity,
-  Search,
-  Repeat,
-  Plus,
-  RefreshCw,
-} from 'lucide-react';
+import { Search } from 'lucide-react';
+import { ROUTES } from '../app/routes';
+// Ook 'verborgen' routes (Instellingen) zijn via het palette bereikbaar.
+const paletteRoutes = () => ROUTES;
 import type { View, Role } from '../types';
 import { cn } from '../lib/ui';
 import { DUR, EASE } from '../lib/motion';
@@ -52,165 +42,22 @@ export function CommandPalette({
   const [selectedIdx, setSelectedIdx] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  // Navigatie-commando's komen uit de routetabel: elk scherm dat een rol
+  // mag zien is vindbaar, mét zoekwoorden. Eerder stond hier een handlijst
+  // die acht views miste.
   const commands = useMemo<Command[]>(
-    () => [
-      {
-        id: 'goto-dashboard',
-        label: 'Dashboard',
-        icon: <LayoutDashboard size={16} />,
-        keywords: 'dashboard home overzicht start',
-        action: () => onNavigate('dashboard'),
-      },
-      {
-        id: 'goto-rooster',
-        label: 'Mijn rooster',
-        icon: <Calendar size={16} />,
-        keywords: 'rooster mijn diensten schedule',
-        action: () => onNavigate('rooster'),
-      },
-      {
-        id: 'goto-omleidingen',
-        label: 'Omleidingen',
-        icon: <MapPin size={16} />,
-        keywords: 'omleidingen hinder route diversion',
-        action: () => onNavigate('omleidingen'),
-      },
-      {
-        id: 'goto-updates',
-        label: 'Updates',
-        icon: <Bell size={16} />,
-        keywords: 'updates nieuws meldingen',
-        action: () => onNavigate('updates'),
-      },
-      {
-        id: 'goto-verlof',
-        label: 'Verlof',
-        icon: <Calendar size={16} />,
-        keywords: 'verlof vakantie afwezig',
-        action: () => onNavigate('verlof'),
-      },
-      {
-        id: 'goto-ruil',
-        label: 'Dienstruil',
-        icon: <Repeat size={16} />,
-        keywords: 'ruil swap dienst tauschen',
-        action: () => onNavigate('ruil-verzoeken'),
-      },
-      {
-        id: 'goto-contacten',
-        label: 'Contacten',
-        icon: <Users size={16} />,
-        keywords: 'contact collega telefoon',
-        action: () => onNavigate('contacten'),
-      },
-      {
-        id: 'goto-dienstoverzicht',
-        label: 'Dienstoverzicht',
-        icon: <FileText size={16} />,
-        keywords: 'dienst overzicht service nummers',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('dienstoverzicht'),
-      },
-      {
-        id: 'goto-ritblaadjes',
-        label: 'Ritbladen',
-        icon: <FileText size={16} />,
-        keywords: 'rit bladen blaadjes ritblaadjes pdf',
-        action: () => onNavigate('ritblaadjes'),
-      },
-      // === Planner/admin only ===
-      {
-        id: 'goto-verlof-beheer',
-        label: 'Verlofbeheer',
-        hint: 'Aanvragen goedkeuren of weigeren',
-        icon: <Calendar size={16} />,
-        keywords: 'verlof beheer goedkeur weiger approve',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('verlof'),
-      },
-      {
-        id: 'goto-verlof-kalender',
-        label: 'Verlof-kalender',
-        icon: <Calendar size={16} />,
-        keywords: 'kalender maandoverzicht verlof',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('verlof-kalender'),
-      },
-      {
-        id: 'goto-beheer-roosters',
-        label: 'Beheer roosters',
-        hint: 'Matrix importeren',
-        icon: <Settings size={16} />,
-        keywords: 'beheer roosters import matrix excel xlsx',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('beheer-roosters'),
-      },
-      {
-        id: 'goto-planning-matrix',
-        label: 'Planningsoverzicht',
-        icon: <FileText size={16} />,
-        keywords: 'planning matrix overzicht',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('planning-matrix'),
-      },
-      {
-        id: 'goto-planning-codes',
-        label: 'Planningscodes',
-        icon: <Settings size={16} />,
-        keywords: 'codes vrij F bv ziek planning',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('planning-codes'),
-      },
-      {
-        id: 'goto-beheer-updates',
-        label: 'Beheer updates',
-        icon: <Plus size={16} />,
-        keywords: 'updates publiceer nieuw beheer',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('beheer-updates'),
-      },
-      {
-        id: 'goto-beheer-omleidingen',
-        label: 'Beheer omleidingen',
-        icon: <Settings size={16} />,
-        keywords: 'beheer omleidingen toevoegen',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('beheer-omleidingen'),
-      },
-      {
-        id: 'goto-beheer-dienstoverzicht',
-        label: 'Beheer Dienstoverzicht',
-        icon: <Settings size={16} />,
-        keywords: 'beheer dienstoverzicht service',
-        roles: ['planner', 'admin'],
-        action: () => onNavigate('beheer-dienstoverzicht'),
-      },
-      // === Admin only ===
-      {
-        id: 'goto-gebruikers',
-        label: 'Gebruikers',
-        icon: <Users size={16} />,
-        keywords: 'gebruikers user account beheer',
-        roles: ['admin'],
-        action: () => onNavigate('gebruikers'),
-      },
-      {
-        id: 'goto-activiteit',
-        label: 'Activiteit',
-        icon: <Activity size={16} />,
-        keywords: 'activiteit audit log historiek',
-        roles: ['admin'],
-        action: () => onNavigate('activiteit'),
-      },
-      {
-        id: 'goto-beheer-debug',
-        label: 'Systeemstatus',
-        icon: <RefreshCw size={16} />,
-        keywords: 'debug status health check',
-        roles: ['admin'],
-        action: () => onNavigate('beheer-debug'),
-      },
-    ],
+    () => paletteRoutes().map((r) => {
+      const Icoon = r.icoon;
+      return {
+        id: `goto-${r.view}`,
+        label: r.label,
+        hint: r.omschrijving,
+        icon: <Icoon size={16} />,
+        keywords: `${r.zoek ?? ''} ${r.pad}`,
+        roles: [...r.rollen],
+        action: () => onNavigate(r.view),
+      };
+    }),
     [onNavigate],
   );
 

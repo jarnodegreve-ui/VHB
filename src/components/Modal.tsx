@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
 import { DUR, EASE } from '../lib/motion';
+import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 
 // Stapel van open modals (module-scope): bij een dialoog bóven een dialoog
 // (bv. verwijder-bevestiging boven Gebruikersbeheer-modal) mogen ESC en de
@@ -50,6 +51,8 @@ export function Modal({
   // "rendered more hooks" — de e2e-smoke ving dat (PR #403).
   const reduceMotion = useReducedMotion();
   const isBovenste = () => modalStack[modalStack.length - 1] === idRef.current;
+  // Terugknop/swipe-back sluit de dialoog i.p.v. de app (PWA op Android).
+  useHistoryDismiss(open, onClose);
 
   useEffect(() => {
     if (!open) return;
