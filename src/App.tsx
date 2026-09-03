@@ -1419,7 +1419,7 @@ export default function App() {
               {resolvedCurrentView === 'documenten' && <DocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
               {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <UpdatesView updates={updates} />)}
               {resolvedCurrentView === 'contacten' && (isInitialLoad ? <ViewLoader /> : <ContactsView users={users} currentUser={currentUser!} />)}
-              {resolvedCurrentView === 'beheer-roosters' && (
+              {resolvedCurrentView === 'beheer-roosters' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageSchedulesView shifts={shifts} onSave={savePlanning} users={users} history={planningMatrixHistory} canAdminOverride={isAdmin} onMatrixImported={async () => {
                     await Promise.all([
@@ -1431,8 +1431,8 @@ export default function App() {
                     ]);
                   }} />
                 </Suspense>
-              )}
-              {resolvedCurrentView === 'planning-matrix' && (
+              ))}
+              {resolvedCurrentView === 'planning-matrix' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyPlanningMatrixView
                     rows={planningMatrixRows}
@@ -1445,33 +1445,33 @@ export default function App() {
                     onOpenUserManagement={() => setCurrentView('gebruikers')}
                   />
                 </Suspense>
-              )}
-              {resolvedCurrentView === 'planning-codes' && <Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense>}
-              {resolvedCurrentView === 'beheer-updates' && (
+              ))}
+              {resolvedCurrentView === 'planning-codes' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyPlanningCodesView codes={planningCodes} onSave={savePlanningCodes} canAdminDelete={isAdmin} /></Suspense>)}
+              {resolvedCurrentView === 'beheer-updates' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUpdatesView updates={updates} onSave={saveUpdates} onSendUrgentEmail={sendUrgentEmail} canSendUrgentEmail={isAdmin} />
                 </Suspense>
-              )}
-              {resolvedCurrentView === 'gebruikers' && (
+              ))}
+              {resolvedCurrentView === 'gebruikers' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyManageUsersView users={users} onSave={saveUsers} currentUser={currentUser!} shifts={shifts} leaveRequests={leaveRequests} swaps={swaps} />
                 </Suspense>
-              )}
+              ))}
               {resolvedCurrentView === 'toestellen' && (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDevicesView users={users} currentUserId={currentUser!.id} />
                 </Suspense>
               )}
-              {resolvedCurrentView === 'activiteit' && <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>}
+              {resolvedCurrentView === 'activiteit' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyActivityLogView entries={activityLog} logins={loginActivity} /></Suspense>)}
               {resolvedCurrentView === 'ocpi-monitoring' && <Suspense fallback={<ViewLoader />}><LazyOcpiDashboardView /></Suspense>}
               {resolvedCurrentView === 'vervaldata' && <Suspense fallback={<ViewLoader />}><LazyVervaldataView users={users} /></Suspense>}
-              {resolvedCurrentView === 'beheer-omleidingen' && <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} /></Suspense>}
-              {resolvedCurrentView === 'beheer-dienstoverzicht' && <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>}
+              {resolvedCurrentView === 'beheer-omleidingen' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageDiversionsView diversions={diversions} onSave={saveDiversions} /></Suspense>)}
+              {resolvedCurrentView === 'beheer-dienstoverzicht' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyManageServicesView services={services} onSave={saveServices} canAdminOverride={isAdmin} /></Suspense>)}
               {resolvedCurrentView === 'ruil-verzoeken' && (isInitialLoad ? <ViewLoader /> : <SwapRequestsView user={currentUser} swaps={swaps} shifts={shifts} users={users} leaveRequests={leaveRequests} onSave={saveSwaps} onDecide={decideSwap} onConfirmSeen={confirmSwapSeen} preselectShiftId={swapPreselectShiftId} onPreselectConsumed={() => setSwapPreselectShiftId(null)} />)}
               {resolvedCurrentView === 'bezetting' && <CapacityView currentUser={currentUser!} />}
               {resolvedCurrentView === 'dekking' && <Suspense fallback={<ViewLoader />}><LazyCoverageView /></Suspense>}
               {resolvedCurrentView === 'assistent' && <Suspense fallback={<ViewLoader />}><LazyAssistentView /></Suspense>}
-              {resolvedCurrentView === 'verlof-kalender' && <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>}
+              {resolvedCurrentView === 'verlof-kalender' && (isInitialLoad ? <ViewLoader /> : <Suspense fallback={<ViewLoader />}><LazyVerlofKalenderView users={users} leaveRequests={leaveRequests} /></Suspense>)}
               {resolvedCurrentView === 'verlof' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyLeaveManagementView
@@ -1520,11 +1520,11 @@ export default function App() {
                   onNavigate={setCurrentView}
                 />
               )}
-              {resolvedCurrentView === 'beheer-debug' && (
+              {resolvedCurrentView === 'beheer-debug' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>
                   <LazyDebugView currentUser={currentUser!} shifts={shifts} services={services} onSaveShifts={savePlanning} />
                 </Suspense>
-              )}
+              ))}
             </ErrorBoundary>
           </div>
         </div>
