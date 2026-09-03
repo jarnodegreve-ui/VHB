@@ -10,7 +10,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../../lib/api';
 import { Button, Chip, MicroLabel, microLabelClass } from '../../components/primitives';
 import { Card } from '../../components/Card';
-import { Field, Input, Select, Textarea } from '../../components/Field';
+import { DateInput, Field, Select, Textarea } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
@@ -464,25 +464,23 @@ export function ZiekteView({
           <div className="grid grid-cols-2 gap-3">
             <Field label="Van" hint="Leeg = vandaag.">
               {({ id, describedBy }) => (
-                <Input
+                <DateInput
                   id={id}
                   aria-describedby={describedBy}
-                  type="date"
                   value={meldForm.startDate}
-                  onChange={(e) => { setMeldForm({ ...meldForm, startDate: e.target.value, endDate: meldForm.endDate && meldForm.endDate < e.target.value ? e.target.value : meldForm.endDate }); setMeldFouten((f) => ({ ...f, endDate: undefined })); }}
+                  onChange={(v) => { setMeldForm({ ...meldForm, startDate: v, endDate: meldForm.endDate && meldForm.endDate < v ? v : meldForm.endDate }); setMeldFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>
             <Field label="Tot en met" error={meldFouten.endDate} hint="Leeg = één dag.">
               {({ id, describedBy, invalid }) => (
-                <Input
+                <DateInput
                   id={id}
                   aria-describedby={describedBy}
                   invalid={invalid}
-                  type="date"
                   value={meldForm.endDate}
                   min={meldForm.startDate || undefined}
-                  onChange={(e) => { setMeldForm({ ...meldForm, endDate: e.target.value }); setMeldFouten((f) => ({ ...f, endDate: undefined })); }}
+                  onChange={(v) => { setMeldForm({ ...meldForm, endDate: v }); setMeldFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>
@@ -601,14 +599,13 @@ export function ZiekteView({
                   >
                     {({ id, describedBy, invalid }) => (
                       <div className="flex gap-2">
-                        <Input
+                        <DateInput
                           id={id}
                           aria-describedby={describedBy}
                           invalid={invalid}
-                          type="date"
                           value={nieuwEinde}
                           min={detail.startDate}
-                          onChange={(e) => setNieuwEinde(e.target.value)}
+                          onChange={(v) => setNieuwEinde(v)}
                           className="min-w-0 flex-1"
                         />
                         <Button variant="primary" size="md" disabled={isOpslaan || nieuwEinde === detail.endDate || nieuwEinde < detail.startDate} onClick={() => void bewaarEinde(nieuwEinde)}>

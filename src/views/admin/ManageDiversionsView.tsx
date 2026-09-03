@@ -6,7 +6,7 @@ import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../comp
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, IconButton } from '../../components/primitives';
 import { Card } from '../../components/Card';
-import { Field, Input, Textarea } from '../../components/Field';
+import { DateInput, Field, Input, Textarea } from '../../components/Field';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail } from '../../components/DetailPaneel';
 
@@ -312,20 +312,20 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
 
         <div className="grid grid-cols-2 gap-4">
           <Field label="Startdatum" htmlFor="omleiding-start">
-            <Input
+            <DateInput
               id="omleiding-start"
-              type="date"
               required
               value={formData.startDate}
-              onChange={(e) => setFormData({...formData, startDate: e.target.value})}
+              max={formData.endDate || undefined}
+              onChange={(v) => setFormData({...formData, startDate: v})}
             />
           </Field>
           <Field label="Einddatum" hint="Leeg = tot hij verwijderd wordt." htmlFor="omleiding-eind">
-            <Input
+            <DateInput
               id="omleiding-eind"
-              type="date"
               value={formData.endDate || ''}
-              onChange={(e) => setFormData({...formData, endDate: e.target.value})}
+              min={formData.startDate || undefined}
+              onChange={(v) => setFormData({...formData, endDate: v})}
             />
           </Field>
         </div>

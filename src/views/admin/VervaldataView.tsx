@@ -9,7 +9,7 @@ import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
-import { Field, Input } from '../../components/Field';
+import { DateInput, Field } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Td, Th, type BadgeTone } from '../../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 
@@ -383,11 +383,10 @@ export function VervaldataView({ users }: { users: User[] }) {
               {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
                 <Field key={soort} label={`${label} geldig tot`}>
                   {({ id }) => (
-                    <Input
+                    <DateInput
                       id={id}
-                      type="date"
                       value={draft[soort] ?? ''}
-                      onChange={(e) => setDraft((d) => ({ ...d, [soort]: e.target.value }))}
+                      onChange={(v) => setDraft((d) => ({ ...d, [soort]: v }))}
                     />
                   )}
                 </Field>

@@ -8,7 +8,7 @@ import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
-import { Field, Input, Select } from '../../components/Field';
+import { DateInput, Field, Input, Select } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import type { VerwachtingAfwijking } from '../../lib/coverageGaps';
 import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
@@ -1075,25 +1075,21 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <Field label="Van" htmlFor="import-periode-van">
-                        <Input
+                        <DateInput
                           id="import-periode-van"
-                          type="date"
                           value={periodeVan}
                           min={matrixPreview.fileStartDate ?? undefined}
                           max={periodeTot || matrixPreview.fileEndDate || undefined}
-                          onChange={(e) => handlePeriodeChange(e.target.value, periodeTot)}
-                          className="tabular-nums"
+                          onChange={(v) => handlePeriodeChange(v, periodeTot)}
                         />
                       </Field>
                       <Field label="Tot en met" htmlFor="import-periode-tot">
-                        <Input
+                        <DateInput
                           id="import-periode-tot"
-                          type="date"
                           value={periodeTot}
                           min={periodeVan || matrixPreview.fileStartDate || undefined}
                           max={matrixPreview.fileEndDate ?? undefined}
-                          onChange={(e) => handlePeriodeChange(periodeVan, e.target.value)}
-                          className="tabular-nums"
+                          onChange={(v) => handlePeriodeChange(periodeVan, v)}
                         />
                       </Field>
                     </div>

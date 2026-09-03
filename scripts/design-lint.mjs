@@ -25,6 +25,9 @@ const REGELS = [
   { naam: 'tekst in statuskleur op 600 (gebruik 700, flipt in dark)', re: /\btext-(?:emerald|red|amber|oker|blue|rose)-600\b/g },
   { naam: 'ad-hoc micro-label (gebruik MicroLabel / text-micro)', re: /\btext-2xs font-(?:medium|semibold|bold|black) uppercase tracking-\[0\.08em\]/g, skip: PRINT },
   { naam: 'rauwe hex-kleur (gebruik tokens)', re: /#[0-9a-fA-F]{6}\b/g, skip: /(BrandLogo|BrandSpinner)\.tsx$|lib\/ui\.ts$|Field\.tsx$/ },
+  // Native datumveld oogt per browser anders (Safari desktop het slechtst):
+  // altijd DateInput (Field.tsx) — de eigen kiezer met dezelfde waarde-API.
+  { naam: 'native type="date" (gebruik DateInput uit Field.tsx)', re: /\btype=["']date["']/g, skip: /DatePicker\.tsx$/ },
 ];
 
 const STRIKT = process.env.VHB_LINT_STRIKT === '1';

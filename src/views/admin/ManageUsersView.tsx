@@ -13,7 +13,7 @@ import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabel
 import { useQueryParam } from '../../app/router';
 import { InfoTip } from '../../components/InfoTip';
 import { Card, CardHeader } from '../../components/Card';
-import { Field, Input, Select } from '../../components/Field';
+import { DateInput, Field, Input, Select } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
@@ -847,7 +847,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                 {editingUser.role === 'chauffeur' && (
                   <Field label="Sectie (maandplanning)" htmlFor="bewerk-sectie"><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
                 )}
-                <Field label="In dienst sinds" htmlFor="bewerk-startdatum" hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><Input id="bewerk-startdatum" type="date" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} /></Field>
+                <Field label="In dienst sinds" htmlFor="bewerk-startdatum" hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><DateInput id="bewerk-startdatum" value={editingUser.startDate || ''} onChange={(v) => setEditingUser({ ...editingUser, startDate: v || undefined })} /></Field>
                 <Field label="Verlofbudget (dagen)" htmlFor="bewerk-verlofbudget" className="sm:col-span-2" hint="Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).">
                   <Input
                     id="bewerk-verlofbudget"
@@ -868,11 +868,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                     <div className="grid gap-3 sm:grid-cols-3">
                       {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
                         <Field key={soort} label={label} htmlFor={`bewerk-verval-${soort}`}>
-                          <Input
+                          <DateInput
                             id={`bewerk-verval-${soort}`}
-                            type="date"
                             value={vervalDraft[soort] ?? ''}
-                            onChange={(e) => setVervalDraft((d) => ({ ...d, [soort]: e.target.value }))}
+                            onChange={(v) => setVervalDraft((d) => ({ ...d, [soort]: v }))}
                           />
                         </Field>
                       ))}
