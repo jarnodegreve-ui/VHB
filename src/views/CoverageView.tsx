@@ -7,7 +7,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../lib/api';
 import { Badge, Button, FilterChip, IconButton, MicroLabel } from '../components/primitives';
 import { Card, CardHeader } from '../components/Card';
-import { Input, Select } from '../components/Field';
+import { DateInput, Input, Select } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
 import { formatShortDay, MONTH_NAMES } from '../lib/format';
@@ -653,14 +653,13 @@ export function CoverageView() {
                     <Card key={i} tone="muted" padding="sm" className="space-y-3">
                       <div className="flex flex-wrap items-center gap-2">
                         <MicroLabel className="text-slate-500">Vanaf</MicroLabel>
-                        <Input
-                          type="date"
+                        <DateInput
+                          size="sm"
                           value={p.vanaf}
-                          onChange={(e) => setPeriodVanaf(i, e.target.value)}
+                          onChange={(v) => setPeriodVanaf(i, v)}
                           aria-label="Ingangsdatum van deze weekdag-toewijzing"
                           aria-describedby={!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf) ? `periode-${i}-fout` : undefined}
                           invalid={!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf)}
-                          className="w-auto"
                         />
                         {/* Zonder ingangsdatum wordt de periode bij Opslaan
                             stil weggelaten — zeg dat bij het veld. */}
@@ -738,9 +737,9 @@ export function CoverageView() {
                       return (
                         <div key={i} className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
-                            <Input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" aria-describedby={foutId} invalid={!o.from || omgekeerd} className="w-auto" />
+                            <DateInput size="sm" value={o.from} max={o.to || undefined} onChange={(v) => updateOverride(i, 'from', v)} aria-label="Van" aria-describedby={foutId} invalid={!o.from || omgekeerd} />
                             <span className="text-label">t/m</span>
-                            <Input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" aria-describedby={foutId} invalid={!o.to || omgekeerd} className="w-auto" />
+                            <DateInput size="sm" value={o.to} min={o.from || undefined} onChange={(v) => updateOverride(i, 'to', v)} aria-label="Tot en met" aria-describedby={foutId} invalid={!o.to || omgekeerd} />
                             <span className="text-slate-400 font-semibold">→</span>
                             <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" aria-describedby={foutId} invalid={!o.dayType} className="w-auto">
                               <option value="">— kies type —</option>
