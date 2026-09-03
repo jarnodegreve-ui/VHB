@@ -3,7 +3,7 @@ import { Bell, Bus, Check, Download, Pencil, Plus, Search, Trash2, X } from 'luc
 import { PageHeader, PageShell, EmptyState } from '../../components/ui';
 import { Card, CardHeader } from '../../components/Card';
 import { Badge, Button, Chip, FilterChip, IconButton, MicroLabel, StatusBadge, Switch, TableShell, Td, Th } from '../../components/primitives';
-import { Field, Input, Select, Textarea } from '../../components/Field';
+import { DateInput, Field, Input, Select, Textarea } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '../../components/Table';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
@@ -79,6 +79,7 @@ export function DesignsysteemView() {
   const [pagina, setPagina] = useState(1);
   const sort = useSort<'naam' | 'dienst'>('naam');
   const [fout, setFout] = useState(false);
+  const [datum, setDatum] = useState('');
 
   const rijen = sort.sorteer([...RIJEN], (r, k) => r[k])
     .filter((r) => (filter === 'open' ? r.status === 'pending' : true))
@@ -253,6 +254,9 @@ export function DesignsysteemView() {
               </Select>
             )}
           </Field>
+          <Field label="Startdatum" hint="Eén datumkiezer voor alle velden; op mobiel een sheet onderaan.">
+            {({ id, describedBy, invalid }) => <DateInput id={id} aria-describedby={describedBy} invalid={invalid} value={datum} onChange={setDatum} min="2026-01-01" />}
+          </Field>
           <Field label="Opmerking" hint="Optioneel.">
             {({ id }) => <Textarea id={id} rows={2} placeholder="Korte toelichting…" />}
           </Field>
@@ -321,6 +325,7 @@ export function DesignsysteemView() {
           <Button variant="secondary" size="sm" onClick={() => notify('Opgeslagen.', 'success')}>Succes</Button>
           <Button variant="secondary" size="sm" onClick={() => notify('Dat is niet gelukt. Probeer opnieuw.', 'error')}>Fout</Button>
           <Button variant="secondary" size="sm" onClick={() => notify('Even geduld, de import loopt.', 'info')}>Info</Button>
+          <Button variant="secondary" size="sm" onClick={() => notify('Omleiding ‘Lijn 12 · Werken Stationsstraat’ verwijderd.', 'info', { action: { label: 'Ongedaan maken', run: () => notify('Omleiding hersteld.', 'success') }, opties: { ongedaan: true } })}>Ongedaan maken</Button>
         </Rij>
       </Sectie>
     </PageShell>
