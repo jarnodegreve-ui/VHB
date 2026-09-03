@@ -11,12 +11,12 @@ import { Card } from '../components/Card';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
-import { cn, downloadBlob } from '../lib/ui';
+import { cn } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
 import { isoDate } from '../lib/availability';
 import { shiftCategory } from '../lib/shiftTime';
 import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
-import { buildCalendar, type IcsEvent } from '../lib/ics';
+import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openHuidigRitblad } from '../lib/ritblad';
 
 /**
@@ -158,26 +158,8 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
   const upcoming = grouped.filter((g) => g.date >= today);
   const past = grouped.filter((g) => g.date < today).reverse();
 
-  const exportToICS = () => {
-    // Gedeelde ICS-builder (src/lib/ics.ts) i.p.v. een eigen kopie: die schrijft
-    // floating local time én zet DTEND een dag verder bij een nachtdienst
-    // (eind <= start) — de oude handmatige export zette DTEND vóór DTSTART.
-    const dtstamp = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
-    const events: IcsEvent[] = myShifts
-      .filter((shift) => shift.startTime && shift.endTime)
-      .map((shift) => ({
-        uid: `${shift.id}@vhb-portaal.be`,
-        date: shift.date,
-        startTime: shift.startTime,
-        endTime: shift.endTime,
-        summary: `Dienst ${serviceNumberOf(shift)}`,
-        description: `VHB · ${shift.startTime} - ${shift.endTime}`,
-      }));
-
-    const fullCalendar = buildCalendar(events, { calName: `VHB Rooster ${user.name}`, dtstamp });
-    const blob = new Blob([fullCalendar], { type: 'text/calendar;charset=utf-8' });
-    void downloadBlob(`VHB_Rooster_${user.name.replace(/\s+/g, '_')}.ics`, blob);
-  };
+  // Gedeelde export (src/lib/roosterIcs.ts) — ook gebruikt door Instellingen.
+  const exportToICS = () => downloadRoosterIcs(user.name, myShifts);
 
   return (
     <PageShell>

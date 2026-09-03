@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
-import { LayoutDashboard, Calendar, MapPin, CalendarCheck, FileText, Menu, AlertTriangle, RotateCcw, IdCard } from 'lucide-react';
+import { Menu } from 'lucide-react';
+import { routeVan } from '../app/routes';
 import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
 
@@ -56,24 +57,18 @@ export function BottomNav({
   hidden?: boolean;
 }) {
   const isPlanner = role === 'planner' || role === 'admin';
+  // Tabs per rol; naam en icoon komen uit de routetabel zodat een scherm
+  // hier niet anders heet dan in de zijbalk (was "Dekking" vs
+  // "Openstaande diensten").
+  const tab = (view: View, badge?: number): NavSlot => {
+    const r = routeVan(view);
+    const Icoon = r.icoon;
+    return { view, label: r.kort ?? r.label, icon: <Icoon size={18} />, badge };
+  };
   const slots: NavSlot[] = isPlanner
-    ? [
-        { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-        { view: 'dekking', label: 'Dekking', icon: <AlertTriangle size={18} /> },
-        { view: 'verlof', label: 'Verlof', icon: <CalendarCheck size={18} />, badge: pendingLeaveCount },
-        { view: 'ruil-verzoeken', label: 'Ruil', icon: <RotateCcw size={18} />, badge: pendingSwapsCount },
-        { view: 'vervaldata', label: 'Vervaldata', icon: <IdCard size={18} /> },
-      ]
-    : [
-        { view: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={18} /> },
-        { view: 'rooster', label: 'Rooster', icon: <Calendar size={18} /> },
-        { view: 'omleidingen', label: 'Omleidingen', icon: <MapPin size={18} /> },
-        { view: 'ritblaadjes', label: 'Ritbladen', icon: <FileText size={18} /> },
-        // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount),
-        // dus die hoort hier — op 'Updates' was hij misleidend. Updates blijven op
-        // het dashboard zichtbaar.
-        { view: 'verlof', label: 'Verlof', icon: <CalendarCheck size={18} />, badge: unseenLeaveCount },
-      ];
+    ? [tab('dashboard'), tab('dekking'), tab('verlof', pendingLeaveCount), tab('ruil-verzoeken', pendingSwapsCount), tab('vervaldata')]
+    // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount).
+    : [tab('dashboard'), tab('rooster'), tab('omleidingen'), tab('ritblaadjes'), tab('verlof', unseenLeaveCount)];
 
   return (
     <nav

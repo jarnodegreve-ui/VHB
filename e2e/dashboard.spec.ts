@@ -215,6 +215,6 @@ test.describe('smoke: ingelogde admin', () => {
 
     // Rij navigeert rechtstreeks naar het Toestellen-scherm.
     await rij.click();
-    await expect(page.getByRole('heading', { name: 'Toestellen' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Toestellen', exact: true })).toBeVisible();
   });
 });
