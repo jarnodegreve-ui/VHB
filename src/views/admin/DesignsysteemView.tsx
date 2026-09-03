@@ -7,6 +7,8 @@ import { Field, Input, Select, Textarea } from '../../components/Field';
 import { InfoTip } from '../../components/InfoTip';
 import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '../../components/Table';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
+import { Avatar } from '../../components/Avatar';
+import { BrandMotief } from '../../components/BrandMotief';
 import { DUR } from '../../lib/motion';
 import { notify } from '../../lib/ui';
 
@@ -66,7 +68,7 @@ function Rij({ label, children }: { label: string; children: ReactNode }) {
 
 const INHOUD = [
   ['kleur', 'Kleur'], ['typografie', 'Typografie'], ['maat', 'Maat en beweging'], ['knoppen', 'Knoppen'], ['labels', 'Badges en chips'],
-  ['kaarten', 'Kaarten'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
+  ['kaarten', 'Kaarten'], ['personen', 'Personen'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
 ] as const;
 
 export function DesignsysteemView() {
@@ -221,6 +223,19 @@ export function DesignsysteemView() {
         </Rij>
       </Sectie>
 
+      <Sectie id="personen" titel="Personen" uitleg="Avatar met initialen en een vaste, gedempte tint per naam — zodat lijsten scanbaar worden zonder extra kleur. De ingelogde gebruiker in de topbar blijft goud.">
+        <Rij label="Maten">
+          <Avatar naam="Bart Peeters" size="sm" />
+          <Avatar naam="Bart Peeters" size="md" />
+          <Avatar naam="Bart Peeters" size="lg" />
+        </Rij>
+        <Rij label="Tinten">
+          {['An Claes', 'Tom Wouters', 'Els Maes', 'Jef Janssens', 'Mia De Smet', 'Koen Vermeulen', 'Sara Willems', 'Dries Peeters'].map((naam) => (
+            <span key={naam} className="inline-flex items-center gap-2 text-sm text-slate-700"><Avatar naam={naam} size="md" naamZichtbaar />{naam}</span>
+          ))}
+        </Rij>
+      </Sectie>
+
       <Sectie id="formulier" titel="Formulier" uitleg="Field zorgt voor label, hint en fout (aria-describedby); fouten staan bij het veld, nooit in een toast.">
         <div className="grid gap-4 sm:grid-cols-2">
           <Field label="Naam" required hint="Voornaam en achternaam.">
@@ -292,9 +307,15 @@ export function DesignsysteemView() {
           <SkeletonTile className="w-40" />
           <Skeleton className="h-4 w-32" />
         </Rij>
-        <div className="grid gap-3 lg:grid-cols-2">
-          <EmptyState title="Nog geen omleidingen" message="Voeg de eerste omleiding toe; chauffeurs zien ze meteen op Mijn dag." action={<Button variant="primary" size="sm"><Plus size={16} />Omleiding toevoegen</Button>} />
-          <EmptyState title="Alles afgehandeld" message="Er staan geen aanvragen meer open." />
+        <Rij label="Motief">
+          <span className="text-slate-400"><BrandMotief variant="leeg" /></span>
+          <span className="text-slate-400"><BrandMotief variant="klaar" /></span>
+          <span className="text-slate-400"><BrandMotief variant="fout" /></span>
+        </Rij>
+        <div className="grid gap-3 lg:grid-cols-3">
+          <EmptyState variant="leeg" title="Nog geen omleidingen" message="Voeg de eerste omleiding toe; chauffeurs zien ze meteen op Mijn dag." action={<Button variant="primary" size="sm"><Plus size={16} />Omleiding toevoegen</Button>} />
+          <EmptyState variant="klaar" title="Alles afgehandeld" message="Er staan geen aanvragen meer open." />
+          <EmptyState variant="fout" title="Dit scherm kon niet laden" message="Probeer het opnieuw; blijft het misgaan, meld het via het menu." action={<Button variant="secondary" size="sm">Opnieuw proberen</Button>} />
         </div>
         <Rij label="Toast">
           <Button variant="secondary" size="sm" onClick={() => notify('Opgeslagen.', 'success')}>Succes</Button>
