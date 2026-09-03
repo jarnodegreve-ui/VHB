@@ -52,7 +52,9 @@ import { addDays, isoDate } from './lib/availability';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
-import { Button, MicroLabel } from './components/primitives';
+import { Button, IconButton, MicroLabel } from './components/primitives';
+import { Card, CardHeader } from './components/Card';
+import { Field, Textarea } from './components/Field';
 import { Toast, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { NavItem, NavSection, NavSubLabel } from './components/Navigation';
@@ -2046,6 +2048,8 @@ export default function App() {
             </Button>
           )}
           <div className="mt-4">
+            {/* rauw: tekstlink op het carbon pre-app-scherm — Button ghost hovert met
+                een licht slate-vlak dat hier als vlek zou opvallen. */}
             <button
               type="button"
               onClick={handleLogout}
@@ -2072,6 +2076,7 @@ export default function App() {
             <BrandSpinner size={26} tone="donker" />
             <span className="text-sm font-medium">Profiel laden…</span>
           </div>
+          {/* rauw: tekstlink op het carbon pre-app-scherm (zie "Afmelden" hierboven). */}
           <button
             type="button"
             onClick={() => window.location.reload()}
@@ -2182,33 +2187,27 @@ export default function App() {
                 });
               }}
             >
-              <h3 className="text-base font-bold text-slate-800">Meld een probleem</h3>
-              <p className="mt-1 text-xs text-slate-500">
-                Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee.
-              </p>
-              <label htmlFor="probleem-tekst" className="mt-4 block text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">
-                Wat ging er mis?
-              </label>
-              <textarea
-                id="probleem-tekst"
-                value={probleemTekst}
-                onChange={(e) => setProbleemTekst(e.target.value)}
-                maxLength={900}
-                rows={4}
-                placeholder="Bijv. de aftelling bij Chris klopt niet — hij is al klaar…"
-                className="control-input mt-1.5 w-full rounded-2xl bg-surface-field px-4 py-3 text-base font-medium outline-none sm:text-sm"
+              <CardHeader
+                title="Meld een probleem"
+                description="Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee."
               />
+              <Field label="Wat ging er mis?" htmlFor="probleem-tekst" className="mt-4">
+                <Textarea
+                  id="probleem-tekst"
+                  value={probleemTekst}
+                  onChange={(e) => setProbleemTekst(e.target.value)}
+                  maxLength={900}
+                  rows={4}
+                  placeholder="Bijv. de aftelling bij Chris klopt niet — hij is al klaar…"
+                />
+              </Field>
               {probleemFout && (
                 <p className="mt-2 text-xs font-semibold text-red-700">Versturen lukte niet — controleer je verbinding en probeer opnieuw.</p>
               )}
               <div className="mt-4 flex justify-end gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => setShowProbleemMelder(false)}
-                  className="ios-pressable rounded-2xl px-4 py-2.5 text-sm font-semibold text-slate-500 hover:text-slate-700"
-                >
+                <Button variant="ghost" onClick={() => setShowProbleemMelder(false)}>
                   Annuleren
-                </button>
+                </Button>
                 <Button type="submit" variant="primary" disabled={!probleemTekst.trim() || probleemBezig}>
                   {probleemBezig ? 'Versturen…' : 'Versturen'}
                 </Button>
@@ -2225,7 +2224,7 @@ export default function App() {
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-[110] flex items-center justify-center bg-ink/20"
           >
-            <div className="rounded-2xl border border-slate-200/80 bg-paper/95 px-5 py-4 shadow-xl">
+            <Card padding="sm" className="shadow-xl">
               <div className="flex items-center gap-4">
                 <BrandSpinner size={24} />
                 <div>
@@ -2233,7 +2232,7 @@ export default function App() {
                   <p className="text-sm font-semibold text-slate-800">Gegevens verwerken...</p>
                 </div>
               </div>
-            </div>
+            </Card>
           </motion.div>
         )}
       </AnimatePresence>
@@ -2273,6 +2272,7 @@ export default function App() {
           {/* Géén transform/transition-all op de logoknop: Safari rastert een
               element met schaal-animatie als bitmap-laag en schaalt die —
               dat maakte de logo-randen kartelig op retina (melding Jarno). */}
+          {/* rauw: logoknop (eigen layout, bewust zonder ios-pressable/transform). */}
           <button
             type="button"
             onClick={() => { setCurrentView('dashboard'); setIsSidebarOpen(false); }}
@@ -2287,13 +2287,14 @@ export default function App() {
             <BrandLogo tone="licht" naamregelSchaal={1.2} naamregelAfstand={70} className="w-32 lg:w-36 h-auto mx-auto select-none block dark:hidden" />
             <BrandLogo tone="donker" naamregelSchaal={1.2} naamregelAfstand={70} className="w-32 lg:w-36 h-auto mx-auto select-none hidden dark:block" />
           </button>
-          <button
+          <IconButton
+            label="Menu sluiten"
+            variant="ghost"
             onClick={() => setIsSidebarOpen(false)}
-            aria-label="Menu sluiten"
-            className="absolute right-3 top-1/2 -translate-y-1/2 w-11 h-11 flex items-center justify-center text-slate-500 hover:text-slate-900 hover:bg-slate-100/80 rounded-xl transition-colors lg:hidden"
+            className="absolute right-3 top-1/2 -translate-y-1/2 lg:hidden"
           >
             <X size={18} />
-          </button>
+          </IconButton>
         </div>
 
         <nav className="flex-1 min-h-0 px-3 py-3 space-y-0.5 overflow-y-auto overscroll-contain">
@@ -2450,13 +2451,11 @@ export default function App() {
             <header className={cn("topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7", isScrolled && "topbar--scrolled")}>
               <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 py-2.5 min-h-12">
                 <div className="flex items-center gap-2 min-w-0">
-                  <button
-                    onClick={() => setIsSidebarOpen(true)}
-                    aria-label="Menu openen"
-                    className="p-2 -ml-1 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg hidden md:block lg:hidden transition-colors"
-                  >
-                    <Menu size={18} />
-                  </button>
+                  <span className="hidden md:inline-flex lg:hidden">
+                    <IconButton label="Menu openen" variant="ghost" size="sm" className="-ml-1" onClick={() => setIsSidebarOpen(true)}>
+                      <Menu size={18} />
+                    </IconButton>
+                  </span>
                   {/* Topbar is puur context: alleen de compacte titel. De
                       subtitel dupliceerde de PageHeader-description eronder,
                       en het identiteitsblok stond al in de sidebar-footer —
@@ -2479,18 +2478,16 @@ export default function App() {
                       <span className="hidden md:inline-flex">
                         <PreviewToggle active={previewChauffeur} onToggle={() => setPreviewChauffeur((v) => !v)} />
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setPreviewChauffeur((v) => !v)}
-                        aria-label={previewChauffeur ? 'Chauffeurs-weergave uit' : 'Bekijk als chauffeur'}
+                      <IconButton
+                        label={previewChauffeur ? 'Chauffeurs-weergave uit' : 'Bekijk als chauffeur'}
+                        variant="ghost"
+                        size="sm"
                         aria-pressed={previewChauffeur}
-                        className={cn(
-                          'md:hidden p-2 rounded-lg transition-colors',
-                          previewChauffeur ? 'bg-oker-500/15 text-oker-700' : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800',
-                        )}
+                        onClick={() => setPreviewChauffeur((v) => !v)}
+                        className={cn('md:hidden', previewChauffeur && 'bg-oker-500/15 text-oker-700 hover:bg-oker-500/15 hover:text-oker-700')}
                       >
                         <Eye size={16} />
-                      </button>
+                      </IconButton>
                     </>
                   )}
                   {/* Werkvoorraad — tussen de preview-toggle en de bel (idee
@@ -2503,12 +2500,13 @@ export default function App() {
                       onNavigate={setCurrentView}
                     />
                   )}
-                  <button
-                    type="button"
-                    onClick={() => setCurrentView('updates')}
-                    aria-label="Meldingen"
+                  <IconButton
+                    label="Meldingen"
                     title="Updates en meldingen"
-                    className="relative p-2 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg transition-colors"
+                    variant="ghost"
+                    size="sm"
+                    className="relative"
+                    onClick={() => setCurrentView('updates')}
                   >
                     <Bell size={16} />
                     {/* Stip alleen voor chauffeurs: bij staf draagt de
@@ -2517,7 +2515,7 @@ export default function App() {
                     {currentUser.role === 'chauffeur' && appBadgeCount > 0 && (
                       <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oker-500 ring-2 ring-paper" aria-hidden="true" />
                     )}
-                  </button>
+                  </IconButton>
                   <UserMenu
                     user={currentUser}
                     initials={userInitials}
@@ -2539,13 +2537,13 @@ export default function App() {
               keek je zonder het te weten naar verouderde data. */}
           {!isOnline && (
             <div className="mx-auto w-full max-w-[1200px]">
-              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-sm font-semibold text-amber-800">
+              <Card tone="warning" padding="none" className="mb-4 flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-amber-800">
                 <WifiOff size={14} className="shrink-0" />
                 <span>
                   Offline — wijzigingen komen niet door
                   {lastSyncedAt ? ` · laatst bijgewerkt ${formatSyncedTime(lastSyncedAt)}` : ''}
                 </span>
-              </div>
+              </Card>
             </div>
           )}
           {/* Directe view-wissel — geen AnimatePresence/motion. Een in/uit-

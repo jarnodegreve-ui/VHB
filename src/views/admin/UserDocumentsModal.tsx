@@ -5,7 +5,8 @@ import { Modal } from '../../components/Modal';
 import { ModalHeader } from '../../components/ui';
 import { notify, openPdfInNewTab } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
-import { Button, MicroLabel } from '../../components/primitives';
+import { Button, IconButton, MicroLabel } from '../../components/primitives';
+import { Field, Input } from '../../components/Field';
 import { formatDateHuman, prettySize } from '../../lib/format';
 import type { UserDocument } from '../DocumentsView';
 
@@ -85,15 +86,14 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
           />
 
           <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0 space-y-3">
-            <div className="space-y-1.5">
-              <MicroLabel>Categorie (optioneel)</MicroLabel>
-              <input
+            <Field label="Categorie (optioneel)" htmlFor="document-categorie">
+              <Input
+                id="document-categorie"
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="bv. attest, loonbrief, reglement"
-                className="control-input w-full px-4 py-2.5 rounded-2xl outline-none text-base sm:text-sm font-medium bg-surface-field"
               />
-            </div>
+            </Field>
             <input ref={fileRef} type="file" accept={ACCEPT} onChange={handleUpload} className="hidden" />
             <Button variant="primary" icon={<Upload size={16} />} disabled={uploading} onClick={() => fileRef.current?.click()}>
               {uploading ? 'Uploaden…' : `Document toevoegen (PDF/afbeelding, max ${MAX_MB} MB)`}
@@ -123,8 +123,8 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                         <p className="mt-0.5 text-2xs font-medium text-slate-400">Nog niet geopend</p>
                       )}
                     </div>
-                    <button type="button" onClick={() => doc.url && openPdfInNewTab(doc.url)} aria-label="Openen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors"><Download size={16} /></button>
-                    <button type="button" onClick={() => void handleDelete(doc)} aria-label="Verwijderen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-surface-white text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center transition-colors"><Trash2 size={16} /></button>
+                    <IconButton label="Openen" variant="secondary" onClick={() => doc.url && openPdfInNewTab(doc.url)}><Download size={16} /></IconButton>
+                    <IconButton label="Verwijderen" variant="danger" onClick={() => void handleDelete(doc)}><Trash2 size={16} /></IconButton>
                   </div>
                 ))}
               </div>

@@ -10,10 +10,10 @@ export function Skeleton({
   rounded = 'md',
 }: {
   className?: string;
-  rounded?: 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'full';
+  /** Radius uit de ladder (md = 6 px is de ondergrens). */
+  rounded?: 'md' | 'lg' | 'xl' | '2xl' | 'full';
 }) {
   const radius = {
-    sm: 'rounded-sm',
     md: 'rounded-md',
     lg: 'rounded-lg',
     xl: 'rounded-xl',

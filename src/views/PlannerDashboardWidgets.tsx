@@ -47,7 +47,9 @@ import { Modal } from '../components/Modal';
 import { ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Button, microLabelClass, segItemClass } from '../components/primitives';
+import { Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
+import { Card } from '../components/Card';
+import { Field, Input, Select, Textarea } from '../components/Field';
 import { cn, notify, telHref } from '../lib/ui';
 
 /**
@@ -220,12 +222,12 @@ export function PlannerDashboardWidgets({
           <SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile /><SkeletonTile />
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-          <div className="lg:col-span-2 rounded-3xl p-5 surface-card">
+          <Card padding="md" className="lg:col-span-2">
             <SkeletonRow /><SkeletonRow /><SkeletonRow />
-          </div>
-          <div className="rounded-3xl p-5 surface-card">
+          </Card>
+          <Card padding="md">
             <SkeletonRow /><SkeletonRow />
-          </div>
+          </Card>
         </div>
       </section>
     );
@@ -521,6 +523,7 @@ export function PlannerDashboardWidgets({
             (verbeterronde 01-09, nr. 1); live cijfers blijven op nu. */}
         <div className="glass-segmented inline-flex rounded-2xl p-1">
           {([0, 1] as const).map((offset) => (
+            // rauw: segmented-control-item via segItemClass (het voorgeschreven patroon)
             <button
               key={offset}
               type="button"
@@ -773,7 +776,7 @@ export function PlannerDashboardWidgets({
               </p>
             )}
             {attentionCount === 0 && (
-              <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
+              <Card tone="success" padding="none" className="flex items-center gap-3 px-4 py-3.5">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
                   <CheckCircle2 size={16} />
                 </span>
@@ -781,7 +784,7 @@ export function PlannerDashboardWidgets({
                   <p className="text-sm font-semibold text-slate-800">Alles ok</p>
                   <p className="text-xs font-normal text-slate-500">Geen open taken of openstaande diensten.</p>
                 </div>
-              </div>
+              </Card>
             )}
           </div>
         </OpsPanel>
@@ -899,18 +902,14 @@ export function PlannerDashboardWidgets({
             {todayAbsent.map((a) => (
               <li key={a.id} className="flex items-center justify-between gap-3 rounded-xl px-3 py-2.5">
                 <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{a.name}</span>
-                <span className={cn('shrink-0 inline-block rounded-md px-1.5 py-0.5 text-2xs font-semibold', a.isSick ? 'bg-rose-500/12 text-rose-700' : 'bg-surface-muted text-slate-600')}>{a.label}</span>
+                <Chip mono={false} tone={a.isSick ? 'rose' : 'slate'}>{a.label}</Chip>
               </li>
             ))}
           </ul>
         )}
-        <button
-          type="button"
-          onClick={() => { setShowAbsent(false); onNavigate('verlof-kalender'); }}
-          className="ios-pressable mt-2 w-full rounded-xl border border-slate-200 py-2.5 text-center text-xs font-semibold text-slate-600 hover:bg-surface-soft-hover"
-        >
+        <Button variant="secondary" size="md" full className="mt-2" onClick={() => { setShowAbsent(false); onNavigate('verlof-kalender'); }}>
           Volledige kalender openen
-        </button>
+        </Button>
       </DashboardListModal>
 
       {/* === Popup: wie is er vandaag ingepland, met hun dienst(en) === */}
@@ -967,7 +966,7 @@ export function PlannerDashboardWidgets({
                 scrol je makkelijk over de laatste heen — dan lijkt het klaar
                 terwijl er nog diensten open staan (melding Jarno 14-08). */}
             {isAdmin && (
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">
+              <p className={cn(microLabelClass, 'tabular-nums')}>
                 {Object.keys(afgehandeld).length} van {ziekVervolg.diensten.length} overgezet
                 {Object.keys(afgehandeld).length < ziekVervolg.diensten.length
                   ? ` · nog ${ziekVervolg.diensten.length - Object.keys(afgehandeld).length} te doen`
@@ -978,12 +977,12 @@ export function PlannerDashboardWidgets({
               {ziekVervolg.diensten.map((d) => {
                 const klaar = afgehandeld[d.id];
                 return (
-                  <div key={d.id} className="rounded-2xl bg-surface-soft px-3.5 py-3 space-y-2.5">
+                  <Card key={d.id} tone="muted" padding="none" className="px-3.5 py-3 space-y-2.5">
                     <div className="flex items-center justify-between gap-3">
                       <span className="text-sm font-semibold text-slate-800 tabular-nums">
                         Dienst {serviceNumberOf(d)}
                       </span>
-                      <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">{formatDay(d.date)}</span>
+                      <span className={cn(microLabelClass, 'tabular-nums')}>{formatDay(d.date)}</span>
                     </div>
                     {klaar ? (
                       <p className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700">
@@ -991,11 +990,11 @@ export function PlannerDashboardWidgets({
                       </p>
                     ) : isAdmin ? (
                       <div className="flex flex-col gap-2 sm:flex-row">
-                        <select
+                        <Select
                           aria-label={`Vervanger voor dienst ${serviceNumberOf(d)} op ${d.date}`}
                           value={vervangerPerDienst[d.id] ?? ''}
                           onChange={(e) => setVervangerPerDienst((cur) => ({ ...cur, [d.id]: e.target.value }))}
-                          className="control-input min-w-0 flex-1 rounded-2xl px-3.5 py-2.5 text-base sm:text-sm font-semibold outline-none bg-surface-field"
+                          className="min-w-0 flex-1"
                         >
                           <option value="">Kies een chauffeur…</option>
                           {/* Vrij die dag bovenaan, daarbinnen minst gewerkt
@@ -1007,7 +1006,7 @@ export function PlannerDashboardWidgets({
                             werkdagen,
                             d.date,
                           ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
-                        </select>
+                        </Select>
                         <Button
                           variant="primary"
                           size="md"
@@ -1018,7 +1017,7 @@ export function PlannerDashboardWidgets({
                         </Button>
                       </div>
                     ) : null}
-                  </div>
+                  </Card>
                 );
               })}
             </div>
@@ -1062,54 +1061,55 @@ export function PlannerDashboardWidgets({
           }}
           className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
-          <div className="space-y-1.5">
-            <label className={cn(microLabelClass, 'ml-1')}>Chauffeur</label>
-            <select
-              aria-label="Chauffeur"
-              value={sickForm.userId}
-              onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickError(''); }}
-              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
-            >
-              <option value="">Kies een chauffeur…</option>
-              {users
-                .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
-                .sort((a, b) => a.name.localeCompare(b.name))
-                .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
-            </select>
-          </div>
+          <Field label="Chauffeur">
+            {({ id }) => (
+              <Select
+                id={id}
+                value={sickForm.userId}
+                onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickError(''); }}
+              >
+                <option value="">Kies een chauffeur…</option>
+                {users
+                  .filter((u) => u.role === 'chauffeur' && u.isActive !== false)
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </Select>
+            )}
+          </Field>
           <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <label className={cn(microLabelClass, 'ml-1')}>Van</label>
-              <input
-                type="date"
-                aria-label="Startdatum ziekmelding"
-                value={sickForm.startDate}
-                onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })}
-                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className={cn(microLabelClass, 'ml-1')}>Tot en met</label>
-              <input
-                type="date"
-                aria-label="Einddatum ziekmelding"
-                value={sickForm.endDate}
-                min={sickForm.startDate}
-                onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })}
-                className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none bg-surface-field"
-              />
-            </div>
+            <Field label="Van">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={sickForm.startDate}
+                  onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })}
+                />
+              )}
+            </Field>
+            <Field label="Tot en met">
+              {({ id }) => (
+                <Input
+                  id={id}
+                  type="date"
+                  value={sickForm.endDate}
+                  min={sickForm.startDate}
+                  onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })}
+                />
+              )}
+            </Field>
           </div>
-          <div className="space-y-1.5">
-            <label className={cn(microLabelClass, 'ml-1')}>Opmerking (optioneel)</label>
-            <textarea
-              aria-label="Opmerking ziekmelding"
-              value={sickForm.comment}
-              onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
-              className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none h-20 resize-none bg-surface-field"
-              placeholder="bv. gemeld via telefoon om 6u"
-            />
-          </div>
+          <Field label="Opmerking (optioneel)">
+            {({ id }) => (
+              <Textarea
+                id={id}
+                value={sickForm.comment}
+                onChange={(e) => setSickForm({ ...sickForm, comment: e.target.value })}
+                className="h-20"
+                placeholder="bv. gemeld via telefoon om 6u"
+              />
+            )}
+          </Field>
           {sickError && (
             <p role="alert" className="text-xs font-semibold text-red-700">{sickError}</p>
           )}

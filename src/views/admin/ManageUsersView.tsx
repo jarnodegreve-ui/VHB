@@ -5,9 +5,11 @@ import type { LeaveRequest, Shift, SwapRequest, User } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { EXPIRY_SOORT_LABELS, formatDateTimeHuman } from '../../lib/format';
 import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
-import { AdminSubsectionHeader, ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, FilterChip, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, MicroLabel, segItemClass, TableShell, Td, Th, Switch } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Field, Input, Select } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
@@ -500,8 +502,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       />
 
       <div className="grid gap-4 xl:grid-cols-[1.2fr_0.9fr]">
-        <div className="surface-card rounded-3xl p-6">
-          <AdminSubsectionHeader
+        <Card>
+          <CardHeader
+            size="lg"
             eyebrow="Werkset"
             title="Zichtbare gebruikers"
             description="Filter de huidige lijst per rol voordat je wijzigingen doorvoert."
@@ -531,19 +534,20 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="glass-segmented inline-flex rounded-2xl p-1 self-start">
               {(['all', 'chauffeur', 'planner', 'admin'] as const).map((role) => (
-                <button key={role} onClick={() => setRoleFilter(role)} className={segItemClass(roleFilter === role, 'capitalize')}>
+                // rauw: segmented control op de glass-rail, klassen via segItemClass
+                <button key={role} type="button" onClick={() => setRoleFilter(role)} className={segItemClass(roleFilter === role, 'capitalize')}>
                   {role === 'all' ? 'Alles' : role}
                 </button>
               ))}
             </div>
-            <input
+            <Input
               type="search"
               enterKeyHint="search"
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
               placeholder="Zoek op naam, personeelsnr of e-mail…"
               aria-label="Zoek gebruiker"
-              className="control-input w-full sm:max-w-xs rounded-2xl px-4 py-2.5 text-base sm:text-sm font-medium outline-none"
+              className="sm:max-w-xs"
             />
             {/* Snelfilter voor de uitrol: wie moet ik nog persoonlijk
                 meekrijgen? Alleen tonen als er zo iemand is. */}
@@ -565,7 +569,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               </FilterChip>
             )}
           </div>
-        </div>
+        </Card>
 
         <div className="rounded-3xl border border-oker-100 bg-oker-50/80 p-5 text-sm">
           <MicroLabel className="text-oker-700">Bronimport</MicroLabel>
@@ -588,7 +592,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
 
       <TableShell>
         <div className="border-b border-slate-200/70 px-5 py-4 md:px-6">
-          <AdminSubsectionHeader
+          <CardHeader
+            size="lg"
             eyebrow="Overzicht"
             title="Gebruikerslijst"
             description="Controleer status, sessies en accountacties per medewerker."
@@ -640,19 +645,18 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <Td className="text-right">
                     <div className="relative flex items-center justify-end gap-1.5">
                       <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                      <Button
+                      <IconButton
+                        label="Meer acties"
                         variant="ghost"
                         size="sm"
-                        className="px-2"
                         onClick={() => setMenuUserId(menuUserId === u.id ? null : u.id)}
-                        aria-label="Meer acties"
                         aria-expanded={menuUserId === u.id}
-                        title="Meer acties"
-                        icon={<MoreHorizontal size={16} />}
-                      />
+                      >
+                        <MoreHorizontal size={16} />
+                      </IconButton>
                       {menuUserId === u.id && (
                         <>
-                          {/* Klik-buiten sluit het menu. */}
+                          {/* rauw: onzichtbaar klik-buiten-vlak dat het menu sluit */}
                           <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
                           <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-surface-white p-1.5 shadow-xl text-left">
                             <RowMenuItem icon={<Info size={16} />} label="Verlof- & dienstruil-historiek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
@@ -707,16 +711,16 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
-                <div className="p-3 bg-surface-soft rounded-2xl"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></div>
-                <div className="p-3 bg-surface-soft rounded-2xl"><MicroLabel>Sessies</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.activeSessions || 0}</p></div>
+                <Card tone="muted" padding="sm"><MicroLabel>Laatst Actief</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : 'Nooit'}</p></Card>
+                <Card tone="muted" padding="sm"><MicroLabel>Sessies</MicroLabel><p className="mt-1 text-sm font-semibold text-slate-700 tabular-nums">{u.activeSessions || 0}</p></Card>
               </div>
               <div className="flex gap-2 pt-1">
                 <Button variant="secondary" className="flex-1" onClick={() => setEditingUser(u)}>Bewerken</Button>
-                <Button variant="ghost" className="px-3" onClick={() => setViewingHistoryUser(u)} aria-label="Verlof- en dienstruil-historiek" title="Verlof- en dienstruil-historiek" icon={<Info size={18} />} />
-                <Button variant="ghost" className="px-3" onClick={() => setDocumentsUser(u)} aria-label="Documenten beheren" title="Documenten beheren" icon={<FolderOpen size={18} />} />
-                <Button variant="ghost" className="px-3" onClick={() => setViewingChangeLogUser(u)} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" icon={<History size={18} />} />
-                <Button variant="danger" className="px-3" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)} aria-label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} title={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} icon={<Trash2 size={18} />} />
-                <Button variant="ghost" className="px-3" onClick={() => setConfirmResetUser(u)} aria-label="Stel nieuw tijdelijk wachtwoord in" title="Stel nieuw tijdelijk wachtwoord in" icon={<RotateCcw size={18} />} />
+                <IconButton label="Verlof- en dienstruil-historiek" variant="ghost" onClick={() => setViewingHistoryUser(u)}><Info size={18} /></IconButton>
+                <IconButton label="Documenten beheren" variant="ghost" onClick={() => setDocumentsUser(u)}><FolderOpen size={18} /></IconButton>
+                <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setViewingChangeLogUser(u)}><History size={18} /></IconButton>
+                <IconButton label={isProtectedAdmin(u) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} variant="danger" onClick={() => !isProtectedAdmin(u) && setConfirmDeleteId(u.id)} disabled={isProtectedAdmin(u)}><Trash2 size={18} /></IconButton>
+                <IconButton label="Stel nieuw tijdelijk wachtwoord in" variant="ghost" onClick={() => setConfirmResetUser(u)}><RotateCcw size={18} /></IconButton>
               </div>
             </div>
           ))}
@@ -733,18 +737,19 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         <ModalHeader title="Nieuwe Gebruiker" description="Voeg handmatig een medewerker toe." />
         <form onSubmit={handleAddUser} className="p-6 md:p-7 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5 sm:col-span-2">
-              <MicroLabel>Volledige Naam</MicroLabel>
-              <input type="text" autoComplete="name" required aria-label="Volledige naam" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. Jan Janssen" />
-              {vindNaamBotsingen(newUser.name, users).length > 0 && (
-                <p className="text-xs font-medium text-amber-700">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</p>
-              )}
-            </div>
-            <div className="space-y-1.5"><MicroLabel>Rol</MicroLabel><select aria-label="Rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
-            <div className="space-y-1.5"><MicroLabel>Personeelsnummer</MicroLabel><input type="text" autoComplete="off" aria-label="Personeelsnummer" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
-            <div className="space-y-1.5 sm:col-span-2"><MicroLabel>E-mailadres</MicroLabel><input type="email" autoComplete="email" inputMode="email" required aria-label="E-mailadres" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
-            <div className="space-y-1.5"><MicroLabel>Tijdelijk Wachtwoord</MicroLabel><input type="password" autoComplete="new-password" aria-label="Tijdelijk wachtwoord" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 6 tekens" /></div>
-            <div className="space-y-1.5"><MicroLabel>GSM Nummer</MicroLabel><input type="tel" autoComplete="tel" inputMode="tel" aria-label="GSM-nummer" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
+            <Field
+              label="Volledige Naam"
+              htmlFor="nieuw-naam"
+              className="sm:col-span-2"
+              hint={vindNaamBotsingen(newUser.name, users).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</span> : undefined}
+            >
+              <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} placeholder="bijv. Jan Janssen" />
+            </Field>
+            <Field label="Rol" htmlFor="nieuw-rol"><Select id="nieuw-rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
+            <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr"><Input id="nieuw-personeelsnr" type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} placeholder="Optioneel" /></Field>
+            <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2"><Input id="nieuw-email" type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="bijv. jan@voorbeeld.be" /></Field>
+            <Field label="Tijdelijk Wachtwoord" htmlFor="nieuw-wachtwoord"><Input id="nieuw-wachtwoord" type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} placeholder="Minstens 6 tekens" /></Field>
+            <Field label="GSM Nummer" htmlFor="nieuw-gsm"><Input id="nieuw-gsm" type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
           </div>
           <div className="flex gap-3 pt-2">
             <Button variant="ghost" className="flex-1" onClick={() => setShowAddModal(false)}>Annuleren</Button>
@@ -759,78 +764,75 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             <ModalHeader title="Gebruiker Bewerken" description={`Pas de gegevens van ${editingUser.name} aan.`} />
             <form onSubmit={handleUpdateUser} className="p-6 md:p-7 space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-1.5 sm:col-span-2">
-                  <MicroLabel>Volledige Naam</MicroLabel>
-                  <input type="text" autoComplete="name" required aria-label="Volledige naam" value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" />
-                  {vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 && (
-                    <p className="text-xs font-medium text-amber-700">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</p>
-                  )}
-                </div>
-                <div className="space-y-1.5"><MicroLabel>Rol</MicroLabel><select aria-label="Rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
-                <div className="space-y-1.5"><MicroLabel>Personeelsnummer</MicroLabel><input type="text" autoComplete="off" aria-label="Personeelsnummer" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" /></div>
-                <div className="space-y-1.5 sm:col-span-2"><MicroLabel>E-mailadres</MicroLabel><input type="email" autoComplete="email" inputMode="email" aria-label="E-mailadres" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. jan@voorbeeld.be" /></div>
-                <div className="space-y-1.5"><MicroLabel>Nieuw Wachtwoord</MicroLabel><input type="password" autoComplete="new-password" aria-label="Nieuw wachtwoord" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
-                <div className="space-y-1.5"><MicroLabel>GSM Nummer</MicroLabel><input type="tel" autoComplete="tel" inputMode="tel" aria-label="GSM-nummer" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Optioneel" /></div>
+                <Field
+                  label="Volledige Naam"
+                  htmlFor="bewerk-naam"
+                  className="sm:col-span-2"
+                  hint={vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</span> : undefined}
+                >
+                  <Input id="bewerk-naam" type="text" autoComplete="name" required value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} />
+                </Field>
+                <Field label="Rol" htmlFor="bewerk-rol"><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
+                <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr"><Input id="bewerk-personeelsnr" type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} /></Field>
+                <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2"><Input id="bewerk-email" type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} placeholder="bijv. jan@voorbeeld.be" /></Field>
+                <Field label="Nieuw Wachtwoord" htmlFor="bewerk-wachtwoord"><Input id="bewerk-wachtwoord" type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} placeholder="Optioneel" /></Field>
+                <Field label="GSM Nummer" htmlFor="bewerk-gsm"><Input id="bewerk-gsm" type="tel" autoComplete="tel" inputMode="tel" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
                 {editingUser.role === 'chauffeur' && (
-                  <div className="space-y-1.5"><MicroLabel>Sectie (Maandplanning)</MicroLabel><select aria-label="Sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></select></div>
+                  <Field label="Sectie (Maandplanning)" htmlFor="bewerk-sectie"><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
                 )}
-                <div className="space-y-1.5"><MicroLabel>In dienst sinds</MicroLabel><input type="date" aria-label="In dienst sinds" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" /><p className="text-2xs text-slate-400 font-medium px-1">Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning.</p></div>
-                <div className="space-y-1.5 sm:col-span-2">
-                  <MicroLabel>Verlofbudget (dagen)</MicroLabel>
-                  <input
+                <Field label="In dienst sinds" htmlFor="bewerk-startdatum" hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><Input id="bewerk-startdatum" type="date" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} /></Field>
+                <Field label="Verlofbudget (dagen)" htmlFor="bewerk-verlofbudget" className="sm:col-span-2" hint="Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).">
+                  <Input
+                    id="bewerk-verlofbudget"
                     type="number"
                     inputMode="numeric"
                     min={0}
-                    aria-label="Verlofbudget" value={editingUser.verlofBudget ?? ''}
+                    value={editingUser.verlofBudget ?? ''}
                     onChange={(e) => {
                       const v = e.target.value;
                       setEditingUser({ ...editingUser, verlofBudget: v === '' ? undefined : Math.max(0, parseInt(v, 10) || 0) });
                     }}
-                    className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium"
                     placeholder="Leeg = standaard (24 dagen)"
                   />
-                  <p className="text-2xs text-slate-400 font-medium px-1">Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).</p>
-                </div>
+                </Field>
                 {editingUser.role === 'chauffeur' && (
-                  <div className="space-y-1.5 sm:col-span-2">
-                    <MicroLabel>Documenten geldig tot</MicroLabel>
+                  <fieldset className="space-y-1.5 sm:col-span-2">
+                    <legend className="text-label mb-1.5">Documenten geldig tot</legend>
                     <div className="grid gap-3 sm:grid-cols-3">
                       {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
-                        <div key={soort} className="space-y-1">
-                          <p className="px-1 text-2xs font-medium text-slate-500">{label}</p>
-                          <input
+                        <Field key={soort} label={label} htmlFor={`bewerk-verval-${soort}`}>
+                          <Input
+                            id={`bewerk-verval-${soort}`}
                             type="date"
-                            aria-label={`${label} geldig tot`}
                             value={vervalDraft[soort] ?? ''}
                             onChange={(e) => setVervalDraft((d) => ({ ...d, [soort]: e.target.value }))}
-                            className="control-input w-full px-3 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium"
                           />
-                        </div>
+                        </Field>
                       ))}
                     </div>
-                    <p className="text-2xs text-slate-400 font-medium px-1">Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.</p>
-                  </div>
+                    <p className="text-xs text-slate-500">Het portaal verwittigt de chauffeur en de planning automatisch op 90, 30 en 7 dagen voor de vervaldatum. Leeg = niet bewaken.</p>
+                  </fieldset>
                 )}
               </div>
-              <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
+              <Card tone="muted" padding="sm" className="flex items-center justify-between">
                 <div><p className="text-sm font-semibold text-slate-700">Account Actief</p><p className="text-2xs text-slate-400">Inactieve gebruikers kunnen niet inloggen.</p></div>
                 <Switch checked={editingUser.isActive !== false} onChange={(aan) => setEditingUser({ ...editingUser, isActive: aan })} label="Account actief" />
-              </div>
-              <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
+              </Card>
+              <Card tone="muted" padding="sm" className="flex items-center justify-between">
                 <div><p className="text-sm font-semibold text-slate-700">Tonen in contactlijst</p><p className="text-2xs text-slate-400">Uit = deze persoon staat niet in de contactlijst voor collega's.</p></div>
                 <Switch checked={editingUser.showInContacts !== false} onChange={(aan) => setEditingUser({ ...editingUser, showInContacts: aan })} label="Tonen in contactlijst" />
-              </div>
+              </Card>
               {editingUser.role === 'admin' && (
-                <div className="flex items-center justify-between p-4 surface-muted rounded-2xl">
+                <Card tone="muted" padding="sm" className="flex items-center justify-between">
                   <div><p className="text-sm font-semibold text-slate-700">Systeemmails</p><p className="text-2xs text-slate-400">Foutendigest en back-up-mails van het portaal. Uit = deze admin ontvangt ze niet.</p></div>
                   <Switch checked={editingUser.wantsSystemMail !== false} onChange={(aan) => setEditingUser({ ...editingUser, wantsSystemMail: aan })} label="Systeemmails" />
-                </div>
+                </Card>
               )}
-              <div className="grid grid-cols-2 gap-4"><div className="p-3 surface-muted rounded-xl"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></div><div className="p-3 surface-muted rounded-xl"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></div></div>
+              <div className="grid grid-cols-2 gap-4"><Card tone="muted" padding="sm"><MicroLabel>Laatst Ingelogd</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.lastLogin ? formatDateTimeHuman(editingUser.lastLogin) : 'Nooit'}</p></Card><Card tone="muted" padding="sm"><MicroLabel>Actieve Sessies</MicroLabel><p className="text-sm font-semibold text-slate-700 tabular-nums mt-1">{editingUser.activeSessions || 0}</p></Card></div>
               {/* Verwijderknop stond in de kop; de gedeelde ModalHeader heeft
                   daar geen slot voor, dus links in de knoppenrij (zelfde
                   gedrag, zelfde bescherming; controle-ronde 27-08). */}
-              <div className="flex gap-3 pt-2"><Button variant="danger" className="px-3" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)} aria-label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} title={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} icon={<Trash2 size={16} />} /><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
+              <div className="flex gap-3 pt-2"><IconButton label={isProtectedAdmin(editingUser) ? 'Laatste actieve admin kan niet verwijderd worden' : 'Verwijder gebruiker'} variant="danger" onClick={() => !isProtectedAdmin(editingUser) && setConfirmDeleteId(editingUser.id)} disabled={isProtectedAdmin(editingUser)}><Trash2 size={16} /></IconButton><Button variant="ghost" className="flex-1" onClick={() => setEditingUser(null)}>Annuleren</Button><Button type="submit" variant="primary" className="flex-1" disabled={isSubmittingUser}>{isSubmittingUser ? 'Bezig…' : 'Opslaan'}</Button></div>
             </form>
           </>
         )}
@@ -841,8 +843,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
           <>
             <ModalHeader title="Wachtwoord resetten" description={`Stel een nieuw tijdelijk wachtwoord in voor ${confirmResetUser.name}.`} />
             <div className="p-6 md:p-7 space-y-4">
-              <div className="space-y-1.5"><MicroLabel>Tijdelijk wachtwoord</MicroLabel><input type="password" aria-label="Tijdelijk wachtwoord" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="Minstens 6 tekens" autoFocus /></div>
-              <p className="text-xs text-slate-400">De gebruiker logt daarna in met dit nieuwe wachtwoord.</p>
+              <Field label="Tijdelijk wachtwoord" htmlFor="reset-wachtwoord" hint="De gebruiker logt daarna in met dit nieuwe wachtwoord.">
+                <Input id="reset-wachtwoord" type="password" value={resetPasswordValue} onChange={(e) => setResetPasswordValue(e.target.value)} placeholder="Minstens 6 tekens" autoFocus />
+              </Field>
               <div className="flex gap-3 pt-2"><Button variant="ghost" className="flex-1" onClick={() => { setConfirmResetUser(null); setResetPasswordValue(''); }}>Annuleren</Button><Button variant="primary" className="flex-1" onClick={handleResetPassword} disabled={isResettingPassword}>{isResettingPassword ? 'Bezig…' : 'Resetten'}</Button></div>
             </div>
           </>
@@ -889,6 +892,7 @@ function RowMenuItem({ icon, label, onClick, disabled = false, tone = 'default' 
   tone?: 'default' | 'danger';
 }) {
   return (
+    // rauw: menu-item in het ⋯-overflowmenu (icoon + label op volle breedte, geen knop-uiterlijk)
     <button
       type="button"
       onClick={onClick}

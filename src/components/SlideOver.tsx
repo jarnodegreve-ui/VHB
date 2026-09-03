@@ -141,7 +141,7 @@ export function SlideOver({
               // (blur + transform op één element geeft compositing-glitches);
               // near-opaque oppervlak heeft het ook niet nodig.
               'fixed inset-y-0 right-0 z-[101] flex h-full w-full flex-col outline-none sm:rounded-l-2xl',
-              'bg-paper/95 border-l border-slate-200/80 shadow-[0_0_80px_rgba(13,13,15,0.25)]',
+              'bg-paper/95 border-l border-slate-200/80 shadow-2xl shadow-ink/20',
               widthClass,
             )}
           >

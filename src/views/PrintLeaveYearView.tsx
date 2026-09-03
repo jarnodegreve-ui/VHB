@@ -2,6 +2,7 @@ import { useEffect, useMemo } from 'react';
 import type { LeaveRequest, User } from '../types';
 import { daysBetween, verlofBalans } from '../lib/leaveBalance';
 import { formatLeaveType, formatShortDay, MONTH_NAMES } from '../lib/format';
+import { Button } from '../components/primitives';
 
 /**
  * Print-vriendelijk verlof-jaaroverzicht voor één chauffeur: saldo,
@@ -89,12 +90,9 @@ export function PrintLeaveYearView({
 
       <div className="max-w-3xl mx-auto p-8 md:p-10">
         <div className="no-print flex justify-end mb-4">
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-ink text-white rounded-xl text-xs font-black uppercase tracking-[0.08em] hover:bg-ink-soft transition-colors"
-          >
+          <Button variant="primary" onClick={() => window.print()}>
             Print / Opslaan als PDF
-          </button>
+          </Button>
         </div>
 
         {/* Header */}

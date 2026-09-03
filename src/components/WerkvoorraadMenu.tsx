@@ -5,6 +5,7 @@ import type { View } from '../types';
 import type { Werkvoorraad } from '../lib/werkvoorraad';
 import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
 import { useDropdown } from './useDropdown';
+import { IconButton } from './primitives';
 import { DUR } from '../lib/motion';
 
 /**
@@ -155,24 +156,22 @@ export function WerkvoorraadMenu({
 
   return (
     <div ref={wortel} className="relative">
-      <button
-        type="button"
+      <IconButton
+        label={wv.attentionCount > 0 ? `Open taken (${wv.attentionCount})` : 'Open taken'}
+        title="Open taken"
+        variant="ghost"
+        size="sm"
         onClick={() => setOpen((v) => !v)}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={wv.attentionCount > 0 ? `Open taken (${wv.attentionCount})` : 'Open taken'}
-        title="Open taken"
-        className={cn(
-          'relative p-2 rounded-lg transition-colors',
-          open ? 'bg-slate-100/80 text-slate-800' : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800',
-        )}
+        className={cn('relative', open && 'bg-slate-100 text-slate-800')}
       >
         <ListChecks size={16} />
         {wv.attentionCount > 0 && (
           <span
             aria-hidden="true"
             className={cn(
-              'absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-paper',
+              'absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full text-2xs font-bold ring-2 ring-paper',
               heeftRood
                 ? 'bg-red-600 text-white'
                 : 'bg-amber-500 text-slate-950',
@@ -181,7 +180,7 @@ export function WerkvoorraadMenu({
             {wv.attentionCount > 9 ? '9+' : wv.attentionCount}
           </span>
         )}
-      </button>
+      </IconButton>
 
       <AnimatePresence>
       {open && (
@@ -218,6 +217,8 @@ export function WerkvoorraadMenu({
             </div>
           ) : (
             rijen.map((r) => (
+              // rauw: dropdown-menurij (role=menuitem) met tweeregelige eigen layout
+              // (icoon + label + subregel, links uitgelijnd) — geen knop-uiterlijk.
               <button
                 key={r.key}
                 role="menuitem"

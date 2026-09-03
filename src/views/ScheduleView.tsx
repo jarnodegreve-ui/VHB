@@ -6,7 +6,8 @@ import { typedagLabel } from '../lib/typedag';
 import { leaveChip, leaveDayTint, leaveDot } from '../lib/statusColors';
 import { formatLeaveType, serviceNumberOf } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { Badge, Button, Chip, MicroLabel, microLabelClass, segItemClass, TableShell, Td, Th } from '../components/primitives';
+import { Card } from '../components/Card';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
 import { SkeletonRow } from '../components/Skeleton';
@@ -206,6 +207,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
             app die er anders uitzag. */}
         <div className="glass-segmented inline-flex rounded-2xl p-1">
           {(['lijst', 'maand'] as const).map((w) => (
+            /* rauw: segmented control op de glass-rail, klassen via segItemClass */
             <button
               key={w}
               type="button"
@@ -224,13 +226,13 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
       <CalendarSubscribeModal open={calendarOpen} onClose={() => setCalendarOpen(false)} onDownload={exportToICS} />
 
       {isInitialLoad ? (
-        <div className="surface-card rounded-3xl overflow-hidden">
+        <Card padding="none" className="overflow-hidden">
           {Array.from({ length: 6 }).map((_, i) => (
             <div key={i}>
               <SkeletonRow className="border-b border-slate-100 last:border-0" />
             </div>
           ))}
-        </div>
+        </Card>
       ) : upcoming.length === 0 && past.length === 0 ? (
         <EmptyState icon={<CalendarDays size={24} />} title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
       ) : weergave === 'maand' ? (
@@ -251,16 +253,15 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           {/* Verleden — collapsed by default */}
           {past.length > 0 && (
             <div className="mt-6">
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
+                className="-ml-3"
                 onClick={() => setShowPast((v) => !v)}
-                className="flex items-center gap-2 text-xs font-semibold text-slate-500 hover:text-slate-700 transition-colors"
+                icon={<ChevronDown size={14} className={cn('transition-transform', showPast && 'rotate-180')} />}
               >
-                <ChevronDown
-                  size={14}
-                  className={cn('transition-transform', showPast && 'rotate-180')}
-                />
                 {showPast ? 'Verberg' : 'Toon'} verleden ({past.length})
-              </button>
+              </Button>
               {showPast && (
                 <div className="mt-4 opacity-60">
                   <ShiftList shifts={past} today={today} />
@@ -350,7 +351,7 @@ function MonthCalendar({
           met een duim, en net boven de 40px-drempel van het auditscript, dus
           het glipte er structureel doorheen. Met de kleinere gap erbij zitten
           ze op ~44px. */}
-      <div className="surface-card rounded-3xl p-3 md:p-4">
+      <Card padding="none" className="p-3 md:p-4">
         <MaandNavigatie
           className="justify-between"
           label={monthName}
@@ -361,7 +362,7 @@ function MonthCalendar({
         {/* Grid */}
         <div className="mt-3 grid grid-cols-7 gap-0.5 md:gap-1">
           {WEEKDAY_SHORT_MON.map((d) => (
-            <div key={d} className="py-1 text-center text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">
+            <div key={d} className={cn(microLabelClass, 'py-1 text-center')}>
               {d}
             </div>
           ))}
@@ -378,6 +379,7 @@ function MonthCalendar({
             const conflict = dayGroups.some((g) => g.hasConflict);
 
             return (
+              /* rauw: kalender-dagcel (dagnummer + dienst/verlof-markering) */
               <button
                 key={day}
                 type="button"
@@ -429,10 +431,10 @@ function MonthCalendar({
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-oker-700">F</span> feestdag</span>
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-slate-400">v</span> vrij</span>
         </div>
-      </div>
+      </Card>
 
       {/* Detail van de geselecteerde dag */}
-      <div className="surface-card rounded-3xl p-4">
+      <Card padding="sm">
         <MicroLabel className={cn(selected === today && 'text-oker-700')}>
           {selected === today ? 'Vandaag' : `Wk ${isoWeekOf(selected)}`}
         </MicroLabel>
@@ -476,11 +478,7 @@ function MonthCalendar({
                     <span className="font-medium tabular-nums text-slate-700">
                       {s.startTime} – {s.endTime}
                     </span>
-                    {s.loopnr && (
-                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
-                        loop {s.loopnr}
-                      </span>
-                    )}
+                    {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
                   </div>
                 ))}
               </div>
@@ -495,24 +493,16 @@ function MonthCalendar({
         )}
 
         {selected === today && selectedGroups.length > 0 && (
-          <button
-            type="button"
-            onClick={() => void openHuidigRitblad()}
-            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
-          >
-            <FileText size={14} className="text-oker-500" /> Ritblad van vandaag
-          </button>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} className="text-oker-500" />}>
+            Ritblad van vandaag
+          </Button>
         )}
         {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict || g.openSwap) && (
-          <button
-            type="button"
-            onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)}
-            className="ios-pressable mt-3 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors hover:bg-surface-soft-hover"
-          >
-            <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
-          </button>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)} icon={<ArrowLeftRight size={14} className="text-oker-500" />}>
+            Deze dienst ruilen
+          </Button>
         )}
-      </div>
+      </Card>
     </div>
   );
 }
@@ -585,11 +575,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                           <span className="tabular-nums">
                             {s.startTime} – {s.endTime}
                           </span>
-                          {s.loopnr && (
-                            <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
-                              loop {s.loopnr}
-                            </span>
-                          )}
+                          {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
                         </div>
                       ))}
                     </div>
@@ -620,10 +606,10 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
           const pill = CATEGORY_PILL[cat];
 
           return (
-            <div
+            <Card
               key={g.key}
+              padding="sm"
               className={cn(
-                'surface-card rounded-3xl p-4',
                 isToday && 'ring-2 ring-oker-300',
                 g.hasConflict && 'ring-2 ring-red-300 bg-red-50/30',
               )}
@@ -665,11 +651,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                     <span className="font-medium text-slate-700 tabular-nums">
                       {s.startTime} – {s.endTime}
                     </span>
-                    {s.loopnr && (
-                      <span className="shrink-0 rounded-md bg-surface-muted px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-slate-600">
-                        loop {s.loopnr}
-                      </span>
-                    )}
+                    {s.loopnr && <Chip>loop {s.loopnr}</Chip>}
                   </div>
                 ))}
               </div>
@@ -682,28 +664,20 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {onRequestSwap && !g.hasConflict && !g.openSwap && (
-                  <button
-                    type="button"
-                    onClick={() => onRequestSwap(g.segments[0].id)}
-                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
-                  >
-                    <ArrowLeftRight size={14} className="text-oker-500" /> Deze dienst ruilen
-                  </button>
+                  <Button variant="secondary" size="sm" onClick={() => onRequestSwap(g.segments[0].id)} icon={<ArrowLeftRight size={14} className="text-oker-500" />}>
+                    Deze dienst ruilen
+                  </Button>
                 )}
                 {/* Alleen bij vandaag: er is één actueel ritblad, geen blad
                     per dienst — bij een dienst van volgende week zou deze knop
                     suggereren dat het dát blad is. */}
                 {isToday && (
-                  <button
-                    type="button"
-                    onClick={() => void openHuidigRitblad()}
-                    className="ios-pressable inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
-                  >
-                    <FileText size={14} className="text-oker-500" /> Ritblad van vandaag
-                  </button>
+                  <Button variant="secondary" size="sm" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} className="text-oker-500" />}>
+                    Ritblad van vandaag
+                  </Button>
                 )}
               </div>
-            </div>
+            </Card>
           );
         })}
       </div>

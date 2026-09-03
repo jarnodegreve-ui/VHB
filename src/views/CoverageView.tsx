@@ -3,9 +3,11 @@ import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertT
 import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, notify } from '../lib/ui';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
+import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
-import { Badge, Button, FilterChip, MicroLabel } from '../components/primitives';
+import { Badge, Button, FilterChip, IconButton, MicroLabel } from '../components/primitives';
+import { Card, CardHeader } from '../components/Card';
+import { Input, Select } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
 import { formatShortDay, MONTH_NAMES } from '../lib/format';
@@ -445,20 +447,20 @@ export function CoverageView() {
         )}
       />
 
-      {error && <div className="surface-card p-4 rounded-2xl text-sm font-semibold text-red-700">{error}</div>}
+      {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
 
       {/* === Instellingen === */}
       {showConfig && (
-        <div className="surface-card rounded-3xl p-6 space-y-6">
-          <div className="flex items-start justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-bold tracking-tight text-slate-900">Dekkingsinstellingen</h3>
-              <p className="text-xs font-medium text-slate-500 mt-0.5">Beheer je dag-types, de verwachte diensten per type, welk type elke weekdag is, en uitzonderingen.</p>
-            </div>
-            <Button variant="primary" size="md" className="shrink-0" disabled={saving} onClick={handleSave}>
-              {saving ? 'Opslaan…' : 'Opslaan'}
-            </Button>
-          </div>
+        <Card padding="md" className="space-y-6">
+          <CardHeader
+            title="Dekkingsinstellingen"
+            description="Beheer je dag-types, de verwachte diensten per type, welk type elke weekdag is, en uitzonderingen."
+            aside={(
+              <Button variant="primary" size="md" className="shrink-0" disabled={saving} onClick={handleSave}>
+                {saving ? 'Opslaan…' : 'Opslaan'}
+              </Button>
+            )}
+          />
 
           {!config ? (
             <div className="space-y-2.5">
@@ -485,18 +487,18 @@ export function CoverageView() {
                     {dayTypes.map((dt, i) => {
                       const selected = new Set(dt.services);
                       return (
-                        <div key={i} className="rounded-2xl border border-slate-100 bg-surface-field p-4">
+                        <Card key={i} tone="muted" padding="sm">
                           <div className="flex items-center gap-2">
-                            <Button
+                            <IconButton
+                              label={openDayTypes.has(i) ? `Dag-type ${dt.name || ''} inklappen` : `Dag-type ${dt.name || ''} uitklappen`}
                               variant="ghost"
                               size="sm"
-                              icon={<ChevronDown size={16} className={cn('transition-transform', openDayTypes.has(i) && 'rotate-180')} />}
-                              className="shrink-0"
-                              aria-label={openDayTypes.has(i) ? `Dag-type ${dt.name || ''} inklappen` : `Dag-type ${dt.name || ''} uitklappen`}
                               aria-expanded={openDayTypes.has(i)}
                               onClick={() => toggleDayTypeOpen(i)}
-                            />
-                            <input
+                            >
+                              <ChevronDown size={16} className={cn('transition-transform', openDayTypes.has(i) && 'rotate-180')} />
+                            </IconButton>
+                            <Input
                               ref={i === 0 ? firstNameRef : undefined}
                               value={dt.name}
                               onChange={(e) => updateDayTypeName(i, e.target.value)}
@@ -504,10 +506,10 @@ export function CoverageView() {
                               onBlur={() => finishDayTypeNameEdit(i)}
                               placeholder="Naam dag-type"
                               aria-label="Naam dag-type"
-                              className="control-input flex-1 rounded-xl px-3 py-2 text-sm font-semibold outline-none"
+                              className="flex-1 font-semibold"
                             />
                             <Badge tone="slate" className="shrink-0 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</Badge>
-                            <Button variant="ghost" size="sm" icon={<X size={16} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Dag-type verwijderen" onClick={() => removeDayType(i)} />
+                            <IconButton label="Dag-type verwijderen" variant="danger" size="sm" onClick={() => removeDayType(i)}><X size={16} /></IconButton>
                           </div>
                           {openDayTypes.has(i) && (
                           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -521,7 +523,7 @@ export function CoverageView() {
                             })}
                           </div>
                           )}
-                        </div>
+                        </Card>
                       );
                     })}
                   </div>
@@ -531,6 +533,7 @@ export function CoverageView() {
               {/* 1b. Lijsten uit de planning: voorstel per dag-type uit wat er
                   deze maand echt gereden wordt (verbeterronde 22-08, nr. 2). */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
+                {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
                   onClick={() => setVoorstelOpen((v) => !v)}
@@ -557,7 +560,7 @@ export function CoverageView() {
                       const lijstKloptAl = huidig !== null && huidig.length === v.codes.length
                         && v.codes.every((c) => huidig.some((h) => h.trim().toLowerCase() === c.code.trim().toLowerCase()));
                       return (
-                        <div key={v.dayType} className="rounded-2xl border border-slate-100 bg-surface-field p-4">
+                        <Card key={v.dayType} tone="muted" padding="sm">
                           <div className="flex flex-wrap items-center gap-2">
                             <span className="text-sm font-bold text-slate-700 capitalize">{v.dayType}</span>
                             <Badge tone="slate" className="tabular-nums">{v.codes.length} diensten · {v.dagen} dagen</Badge>
@@ -570,7 +573,7 @@ export function CoverageView() {
                             )}
                           </div>
                           <p className="mt-2 text-2xs font-medium text-slate-500 tabular-nums">{v.codes.map((c) => c.code).join(' · ')}</p>
-                        </div>
+                        </Card>
                       );
                     })}
                   </div>
@@ -581,6 +584,7 @@ export function CoverageView() {
 
               {/* 2. Standaard dag-type per weekdag */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
+                {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
                   onClick={() => setWeekdagenOpen((v) => !v)}
@@ -599,15 +603,15 @@ export function CoverageView() {
                   {WEEKDAY_ORDER.map(({ dow, label }) => (
                     <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
                       <span className="text-sm font-bold text-slate-700">{label}</span>
-                      <select
+                      <Select
                         value={weekdays[dow] || ''}
                         onChange={(e) => setWeekday(dow, e.target.value)}
                         aria-label={`Dag-type voor ${label}`}
-                        className="control-input rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                        className="w-auto max-w-[55%]"
                       >
                         <option value="">— geen —</option>
                         {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                      </select>
+                      </Select>
                     </div>
                   ))}
                 </div>
@@ -626,35 +630,35 @@ export function CoverageView() {
                     </Button>
                   </div>
                   {weekdayPeriods.map((p, i) => (
-                    <div key={i} className="rounded-2xl border border-slate-100 bg-surface-field p-4 space-y-3">
+                    <Card key={i} tone="muted" padding="sm" className="space-y-3">
                       <div className="flex items-center gap-2">
                         <MicroLabel className="text-slate-500">Vanaf</MicroLabel>
-                        <input
+                        <Input
                           type="date"
                           value={p.vanaf}
                           onChange={(e) => setPeriodVanaf(i, e.target.value)}
                           aria-label="Ingangsdatum van deze weekdag-toewijzing"
-                          className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
+                          className="w-auto"
                         />
-                        <Button variant="ghost" size="sm" icon={<X size={16} />} className="ml-auto shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Periode verwijderen" onClick={() => removeWeekdayPeriod(i)} />
+                        <IconButton label="Periode verwijderen" variant="danger" size="sm" className="ml-auto" onClick={() => removeWeekdayPeriod(i)}><X size={16} /></IconButton>
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {WEEKDAY_ORDER.map(({ dow, label }) => (
                           <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
                             <span className="text-sm font-bold text-slate-700">{label}</span>
-                            <select
+                            <Select
                               value={p.weekdays[dow] || ''}
                               onChange={(e) => setPeriodWeekday(i, dow, e.target.value)}
                               aria-label={`Dag-type voor ${label} vanaf ${p.vanaf || 'de ingangsdatum'}`}
-                              className="control-input rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                              className="w-auto max-w-[55%]"
                             >
                               <option value="">— geen —</option>
                               {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                            </select>
+                            </Select>
                           </div>
                         ))}
                       </div>
-                    </div>
+                    </Card>
                   ))}
                 </div>
                 </>
@@ -663,6 +667,7 @@ export function CoverageView() {
 
               {/* 3. Uitzonderingen */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
+                {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
                   onClick={() => setUitzonderingenOpen((v) => !v)}
@@ -698,16 +703,16 @@ export function CoverageView() {
                   <div className="space-y-2">
                     {gesorteerdeOverrides.map(({ o, i, verlopen }) => (
                       <div key={i} className="flex flex-wrap items-center gap-2">
-                        <input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                        <Input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" className="w-auto" />
                         <span className="text-2xs font-bold text-slate-400">t/m</span>
-                        <input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none" />
+                        <Input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" className="w-auto" />
                         <span className="text-slate-400 font-semibold">→</span>
-                        <select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" className="control-input rounded-xl px-2 py-2 text-sm font-bold outline-none">
+                        <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" className="w-auto">
                           <option value="">— kies type —</option>
                           {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                        </select>
+                        </Select>
                         {verlopen && <Badge tone="slate">Verlopen</Badge>}
-                        <Button variant="ghost" size="sm" icon={<X size={16} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Uitzondering verwijderen" onClick={() => removeOverride(i)} />
+                        <IconButton label="Uitzondering verwijderen" variant="danger" size="sm" onClick={() => removeOverride(i)}><X size={16} /></IconButton>
                       </div>
                     ))}
                   </div>
@@ -718,6 +723,7 @@ export function CoverageView() {
 
               {/* 4. Kalender-voorzet: feestdagen + schoolvakanties in één klik */}
               <div className="border-t border-slate-100 pt-5 space-y-3">
+                {/* rauw: accordeonkop over de volle breedte (micro-label + omschrijving + chevron) */}
                 <button
                   type="button"
                   onClick={() => setKalenderOpen((v) => !v)}
@@ -744,15 +750,15 @@ export function CoverageView() {
                   ] as const).map(({ label, waarde, zet }) => (
                     <div key={label} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
                       <span className="text-sm font-bold text-slate-700">{label}</span>
-                      <select
+                      <Select
                         value={waarde}
                         onChange={(e) => zet(e.target.value)}
                         aria-label={`Dag-type voor ${label.toLowerCase()}`}
-                        className="control-input rounded-xl px-2 py-1.5 text-sm font-bold outline-none max-w-[55%]"
+                        className="w-auto max-w-[55%]"
                       >
                         <option value="">— overslaan —</option>
                         {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
-                      </select>
+                      </Select>
                     </div>
                   ))}
                 </div>
@@ -766,14 +772,14 @@ export function CoverageView() {
               <p className="text-2xs font-medium text-slate-400">Vergeet niet op <span className="font-bold">Opslaan</span> te klikken.</p>
             </>
           )}
-        </div>
+        </Card>
       )}
 
       {/* Verwachtingen-vs-praktijk: structurele afwijkingen tussen de dag-
           type-lijsten en wat er echt gereden wordt. Zonder deze banner lezen
           die als "openstaande diensten" terwijl niemand ontbreekt (20-08). */}
       {expCheck.length > 0 && (
-        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5">
+        <Card tone="warning" padding="md">
           <div className="flex items-start gap-3">
             <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
             <div className="min-w-0">
@@ -784,7 +790,7 @@ export function CoverageView() {
               <VerwachtingAfwijkingLijst afwijkingen={expCheck} />
             </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* === Gaten-overzicht === */}
@@ -803,10 +809,9 @@ export function CoverageView() {
             <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700"><Check size={16} /> Alle verwachte diensten zijn ingevuld</span>
           )}
         </div>
-        <label className="flex items-center gap-2 text-2xs font-bold text-slate-500 cursor-pointer select-none">
-          <input type="checkbox" checked={onlyGaps} onChange={(e) => setOnlyGaps(e.target.checked)} className="accent-oker-500" />
+        <FilterChip active={onlyGaps} onClick={() => setOnlyGaps((v) => !v)}>
           Alleen dagen met gaten
-        </label>
+        </FilterChip>
       </div>
 
       {loading ? (
@@ -822,11 +827,11 @@ export function CoverageView() {
           message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
         />
       ) : visibleDays.length === 0 ? (
-        <div className="surface-card p-6 md:p-8 rounded-3xl text-center">
+        <Card padding="lg" className="text-center">
           <p className="text-sm font-bold text-emerald-700">Geen openstaande diensten in {MONTH_NAMES[monthIndex].toLowerCase()} {year}.</p>
-        </div>
+        </Card>
       ) : (
-        <div className="surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
+        <Card padding="none" className="overflow-hidden divide-y divide-slate-100">
           {visibleDays.map((d) => {
             const ok = d.missing.length === 0;
             return (
@@ -841,6 +846,7 @@ export function CoverageView() {
                         te laten groeien. */}
                     {bronUitleg(d.bron) ? (
                       <>
+                        {/* rauw: badge-als-knop met hit-slop (-m-2/p-2), geen knopvorm */}
                         <button
                           type="button"
                           onClick={() => setBronOpenDate((cur) => (cur === d.date ? null : d.date))}
@@ -889,6 +895,8 @@ export function CoverageView() {
                               ? 'text-blue-700'
                               : 'text-slate-600';
                         return (
+                          // rauw: dienst-chip met samengestelde inhoud (code · naam · reden) in de
+                          // rode gat-toon — Chip is niet klikbaar en FilterChip kent geen inhoud-slots
                           <button
                             key={svc}
                             type="button"
@@ -912,25 +920,20 @@ export function CoverageView() {
               </div>
             );
           })}
-        </div>
+        </Card>
       )}
 
       {/* Advies voor het gekozen gat: wie is vrij én bij wie past de dienst? */}
-      <Modal open={!!pick} onClose={() => setPick(null)} maxWidth="sm">
+      <Modal open={!!pick} onClose={() => setPick(null)} maxWidth="sm" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
         {pick && (
-          <div className="p-6">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <MicroLabel className="tabular-nums">Kandidaten voor dienst {pick.code}</MicroLabel>
-                <h3 className="mt-0.5 text-lg font-bold tracking-tight text-slate-900 capitalize">{dayLabel(pick.date)}</h3>
-                {advies && advies.segmenten.length > 0 && (
-                  <p className="mt-0.5 text-xs font-semibold text-slate-500 tabular-nums">{segmentenLabel(advies.segmenten)}</p>
-                )}
-              </div>
-              <button type="button" onClick={() => setPick(null)} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
-                <X size={16} />
-              </button>
-            </div>
+          <>
+          <ModalHeader
+            eyebrow={`Kandidaten voor dienst ${pick.code}`}
+            title={dayLabel(pick.date).replace(/^./, (c) => c.toUpperCase())}
+            description={advies && advies.segmenten.length > 0 ? <span className="tabular-nums">{segmentenLabel(advies.segmenten)}</span> : undefined}
+            onClose={() => setPick(null)}
+          />
+          <div className="flex-1 overflow-y-auto overscroll-contain p-6">
 
             {pickLoading ? (
               <div className="mt-5 flex items-center gap-3 text-slate-500">
@@ -948,10 +951,10 @@ export function CoverageView() {
                 <div className="mt-4 space-y-4">
                   {/* De collega-zin: zelfde feiten als de lijst, maar dan zoals
                       je ze tegen elkaar zegt — server-side opgebouwd. */}
-                  <div className="rounded-2xl bg-oker-50/70 ring-1 ring-oker-100 px-4 py-3">
+                  <Card tone="accent" padding="none" className="px-4 py-3">
                     <MicroLabel className="text-oker-700">Advies</MicroLabel>
                     <p className="mt-1 text-sm font-semibold leading-snug text-slate-800">{advies.samenvatting}</p>
-                  </div>
+                  </Card>
 
                   {advies.tijdenOnbekend && (
                     <p className="text-2xs font-semibold text-amber-800">
@@ -1042,6 +1045,7 @@ export function CoverageView() {
               );
             })()}
           </div>
+          </>
         )}
       </Modal>
 

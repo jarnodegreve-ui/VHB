@@ -14,7 +14,7 @@ import { cn } from '../lib/ui';
 
 // === Button ===
 
-type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'success' | 'danger' | 'dangerSolid';
+type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'success' | 'warning' | 'danger' | 'dangerSolid' | 'ink';
 type ButtonSize = 'sm' | 'md' | 'lg';
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
@@ -26,6 +26,10 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   // red-600 als basis: wit op red-500 haalt maar ~3,8:1 — onder AA voor
   // 13-14px tekst, uitgerekend op de "Verwijderen"-knoppen.
   dangerSolid: 'bg-red-600 text-white hover:bg-red-600/90 shadow-lg shadow-red-600/20',
+  // warning = semantisch amber (callout-knoppen), altijd carbon-tekst op amber.
+  warning: 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-sm shadow-amber-500/20',
+  // ink = altijd-donkere solide knop (print, agenda-koppeling) — flipt niet.
+  ink: 'bg-ink text-white hover:bg-ink-soft shadow-sm',
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
@@ -216,13 +220,14 @@ export function FilterChip({ active, tone = 'oker', icon, className, children, t
 
 // === IconButton ===
 
-type IconButtonVariant = 'ghost' | 'secondary' | 'danger' | 'primary';
+type IconButtonVariant = 'ghost' | 'secondary' | 'danger' | 'success' | 'primary';
 type IconButtonSize = 'sm' | 'md';
 
 const ICON_BUTTON_VARIANTS: Record<IconButtonVariant, string> = {
   ghost: 'text-slate-500 hover:bg-slate-100 hover:text-slate-800',
   secondary: 'control-button-soft text-slate-600 hover:text-slate-900',
   danger: 'text-slate-400 hover:bg-red-50 hover:text-red-700',
+  success: 'text-slate-400 hover:bg-emerald-50 hover:text-emerald-700',
   primary: 'bg-oker-500 text-slate-950 hover:bg-oker-400 shadow-sm shadow-oker-500/30',
 };
 

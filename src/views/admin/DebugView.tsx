@@ -4,7 +4,8 @@ import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { Badge, Button, Chip, MicroLabel } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
 import { BUILD_INFO, getServiceWorkerVersion } from '../../lib/appVersion';
 import { isoDate } from '../../lib/availability';
 import { OcpiCard } from './OcpiCard';
@@ -274,7 +275,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         </div>
       )}
 
-      <div className="surface-card p-6 rounded-3xl">
+      <Card>
         <MicroLabel className="mb-4">Versie</MicroLabel>
         <div className="space-y-3">
           <div className="flex justify-between items-center gap-4">
@@ -309,12 +310,12 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             )}
           </div>
         </div>
-      </div>
+      </Card>
 
       {healthData && (
         <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="surface-card p-6 rounded-3xl">
+            <Card>
               <MicroLabel className="mb-4">Supabase Status</MicroLabel>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -332,9 +333,9 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                   <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(healthData.time).toLocaleString()}</span>
                 </div>
               </div>
-            </div>
+            </Card>
 
-            <div className="surface-card p-6 rounded-3xl">
+            <Card>
               <MicroLabel className="mb-4">E-mail</MicroLabel>
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
@@ -375,9 +376,9 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                   </p>
                 )}
               </div>
-            </div>
+            </Card>
 
-            <div className="surface-card p-6 rounded-3xl">
+            <Card>
               <MicroLabel className="mb-4">Tabel Status</MicroLabel>
               <div className="space-y-3">
                 {Object.entries(healthData.tables || {}).map(([name, status]: [string, any]) => (
@@ -388,11 +389,11 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                         {status === 'OK' ? 'OK' : 'Fout'}
                       </Badge>
                     </div>
-                    {status !== 'OK' && <p className="text-2xs text-red-400 font-mono break-all bg-red-50 p-2 rounded-lg mt-1">{status}</p>}
+                    {status !== 'OK' && <p className="text-2xs text-red-700 font-mono break-all bg-red-50 p-2 rounded-lg mt-1">{status}</p>}
                   </div>
                 ))}
               </div>
-            </div>
+            </Card>
           </div>
 
           <div className="bg-ink p-6 rounded-3xl text-white/75 font-mono text-xs overflow-auto max-h-64">
@@ -404,57 +405,46 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <OcpiCard />
 
-      <div className="surface-card p-6 md:p-8 rounded-3xl">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-slate-500/12 text-slate-600 rounded-2xl">
-            <DownloadCloud size={24} />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-slate-900 font-semibold text-lg mb-2">Back-up</h4>
-            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Download alle gegevens (gebruikers, planning, diensten, omleidingen, updates, verlof, dienstruilen, planningscodes en de audit-log) als één JSON-bestand. Bewaar dit op een veilige plek — het is je herstelpad als er ooit iets misgaat. De PDF-bestanden van omleidingen zitten er niet in; die staan apart in Supabase Storage.
-            </p>
-            <Button variant="primary" onClick={downloadBackup} disabled={isExporting}>
-              {isExporting ? 'Exporteren…' : 'Download volledige back-up'}
-            </Button>
-          </div>
+      <Card padding="lg">
+        <CardHeader
+          icon={<DownloadCloud size={16} />}
+          title="Back-up"
+          description="Download alle gegevens (gebruikers, planning, diensten, omleidingen, updates, verlof, dienstruilen, planningscodes en de audit-log) als één JSON-bestand. Bewaar dit op een veilige plek — het is je herstelpad als er ooit iets misgaat. De PDF-bestanden van omleidingen zitten er niet in; die staan apart in Supabase Storage."
+        />
+        <div className="mt-4">
+          <Button variant="primary" onClick={downloadBackup} disabled={isExporting}>
+            {isExporting ? 'Exporteren…' : 'Download volledige back-up'}
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="surface-card p-6 md:p-8 rounded-3xl border-2 border-red-100">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-red-500/12 text-red-700 rounded-2xl">
-            <UploadCloud size={24} />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-slate-900 font-semibold text-lg mb-2">Herstellen vanuit back-up</h4>
-            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Zet alle gegevens terug naar de inhoud van een back-upbestand. <strong className="text-red-700">Dit overschrijft de huidige planning, gebruikers, verlof, dienstruilen en meer</strong> — gebruik dit enkel om een verlies te herstellen. Je krijgt eerst een overzicht te zien en moet bevestigen. De audit-log en import-historiek blijven ongewijzigd.
-            </p>
-            <input
-              ref={restoreInputRef}
-              type="file"
-              accept="application/json,.json"
-              className="hidden"
-              onChange={(e) => handleRestoreFile(e.target.files?.[0])}
-            />
-            <Button variant="secondary" onClick={() => restoreInputRef.current?.click()}>
-              Kies back-upbestand…
-            </Button>
-          </div>
+      <Card padding="lg" className="border-2 border-red-100">
+        <CardHeader
+          icon={<UploadCloud size={16} />}
+          title="Herstellen vanuit back-up"
+          description={<>Zet alle gegevens terug naar de inhoud van een back-upbestand. <strong className="text-red-700">Dit overschrijft de huidige planning, gebruikers, verlof, dienstruilen en meer</strong> — gebruik dit enkel om een verlies te herstellen. Je krijgt eerst een overzicht te zien en moet bevestigen. De audit-log en import-historiek blijven ongewijzigd.</>}
+        />
+        <div className="mt-4">
+          <input
+            ref={restoreInputRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={(e) => handleRestoreFile(e.target.files?.[0])}
+          />
+          <Button variant="secondary" onClick={() => restoreInputRef.current?.click()}>
+            Kies back-upbestand…
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="surface-card p-6 md:p-8 rounded-3xl">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-red-500/12 text-red-700 rounded-2xl">
-            <Bug size={24} />
-          </div>
-          <div className="flex-1 min-w-0">
-            <h4 className="text-slate-900 font-semibold text-lg mb-2">Recente client-fouten</h4>
-            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Fouten die bij gebruikers in de browser optraden (crashes én fout-toasts) worden automatisch gerapporteerd. Ze staan altijd in de Vercel-functielogs; hieronder verschijnen ze zodra de optionele <code className="bg-surface-muted px-1 rounded font-semibold">client_errors</code>-tabel in Supabase bestaat.
-            </p>
+      <Card padding="lg">
+        <CardHeader
+          icon={<Bug size={16} />}
+          title="Recente client-fouten"
+          description={<>Fouten die bij gebruikers in de browser optraden (crashes én fout-toasts) worden automatisch gerapporteerd. Ze staan altijd in de Vercel-functielogs; hieronder verschijnen ze zodra de optionele <Chip>client_errors</Chip>-tabel in Supabase bestaat.</>}
+        />
+        <div className="mt-4 min-w-0">
             {clientErrors === null ? (
               <p className="text-sm font-medium text-slate-400">Niet beschikbaar.</p>
             ) : clientErrors.length === 0 ? (
@@ -475,31 +465,24 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 ))}
               </div>
             )}
-          </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="surface-card p-6 md:p-8 rounded-3xl">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-oker-500/15 text-oker-700 rounded-2xl">
-            <FlaskConical size={24} />
-          </div>
-          <div className="flex-1">
-            <h4 className="text-slate-900 font-semibold text-lg mb-2">Test-omgeving</h4>
-            <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <code className="bg-surface-muted px-1 rounded font-semibold">TEST</code> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.
-            </p>
-            <div className="flex flex-wrap items-center gap-3">
-              <Button variant="primary" onClick={addTestShift}>
-                + Maak fictieve dienst voor mezelf
-              </Button>
-              <Button variant="secondary" onClick={clearTestShifts} disabled={myTestShifts.length === 0}>
-                Verwijder mijn fictieve diensten ({myTestShifts.length})
-              </Button>
-            </div>
-          </div>
+      <Card padding="lg">
+        <CardHeader
+          icon={<FlaskConical size={16} />}
+          title="Test-omgeving"
+          description={<>Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <Chip>TEST</Chip> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.</>}
+        />
+        <div className="mt-4 flex flex-wrap items-center gap-3">
+          <Button variant="primary" onClick={addTestShift}>
+            + Maak fictieve dienst voor mezelf
+          </Button>
+          <Button variant="secondary" onClick={clearTestShifts} disabled={myTestShifts.length === 0}>
+            Verwijder mijn fictieve diensten ({myTestShifts.length})
+          </Button>
         </div>
-      </div>
+      </Card>
 
       <div className="bg-oker-50 p-8 rounded-3xl border border-oker-100">
         <div className="flex items-start gap-4">
@@ -507,7 +490,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             <Activity size={24} />
           </div>
           <div>
-            <h4 className="text-oker-900 font-semibold text-lg mb-2">Hulp bij problemen</h4>
+            <h4 className="text-card-title mb-2 text-oker-900">Hulp bij problemen</h4>
             <p className="text-oker-800 text-sm leading-relaxed font-medium">
               Als de tabellen hierboven "Error" of "Exception" aangeven, betekent dit dat de tabel waarschijnlijk nog niet bestaat in Supabase of dat de rechten niet goed staan.
               Controleer dan in Supabase of de betreffende tabel bestaat en of de rechten goed staan — het volledige verwachte schema staat in <code className="bg-oker-100 px-1 rounded font-semibold">supabase/</code> in de repo (setup + migraties).

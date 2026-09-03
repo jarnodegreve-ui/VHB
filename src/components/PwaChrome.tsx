@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { Download, WifiOff, X } from 'lucide-react';
-import { Button } from './primitives';
+import { Button, IconButton } from './primitives';
 import { DUR, EASE } from '../lib/motion';
 
 /**
@@ -144,13 +144,9 @@ export function InstallPrompt() {
             <Button variant="primary" size="sm" className="shrink-0" onClick={install}>
               Toevoegen
             </Button>
-            <button
-              onClick={() => dismiss(true)}
-              aria-label="Niet nu"
-              className="shrink-0 inline-flex h-11 w-11 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-            >
+            <IconButton label="Niet nu" variant="ghost" size="sm" onClick={() => dismiss(true)}>
               <X size={16} />
-            </button>
+            </IconButton>
           </div>
         </motion.div>
       )}

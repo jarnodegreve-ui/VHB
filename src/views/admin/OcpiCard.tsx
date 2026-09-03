@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { Zap } from 'lucide-react';
 import { notify } from '../../lib/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, MicroLabel } from '../../components/primitives';
+import { Badge, Button, Chip, MicroLabel } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
 
 type OcpiStatus = {
   registered: boolean;
@@ -86,32 +87,29 @@ export function OcpiCard() {
   };
 
   return (
-    <div className="surface-card p-6 md:p-8 rounded-3xl">
-      <div className="flex items-start gap-4">
-        <div className="p-3 bg-slate-500/12 text-slate-600 rounded-2xl">
-          <Zap size={24} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div>
-              <h3 className="text-base font-bold text-slate-800">OCPI-koppeling (ChargEye)</h3>
-              <p className="text-sm text-slate-500 mt-0.5">Read-only monitoring van de Kempower-laadpalen (eMSP, OCPI 2.2.1).</p>
-            </div>
-            <div className="flex items-center gap-2.5">
-              {status?.registered && (
-                <Button variant="secondary" onClick={sync} disabled={isSyncing}>
-                  {isSyncing ? 'Synchroniseren…' : 'Nu synchroniseren'}
-                </Button>
-              )}
-              <Button
-                variant="primary"
-                onClick={register}
-                disabled={isRegistering || (status ? !status.configured : false)}
-              >
-                {isRegistering ? 'Registreren…' : status?.registered ? 'Herregistreren' : 'Registreren'}
+    <Card padding="lg">
+      <CardHeader
+        icon={<Zap size={16} />}
+        title="OCPI-koppeling (ChargEye)"
+        description="Read-only monitoring van de Kempower-laadpalen (eMSP, OCPI 2.2.1)."
+        aside={(
+          <>
+            {status?.registered && (
+              <Button variant="secondary" onClick={sync} disabled={isSyncing}>
+                {isSyncing ? 'Synchroniseren…' : 'Nu synchroniseren'}
               </Button>
-            </div>
-          </div>
+            )}
+            <Button
+              variant="primary"
+              onClick={register}
+              disabled={isRegistering || (status ? !status.configured : false)}
+            >
+              {isRegistering ? 'Registreren…' : status?.registered ? 'Herregistreren' : 'Registreren'}
+            </Button>
+          </>
+        )}
+      />
+      <div className="min-w-0">
           {lastSync && (
             <p className="mt-2 text-2xs text-slate-500">Laatste sync: {lastSync}</p>
           )}
@@ -154,9 +152,9 @@ export function OcpiCard() {
                 {status.endpoints.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     {status.endpoints.map((e) => (
-                      <span key={`${e.identifier}:${e.role}`} className="text-2xs font-mono px-2 py-1 rounded-lg bg-surface-muted text-slate-600">
+                      <Chip key={`${e.identifier}:${e.role}`} tone="slate">
                         {e.identifier}{e.role ? `:${e.role.toLowerCase()}` : ''}
-                      </span>
+                      </Chip>
                     ))}
                   </div>
                 )}
@@ -173,8 +171,7 @@ export function OcpiCard() {
               </p>
             </div>
           )}
-        </div>
       </div>
-    </div>
+    </Card>
   );
 }

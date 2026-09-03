@@ -2,8 +2,10 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Bus, Calendar, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
-import { AdminSubsectionHeader, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, segItemClass, TableShell, Td, Th } from '../../components/primitives';
+import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { Badge, Button, IconButton, segItemClass, TableShell, Td, Th } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Input, Select } from '../../components/Field';
 import { OpsStat } from '../../components/ops';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -117,8 +119,9 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         <OpsStat icon={<Info size={16} />} tone={summary.unknown > 0 ? 'amber' : 'slate'} label="Onbekend" value={summary.unknown} sub="nog te verfijnen" />
       </div>
 
-      <section className="surface-card rounded-3xl p-6">
-        <AdminSubsectionHeader
+      <Card as="section">
+        <CardHeader
+          size="lg"
           eyebrow="Werkset"
           title="Codebeheer"
           description="Voeg matrixcodes toe, wijzig hun betekenis en bepaal of ze als dienst, verlof of afwezigheid tellen."
@@ -144,6 +147,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             { key: 'training', label: 'Opleiding' },
             { key: 'unknown', label: 'Onbekend' },
           ].map((option) => (
+            // rauw: segmented control op de glass-rail, klassen via segItemClass
             <button
               key={option.key}
               onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
@@ -179,31 +183,34 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                       return (
                         <tr key={code._key} className="hover:bg-slate-50/60 transition-colors">
                           <Td>
-                            <input
+                            <Input
+                              aria-label="Code"
                               value={code.code}
                               onChange={(event) => updateCode(index, { code: event.target.value })}
-                              className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
+                              className="min-w-0 px-2.5 font-semibold uppercase tracking-[0.08em]"
                               placeholder="bv"
                             />
                           </Td>
                           <Td>
-                            <select
+                            <Select
+                              aria-label="Categorie"
                               value={code.category}
                               onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
-                              className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-medium"
+                              className="min-w-0 px-2.5"
                             >
                               <option value="service">Dienst</option>
                               <option value="absence">Afwezigheid</option>
                               <option value="leave">Verlof</option>
                               <option value="training">Opleiding</option>
                               <option value="unknown">Onbekend</option>
-                            </select>
+                            </Select>
                           </Td>
                           <Td>
-                            <input
+                            <Input
+                              aria-label="Beschrijving"
                               value={code.description}
                               onChange={(event) => updateCode(index, { description: event.target.value })}
-                              className="control-input w-full min-w-0 rounded-xl px-2.5 py-2.5 text-sm font-medium"
+                              className="min-w-0 px-2.5"
                               placeholder="Beschrijving"
                             />
                           </Td>
@@ -225,24 +232,14 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                           <Td>
                             <div className="flex items-center justify-end gap-1">
                               {code.code && (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => setHistoryCode(code)}
-                                  title="Wijzigingsgeschiedenis"
-                                  aria-label="Wijzigingsgeschiedenis"
-                                  icon={<History size={16} />}
-                                />
+                                <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryCode(code)}>
+                                  <History size={16} />
+                                </IconButton>
                               )}
                               {canAdminDelete ? (
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => removeCode(index)}
-                                  aria-label="Verwijder code"
-                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
-                                  icon={<Trash2 size={16} />}
-                                />
+                                <IconButton label="Verwijder code" variant="danger" size="sm" onClick={() => removeCode(index)}>
+                                  <Trash2 size={16} />
+                                </IconButton>
                               ) : (
                                 <Badge tone="slate">Admin</Badge>
                               )}
@@ -261,28 +258,30 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                   return (
                     <div key={code._key} className="space-y-4 p-5">
                       <div className="grid gap-4 md:grid-cols-2">
-                        <input
+                        <Input
+                          aria-label="Code"
                           value={code.code}
                           onChange={(event) => updateCode(index, { code: event.target.value })}
-                          className="control-input rounded-2xl px-3 py-2.5 text-sm font-semibold uppercase tracking-[0.08em]"
+                          className="font-semibold uppercase tracking-[0.08em]"
                           placeholder="Code"
                         />
-                        <select
+                        <Select
+                          aria-label="Categorie"
                           value={code.category}
                           onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
-                          className="control-input rounded-2xl px-3 py-2.5 text-sm font-medium"
                         >
                           <option value="service">Dienst</option>
                           <option value="absence">Afwezigheid</option>
                           <option value="leave">Verlof</option>
                           <option value="training">Opleiding</option>
                           <option value="unknown">Onbekend</option>
-                        </select>
+                        </Select>
                       </div>
-                      <input
+                      <Input
+                        aria-label="Beschrijving"
                         value={code.description}
                         onChange={(event) => updateCode(index, { description: event.target.value })}
-                        className="control-input w-full min-w-0 rounded-2xl px-2.5 py-2.5 text-sm font-medium"
+                        className="min-w-0"
                         placeholder="Beschrijving"
                       />
                       <div className="grid gap-3 sm:grid-cols-3">
@@ -321,7 +320,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             </div>
           )}
         </TableShell>
-      </section>
+      </Card>
 
       <EntityHistoryModal
         open={!!historyCode}

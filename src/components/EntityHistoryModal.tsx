@@ -4,6 +4,8 @@ import type { ActivityEntityType, ActivityLogEntry } from '../types';
 import { apiJson } from '../lib/api';
 import { cn } from '../lib/ui';
 import { Modal } from './Modal';
+import { Card } from './Card';
+import { Skeleton } from './Skeleton';
 import { EmptyState, ModalHeader } from './ui';
 import { MicroLabel, microLabelClass } from './primitives';
 
@@ -71,7 +73,7 @@ export function EntityHistoryModal({
               {entries === null && !error && (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-16 rounded-2xl bg-slate-100/60 animate-pulse" />
+                    <Skeleton key={i} rounded="2xl" className="h-16" />
                   ))}
                 </div>
               )}
@@ -88,7 +90,7 @@ export function EntityHistoryModal({
                         'absolute -left-[1.65rem] top-2 w-3 h-3 rounded-full ring-4 ring-paper',
                         i === 0 ? 'bg-oker-500' : 'bg-slate-300',
                       )} />
-                      <div className="rounded-2xl border border-slate-100 bg-surface-field p-3.5">
+                      <Card tone="muted" padding="sm">
                         <div className="flex items-baseline justify-between gap-3">
                           <p className="text-sm font-semibold text-slate-800">{entry.action}</p>
                           <span className={cn(microLabelClass, 'shrink-0')}>
@@ -105,7 +107,7 @@ export function EntityHistoryModal({
                         <MicroLabel className="mt-2">
                           {entry.actorName} · {entry.actorRole}
                         </MicroLabel>
-                      </div>
+                      </Card>
                     </li>
                   ))}
                 </ol>

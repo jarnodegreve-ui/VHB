@@ -4,6 +4,7 @@ import { isoWeekNumber } from '../lib/week';
 import { shiftCategory } from '../lib/shiftTime';
 import { MONTH_NAMES, serviceNumberOf } from '../lib/format';
 import { apiFetch } from '../lib/api';
+import { Button } from '../components/primitives';
 
 
 const WEEKDAY_FULL = ['Zondag', 'Maandag', 'Dinsdag', 'Woensdag', 'Donderdag', 'Vrijdag', 'Zaterdag'];
@@ -149,12 +150,9 @@ export function PrintMonthlyScheduleView({
               {skipped > 0 ? ` · ${skipped} zonder diensten of afwezigheden overgeslagen` : ''}
             </p>
           )}
-          <button
-            onClick={() => window.print()}
-            className="px-4 py-2 bg-ink text-white rounded-xl text-xs font-black uppercase tracking-[0.08em] hover:bg-ink-soft transition-colors"
-          >
+          <Button variant="primary" onClick={() => window.print()}>
             Print / Opslaan als PDF
-          </button>
+          </Button>
         </div>
 
         {bulk && ready && printable.length === 0 ? (

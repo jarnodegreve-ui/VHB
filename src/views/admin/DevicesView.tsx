@@ -6,7 +6,9 @@ import { getDeviceToken } from '../../lib/device';
 import { notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, Switch } from '../../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, Switch } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Input } from '../../components/Field';
 
 type Device = {
   userId: string;
@@ -144,17 +146,16 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 onSubmit={(e) => { e.preventDefault(); void submitRename(); }}
                 className="flex items-center gap-2"
               >
-                <input
+                <Input
                   autoFocus
+                  aria-label="Nieuwe naam"
                   value={renameValue}
                   onChange={(e) => setRenameValue(e.target.value)}
                   onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); }}
                   enterKeyHint="done"
-                  // text-base = 16px: onder 16px zoomt iOS bij focus in.
-                  className="control-input rounded-xl px-3 py-2 text-base font-semibold outline-none"
                 />
-                <Button type="submit" variant="secondary" size="sm" className="min-h-11 min-w-11 justify-center" icon={<Check size={16} />} aria-label="Naam opslaan" />
-                <Button type="button" variant="ghost" size="sm" className="min-h-11 min-w-11 justify-center" icon={<X size={16} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
+                <IconButton type="submit" label="Naam opslaan" variant="secondary"><Check size={16} /></IconButton>
+                <IconButton label="Annuleren" variant="ghost" onClick={() => setRenaming(null)}><X size={16} /></IconButton>
               </form>
             ) : (
               <>
@@ -171,20 +172,13 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="min-h-11 min-w-11 justify-center"
-          icon={<Pencil size={16} />}
-          aria-label="Toestel hernoemen"
-          title="Hernoemen"
-          onClick={() => { setRenaming(device); setRenameValue(device.name); }}
-        />
+        <IconButton label="Toestel hernoemen" title="Hernoemen" variant="ghost" onClick={() => { setRenaming(device); setRenameValue(device.name); }}>
+          <Pencil size={16} />
+        </IconButton>
         {device.status !== 'approved' && (
           <Button
             variant="primary"
             size="sm"
-            className="min-h-11"
             icon={<ShieldCheck size={14} />}
             disabled={busyKey === keyOf(device)}
             onClick={() => void act(device, 'approve')}
@@ -196,7 +190,6 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <Button
             variant="secondary"
             size="sm"
-            className="min-h-11"
             icon={<ShieldAlert size={14} />}
             disabled={busyKey === keyOf(device)}
             onClick={() => void act(device, 'revoke')}
@@ -205,16 +198,9 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           </Button>
         )}
         {!isOwnCurrent(device) && (
-          <Button
-            variant="danger"
-            size="sm"
-            className="min-h-11 min-w-11 justify-center"
-            icon={<Trash2 size={16} />}
-            aria-label="Toestel schrappen"
-            title="Schrappen"
-            disabled={busyKey === keyOf(device)}
-            onClick={() => setConfirmDelete(device)}
-          />
+          <IconButton label="Toestel schrappen" title="Schrappen" variant="danger" disabled={busyKey === keyOf(device)} onClick={() => setConfirmDelete(device)}>
+            <Trash2 size={16} />
+          </IconButton>
         )}
       </div>
     </div>
@@ -230,16 +216,17 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         <div className="flex min-w-0 items-center gap-2">
           {isRenaming ? (
             <form onSubmit={(e) => { e.preventDefault(); void submitRename(); }} className="flex items-center gap-2">
-              <input
+              <Input
                 autoFocus
+                aria-label="Nieuwe naam"
                 value={renameValue}
                 onChange={(e) => setRenameValue(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Escape') setRenaming(null); }}
                 enterKeyHint="done"
-                className="control-input rounded-xl px-3 py-1.5 text-base font-semibold outline-none"
+                className="py-1.5"
               />
-              <Button type="submit" variant="secondary" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Check size={16} />} aria-label="Naam opslaan" />
-              <Button type="button" variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<X size={16} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
+              <IconButton type="submit" label="Naam opslaan" variant="secondary"><Check size={16} /></IconButton>
+              <IconButton label="Annuleren" variant="ghost" onClick={() => setRenaming(null)}><X size={16} /></IconButton>
             </form>
           ) : (
             <>
@@ -257,19 +244,23 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         </div>
         {!isRenaming && (
           <div className="flex shrink-0 items-center gap-0.5">
-            <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Pencil size={14} />} aria-label="Toestel hernoemen" title="Hernoemen"
-              onClick={() => { setRenaming(device); setRenameValue(device.name); }} />
+            <IconButton label="Toestel hernoemen" title="Hernoemen" variant="ghost" onClick={() => { setRenaming(device); setRenameValue(device.name); }}>
+              <Pencil size={14} />
+            </IconButton>
             {device.status !== 'approved' && (
-              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-emerald-700" icon={<ShieldCheck size={16} />} aria-label="Keur goed" title="Keur goed"
-                disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'approve')} />
+              <IconButton label="Keur goed" variant="ghost" className="text-emerald-700 hover:text-emerald-700" disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'approve')}>
+                <ShieldCheck size={16} />
+              </IconButton>
             )}
             {device.status === 'approved' && !isOwnCurrent(device) && (
-              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<ShieldAlert size={16} />} aria-label="Blokkeer" title="Blokkeer"
-                disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'revoke')} />
+              <IconButton label="Blokkeer" variant="ghost" disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'revoke')}>
+                <ShieldAlert size={16} />
+              </IconButton>
             )}
             {!isOwnCurrent(device) && (
-              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-red-500" icon={<Trash2 size={14} />} aria-label="Toestel schrappen" title="Schrappen"
-                disabled={busyKey === keyOf(device)} onClick={() => setConfirmDelete(device)} />
+              <IconButton label="Toestel schrappen" title="Schrappen" variant="danger" disabled={busyKey === keyOf(device)} onClick={() => setConfirmDelete(device)}>
+                <Trash2 size={14} />
+              </IconButton>
             )}
           </div>
         )}
@@ -284,44 +275,42 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         description="Elk volgend toestel wacht hier op goedkeuring."
       />
 
-      <div className="surface-card rounded-3xl p-5 md:p-6">
-        <div className="flex items-center justify-between gap-4">
-          <div className="min-w-0">
-            <h3 className="text-lg font-bold tracking-tight">Toestel-goedkeuring</h3>
-            <p className="mt-1 text-sm font-medium text-slate-500">
-              {gateEnabled === false
-                ? 'Uit — elk toestel wordt bij aanmelden automatisch goedgekeurd en aan de lijst toegevoegd. Geblokkeerde toestellen blijven geblokkeerd.'
-                : 'Aan — elk nieuw toestel (behalve het eerste per chauffeur) wacht op jouw goedkeuring voordat het toegang krijgt.'}
-            </p>
-          </div>
-          <Switch
-            checked={gateEnabled !== false}
-            onChange={() => void toggleGate()}
-            label="Toestel-goedkeuring vereist"
-            disabled={gateEnabled === null || isTogglingGate}
-          />
-        </div>
+      <Card>
+        <CardHeader
+          title="Toestel-goedkeuring"
+          description={gateEnabled === false
+            ? 'Uit — elk toestel wordt bij aanmelden automatisch goedgekeurd en aan de lijst toegevoegd. Geblokkeerde toestellen blijven geblokkeerd.'
+            : 'Aan — elk nieuw toestel (behalve het eerste per chauffeur) wacht op jouw goedkeuring voordat het toegang krijgt.'}
+          aside={(
+            <Switch
+              checked={gateEnabled !== false}
+              onChange={() => void toggleGate()}
+              label="Toestel-goedkeuring vereist"
+              disabled={gateEnabled === null || isTogglingGate}
+            />
+          )}
+        />
         {gateEnabled === false && (
           <p className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-2.5 text-xs font-medium text-amber-800">
             Tijdelijk bedoeld — bv. bij de uitrol naar alle chauffeurs. Zet de goedkeuring daarna weer aan; alles wat intussen aanmeldde staat dan al goedgekeurd in de lijst.
           </p>
         )}
-      </div>
+      </Card>
 
       {pending.length > 0 && (
-        <div className="surface-card rounded-3xl p-5 md:p-6">
-          <div className="flex items-center justify-between gap-4">
-            <h3 className="text-lg font-bold tracking-tight">Wacht op goedkeuring</h3>
-            <Badge tone="amber" dot className="shrink-0 tabular-nums">{pending.length}</Badge>
-          </div>
+        <Card>
+          <CardHeader
+            title="Wacht op goedkeuring"
+            aside={<Badge tone="amber" dot className="shrink-0 tabular-nums">{pending.length}</Badge>}
+          />
           <div className="mt-4 space-y-2">
             {pending.map((d) => renderDevice(d, true))}
           </div>
-        </div>
+        </Card>
       )}
 
-      <div className="surface-card rounded-3xl p-5 md:p-6">
-        <h3 className="text-lg font-bold tracking-tight">Alle toestellen</h3>
+      <Card>
+        <CardHeader title="Alle toestellen" />
         {devices === null ? (
           <p className="mt-4 text-sm font-medium text-slate-500">Laden…</p>
         ) : devices.length === 0 ? (
@@ -339,6 +328,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
               const attention = list.filter((d) => d.status !== 'approved').length;
               return (
                 <div key={userId} className="py-1">
+                  {/* rauw: hele groepsrij is de knop (naam + telling + badge + chevron) */}
                   <button
                     type="button"
                     onClick={() => toggleUser(userId)}
@@ -358,7 +348,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             })}
           </div>
         )}
-      </div>
+      </Card>
 
       <ConfirmationModal
         isOpen={!!confirmDelete}

@@ -1,7 +1,8 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { AlertTriangle, CheckCircle2, Info, X } from 'lucide-react';
 import { cn } from '../lib/ui';
-import { DUR } from '../lib/motion';
+import { Button, IconButton } from './primitives';
+import { DUR, EASE } from '../lib/motion';
 
 export type Toast = {
   id: number;
@@ -26,8 +27,6 @@ const TONE_STYLES = {
     chip: 'bg-oker-500/15 text-oker-700',
   },
 } as const;
-
-const EASE_OUT = [0.22, 1, 0.36, 1] as const;
 
 const prefersReducedMotion = () =>
   typeof window !== 'undefined' &&
@@ -76,7 +75,7 @@ export function ToastStack({
               initial={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
               animate={reduced ? { opacity: 1 } : { opacity: 1, y: 0, scale: 1 }}
               exit={reduced ? { opacity: 0 } : { opacity: 0, y: -8, scale: 0.98 }}
-              transition={{ duration: DUR.base, ease: EASE_OUT }}
+              transition={{ duration: DUR.base, ease: EASE }}
               className="rounded-2xl border border-slate-200 bg-paper/95 px-4 py-3 shadow-lg backdrop-blur-sm touch-pan-y"
             >
               <div className="flex items-start gap-3">
@@ -95,22 +94,25 @@ export function ToastStack({
                       min-h-11 met negatieve marge zodat het raakvlak groeit
                       zonder de toast hoger te maken. */}
                   {toast.action && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => { toast.action!.run(); onDismiss(toast.id); }}
-                      className="ios-pressable -mx-2 -my-1 mt-0.5 inline-flex min-h-11 items-center rounded-lg px-2 py-1 text-sm font-semibold text-oker-700 underline-offset-2 hover:underline sm:pointer-fine:min-h-0 sm:pointer-fine:mt-1.5"
+                      className="-mx-2 -my-1 mt-0.5 px-2 py-1 text-sm text-oker-700 underline-offset-2 hover:text-oker-700 hover:underline sm:pointer-fine:min-h-0 sm:pointer-fine:mt-1.5"
                     >
                       {toast.action.label}
-                    </button>
+                    </Button>
                   )}
                 </div>
-                <button
+                <IconButton
+                  label="Sluit melding"
+                  variant="ghost"
+                  size="sm"
                   onClick={() => onDismiss(toast.id)}
-                  className="-m-1.5 inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md p-1 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 sm:pointer-fine:-m-0 sm:pointer-fine:h-7 sm:pointer-fine:w-7"
-                  aria-label="Sluit melding"
+                  className="-m-1.5 text-slate-400 sm:pointer-fine:-m-0"
                 >
                   <X size={16} />
-                </button>
+                </IconButton>
               </div>
             </motion.div>
           );

@@ -44,7 +44,7 @@ export function Field({
     <div className={cn('space-y-1.5', className)}>
       <label htmlFor={id} className="block text-label">
         {label}
-        {required ? <span aria-hidden="true" className="ml-0.5 text-red-600">*</span> : null}
+        {required ? <span aria-hidden="true" className="ml-0.5 text-red-700">*</span> : null}
       </label>
       {typeof children === 'function' ? children({ id, describedBy, invalid: Boolean(error) }) : children}
       {error ? (

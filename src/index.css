@@ -399,6 +399,65 @@ html.dark {
   }
 }
 
+@layer components {
+  /* === Typografie-rollen ===
+     Zeven rollen i.p.v. losse class-recepten. Koppen (page/section/card)
+     in Manrope; labels in Inter. Gebruik de rol, niet de losse utilities:
+       text-page-title    h1 van een scherm (PageHeader, dashboard-groet)
+       text-section-title h2 van een grote (beheer)sectie
+       text-card-title    h2/h3 in een kaart of paneel
+       text-label         veldlabel / tabelkop (sentence-case)
+       text-micro         uppercase eyebrow (MicroLabel)
+     Body = text-sm (13) / text-base (16); code = font-mono.
+     In @layer components: een kleur-utility ernaast (text-oker-700) wint
+     dan van de rol-kleur, zoals bedoeld. */
+  .text-page-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.5rem;
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--color-slate-900);
+  }
+  @media (min-width: 768px) {
+    .text-page-title { font-size: 1.875rem; }
+  }
+  .text-section-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1.125rem;
+    line-height: 1.25;
+    letter-spacing: -0.02em;
+    color: var(--color-slate-900);
+  }
+  @media (min-width: 768px) {
+    .text-section-title { font-size: 1.25rem; }
+  }
+  .text-card-title {
+    font-family: var(--font-display);
+    font-weight: 700;
+    font-size: 1rem;
+    line-height: 1.3;
+    letter-spacing: -0.015em;
+    color: var(--color-slate-900);
+  }
+  .text-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    color: var(--color-slate-600);
+  }
+  .text-micro {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--color-slate-500);
+  }
+
+}
+
 @layer utilities {
   /* === Oppervlakken — kalm, near-opaque, haarlijn-randen ===
    * Eén consistente familie i.p.v. zwaar gestapeld glas: witte kaarten met
@@ -702,60 +761,6 @@ html.dark {
     background: rgba(242, 243, 244, 0.75);
     border: 1px solid rgba(228, 230, 232, 0.8);
     box-shadow: inset 0 1px 2px rgba(13, 13, 15, 0.03);
-  }
-
-  /* === Typografie-rollen ===
-     Zeven rollen i.p.v. losse class-recepten. Koppen (page/section/card)
-     in Manrope; labels in Inter. Gebruik de rol, niet de losse utilities:
-       text-page-title    h1 van een scherm (PageHeader, dashboard-groet)
-       text-section-title h2 van een grote (beheer)sectie
-       text-card-title    h2/h3 in een kaart of paneel
-       text-label         veldlabel / tabelkop (sentence-case)
-       text-micro         uppercase eyebrow (MicroLabel)
-     Body = text-sm (13) / text-base (16); code = font-mono. */
-  .text-page-title {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 1.5rem;
-    line-height: 1.1;
-    letter-spacing: -0.02em;
-    color: var(--color-slate-900);
-  }
-  @media (min-width: 768px) {
-    .text-page-title { font-size: 1.875rem; }
-  }
-  .text-section-title {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 1.125rem;
-    line-height: 1.25;
-    letter-spacing: -0.02em;
-    color: var(--color-slate-900);
-  }
-  @media (min-width: 768px) {
-    .text-section-title { font-size: 1.25rem; }
-  }
-  .text-card-title {
-    font-family: var(--font-display);
-    font-weight: 700;
-    font-size: 1rem;
-    line-height: 1.3;
-    letter-spacing: -0.015em;
-    color: var(--color-slate-900);
-  }
-  .text-label {
-    font-size: 0.75rem;
-    line-height: 1rem;
-    font-weight: 500;
-    color: var(--color-slate-600);
-  }
-  .text-micro {
-    font-size: 0.6875rem;
-    line-height: 1rem;
-    font-weight: 500;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--color-slate-500);
   }
 
   .section-title {

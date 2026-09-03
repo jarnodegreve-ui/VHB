@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { ArrowUpRight, ChevronRight } from 'lucide-react';
 import { CountUp } from './CountUp';
 import { cn } from '../lib/ui';
+import { Button } from './primitives';
 
 /**
  * Gedeelde bouwstenen van het Operations Center-dashboard.
@@ -153,6 +154,7 @@ export function OpsStat({
       // zodra de knop hoger is dan zijn inhoud (grid rekt tegels tot gelijke
       // hoogte). Zonder dit hingen icoon en kop van een kortere tegel lager
       // dan die van de buurtegel.
+      // rauw: KPI-tegel-als-knop met eigen layout en inline var(--tile-*)-oppervlak.
       <button type="button" onClick={onClick} className={cn('group surface-card-hover flex flex-col items-stretch justify-start rounded-3xl p-4 text-left', className)} style={style}>
         {inner}
       </button>
@@ -201,13 +203,10 @@ export function OpsPanel({
       </div>
       {children}
       {onSeeAll && (
-        <button
-          onClick={onSeeAll}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-xl bg-surface-row ring-1 ring-hairline px-3 py-2 text-xs font-semibold text-slate-600 transition-all hover:bg-surface-row-hover hover:text-slate-900 hover:shadow-sm"
-        >
+        <Button variant="secondary" size="sm" full className="mt-3 gap-1" onClick={onSeeAll}>
           {seeAllLabel}
           <ArrowUpRight size={12} />
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -233,6 +232,8 @@ export function OpsRow({
   onClick: () => void;
 }) {
   return (
+    // rauw: klikbare werkvoorraad-rij (icoon + twee tekstregels + meta + chevron) —
+    // rij-als-knop met eigen layout, geen knop-uiterlijk.
     <button
       type="button"
       onClick={onClick}
@@ -267,6 +268,8 @@ export function QuickAction({
   onClick: () => void;
 }) {
   return (
+    // rauw: snelactie-tegel (kaart-als-knop met eigen layout en inline
+    // var(--tile-*)-oppervlak), bewust buiten Button gehouden.
     <button
       type="button"
       onClick={onClick}

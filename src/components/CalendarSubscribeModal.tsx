@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
-import { CalendarPlus, Copy, Check, Download, ExternalLink, X, ShieldCheck } from 'lucide-react';
+import { CalendarPlus, Copy, Check, Download, ExternalLink, ShieldCheck } from 'lucide-react';
 import { Modal } from './Modal';
+import { ModalHeader } from './ui';
 import { BrandSpinner } from './BrandSpinner';
-import { MicroLabel } from './primitives';
+import { Button, MicroLabel } from './primitives';
+import { Input } from './Field';
 import { fetchCalendarLinks, type CalendarLinks } from '../lib/calendar';
 
 /**
@@ -50,92 +52,91 @@ export function CalendarSubscribeModal({
   };
 
   return (
-    <Modal open={open} onClose={onClose} maxWidth="md">
-      <div className="p-6">
-        <div className="flex items-start justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-oker-500 text-slate-950 shadow-md shadow-black/10 shrink-0">
+    <Modal open={open} onClose={onClose} maxWidth="md" ariaLabel="Aan agenda toevoegen">
+      <div className="flex max-h-[88dvh] flex-col overflow-hidden">
+        {/* Zelfde kop-dialect als de andere modals (ModalHeader met icoontegel
+            als `leading`), i.p.v. een eigen h3 + losse sluitknop. */}
+        <ModalHeader
+          leading={
+            <div className="inline-flex items-center justify-center w-10 h-10 rounded-2xl bg-oker-500 text-slate-950 shadow-md shadow-black/10">
               <CalendarPlus size={20} />
             </div>
-            <div className="min-w-0">
-              <h3 className="text-lg font-bold tracking-tight text-slate-900">Aan agenda toevoegen</h3>
-              <p className="text-xs font-medium text-slate-500">Je diensten in je eigen agenda — automatisch bijgewerkt.</p>
-            </div>
+          }
+          title="Aan agenda toevoegen"
+          description="Je diensten in je eigen agenda — automatisch bijgewerkt."
+          onClose={onClose}
+        />
+
+        <div className="p-6 md:p-7 overflow-y-auto flex-1">
+          {/* Abonneren */}
+          <div>
+            <MicroLabel>Abonneren (blijft up-to-date)</MicroLabel>
+
+            {loading ? (
+              <div className="mt-3 flex items-center gap-3 text-slate-500">
+                <BrandSpinner size={16} />
+                <span className="text-sm font-bold">Link laden…</span>
+              </div>
+            ) : error ? (
+              <p className="mt-3 text-sm font-bold text-red-700">{error}</p>
+            ) : links ? (
+              <>
+                <div className="mt-3 flex flex-col sm:flex-row gap-2">
+                  <a
+                    href={links.webcal}
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-ink text-white px-4 py-3 text-sm font-semibold hover:bg-ink-soft transition-colors"
+                  >
+                    <CalendarPlus size={16} /> Apple / iPhone
+                  </a>
+                  <a
+                    href={links.googleUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-surface-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
+                  >
+                    <ExternalLink size={16} className="text-oker-500" /> Google Agenda
+                  </a>
+                </div>
+
+                <div className="mt-2 flex items-stretch gap-2">
+                  <Input
+                    readOnly
+                    aria-label="Persoonlijke agenda-link"
+                    value={links.url}
+                    onFocus={(e) => e.currentTarget.select()}
+                    className="min-w-0 flex-1 select-all text-slate-600"
+                  />
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="shrink-0"
+                    icon={copied ? <Check size={14} className="text-emerald-700" /> : <Copy size={14} />}
+                    onClick={copy}
+                  >
+                    {copied ? 'Gekopieerd' : 'Kopieer'}
+                  </Button>
+                </div>
+
+                <p className="mt-2 text-xs font-medium text-slate-400 leading-relaxed">
+                  Plak deze link in je agenda-app als <span className="font-bold text-slate-500">abonnement</span> (niet als import).
+                  Wijzigingen in je rooster verschijnen daarna vanzelf, meestal binnen een uur.
+                </p>
+                <div className="mt-2 flex items-start gap-1.5 text-2xs font-medium text-slate-400">
+                  <ShieldCheck size={14} className="text-slate-400 mt-0.5 shrink-0" />
+                  <span>Deze link is persoonlijk — deel 'm niet, hij toont jouw diensten.</span>
+                </div>
+              </>
+            ) : null}
           </div>
-          <button type="button" onClick={onClose} aria-label="Sluiten" className="ios-pressable shrink-0 w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors">
-            <X size={16} />
-          </button>
-        </div>
 
-        {/* Abonneren */}
-        <div className="mt-5">
-          <MicroLabel>Abonneren (blijft up-to-date)</MicroLabel>
-
-          {loading ? (
-            <div className="mt-3 flex items-center gap-3 text-slate-500">
-              <BrandSpinner size={16} />
-              <span className="text-sm font-bold">Link laden…</span>
-            </div>
-          ) : error ? (
-            <p className="mt-3 text-sm font-bold text-red-500">{error}</p>
-          ) : links ? (
-            <>
-              <div className="mt-3 flex flex-col sm:flex-row gap-2">
-                <a
-                  href={links.webcal}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-ink text-white px-4 py-3 text-sm font-semibold hover:bg-ink-soft transition-colors"
-                >
-                  <CalendarPlus size={16} /> Apple / iPhone
-                </a>
-                <a
-                  href={links.googleUrl}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-surface-white px-4 py-3 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
-                >
-                  <ExternalLink size={16} className="text-oker-500" /> Google Agenda
-                </a>
-              </div>
-
-              <div className="mt-2 flex items-stretch gap-2">
-                <input
-                  readOnly
-                  value={links.url}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-surface-soft px-3 py-2 text-base sm:text-xs font-medium text-slate-600 select-all"
-                />
-                <button
-                  type="button"
-                  onClick={copy}
-                  className="ios-pressable shrink-0 inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-surface-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-surface-soft-hover transition-colors"
-                >
-                  {copied ? <><Check size={14} className="text-emerald-500" /> Gekopieerd</> : <><Copy size={14} /> Kopieer</>}
-                </button>
-              </div>
-
-              <p className="mt-2 text-xs font-medium text-slate-400 leading-relaxed">
-                Plak deze link in je agenda-app als <span className="font-bold text-slate-500">abonnement</span> (niet als import).
-                Wijzigingen in je rooster verschijnen daarna vanzelf, meestal binnen een uur.
-              </p>
-              <div className="mt-2 flex items-start gap-1.5 text-2xs font-medium text-slate-400">
-                <ShieldCheck size={14} className="text-slate-400 mt-0.5 shrink-0" />
-                <span>Deze link is persoonlijk — deel 'm niet, hij toont jouw diensten.</span>
-              </div>
-            </>
-          ) : null}
-        </div>
-
-        {/* Eenmalig downloaden */}
-        <div className="mt-5 pt-4 border-t border-slate-100">
-          <MicroLabel>Of eenmalig</MicroLabel>
-          <button
-            type="button"
-            onClick={() => { onDownload(); onClose(); }}
-            className="mt-2 inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-surface-white px-4 py-2.5 text-sm font-semibold text-slate-700 hover:bg-surface-soft-hover transition-colors"
-          >
-            <Download size={16} className="text-oker-500" /> Download .ics-bestand
-          </button>
-          <p className="mt-1.5 text-xs font-medium text-slate-400">Een momentopname — updatet niet automatisch.</p>
+          {/* Eenmalig downloaden */}
+          <div className="mt-5 pt-4 border-t border-slate-100">
+            <MicroLabel>Of eenmalig</MicroLabel>
+            <Button variant="secondary" className="mt-2" icon={<Download size={16} className="text-oker-500" />} onClick={() => { onDownload(); onClose(); }}>
+              Download .ics-bestand
+            </Button>
+            <p className="mt-1.5 text-xs font-medium text-slate-400">Een momentopname — updatet niet automatisch.</p>
+          </div>
         </div>
       </div>
     </Modal>

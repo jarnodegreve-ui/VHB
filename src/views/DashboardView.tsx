@@ -11,7 +11,8 @@ import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
 import { OpsPanel, OpsRow, OpsStat, QuickAction } from '../components/ops';
-import { Badge, Button } from '../components/primitives';
+import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Card, CardHeader } from '../components/Card';
 import { ServiceChip } from '../components/ServiceChip';
 
 /**
@@ -177,16 +178,16 @@ export function DashboardView({ notes = [],
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <div className="rounded-3xl p-5 surface-card">
+          <Card>
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
-          </div>
-          <div className="rounded-3xl p-5 surface-card">
+          </Card>
+          <Card>
             <SkeletonRow />
             <SkeletonRow />
             <SkeletonRow />
-          </div>
+          </Card>
         </div>
       </div>
     );
@@ -202,25 +203,19 @@ export function DashboardView({ notes = [],
       {/* === Eenmalige welkomstkaart (eerste bezoek) === */}
       {showWelcome && (
         <div className="rounded-2xl border border-oker-200/70 bg-oker-50 p-5 space-y-3">
-          <div>
-            <h2 className="text-base font-bold tracking-tight text-slate-900">Welkom bij het VHB Portaal 👋</h2>
-            <p className="mt-1 text-sm font-medium text-slate-600 leading-relaxed">
-              Hier vind je je <strong>rooster</strong>, vraag je <strong>verlof</strong> aan, stel je een <strong>dienstruil</strong> voor aan een collega en lees je <strong>omleidingen en updates</strong>. Op je telefoon staan de belangrijkste knoppen onderaan.
-            </p>
-          </div>
+          <CardHeader
+            title="Welkom bij het VHB Portaal 👋"
+            description={<>Hier vind je je <strong>rooster</strong>, vraag je <strong>verlof</strong> aan, stel je een <strong>dienstruil</strong> voor aan een collega en lees je <strong>omleidingen en updates</strong>. Op je telefoon staan de belangrijkste knoppen onderaan.</>}
+          />
           <div className="flex flex-col sm:flex-row gap-2">
             {onChangePassword && (
               <Button variant="primary" onClick={() => { dismissWelcome(); onChangePassword(); }}>
                 Kies eerst je eigen wachtwoord
               </Button>
             )}
-            <button
-              type="button"
-              onClick={dismissWelcome}
-              className="ios-pressable rounded-xl border border-slate-200 bg-surface-white px-4 py-2.5 text-sm font-semibold text-slate-600 hover:bg-surface-soft-hover min-h-11"
-            >
+            <Button variant="secondary" onClick={dismissWelcome}>
               Aan de slag
-            </button>
+            </Button>
           </div>
           <p className="text-2xs font-medium text-slate-400">Kreeg je een tijdelijk wachtwoord van de planning? Kies dan nu meteen een eigen wachtwoord.</p>
         </div>
@@ -430,28 +425,23 @@ export function DashboardView({ notes = [],
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="slate">{lineLabel(openDiversion.line)}</Badge>
             </div>
-            <div className="surface-muted rounded-xl p-4">
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Periode</p>
+            <Card tone="muted" padding="sm">
+              <MicroLabel>Periode</MicroLabel>
               <p className="mt-1.5 text-sm font-mono font-semibold text-slate-800 tabular-nums">
                 {formatDateHuman(openDiversion.startDate)}
                 {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
               </p>
-            </div>
+            </Card>
             <div>
-              <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500">Omschrijving</p>
+              <MicroLabel>Omschrijving</MicroLabel>
               <p className="mt-2 whitespace-pre-wrap text-sm font-normal leading-relaxed text-slate-700">
                 {openDiversion.description}
               </p>
             </div>
             {openDiversion.pdfUrl && (
-              <button
-                type="button"
-                onClick={() => openPdfInNewTab(openDiversion.pdfUrl)}
-                className="control-button-soft ios-pressable inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all"
-              >
-                <FileText size={16} />
+              <Button variant="secondary" onClick={() => openPdfInNewTab(openDiversion.pdfUrl)} icon={<FileText size={16} />}>
                 Bijlage openen (PDF)
-              </button>
+              </Button>
             )}
           </div>
         )}

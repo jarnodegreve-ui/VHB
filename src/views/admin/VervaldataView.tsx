@@ -8,6 +8,8 @@ import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
+import { Card, CardHeader } from '../../components/Card';
+import { Field, Input } from '../../components/Field';
 import { Badge, Button, MicroLabel, type BadgeTone } from '../../components/primitives';
 
 type ExpiryRow = { userId: string; soort: string; validUntil: string };
@@ -170,14 +172,14 @@ export function VervaldataView({ users }: { users: User[] }) {
               <div className="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-4">
                 <Search size={16} className="text-slate-400" />
               </div>
-              <input
+              <Input
                 type="search"
                 enterKeyHint="search"
                 aria-label="Zoek een chauffeur"
                 placeholder="Zoek chauffeur…"
                 value={zoek}
                 onChange={(e) => setZoek(e.target.value)}
-                className="control-input w-full rounded-2xl py-3 pl-11 pr-4 text-base font-medium outline-none sm:text-sm"
+                className="pl-11"
               />
             </div>
             <Button variant="secondary" onClick={() => void load()} disabled={isLoading} aria-label="Ververs">
@@ -189,7 +191,7 @@ export function VervaldataView({ users }: { users: User[] }) {
       />
 
       {error && (
-        <div className="p-4 rounded-2xl text-sm font-semibold bg-red-50 text-red-700 border border-red-100">{error}</div>
+        <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>
       )}
 
       {/* Ops-tegels (zelfde als de status-strip op het dashboard): vaste
@@ -228,11 +230,11 @@ export function VervaldataView({ users }: { users: User[] }) {
       </div>
 
       {isLoading && expiries.length === 0 && !error ? (
-        <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+        <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
           <SkeletonRow className="px-5 py-4" />
-        </div>
+        </Card>
       ) : metDatums.length === 0 && zonderDatums.length === 0 ? (
         <EmptyState title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
       ) : (
@@ -246,8 +248,9 @@ export function VervaldataView({ users }: { users: User[] }) {
                 <MicroLabel>Chauffeur</MicroLabel>
                 {soorten.map(([soort, label]) => <MicroLabel key={soort}>{label}</MicroLabel>)}
               </div>
-              <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+              <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
                 {metDatums.map(({ user, datums, eerste }) => (
+                  // rauw: klikbare rij met eigen kolomraster (naam + datumpillen) — kaart-als-knop
                   <button
                     key={user.id}
                     type="button"
@@ -296,15 +299,16 @@ export function VervaldataView({ users }: { users: User[] }) {
                     })}
                   </button>
                 ))}
-              </div>
+              </Card>
             </div>
           )}
 
           {zonderDatums.length > 0 && (
             <div>
               <MicroLabel className="mb-2 block px-1">Nog geen datums ingevuld</MicroLabel>
-              <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
+              <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
                 {zonderDatums.map((u) => (
+                  // rauw: klikbare rij in hetzelfde kolomraster als de lijst erboven — kaart-als-knop
                   <button
                     key={u.id}
                     type="button"
@@ -319,7 +323,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                     <span className="shrink-0 text-2xs font-semibold text-oker-700">Invullen</span>
                   </button>
                 ))}
-              </div>
+              </Card>
             </div>
           )}
         </>
@@ -328,20 +332,19 @@ export function VervaldataView({ users }: { users: User[] }) {
       <Modal open={!!bewerkt} onClose={() => setBewerkt(null)} maxWidth="sm" ariaLabel={bewerkt ? `Vervaldata van ${bewerkt.name}` : 'Vervaldata'}>
         {bewerkt && (
           <div className="p-6">
-            <h3 className="text-base font-bold text-slate-800">{bewerkt.name}</h3>
-            <p className="mt-1 text-xs text-slate-500">Leeg laten = niet bewaken voor dit document.</p>
+            <CardHeader title={bewerkt.name} description="Leeg laten = niet bewaken voor dit document." />
             <div className="mt-4 space-y-3">
               {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
-                <div key={soort} className="space-y-1">
-                  <MicroLabel>{label} geldig tot</MicroLabel>
-                  <input
-                    type="date"
-                    aria-label={`${label} geldig tot`}
-                    value={draft[soort] ?? ''}
-                    onChange={(e) => setDraft((d) => ({ ...d, [soort]: e.target.value }))}
-                    className="control-input w-full rounded-2xl px-4 py-2.5 text-sm font-medium outline-none transition-all"
-                  />
-                </div>
+                <Field key={soort} label={`${label} geldig tot`}>
+                  {({ id }) => (
+                    <Input
+                      id={id}
+                      type="date"
+                      value={draft[soort] ?? ''}
+                      onChange={(e) => setDraft((d) => ({ ...d, [soort]: e.target.value }))}
+                    />
+                  )}
+                </Field>
               ))}
             </div>
             <div className="mt-5 flex gap-3">

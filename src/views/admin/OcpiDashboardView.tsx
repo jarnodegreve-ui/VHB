@@ -6,11 +6,13 @@ import { isoDate } from '../../lib/availability';
 import { MONTH_NAMES, WEEKDAY_SHORT_SUN, formatGetal } from '../../lib/format';
 import { maandPlus } from '../../lib/datum';
 import { Modal } from '../../components/Modal';
-import { PageHeader, PageShell, AdminSubsectionHeader, EmptyState } from '../../components/ui';
+import { PageHeader, PageShell, EmptyState } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { OpsStat } from '../../components/ops';
 import { SkeletonTile } from '../../components/Skeleton';
-import { Badge, Button, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
+import { Badge, Button, IconButton, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
+import { Card, CardHeader } from '../../components/Card';
+import { Input } from '../../components/Field';
 import { MaandNavigatie } from '../../components/MaandNavigatie';
 
 /** Termijn-schakelaar in exact de app-standaard segmented-maat (rail
@@ -21,6 +23,7 @@ function TermijnKeuze<T extends string>({ label, waarde, opties, onKies }: { lab
   return (
     <div role="group" aria-label={label} className="glass-segmented inline-flex shrink-0 rounded-2xl p-1">
       {opties.map((o) => (
+        // rauw: segmented control op de glass-rail, klassen via segItemClass
         <button
           key={o.id}
           type="button"
@@ -494,9 +497,8 @@ export function OcpiDashboardView() {
         title="Laadpalen (OCPI)"
         description="Read-only monitoring van de Kempower-laadpalen via ChargEye."
         actions={(
-          <Button variant="secondary" onClick={() => { load(); setHerlaad((n) => n + 1); }} disabled={isLoading}>
-            <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
-            <span className="ml-1.5">Ververs</span>
+          <Button variant="secondary" icon={<RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />} onClick={() => { load(); setHerlaad((n) => n + 1); }} disabled={isLoading}>
+            Ververs
           </Button>
         )}
       />
@@ -559,7 +561,7 @@ export function OcpiDashboardView() {
               vast laag blok i.p.v. één rij per dag (dat werd een muur van 30
               regels). Ontbrekende dagen tellen als 0 zodat het weekritme
               klopt; maandagen krijgen een dagnummer als anker. */}
-          <div className="surface-card p-6 rounded-3xl">
+          <Card>
             <div className="mb-4 flex items-center justify-between gap-3">
               <MicroLabel>Verbruik (kWh)</MicroLabel>
               <TermijnKeuze
@@ -594,6 +596,7 @@ export function OcpiDashboardView() {
                           const gekozen = gekozenDag === d.date;
                           const isPiek = d.kwh > 0 && d.kwh === grafiek.piek;
                           return (
+                            // rauw: grafiekstaaf (tik-vlak, aria-hidden) — geen knop-uiterlijk
                             <button
                               key={d.date}
                               type="button"
@@ -635,12 +638,12 @@ export function OcpiDashboardView() {
                 })()}
               </>
             )}
-          </div>
+          </Card>
 
           {/* Vermogen — de kwartierpiek bepaalt in België het capaciteits-
               tarief. 24u toont de ruwe kwartier-slots; 7d/maand tonen per dag
               de dágpiek en wanneer die viel. Gevoed door de sync-snapshots. */}
-          <div className="surface-card p-6 rounded-3xl">
+          <Card>
             <div className="mb-4 flex items-center justify-between gap-3">
               <MicroLabel>Vermogen (kW)</MicroLabel>
               <TermijnKeuze
@@ -721,6 +724,7 @@ export function OcpiDashboardView() {
                             tap-selectie als de staafvariant. */}
                         <div className="absolute inset-0 flex">
                           {vermogen.staven.map((st) => (
+                            // rauw: onzichtbaar tik-vlak op de curve (aria-hidden)
                             <button
                               key={st.key}
                               type="button"
@@ -751,6 +755,7 @@ export function OcpiDashboardView() {
                         {vermogen.staven.map((st) => {
                           const gekozen = gekozenSlot === st.key;
                           return (
+                            // rauw: grafiekstaaf (tik-vlak, aria-hidden) — geen knop-uiterlijk
                             <button
                               key={st.key}
                               type="button"
@@ -807,7 +812,7 @@ export function OcpiDashboardView() {
                 })()}
               </>
             )}
-          </div>
+          </Card>
 
           </div>
 
@@ -833,7 +838,7 @@ export function OcpiDashboardView() {
               return (
                 <div className="p-6">
                   <div className="mb-4 flex items-center justify-between gap-3">
-                    <h3 className="min-w-0 truncate text-base font-bold text-slate-800">
+                    <h3 className="min-w-0 truncate text-card-title">
                       Laadpunt {gekozenPunt.evse_id ?? gekozenPunt.uid}{bus ? ` · bus ${bus}` : ''}
                     </h3>
                     <span className="flex shrink-0 items-center gap-2">
@@ -841,14 +846,9 @@ export function OcpiDashboardView() {
                       {/* Expliciete sluitknop: tik-buiten en ESC bestaan, maar
                           een popup zonder zichtbare uitgang is op een telefoon
                           een raadsel. */}
-                      <button
-                        type="button"
-                        onClick={() => setGekozenPunt(null)}
-                        aria-label="Sluiten"
-                        className="ios-pressable inline-flex h-11 w-11 sm:pointer-fine:h-8 sm:pointer-fine:w-8 items-center justify-center rounded-xl text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                      >
+                      <IconButton label="Sluiten" variant="ghost" size="sm" onClick={() => setGekozenPunt(null)}>
                         <X size={16} />
-                      </button>
+                      </IconButton>
                     </span>
                   </div>
                   <div>
@@ -872,7 +872,7 @@ export function OcpiDashboardView() {
 
           {/* Live sessies */}
           <div>
-            <AdminSubsectionHeader title="Lopende sessies" />
+            <CardHeader size="lg" title="Lopende sessies" />
             {data.activeSessions.length === 0 ? (
               <EmptyState title="Geen lopende sessies" message="Er wordt op dit moment niet geladen (of ze zijn nog niet gesynchroniseerd)." />
             ) : (
@@ -885,7 +885,7 @@ export function OcpiDashboardView() {
                   const nummer = (s.evse_uid && nummerByUid.get(s.evse_uid)) || s.evse_uid || 'Onbekende paal';
                   const bus = busVoorLaadpunt(nummer);
                   return (
-                    <div key={s.id} className="surface-card p-4 rounded-2xl flex items-center justify-between gap-3">
+                    <Card key={s.id} padding="sm" className="flex items-center justify-between gap-3">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="text-sm font-semibold text-slate-800">
@@ -905,7 +905,7 @@ export function OcpiDashboardView() {
                       <Badge tone={st.vol ? 'emerald' : 'blue'} dot className="shrink-0 whitespace-nowrap">
                         {st.label ?? 'Laden'}
                       </Badge>
-                    </div>
+                    </Card>
                   );
                 })}
               </div>
@@ -914,20 +914,19 @@ export function OcpiDashboardView() {
 
           {/* Stations + laadpunten */}
           <div>
-            <AdminSubsectionHeader title="Laadpalen per locatie" />
+            <CardHeader size="lg" title="Laadpalen per locatie" />
             {data.locations.length === 0 ? (
               <EmptyState title="Nog geen locaties" message="Klik in Systeem Status → OCPI-koppeling op 'Nu synchroniseren' om de laadpalen op te halen." />
             ) : (
               <div className="space-y-4">
                 {data.locations.map((loc) => (
-                  <div key={loc.id} className="surface-card p-6 rounded-3xl">
-                    <div className="flex items-center justify-between gap-3 mb-4">
-                      <div>
-                        <h3 className="text-base font-bold text-slate-800">{loc.name ?? loc.id}</h3>
-                        {loc.city && <p className="text-xs text-slate-500">{loc.city}</p>}
-                      </div>
-                      <span className="text-2xs text-slate-400">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>
-                    </div>
+                  <Card key={loc.id}>
+                    <CardHeader
+                      className="mb-4"
+                      title={loc.name ?? loc.id}
+                      description={loc.city || undefined}
+                      aside={<span className="text-2xs text-slate-400">{loc.evses.length} laadpunt{loc.evses.length === 1 ? '' : 'en'}</span>}
+                    />
                     {loc.evses.length === 0 ? (
                       <p className="text-sm text-slate-500">Geen laadpunten.</p>
                     ) : (
@@ -962,6 +961,7 @@ export function OcpiDashboardView() {
                                   const sessie = sessieByEvse.get(evse.uid);
                                   const s = laadStatus(evse.status, sessie);
                                   return (
+                                    // rauw: hele laadpuntrij (nummer · bus · pillen) is de knop naar de detail-popup
                                     <button
                                       key={evse.uid}
                                       type="button"
@@ -1002,7 +1002,7 @@ export function OcpiDashboardView() {
                         })}
                       </div>
                     )}
-                  </div>
+                  </Card>
                 ))}
               </div>
             )}
@@ -1017,7 +1017,8 @@ export function OcpiDashboardView() {
               Oker = het punt met het hoogste totaal, net als de piek in de
               grafieken. */}
           <div>
-            <AdminSubsectionHeader
+            <CardHeader
+              size="lg"
               title="Verbruik per laadpunt"
               description="Geleverde energie per laadpunt, per maand of per vrij gekozen periode, uit de laadsessies van ChargEye."
               aside={(
@@ -1044,35 +1045,35 @@ export function OcpiDashboardView() {
                     // met sessies en vandaag. Volgorde-fouten worden stil
                     // rechtgezet (zie zetVan/zetTot) i.p.v. met een foutmelding.
                     <div className="flex items-center gap-2" role="group" aria-label="Periodekeuze">
-                      <input
+                      <Input
                         type="date"
                         value={periodeGekozen.van}
                         min={verbruik?.eersteDag ?? undefined}
                         max={vandaag}
                         onChange={(e) => zetVan(e.target.value)}
                         aria-label="Van"
-                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
+                        className="w-auto px-3 py-2"
                       />
                       <span className="text-xs font-medium text-slate-400">t/m</span>
-                      <input
+                      <Input
                         type="date"
                         value={periodeGekozen.tot}
                         min={verbruik?.eersteDag ?? undefined}
                         max={vandaag}
                         onChange={(e) => zetTot(e.target.value)}
                         aria-label="Tot en met"
-                        className="control-input rounded-2xl px-3 py-2 text-sm font-bold outline-none"
+                        className="w-auto px-3 py-2"
                       />
                     </div>
                   )}
                   <Button
                     variant="secondary"
+                    icon={<Download size={16} />}
                     onClick={exporteerVerbruikCsv}
                     disabled={!verbruik || verbruik.totaalSessies === 0}
                     title="Verbruik per laadpunt downloaden als CSV"
                   >
-                    <Download size={16} />
-                    <span className="ml-1.5">CSV</span>
+                    CSV
                   </Button>
                 </div>
               )}
@@ -1089,7 +1090,7 @@ export function OcpiDashboardView() {
               })));
               const label = periodeLabel(verbruik);
               return (
-                <div className={cn('surface-card p-6 rounded-3xl transition-opacity', verbruikLaadt && 'opacity-60')} aria-busy={verbruikLaadt}>
+                <Card className={cn('transition-opacity', verbruikLaadt && 'opacity-60')} aria-busy={verbruikLaadt}>
                   {/* Eén regel die zegt wáárover de cijfers gaan — in periode-
                       modus staat het label nergens anders voluit. */}
                   <p className="mb-4 text-2xs font-medium font-mono tabular-nums text-slate-500">
@@ -1140,7 +1141,7 @@ export function OcpiDashboardView() {
                       })}
                     </div>
                   )}
-                </div>
+                </Card>
               );
             })()}
           </div>
@@ -1150,11 +1151,11 @@ export function OcpiDashboardView() {
               afgelopen 7 dagen. Dit maakt het "stekker in maar laadt niet"-
               scenario zichtbaar dat anders alleen in de ruwe data stond. */}
           <div>
-            <AdminSubsectionHeader title="Storingen (ChargEye)" />
+            <CardHeader size="lg" title="Storingen (ChargEye)" />
             {storingen.length === 0 ? (
               <EmptyState title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
             ) : (
-              <div className="surface-card rounded-3xl overflow-hidden">
+              <Card padding="none" className="overflow-hidden">
                 <div className="divide-y divide-slate-100">
                   {(alleStoringen ? storingen : storingen.slice(0, 5)).map((st, i) => {
                     const nummer = st.evseUid ? nummerByUid.get(st.evseUid) ?? st.evseUid : null;
@@ -1179,16 +1180,11 @@ export function OcpiDashboardView() {
                   })}
                 </div>
                 {storingen.length > 5 && (
-                  <button
-                    type="button"
-                    onClick={() => setAlleStoringen((v) => !v)}
-                    aria-expanded={alleStoringen}
-                    className="ios-pressable w-full border-t border-slate-100 px-4 py-2.5 text-center text-xs font-semibold text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-700"
-                  >
+                  <Button variant="ghost" size="sm" full className="rounded-none border-t border-slate-100" aria-expanded={alleStoringen} onClick={() => setAlleStoringen((v) => !v)}>
                     {alleStoringen ? 'Toon minder' : `Toon alle ${storingen.length} storingen`}
-                  </button>
+                  </Button>
                 )}
-              </div>
+              </Card>
             )}
           </div>
         </div>

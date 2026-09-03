@@ -299,7 +299,7 @@ export function CommandPalette({
                 placeholder="Zoek scherm of actie…"
                 className="no-focus-ring flex-1 bg-transparent outline-none text-base text-slate-900 placeholder:text-slate-400"
               />
-              <kbd className="hidden sm:inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+              <kbd className="hidden sm:inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                 esc
               </kbd>
             </div>
@@ -314,6 +314,8 @@ export function CommandPalette({
                 filtered.map((cmd, i) => {
                   const isActive = i === selectedIdx;
                   return (
+                    // rauw: resultaatrij van het command palette (icoon + label + hint,
+                    // toetsenbord-actieve staat) — navigatie-item, geen knop-uiterlijk.
                     <button
                       key={cmd.id}
                       onClick={() => {
@@ -351,24 +353,24 @@ export function CommandPalette({
             {/* Footer */}
             <div className="flex items-center gap-3 border-t border-slate-200/70 px-4 py-2 text-2xs text-slate-400">
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   ↑
                 </kbd>
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   ↓
                 </kbd>
                 navigeren
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   ↵
                 </kbd>
                 openen
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-[5px] border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
                   esc
                 </kbd>
                 sluiten

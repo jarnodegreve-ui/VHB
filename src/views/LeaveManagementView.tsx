@@ -5,7 +5,9 @@ import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
-import { Button, MicroLabel, microLabelClass, StatusBadge, Badge, statusAccentClass } from '../components/primitives';
+import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge, statusAccentClass } from '../components/primitives';
+import { Card } from '../components/Card';
+import { Field, Input, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { SlideOver } from '../components/SlideOver';
 import { verlofBalans, daysBetween } from '../lib/leaveBalance';
@@ -408,17 +410,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           minmax(0,1fr) + min-w-0 klemt alles op de viewport. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="min-w-0 lg:col-span-8 space-y-6">
-          <div className="surface-card p-6 md:p-8 rounded-3xl" {...swipeHandlers}>
+          <Card padding="lg" {...swipeHandlers}>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
               <MaandNavigatie label={monthName} labelClassName="text-lg font-bold tracking-tight min-w-[160px]" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
                 {!isCurrentMonth && (
-                  <button
-                    type="button"
-                    onClick={goToCurrentMonth}
-                    className="ios-pressable ml-1 px-3 h-9 rounded-xl border border-slate-200 bg-surface-white text-2xs font-semibold text-slate-500 hover:text-slate-800 hover:bg-surface-soft-hover transition-colors"
-                  >
+                  <Button variant="secondary" size="sm" className="ml-1" onClick={goToCurrentMonth}>
                     Vandaag
-                  </button>
+                  </Button>
                 )}
               </MaandNavigatie>
               <div className="flex flex-wrap gap-4">
@@ -427,7 +425,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
-              {WEEKDAY_SHORT_MON.map((d) => <div key={d} className="text-center text-2xs font-semibold text-slate-500 uppercase tracking-[0.08em] mb-2">{d}</div>)}
+              {WEEKDAY_SHORT_MON.map((d) => <div key={d} className={cn(microLabelClass, 'text-center mb-2')}>{d}</div>)}
               {calendarDays.map((day, i) => {
                 if (day === null) return <div key={`empty-${i}`} />;
                 const dateStr = `${viewMonth.getFullYear()}-${(viewMonth.getMonth() + 1).toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
@@ -437,6 +435,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 const isInDraftRange = isDateWithinDraftRange(dateStr);
                 const isDraftEdge = isDraftBoundary(dateStr);
                 return (
+                  // rauw: kalender-dagcel (eigen selectie-/bereik-stijl)
                   <button
                     key={day}
                     onClick={() => handleCalendarDateClick(dateStr)}
@@ -454,42 +453,42 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 );
               })}
             </div>
-          </div>
+          </Card>
 
           {selectedDate && (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="surface-card p-6 md:p-8 rounded-3xl">
-              <div className="flex items-center justify-between mb-6">
-                <h4 className="font-bold tracking-tight text-slate-800">Afwezigheid op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h4>
-                <button type="button" aria-label="Sluiten" onClick={() => setSelectedDate(null)} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 rounded-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700 transition-colors"><X size={18} /></button>
-              </div>
-              <div className="space-y-3">
-                {getRequestsForDate(selectedDate).length > 0 ? getRequestsForDate(selectedDate).map((req) => {
-                  const requester = users.find((u) => u.id === req.userId);
-                  return (
-                    <div key={req.id} className="flex flex-wrap items-center justify-between gap-3 p-4 bg-surface-soft rounded-2xl">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-surface-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
-                        <div>
-                          <p className="font-semibold text-slate-800 text-sm">{requester?.name}</p>
-                          <MicroLabel>{formatLeaveType(req.type)}</MicroLabel>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <Card padding="lg">
+                {/* Bewust geen CardHeader: die zet de aside op mobiel ónder de
+                    titel, en een sluitknop hoort rechts naast de kop te blijven. */}
+                <div className="flex items-center justify-between mb-6">
+                  <h3 className="text-card-title">Afwezigheid op {new Date(`${selectedDate}T00:00:00`).toLocaleDateString('nl-BE', { day: 'numeric', month: 'long' })}</h3>
+                  <IconButton label="Sluiten" variant="ghost" size="sm" onClick={() => setSelectedDate(null)}><X size={18} /></IconButton>
+                </div>
+                <div className="space-y-3">
+                  {getRequestsForDate(selectedDate).length > 0 ? getRequestsForDate(selectedDate).map((req) => {
+                    const requester = users.find((u) => u.id === req.userId);
+                    return (
+                      <Card key={req.id} tone="muted" padding="sm" className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-surface-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
+                          <div>
+                            <p className="font-semibold text-slate-800 text-sm">{requester?.name}</p>
+                            <MicroLabel>{formatLeaveType(req.type)}</MicroLabel>
+                          </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xs font-medium text-slate-400 tabular-nums">{req.startDate} – {req.endDate}</span>
-                        {isPlanner && (
-                          <button
-                            type="button"
-                            onClick={() => handleCancel(req.id)}
-                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-surface-white text-2xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
-                          >
-                            Annuleren
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                }) : <p className="text-center py-4 text-sm text-slate-500">Geen afwezigen op deze dag.</p>}
-              </div>
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xs font-medium text-slate-400 tabular-nums">{req.startDate} – {req.endDate}</span>
+                          {isPlanner && (
+                            <Button variant="danger" size="sm" onClick={() => handleCancel(req.id)}>
+                              Annuleren
+                            </Button>
+                          )}
+                        </div>
+                      </Card>
+                    );
+                  }) : <p className="text-center py-4 text-sm text-slate-500">Geen afwezigen op deze dag.</p>}
+                </div>
+              </Card>
             </motion.div>
           )}
         </div>
@@ -502,13 +501,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 openPdfInNewTab, niet via rauwe window.open — die geeft in
                 iOS-standalone geregeld null terug, en dan deed deze knop
                 niets. Dit is chauffeurs-facing, dus dat is een dood pad. */}
-            <button
-              type="button"
+            <Button
+              variant="secondary"
+              size="md"
+              full
+              icon={<Printer size={14} />}
               onClick={() => openPdfInNewTab(`${window.location.origin}${window.location.pathname}?print-verlof-driver=${encodeURIComponent(user.id)}&print-verlof-jaar=${new Date().getFullYear()}`)}
-              className="ios-pressable flex w-full items-center justify-center gap-2 rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-surface-soft-hover hover:text-slate-700"
             >
-              <Printer size={14} /> Jaaroverzicht (PDF)
-            </button>
+              Jaaroverzicht (PDF)
+            </Button>
           </div>
 
           {isPlanner && (() => {
@@ -526,17 +527,17 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 <div className="flex items-center justify-between px-1">
                   <MicroLabel className="text-slate-500">Wachtend op goedkeuring</MicroLabel>
                   {plannerPending.length > 1 && (
-                    <button
-                      type="button"
+                    <Button
+                      variant="ghost"
+                      size="sm"
                       onClick={() => setSelectedPendingIds(allSelected ? new Set() : new Set(plannerPending.map((r) => r.id)))}
-                      className="text-2xs font-semibold text-slate-500 hover:text-oker-700 transition-colors"
                     >
                       {allSelected ? 'Deselecteer alles' : 'Selecteer alles'}
-                    </button>
+                    </Button>
                   )}
                 </div>
                 {selectedPendingIds.size > 0 && (
-                  <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 rounded-2xl bg-slate-50/80 border border-slate-200">
+                  <Card tone="muted" padding="none" className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                     <span className="text-xs font-semibold text-slate-700">
                       {selectedPendingIds.size} {selectedPendingIds.size === 1 ? 'aanvraag' : 'aanvragen'} geselecteerd
                     </span>
@@ -544,7 +545,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       <Button variant="danger" size="sm" onClick={handleBulkReject}>Weigeren ({selectedPendingIds.size})</Button>
                       <Button variant="success" size="sm" icon={<Check size={14} />} onClick={handleBulkApprove}>Goedkeuren ({selectedPendingIds.size})</Button>
                     </div>
-                  </div>
+                  </Card>
                 )}
                 <div className="space-y-1.5">
                   {plannerPending.length > 0 ? plannerPending.map((req) => {
@@ -566,6 +567,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           className="w-4 h-4 rounded border-slate-300 text-oker-500 focus:ring-oker-400 cursor-pointer shrink-0"
                           aria-label={`Selecteer ${requester?.name}`}
                         />
+                        {/* rauw: rij-inhoud (naam + periode + chevron) als knop naast de checkbox — geen knopvorm */}
                         <button
                           type="button"
                           onClick={() => setReviewLeave(req)}
@@ -589,10 +591,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       </div>
                     );
                   }) : (
-                    <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3.5">
+                    <Card tone="success" padding="none" className="px-4 py-3.5">
                       <p className="text-sm font-semibold text-slate-800">Alles beoordeeld</p>
                       <p className="text-xs font-normal text-slate-500">Geen openstaande verlofaanvragen.</p>
-                    </div>
+                    </Card>
                   )}
                 </div>
               </div>
@@ -638,32 +640,34 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     beoordelaar) en rekenen saldo én dienstconflicten hieronder
                     op díe chauffeur. */}
                 {isPlanner && (
-                  <div className="space-y-1.5">
-                    <MicroLabel>Voor wie</MicroLabel>
-                    <select
-                      aria-label="Voor wie vraag je verlof aan"
-                      value={voorWie}
-                      onChange={(e) => setVoorWie(e.target.value)}
-                      className="control-input w-full rounded-2xl px-4 py-3 text-base font-medium outline-none sm:text-sm"
-                    >
-                      <option value="">Mezelf ({user.name})</option>
-                      {users
-                        .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
-                        .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
-                        .map((u) => (
-                          <option key={u.id} value={String(u.id)}>{u.name}</option>
-                        ))}
-                    </select>
-                    {namensIemandAnders && (
-                      <p className="text-2xs font-medium text-oker-700">
-                        Wordt meteen als goedgekeurd verlof vastgelegd — je hoeft het daarna niet nog eens te beoordelen.
-                      </p>
+                  <Field label="Voor wie">
+                    {({ id }) => (
+                      <>
+                        <Select
+                          id={id}
+                          value={voorWie}
+                          onChange={(e) => setVoorWie(e.target.value)}
+                        >
+                          <option value="">Mezelf ({user.name})</option>
+                          {users
+                            .filter((u) => u.role === 'chauffeur' && u.isActive !== false && u.name.trim().toLowerCase() !== 'beheerder')
+                            .sort((a, b) => a.name.localeCompare(b.name, 'nl'))
+                            .map((u) => (
+                              <option key={u.id} value={String(u.id)}>{u.name}</option>
+                            ))}
+                        </Select>
+                        {namensIemandAnders && (
+                          <p className="text-2xs font-medium text-oker-700">
+                            Wordt meteen als goedgekeurd verlof vastgelegd — je hoeft het daarna niet nog eens te beoordelen.
+                          </p>
+                        )}
+                      </>
                     )}
-                  </div>
+                  </Field>
                 )}
 
-                <div className="rounded-3xl bg-oker-50/70 px-5 py-4 text-sm text-slate-600">
-                  <p className="text-2xs font-semibold uppercase tracking-[0.08em] text-oker-700">Periode kiezen</p>
+                <Card tone="accent" padding="none" className="px-5 py-4 text-sm text-slate-600">
+                  <MicroLabel className="text-oker-700">Periode kiezen</MicroLabel>
                   <p className="mt-2 font-medium">
                     {!formData.startDate
                       ? 'Klik op de startdatum.'
@@ -671,13 +675,13 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         ? 'Klik nu op de einddatum (of dezelfde dag voor één dag verlof).'
                         : 'Periode geselecteerd. Pas aan via "Periode wissen" of klik een nieuwe startdatum aan.'}
                   </p>
-                </div>
+                </Card>
 
-                <div className="rounded-3xl border border-slate-200 bg-surface-white p-4 space-y-3" {...swipeHandlers}>
+                <Card padding="sm" className="space-y-3" {...swipeHandlers}>
                   <MaandNavigatie className="justify-between" label={monthName} onVorige={goToPrevMonth} onVolgende={goToNextMonth} />
                   <div className="grid grid-cols-7 gap-1">
                     {WEEKDAY_SHORT_MON.map((d) => (
-                      <div key={d} className="text-center text-2xs font-semibold text-slate-500 uppercase tracking-[0.08em] py-1">{d}</div>
+                      <div key={d} className={cn(microLabelClass, 'text-center py-1')}>{d}</div>
                     ))}
                     {calendarDays.map((day, i) => {
                       if (day === null) return <div key={`m-empty-${i}`} />;
@@ -687,6 +691,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       const isToday = dateStr === today;
                       const isPast = dateStr < today;
                       return (
+                        // rauw: kalender-dagcel in de datumkiezer (eigen bereik-/randstijl)
                         <button
                           key={day}
                           type="button"
@@ -707,29 +712,50 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       );
                     })}
                   </div>
-                </div>
+                </Card>
                 <div className="grid grid-cols-2 gap-4">
                   {/* tabIndex -1: puur weergavevelden — focus zou op iOS alleen maar inzoomen */}
-                  <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Startdatum</label><input type="text" readOnly tabIndex={-1} aria-label="Startdatum" value={formData.startDate || 'Selecteer in kalender'} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none" /></div>
-                  <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Einddatum</label><input type="text" readOnly tabIndex={-1} aria-label="Einddatum" value={formData.endDate || 'Selecteer in kalender'} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none" /></div>
+                  <Field label="Startdatum">
+                    {({ id }) => <Input id={id} type="text" readOnly tabIndex={-1} value={formData.startDate || 'Selecteer in kalender'} />}
+                  </Field>
+                  <Field label="Einddatum">
+                    {({ id }) => <Input id={id} type="text" readOnly tabIndex={-1} value={formData.endDate || 'Selecteer in kalender'} />}
+                  </Field>
                 </div>
-                <button type="button" onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))} className="w-full rounded-2xl border border-slate-200 px-4 py-3 text-xs font-semibold text-slate-500 transition-colors hover:bg-surface-soft-hover">
+                <Button variant="secondary" size="md" full onClick={() => setFormData((current) => ({ ...current, startDate: '', endDate: '' }))}>
                   Periode wissen
-                </button>
-                <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Type verlof</label><select aria-label="Type verlof" value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all bg-surface-field"><option value="betaald_verlof">Betaald verlof</option><option value="klein_verlet">Klein verlet</option></select></div>
-                <div className="space-y-2"><label className={cn(microLabelClass, 'ml-1')}>Opmerking</label><textarea aria-label="Opmerking" value={formData.comment} onChange={(e) => setFormData({ ...formData, comment: e.target.value })} onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)} className="control-input w-full px-4 py-3 rounded-2xl font-bold text-base sm:text-sm outline-none transition-all h-24 resize-none" placeholder="Optionele toelichting..." /></div>
+                </Button>
+                <Field label="Type verlof">
+                  {({ id }) => (
+                    <Select id={id} value={formData.type} onChange={(e) => setFormData({ ...formData, type: e.target.value as LeaveRequest['type'] })}>
+                      <option value="betaald_verlof">Betaald verlof</option>
+                      <option value="klein_verlet">Klein verlet</option>
+                    </Select>
+                  )}
+                </Field>
+                <Field label="Opmerking">
+                  {({ id }) => (
+                    <Textarea
+                      id={id}
+                      value={formData.comment}
+                      onChange={(e) => setFormData({ ...formData, comment: e.target.value })}
+                      onFocus={(e) => setTimeout(() => e.target.scrollIntoView({ block: 'center', behavior: 'smooth' }), 250)}
+                      className="h-24"
+                      placeholder="Optionele toelichting..."
+                    />
+                  )}
+                </Field>
 
                 {/* Live impact-preview: budget + shift-conflicten */}
                 {requestPreview && (
                   <div className="space-y-2">
                     {/* Budget-saldo */}
                     {formData.type === 'betaald_verlof' && (
-                      <div className={cn(
-                        'rounded-2xl px-4 py-3 text-xs font-medium border',
-                        requestPreview.wouldExceed
-                          ? 'bg-red-50/80 border-red-200 text-red-700'
-                          : 'bg-emerald-50/60 border-emerald-200/80 text-emerald-700'
-                      )}>
+                      <Card
+                        tone={requestPreview.wouldExceed ? 'danger' : 'success'}
+                        padding="none"
+                        className={cn('px-4 py-3 text-xs font-medium', requestPreview.wouldExceed ? 'text-red-700' : 'text-emerald-700')}
+                      >
                         <div className="flex items-center justify-between gap-3">
                           <span className="font-semibold">
                             {requestPreview.requestedDays} {requestPreview.requestedDays === 1 ? 'dag' : 'dagen'} aangevraagd
@@ -743,12 +769,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             ? `⚠ ${Math.abs(requestPreview.remainingAfter)} ${Math.abs(requestPreview.remainingAfter) === 1 ? 'dag' : 'dagen'} boven je jaarbudget. Planner moet beoordelen.`
                             : `${requestPreview.remainingAfter} ${requestPreview.remainingAfter === 1 ? 'dag' : 'dagen'} resterend na deze aanvraag.`}
                         </p>
-                      </div>
+                      </Card>
                     )}
 
                     {/* Shift-conflict */}
                     {requestPreview.conflictingShifts.length > 0 && (
-                      <div className="rounded-2xl px-4 py-3 text-xs font-medium border bg-amber-50/80 border-amber-200 text-amber-800">
+                      <Card tone="warning" padding="none" className="px-4 py-3 text-xs font-medium text-amber-800">
                         <div className="flex items-center gap-2">
                           <AlertTriangle size={14} className="shrink-0" />
                           <span className="font-semibold">
@@ -759,7 +785,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         <p className="mt-1 text-2xs font-medium opacity-90">
                           De planner herverdeelt deze bij goedkeuring.
                         </p>
-                      </div>
+                      </Card>
                     )}
                   </div>
                 )}
@@ -829,20 +855,17 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 )}
               </div>
 
-              <div className="surface-muted rounded-xl p-4">
+              <Card tone="muted" padding="sm">
                 <MicroLabel className="text-slate-500">Periode</MicroLabel>
                 <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
                   {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
                   <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'dag' : 'dagen'})</span>
                 </p>
-              </div>
+              </Card>
 
               {/* Saldo-context van de aanvrager — beslis met het budget in beeld. */}
               {reviewLeave.type === 'betaald_verlof' && (
-                <div className={cn(
-                  'rounded-xl border px-4 py-3',
-                  exceeds ? 'border-red-100 bg-red-50' : 'border-emerald-100 bg-emerald-50',
-                )}>
+                <Card tone={exceeds ? 'danger' : 'success'} padding="none" className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
                     <MicroLabel className={exceeds ? 'text-red-700' : 'text-emerald-700'}>
                       Verlofsaldo {requestYear}
@@ -856,7 +879,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       ? `Deze aanvraag gaat ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget} ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget === 1 ? 'dag' : 'dagen'} over het jaarbudget.`
                       : `Na goedkeuring resteren ${balance.betaaldBudget - balance.betaaldGebruikt - dayCount} dagen.`}
                   </p>
-                </div>
+                </Card>
               )}
 
               {/* Dekkingsimpact: hoeveel andere chauffeurs zijn deze periode al
@@ -876,12 +899,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   cur.setDate(cur.getDate() + 1);
                 }
                 return (
-                  <div className="rounded-xl border border-slate-100 bg-surface-soft px-4 py-3">
+                  <Card tone="muted" padding="none" className="px-4 py-3">
                     <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
                     <p className="mt-1 text-xs font-normal text-slate-600">
                       {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} afwezig in deze periode{peak > 1 ? ` — tot ${peak} tegelijk op de drukste dag` : ''}.
                     </p>
-                  </div>
+                  </Card>
                 );
               })()}
 
@@ -957,8 +980,9 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
           const fresh = isNew?.(req) ?? false;
           const open = openIds.includes(req.id);
           return (
-            <div key={req.id} className={cn('surface-card rounded-2xl relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
+            <Card key={req.id} padding="none" className={cn('relative overflow-hidden', fresh && 'ring-2 ring-oker-400/40')}>
               <div className={cn('absolute top-0 left-0 w-1 h-full', statusAccentClass(req.status))} />
+              {/* rauw: uitklapbare kaartkop (periode + type + status + chevron) — hele rij klikbaar */}
               <button
                 type="button"
                 onClick={() => toggle(req.id)}
@@ -991,12 +1015,12 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                   )}
                 </div>
               )}
-            </div>
+            </Card>
           );
         }) : (
-          <div className="surface-card p-6 rounded-2xl text-center">
+          <Card padding="md" className="text-center">
             <p className="text-slate-400 font-medium text-sm">{emptyText}</p>
-          </div>
+          </Card>
         )}
       </div>
     </div>
