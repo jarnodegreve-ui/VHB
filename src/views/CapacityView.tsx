@@ -21,6 +21,20 @@ import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
 import { DUR } from '../lib/motion';
 
 
+/** Maandag (ISO-datum) van de week waarin `iso` valt. */
+const mondayOf = (iso: string) => {
+  const d = new Date(`${iso}T00:00:00`);
+  const day = d.getDay();
+  d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
+  return isoDate(d);
+};
+const addDaysIso = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00`);
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+};
+const monthOf = (iso: string) => iso.slice(0, 7);
+
 /** Vaste redenen voor een handmatige dienstwissel; bij 'Andere correctie' is
  *  de vrije toelichting verplicht (de server eist altijd een reden). */
 const WISSEL_REDENEN = ['Ziekte', 'Mondelinge dienstruil', 'Andere correctie'] as const;
@@ -42,10 +56,12 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   const [selected, setSelected] = useState<{ driverName: string; driverId: string; iso: string; cell: MonthCell } | null>(null);
 
 
-  // Venster van 2 weken binnen de maand; bij de randen springen we naar de
-  // vorige/volgende maand. 'pendingEdge' bepaalt waar we landen na het laden.
-  const [pageIndex, setPageIndex] = useState(0);
-  const [pendingEdge, setPendingEdge] = useState<null | 'first' | 'last' | 'today'>('today');
+  // Desktop: vast venster van twee volle weken (ma–zo + ma–zo), beginnend op
+  // de maandag van de huidige week — ook als er al dagen voorbij zijn (vraag
+  // Jarno 03-09). Het venster mag over een maandgrens lopen; de tweede maand
+  // wordt er dan stil bij geladen (extraData).
+  const [windowStart, setWindowStart] = useState(() => mondayOf(isoDate(new Date())));
+  const [extraData, setExtraData] = useState<MonthPlanning | null>(null);
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -260,6 +276,22 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [reloadTick]);
 
+  // De 14 dagen van het venster; de maand die niet de hoofdmaand is wordt
+  // apart geladen zodat de kolommen na de maandgrens niet leeg blijven.
+  const windowDates = useMemo(() => Array.from({ length: 14 }, (_, i) => addDaysIso(windowStart, i)), [windowStart]);
+  const extraMonth = useMemo(() => {
+    const maanden = Array.from(new Set(windowDates.map(monthOf)));
+    return maanden.find((m) => m !== monthParam) ?? null;
+  }, [windowDates, monthParam]);
+  useEffect(() => {
+    if (!extraMonth) { setExtraData(null); return; }
+    let cancelled = false;
+    fetchMonthPlanning(extraMonth)
+      .then((res) => { if (!cancelled) setExtraData(res); })
+      .catch(() => { if (!cancelled) setExtraData(null); /* lege kolommen; volgende verversing herstelt */ });
+    return () => { cancelled = true; };
+  }, [extraMonth, reloadTick]);
+
   useEffect(() => {
     const opWijziging = () => setReloadTick((t) => t + 1);
     window.addEventListener('vhb-planning-changed', opWijziging);
@@ -267,8 +299,23 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
   }, []);
 
   const dates = data?.dates ?? [];
-  const drivers = data?.drivers ?? [];
-  const cells = data?.cells ?? {};
+  // Chauffeurs en cellen van hoofd- én extra maand samen (venster over een
+  // maandgrens); de hoofdmaand bepaalt de volgorde.
+  const drivers = useMemo(() => {
+    const basis = data?.drivers ?? [];
+    if (!extraData) return basis;
+    const ids = new Set(basis.map((d) => d.id));
+    return [...basis, ...extraData.drivers.filter((d) => !ids.has(d.id))];
+  }, [data, extraData]);
+  const cells = useMemo(() => {
+    const basis = data?.cells ?? {};
+    if (!extraData) return basis;
+    const merged: Record<string, Record<string, MonthCell>> = {};
+    for (const id of new Set([...Object.keys(basis), ...Object.keys(extraData.cells)])) {
+      merged[id] = { ...(extraData.cells[id] ?? {}), ...(basis[id] ?? {}) };
+    }
+    return merged;
+  }, [data, extraData]);
   // Werkdagen per chauffeur uit de maandcellen — voedt de vervanger-sortering
   // (minst gewerkt die week eerst). hiddenService telt mee als werkdag: de
   // dienst staat dan nog op naam (ziekte-overlay), dus die dag is niet vrij.
@@ -284,79 +331,34 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
     return per;
   }, [cells]);
 
-  // Maandag van de week (lokaal) → sleutel om dagen per week te bucketen.
-  const weekKeyOf = (iso: string) => {
-    const d = new Date(`${iso}T00:00:00`);
-    const day = d.getDay();
-    d.setDate(d.getDate() + (day === 0 ? -6 : 1 - day));
-    return isoDate(d);
+  // Venster verschuiven = twee weken op; de hoofdmaand volgt de maand waarin
+  // het grootste deel van het venster valt (de tweede maandag), zodat export
+  // en overzicht bij "de maand die je bekijkt" horen.
+  const verschuifVenster = (weken: number) => {
+    const next = addDaysIso(windowStart, weken * 7);
+    setWindowStart(next);
+    const midden = new Date(`${addDaysIso(next, 7)}T00:00:00`);
+    setViewMonth(new Date(midden.getFullYear(), midden.getMonth(), 1));
   };
-
-  // Pagina's van telkens 2 kalenderweken (enkel de geplande dagen erin).
-  const WEEKS_PER_PAGE = 2;
-  const pages = useMemo(() => {
-    if (dates.length === 0) return [] as string[][];
-    const byWeek = new Map<string, string[]>();
-    for (const iso of dates) {
-      const k = weekKeyOf(iso);
-      const bucket = byWeek.get(k);
-      if (bucket) bucket.push(iso); else byWeek.set(k, [iso]);
-    }
-    const weekKeys = Array.from(byWeek.keys()).sort();
-    const result: string[][] = [];
-    for (let i = 0; i < weekKeys.length; i += WEEKS_PER_PAGE) {
-      result.push(weekKeys.slice(i, i + WEEKS_PER_PAGE).flatMap((k) => byWeek.get(k)!));
-    }
-    return result;
-  }, [dates]);
-
-  // Na het (her)laden van een maand op de juiste pagina landen.
-  useEffect(() => {
-    // pendingEdge pas consumeren als de JUISTE maand geladen is — het effect
-    // draaide eerder direct na setViewMonth tegen de oude pagina's, waardoor
-    // "Vandaag"/maandwissels op het verkeerde 2-weken-venster landden.
-    if (pendingEdge && (loading || data?.month !== monthParam)) return;
-    if (pages.length === 0) { setPageIndex(0); return; }
-    if (pendingEdge === 'last') { setPageIndex(pages.length - 1); setPendingEdge(null); }
-    else if (pendingEdge === 'first') { setPageIndex(0); setPendingEdge(null); }
-    else if (pendingEdge === 'today') {
-      const idx = pages.findIndex((pg) => pg.includes(todayIso));
-      setPageIndex(idx >= 0 ? idx : 0);
-      setPendingEdge(null);
-    } else {
-      setPageIndex((p) => Math.min(p, pages.length - 1));
-    }
-  }, [pages, pendingEdge, todayIso, loading, data?.month, monthParam]);
-
-  const goPrevWindow = () => {
-    if (pageIndex > 0) { setPageIndex(pageIndex - 1); return; }
-    setPendingEdge('last');
-    setViewMonth(new Date(year, monthIndex - 1, 1));
-  };
-  const goNextWindow = () => {
-    if (pageIndex < pages.length - 1) { setPageIndex(pageIndex + 1); return; }
-    setPendingEdge('first');
-    setViewMonth(new Date(year, monthIndex + 1, 1));
-  };
+  const goPrevWindow = () => verschuifVenster(-2);
+  const goNextWindow = () => verschuifVenster(2);
   const goToday = () => {
     const n = new Date();
-    setPendingEdge('today');
+    setWindowStart(mondayOf(todayIso));
     setViewMonth(new Date(n.getFullYear(), n.getMonth(), 1));
     // Mobiele dag-weergave springt mee; valt vandaag buiten de al geladen
     // maand, dan corrigeert het dates-effect zodra de nieuwe maand binnen is.
     setMobielDag(todayIso);
   };
 
-  const visibleDates = pages[pageIndex] ?? [];
+  const visibleDates = windowDates;
 
   const formatDayMonth = (iso: string) => {
     const d = new Date(`${iso}T00:00:00`);
     try { return d.toLocaleDateString('nl-BE', { day: 'numeric', month: 'short' }); }
     catch { return iso; }
   };
-  const windowLabel = visibleDates.length > 0
-    ? `${weekRangeLabel(visibleDates)} · ${formatDayMonth(visibleDates[0])} – ${formatDayMonth(visibleDates[visibleDates.length - 1])} ${year}`
-    : `${MONTH_NAMES[monthIndex]} ${year}`;
+  const windowLabel = `${weekRangeLabel(visibleDates)} · ${formatDayMonth(visibleDates[0])} – ${formatDayMonth(visibleDates[visibleDates.length - 1])} ${visibleDates[visibleDates.length - 1].slice(0, 4)}`;
 
   const dayHeader = (iso: string) => {
     const d = new Date(`${iso}T00:00:00`);
@@ -371,7 +373,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
   const formatDateLong = formatDayLong;
 
-  const hasData = dates.length > 0 && drivers.length > 0;
+  // Ook een venster dat alleen in de extra maand planning heeft telt als data.
+  const hasData = (dates.length > 0 || (extraData?.dates.length ?? 0) > 0) && drivers.length > 0;
 
   // Sectie-koppen tonen zodra minstens één chauffeur een sectie heeft (anders
   // gedraagt de lijst zich als voorheen — één alfabetische groep, geen koppen).
@@ -742,7 +745,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   variant="ghost"
                   size="md"
                   className="text-slate-400"
-                  onClick={() => { setPendingEdge('last'); setViewMonth(new Date(year, monthIndex - 1, 1)); }}
+                  onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))}
                 >
                   <ChevronLeft size={16} />
                 </IconButton>
@@ -767,7 +770,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                     variant="ghost"
                     size="md"
                     className="text-slate-400"
-                    onClick={() => { setPendingEdge('first'); setViewMonth(new Date(year, monthIndex + 1, 1)); }}
+                    onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))}
                   >
                     <ChevronRight size={16} />
                   </IconButton>
