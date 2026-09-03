@@ -68,7 +68,9 @@ export function BottomNav({
   const slots: NavSlot[] = isPlanner
     ? [tab('dashboard'), tab('dekking'), tab('verlof', pendingLeaveCount), tab('ruil-verzoeken', pendingSwapsCount), tab('vervaldata')]
     // Verlof i.p.v. Updates: de badge telt verlofbeslissingen (unseenLeaveCount).
-    : [tab('dashboard'), tab('rooster'), tab('omleidingen'), tab('ritblaadjes'), tab('verlof', unseenLeaveCount)];
+    // Mijn dag (03-09) neemt de plek van Ritbladen in: het ritblad van vandaag
+    // zit als knop ín Mijn dag, de Ritbladen-pagina blijft via "Meer".
+    : [tab('dashboard'), tab('mijn-dag'), tab('rooster'), tab('omleidingen'), tab('verlof', unseenLeaveCount)];
 
   return (
     <nav

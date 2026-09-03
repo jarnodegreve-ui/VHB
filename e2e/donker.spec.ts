@@ -55,7 +55,7 @@ const witteVlakken = (page: Page) =>
 // plus de beheerschermen met veel oppervlakken. Bewust niet: de printviews
 // (die zijn per definitie wit, A4) en het inlogscherm (altijd carbon).
 const SCHERMEN = [
-  'dashboard', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten',
+  'dashboard', 'mijn-dag', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten',
   'contacten', 'updates', 'ruil-verzoeken', 'verlof', 'bezetting',
   'dekking', 'verlof-kalender', 'dienstoverzicht', 'planning-codes',
   'vervaldata', 'gebruikers', 'toestellen', 'activiteit',

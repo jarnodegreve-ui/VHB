@@ -22,7 +22,7 @@ const DESKTOP = process.env.VISUEEL_DESKTOP === '1';
 const ALLE_THEMAS = process.env.VISUEEL_ALLE_THEMAS === '1';
 fs.mkdirSync(OUT, { recursive: true });
 
-const CHAUFFEUR_VIEWS = ['dashboard', 'instellingen', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'];
+const CHAUFFEUR_VIEWS = ['dashboard', 'mijn-dag', 'instellingen', 'rooster', 'omleidingen', 'ritblaadjes', 'documenten', 'contacten', 'updates', 'ruil-verzoeken', 'bezetting', 'verlof'];
 const ADMIN_VIEWS = ['dashboard', 'verlof', 'verlof-kalender', 'dekking', 'beheer-roosters', 'planning-matrix', 'planning-codes', 'dienstoverzicht', 'beheer-dienstoverzicht', 'beheer-updates', 'beheer-omleidingen', 'gebruikers', 'toestellen', 'activiteit', 'beheer-debug'];
 
 const PROFILES = [

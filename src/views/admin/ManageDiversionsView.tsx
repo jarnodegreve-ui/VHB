@@ -21,7 +21,16 @@ import { isoDate } from '../../lib/availability';
 
 const FORM_ID = 'omleiding-form';
 
-export function ManageDiversionsView({ diversions, onSave }: { diversions: Diversion[], onSave: (d: Diversion[]) => void }) {
+export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCreateDiversion, onDeleteDiversion }: {
+  diversions: Diversion[];
+  /** Collectie-saver (hele lijst) — alleen nog de terugval als de
+   *  per-record-savers hieronder niet doorgegeven zijn. */
+  onSave: (d: Diversion[]) => void;
+  /** Per record (PUT/POST one/DELETE, useAppData). Optioneel tot App ze doorgeeft. */
+  onSaveDiversion?: (d: Diversion) => Promise<boolean>;
+  onCreateDiversion?: (d: Diversion) => Promise<boolean>;
+  onDeleteDiversion?: (id: string) => Promise<boolean>;
+}) {
   // Het bewerkformulier leeft in het DetailPaneel: desktop naast de lijst,
   // mobiel als SlideOver. "Nieuw" opent hetzelfde paneel leeg.
   const [paneelOpen, setPaneelOpen] = useState(false);
@@ -139,16 +148,15 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     }
 
     if (editingId) {
-      const updatedDiversions = diversions.map(d =>
-        d.id === editingId
-          ? {
-              ...d,
-              ...formData,
-              pdfUrl: uploadedPdfUrl || d.pdfUrl,
-            } as Diversion
-          : d
-      );
-      onSave(updatedDiversions);
+      const bestaande = diversions.find((d) => d.id === editingId);
+      const bijgewerkt = { ...bestaande, ...formData, id: editingId, pdfUrl: uploadedPdfUrl || bestaande?.pdfUrl } as Diversion;
+      if (onSaveDiversion) {
+        // Per record: het paneel blijft open als het misging (409 → de lijst
+        // is ververst; de gebruiker ziet de nieuwe staat en kan opnieuw).
+        if (!(await onSaveDiversion(bijgewerkt))) return;
+      } else {
+        onSave(diversions.map((d) => (d.id === editingId ? bijgewerkt : d)));
+      }
     } else {
       const diversionToAdd: Diversion = {
         id: targetId,
@@ -159,18 +167,26 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         endDate: formData.endDate,
         pdfUrl: uploadedPdfUrl || undefined,
       };
-      onSave([...diversions, diversionToAdd]);
+      if (onCreateDiversion) {
+        if (!(await onCreateDiversion(diversionToAdd))) return;
+      } else {
+        onSave([...diversions, diversionToAdd]);
+      }
     }
 
     sluitPaneel();
   };
 
-  const handleDelete = () => {
-    if (confirmDeleteId) {
-      onSave(diversions.filter(d => d.id !== confirmDeleteId));
-      if (confirmDeleteId === editingId) sluitPaneel();
-      setConfirmDeleteId(null);
+  const handleDelete = async () => {
+    if (!confirmDeleteId) return;
+    const id = confirmDeleteId;
+    setConfirmDeleteId(null);
+    if (onDeleteDiversion) {
+      if (!(await onDeleteDiversion(id))) return;
+    } else {
+      onSave(diversions.filter((d) => d.id !== id));
     }
+    if (id === editingId) sluitPaneel();
   };
 
   const bewerkte = editingId ? diversions.find((d) => d.id === editingId) ?? null : null;

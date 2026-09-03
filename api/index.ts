@@ -6,9 +6,9 @@ import dotenv from "dotenv";
 import { buildCalendar, type IcsEvent } from "./ics.js";
 import { TABLE_PROBES } from "./schemaProbes.js";
 
-import { sendLeaveDecisionEmail, sendEmail, sendWelcomeEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
+import { sendLeaveDecisionEmail, sendEmail, sendExpiryReminderEmail, isSmtpConfigured, escapeHtml, type LeaveDecisionAction } from "./email.js";
 import { getVapidPublicKey, savePushSubscription, deletePushSubscriptionForUser, sendPushToUsers, getUsersMetPush } from "./push.js";
-import type { AppUser, AuthenticatedRequest } from "./types.js";
+import type { AppUser, AuthenticatedRequest, IncomingUser } from "./types.js";
 import { db, supabase, supabaseAdmin } from "./db.js";
 import { authenticate, requireRole, isCronAuthorized, resolveOptionalUser, isRosteringExportAuthorized } from "./middleware.js";
 import { isMissingTableError } from "./deviceGate.js";
@@ -24,7 +24,17 @@ import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
-import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
+import {
+  RECORD_REVISION_HEADER,
+  recordRevisionOf,
+  userRecordRevisionOf,
+  withRecordRevision,
+  requestedRecordRevision,
+  verwerkUsersOpslag,
+  verwerkDiversionsOpslag,
+  verwerkUpdatesOpslag,
+} from "./_lib/recordWrites.js";
+import { addDagenIso, brusselsDay, normalizeEmail, parsePlanningMatrixXlsxMetWaarschuwingen, toRoleScopedUser, sanitizeIncomingUser, countAdmins, toLookupToken, sortedNameToken, nameIdIndex, afwezigOp, matrixCodesForDate, isTakeoverCode, bouwMatrixXlsx, bouwMaandoverzichtAoa, berekenMaandoverzicht, vindOngeregistreerdeZiekte, isDigestRuis, isHandmatigeWissel, HANDMATIGE_WISSEL_PREFIX, normalizeSwapType, TAKEOVER_CODES, LEAVE_TYPE_LABEL, EXPIRY_SOORT_LABEL, isActieveStaf } from "./helpers.js";
 import {
   applySwapsToPlanningRows,
   swapRaaktBereik,
@@ -60,14 +70,12 @@ import {
   markUserDocumentOpened,
   getUserDocument,
   getRitblaadjeMeta,
-  deleteAllDocumentsForUser,
   insertUserDocument,
   deleteUserDocument,
   DOCUMENTS_BUCKET,
   restoreFromBackup,
   replacePlanningData,
   replacePlanningAndMatrix,
-  saveDiversionsData,
   saveLeaveData,
   savePlanningCodesData,
   savePlanningData,
@@ -83,20 +91,12 @@ import {
   savePlanningMatrixHistoryEntry,
   saveServicesData,
   saveSwapsData,
-  saveUpdatesData,
-  saveUsersData,
   DIVERSIONS_BUCKET,
-  summarizeDiversionChanges,
   summarizePlanningCodeChanges,
-  diffDiversionChanges,
-  diffUpdateChanges,
-  diffUserChanges,
   diffPlanningCodeChanges,
   summarizeServiceChanges,
   diffServiceChanges,
   summarizeTokens,
-  summarizeUpdateChanges,
-  summarizeUserChanges,
   isMissingDbFunction,
   logCronHeartbeat,
   getCronHeartbeats,
@@ -108,7 +108,6 @@ import {
   deleteUserExpiry,
   deletePlanningNote,
   getLatestBackup,
-  kopieerOnthaalDocumentenNaar,
   storeImportSnapshot,
   getImportSnapshot,
   restorePlanningAndMatrixSnapshot,
@@ -2095,7 +2094,9 @@ app.get("/api/users", authenticate, async (req: AuthenticatedRequest, res) => {
     // Revisie over de volledige serverstaat (niet de role-scoped weergave):
     // opaque token, hoeft enkel consistent te zijn met de POST-vergelijking.
     res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(users));
-    res.json(users.map((user) => toRoleScopedUser(user, req.appUser!.role, req.appUser!.id)));
+    // `_rev` per record (hash over de volledige serverstaat, zonder sessie-
+    // velden): de client stuurt hem terug bij PUT/DELETE /api/users/:id.
+    res.json(users.map((user) => withRecordRevision(toRoleScopedUser(user, req.appUser!.role, req.appUser!.id), userRecordRevisionOf(user))));
   } catch (err) {
     console.error("Error reading users data:", err);
     res.status(500).json({ error: "Gegevens laden is mislukt." });
@@ -2119,67 +2120,10 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       if (revisionConflict(req, previousUsers, usersRevisionOf)) return revisionConflictResponse(res, "De gebruikerslijst");
       const usersRemoved = detectMassDelete(previousUsers, newData);
       if (usersRemoved !== null) return massDeleteResponse(res, usersRemoved, previousUsers.length, "gebruikers");
-      const { createdAccounts } = (await saveUsersData(newData)) ?? { createdAccounts: [] };
-      // Auth-cache verversen: rol/isActive/e-mail-wijzigingen moeten meteen
-      // doorwerken, niet pas na de TTL.
-      invalidateUsersCache();
-      await logActivity(
-        req,
-        "users",
-        "Gebruikers opgeslagen",
-        `${newData.length} gebruikers verwerkt in gebruikersbeheer. ${summarizeUserChanges(previousUsers, newData)}.`,
-      );
-
-      // Per-user audit entries
-      const userDiff = diffUserChanges(previousUsers, newData);
-      for (const u of userDiff.added) {
-        await logActivity(req, "users", "Gebruiker toegevoegd", `${u.name} (${u.role}, ${u.employeeId || '—'}).`, { type: "user", id: u.id });
-        // Nieuwe chauffeur? Zet de Onthaal-documenten (brochure e.d.) meteen
-        // klaar in "Mijn documenten". Best-effort — mag de save nooit breken.
-        if (u.role === "chauffeur") {
-          try {
-            const klaargezet = await kopieerOnthaalDocumentenNaar(String(u.id));
-            if (klaargezet > 0) {
-              await logActivity(req, "users", "Onthaal-documenten klaargezet", `${klaargezet} document(en) automatisch toegevoegd voor ${u.name}.`, { type: "user", id: u.id });
-            }
-          } catch (err) {
-            console.error(`[onthaal-docs] klaarzetten voor ${u.name} mislukt:`, err);
-          }
-        }
-      }
-      for (const { user: u, fields } of userDiff.changed) {
-        await logActivity(req, "users", "Gebruiker gewijzigd", `${u.name} — ${fields.join(', ')}.`, { type: "user", id: u.id });
-      }
-      for (const u of userDiff.removed) {
-        await logActivity(req, "users", "Gebruiker verwijderd", `${u.name} (${u.role}).`, { type: "user", id: u.id });
-        // Wees-documenten opruimen: verwijder de bijhorende storage-bestanden +
-        // metadata-rijen zodat er niets van de ex-medewerker achterblijft.
-        const removedDocs = await deleteAllDocumentsForUser(String(u.id));
-        if (removedDocs > 0) {
-          await logActivity(req, "users", "Documenten opgeruimd", `${removedDocs} document(en) van ${u.name} verwijderd.`, { type: "user", id: u.id });
-        }
-      }
-
-      // Welkomstmail voor élk nieuw aangemaakt Auth-account: met een
-      // recovery-link stelt de nieuwe collega direct een eigen wachtwoord in
-      // (i.p.v. een doorgefluisterd Excel-wachtwoord). Best-effort — een
-      // mailfout mag de save niet laten falen.
-      for (const account of createdAccounts ?? []) {
-        try {
-          let actionLink: string | null = null;
-          if (supabaseAdmin) {
-            const { data: linkData, error: linkError } = await supabaseAdmin.auth.admin.generateLink({
-              type: "recovery",
-              email: account.email,
-              options: { redirectTo: process.env.APP_URL || "https://vhbportaal.com" },
-            });
-            if (!linkError) actionLink = linkData?.properties?.action_link ?? null;
-          }
-          await sendWelcomeEmail({ to: account.email, name: account.name, actionLink });
-        } catch (err) {
-          console.error(`[welcome-mail] versturen naar ${account.email} mislukt:`, err);
-        }
-      }
+      // Bijwerkingen (Auth + welkomstmail, onthaal-docs, documenten opruimen,
+      // audit, cache) zitten in de gedeelde schrijfkern — zelfde pad als de
+      // per-record-routes hieronder.
+      const { createdAccounts } = await verwerkUsersOpslag(req as AuthenticatedRequest, previousUsers, newData);
 
       res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
       res.json({ success: true, count: newData.length, welcomed: (createdAccounts ?? []).length });
@@ -2191,6 +2135,118 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
     console.error("Error saving users data:", errorMessage);
     console.error("Opslaan is mislukt.", errorMessage);
     res.status(500).json({ error: "Opslaan is mislukt." });
+  }
+});
+
+// --- Gebruikers per record (PUT/POST one/DELETE) ---
+// Eerste stap weg van "POST de hele collectie": het scherm bewerkt rij voor
+// rij, dus de API ook. Zelfde schrijfkern (verwerkUsersOpslag) als de
+// collectie-POST; concurrency per record via `_rev` (zie recordWrites.ts).
+
+/** Gedeelde 409 voor een record dat intussen gewijzigd is: het actuele
+ *  record gaat mee zodat de client kan verversen. */
+const recordConflictResponse = (res: any, label: string, record: unknown) =>
+  res.status(409).json({
+    error: "Gewijzigd door iemand anders",
+    details: `${label} is intussen door iemand anders gewijzigd. De lijst wordt ververst — bekijk de wijziging en probeer je aanpassing opnieuw.`,
+    conflict: "record",
+    record,
+  });
+const recordRevisionMissingResponse = (res: any) =>
+  res.status(400).json({ error: `${RECORD_REVISION_HEADER} ontbreekt: stuur de revisie van het record dat je zag mee.` });
+const isPlainRecord = (body: unknown): body is Record<string, unknown> =>
+  !!body && typeof body === "object" && !Array.isArray(body);
+const newRecordId = () => crypto.randomUUID();
+
+/** Validatie die de collectie-POST ook doet (wachtwoordminimum) plus de
+ *  basis van één record: naam en een geldig e-mailadres als er één is. */
+const validateUserRecord = (body: Record<string, unknown>): string | null => {
+  if (typeof body.name !== "string" || body.name.trim().length === 0) return "Naam ontbreekt.";
+  if (typeof body.password === "string" && body.password.length > 0 && body.password.length < WACHTWOORD_MIN) {
+    return `Een wachtwoord moet minstens ${WACHTWOORD_MIN} tekens hebben.`;
+  }
+  const email = normalizeEmail(typeof body.email === "string" ? body.email : undefined);
+  if (email && !email.includes("@")) return "Ongeldig e-mailadres.";
+  return null;
+};
+/** Zelfde vangrail als saveUsersData, maar als nette 400 i.p.v. een 500. */
+const laatsteAdminVerdwijnt = (users: IncomingUser[]) => countAdmins(users.map(sanitizeIncomingUser)) === 0;
+const emailInGebruik = (users: AppUser[], email: string | undefined, eigenId: string) =>
+  !!email && users.some((u) => String(u.id) !== eigenId && normalizeEmail(u.email) === email);
+const userResponseRecord = async (id: string) => {
+  const user = (await getUsersData()).find((u) => String(u.id) === id);
+  return user ? withRecordRevision(user, userRecordRevisionOf(user)) : null;
+};
+
+app.post("/api/users/one", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = req.body;
+    if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één gebruiker verwacht." });
+    const fout = validateUserRecord(body);
+    if (fout) return res.status(400).json({ error: fout });
+    const id = typeof body.id === "string" && body.id.trim() ? body.id.trim() : newRecordId();
+    const previousUsers = await getUsersData();
+    if (previousUsers.some((u) => String(u.id) === id)) {
+      return res.status(409).json({ error: "Er bestaat al een gebruiker met dit id.", conflict: "exists" });
+    }
+    const email = normalizeEmail(typeof body.email === "string" ? body.email : undefined);
+    if (emailInGebruik(previousUsers, email, id)) return res.status(409).json({ error: `E-mailadres ${email} is al in gebruik.`, conflict: "email" });
+    const record = { ...body, id } as IncomingUser;
+    await verwerkUsersOpslag(req, previousUsers, [...previousUsers, record], { samenvatting: false });
+    res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
+    res.status(201).json({ success: true, user: await userResponseRecord(id) });
+  } catch (err: any) {
+    console.error("Gebruiker toevoegen is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Opslaan is mislukt." });
+  }
+});
+
+app.put("/api/users/:id", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const body = req.body;
+    if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één gebruiker verwacht." });
+    const fout = validateUserRecord(body);
+    if (fout) return res.status(400).json({ error: fout });
+    const rev = requestedRecordRevision(req);
+    if (!rev) return recordRevisionMissingResponse(res);
+    const previousUsers = await getUsersData();
+    const current = previousUsers.find((u) => String(u.id) === id);
+    if (!current) return res.status(404).json({ error: "Gebruiker niet gevonden — mogelijk intussen verwijderd." });
+    if (rev !== userRecordRevisionOf(current)) return recordConflictResponse(res, "Deze gebruiker", withRecordRevision(current, userRecordRevisionOf(current)));
+    const email = normalizeEmail(typeof body.email === "string" ? body.email : undefined);
+    if (emailInGebruik(previousUsers, email, id)) return res.status(409).json({ error: `E-mailadres ${email} is al in gebruik.`, conflict: "email" });
+    const record = { ...body, id } as IncomingUser;
+    const newData = previousUsers.map((u) => (String(u.id) === id ? record : u));
+    if (laatsteAdminVerdwijnt(newData)) return res.status(400).json({ error: "Er moet minstens 1 actieve admin overblijven." });
+    await verwerkUsersOpslag(req, previousUsers, newData, { samenvatting: false });
+    res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
+    res.json({ success: true, user: await userResponseRecord(id) });
+  } catch (err: any) {
+    console.error("Gebruiker opslaan is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Opslaan is mislukt." });
+  }
+});
+
+app.delete("/api/users/:id", authenticate, requireRole("admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    // Jezelf verwijderen blijft geblokkeerd (de UI beschermt dit ook).
+    if (id === String(req.appUser!.id)) return res.status(403).json({ error: "Je kunt je eigen account niet verwijderen." });
+    const rev = requestedRecordRevision(req);
+    if (!rev) return recordRevisionMissingResponse(res);
+    const previousUsers = await getUsersData();
+    const current = previousUsers.find((u) => String(u.id) === id);
+    if (!current) return res.status(404).json({ error: "Gebruiker niet gevonden — mogelijk al verwijderd." });
+    if (rev !== userRecordRevisionOf(current)) return recordConflictResponse(res, "Deze gebruiker", withRecordRevision(current, userRecordRevisionOf(current)));
+    const newData = previousUsers.filter((u) => String(u.id) !== id);
+    if (laatsteAdminVerdwijnt(newData)) return res.status(400).json({ error: "Er moet minstens 1 actieve admin overblijven." });
+    await verwerkUsersOpslag(req, previousUsers, newData, { samenvatting: false });
+    res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Gebruiker verwijderen is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Verwijderen is mislukt." });
   }
 });
 
@@ -3004,7 +3060,9 @@ app.get("/api/diversions", authenticate, async (req, res) => {
     // Revisie op de rauwe data: de ondertekende URL's wisselen per request en
     // zouden de optimistische-concurrency-hash anders elke keer veranderen.
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-    res.json(await withSignedDiversionUrls(data));
+    // `_rev` per record over de rauwe rij (vóór het ondertekenen, zelfde reden).
+    const revs = data.map((d: any) => recordRevisionOf(d));
+    res.json((await withSignedDiversionUrls(data)).map((d: any, i: number) => withRecordRevision(d, revs[i])));
   } catch (err) {
     console.error("Error reading diversions data:", err);
     res.status(500).json({ error: "Gegevens laden is mislukt." });
@@ -3019,26 +3077,7 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
       if (revisionConflict(req, previousDiversions)) return revisionConflictResponse(res, "De omleidingen");
       const diversionsRemoved = detectMassDelete(previousDiversions, newData);
       if (diversionsRemoved !== null) return massDeleteResponse(res, diversionsRemoved, previousDiversions.length, "omleidingen");
-      await saveDiversionsData(newData);
-      await logActivity(
-        req,
-        "diversions",
-        "Omleidingen opgeslagen",
-        `${newData.length} omleidingen opgeslagen. ${summarizeDiversionChanges(previousDiversions, newData)}.`,
-      );
-
-      // Per-omleiding audit entries
-      const divDiff = diffDiversionChanges(previousDiversions, newData);
-      const fmtDiv = (d: any) => `${d.title} (lijn ${d.line}) — ${d.startDate}${d.endDate ? ` t/m ${d.endDate}` : ''}.`;
-      for (const d of divDiff.added) {
-        await logActivity(req, "diversions", "Omleiding toegevoegd", fmtDiv(d), { type: "diversion", id: d.id });
-      }
-      for (const d of divDiff.changed) {
-        await logActivity(req, "diversions", "Omleiding gewijzigd", fmtDiv(d), { type: "diversion", id: d.id });
-      }
-      for (const d of divDiff.removed) {
-        await logActivity(req, "diversions", "Omleiding verwijderd", fmtDiv(d), { type: "diversion", id: d.id });
-      }
+      await verwerkDiversionsOpslag(req as AuthenticatedRequest, previousDiversions, newData);
 
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.json({ success: true, count: newData.length });
@@ -3050,6 +3089,81 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
     console.error("Error saving diversions data:", errorMessage);
     console.error("Opslaan is mislukt.", errorMessage);
     res.status(500).json({ error: "Opslaan is mislukt." });
+  }
+});
+
+// --- Omleidingen per record ---
+const validateDiversionRecord = (body: Record<string, unknown>): string | null => {
+  if (typeof body.title !== "string" || body.title.trim().length === 0) return "Titel ontbreekt.";
+  if (typeof body.startDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.startDate)) return "Startdatum ontbreekt of is ongeldig (JJJJ-MM-DD).";
+  if (body.endDate !== undefined && body.endDate !== null && body.endDate !== "" && (typeof body.endDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.endDate))) return "Einddatum is ongeldig (JJJJ-MM-DD).";
+  return null;
+};
+const diversionResponseRecord = async (id: string) => {
+  const raw = (await getDiversionsData()).find((d: any) => String(d.id) === id);
+  if (!raw) return null;
+  const [signed] = await withSignedDiversionUrls([raw]);
+  return withRecordRevision(signed, recordRevisionOf(raw));
+};
+
+app.post("/api/diversions/one", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = req.body;
+    if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één omleiding verwacht." });
+    const fout = validateDiversionRecord(body);
+    if (fout) return res.status(400).json({ error: fout });
+    const id = typeof body.id === "string" && body.id.trim() ? body.id.trim() : newRecordId();
+    const previousDiversions = await getDiversionsData();
+    if (previousDiversions.some((d: any) => String(d.id) === id)) {
+      return res.status(409).json({ error: "Er bestaat al een omleiding met dit id.", conflict: "exists" });
+    }
+    await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, { ...body, id }], { samenvatting: false });
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
+    res.status(201).json({ success: true, diversion: await diversionResponseRecord(id) });
+  } catch (err: any) {
+    console.error("Omleiding toevoegen is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Opslaan is mislukt." });
+  }
+});
+
+app.put("/api/diversions/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const body = req.body;
+    if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één omleiding verwacht." });
+    const fout = validateDiversionRecord(body);
+    if (fout) return res.status(400).json({ error: fout });
+    const rev = requestedRecordRevision(req);
+    if (!rev) return recordRevisionMissingResponse(res);
+    const previousDiversions = await getDiversionsData();
+    const current = previousDiversions.find((d: any) => String(d.id) === id);
+    if (!current) return res.status(404).json({ error: "Omleiding niet gevonden — mogelijk intussen verwijderd." });
+    if (rev !== recordRevisionOf(current)) return recordConflictResponse(res, "Deze omleiding", withRecordRevision(current, recordRevisionOf(current)));
+    const newData = previousDiversions.map((d: any) => (String(d.id) === id ? { ...body, id } : d));
+    await verwerkDiversionsOpslag(req, previousDiversions, newData, { samenvatting: false });
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
+    res.json({ success: true, diversion: await diversionResponseRecord(id) });
+  } catch (err: any) {
+    console.error("Omleiding opslaan is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Opslaan is mislukt." });
+  }
+});
+
+app.delete("/api/diversions/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const rev = requestedRecordRevision(req);
+    if (!rev) return recordRevisionMissingResponse(res);
+    const previousDiversions = await getDiversionsData();
+    const current = previousDiversions.find((d: any) => String(d.id) === id);
+    if (!current) return res.status(404).json({ error: "Omleiding niet gevonden — mogelijk al verwijderd." });
+    if (rev !== recordRevisionOf(current)) return recordConflictResponse(res, "Deze omleiding", withRecordRevision(current, recordRevisionOf(current)));
+    await verwerkDiversionsOpslag(req, previousDiversions, previousDiversions.filter((d: any) => String(d.id) !== id), { samenvatting: false });
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Omleiding verwijderen is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Verwijderen is mislukt." });
   }
 });
 
@@ -3229,7 +3343,7 @@ app.get("/api/updates", authenticate, async (req, res) => {
   try {
     const data = await getUpdatesData();
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(data));
-    res.json(data);
+    res.json(data.map((u: any) => withRecordRevision(u, recordRevisionOf(u))));
   } catch (err) {
     res.status(500).json({ error: "Updates laden is mislukt." });
   }
@@ -3247,48 +3361,85 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
     if (revisionConflict(req, previousUpdates)) return revisionConflictResponse(res, "De updates");
     const updatesRemoved = detectMassDelete(previousUpdates, newData);
     if (updatesRemoved !== null) return massDeleteResponse(res, updatesRemoved, previousUpdates.length, "updates");
-    const arr = newData;
-    await saveUpdatesData(newData);
-    await logActivity(
-      req,
-      "updates",
-      "Updates opgeslagen",
-      `${arr.length} updates opgeslagen. ${summarizeUpdateChanges(previousUpdates, arr)}.`,
-    );
-
-    // Per-update audit entries
-    const updDiff = diffUpdateChanges(previousUpdates, arr);
-    // Categorieën zijn uit de UI verdwenen (#241) — niet meer in het
-    // auditspoor echoën; URGENT blijft betekenisvol.
-    const fmtUpd = (u: any) => `${u.title}${u.isUrgent ? ' [URGENT]' : ''}.`;
-    for (const u of updDiff.added) {
-      await logActivity(req, "updates", "Update toegevoegd", fmtUpd(u), { type: "update", id: u.id });
-    }
-    for (const u of updDiff.changed) {
-      await logActivity(req, "updates", "Update gewijzigd", fmtUpd(u), { type: "update", id: u.id });
-    }
-    for (const u of updDiff.removed) {
-      await logActivity(req, "updates", "Update verwijderd", fmtUpd(u), { type: "update", id: u.id });
-    }
-
-    // Nieuwe update → push naar alle actieve chauffeurs. Urgente updates mailen
-    // al (aparte flow); een push zorgt dat óók gewone updates niet onopgemerkt
-    // blijven tot iemand de app toevallig opent.
-    if (updDiff.added.length > 0) {
-      const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
-      for (const u of updDiff.added) {
-        await sendPushToUsers(chauffeurIds, {
-          title: u.isUrgent ? "Belangrijke update" : "Nieuwe update",
-          body: u.title,
-          url: viewUrl("updates"),
-        });
-      }
-    }
+    await verwerkUpdatesOpslag(req as AuthenticatedRequest, previousUpdates, newData, { pushUrl: viewUrl("updates") });
 
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
     res.json({ success: true });
   } catch (err: any) {
     console.error("Updates opslaan is mislukt.", err);
+    res.status(500).json({ error: "Updates opslaan is mislukt." });
+  }
+});
+
+// --- Updates per record ---
+const validateUpdateRecord = (body: Record<string, unknown>): string | null => {
+  if (typeof body.title !== "string" || body.title.trim().length === 0) return "Titel ontbreekt.";
+  if (typeof body.content !== "string" || body.content.trim().length === 0) return "Inhoud ontbreekt.";
+  return null;
+};
+const updateResponseRecord = async (id: string) => {
+  const u = (await getUpdatesData()).find((x: any) => String(x.id) === id);
+  return u ? withRecordRevision(u, recordRevisionOf(u)) : null;
+};
+
+app.post("/api/updates/one", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const body = req.body;
+    if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één update verwacht." });
+    const fout = validateUpdateRecord(body);
+    if (fout) return res.status(400).json({ error: fout });
+    const id = typeof body.id === "string" && body.id.trim() ? body.id.trim() : newRecordId();
+    const previousUpdates = await getUpdatesData();
+    if (previousUpdates.some((u: any) => String(u.id) === id)) {
+      return res.status(409).json({ error: "Er bestaat al een update met dit id.", conflict: "exists" });
+    }
+    // Nieuwste bovenaan, zoals de UI de lijst opbouwt.
+    await verwerkUpdatesOpslag(req, previousUpdates, [{ ...body, id }, ...previousUpdates], { samenvatting: false, pushUrl: viewUrl("updates") });
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
+    res.status(201).json({ success: true, update: await updateResponseRecord(id) });
+  } catch (err: any) {
+    console.error("Update toevoegen is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Updates opslaan is mislukt." });
+  }
+});
+
+app.put("/api/updates/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const body = req.body;
+    if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één update verwacht." });
+    const fout = validateUpdateRecord(body);
+    if (fout) return res.status(400).json({ error: fout });
+    const rev = requestedRecordRevision(req);
+    if (!rev) return recordRevisionMissingResponse(res);
+    const previousUpdates = await getUpdatesData();
+    const current = previousUpdates.find((u: any) => String(u.id) === id);
+    if (!current) return res.status(404).json({ error: "Update niet gevonden — mogelijk intussen verwijderd." });
+    if (rev !== recordRevisionOf(current)) return recordConflictResponse(res, "Deze update", withRecordRevision(current, recordRevisionOf(current)));
+    const newData = previousUpdates.map((u: any) => (String(u.id) === id ? { ...body, id } : u));
+    await verwerkUpdatesOpslag(req, previousUpdates, newData, { samenvatting: false, pushUrl: viewUrl("updates") });
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
+    res.json({ success: true, update: await updateResponseRecord(id) });
+  } catch (err: any) {
+    console.error("Update opslaan is mislukt.", err?.message || err);
+    res.status(500).json({ error: "Updates opslaan is mislukt." });
+  }
+});
+
+app.delete("/api/updates/:id", authenticate, requireRole("planner", "admin"), async (req: AuthenticatedRequest, res) => {
+  try {
+    const id = String(req.params.id);
+    const rev = requestedRecordRevision(req);
+    if (!rev) return recordRevisionMissingResponse(res);
+    const previousUpdates = await getUpdatesData();
+    const current = previousUpdates.find((u: any) => String(u.id) === id);
+    if (!current) return res.status(404).json({ error: "Update niet gevonden — mogelijk al verwijderd." });
+    if (rev !== recordRevisionOf(current)) return recordConflictResponse(res, "Deze update", withRecordRevision(current, recordRevisionOf(current)));
+    await verwerkUpdatesOpslag(req, previousUpdates, previousUpdates.filter((u: any) => String(u.id) !== id), { samenvatting: false, pushUrl: viewUrl("updates") });
+    res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
+    res.json({ success: true });
+  } catch (err: any) {
+    console.error("Update verwijderen is mislukt.", err?.message || err);
     res.status(500).json({ error: "Updates opslaan is mislukt." });
   }
 });

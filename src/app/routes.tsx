@@ -2,7 +2,7 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
   Hash, HeartPulse, IdCard, LayoutDashboard, Map as MapIcon, MapPin, Phone, Plus, RotateCcw, Settings, Smartphone,
-  Sparkles, Thermometer, Users, Zap,
+  Sparkles, Sunrise, Thermometer, Users, Zap,
 } from 'lucide-react';
 import type { Role, View } from '../types';
 
@@ -43,6 +43,7 @@ const ADMIN: readonly Role[] = ['admin'];
 export const ROUTES: readonly RouteDef[] = [
   // — Algemeen —
   { view: 'dashboard', pad: '', label: 'Dashboard', omschrijving: 'Vandaag in één oogopslag.', icoon: LayoutDashboard, sectie: 'algemeen', rollen: IEDEREEN, zoek: 'home overzicht start' },
+  { view: 'mijn-dag', pad: 'mijn-dag', label: 'Mijn dag', omschrijving: 'Je dienst van vandaag of morgen, blok voor blok.', icoon: Sunrise, sectie: 'algemeen', rollen: IEDEREEN, zoek: 'vandaag morgen dienst nu tijdlijn pauze' },
   { view: 'rooster', pad: 'rooster', label: 'Rooster', omschrijving: 'Je komende diensten en export naar agenda.', icoon: Calendar, sectie: 'algemeen', rollen: IEDEREEN, zoek: 'mijn diensten schedule agenda' },
   { view: 'omleidingen', pad: 'omleidingen', label: 'Omleidingen', omschrijving: 'Actuele omleidingen.', icoon: MapPin, sectie: 'algemeen', rollen: IEDEREEN, zoek: 'hinder route diversion' },
   { view: 'ritblaadjes', pad: 'ritbladen', label: 'Ritbladen', omschrijving: 'Actuele rit-informatie als PDF.', icoon: FileText, sectie: 'algemeen', rollen: IEDEREEN, zoek: 'rit blaadjes pdf' },

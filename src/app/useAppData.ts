@@ -143,6 +143,34 @@ export function useAppData({
     return rev ? { [REVISION_HEADER]: rev } : {};
   };
 
+  // Per-record-revisies (gebruikers, omleidingen, updates): de server hangt
+  // aan elk record een `_rev` (hash van het record zoals hij het serveert;
+  // records hebben geen updatedAt). We halen hem uit de GET-respons, bewaren
+  // hem hier per id en sturen hem bij PUT/DELETE /api/<collectie>/:id terug
+  // in X-Record-Revision. De views zien `_rev` nooit — de state blijft het
+  // gewone User/Diversion/Update-type.
+  const RECORD_REVISION_HEADER = 'x-record-revision';
+  type RecordKey = 'users' | 'diversions' | 'updates';
+  const recordRevisionsRef = useRef<Record<RecordKey, Record<string, string>>>({ users: {}, diversions: {}, updates: {} });
+  const stripRecordRevisions = <T extends { id: string }>(key: RecordKey, rows: Array<T & { _rev?: string }>): T[] => {
+    const map: Record<string, string> = {};
+    const clean = rows.map(({ _rev, ...rest }) => {
+      if (typeof _rev === 'string') map[String(rest.id)] = _rev;
+      return rest as T;
+    });
+    recordRevisionsRef.current[key] = map;
+    return clean;
+  };
+  const captureRecordRevision = <T extends { id: string }>(key: RecordKey, record: (T & { _rev?: string }) | null | undefined): T | null => {
+    if (!record) return null;
+    const { _rev, ...rest } = record;
+    if (typeof _rev === 'string') recordRevisionsRef.current[key][String(rest.id)] = _rev;
+    return rest as T;
+  };
+  const forgetRecordRevision = (key: RecordKey, id: string) => {
+    delete recordRevisionsRef.current[key][id];
+  };
+
   /** Achtergrond-dataload ná het profiel: blokkeert de eerste render niet —
    *  de views tonen intussen skeletons (isInitialLoad). */
   const loadAppData = async (appUser: User, accessToken: string) => {
@@ -184,7 +212,7 @@ export function useAppData({
       const response = await apiFetch('/api/updates', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setUpdates(data);
+        setUpdates(stripRecordRevisions<Update>('updates', data));
         markCollectionLoaded('updates');
         captureRevision('updates', response);
       }
@@ -213,6 +241,8 @@ export function useAppData({
       }
       setUpdates(newUpdates);
       captureRevision('updates', response);
+      // Verse per-record-revisies ophalen (de collectie-save kent ze niet).
+      void fetchUpdates();
       if (currentUser?.role === 'admin') {
         await fetchActivityLog();
       }
@@ -680,7 +710,7 @@ export function useAppData({
       captureRevision('users', response);
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setUsers(data);
+        setUsers(stripRecordRevisions<User>('users', data));
         markCollectionLoaded('users');
       }
     } catch (error) {
@@ -808,7 +838,7 @@ export function useAppData({
       const response = await apiFetch('/api/diversions', { accessToken });
       const data = await response.json();
       if (data && Array.isArray(data)) {
-        setDiversions(data);
+        setDiversions(stripRecordRevisions<Diversion>('diversions', data));
         markCollectionLoaded('diversions');
         captureRevision('diversions', response);
       }
@@ -836,6 +866,8 @@ export function useAppData({
       if (response.ok) {
         setDiversions(newDiversions);
         captureRevision('diversions', response);
+        // Verse per-record-revisies ophalen (de collectie-save kent ze niet).
+        void fetchDiversions(undefined, { silent: true });
         if (currentUser?.role === 'admin') {
           await fetchActivityLog();
         }
@@ -852,6 +884,148 @@ export function useAppData({
     }
   };
 
+
+  // --- Per-record opslaan (gebruikers, omleidingen, updates) ---
+  // Eerste stap weg van "POST de hele collectie": bewerken/toevoegen/
+  // verwijderen gaat per record (PUT / POST …/one / DELETE). Optimistisch:
+  // de lokale lijst wordt meteen aangepast; slaagt de call, dan vervangt
+  // het canonieke serverrecord (mét verse `_rev`) de optimistische versie;
+  // bij een 409 (iemand anders wijzigde het record) of een fout verversen
+  // we de collectie — dat draait de optimistische stap vanzelf terug.
+  // De collectie-savers (saveUsers e.d.) blijven bestaan voor import/bulk.
+  type PerRecordOpts<T extends { id: string }> = {
+    key: RecordKey;
+    /** Onderwerp voor de toasts, bv. 'Deze gebruiker'. */
+    label: string;
+    method: 'PUT' | 'POST' | 'DELETE';
+    url: string;
+    id: string;
+    body?: unknown;
+    /** Sleutel van het record in de respons-JSON ('user' | 'diversion' | 'update'). */
+    responseKey: string;
+    setList: React.Dispatch<React.SetStateAction<T[]>>;
+    optimistic: (prev: T[]) => T[];
+    /** Canoniek record uit de respons in de lijst zetten (PUT/POST). */
+    applySaved?: (prev: T[], saved: T) => T[];
+    refetch: () => Promise<void> | void;
+    successToast?: string;
+  };
+  const perRecord = async <T extends { id: string }>(opts: PerRecordOpts<T>): Promise<boolean> => {
+    if (!guardCollectionLoaded(opts.key, opts.label + ' is')) return false;
+    const needsRevision = opts.method !== 'POST';
+    const rev = recordRevisionsRef.current[opts.key][opts.id];
+    if (needsRevision && !rev) {
+      // Geen revisie bekend (lijst nooit vers geladen sinds een bulk-save):
+      // eerst verversen, dan opnieuw proberen — nooit blind overschrijven.
+      showToast(`${opts.label} is nog niet vers geladen — ik ververs de lijst, probeer het daarna opnieuw.`, 'info');
+      await opts.refetch();
+      return false;
+    }
+    opts.setList(opts.optimistic);
+    try {
+      const response = await apiFetch(opts.url, {
+        method: opts.method,
+        headers: needsRevision && rev ? { [RECORD_REVISION_HEADER]: rev } : {},
+        body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+      });
+      const data = await response.json().catch(() => ({} as any));
+      if (response.ok) {
+        captureRevision(opts.key, response);
+        if (opts.method === 'DELETE') {
+          forgetRecordRevision(opts.key, opts.id);
+        } else {
+          const saved = captureRecordRevision<T>(opts.key, data?.[opts.responseKey]);
+          if (saved && opts.applySaved) opts.setList((prev) => opts.applySaved!(prev, saved));
+        }
+        if (currentUser?.role === 'admin') void fetchActivityLog();
+        if (opts.successToast) showToast(opts.successToast, 'success');
+        return true;
+      }
+      if (response.status === 409 || response.status === 404) {
+        showToast(
+          response.status === 404
+            ? `${opts.label} is intussen door iemand anders verwijderd — ik ververs de lijst.`
+            : data?.conflict === 'record' || data?.conflict === 'revision'
+              ? `${opts.label} is intussen door iemand anders gewijzigd — ik ververs de lijst, probeer je wijziging opnieuw.`
+              : (data?.details || data?.error || `${opts.label} kon niet opgeslagen worden.`),
+          'info',
+        );
+        await opts.refetch();
+        return false;
+      }
+      showToast(data?.details || data?.error || `${opts.label} kon niet opgeslagen worden (${response.status}).`, 'error');
+      await opts.refetch();
+      return false;
+    } catch (error) {
+      console.error(`Error saving ${opts.key} record:`, error);
+      showToast(`${opts.label} kon niet opgeslagen worden: ${error instanceof Error ? error.message : 'onbekende fout'}.`, 'error');
+      await opts.refetch();
+      return false;
+    }
+  };
+  const replaceById = <T extends { id: string }>(prev: T[], record: T): T[] =>
+    prev.map((r) => (r.id === record.id ? record : r));
+  const withoutId = <T extends { id: string }>(prev: T[], id: string): T[] => prev.filter((r) => r.id !== id);
+
+  // Gebruikers (admin). Het record mag een `password` dragen (nieuw of reset);
+  // het serverrecord dat terugkomt is zonder.
+  const saveUser = (record: User & { password?: string }): Promise<boolean> =>
+    perRecord<User>({
+      key: 'users', label: 'Deze gebruiker', method: 'PUT', url: `/api/users/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      responseKey: 'user', setList: setUsers,
+      optimistic: (prev) => { const { password: _pw, ...zonder } = record; return replaceById(prev, zonder as User); },
+      applySaved: replaceById, refetch: () => fetchUsers(), successToast: 'Gebruiker opgeslagen.',
+    });
+  const createUser = (record: User & { password?: string }): Promise<boolean> =>
+    perRecord<User>({
+      key: 'users', label: 'Deze gebruiker', method: 'POST', url: '/api/users/one', id: record.id, body: record,
+      responseKey: 'user', setList: setUsers,
+      optimistic: (prev) => { const { password: _pw, ...zonder } = record; return [...withoutId(prev, record.id), zonder as User]; },
+      applySaved: replaceById, refetch: () => fetchUsers(), successToast: 'Gebruiker toegevoegd.',
+    });
+  const deleteUser = (id: string): Promise<boolean> =>
+    perRecord<User>({
+      key: 'users', label: 'Deze gebruiker', method: 'DELETE', url: `/api/users/${encodeURIComponent(id)}`, id,
+      responseKey: 'user', setList: setUsers, optimistic: (prev) => withoutId(prev, id), refetch: () => fetchUsers(), successToast: 'Gebruiker verwijderd.',
+    });
+
+  // Omleidingen (planner/admin).
+  const saveDiversion = (record: Diversion): Promise<boolean> =>
+    perRecord<Diversion>({
+      key: 'diversions', label: 'Deze omleiding', method: 'PUT', url: `/api/diversions/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById,
+      refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding opgeslagen.',
+    });
+  const createDiversion = (record: Diversion): Promise<boolean> =>
+    perRecord<Diversion>({
+      key: 'diversions', label: 'Deze omleiding', method: 'POST', url: '/api/diversions/one', id: record.id, body: record,
+      responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => [...withoutId(prev, record.id), record], applySaved: replaceById,
+      refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding toegevoegd.',
+    });
+  const deleteDiversion = (id: string): Promise<boolean> =>
+    perRecord<Diversion>({
+      key: 'diversions', label: 'Deze omleiding', method: 'DELETE', url: `/api/diversions/${encodeURIComponent(id)}`, id,
+      responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => withoutId(prev, id),
+      refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding verwijderd.',
+    });
+
+  // Updates (planner/admin). Geen success-toast: de view meldt zelf
+  // "gepubliceerd/bijgewerkt" (en stuurt eventueel de dringende mail).
+  const saveUpdate = (record: Update): Promise<boolean> =>
+    perRecord<Update>({
+      key: 'updates', label: 'Deze update', method: 'PUT', url: `/api/updates/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      responseKey: 'update', setList: setUpdates, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById, refetch: () => fetchUpdates(),
+    });
+  const createUpdate = (record: Update): Promise<boolean> =>
+    perRecord<Update>({
+      key: 'updates', label: 'Deze update', method: 'POST', url: '/api/updates/one', id: record.id, body: record,
+      responseKey: 'update', setList: setUpdates, optimistic: (prev) => [record, ...withoutId(prev, record.id)], applySaved: replaceById, refetch: () => fetchUpdates(),
+    });
+  const deleteUpdate = (id: string): Promise<boolean> =>
+    perRecord<Update>({
+      key: 'updates', label: 'Deze update', method: 'DELETE', url: `/api/updates/${encodeURIComponent(id)}`, id,
+      responseKey: 'update', setList: setUpdates, optimistic: (prev) => withoutId(prev, id), refetch: () => fetchUpdates(),
+    });
 
   useEffect(() => {
     if (currentView === 'activiteit' && currentUser?.role === 'admin') {
@@ -897,5 +1071,6 @@ export function useAppData({
     fetchPlanningMatrix, fetchPlanningCodes, fetchPlanningMatrixHistory, refreshCoverageGaps, fetchActivityLog, fetchLoginActivity,
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
     fetchServices, saveServices, fetchUsers, saveUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
+    saveUser, createUser, deleteUser, saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
   };
 }

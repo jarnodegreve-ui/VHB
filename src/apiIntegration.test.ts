@@ -3924,3 +3924,210 @@ describe('import-keten — golden end-to-end (echte praktijk-structuur)', () => 
     expect(mem.planning).toHaveLength(verwachteShifts);
   });
 });
+
+describe('per-record API (PUT / POST one / DELETE) — gebruikers, omleidingen, updates', () => {
+  const REV = 'x-record-revision';
+  const COLL = 'x-collection-revision';
+  const revVan = async (pad: string, token: string, id: string): Promise<string> => {
+    const res = await api('GET', pad, { token });
+    expect(res.status).toBe(200);
+    const rec = res.json.find((r: any) => String(r.id) === id);
+    expect(rec?._rev).toBeTruthy();
+    return rec._rev as string;
+  };
+
+  describe('gebruikers', () => {
+    it('GET /api/users geeft per record een stabiele _rev die niet meebeweegt met een login', async () => {
+      const a = await revVan('/api/users', 'tok-admin', '3');
+      mem.users = mem.users.map((u: any) => (u.id === '3' ? { ...u, lastLogin: '2026-09-03T08:00:00Z', activeSessions: 1 } : u));
+      expect(await revVan('/api/users', 'tok-admin', '3')).toBe(a);
+      mem.users = mem.users.map((u: any) => (u.id === '3' ? { ...u, phone: '0470 11 22 33' } : u));
+      expect(await revVan('/api/users', 'tok-admin', '3')).not.toBe(a);
+    });
+
+    it('PUT /api/users/:id met de juiste revisie slaat op, logt per gebruiker en geeft het canonieke record + nieuwe _rev terug', async () => {
+      const rev = await revVan('/api/users', 'tok-admin', '3');
+      const res = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], phone: '0470 99 88 77' }, headers: { [REV]: rev } });
+      expect(res.status).toBe(200);
+      expect(res.json.user.phone).toBe('0470 99 88 77');
+      expect(res.json.user._rev).toBeTruthy();
+      expect(res.json.user._rev).not.toBe(rev);
+      expect(res.headers.get(COLL)).toBeTruthy();
+      expect(mem.users.find((u: any) => u.id === '3')?.phone).toBe('0470 99 88 77');
+      expect(mem.users).toHaveLength(4);
+      expect(mem.activity.find((a) => a.action === 'Gebruiker gewijzigd' && a.entityId === '3')).toBeTruthy();
+      // Geen collectie-samenvatting ("N gebruikers verwerkt") bij een per-record-save.
+      expect(mem.activity.find((a) => a.action === 'Gebruikers opgeslagen')).toBeFalsy();
+    });
+
+    it('PUT met een verouderde revisie geeft 409 mét het actuele record en wijzigt niets', async () => {
+      const rev = await revVan('/api/users', 'tok-admin', '3');
+      // Collega wijzigt intussen de naam.
+      mem.users = mem.users.map((u: any) => (u.id === '3' ? { ...u, name: 'Chauffeur A (collega)' } : u));
+      const res = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], phone: '0470 00 00 00' }, headers: { [REV]: rev } });
+      expect(res.status).toBe(409);
+      expect(res.json.conflict).toBe('record');
+      expect(res.json.record.name).toBe('Chauffeur A (collega)');
+      expect(res.json.record._rev).toBeTruthy();
+      expect(mem.users.find((u: any) => u.id === '3')?.phone).toBeUndefined();
+    });
+
+    it('PUT zonder revisie-header → 400; onbekend id → 404; planner → 403', async () => {
+      const zonder = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2] } });
+      expect(zonder.status).toBe(400);
+      const weg = await api('PUT', '/api/users/bestaat-niet', { token: 'tok-admin', body: { name: 'X' }, headers: { [REV]: 'x' } });
+      expect(weg.status).toBe(404);
+      const planner = await api('PUT', '/api/users/3', { token: 'tok-planner', body: { ...mem.users[2] }, headers: { [REV]: 'x' } });
+      expect(planner.status).toBe(403);
+    });
+
+    it('PUT handhaaft het wachtwoordminimum en de laatste-admin-regel', async () => {
+      const rev3 = await revVan('/api/users', 'tok-admin', '3');
+      const kort = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], password: 'kort' }, headers: { [REV]: rev3 } });
+      expect(kort.status).toBe(400);
+      const rev1 = await revVan('/api/users', 'tok-admin', '1');
+      const degradeer = await api('PUT', '/api/users/1', { token: 'tok-admin', body: { ...mem.users[0], role: 'chauffeur' }, headers: { [REV]: rev1 } });
+      expect(degradeer.status).toBe(400);
+      expect(mem.users.find((u: any) => u.id === '1')?.role).toBe('admin');
+    });
+
+    it('POST /api/users/one maakt één gebruiker aan (201) en stuurt de welkomstmail', async () => {
+      const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { id: 'n-1', name: 'Nieuwe Collega', role: 'chauffeur', employeeId: 'VHB-9', email: 'nieuw@vhb.be', password: 'tijdelijk-wachtwoord' } });
+      expect(res.status).toBe(201);
+      expect(res.json.user.id).toBe('n-1');
+      expect(res.json.user._rev).toBeTruthy();
+      expect(mem.users).toHaveLength(5);
+      expect(mem.emailsSent.find((m) => m.context === 'welcome:nieuw@vhb.be')).toBeTruthy();
+      expect(mem.activity.find((a) => a.action === 'Gebruiker toegevoegd' && a.entityId === 'n-1')).toBeTruthy();
+      // Zelfde id nog eens → 409, en een bezet e-mailadres → 409.
+      expect((await api('POST', '/api/users/one', { token: 'tok-admin', body: { id: 'n-1', name: 'Dubbel' } })).status).toBe(409);
+      expect((await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'Dubbel', email: 'A@vhb.be' } })).status).toBe(409);
+    });
+
+    it('POST /api/users/one weigert een kort wachtwoord (400) en een lijst (400)', async () => {
+      expect((await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'X', email: 'x@vhb.be', password: 'kort' } })).status).toBe(400);
+      expect((await api('POST', '/api/users/one', { token: 'tok-admin', body: [{ name: 'X' }] })).status).toBe(400);
+    });
+
+    it('DELETE /api/users/:id verwijdert de gebruiker en ruimt zijn documenten op', async () => {
+      mem.documents = [
+        { id: 'd1', userId: '3', filename: 'a.pdf', storagePath: '3/a', uploadedAt: '2026-07-01T00:00:00Z' },
+        { id: 'd2', userId: '4', filename: 'b.pdf', storagePath: '4/b', uploadedAt: '2026-07-01T00:00:00Z' },
+      ];
+      const rev = await revVan('/api/users', 'tok-admin', '3');
+      const res = await api('DELETE', '/api/users/3', { token: 'tok-admin', headers: { [REV]: rev } });
+      expect(res.status).toBe(200);
+      expect(mem.users.map((u: any) => u.id)).toEqual(['1', '2', '4']);
+      expect(mem.documents.map((d: any) => d.id)).toEqual(['d2']);
+      expect(mem.activity.find((a) => a.action === 'Gebruiker verwijderd' && a.entityId === '3')).toBeTruthy();
+      expect(mem.activity.find((a) => a.action === 'Documenten opgeruimd' && a.entityId === '3')).toBeTruthy();
+    });
+
+    it('DELETE: jezelf → 403 (ook met juiste revisie), verouderde revisie → 409, niets verwijderd', async () => {
+      const revZelf = await revVan('/api/users', 'tok-admin', '1');
+      expect((await api('DELETE', '/api/users/1', { token: 'tok-admin', headers: { [REV]: revZelf } })).status).toBe(403);
+      const stale = await api('DELETE', '/api/users/3', { token: 'tok-admin', headers: { [REV]: 'oud' } });
+      expect(stale.status).toBe(409);
+      expect(stale.json.record.id).toBe('3');
+      expect(mem.users).toHaveLength(4);
+      // (De laatste-admin-regel op DELETE deelt laatsteAdminVerdwijnt met PUT — daar getest.)
+    });
+  });
+
+  describe('omleidingen', () => {
+    beforeEach(() => {
+      mem.diversions = [
+        { id: 'o-1', line: '12', title: 'Werken N70', description: 'Omrijden via …', startDate: '2026-07-01', endDate: '2026-07-31' },
+        { id: 'o-2', line: '14', title: 'Kermis', description: 'Centrum afgesloten', startDate: '2026-08-01' },
+      ];
+    });
+
+    it('GET geeft _rev per omleiding; POST one (201) logt en geeft het record terug', async () => {
+      expect(await revVan('/api/diversions', 'tok-planner', 'o-1')).toBeTruthy();
+      const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', title: 'Nieuwe omleiding', description: 'x', startDate: '2026-09-10' } });
+      expect(res.status).toBe(201);
+      expect(res.json.diversion.title).toBe('Nieuwe omleiding');
+      expect(res.json.diversion.id).toBeTruthy();
+      expect(res.json.diversion._rev).toBeTruthy();
+      expect(mem.diversions).toHaveLength(3);
+      expect(mem.activity.find((a) => a.action === 'Omleiding toegevoegd')).toBeTruthy();
+      expect(mem.activity.find((a) => a.action === 'Omleidingen opgeslagen')).toBeFalsy();
+    });
+
+    it('POST one valideert titel en datums (400) en weigert chauffeurs (403)', async () => {
+      expect((await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', title: '', startDate: '2026-09-10' } })).status).toBe(400);
+      expect((await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', title: 'X', startDate: '10/09/2026' } })).status).toBe(400);
+      expect((await api('POST', '/api/diversions/one', { token: 'tok-a', body: { line: '1', title: 'X', startDate: '2026-09-10' } })).status).toBe(403);
+    });
+
+    it('PUT met juiste revisie slaat op; verouderde revisie → 409 met actueel record', async () => {
+      const rev = await revVan('/api/diversions', 'tok-planner', 'o-1');
+      const ok = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], endDate: '2026-08-15' }, headers: { [REV]: rev } });
+      expect(ok.status).toBe(200);
+      expect(ok.json.diversion.endDate).toBe('2026-08-15');
+      expect(ok.json.diversion._rev).not.toBe(rev);
+      expect(mem.diversions.find((d: any) => d.id === 'o-1')?.endDate).toBe('2026-08-15');
+      expect(mem.activity.find((a) => a.action === 'Omleiding gewijzigd' && a.entityId === 'o-1')).toBeTruthy();
+      // De oude revisie is nu verouderd.
+      const stale = await api('PUT', '/api/diversions/o-1', { token: 'tok-admin', body: { ...mem.diversions[0], endDate: '2026-08-20' }, headers: { [REV]: rev } });
+      expect(stale.status).toBe(409);
+      expect(stale.json.conflict).toBe('record');
+      expect(stale.json.record.endDate).toBe('2026-08-15');
+      expect(mem.diversions.find((d: any) => d.id === 'o-1')?.endDate).toBe('2026-08-15');
+    });
+
+    it('DELETE verwijdert met juiste revisie; zonder header 400, onbekend 404', async () => {
+      const rev = await revVan('/api/diversions', 'tok-planner', 'o-2');
+      expect((await api('DELETE', '/api/diversions/o-2', { token: 'tok-planner' })).status).toBe(400);
+      expect((await api('DELETE', '/api/diversions/o-9', { token: 'tok-planner', headers: { [REV]: 'x' } })).status).toBe(404);
+      const res = await api('DELETE', '/api/diversions/o-2', { token: 'tok-planner', headers: { [REV]: rev } });
+      expect(res.status).toBe(200);
+      expect(res.headers.get(COLL)).toBeTruthy();
+      expect(mem.diversions.map((d: any) => d.id)).toEqual(['o-1']);
+      expect(mem.activity.find((a) => a.action === 'Omleiding verwijderd' && a.entityId === 'o-2')).toBeTruthy();
+    });
+  });
+
+  describe('updates', () => {
+    it('POST one publiceert bovenaan (201), logt en pusht naar actieve chauffeurs', async () => {
+      const res = await api('POST', '/api/updates/one', { token: 'tok-planner', body: { date: '2026-09-03', title: 'Nieuwe regeling', content: 'Vanaf maandag …', isUrgent: false } });
+      expect(res.status).toBe(201);
+      expect(res.json.update.title).toBe('Nieuwe regeling');
+      expect(res.json.update._rev).toBeTruthy();
+      expect(mem.updates).toHaveLength(7);
+      expect(mem.updates[0].title).toBe('Nieuwe regeling');
+      expect(mem.activity.find((a) => a.action === 'Update toegevoegd')).toBeTruthy();
+      const push = mem.pushesSent.find((p) => p.payload.title === 'Nieuwe update');
+      expect(push?.userIds.sort()).toEqual(['3', '4']);
+      expect(push?.payload.url).toBe('/?view=updates');
+    });
+
+    it('POST one valideert titel/inhoud (400) en weigert chauffeurs (403)', async () => {
+      expect((await api('POST', '/api/updates/one', { token: 'tok-planner', body: { title: 'X', content: '' } })).status).toBe(400);
+      expect((await api('POST', '/api/updates/one', { token: 'tok-a', body: { title: 'X', content: 'y' } })).status).toBe(403);
+    });
+
+    it('PUT met juiste revisie slaat op; twee-planners-race → de tweede krijgt 409', async () => {
+      const rev = await revVan('/api/updates', 'tok-planner', 'u1');
+      const revAdmin = await revVan('/api/updates', 'tok-admin', 'u1');
+      expect(revAdmin).toBe(rev);
+      const eerste = await api('PUT', '/api/updates/u1', { token: 'tok-planner', body: { ...mem.updates[0], title: 'Update 1 (planner)' }, headers: { [REV]: rev } });
+      expect(eerste.status).toBe(200);
+      expect(eerste.json.update.title).toBe('Update 1 (planner)');
+      const tweede = await api('PUT', '/api/updates/u1', { token: 'tok-admin', body: { ...mem.updates[0], title: 'Update 1 (admin)' }, headers: { [REV]: revAdmin } });
+      expect(tweede.status).toBe(409);
+      expect(tweede.json.record.title).toBe('Update 1 (planner)');
+      expect(mem.updates.find((u: any) => u.id === 'u1')?.title).toBe('Update 1 (planner)');
+      expect(mem.activity.filter((a) => a.action === 'Update gewijzigd' && a.entityId === 'u1')).toHaveLength(1);
+    });
+
+    it('DELETE verwijdert één update en laat de rest staan', async () => {
+      const rev = await revVan('/api/updates', 'tok-planner', 'u3');
+      const res = await api('DELETE', '/api/updates/u3', { token: 'tok-planner', headers: { [REV]: rev } });
+      expect(res.status).toBe(200);
+      expect(mem.updates.map((u: any) => u.id)).toEqual(['u1', 'u2', 'u4', 'u5', 'u6']);
+      expect(mem.activity.find((a) => a.action === 'Update verwijderd' && a.entityId === 'u3')).toBeTruthy();
+      expect((await api('DELETE', '/api/updates/u3', { token: 'tok-planner', headers: { [REV]: rev } })).status).toBe(404);
+    });
+  });
+});

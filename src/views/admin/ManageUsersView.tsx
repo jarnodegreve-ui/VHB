@@ -32,7 +32,25 @@ const KOLOMMEN = [
   { key: 'sessies', label: 'Sessies' },
 ] as const;
 
-export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', currentUser, shifts = [], leaveRequests = [], swaps = [] }: { users: User[]; onSave: (u: UserDraft[]) => Promise<boolean>; title?: string; currentUser: User; shifts?: Shift[]; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[] }) {
+export function ManageUsersView({ users, onSave, onSaveUser, onCreateUser, onDeleteUser, title = 'Gebruikersbeheer', currentUser, shifts = [], leaveRequests = [], swaps = [] }: {
+  users: User[];
+  /** Collectie-saver (hele lijst): blijft het pad voor de Excel-import en de
+   *  bulkacties op een selectie (één atomaire save mét revisie- en
+   *  massa-verwijder-vangrail; per record in een lus zou N× de volledige
+   *  Auth-sync draaien en halverwege kunnen stranden). */
+  onSave: (u: UserDraft[]) => Promise<boolean>;
+  /** Per record (PUT/POST one/DELETE, useAppData) voor bewerken, toevoegen,
+   *  verwijderen en de snelle pauzeer/activeer-knop. Optioneel tot App ze
+   *  doorgeeft; zonder valt de view terug op onSave. */
+  onSaveUser?: (u: UserDraft) => Promise<boolean>;
+  onCreateUser?: (u: UserDraft) => Promise<boolean>;
+  onDeleteUser?: (id: string) => Promise<boolean>;
+  title?: string;
+  currentUser: User;
+  shifts?: Shift[];
+  leaveRequests?: LeaveRequest[];
+  swaps?: SwapRequest[];
+}) {
   const [isImporting, setIsImporting] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
@@ -233,7 +251,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
 
   const voerToevoegenUit = async (userToAdd: UserDraft) => {
     setIsSubmittingUser(true);
-    const success = await onSave([...users, userToAdd]).finally(() => setIsSubmittingUser(false));
+    const success = await (onCreateUser ? onCreateUser(userToAdd) : onSave([...users, userToAdd])).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     setShowAddModal(false);
     setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
@@ -271,7 +289,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   const voerBijwerkenUit = async () => {
     if (!editingUser) return;
     setIsSubmittingUser(true);
-    const success = await onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u))).finally(() => setIsSubmittingUser(false));
+    const success = await (onSaveUser ? onSaveUser(editingUser) : onSave(users.map((u) => (u.id === editingUser.id ? editingUser : u)))).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten.
     const bestaand = userExpiries[editingUser.id] ?? {};
@@ -306,7 +324,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
       setConfirmDeleteId(null);
       return;
     }
-    const success = await onSave(users.filter((u) => u.id !== confirmDeleteId));
+    const success = await (onDeleteUser ? onDeleteUser(confirmDeleteId) : onSave(users.filter((u) => u.id !== confirmDeleteId)));
     if (!success) return;
     if (editingUser?.id === confirmDeleteId) setEditingUser(null);
     setConfirmDeleteId(null);
@@ -329,7 +347,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   };
   const quickToggleActive = async (u: User) => {
     if (u.isActive !== false && isProtectedAdmin(u)) return notify('Je kunt de laatste actieve admin niet pauzeren.', 'error');
-    await onSave(users.map((x) => (x.id === u.id ? { ...x, isActive: u.isActive === false } : x)));
+    const gewijzigd = { ...u, isActive: u.isActive === false };
+    if (onSaveUser) await onSaveUser(gewijzigd);
+    else await onSave(users.map((x) => (x.id === u.id ? gewijzigd : x)));
   };
   const handleBulkDelete = async () => {
     const targetIds = new Set([...selectedIds].filter((id) => { const u = users.find((x) => x.id === id); return !!u && !isBulkProtected(u); }));

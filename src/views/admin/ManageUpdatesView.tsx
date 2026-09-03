@@ -17,11 +17,20 @@ const FORM_ID = 'update-form';
 export function ManageUpdatesView({
   updates,
   onSave,
+  onSaveUpdate,
+  onCreateUpdate,
+  onDeleteUpdate,
   onSendUrgentEmail,
   canSendUrgentEmail,
 }: {
   updates: Update[];
+  /** Collectie-saver (hele lijst) — alleen nog de terugval als de
+   *  per-record-savers hieronder niet doorgegeven zijn. */
   onSave: (u: Update[]) => Promise<boolean>;
+  /** Per record (PUT/POST one/DELETE, useAppData). Optioneel tot App ze doorgeeft. */
+  onSaveUpdate?: (u: Update) => Promise<boolean>;
+  onCreateUpdate?: (u: Update) => Promise<boolean>;
+  onDeleteUpdate?: (id: string) => Promise<boolean>;
   onSendUrgentEmail: (u: Update) => Promise<void>;
   canSendUrgentEmail: boolean;
 }) {
@@ -67,11 +76,15 @@ export function ManageUpdatesView({
       isUrgent: updateForm.isUrgent,
     };
 
-    const success = await onSave(
-      editingId
-        ? updates.map((update) => update.id === editingId ? updateToSave : update)
-        : [updateToSave, ...updates]
-    );
+    // Per record als App de savers doorgeeft; anders de hele lijst (terugval).
+    const perRecord = editingId ? onSaveUpdate : onCreateUpdate;
+    const success = perRecord
+      ? await perRecord(updateToSave)
+      : await onSave(
+        editingId
+          ? updates.map((update) => update.id === editingId ? updateToSave : update)
+          : [updateToSave, ...updates]
+      );
     if (success) {
       if (updateForm.isUrgent && canSendUrgentEmail) {
         await onSendUrgentEmail(updateToSave);
@@ -80,7 +93,8 @@ export function ManageUpdatesView({
       setEditingId(null);
       setPaneelOpen(false);
       notify(editingId ? 'Update bijgewerkt.' : 'Update gepubliceerd.', 'success');
-    } else {
+    } else if (!perRecord) {
+      // De per-record-saver meldt zelf wat er misging (409 → ververst).
       notify('Update kon niet worden opgeslagen. Controleer de foutmelding hierboven en probeer opnieuw.', 'error');
     }
     setIsPublishing(false);
@@ -115,11 +129,11 @@ export function ManageUpdatesView({
 
   const handleDelete = async (id: string) => {
     setDeletingId(id);
-    const success = await onSave(updates.filter((update) => update.id !== id));
+    const success = onDeleteUpdate ? await onDeleteUpdate(id) : await onSave(updates.filter((update) => update.id !== id));
     if (success) {
       notify('Update verwijderd.', 'success');
       if (id === editingId) handleCancelEdit();
-    } else {
+    } else if (!onDeleteUpdate) {
       notify('Update kon niet worden verwijderd.', 'error');
     }
     setDeletingId(null);

@@ -9,6 +9,7 @@ import type { View } from '../types';
  */
 export const VIEW_LOADERS: Record<View, () => Promise<unknown>> = {
   dashboard: () => import('../views/DashboardView'),
+  'mijn-dag': () => import('../views/MijnDagView'),
   rooster: () => import('../views/ScheduleView'),
   omleidingen: () => import('../views/DiversionsView'),
   ritblaadjes: () => import('../views/RitblaadjesView'),
