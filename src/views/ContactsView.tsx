@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { Check, Copy, Phone, Search, Users, X } from 'lucide-react';
+import { Check, Copy, Phone, Search, X } from 'lucide-react';
 import type { User } from '../types';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
+import { Avatar } from '../components/Avatar';
 import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Input } from '../components/Field';
@@ -92,9 +93,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
         aria-label={`Contactgegevens van ${u.name}`}
         className="ios-pressable flex items-center gap-3 min-w-0 text-left flex-1 rounded-xl -m-1 p-1 hover:bg-slate-50/60 transition-colors"
       >
-        <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-700 font-bold text-base shrink-0">
-          {u.name.charAt(0)}
-        </div>
+        <Avatar naam={u.name} size="lg" />
         <div className="min-w-0">
           <h4 className="font-bold text-slate-800 tracking-tight truncate">{u.name}</h4>
           {/* Mobiel: rol als micro-label onder de naam; lg+: als badge. */}
@@ -122,7 +121,6 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
 
   const leeg = (
     <EmptyState
-      icon={<Users size={24} />}
       title="Geen contacten gevonden"
       message={searchQuery ? "Pas je zoekopdracht aan om medewerkers terug te vinden." : "Zodra collega's zichtbaar staan in de contactlijst verschijnen ze hier."}
     />
@@ -182,9 +180,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
           <div className="p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-700 font-bold text-lg shrink-0">
-                  {selected.name.charAt(0)}
-                </div>
+                <Avatar naam={selected.name} size="lg" />
                 <div className="min-w-0">
                   <h3 className="text-section-title truncate">{selected.name}</h3>
                   <MicroLabel>{roleLabel(selected.role)}</MicroLabel>

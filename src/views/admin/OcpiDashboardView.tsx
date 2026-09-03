@@ -1155,7 +1155,7 @@ export function OcpiDashboardView() {
           <div>
             <CardHeader size="lg" title="Storingen (ChargEye)" />
             {storingen.length === 0 ? (
-              <EmptyState title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
+              <EmptyState variant="klaar" title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
             ) : (
               <Card padding="none" className="overflow-hidden">
                 <div className="divide-y divide-slate-100">

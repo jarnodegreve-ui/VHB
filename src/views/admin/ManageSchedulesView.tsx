@@ -1,5 +1,5 @@
 import React, { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { Activity, AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
+import { AlertTriangle, ChevronDown, RotateCcw, Trash2, Upload } from 'lucide-react';
 import type { PlanningMatrixImportHistory, Shift, User } from '../../types';
 import { cn, notify, openPdfInNewTab } from '../../lib/ui';
 import { isoDate } from '../../lib/availability';
@@ -719,7 +719,6 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             );
           }) : (
             <EmptyState
-              icon={<Activity size={24} />}
               title="Nog geen importhistoriek"
               message="Na je eerste bevestigde matrix-import verschijnt hier automatisch een historiek."
             />

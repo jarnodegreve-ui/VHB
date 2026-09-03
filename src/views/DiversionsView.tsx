@@ -138,7 +138,6 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
           </ul>
         ) : (
           <EmptyState
-            icon={<Search size={24} />}
             title={searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}
             message={searchQuery ? `Geen omleidingen gevonden voor "${searchQuery}"` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
             action={searchQuery ? (

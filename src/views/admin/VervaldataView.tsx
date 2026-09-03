@@ -273,7 +273,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           <SkeletonRow className="px-5 py-4" />
         </Card>
       ) : rijen.length === 0 ? (
-        <EmptyState icon={<IdCard size={24} />} title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
+        <EmptyState title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
       ) : (
         // `overflow-clip` i.p.v. TableShell: die maakt een scrollcontainer en
         // dan plakt de kolomkop niet meer onder de topbar. De tabel is
@@ -302,7 +302,6 @@ export function VervaldataView({ users }: { users: User[] }) {
           {gesorteerd.length === 0 ? (
             <div className="p-6">
               <EmptyState
-                icon={<IdCard size={24} />}
                 title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Geen chauffeurs voor dit filter'}
                 message={filter === 'verlopen' && !zoekTerm ? 'Niets verlopen — goed nieuws.' : 'Pas de zoekterm of het filter aan.'}
                 action={filterActief ? <Button variant="secondary" onClick={wisFilters}>Zoekterm en filter wissen</Button> : undefined}

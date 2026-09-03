@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Bus, Calendar, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bus, Calendar, History, Info, Plus, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
 import { metOngedaan } from '../../lib/ongedaan';
@@ -333,7 +333,6 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           ) : (
             <div className="p-6">
               <EmptyState
-                icon={<Settings size={24} />}
                 title="Nog geen planningscodes"
                 message="Voeg de eerste matrixcodes toe zodat planners en admins hun betekenis centraal beheren."
                 action={<Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>Code toevoegen</Button>}

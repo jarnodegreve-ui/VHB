@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
-import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
+import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload } from 'lucide-react';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
@@ -13,6 +13,7 @@ import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabel
 import { useQueryParam } from '../../app/router';
 import { InfoTip } from '../../components/InfoTip';
 import { Card, CardHeader } from '../../components/Card';
+import { Avatar } from '../../components/Avatar';
 import { Field, Input, Select } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
@@ -657,20 +658,25 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                       />
                     </Td>
                     <Td>
-                      <div className="font-semibold text-slate-800">{u.name}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                        <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
-                        {nietInPlanning(u) && (
-                          <Badge
-                            tone="amber"
-                            icon={<CalendarOff size={12} />}
-                            title={laatsteInPlanning(u)
-                              ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
-                              : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
-                          >
-                            Niet in planning
-                          </Badge>
-                        )}
+                      <div className="flex items-start gap-2.5">
+                        <Avatar naam={u.name} size="md" className="mt-px" />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-800">{u.name}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
+                            {nietInPlanning(u) && (
+                              <Badge
+                                tone="amber"
+                                icon={<CalendarOff size={12} />}
+                                title={laatsteInPlanning(u)
+                                  ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                                  : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
+                              >
+                                Niet in planning
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </Td>
                     {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
@@ -742,6 +748,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                     label={`Selecteer ${u.name}`}
                     className={cn('-ml-3 -mt-3', isBulkProtected(u) && 'opacity-30')}
                   />
+                  <Avatar naam={u.name} size="md" />
                   <div>
                     <div className="font-semibold text-slate-800 leading-tight">{u.name}</div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -778,14 +785,12 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           <div className="p-6">
             {filterActief ? (
               <EmptyState
-                icon={<Users size={24} />}
                 title={userSearch.trim() ? `Geen resultaten voor “${userSearch.trim()}”` : 'Geen gebruikers voor deze filter'}
                 message="Pas de zoekterm of de filters aan."
                 action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filters wissen</Button>}
               />
             ) : (
               <EmptyState
-                icon={<Users size={24} />}
                 title="Nog geen gebruikers"
                 message="Voeg een medewerker toe of importeer een Excel-bestand."
                 action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>Gebruiker toevoegen</Button>}

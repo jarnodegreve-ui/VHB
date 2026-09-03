@@ -108,7 +108,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
           <SkeletonRow className="px-5 py-4" />
         </Card>
       ) : docs.length === 0 ? (
-        <EmptyState icon={<FileText size={20} />} title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
+        <EmptyState title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
       ) : (
         <>
           {/* lg+: tabel (naam, datum, grootte, actie) — de gestapelde kaarten

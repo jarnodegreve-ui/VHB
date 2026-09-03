@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bell, ChevronRight, Clock, Info } from 'lucide-react';
+import { Bell, ChevronRight, Clock } from 'lucide-react';
 import type { Update } from '../types';
 import { cn } from '../lib/ui';
 import { markUpdatesRead } from '../lib/updateReads';
@@ -46,7 +46,6 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
 
       {updates.length === 0 ? (
         <EmptyState
-          icon={<Info size={24} />}
           title="Geen updates"
           message="Er zijn nog geen berichten geplaatst."
         />

@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { motion } from 'motion/react';
-import { AlertTriangle, Check, ChevronDown, ChevronRight as ChevronRightSmall, History, Plus, Printer, User as UserIcon, X } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, ChevronRight as ChevronRightSmall, History, Plus, Printer, X } from 'lucide-react';
 import type { LeaveRequest, Shift, User } from '../types';
 import { cn, notify, openPdfInNewTab } from '../lib/ui';
 import { Modal } from '../components/Modal';
 import { ConfirmationModal, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge, statusAccentClass } from '../components/primitives';
 import { Card } from '../components/Card';
+import { Avatar } from '../components/Avatar';
 import { Field, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { DetailPaneel } from '../components/DetailPaneel';
@@ -423,11 +424,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         sleutel={reviewLeave?.id}
         title={reviewLeave ? (users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend') : 'Verlofaanvraag'}
         subtitle={reviewLeave ? `Aangevraagd op ${formatDateHuman(reviewLeave.createdAt)}` : undefined}
-        icon={
-          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
-            <UserIcon size={16} />
-          </span>
-        }
+        icon={reviewLeave ? <Avatar naam={users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend'} size="lg" /> : undefined}
         footer={reviewLeave ? (
           <div className="flex items-center gap-2">
             <IconButton
@@ -666,7 +663,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           onClick={() => setReviewLeave(req)}
                           className="group flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
                         >
-                          <div className="w-10 h-10 bg-surface-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 shrink-0"><UserIcon size={20} /></div>
+                          <Avatar naam={requester?.name ?? 'Onbekend'} size="lg" />
                           <div className="min-w-0 flex-1">
                             <p className="truncate font-semibold text-slate-800 text-sm">{requester?.name}</p>
                             <p className="text-2xs font-medium text-slate-500 tabular-nums">{formatLeaveType(req.type)} · {req.startDate} – {req.endDate}</p>
@@ -767,6 +764,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           onClick={() => setReviewLeave(req)}
                           className="flex min-w-0 flex-1 items-center gap-3 text-left"
                         >
+                          <Avatar naam={requester?.name ?? 'Onbekend'} size="md" />
                           <span className="min-w-0 flex-1">
                             <span className="flex items-center gap-2">
                               <span className="truncate text-sm font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>

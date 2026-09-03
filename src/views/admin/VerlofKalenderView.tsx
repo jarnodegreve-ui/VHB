@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from 'react';
 import { typedagLabel } from '../../lib/typedag';
-import { CalendarOff, ChevronLeft, ChevronRight, Printer, Users } from 'lucide-react';
+import { CalendarOff, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
 import { leaveSolid } from '../../lib/statusColors';
 import { cn, openPdfInNewTab } from '../../lib/ui';
@@ -137,10 +137,10 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
   );
   const wisFilters = () => { setZoek(''); setAlleenAfwezig(false); };
   const legeStaat = alleUsers.length === 0
-    ? <EmptyState icon={<Users size={24} />} title="Geen actieve chauffeurs" message="Zodra er chauffeurs of planners in het systeem staan, verschijnen ze hier." />
+    ? <EmptyState title="Geen actieve chauffeurs" message="Zodra er chauffeurs of planners in het systeem staan, verschijnen ze hier." />
     : (
       <EmptyState
-        icon={<CalendarOff size={24} />}
+        variant={zoekTerm ? 'leeg' : 'klaar'}
         title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Niemand afwezig deze maand'}
         message={zoekTerm ? 'Pas de zoekterm aan.' : 'Zet het filter uit om iedereen te zien.'}
         action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filter wissen</Button>}
