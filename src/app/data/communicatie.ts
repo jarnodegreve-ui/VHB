@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Diversion, Update, User } from '../../types';
 import { apiFetch } from '../../lib/api';
-import { replaceById, withoutId, type DataCtx } from './kern';
+import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 
 /**
  * Communicatie: updates (nieuws) en omleidingen — collectie- én
@@ -133,16 +133,17 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
     }
   };
 
-  // Omleidingen (planner/admin).
-  const saveDiversion = (record: Diversion): Promise<boolean> =>
+  // Omleidingen (planner/admin). `opVeldfouten` krijgt de veldfouten van een
+  // 400 (gedeeld schema) voor het formulier.
+  const saveDiversion = (record: Diversion, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Diversion>({
-      key: 'diversions', label: 'Deze omleiding', method: 'PUT', url: `/api/diversions/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      key: 'diversions', label: 'Deze omleiding', method: 'PUT', url: `/api/diversions/${encodeURIComponent(record.id)}`, id: record.id, body: record, opVeldfouten,
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById,
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding opgeslagen.',
     });
-  const createDiversion = (record: Diversion): Promise<boolean> =>
+  const createDiversion = (record: Diversion, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Diversion>({
-      key: 'diversions', label: 'Deze omleiding', method: 'POST', url: '/api/diversions/one', id: record.id, body: record,
+      key: 'diversions', label: 'Deze omleiding', method: 'POST', url: '/api/diversions/one', id: record.id, body: record, opVeldfouten,
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => [...withoutId(prev, record.id), record], applySaved: replaceById,
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding toegevoegd.',
     });
@@ -155,14 +156,14 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
 
   // Updates (planner/admin). Geen success-toast: de view meldt zelf
   // "gepubliceerd/bijgewerkt" (en stuurt eventueel de dringende mail).
-  const saveUpdate = (record: Update): Promise<boolean> =>
+  const saveUpdate = (record: Update, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Update>({
-      key: 'updates', label: 'Deze update', method: 'PUT', url: `/api/updates/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      key: 'updates', label: 'Deze update', method: 'PUT', url: `/api/updates/${encodeURIComponent(record.id)}`, id: record.id, body: record, opVeldfouten,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById, refetch: () => fetchUpdates(),
     });
-  const createUpdate = (record: Update): Promise<boolean> =>
+  const createUpdate = (record: Update, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Update>({
-      key: 'updates', label: 'Deze update', method: 'POST', url: '/api/updates/one', id: record.id, body: record,
+      key: 'updates', label: 'Deze update', method: 'POST', url: '/api/updates/one', id: record.id, body: record, opVeldfouten,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => [record, ...withoutId(prev, record.id)], applySaved: replaceById, refetch: () => fetchUpdates(),
     });
   const deleteUpdate = (id: string): Promise<boolean> =>

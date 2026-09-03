@@ -7,6 +7,8 @@ import { apiFetch } from '../../lib/api';
 import { Badge, Button, IconButton } from '../../components/primitives';
 import { Card } from '../../components/Card';
 import { Field, Input, Textarea } from '../../components/Field';
+import { valideer } from '../../lib/valideer';
+import { diversionSchema } from '../../../shared/schemas/diversion';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail } from '../../components/DetailPaneel';
 
@@ -27,8 +29,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
    *  per-record-savers hieronder niet doorgegeven zijn. */
   onSave: (d: Diversion[]) => void;
   /** Per record (PUT/POST one/DELETE, useAppData). Optioneel tot App ze doorgeeft. */
-  onSaveDiversion?: (d: Diversion) => Promise<boolean>;
-  onCreateDiversion?: (d: Diversion) => Promise<boolean>;
+  onSaveDiversion?: (d: Diversion, opVeldfouten?: (fouten: Record<string, string>) => void) => Promise<boolean>;
+  onCreateDiversion?: (d: Diversion, opVeldfouten?: (fouten: Record<string, string>) => void) => Promise<boolean>;
   onDeleteDiversion?: (id: string) => Promise<boolean>;
 }) {
   // Het bewerkformulier leeft in het DetailPaneel: desktop naast de lijst,
@@ -57,6 +59,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   });
   const [pdfFile, setPdfFile] = useState<File | null>(null);
   const [isUploading, setIsUploading] = useState(false);
+  // Veldfouten: gedeeld schema vóór submit + server-veldfouten van een 400.
+  const [fouten, setFouten] = useState<Record<string, string>>({});
 
   const uploadPdf = async (id: string, file: File): Promise<string | null> => {
     if (file.size > 20 * 1024 * 1024) {
@@ -102,6 +106,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       startDate: isoDate(new Date()),
     });
     setPdfFile(null);
+    setFouten({});
     setPaneelOpen(true);
   };
 
@@ -115,6 +120,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       endDate: div.endDate,
     });
     setPdfFile(null);
+    setFouten({});
     setPaneelOpen(true);
   };
 
@@ -130,6 +136,14 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       ? crypto.randomUUID()
       : `d-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
     const targetId = editingId || generateId();
+
+    // Gedeeld contract (shared/schemas/diversion.ts) vóór de upload: fouten
+    // bij het veld, en geen PDF naar Storage voor een omleiding die afketst.
+    const huidige = editingId ? diversions.find((d) => d.id === editingId) : undefined;
+    const check = valideer(diversionSchema, { ...huidige, ...formData, id: targetId });
+    if (check.ok === false) return setFouten(check.fouten);
+    setFouten({});
+
     let uploadedPdfUrl: string | null = null;
 
     if (pdfFile) {
@@ -153,7 +167,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       if (onSaveDiversion) {
         // Per record: het paneel blijft open als het misging (409 → de lijst
         // is ververst; de gebruiker ziet de nieuwe staat en kan opnieuw).
-        if (!(await onSaveDiversion(bijgewerkt))) return;
+        if (!(await onSaveDiversion(bijgewerkt, setFouten))) return;
       } else {
         onSave(diversions.map((d) => (d.id === editingId ? bijgewerkt : d)));
       }
@@ -168,7 +182,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         pdfUrl: uploadedPdfUrl || undefined,
       };
       if (onCreateDiversion) {
-        if (!(await onCreateDiversion(diversionToAdd))) return;
+        if (!(await onCreateDiversion(diversionToAdd, setFouten))) return;
       } else {
         onSave([...diversions, diversionToAdd]);
       }
@@ -277,9 +291,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       {/* De opslaan-knop staat in de footer (buiten het formulier) en koppelt
           via form={FORM_ID}; Enter in een veld dient dus ook gewoon in. */}
       <form id={FORM_ID} onSubmit={handleSubmit} className="space-y-5">
-        <Field label="Lijn(en)" htmlFor="omleiding-lijn">
+        <Field label="Lijn(en)" htmlFor="omleiding-lijn" error={fouten.line}>
           <Input
             id="omleiding-lijn"
+            invalid={!!fouten.line}
             type="text"
             required
             value={formData.line}
@@ -288,9 +303,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
           />
         </Field>
 
-        <Field label="Titel" htmlFor="omleiding-titel">
+        <Field label="Titel" htmlFor="omleiding-titel" error={fouten.title}>
           <Input
             id="omleiding-titel"
+            invalid={!!fouten.title}
             type="text"
             required
             value={formData.title}
@@ -299,9 +315,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
           />
         </Field>
 
-        <Field label="Omschrijving" htmlFor="omleiding-omschrijving">
+        <Field label="Omschrijving" htmlFor="omleiding-omschrijving" error={fouten.description}>
           <Textarea
             id="omleiding-omschrijving"
+            invalid={!!fouten.description}
             required
             rows={3}
             value={formData.description}
@@ -311,7 +328,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         </Field>
 
         <div className="grid grid-cols-2 gap-4">
-          <Field label="Startdatum" htmlFor="omleiding-start">
+          <Field label="Startdatum" htmlFor="omleiding-start" error={fouten.startDate}>
             <Input
               id="omleiding-start"
               type="date"
@@ -320,7 +337,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
               onChange={(e) => setFormData({...formData, startDate: e.target.value})}
             />
           </Field>
-          <Field label="Einddatum" hint="Leeg = tot hij verwijderd wordt." htmlFor="omleiding-eind">
+          <Field label="Einddatum" hint="Leeg = tot hij verwijderd wordt." htmlFor="omleiding-eind" error={fouten.endDate}>
             <Input
               id="omleiding-eind"
               type="date"
