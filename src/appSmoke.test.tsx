@@ -130,15 +130,16 @@ describe('app smoke test', () => {
     render(<App />);
 
     expect(await screen.findByText('Chauffeurs actief', undefined, { timeout: 5000 })).toBeTruthy();
-    const toggle = await screen.findByRole('switch', { name: /chauffeurs-weergave/i });
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
+    // Sinds 03-09 is het één oog-icoon (aria-pressed) op elk formaat, geen pill.
+    const toggle = await screen.findByRole('button', { name: /bekijk als chauffeur/i });
+    expect(toggle.getAttribute('aria-pressed')).toBe('false');
 
     fireEvent.click(toggle);
 
     // Chauffeursdashboard verschijnt (de planner-tegels zijn weg) en de
-    // schakelaar staat nu aan, zodat je ook terug kunt.
+    // knop staat nu aan (label wisselt), zodat je ook terug kunt.
     await waitFor(() => expect(screen.queryByText('Chauffeurs actief')).toBeNull());
-    expect(screen.getByRole('switch', { name: /chauffeurs-weergave/i }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('button', { name: /chauffeurs-weergave uit/i }).getAttribute('aria-pressed')).toBe('true');
   });
 
   it('rendert het chauffeursdashboard in dezelfde ops-stijl, zonder busje', async () => {
@@ -146,7 +147,7 @@ describe('app smoke test', () => {
     render(<App />);
 
     expect(await screen.findByText('Chauffeurs actief', undefined, { timeout: 5000 })).toBeTruthy();
-    fireEvent.click(await screen.findByRole('switch', { name: /chauffeurs-weergave/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /bekijk als chauffeur/i }));
 
     // Statusstrip + panelen + snelle acties van de chauffeur.
     expect(await screen.findByText('Volgende dienst')).toBeTruthy();

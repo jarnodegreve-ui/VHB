@@ -1,7 +1,6 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { ShieldAlert, Smartphone } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
-import { BrandSpinner } from '../components/BrandSpinner';
 import { Button } from '../components/primitives';
 import { cn } from '../lib/ui';
 
@@ -30,41 +29,63 @@ function CarbonScherm({ children, className }: { children: ReactNode; className?
   );
 }
 
-function LaadRegel({ tekst }: { tekst: string }) {
-  return (
-    <div className="flex items-center gap-2.5 text-slate-300">
-      {/* 26 px: bewuste maat (PR #411), iets boven de icoonladder. */}
-      <BrandSpinner size={26} tone="donker" />
-      <span className="text-sm font-medium">{tekst}</span>
-    </div>
-  );
+/** Tekst pas na een korte stilte: bij een normale start (< 1,5 s) zie je
+ *  alleen het logo; na 8 s de uitweg. */
+function useLaadFases() {
+  const [fase, setFase] = useState<0 | 1 | 2>(0);
+  useEffect(() => {
+    const t1 = window.setTimeout(() => setFase(1), 1500);
+    const t2 = window.setTimeout(() => setFase(2), 8000);
+    return () => { window.clearTimeout(t1); window.clearTimeout(t2); };
+  }, []);
+  return fase;
 }
 
 /** Tekstlink op carbon: Button ghost hovert met een licht vlak dat hier als vlek opvalt. */
 function CarbonLink({ onClick, children }: { onClick: () => void; children: ReactNode }) {
   return (
     // rauw: tekstlink op het carbon pre-app-scherm.
-    <button type="button" onClick={onClick} className="text-xs font-semibold text-slate-500 hover:text-white transition-colors">
+    <button type="button" onClick={onClick} className="text-xs font-semibold text-white/60 hover:text-white transition-colors">
       {children}
     </button>
   );
 }
 
-export function SessieLaden() {
-  return <CarbonScherm><LaadRegel tekst="Sessie laden…" /></CarbonScherm>;
-}
-
-export function ProfielLaden() {
+/**
+ * Het laadscherm (koude start, profiel laden): het logo zelf is de spinner
+ * — geen tweede lus en geen systeemtaal. Tekst verschijnt pas na 1,5 s,
+ * de uitweg na 8 s (verbeterronde laadscherm 03-09, nrs. 1 + 2).
+ */
+export function LaadScherm({ tekst = 'Even je gegevens ophalen…' }: { tekst?: string }) {
+  const fase = useLaadFases();
   return (
-    <CarbonScherm>
-      <LaadRegel tekst="Profiel laden…" />
-      <CarbonLink onClick={() => window.location.reload()}>Duurt het te lang? Vernieuw de pagina</CarbonLink>
-    </CarbonScherm>
+    <div className="login-bg-dark min-h-screen flex flex-col items-center justify-center gap-6" aria-busy="true" aria-label="Portaal wordt geladen">
+      <CarbonAchtergrond />
+      <BrandLogo tone="donker" naamregelAfstand={70} laden className="w-36 sm:w-44 h-auto select-none" />
+      <div className="flex min-h-10 flex-col items-center gap-3">
+        <p className={cn('text-sm font-medium text-white/60 transition-opacity duration-300', fase >= 1 ? 'opacity-100' : 'opacity-0')} aria-hidden={fase < 1 || undefined}>
+          {tekst}
+        </p>
+        {fase >= 2 && <CarbonLink onClick={() => window.location.reload()}>Duurt het te lang? Vernieuw de pagina</CarbonLink>}
+      </div>
+    </div>
   );
 }
 
+export function SessieLaden() {
+  return <LaadScherm />;
+}
+
+export function ProfielLaden() {
+  return <LaadScherm tekst="Je profiel ophalen…" />;
+}
+
 export function PrintLaden() {
-  return <div className="min-h-screen bg-surface-white flex items-center justify-center text-slate-500">Print-weergave laden…</div>;
+  return (
+    <div className="min-h-screen bg-surface-white flex flex-col items-center justify-center gap-5" aria-busy="true" aria-label="Print-weergave wordt geladen">
+      <BrandLogo tone="licht" naamregelAfstand={70} laden className="w-36 h-auto select-none" />
+    </div>
+  );
 }
 
 export function ConfigOntbreekt() {

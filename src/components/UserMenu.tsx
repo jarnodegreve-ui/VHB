@@ -99,7 +99,7 @@ export function UserMenu({
         >
           {/* Identiteit bovenaan — het kaartje dat eerst in de sidebar-voet stond. */}
           <div className="flex items-center gap-2.5 px-3 py-2.5 mb-1 border-b fine-divider">
-            <span className="w-8 h-8 rounded-full bg-oker-100 text-oker-700 flex items-center justify-center text-2xs font-bold shrink-0">
+            <span className="w-8 h-8 rounded-full bg-oker-500 text-slate-950 flex items-center justify-center text-2xs font-bold shrink-0">
               {initials}
             </span>
             <span className="min-w-0">
