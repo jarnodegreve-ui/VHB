@@ -18,7 +18,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
   const overBudget = balance.betaaldGebruikt > balance.betaaldBudget;
 
   return (
-    <div className={cn('rounded-3xl border border-slate-100 bg-white/55 p-5 space-y-4', compact && 'p-4 space-y-3')}>
+    <div className={cn('rounded-3xl border border-slate-100 bg-paper/55 p-5 space-y-4', compact && 'p-4 space-y-3')}>
       <div className="flex items-baseline justify-between gap-3">
         <h5 className={cn('font-bold text-slate-700 tracking-tight', compact ? 'text-sm' : 'text-base')}>Verlofbalans</h5>
         <span className={microLabelClass}>{year}</span>

@@ -22,11 +22,11 @@ function InklapSectie({ title, aantal, tone, defaultOpen, children }: {
 }) {
   const [open, setOpen] = useState(Boolean(defaultOpen));
   const kader = tone === 'amber'
-    ? 'border-amber-200/70 bg-amber-50/70 dark:border-amber-500/30 dark:bg-amber-500/10'
+    ? 'border-amber-200/70 bg-amber-50/70'
     : tone === 'red'
       ? 'border-red-200/70 bg-red-50/80'
       : 'border-slate-200/70 bg-surface-field';
-  const label = tone === 'amber' ? 'text-amber-700 dark:text-amber-400' : tone === 'red' ? 'text-red-700' : 'text-slate-600';
+  const label = tone === 'amber' ? 'text-amber-700' : tone === 'red' ? 'text-red-700' : 'text-slate-600';
   return (
     <div className={cn('rounded-3xl border', kader)}>
       <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex min-h-11 w-full items-center justify-between gap-3 px-5 py-4 text-left">
@@ -501,8 +501,8 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               : 'nog nooit';
 
             const accent = hasChanges
-              ? { border: 'border-amber-200', bg: 'bg-amber-50/70', icon: 'bg-amber-100 text-amber-700', eyebrow: 'text-amber-700', body: 'text-amber-900', stamp: 'text-amber-600' }
-              : { border: 'border-emerald-200', bg: 'bg-emerald-50/70', icon: 'bg-emerald-100 text-emerald-700', eyebrow: 'text-emerald-700', body: 'text-emerald-900', stamp: 'text-emerald-600' };
+              ? { border: 'border-amber-200', bg: 'bg-amber-50/70', icon: 'bg-amber-100 text-amber-700', eyebrow: 'text-amber-700', body: 'text-amber-900', stamp: 'text-amber-700' }
+              : { border: 'border-emerald-200', bg: 'bg-emerald-50/70', icon: 'bg-emerald-100 text-emerald-700', eyebrow: 'text-emerald-700', body: 'text-emerald-900', stamp: 'text-emerald-700' };
 
             return (
               <div className={cn('mt-6 rounded-3xl border p-5', accent.border, accent.bg)}>
@@ -757,7 +757,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             );
           }) : (
             <EmptyState
-              icon={<Activity size={28} />}
+              icon={<Activity size={24} />}
               title="Nog geen importhistoriek"
               message="Na je eerste bevestigde matrix-import verschijnt hier automatisch een historiek."
             />
@@ -963,7 +963,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                                 <span className="font-semibold">{c.driverName}</span>
                                 {' — '}
                                 {c.date}, dienst {c.serviceNumber}
-                                <span className="text-red-600"> · verlof {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
+                                <span className="text-red-700"> · verlof {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
                               </span>
                             </li>
                           ))}
@@ -981,7 +981,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     geruisloos uit het portaal. */}
                 {matrixPreview.parserWaarschuwingen.length > 0 && (
                   <InklapSectie title="Kolommen buiten de import" aantal={matrixPreview.parserWaarschuwingen.length} tone="amber" defaultOpen>
-                    <ul className="space-y-1.5 text-xs font-medium text-amber-900 dark:text-amber-200">
+                    <ul className="space-y-1.5 text-xs font-medium text-amber-900">
                       {matrixPreview.parserWaarschuwingen.map((w, i) => (
                         <li key={i} className="flex items-start gap-2">
                           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
@@ -1002,10 +1002,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     tone="amber"
                     defaultOpen
                   >
-                    <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
+                    <p className="text-xs font-medium text-amber-900/80">
                       Klopt dit met de realiteit (vertrokken of nieuwe collega), dan is er niets aan de hand — staat hier iemand die nog gewoon rijdt, controleer dan zijn kolom in de Excel.
                     </p>
-                    <div className="mt-3 space-y-2 text-xs text-amber-900 dark:text-amber-200">
+                    <div className="mt-3 space-y-2 text-xs text-amber-900">
                       {matrixPreview.chauffeursVerdwenen.length > 0 && (
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-semibold">Niet meer in dit bestand:</span>
@@ -1033,7 +1033,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     dan niet. Registreren kan meteen hiervandaan. */}
                 {matrixPreview.ziekTeRegistreren.length > 0 && (
                   <InklapSectie title="Ziekte nog niet geregistreerd" aantal={matrixPreview.ziekTeRegistreren.length} tone="amber" defaultOpen>
-                    <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
+                    <p className="text-xs font-medium text-amber-900/80">
                       Deze chauffeurs staan in de Excel als "ziek", maar hebben geen ziekteperiode in het portaal — het Ziekte-blad en de meldingen kennen hen dan niet. Registreren kan meteen:
                     </p>
                     {/* Zelfde rij-component als het Ziekte-blad: één presentatie
@@ -1061,7 +1061,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     fantoomgaten op de dekking (20-08). */}
                 {matrixPreview.verwachtingsCheck.length > 0 && (
                   <InklapSectie title="Dekking-verwachtingen wijken af" aantal={matrixPreview.verwachtingsCheck.length} tone="amber" defaultOpen>
-                    <p className="text-xs font-medium text-amber-900/80 dark:text-amber-200/80">
+                    <p className="text-xs font-medium text-amber-900/80">
                       Vergelijking van de dag-type-lijsten (Openstaande diensten → Instellen) met wat dit bestand echt rijdt:
                     </p>
                     <VerwachtingAfwijkingLijst afwijkingen={matrixPreview.verwachtingsCheck} />
@@ -1073,11 +1073,11 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     "nog te herverdelen" op dashboard en maandplanning. */}
                 {matrixPreview.ziekteDiensten.length > 0 && (
                   <InklapSectie title="Ziek gemelde chauffeurs in deze Excel" aantal={matrixPreview.ziekteDiensten.length} tone="amber">
-                    <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                    <p className="text-sm font-medium text-amber-900">
                       {matrixPreview.ziekteDiensten.length} dienst{matrixPreview.ziekteDiensten.length === 1 ? ' staat' : 'en staan'} op een chauffeur die ziek gemeld is.
                       De import gaat gewoon door; daarna staan ze als "nog te herverdelen" op het dashboard en in de maandplanning.
                     </p>
-                    <ul className="mt-3 space-y-1 text-xs text-amber-900 dark:text-amber-200">
+                    <ul className="mt-3 space-y-1 text-xs text-amber-900">
                       {matrixPreview.ziekteDiensten.slice(0, 6).map((c, i) => (
                         <li key={i} className="flex items-start gap-2">
                           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
@@ -1119,7 +1119,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <div className="surface-card rounded-3xl p-5">
                     <div className="flex items-center justify-between gap-3">
                       <MicroLabel>Importperiode</MicroLabel>
-                      {isPreviewVerversen && <MicroLabel className="text-oker-600">Bijwerken…</MicroLabel>}
+                      {isPreviewVerversen && <MicroLabel className="text-oker-700">Bijwerken…</MicroLabel>}
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-500">
                       Het bestand loopt van {matrixPreview.fileStartDate ? new Date(matrixPreview.fileStartDate).toLocaleDateString('nl-BE') : '?'} t/m {matrixPreview.fileEndDate ? new Date(matrixPreview.fileEndDate).toLocaleDateString('nl-BE') : '?'}. Alleen de gekozen periode wordt geïmporteerd en vervangen — kort hem in als latere maanden nog niet vaststaan.
@@ -1186,12 +1186,12 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     bestaande matrix en dit bestand. Meestal een verkeerd of
                     onvolledig bestand — informatief, blokkeert niet. */}
                 {matrixOverwriteSummary?.gap && (
-                  <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+                  <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5">
                     <div className="flex items-start gap-3">
-                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+                      <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
                       <div>
-                        <MicroLabel className="text-amber-700 dark:text-amber-400">De periodes sluiten niet aan</MicroLabel>
-                        <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+                        <MicroLabel className="text-amber-700">De periodes sluiten niet aan</MicroLabel>
+                        <p className="mt-1 text-sm font-medium text-amber-900">
                           Tussen {new Date(matrixOverwriteSummary.gap.van).toLocaleDateString('nl-BE')} en {new Date(matrixOverwriteSummary.gap.tot).toLocaleDateString('nl-BE')} {matrixOverwriteSummary.gap.dagen === 1 ? 'valt 1 dag' : `vallen ${matrixOverwriteSummary.gap.dagen} dagen`} zonder planning.
                           Klopt dat niet, controleer dan of je het juiste bestand uploadt — de import gaat anders gewoon door.
                         </p>
@@ -1227,7 +1227,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
                     <div className="rounded-2xl bg-surface-white ring-1 ring-hairline p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <MicroLabel className={matrixPreview.unmatchedDrivers.length > 0 ? 'text-amber-700 dark:text-amber-400' : 'text-slate-500'}>Niet-Gematchte Chauffeurs</MicroLabel>
+                        <MicroLabel className={matrixPreview.unmatchedDrivers.length > 0 ? 'text-amber-700' : 'text-slate-500'}>Niet-Gematchte Chauffeurs</MicroLabel>
                         <Badge tone={matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} className="tabular-nums">{matrixPreview.unmatchedDrivers.length}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -1243,7 +1243,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
                 {matrixPreview.servicesWithoutSegments.length > 0 && (
                   <InklapSectie title="Services zonder geldige uren" aantal={matrixPreview.servicesWithoutSegments.length} tone="amber" defaultOpen>
-                    <p className="text-sm font-medium text-amber-900 dark:text-amber-200">
+                    <p className="text-sm font-medium text-amber-900">
                       {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">

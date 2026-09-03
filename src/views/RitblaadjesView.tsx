@@ -251,7 +251,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         </div>
       ) : !current ? (
         <EmptyState
-          icon={<FileText size={28} />}
+          icon={<FileText size={24} />}
           title="Nog geen ritblad beschikbaar"
           message={canEdit ? 'Upload een PDF om te delen met alle chauffeurs.' : 'Zodra er een nieuw ritblad is, verschijnt het hier.'}
         />
@@ -260,8 +260,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
           <div className="surface-card rounded-3xl p-6 md:p-8">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-oker-50 text-oker-600 ring-1 ring-oker-100 flex items-center justify-center shrink-0">
-                  <FileText size={22} />
+                <div className="w-12 h-12 rounded-2xl bg-oker-50 text-oker-700 ring-1 ring-oker-100 flex items-center justify-center shrink-0">
+                  <FileText size={20} />
                 </div>
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
@@ -320,8 +320,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                 onClick={() => openPdfInNewTab(current.url!)}
                 className="ios-pressable flex w-full flex-col items-center justify-center gap-3 px-8 py-14 text-center"
               >
-                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-600 dark:text-oker-400">
-                  <FileText size={22} />
+                <span className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-oker-500/15 text-oker-700">
+                  <FileText size={20} />
                 </span>
                 <span className="text-base font-semibold text-slate-800">Bekijk ritblad</span>
                 <span className="max-w-sm text-sm font-normal leading-relaxed text-slate-500">

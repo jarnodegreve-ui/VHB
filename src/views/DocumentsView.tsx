@@ -74,7 +74,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
             const urgent = Number.isFinite(dagen) && dagen <= 30;
             return (
               <div key={e.soort} className="flex items-center gap-4 px-5 py-4">
-                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${urgent ? 'bg-red-50 text-red-600' : 'bg-oker-50 text-oker-600'}`}>
+                <div className={`w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 ${urgent ? 'bg-red-50 text-red-700' : 'bg-oker-50 text-oker-700'}`}>
                   <IdCard size={20} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -99,12 +99,12 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
           <SkeletonRow className="px-5 py-4" />
         </div>
       ) : docs.length === 0 ? (
-        <EmptyState icon={<FileText size={22} />} title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
+        <EmptyState icon={<FileText size={20} />} title="Nog geen documenten" message="Zodra de planning een document voor je klaarzet, verschijnt het hier." />
       ) : (
         <div className="surface-card rounded-3xl divide-y divide-slate-100 overflow-hidden">
           {docs.map((doc) => (
             <div key={doc.id} className="flex items-center gap-4 px-5 py-4">
-              <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">
                 <FileText size={20} />
               </div>
               <div className="min-w-0 flex-1">

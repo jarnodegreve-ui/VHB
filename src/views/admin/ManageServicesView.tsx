@@ -351,7 +351,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                     <div className="flex items-center justify-end gap-1">
                       <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
                       <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
-                      {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
+                      {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-700 hover:bg-red-50" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
                     </div>
                   </Td>
                 </tr>
@@ -369,7 +369,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                 <div className="flex items-center gap-1">
                   <Button variant="ghost" size="sm" className="px-2" icon={<History size={16} />} onClick={() => setHistoryService(s)} title="Wijzigingsgeschiedenis" aria-label="Wijzigingsgeschiedenis" />
                   <Button variant="ghost" size="sm" className="px-2" icon={<Pencil size={16} />} onClick={() => handleEdit(s)} title="Dienst bewerken" aria-label="Dienst bewerken" />
-                  {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
+                  {canAdminOverride ? <Button variant="ghost" size="sm" className="px-2 hover:text-red-700 hover:bg-red-50" icon={<Trash2 size={16} />} onClick={() => handleDelete(s.id)} title="Dienst verwijderen" aria-label="Dienst verwijderen" /> : null}
                 </div>
               </div>
 
@@ -409,7 +409,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         {services.length === 0 && (
           <div className="p-6">
             <EmptyState
-              icon={<Clock size={28} />}
+              icon={<Clock size={24} />}
               title="Geen diensten geconfigureerd"
               message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
             />

@@ -395,12 +395,12 @@ function MonthCalendar({
                   {day}
                 </span>
                 {td && td.kort === 'F' && (
-                  <span className="text-2xs font-bold leading-none text-oker-600" title={td.titel}>
+                  <span className="text-2xs font-bold leading-none text-oker-700" title={td.titel}>
                     {td.kort}
                   </span>
                 )}
                 {dayGroups.length > 0 ? (
-                  <span className={cn('max-w-full truncate text-2xs font-bold tabular-nums leading-none', conflict ? 'text-red-600' : 'text-oker-700')}>
+                  <span className={cn('max-w-full truncate text-2xs font-bold tabular-nums leading-none', conflict ? 'text-red-700' : 'text-oker-700')}>
                     {dayGroups[0].line}
                     {dayGroups.length > 1 && '+'}
                   </span>
@@ -426,19 +426,19 @@ function MonthCalendar({
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold tabular-nums text-oker-700">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-oker-600">F</span> feestdag</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-oker-700">F</span> feestdag</span>
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-slate-400">v</span> vrij</span>
         </div>
       </div>
 
       {/* Detail van de geselecteerde dag */}
       <div className="surface-card rounded-3xl p-4">
-        <MicroLabel className={cn(selected === today && 'text-oker-600')}>
+        <MicroLabel className={cn(selected === today && 'text-oker-700')}>
           {selected === today ? 'Vandaag' : `Wk ${isoWeekOf(selected)}`}
         </MicroLabel>
         <p className="mt-0.5 text-sm font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
         {selectedTypedag && (
-          <p className={cn('mt-0.5 text-2xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+          <p className={cn('mt-0.5 text-2xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-700' : 'text-slate-400')}>
             {selectedTypedag.titel}
           </p>
         )}
@@ -463,10 +463,10 @@ function MonthCalendar({
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-base font-semibold tabular-nums text-oker-700">{g.line}</span>
                 {g.hasConflict && (
-                  <Badge tone="red" icon={<AlertTriangle size={10} />}>Verlof-conflict</Badge>
+                  <Badge tone="red" icon={<AlertTriangle size={12} />}>Verlof-conflict</Badge>
                 )}
                 {g.openSwap && (
-                  <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                  <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                 )}
               </div>
               <div className="mt-1.5 space-y-1.5 pl-1">
@@ -489,7 +489,7 @@ function MonthCalendar({
         )}
 
         {selectedNote && (
-          <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800 dark:text-oker-300">
+          <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800">
             {selectedNote}
           </p>
         )}
@@ -557,11 +557,11 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                         {isToday && <Badge tone="oker">Vandaag</Badge>}
                         {g.hasConflict && (
                           <span title="Je staat ingepland terwijl je verlof goedgekeurd is. Neem contact op met de planner.">
-                            <Badge tone="red" icon={<AlertTriangle size={11} />}>Verlof-conflict</Badge>
+                            <Badge tone="red" icon={<AlertTriangle size={12} />}>Verlof-conflict</Badge>
                           </span>
                         )}
                         {g.openSwap && (
-                          <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                          <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                         )}
                       </div>
                     </div>
@@ -631,7 +631,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
               {/* Datum + dienst-pill */}
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
-                  <MicroLabel className={cn(isToday && 'text-oker-600')}>
+                  <MicroLabel className={cn(isToday && 'text-oker-700')}>
                     {isToday ? 'Vandaag' : formatShortDayPadded(g.date).split(' ')[0]}
                   </MicroLabel>
                   <p className="text-sm font-semibold text-slate-900 mt-0.5 tabular-nums">
@@ -639,15 +639,15 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                   </p>
                   {g.hasConflict && (
                     <div className="mt-1">
-                      <Badge tone="red" icon={<AlertTriangle size={10} />}>
+                      <Badge tone="red" icon={<AlertTriangle size={12} />}>
                         Verlof-conflict
                       </Badge>
-                      <p className="text-2xs font-medium text-red-600 mt-1">Je hebt hier verlof — bel de planner.</p>
+                      <p className="text-2xs font-medium text-red-700 mt-1">Je hebt hier verlof — bel de planner.</p>
                     </div>
                   )}
                   {g.openSwap && (
                     <div className="mt-1">
-                      <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={10} />}>{openSwapLabel(g.openSwap)}</Badge>
+                      <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                     </div>
                   )}
                 </div>
@@ -675,7 +675,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
               </div>
 
               {noteFor?.(g.date) && (
-                <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800 dark:text-oker-300">
+                <p className="mt-2.5 rounded-xl bg-oker-500/10 px-3 py-2 text-xs font-medium leading-snug text-oker-800">
                   {noteFor(g.date)}
                 </p>
               )}

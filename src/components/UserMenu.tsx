@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/ui';
 import type { User } from '../types';
 import { useDropdown } from './useDropdown';
+import { DUR } from '../lib/motion';
 
 /**
  * Avatar-menu in de topbar (mock Jarno 30-08): goud cirkeltje met initialen
@@ -68,7 +69,7 @@ export function UserMenu({
           initial={{ opacity: 0, scale: 0.97, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.97, y: -4 }}
-          transition={{ duration: 0.15, ease: 'easeOut' }}
+          transition={{ duration: DUR.fast, ease: 'easeOut' }}
           style={{ transformOrigin: 'top right' }}
           className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-surface-white backdrop-blur-xl ring-1 ring-hairline shadow-xl p-1.5 z-50"
         >
@@ -105,7 +106,7 @@ export function UserMenu({
           <button
             role="menuitem"
             onClick={sluitEn(onLogout)}
-            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-red-600 hover:bg-red-50/70 rounded-xl transition-colors duration-150 font-medium text-sm"
+            className="flex items-center gap-3 w-full px-3 py-2.5 text-slate-600 hover:text-red-700 hover:bg-red-50/70 rounded-xl transition-colors duration-150 font-medium text-sm"
           >
             <span className="text-slate-400 shrink-0"><LogOut size={16} /></span>
             <span>Uitloggen</span>

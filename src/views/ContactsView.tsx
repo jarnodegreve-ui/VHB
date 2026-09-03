@@ -67,7 +67,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
               aria-label={`Contactgegevens van ${u.name}`}
               className="ios-pressable flex items-center gap-3 min-w-0 text-left flex-1 rounded-xl -m-1 p-1 hover:bg-slate-50/60 transition-colors"
             >
-              <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-bold text-base shrink-0">
+              <div className="w-11 h-11 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-700 font-bold text-base shrink-0">
                 {u.name.charAt(0)}
               </div>
               <div className="min-w-0">
@@ -80,7 +80,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 href={telHref(u.phone)}
                 aria-label={`Bel ${u.name}`}
                 title={`Bel ${u.name}`}
-                className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-700 hover:border-emerald-700 hover:text-white transition-colors"
+                className="ios-pressable inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-emerald-100 bg-emerald-50 text-emerald-700 hover:bg-emerald-600 hover:border-emerald-700 hover:text-white transition-colors"
               >
                 <Phone size={18} />
               </a>
@@ -92,7 +92,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
         {filteredUsers.length === 0 && (
           <div className="col-span-full">
             <EmptyState
-              icon={<Users size={28} />}
+              icon={<Users size={24} />}
               title="Geen contacten gevonden"
               message={searchQuery ? "Pas je zoekopdracht aan om medewerkers terug te vinden." : "Zodra collega's zichtbaar staan in de contactlijst verschijnen ze hier."}
             />
@@ -106,7 +106,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
           <div className="p-6">
             <div className="flex items-start justify-between gap-3">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-12 h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-600 font-bold text-lg shrink-0">
+                <div className="w-12 h-12 bg-oker-50 rounded-2xl flex items-center justify-center text-oker-700 font-bold text-lg shrink-0">
                   {selected.name.charAt(0)}
                 </div>
                 <div className="min-w-0">

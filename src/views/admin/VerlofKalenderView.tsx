@@ -152,12 +152,12 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                       <div className={microLabelClass}>{weekdayLetter(day)}</div>
                       <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                       {typedagLabel(dateIso(day)) && (
-                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-600' : 'text-slate-400')}>
+                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-700' : 'text-slate-400')}>
                           {typedagLabel(dateIso(day))!.kort}
                         </div>
                       )}
                       {absenceCountPerDay[day] > 0 && (
-                        <div className="text-2xs font-semibold text-emerald-600 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
+                        <div className="text-2xs font-semibold text-emerald-700 mt-0.5 tabular-nums">{absenceCountPerDay[day]}</div>
                       )}
                     </Th>
                   </Fragment>

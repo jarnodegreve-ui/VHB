@@ -130,12 +130,12 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     <div
       key={keyOf(device)}
       className={`flex flex-col gap-2 rounded-xl border px-3 py-2 md:flex-row md:items-center md:justify-between ${
-        highlight ? 'border-amber-200 bg-amber-50/80' : 'border-slate-200/80 bg-white/50'
+        highlight ? 'border-amber-200 bg-amber-50/80' : 'border-slate-200/80 bg-paper/50'
       }`}
     >
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-slate-500">
-          <Smartphone size={15} />
+          <Smartphone size={16} />
         </div>
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
@@ -238,8 +238,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                 enterKeyHint="done"
                 className="control-input rounded-xl px-3 py-1.5 text-base font-semibold outline-none"
               />
-              <Button type="submit" variant="secondary" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Check size={15} />} aria-label="Naam opslaan" />
-              <Button type="button" variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<X size={15} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
+              <Button type="submit" variant="secondary" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Check size={16} />} aria-label="Naam opslaan" />
+              <Button type="button" variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<X size={16} />} aria-label="Annuleren" onClick={() => setRenaming(null)} />
             </form>
           ) : (
             <>
@@ -260,11 +260,11 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<Pencil size={14} />} aria-label="Toestel hernoemen" title="Hernoemen"
               onClick={() => { setRenaming(device); setRenameValue(device.name); }} />
             {device.status !== 'approved' && (
-              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-emerald-600" icon={<ShieldCheck size={15} />} aria-label="Keur goed" title="Keur goed"
+              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center text-emerald-700" icon={<ShieldCheck size={16} />} aria-label="Keur goed" title="Keur goed"
                 disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'approve')} />
             )}
             {device.status === 'approved' && !isOwnCurrent(device) && (
-              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<ShieldAlert size={15} />} aria-label="Blokkeer" title="Blokkeer"
+              <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<ShieldAlert size={16} />} aria-label="Blokkeer" title="Blokkeer"
                 disabled={busyKey === keyOf(device)} onClick={() => void act(device, 'revoke')} />
             )}
             {!isOwnCurrent(device) && (
@@ -327,7 +327,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         ) : devices.length === 0 ? (
           <div className="mt-4">
             <EmptyState
-              icon={<Smartphone size={26} />}
+              icon={<Smartphone size={24} />}
               title="Nog geen toestellen"
               message="Toestellen verschijnen hier zodra gebruikers inloggen. Draai eerst de user_devices-migratie als deze lijst leeg blijft."
             />
@@ -350,7 +350,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
                       <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
                       {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
                     </div>
-                    <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                    <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                   </button>
                   {open && <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>}
                 </div>

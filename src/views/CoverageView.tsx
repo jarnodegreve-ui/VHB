@@ -474,7 +474,7 @@ export function CoverageView() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
                   <MicroLabel className="text-slate-500">Dag-types &amp; verwachte diensten</MicroLabel>
-                  <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addDayType}>
+                  <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={addDayType}>
                     Dag-type
                   </Button>
                 </div>
@@ -490,7 +490,7 @@ export function CoverageView() {
                             <Button
                               variant="ghost"
                               size="sm"
-                              icon={<ChevronDown size={15} className={cn('transition-transform', openDayTypes.has(i) && 'rotate-180')} />}
+                              icon={<ChevronDown size={16} className={cn('transition-transform', openDayTypes.has(i) && 'rotate-180')} />}
                               className="shrink-0"
                               aria-label={openDayTypes.has(i) ? `Dag-type ${dt.name || ''} inklappen` : `Dag-type ${dt.name || ''} uitklappen`}
                               aria-expanded={openDayTypes.has(i)}
@@ -507,7 +507,7 @@ export function CoverageView() {
                               className="control-input flex-1 rounded-xl px-3 py-2 text-sm font-semibold outline-none"
                             />
                             <Badge tone="slate" className="shrink-0 tabular-nums">{dt.services.length} {dt.services.length === 1 ? 'dienst' : 'diensten'}</Badge>
-                            <Button variant="ghost" size="sm" icon={<X size={15} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Dag-type verwijderen" onClick={() => removeDayType(i)} />
+                            <Button variant="ghost" size="sm" icon={<X size={16} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Dag-type verwijderen" onClick={() => removeDayType(i)} />
                           </div>
                           {openDayTypes.has(i) && (
                           <div className="mt-3 flex flex-wrap gap-1.5">
@@ -621,7 +621,7 @@ export function CoverageView() {
                     <p className="text-xs font-medium text-slate-500">
                       Vanaf een datum kan een ándere toewijzing gelden — bv. het schooljaar-regime vanaf 1 september. De recentste ingangsdatum vóór een dag wint; uitzonderingen hieronder gaan altijd voor.
                     </p>
-                    <Button variant="secondary" size="sm" icon={<Plus size={13} />} className="shrink-0" onClick={addWeekdayPeriod}>
+                    <Button variant="secondary" size="sm" icon={<Plus size={14} />} className="shrink-0" onClick={addWeekdayPeriod}>
                       Periode
                     </Button>
                   </div>
@@ -636,7 +636,7 @@ export function CoverageView() {
                           aria-label="Ingangsdatum van deze weekdag-toewijzing"
                           className="control-input rounded-xl px-3 py-2 text-sm font-bold outline-none"
                         />
-                        <Button variant="ghost" size="sm" icon={<X size={15} />} className="ml-auto shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Periode verwijderen" onClick={() => removeWeekdayPeriod(i)} />
+                        <Button variant="ghost" size="sm" icon={<X size={16} />} className="ml-auto shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Periode verwijderen" onClick={() => removeWeekdayPeriod(i)} />
                       </div>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {WEEKDAY_ORDER.map(({ dow, label }) => (
@@ -687,7 +687,7 @@ export function CoverageView() {
                         Ruim {verlopenAantal} verlopen op
                       </Button>
                     )}
-                    <Button variant="secondary" size="sm" icon={<Plus size={13} />} onClick={addOverride}>
+                    <Button variant="secondary" size="sm" icon={<Plus size={14} />} onClick={addOverride}>
                       Uitzondering
                     </Button>
                   </div>
@@ -707,7 +707,7 @@ export function CoverageView() {
                           {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                         </select>
                         {verlopen && <Badge tone="slate">Verlopen</Badge>}
-                        <Button variant="ghost" size="sm" icon={<X size={15} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Uitzondering verwijderen" onClick={() => removeOverride(i)} />
+                        <Button variant="ghost" size="sm" icon={<X size={16} />} className="shrink-0 hover:text-red-700 hover:bg-red-50" aria-label="Uitzondering verwijderen" onClick={() => removeOverride(i)} />
                       </div>
                     ))}
                   </div>
@@ -756,7 +756,7 @@ export function CoverageView() {
                     </div>
                   ))}
                 </div>
-                <Button variant="secondary" size="sm" icon={<CalendarPlus size={13} />} onClick={voegKalenderToe}>
+                <Button variant="secondary" size="sm" icon={<CalendarPlus size={14} />} onClick={voegKalenderToe}>
                   Zet voor in de lijst
                 </Button>
                 </>
@@ -773,12 +773,12 @@ export function CoverageView() {
           type-lijsten en wat er echt gereden wordt. Zonder deze banner lezen
           die als "openstaande diensten" terwijl niemand ontbreekt (20-08). */}
       {expCheck.length > 0 && (
-        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5">
           <div className="flex items-start gap-3">
-            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
             <div className="min-w-0">
-              <MicroLabel className="text-amber-700 dark:text-amber-400">Verwachtingen wijken af van de planning</MicroLabel>
-              <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+              <MicroLabel className="text-amber-700">Verwachtingen wijken af van de planning</MicroLabel>
+              <p className="mt-1 text-sm font-medium text-amber-900">
                 Sommige dag-type-lijsten sporen niet met wat er deze maand echt gereden wordt — meestal een dienstregelingswissel die nog niet in de dekkingsinstellingen verwerkt is. Pas de lijsten aan via Instellen.
               </p>
               <VerwachtingAfwijkingLijst afwijkingen={expCheck} />
@@ -791,8 +791,8 @@ export function CoverageView() {
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <div className="flex items-center gap-2 text-sm">
           {totalMissing > 0 ? (
-            <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-red-600 tabular-nums">
-              <AlertTriangle size={15} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand
+            <span className="inline-flex flex-wrap items-center gap-1.5 font-semibold text-red-700 tabular-nums">
+              <AlertTriangle size={16} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand
               {uitvalSplit.doorAfwezigheid > 0 && (
                 <span className="font-medium text-slate-500">
                   — {uitvalSplit.zonderChauffeur > 0 ? `${uitvalSplit.zonderChauffeur} zonder chauffeur · ` : ''}{uitvalSplit.doorAfwezigheid} door afwezigheid{uitvalSplit.namen.length === 1 ? ` (${uitvalSplit.namen[0]})` : ` (${uitvalSplit.namen.length} chauffeurs)`}
@@ -800,7 +800,7 @@ export function CoverageView() {
               )}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-600"><Check size={15} /> Alle verwachte diensten zijn ingevuld</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700"><Check size={16} /> Alle verwachte diensten zijn ingevuld</span>
           )}
         </div>
         <label className="flex items-center gap-2 text-2xs font-bold text-slate-500 cursor-pointer select-none">
@@ -817,13 +817,13 @@ export function CoverageView() {
         </div>
       ) : !anyExpectations ? (
         <EmptyState
-          icon={<Settings2 size={28} />}
+          icon={<Settings2 size={24} />}
           title="Nog geen verwachte diensten ingesteld"
           message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
         />
       ) : visibleDays.length === 0 ? (
         <div className="surface-card p-6 md:p-8 rounded-3xl text-center">
-          <p className="text-sm font-bold text-emerald-600">Geen openstaande diensten in {MONTH_NAMES[monthIndex].toLowerCase()} {year}.</p>
+          <p className="text-sm font-bold text-emerald-700">Geen openstaande diensten in {MONTH_NAMES[monthIndex].toLowerCase()} {year}.</p>
         </div>
       ) : (
         <div className="surface-card rounded-3xl overflow-hidden divide-y divide-slate-100">
@@ -865,7 +865,7 @@ export function CoverageView() {
                 </div>
                 <div className="min-w-0 flex-1">
                   {ok ? (
-                    <span className="text-xs font-medium text-emerald-600 inline-flex items-center gap-1"><Check size={13} /> volledig gedekt</span>
+                    <span className="text-xs font-medium text-emerald-700 inline-flex items-center gap-1"><Check size={14} /> volledig gedekt</span>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {d.missing.map((svc) => {
@@ -882,24 +882,24 @@ export function CoverageView() {
                         // van de persoon.
                         const info = d.uitval?.[normalizeCode(svc)];
                         const redenKleur = info?.reason === 'ziek'
-                          ? 'text-rose-600 dark:text-rose-400'
+                          ? 'text-rose-700'
                           : info?.reason === 'verlof'
-                            ? 'text-emerald-700 dark:text-emerald-400'
+                            ? 'text-emerald-700'
                             : info?.reason === 'klein verlet'
-                              ? 'text-blue-700 dark:text-blue-300'
-                              : 'text-slate-600 dark:text-slate-300';
+                              ? 'text-blue-700'
+                              : 'text-slate-600';
                         return (
                           <button
                             key={svc}
                             type="button"
                             onClick={() => setPick({ date: d.date, code: svc })}
                             title="Klik om te zien wie vrij is"
-                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-2xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer dark:text-red-300"
+                            className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-2xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
                           >
                             <span className="tabular-nums">{svc}</span>
                             {info && (
                               <span className="flex min-w-0 items-baseline gap-1 font-medium">
-                                <span className="min-w-0 truncate text-red-700/90 dark:text-red-300/80">· {info.name}</span>
+                                <span className="min-w-0 truncate text-red-700/90">· {info.name}</span>
                                 <span className={cn('shrink-0', redenKleur)}>· {info.reason}</span>
                               </span>
                             )}
@@ -961,11 +961,11 @@ export function CoverageView() {
 
                   {passend.length > 0 ? (
                     <div>
-                      <MicroLabel className="text-emerald-600 tabular-nums">Voorstel — {passend.length} passend</MicroLabel>
+                      <MicroLabel className="text-emerald-700 tabular-nums">Voorstel — {passend.length} passend</MicroLabel>
                       <div className="mt-2 flex flex-col gap-1.5">
                         {passend.map((k, i) => (
                           <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">
-                            <UserCheck size={15} className="text-emerald-600 shrink-0" />
+                            <UserCheck size={16} className="text-emerald-700 shrink-0" />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">
                                 <span className="min-w-0 truncate text-sm font-bold text-slate-800">{k.name}</span>
@@ -1015,10 +1015,10 @@ export function CoverageView() {
                       <div className="mt-2 flex flex-col gap-1.5">
                         {nietPassend.map((k) => (
                           <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-rose-50/60 ring-1 ring-rose-100 px-3 py-2">
-                            <UserX size={15} className="text-rose-500 shrink-0" />
+                            <UserX size={16} className="text-rose-500 shrink-0" />
                             <div className="min-w-0 flex-1">
                               <span className="block truncate text-sm font-bold text-slate-800">{k.name}</span>
-                              <p className="text-2xs font-medium text-rose-600 dark:text-rose-400">{k.redenen.join(' · ')}</p>
+                              <p className="text-2xs font-medium text-rose-700">{k.redenen.join(' · ')}</p>
                             </div>
                             <Button
                               variant="ghost"

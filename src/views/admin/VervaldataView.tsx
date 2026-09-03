@@ -181,7 +181,7 @@ export function VervaldataView({ users }: { users: User[] }) {
               />
             </div>
             <Button variant="secondary" onClick={() => void load()} disabled={isLoading} aria-label="Ververs">
-              <RefreshCw size={15} className={isLoading ? 'animate-spin' : ''} />
+              <RefreshCw size={16} className={isLoading ? 'animate-spin' : ''} />
               <span className="ml-1.5 hidden sm:inline">Ververs</span>
             </Button>
           </div>
@@ -253,10 +253,10 @@ export function VervaldataView({ users }: { users: User[] }) {
                     type="button"
                     onClick={() => openBewerken(user)}
                     style={kolommen}
-                    className="ios-pressable flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-left transition-colors hover:bg-surface-soft-hover md:grid md:gap-4 dark:hover:bg-white/5"
+                    className="ios-pressable flex w-full flex-wrap items-center gap-x-4 gap-y-2 px-5 py-3.5 text-left transition-colors hover:bg-surface-soft-hover md:grid md:gap-4"
                   >
                     <div className="min-w-0 flex-1 basis-44 md:flex-none md:basis-auto">
-                      <p className={cn('truncate text-sm font-semibold', eerste < 0 ? 'text-red-700 dark:text-red-400' : 'text-slate-800')}>{user.name}</p>
+                      <p className={cn('truncate text-sm font-semibold', eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{user.name}</p>
                       <p className="text-2xs font-medium tabular-nums text-slate-500">
                         {eerste < 0
                           ? `al ${Math.abs(eerste)} ${Math.abs(eerste) === 1 ? 'dag' : 'dagen'} verlopen`
@@ -310,13 +310,13 @@ export function VervaldataView({ users }: { users: User[] }) {
                     type="button"
                     onClick={() => openBewerken(u)}
                     style={kolommen}
-                    className="ios-pressable flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-soft-hover md:grid md:gap-4 dark:hover:bg-white/5"
+                    className="ios-pressable flex min-h-11 w-full items-center justify-between gap-3 px-5 py-3 text-left transition-colors hover:bg-surface-soft-hover md:grid md:gap-4"
                   >
                     <p className="min-w-0 truncate text-sm font-semibold text-slate-700">{u.name}</p>
                     {/* Zelfde kolomraster als de lijst hierboven, zodat beide
                         blokken één tabel lijken; "Invullen" staat in de eerste
                         documentkolom en dus recht onder de pillen. */}
-                    <span className="shrink-0 text-2xs font-semibold text-oker-700 dark:text-oker-600">Invullen</span>
+                    <span className="shrink-0 text-2xs font-semibold text-oker-700">Invullen</span>
                   </button>
                 ))}
               </div>

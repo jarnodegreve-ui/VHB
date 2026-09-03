@@ -288,7 +288,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 href={`https://github.com/jarnodegreve-ui/VHB/commit/${BUILD_INFO.sha}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs font-mono text-oker-600 hover:text-oker-700 dark:hover:text-oker-500 tabular-nums"
+                className="text-xs font-mono text-oker-700 hover:text-oker-700 tabular-nums"
               >
                 {BUILD_INFO.sha}
               </a>
@@ -355,7 +355,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                     </div>
                   </>
                 ) : (
-                  <p className="text-xs font-medium text-red-600">
+                  <p className="text-xs font-medium text-red-700">
                     Zonder SMTP_USER/SMTP_PASS worden mails alleen gelogd, niet verstuurd — verlofbeslissingen en updates komen dan nergens aan.
                   </p>
                 )}
@@ -365,12 +365,12 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                   full
                   onClick={sendTestEmail}
                   disabled={isMailTesting}
-                  icon={<Mail size={15} />}
+                  icon={<Mail size={16} />}
                 >
                   {isMailTesting ? 'Versturen…' : 'Stuur testmail naar mezelf'}
                 </Button>
                 {mailTest && (
-                  <p className={`text-xs font-medium break-words rounded-lg p-2 ${mailTest.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'}`}>
+                  <p className={`text-xs font-medium break-words rounded-lg p-2 ${mailTest.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
                     {mailTest.message}
                   </p>
                 )}
@@ -395,7 +395,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
             </div>
           </div>
 
-          <div className="bg-slate-900 p-6 rounded-3xl text-slate-300 font-mono text-xs overflow-auto max-h-64">
+          <div className="bg-ink p-6 rounded-3xl text-white/75 font-mono text-xs overflow-auto max-h-64">
             <MicroLabel className="mb-4 text-slate-500">Raw Health Data</MicroLabel>
             <pre>{JSON.stringify(healthData, null, 2)}</pre>
           </div>
@@ -406,7 +406,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-6 md:p-8 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-slate-500/12 text-slate-600 dark:text-slate-300 rounded-2xl">
+          <div className="p-3 bg-slate-500/12 text-slate-600 rounded-2xl">
             <DownloadCloud size={24} />
           </div>
           <div className="flex-1">
@@ -423,13 +423,13 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-6 md:p-8 rounded-3xl border-2 border-red-100">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-red-500/12 text-red-600 dark:text-red-400 rounded-2xl">
+          <div className="p-3 bg-red-500/12 text-red-700 rounded-2xl">
             <UploadCloud size={24} />
           </div>
           <div className="flex-1">
             <h4 className="text-slate-900 font-semibold text-lg mb-2">Herstellen vanuit back-up</h4>
             <p className="text-slate-600 text-sm leading-relaxed font-medium mb-4">
-              Zet alle gegevens terug naar de inhoud van een back-upbestand. <strong className="text-red-600">Dit overschrijft de huidige planning, gebruikers, verlof, dienstruilen en meer</strong> — gebruik dit enkel om een verlies te herstellen. Je krijgt eerst een overzicht te zien en moet bevestigen. De audit-log en import-historiek blijven ongewijzigd.
+              Zet alle gegevens terug naar de inhoud van een back-upbestand. <strong className="text-red-700">Dit overschrijft de huidige planning, gebruikers, verlof, dienstruilen en meer</strong> — gebruik dit enkel om een verlies te herstellen. Je krijgt eerst een overzicht te zien en moet bevestigen. De audit-log en import-historiek blijven ongewijzigd.
             </p>
             <input
               ref={restoreInputRef}
@@ -447,7 +447,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-6 md:p-8 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-red-500/12 text-red-600 dark:text-red-400 rounded-2xl">
+          <div className="p-3 bg-red-500/12 text-red-700 rounded-2xl">
             <Bug size={24} />
           </div>
           <div className="flex-1 min-w-0">
@@ -481,7 +481,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="surface-card p-6 md:p-8 rounded-3xl">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-oker-500/15 text-oker-600 dark:text-oker-400 rounded-2xl">
+          <div className="p-3 bg-oker-500/15 text-oker-700 rounded-2xl">
             <FlaskConical size={24} />
           </div>
           <div className="flex-1">
@@ -503,7 +503,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
       <div className="bg-oker-50 p-8 rounded-3xl border border-oker-100">
         <div className="flex items-start gap-4">
-          <div className="p-3 bg-oker-500/15 text-oker-600 dark:text-oker-400 rounded-2xl">
+          <div className="p-3 bg-oker-500/15 text-oker-700 rounded-2xl">
             <Activity size={24} />
           </div>
           <div>

@@ -340,7 +340,7 @@ export function ZiekteView({
           </span>
         </span>
         {toonOpen && open > 0 && (
-          <span className="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-2xs font-semibold text-amber-700 dark:text-amber-400 tabular-nums">
+          <span className="shrink-0 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-2xs font-semibold text-amber-700 tabular-nums">
             {open} {open === 1 ? 'dienst' : 'diensten'} op naam
           </span>
         )}
@@ -368,7 +368,7 @@ export function ZiekteView({
         title="Ziekte"
         description="Wie is er ziek gemeld, en welke diensten staan daardoor nog open. Gescheiden van het verlofbeheer — ziekte is geen aanvraag."
         actions={(
-          <Button variant="primary" size="md" icon={<Plus size={15} />} onClick={() => setMeldOpen(true)}>
+          <Button variant="primary" size="md" icon={<Plus size={16} />} onClick={() => setMeldOpen(true)}>
             Ziek melden
           </Button>
         )}
@@ -377,14 +377,14 @@ export function ZiekteView({
       {/* Excel zegt ziek, portaal weet van niets — vóór de secties, want dit
           is precies het geval waarin de secties hieronder leeg blijven. */}
       {excelZiekte.length > 0 && (
-        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5 dark:border-amber-500/30 dark:bg-amber-500/10">
+        <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5">
           <div className="flex items-start gap-3">
             {/* Zelfde banner-anatomie als de dekking (icoon-chip + tekst) —
                 één signaalvorm voor "Excel en portaal lopen uiteen". */}
-            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400"><AlertTriangle size={18} /></div>
+            <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
             <div className="min-w-0 flex-1">
-              <MicroLabel className="text-amber-700 dark:text-amber-400">In de planning als ziek, hier niet geregistreerd</MicroLabel>
-              <p className="mt-1 text-sm font-medium text-amber-900 dark:text-amber-200">
+              <MicroLabel className="text-amber-700">In de planning als ziek, hier niet geregistreerd</MicroLabel>
+              <p className="mt-1 text-sm font-medium text-amber-900">
                 Deze chauffeurs staan in de geïmporteerde planning als "ziek", maar hebben geen ziekteperiode in het portaal — meldingen, dekking en dit blad kennen die afwezigheid dan niet.
               </p>
               {/* Zelfde rij-component als de import-preview: één presentatie. */}
@@ -485,7 +485,7 @@ export function ZiekteView({
               className="control-input h-20 w-full resize-none rounded-2xl bg-surface-field px-4 py-3 text-base font-bold outline-none sm:text-sm"
             />
           </div>
-          {meldFout && <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{meldFout}</p>}
+          {meldFout && <p role="alert" className="text-xs font-semibold text-red-700">{meldFout}</p>}
           <Button type="submit" variant="primary" size="lg" full disabled={isMelden}>
             {isMelden ? 'Registreren…' : 'Ziekmelding registreren'}
           </Button>
@@ -542,7 +542,7 @@ export function ZiekteView({
                                 <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-slate-500 tabular-nums">{formatShortDay(dienst.date)}</span>
                               </div>
                               {klaar ? (
-                                <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">Overgezet naar {klaar}</p>
+                                <p className="text-xs font-semibold text-emerald-700">Overgezet naar {klaar}</p>
                               ) : isAdmin ? (
                                 <>
                                 {batchAdvies[adviesSleutel(dienst)]?.samenvatting && (
@@ -551,7 +551,7 @@ export function ZiekteView({
                                 {verdeelFouten[dienst.id] && (
                                   // red, niet rose: rose is hier de zíekte-statuskleur;
                                   // dit is een fout en hoort de fouttaal te spreken.
-                                  <p role="alert" className="text-xs font-semibold text-red-600 dark:text-red-400">{verdeelFouten[dienst.id]}</p>
+                                  <p role="alert" className="text-xs font-semibold text-red-700">{verdeelFouten[dienst.id]}</p>
                                 )}
                                 <div className="flex flex-col gap-2 sm:flex-row">
                                   <select

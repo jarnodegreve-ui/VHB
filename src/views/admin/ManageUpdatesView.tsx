@@ -175,7 +175,7 @@ export function ManageUpdatesView({
                 <input
                   type="checkbox"
                   id="isUrgent"
-                  className="w-5 h-5 rounded border-red-300 dark:border-red-500/60 text-red-600 focus:ring-red-500"
+                  className="w-5 h-5 rounded border-red-300 text-red-700 focus:ring-red-500"
                   checked={updateForm.isUrgent}
                   onChange={(e) => setUpdateForm({ ...updateForm, isUrgent: e.target.checked })}
                 />
@@ -188,7 +188,7 @@ export function ManageUpdatesView({
                 <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
                   <AlertTriangle size={16} /> Dringende verzending admin-only
                 </p>
-                <p className="mt-2 text-sm font-medium text-red-700/80 dark:text-red-300/80">
+                <p className="mt-2 text-sm font-medium text-red-700/80">
                   Planners kunnen updates publiceren, maar geen dringende e-mails uitsturen naar alle gebruikers.
                 </p>
               </div>
@@ -244,7 +244,7 @@ export function ManageUpdatesView({
                   <span className="min-w-0 truncate text-sm font-bold tracking-tight text-slate-800">{update.title}</span>
                   {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                   <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">{formatUpdateDate(update.date)}</span>
-                  <ChevronDown size={15} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+                  <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                 </button>
                 <div className="flex shrink-0 items-center gap-0.5">
                   <Button variant="ghost" size="sm" className="h-11 w-11 sm:pointer-fine:h-9 sm:pointer-fine:w-9 justify-center" icon={<History size={14} />} aria-label="Wijzigingsgeschiedenis" title="Wijzigingsgeschiedenis" onClick={() => setHistoryUpdate(update)} />

@@ -62,7 +62,7 @@ export function BroadcastDocumentModal({ onClose, onDone }: { onClose: () => voi
     <Modal open onClose={onClose} maxWidth="md" ariaLabel="Document naar alle chauffeurs" boven>
       <div className="flex flex-col overflow-hidden">
           <ModalHeader
-            leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center"><Users size={20} /></div>}
+            leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center"><Users size={20} /></div>}
             title="Document naar alle chauffeurs"
             description="Elke actieve chauffeur krijgt een eigen kopie + melding."
             onClose={onClose}

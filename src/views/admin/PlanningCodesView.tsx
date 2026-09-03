@@ -231,7 +231,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                                   onClick={() => setHistoryCode(code)}
                                   title="Wijzigingsgeschiedenis"
                                   aria-label="Wijzigingsgeschiedenis"
-                                  icon={<History size={15} />}
+                                  icon={<History size={16} />}
                                 />
                               )}
                               {canAdminDelete ? (
@@ -240,8 +240,8 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                                   size="sm"
                                   onClick={() => removeCode(index)}
                                   aria-label="Verwijder code"
-                                  className="text-red-500 hover:text-red-600 hover:bg-red-50"
-                                  icon={<Trash2 size={15} />}
+                                  className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                                  icon={<Trash2 size={16} />}
                                 />
                               ) : (
                                 <Badge tone="slate">Admin</Badge>
@@ -300,7 +300,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                         </label>
                       </div>
                       {canAdminDelete ? (
-                        <Button variant="danger" size="md" icon={<Trash2 size={15} />} onClick={() => removeCode(index)}>
+                        <Button variant="danger" size="md" icon={<Trash2 size={16} />} onClick={() => removeCode(index)}>
                           Verwijder Code
                         </Button>
                       ) : (
@@ -314,7 +314,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           ) : (
             <div className="p-6">
               <EmptyState
-                icon={<Settings size={28} />}
+                icon={<Settings size={24} />}
                 title="Nog geen planningscodes"
                 message="Voeg hier de eerste matrixcodes toe zodat planners en admins hun betekenis centraal kunnen beheren."
               />

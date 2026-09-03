@@ -14,7 +14,7 @@ export function PreviewToggle({ active, onToggle }: { active: boolean; onToggle:
   // een systeemmelding i.p.v. een hulpmiddel (feedback Jarno).
   return (
     <div className="inline-flex w-fit items-center gap-2.5 rounded-full border border-oker-200/70 bg-oker-500/10 py-1.5 pl-3 pr-2">
-      <Eye size={14} className="shrink-0 text-oker-600" />
+      <Eye size={14} className="shrink-0 text-oker-700" />
       <span className="text-xs font-medium text-slate-600 whitespace-nowrap">
         {active ? 'Chauffeurs-weergave aan' : 'Bekijk als chauffeur'}
       </span>

@@ -229,8 +229,8 @@ export function DashboardView({ notes = [],
       {/* === Persoonlijke header === */}
       <div className="flex flex-col gap-3 px-1 pt-1 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-xl md:text-2xl font-bold tracking-[-0.02em] text-slate-900">
-            {greeting}, <span className="text-oker-600">{firstName}</span>
+          <h1 className="text-page-title">
+            {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
           <p className="mt-0.5 text-sm font-normal text-slate-500">
             {formatDayLong(isoDate(now))} ·{' '}
@@ -243,14 +243,14 @@ export function DashboardView({ notes = [],
           className={cn(
             'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
             needsAttention
-              ? 'border-amber-200 bg-amber-50 dark:border-amber-400/20 dark:bg-amber-400/10'
-              : 'border-emerald-100 bg-emerald-50 dark:border-emerald-400/20 dark:bg-emerald-400/10',
+              ? 'border-amber-200 bg-amber-50'
+              : 'border-emerald-100 bg-emerald-50',
           )}
         >
           {/* Statische stip — permanente beweging voor "alles is normaal"
               maakt van rust een alarm. */}
-          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500 dark:bg-amber-400' : 'bg-emerald-500 dark:bg-emerald-400')} />
-          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700 dark:text-amber-300' : 'text-emerald-700 dark:text-emerald-300')}>
+          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
+          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
             {needsAttention
               ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
               : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
@@ -333,7 +333,7 @@ export function DashboardView({ notes = [],
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         <OpsPanel
           className="lg:col-span-2"
-          icon={<Calendar size={15} />}
+          icon={<Calendar size={16} />}
           title="Komende diensten"
           aside={thisMonthShiftCount > 0 ? `${thisMonthShiftCount} deze maand` : undefined}
           onSeeAll={onNavigate ? () => onNavigate('rooster') : undefined}
@@ -341,7 +341,7 @@ export function DashboardView({ notes = [],
         >
           {upcomingShifts.length === 0 ? (
             <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
                 <Clock size={16} />
               </span>
               <div>
@@ -355,7 +355,7 @@ export function DashboardView({ notes = [],
                 <Fragment key={shift.id}>
                   <OpsRow
                     tone="oker"
-                    icon={<Calendar size={15} />}
+                    icon={<Calendar size={16} />}
                     primary={formatShortDayPadded(shift.date)}
                     secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
                     trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone="oker" />}
@@ -368,14 +368,14 @@ export function DashboardView({ notes = [],
         </OpsPanel>
 
         <OpsPanel
-          icon={<MapPin size={15} />}
+          icon={<MapPin size={16} />}
           title="Omleidingen"
           aside={liveDiversions.length > 0 ? `${liveDiversions.length} actief` : undefined}
           onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
         >
           {newestDiversions.length === 0 ? (
             <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
                 <MapPin size={16} />
               </span>
               <div>
@@ -389,7 +389,7 @@ export function DashboardView({ notes = [],
                 <Fragment key={div.id}>
                   <OpsRow
                     tone="amber"
-                    icon={<AlertTriangle size={15} />}
+                    icon={<AlertTriangle size={16} />}
                     primary={div.title}
                     secondary={div.description}
                     meta={div.line}
@@ -420,8 +420,8 @@ export function DashboardView({ notes = [],
         title={openDiversion?.title ?? 'Omleiding'}
         subtitle={openDiversion ? lineLabel(openDiversion.line) : undefined}
         icon={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
-            <MapPin size={17} />
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
+            <MapPin size={16} />
           </span>
         }
       >
@@ -449,7 +449,7 @@ export function DashboardView({ notes = [],
                 onClick={() => openPdfInNewTab(openDiversion.pdfUrl)}
                 className="control-button-soft ios-pressable inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all"
               >
-                <FileText size={15} />
+                <FileText size={16} />
                 Bijlage openen (PDF)
               </button>
             )}

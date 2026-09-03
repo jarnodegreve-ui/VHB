@@ -14,15 +14,15 @@ import { cn } from '../lib/ui';
 const STAT_TONES = {
   // In donker een tikje meer vulling (…/18 i.p.v. /12): 12%-alpha op
   // near-black werd modderig — een signaal hoort daar juist te dragen.
-  emerald: 'bg-emerald-500/12 text-emerald-600 dark:bg-emerald-500/18 dark:text-emerald-400',
-  red: 'bg-red-500/12 text-red-600 dark:bg-red-500/18 dark:text-red-400',
-  amber: 'bg-amber-500/12 text-amber-600 dark:bg-amber-500/18 dark:text-amber-400',
+  emerald: 'bg-emerald-500/12 text-emerald-700',
+  red: 'bg-red-500/12 text-red-700',
+  amber: 'bg-amber-500/12 text-amber-700',
   // Ziekte volgt de statuskleurtaal (lib/statusColors): rose, niet amber —
   // anders betekende ziek op de tegel iets anders dan in de rijen eronder.
-  rose: 'bg-rose-500/12 text-rose-600 dark:bg-rose-500/18 dark:text-rose-400',
-  oker: 'bg-oker-500/15 text-oker-600 dark:bg-oker-500/20 dark:text-oker-400',
-  blue: 'bg-blue-500/12 text-blue-600 dark:bg-blue-500/18 dark:text-blue-400',
-  slate: 'bg-slate-500/12 text-slate-600 dark:bg-slate-500/20 dark:text-slate-300',
+  rose: 'bg-rose-500/12 text-rose-700',
+  oker: 'bg-oker-500/15 text-oker-700',
+  blue: 'bg-blue-500/12 text-blue-700',
+  slate: 'bg-slate-500/12 text-slate-600',
 } as const;
 
 type StatTone = keyof typeof STAT_TONES;
@@ -71,7 +71,7 @@ export function OpsStat({
         <span className={cn('inline-flex h-8 w-8 items-center justify-center rounded-lg', STAT_TONES[tone])}>
           {icon}
         </span>
-        {onClick && <ArrowUpRight size={13} className="text-slate-300 transition-colors group-hover:text-slate-500" />}
+        {onClick && <ArrowUpRight size={14} className="text-slate-300 transition-colors group-hover:text-slate-500" />}
       </div>
       {/* Vaste twee-regel-zone (leading-4 × min-h-8): labels van één en twee
           regels ("BESCHIKBAAR" vs "CHAUFFEURS ACTIEF") duwden de cijfers
@@ -95,7 +95,7 @@ export function OpsStat({
         </div>
       )}
       {note && (
-        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-2xs font-medium leading-snug text-oker-800 dark:text-oker-300">
+        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-2xs font-medium leading-snug text-oker-800">
           {note}
         </p>
       )}
@@ -127,7 +127,7 @@ export function OpsStat({
             const pct = Math.max(0, Math.min(100, activeLine.progress!));
             return (
               <div
-                className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-slate-200/70 dark:bg-slate-200/20"
+                className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-slate-200/70"
                 role="progressbar"
                 aria-valuenow={Math.round(pct)}
                 aria-valuemin={0}
@@ -190,7 +190,7 @@ export function OpsPanel({
     >
       <div className="mb-3.5 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600 dark:text-slate-300">
+          <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
             {icon}
           </span>
           <h3 className="text-sm font-semibold tracking-tight text-slate-900">{title}</h3>
@@ -284,7 +284,7 @@ export function QuickAction({
         <span className="block truncate text-sm font-semibold tracking-tight text-slate-900">{label}</span>
         <span className="block truncate text-xs font-medium text-slate-500">{sub}</span>
       </span>
-      <ArrowUpRight size={15} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />
+      <ArrowUpRight size={16} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-700" />
     </button>
   );
 }

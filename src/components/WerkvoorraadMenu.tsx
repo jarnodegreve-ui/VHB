@@ -5,6 +5,7 @@ import type { View } from '../types';
 import type { Werkvoorraad } from '../lib/werkvoorraad';
 import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
 import { useDropdown } from './useDropdown';
+import { DUR } from '../lib/motion';
 
 /**
  * Werkvoorraad-knop in de topbar (idee Jarno 31-08): één plek die vanuit élk
@@ -49,12 +50,12 @@ export function WerkvoorraadMenu({
   // doel-schermen; hier telt de kortste route naar de actie.
   const rijen: Rij[] = [];
   if (wv.planningStale) {
-    rijen.push({ key: 'stale', icon: <CalendarClock size={15} />, tone: 'amber', label: `Planning al ${wv.daysSinceImport} dagen niet bijgewerkt`, view: 'beheer-roosters' });
+    rijen.push({ key: 'stale', icon: <CalendarClock size={16} />, tone: 'amber', label: `Planning al ${wv.daysSinceImport} dagen niet bijgewerkt`, view: 'beheer-roosters' });
   }
   if (wv.horizonKrap) {
     rijen.push({
       key: 'horizon',
-      icon: <CalendarClock size={15} />,
+      icon: <CalendarClock size={16} />,
       tone: wv.horizonDagenOver! <= 0 ? 'red' : 'amber',
       label: wv.horizonDagenOver! <= 0
         ? 'De geladen planning is op'
@@ -65,7 +66,7 @@ export function WerkvoorraadMenu({
   if (wv.importIssueCount > 0 && wv.lastImport) {
     rijen.push({
       key: 'import',
-      icon: <AlertTriangle size={15} />,
+      icon: <AlertTriangle size={16} />,
       tone: 'red',
       label: `Laatste import: ${enkelvoud(wv.importIssueCount, 'aandachtspunt', 'aandachtspunten')}`,
       sub: [
@@ -78,7 +79,7 @@ export function WerkvoorraadMenu({
   if (wv.teHerverdelen.length > 0) {
     rijen.push({
       key: 'herverdeel',
-      icon: <UserX size={15} />,
+      icon: <UserX size={16} />,
       tone: 'red',
       label: `${enkelvoud(wv.teHerverdelen.length, 'dienst', 'diensten')} te herverdelen`,
       sub: somOp(wv.herverdeelPerChauffeur.map((g) => `${g.naam} (${g.diensten.length})`)),
@@ -88,7 +89,7 @@ export function WerkvoorraadMenu({
   if (wv.gapDays.length > 0) {
     rijen.push({
       key: 'gaten',
-      icon: <AlertTriangle size={15} />,
+      icon: <AlertTriangle size={16} />,
       tone: 'red',
       label: `Open diensten op ${enkelvoud(wv.gapDays.length, 'dag', 'dagen')}`,
       sub: somOp(wv.gapDays.map((d) => `${formatShortDay(d.date)} · ${d.missing.length} open`)),
@@ -98,7 +99,7 @@ export function WerkvoorraadMenu({
   if (wv.pendingLeave.length > 0) {
     rijen.push({
       key: 'verlof',
-      icon: <CalendarDays size={15} />,
+      icon: <CalendarDays size={16} />,
       tone: 'amber',
       label: enkelvoud(wv.pendingLeave.length, 'verlofaanvraag', 'verlofaanvragen'),
       sub: somOp(wv.pendingLeave.map((r) => userNaam(r.userId))),
@@ -108,7 +109,7 @@ export function WerkvoorraadMenu({
   if (wv.pendingSwaps.length > 0) {
     rijen.push({
       key: 'ruil',
-      icon: <Repeat size={15} />,
+      icon: <Repeat size={16} />,
       tone: 'blue',
       label: enkelvoud(wv.pendingSwaps.length, 'ruilverzoek', 'ruilverzoeken'),
       sub: somOp(wv.pendingSwaps.map((s) => userNaam(s.requesterId))),
@@ -118,7 +119,7 @@ export function WerkvoorraadMenu({
   if (wv.pendingDevices.length > 0) {
     rijen.push({
       key: 'toestellen',
-      icon: <Smartphone size={15} />,
+      icon: <Smartphone size={16} />,
       tone: 'amber',
       label: `${enkelvoud(wv.pendingDevices.length, 'toestel wacht', 'toestellen wachten')} op goedkeuring`,
       sub: somOp(wv.pendingDevices.map((d) => userNaam(d.userId))),
@@ -129,7 +130,7 @@ export function WerkvoorraadMenu({
     const urgentste = wv.vervalTaken[0];
     rijen.push({
       key: 'vervaldata',
-      icon: <IdCard size={15} />,
+      icon: <IdCard size={16} />,
       tone: wv.vervalTaken.some((e) => e.dagen < 0) ? 'red' : 'amber',
       label: `${enkelvoud(wv.vervalTaken.length, 'vervaldatum', 'vervaldata')} binnen 30 dagen`,
       sub: `${EXPIRY_SOORT_LABELS[urgentste.soort] ?? urgentste.soort} · ${userNaam(urgentste.userId)} · ${
@@ -140,9 +141,9 @@ export function WerkvoorraadMenu({
   }
 
   const toonKleur: Record<Rij['tone'], string> = {
-    red: 'text-red-600 dark:text-red-400',
-    amber: 'text-amber-600 dark:text-amber-300',
-    blue: 'text-blue-600 dark:text-blue-400',
+    red: 'text-red-700',
+    amber: 'text-amber-700',
+    blue: 'text-blue-700',
   };
 
   const ga = (view: View) => () => { setOpen(false); onNavigate(view); };
@@ -166,15 +167,15 @@ export function WerkvoorraadMenu({
           open ? 'bg-slate-100/80 text-slate-800' : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800',
         )}
       >
-        <ListChecks size={17} />
+        <ListChecks size={16} />
         {wv.attentionCount > 0 && (
           <span
             aria-hidden="true"
             className={cn(
-              'absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-white dark:ring-slate-900',
+              'absolute -top-0.5 -right-0.5 min-w-4 h-4 px-1 inline-flex items-center justify-center rounded-full text-[10px] font-bold ring-2 ring-paper',
               heeftRood
-                ? 'bg-red-600 dark:bg-red-500 text-white'
-                : 'bg-amber-500 dark:bg-amber-400 text-slate-950',
+                ? 'bg-red-600 text-white'
+                : 'bg-amber-500 text-slate-950',
             )}
           >
             {wv.attentionCount > 9 ? '9+' : wv.attentionCount}
@@ -190,7 +191,7 @@ export function WerkvoorraadMenu({
           initial={{ opacity: 0, scale: 0.97, y: -4 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.97, y: -4 }}
-          transition={{ duration: 0.15, ease: 'easeOut' }}
+          transition={{ duration: DUR.fast, ease: 'easeOut' }}
           style={{ transformOrigin: 'top right' }}
           /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt —
              absoluut verankerd aan de knop viel het links buiten beeld
@@ -207,7 +208,7 @@ export function WerkvoorraadMenu({
           </div>
           {rijen.length === 0 ? (
             <div className="flex items-center gap-3 px-3 py-3">
-              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-600 dark:text-emerald-400">
+              <span className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
                 <CheckCircle2 size={16} />
               </span>
               <div>

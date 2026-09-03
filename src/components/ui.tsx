@@ -29,14 +29,12 @@ export function PageHeader({
   return (
     <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
-        {eyebrow ? (
-          <p className="text-2xs font-medium uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p>
-        ) : null}
-        {/* text-2xl/3xl + bold (geen black): de kop wint het van de rest door
-            máát, niet door extra gewicht — dat houdt de pagina rustig. */}
-        <h3 className={cn('section-title font-bold tracking-[-0.02em] text-slate-900 leading-[1.1] text-2xl md:text-3xl', eyebrow && 'mt-1.5')}>
+        {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
+        {/* Eén h1 per scherm, in de page-title-rol (24/30 px, bold — geen
+            black): de kop wint het van de rest door máát, niet door gewicht. */}
+        <h1 className={cn('text-page-title', eyebrow && 'mt-1.5')}>
           {title}
-        </h3>
+        </h1>
         {description ? (
           <p className="mt-2 text-sm font-normal leading-relaxed text-slate-500">{description}</p>
         ) : null}
@@ -60,8 +58,8 @@ export function AdminSubsectionHeader({
   return (
     <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div className="max-w-3xl">
-        {eyebrow ? <p className="text-2xs font-medium uppercase tracking-[0.08em] text-slate-500">{eyebrow}</p> : null}
-        <h3 className="mt-1.5 text-lg font-bold tracking-tight text-slate-900 md:text-xl">{title}</h3>
+        {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
+        <h2 className={cn('text-section-title', eyebrow && 'mt-1.5')}>{title}</h2>
         {description ? <p className="mt-1 text-sm font-normal text-slate-500">{description}</p> : null}
       </div>
       {aside ? <div className="flex flex-wrap items-center gap-3">{aside}</div> : null}
@@ -74,7 +72,7 @@ export function AdminSubsectionHeader({
  * (optioneel) en een optionele sluitknop rechts. Eén padding (`p-6 md:p-7`),
  * één titelgrootte (`text-lg`) en één hairline — de view-modals dreven eerder
  * uiteen (p-6/p-8, text-lg/text-xl, `border-slate-200/70` vs een in light
- * onzichtbare `border-white/70`). Gebruik binnen een `flex flex-col`-modal
+ * onzichtbare `border-rim`). Gebruik binnen een `flex flex-col`-modal
  * met `!p-0`; de body eronder krijgt zijn eigen padding.
  * `leading` is het enige extra slot (icoontegel of terugknop vóór de tekst);
  * andere knoppen horen in de body of de knoppenrij, niet in de kop.
@@ -97,8 +95,8 @@ export function ModalHeader({
       <div className="flex min-w-0 items-center gap-3">
         {leading ? <div className="shrink-0">{leading}</div> : null}
         <div className="min-w-0">
-          {eyebrow ? <p className="text-2xs font-medium uppercase tracking-[0.08em] text-oker-600">{eyebrow}</p> : null}
-          <h4 className={cn('text-lg font-bold tracking-tight text-slate-900', eyebrow && 'mt-1.5')}>{title}</h4>
+          {eyebrow ? <p className="text-micro text-oker-700">{eyebrow}</p> : null}
+          <h2 className={cn('text-section-title', eyebrow && 'mt-1.5')}>{title}</h2>
           {description ? <p className="mt-1.5 text-sm font-normal leading-relaxed text-slate-500">{description}</p> : null}
         </div>
       </div>
@@ -145,10 +143,10 @@ export function ConfirmationModal({
     <Modal open={isOpen} onClose={onClose} maxWidth="md" ariaLabel={title} boven>
       <div className="flex max-h-[88dvh] flex-col overflow-hidden">
         <div className="p-6 md:p-7 border-b border-slate-200/70 shrink-0">
-          <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-600' : 'bg-amber-500/15 text-amber-600')}>
-            <AlertTriangle size={22} />
+          <div className={cn('w-11 h-11 rounded-xl flex items-center justify-center mb-4', variant === 'danger' ? 'bg-red-500/12 text-red-700' : 'bg-amber-500/15 text-amber-700')}>
+            <AlertTriangle size={20} />
           </div>
-          <h4 className="text-lg font-bold tracking-tight">{title}</h4>
+          <h2 className="text-section-title">{title}</h2>
           <p className="text-sm text-slate-500 font-normal mt-1.5 leading-relaxed">{message}</p>
         </div>
         <div className="p-5 md:p-6 bg-slate-50/80 flex gap-2.5 shrink-0">
@@ -164,7 +162,7 @@ export function ConfirmationModal({
                niet het merk-oker (dat mengde twee talen in één dialoog).
                Tekst op amber is altijd VHB Black (huisstijlregel; wit op
                amber-600 haalde ≈3,6:1, onder AA — controle-ronde 27-08). */
-            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-700 shadow-red-600/20' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-amber-500/20')}
+            className={cn('flex-1 px-4 py-3 rounded-xl font-semibold text-sm transition-all shadow-lg', variant === 'danger' ? 'bg-red-600 text-white hover:bg-red-600/90 shadow-red-600/20' : 'bg-amber-500 text-slate-950 hover:bg-amber-400 shadow-amber-500/20')}
           >
             {confirmText}
           </button>
@@ -197,7 +195,7 @@ export function EmptyState({
       <div className="w-14 h-14 bg-surface-muted rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
         {icon ?? <Inbox size={24} />}
       </div>
-      <h4 className="text-base font-bold text-slate-800 tracking-tight">{title}</h4>
+      <h3 className="text-card-title">{title}</h3>
       {message ? <p className="mt-1.5 text-sm font-normal text-slate-500 max-w-md mx-auto">{message}</p> : null}
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
     </div>
@@ -254,7 +252,7 @@ export function CredentialsModal({
       <div className="flex max-h-[88dvh] flex-col overflow-hidden">
         <div className="p-6 md:p-7 border-b border-slate-200/70 flex items-center justify-between shrink-0">
           <div>
-            <h4 className="text-lg font-bold tracking-tight">{title}</h4>
+            <h2 className="text-section-title">{title}</h2>
             <p className="mt-1.5 text-sm text-slate-500 font-normal">Bewaar deze gegevens of stuur ze door naar de gebruiker.</p>
           </div>
           <button aria-label="Sluiten" onClick={onClose} className="w-11 h-11 sm:pointer-fine:w-8 sm:pointer-fine:h-8 inline-flex items-center justify-center shrink-0 text-slate-400 hover:bg-slate-100 hover:text-slate-700 rounded-xl transition-colors">

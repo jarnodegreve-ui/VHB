@@ -185,7 +185,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
         />
         {logins.length === 0 ? (
           <div className="mt-5">
-            <EmptyState icon={<Users size={28} />} title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
+            <EmptyState icon={<Users size={24} />} title="Nog geen aanmeldingen geregistreerd" message="Zodra gebruikers inloggen verschijnt hier per dag wie er actief was." />
           </div>
         ) : (
           <div className="mt-5 grid gap-5 lg:grid-cols-2">
@@ -312,7 +312,7 @@ export function ActivityLogView({ entries, logins = [] }: { entries: ActivityLog
             </TableShell>
           ) : (
             <EmptyState
-              icon={<Activity size={28} />}
+              icon={<Activity size={24} />}
               title={entries.length > 0 ? 'Geen resultaten voor deze filter' : 'Nog geen activiteit gelogd'}
               message={entries.length > 0 ? 'Pas je categorie of zoekterm aan om andere activiteiten te tonen.' : 'Zodra admins beheeracties uitvoeren, verschijnen ze hier automatisch.'}
             />

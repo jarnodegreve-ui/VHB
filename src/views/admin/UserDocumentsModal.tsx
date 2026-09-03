@@ -78,7 +78,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
     <Modal open onClose={onClose} maxWidth="lg" ariaLabel={`Documenten — ${user.name}`} boven>
       <div className="flex max-h-[85dvh] flex-col overflow-hidden">
           <ModalHeader
-            leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-600 flex items-center justify-center shrink-0"><FileText size={20} /></div>}
+            leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0"><FileText size={20} /></div>}
             title={`Documenten — ${user.name}`}
             description={`Alleen ${user.name.split(' ')[0]} ziet deze bestanden.`}
             onClose={onClose}
@@ -116,15 +116,15 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                       {/* Leesbevestiging: gezet zodra de chauffeur het document
                           voor het eerst opent. */}
                       {doc.openedAt ? (
-                        <p className="mt-0.5 flex items-center gap-1 text-2xs font-semibold text-emerald-600">
-                          <CheckCircle2 size={11} /> Geopend {formatDateHuman(doc.openedAt)}
+                        <p className="mt-0.5 flex items-center gap-1 text-2xs font-semibold text-emerald-700">
+                          <CheckCircle2 size={12} /> Geopend {formatDateHuman(doc.openedAt)}
                         </p>
                       ) : (
                         <p className="mt-0.5 text-2xs font-medium text-slate-400">Nog niet geopend</p>
                       )}
                     </div>
-                    <button type="button" onClick={() => doc.url && openPdfInNewTab(doc.url)} aria-label="Openen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors"><Download size={15} /></button>
-                    <button type="button" onClick={() => void handleDelete(doc)} aria-label="Verwijderen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-surface-white text-red-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 flex items-center justify-center transition-colors"><Trash2 size={15} /></button>
+                    <button type="button" onClick={() => doc.url && openPdfInNewTab(doc.url)} aria-label="Openen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-surface-white text-slate-500 hover:bg-surface-soft-hover flex items-center justify-center transition-colors"><Download size={16} /></button>
+                    <button type="button" onClick={() => void handleDelete(doc)} aria-label="Verwijderen" className="ios-pressable shrink-0 w-9 h-9 pointer-coarse:w-11 pointer-coarse:h-11 rounded-xl border border-slate-200 bg-surface-white text-red-500 hover:text-red-700 hover:bg-red-50 flex items-center justify-center transition-colors"><Trash2 size={16} /></button>
                   </div>
                 ))}
               </div>

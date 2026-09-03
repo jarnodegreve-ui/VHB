@@ -97,8 +97,8 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
               className="px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3"
             >
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-xl border border-oker-100 bg-oker-50 text-oker-600 flex items-center justify-center shrink-0">
-                  <MapPin size={17} />
+                <div className="w-9 h-9 rounded-xl border border-oker-100 bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">
+                  <MapPin size={16} />
                 </div>
                 <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
                   <h4 className="font-bold text-base text-slate-800 tracking-tight leading-snug">{div.title}</h4>
@@ -120,7 +120,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
                   exit={{ height: 0, opacity: 0 }}
-                  className="overflow-hidden bg-white/35 border-t border-white/60"
+                  className="overflow-hidden bg-paper/35 border-t border-rim"
                 >
                   <div className="p-5 md:p-6 space-y-6">
                     <div className="grid md:grid-cols-2 gap-8">
@@ -176,7 +176,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
         ))
       ) : (
         <EmptyState
-          icon={<Search size={28} />}
+          icon={<Search size={24} />}
           title={searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}
           message={searchQuery ? `Geen omleidingen gevonden voor "${searchQuery}"` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
           action={searchQuery ? (

@@ -150,7 +150,7 @@ export function ChangePasswordModal({
           {error && (
             <motion.div initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} className="flex items-center gap-2 px-4 py-3 bg-red-50 border border-red-100 rounded-2xl">
               <AlertTriangle size={14} className="text-red-400 shrink-0" />
-              <p className="text-red-600 text-sm font-medium">{error}</p>
+              <p className="text-red-700 text-sm font-medium">{error}</p>
             </motion.div>
           )}
 
@@ -165,7 +165,7 @@ export function ChangePasswordModal({
             <button
               type="button"
               onClick={handleClose}
-              className="flex-1 px-4 py-3 rounded-xl font-semibold text-slate-600 hover:bg-surface-row hover:text-slate-900 transition-all text-sm border border-transparent hover:border-white/80"
+              className="flex-1 px-4 py-3 rounded-xl font-semibold text-slate-600 hover:bg-surface-row hover:text-slate-900 transition-all text-sm border border-transparent hover:border-rim-strong"
             >
               Annuleren
             </button>

@@ -83,7 +83,7 @@ export function CalendarSubscribeModal({
               <div className="mt-3 flex flex-col sm:flex-row gap-2">
                 <a
                   href={links.webcal}
-                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-slate-900 text-white px-4 py-3 text-sm font-semibold hover:bg-slate-800 transition-colors"
+                  className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-ink text-white px-4 py-3 text-sm font-semibold hover:bg-ink-soft transition-colors"
                 >
                   <CalendarPlus size={16} /> Apple / iPhone
                 </a>
@@ -118,7 +118,7 @@ export function CalendarSubscribeModal({
                 Wijzigingen in je rooster verschijnen daarna vanzelf, meestal binnen een uur.
               </p>
               <div className="mt-2 flex items-start gap-1.5 text-2xs font-medium text-slate-400">
-                <ShieldCheck size={13} className="text-slate-400 mt-0.5 shrink-0" />
+                <ShieldCheck size={14} className="text-slate-400 mt-0.5 shrink-0" />
                 <span>Deze link is persoonlijk — deel 'm niet, hij toont jouw diensten.</span>
               </div>
             </>

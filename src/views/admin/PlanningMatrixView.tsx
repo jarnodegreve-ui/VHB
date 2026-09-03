@@ -328,9 +328,9 @@ export function PlanningMatrixView({
                 // Fuzzy-suggestie: "Duysbergh Pascal" (typo) → "≈ Duysburgh Pascal?"
                 const suggestion = suggestClosestName(driver, users.map((u) => ({ id: String(u.id), name: u.name })));
                 return (
-                  <span key={driver} className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-white/80 px-3 py-1.5 text-xs font-semibold text-amber-700">
+                  <span key={driver} className="inline-flex items-center gap-1.5 rounded-full border border-amber-100 bg-paper/80 px-3 py-1.5 text-xs font-semibold text-amber-700">
                     {driver}
-                    {suggestion && <span className="font-medium text-amber-600/90">≈ {suggestion.name}?</span>}
+                    {suggestion && <span className="font-medium text-amber-700/90">≈ {suggestion.name}?</span>}
                   </span>
                 );
               }) : (
@@ -344,12 +344,12 @@ export function PlanningMatrixView({
                     size="sm"
                     variant="ghost"
                     onClick={onOpenUserManagement}
-                    className="border border-amber-200 bg-white/80 text-amber-700 hover:bg-amber-100 hover:text-amber-700"
+                    className="border border-amber-200 bg-paper/80 text-amber-700 hover:bg-amber-100 hover:text-amber-700"
                   >
                     Open Gebruikersbeheer
                   </Button>
                 ) : (
-                  <Badge tone="amber" className="bg-white/80">Gebruikersbeheer admin-only</Badge>
+                  <Badge tone="amber" className="bg-paper/80">Gebruikersbeheer admin-only</Badge>
                 )}
               </div>
             ) : null}
@@ -409,7 +409,7 @@ export function PlanningMatrixView({
               );
             }) : (
               <EmptyState
-                icon={<Calendar size={28} />}
+                icon={<Calendar size={24} />}
                 title={showOnlyIssues ? "Geen probleemdagen gevonden" : "Nog geen matrixplanning"}
                 message={showOnlyIssues ? "Alle geüploade dagen zijn momenteel volledig herkenbaar." : "Upload eerst een matrix-CSV via Beheer Roosters om hier een overzicht te zien."}
               />
@@ -472,7 +472,7 @@ export function PlanningMatrixView({
                     <MicroLabel className="text-amber-700">Niet-Gematchte Chauffeurs</MicroLabel>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {unmatchedDriversForSelectedDay.length > 0 ? unmatchedDriversForSelectedDay.map((driver) => (
-                        <Fragment key={driver}><Badge tone="amber" className="bg-white/80">{driver}</Badge></Fragment>
+                        <Fragment key={driver}><Badge tone="amber" className="bg-paper/80">{driver}</Badge></Fragment>
                       )) : (
                         <span className="text-sm text-slate-500">Geen niet-gematchte chauffeurs voor deze dag.</span>
                       )}
@@ -484,12 +484,12 @@ export function PlanningMatrixView({
                             size="sm"
                             variant="ghost"
                             onClick={onOpenUserManagement}
-                            className="border border-amber-200 bg-white/80 text-amber-700 hover:bg-amber-100 hover:text-amber-700"
+                            className="border border-amber-200 bg-paper/80 text-amber-700 hover:bg-amber-100 hover:text-amber-700"
                           >
                             Open Gebruikersbeheer
                           </Button>
                         ) : (
-                          <Badge tone="amber" className="bg-white/80">Gebruikersbeheer admin-only</Badge>
+                          <Badge tone="amber" className="bg-paper/80">Gebruikersbeheer admin-only</Badge>
                         )}
                       </div>
                     ) : null}
@@ -565,7 +565,7 @@ export function PlanningMatrixView({
             </>
           ) : (
             <EmptyState
-              icon={<FileText size={28} />}
+              icon={<FileText size={24} />}
               title="Geen dag geselecteerd"
               message="Kies links een geüploade dag om de actuele matrixplanning te bekijken."
             />

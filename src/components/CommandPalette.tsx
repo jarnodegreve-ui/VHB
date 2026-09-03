@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { View, Role } from '../types';
 import { cn } from '../lib/ui';
+import { DUR, EASE } from '../lib/motion';
 
 type Command = {
   id: string;
@@ -272,19 +273,19 @@ export function CommandPalette({
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
+          transition={{ duration: DUR.fast, ease: EASE }}
           className="fixed inset-0 z-[120] flex items-start justify-center px-4"
           onClick={onClose}
         >
           {/* Backdrop */}
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm" />
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" />
 
           {/* Panel */}
           <motion.div
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
-            transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ duration: DUR.base, ease: EASE }}
             className="glass-modal relative mt-[12vh] w-full max-w-xl rounded-2xl overflow-hidden"
             onClick={(e) => e.stopPropagation()}
           >
@@ -330,7 +331,7 @@ export function CommandPalette({
                       <span
                         className={cn(
                           'shrink-0 flex items-center justify-center',
-                          isActive ? 'text-oker-600' : 'text-slate-400',
+                          isActive ? 'text-oker-700' : 'text-slate-400',
                         )}
                       >
                         {cmd.icon}

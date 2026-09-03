@@ -27,7 +27,7 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
       )}
       <span className={cn(
         "shrink-0 transition-colors duration-150",
-        active ? "text-oker-600" : "text-slate-400 group-hover:text-slate-600"
+        active ? "text-oker-700" : "text-slate-400 group-hover:text-slate-600"
       )}>
         {icon}
       </span>

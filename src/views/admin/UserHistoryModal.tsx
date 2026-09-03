@@ -89,7 +89,7 @@ export function UserHistoryModal({
           ) : (
             <div className="space-y-2">
               {userLeave.map((l) => (
-                <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/55">
+                <div key={l.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-paper/55">
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-slate-800">
                       {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
@@ -118,7 +118,7 @@ export function UserHistoryModal({
                 // over "wie moest hoe vaak inspringen" wil kunnen teruglezen.
                 const handmatig = (s.reason || '').startsWith('Handmatige wissel door');
                 return (
-                  <div key={s.id} className="p-3 rounded-2xl border border-slate-100 bg-white/55 space-y-1.5">
+                  <div key={s.id} className="p-3 rounded-2xl border border-slate-100 bg-paper/55 space-y-1.5">
                     <div className="flex items-center justify-between gap-3">
                       <div className="min-w-0 flex items-center gap-2 text-sm">
                         <RotateCcw size={14} className="text-slate-400 shrink-0" />
@@ -151,7 +151,7 @@ export function UserHistoryModal({
           ) : (
             <div className="space-y-2">
               {upcomingShifts.slice(0, 10).map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/55">
+                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-paper/55">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
                     <span className="text-sm font-semibold text-slate-800">{s.date}</span>
@@ -176,7 +176,7 @@ export function UserHistoryModal({
             <h5 className={microLabelClass}>Recent gewerkt</h5>
             <div className="space-y-2">
               {pastShifts.slice(0, 5).map((s) => (
-                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-white/40 opacity-80">
+                <div key={s.id} className="flex items-center justify-between gap-3 p-3 rounded-2xl border border-slate-100 bg-paper/40 opacity-80">
                   <div className="flex items-center gap-3 min-w-0">
                     <Calendar size={14} className="text-slate-400 shrink-0" />
                     <span className="text-sm font-semibold text-slate-700">{s.date}</span>

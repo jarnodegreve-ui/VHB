@@ -510,18 +510,18 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <Badge tone="slate">{filteredUsers.length} zichtbaar</Badge>
                 {/* Uitrol-teller: hoeveel actieve medewerkers kunnen de
                     meldingen die de app verstuurt écht ontvangen? */}
-                <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} icon={<Bell size={11} />}>
+                <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} icon={<Bell size={12} />}>
                   {pushMetAan} van {pushTotaal} met meldingen
                 </Badge>
                 {/* Adoptie: hoeveel chauffeurs logden ooit in? Rood zolang er
                     nog een groep is die je persoonlijk moet meekrijgen. */}
-                <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} icon={<LogIn size={11} />}>
+                <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} icon={<LogIn size={12} />}>
                   {chauffeursOoitIn} van {actieveChauffeurs.length} chauffeurs ooit ingelogd
                 </Badge>
                 {/* Accounts zonder één cel in de geïmporteerde planning:
                     nieuwe collega, vertrokken, of weggevallen Excel-kolom. */}
                 {aantalNietInPlanning > 0 && (
-                  <Badge tone="amber" icon={<CalendarOff size={11} />}>
+                  <Badge tone="amber" icon={<CalendarOff size={12} />}>
                     {aantalNietInPlanning} niet in de planning
                   </Badge>
                 )}
@@ -553,14 +553,14 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 verdwijnen en bleef een lege tabel zonder uitweg achter
                 (controle-ronde 20-08). */}
             {(nooitIngelogd > 0 || alleenNooitIn) && (
-              <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} className="self-start" icon={<LogIn size={13} />}>
+              <FilterChip active={alleenNooitIn} onClick={() => setAlleenNooitIn((v) => !v)} className="self-start" icon={<LogIn size={14} />}>
                 Nog nooit ingelogd ({nooitIngelogd})
               </FilterChip>
             )}
             {/* Snelfilter: chauffeur-accounts zonder cel aan het einde van de
                 geïmporteerde planning — nieuwe collega of weggevallen kolom. */}
             {(aantalNietInPlanning > 0 || alleenNietInPlanning) && (
-              <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} className="self-start" icon={<CalendarOff size={13} />}>
+              <FilterChip active={alleenNietInPlanning} onClick={() => setAlleenNietInPlanning((v) => !v)} className="self-start" icon={<CalendarOff size={14} />}>
                 Niet in de planning ({aantalNietInPlanning})
               </FilterChip>
             )}
@@ -578,9 +578,9 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-oker-200/70 bg-oker-500/10 px-4 py-2.5">
           <span className="text-sm font-semibold text-slate-700">{selectedIds.size} geselecteerd</span>
           <div className="flex flex-wrap items-center gap-2">
-            <Button variant="secondary" size="sm" icon={<Pause size={15} />} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
-            <Button variant="secondary" size="sm" icon={<Play size={15} />} onClick={() => bulkSetActive(true)}>Activeren</Button>
-            <Button variant="danger" size="sm" icon={<Trash2 size={15} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
+            <Button variant="secondary" size="sm" icon={<Pause size={16} />} onClick={() => bulkSetActive(false)}>Pauzeren</Button>
+            <Button variant="secondary" size="sm" icon={<Play size={16} />} onClick={() => bulkSetActive(true)}>Activeren</Button>
+            <Button variant="danger" size="sm" icon={<Trash2 size={16} />} onClick={() => setConfirmBulkDelete(true)}>Verwijderen</Button>
             <Button variant="ghost" size="sm" onClick={clearSelection}>Wissen</Button>
           </div>
         </div>
@@ -618,7 +618,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                       {nietInPlanning(u) && (
                         <Badge
                           tone="amber"
-                          icon={<CalendarOff size={11} />}
+                          icon={<CalendarOff size={12} />}
                           title={laatsteInPlanning(u)
                             ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
                             : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
@@ -632,8 +632,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   {/* Zonder abonnement komt géén enkele melding aan. */}
                   <Td>
                     {pushUserIds.has(String(u.id))
-                      ? <Badge tone="emerald" icon={<Bell size={11} />}>Aan</Badge>
-                      : <Badge tone="slate" icon={<BellOff size={11} />}>Uit</Badge>}
+                      ? <Badge tone="emerald" icon={<Bell size={12} />}>Aan</Badge>
+                      : <Badge tone="slate" icon={<BellOff size={12} />}>Uit</Badge>}
                   </Td>
                   <Td className="tabular-nums">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>
                   <Td className="text-center"><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-surface-soft text-slate-400')}>{u.activeSessions || 0}</span></Td>
@@ -654,20 +654,20 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                         <>
                           {/* Klik-buiten sluit het menu. */}
                           <button type="button" className="fixed inset-0 z-40 cursor-default" onClick={() => setMenuUserId(null)} aria-label="Sluit menu" tabIndex={-1} />
-                          <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-surface-white p-1.5 shadow-xl text-left dark:border-white/10 dark:bg-[rgb(30,31,34)]">
-                            <RowMenuItem icon={<Info size={15} />} label="Verlof- & dienstruil-historiek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
-                            <RowMenuItem icon={<FolderOpen size={15} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
-                            <RowMenuItem icon={<History size={15} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
-                            <RowMenuItem icon={<RotateCcw size={15} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
+                          <div className="absolute right-0 top-full z-50 mt-1 w-64 rounded-2xl border border-slate-200 bg-surface-white p-1.5 shadow-xl text-left">
+                            <RowMenuItem icon={<Info size={16} />} label="Verlof- & dienstruil-historiek" onClick={() => { setMenuUserId(null); setViewingHistoryUser(u); }} />
+                            <RowMenuItem icon={<FolderOpen size={16} />} label="Documenten beheren" onClick={() => { setMenuUserId(null); setDocumentsUser(u); }} />
+                            <RowMenuItem icon={<History size={16} />} label="Wijzigingsgeschiedenis" onClick={() => { setMenuUserId(null); setViewingChangeLogUser(u); }} />
+                            <RowMenuItem icon={<RotateCcw size={16} />} label="Nieuw tijdelijk wachtwoord" onClick={() => { setMenuUserId(null); setConfirmResetUser(u); }} />
                             <RowMenuItem
-                              icon={u.isActive !== false ? <Pause size={15} /> : <Play size={15} />}
+                              icon={u.isActive !== false ? <Pause size={16} /> : <Play size={16} />}
                               label={u.isActive !== false ? 'Pauzeer gebruiker' : 'Activeer gebruiker'}
                               disabled={u.isActive !== false && isProtectedAdmin(u)}
                               onClick={() => { setMenuUserId(null); void quickToggleActive(u); }}
                             />
-                            <div className="my-1 border-t border-slate-100 dark:border-white/10" />
+                            <div className="my-1 border-t border-slate-100" />
                             <RowMenuItem
-                              icon={<Trash2 size={15} />}
+                              icon={<Trash2 size={16} />}
                               label="Verwijder gebruiker"
                               tone="danger"
                               disabled={isProtectedAdmin(u)}
@@ -694,7 +694,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                       <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
                       {nietInPlanning(u) && (
-                        <Badge tone="amber" icon={<CalendarOff size={11} />}>Niet in planning</Badge>
+                        <Badge tone="amber" icon={<CalendarOff size={12} />}>Niet in planning</Badge>
                       )}
                     </div>
                   </div>
@@ -702,8 +702,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
                   <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
                   {pushUserIds.has(String(u.id))
-                    ? <Badge tone="emerald" icon={<Bell size={11} />}>Meldingen aan</Badge>
-                    : <Badge tone="slate" icon={<BellOff size={11} />}>Meldingen uit</Badge>}
+                    ? <Badge tone="emerald" icon={<Bell size={12} />}>Meldingen aan</Badge>
+                    : <Badge tone="slate" icon={<BellOff size={12} />}>Meldingen uit</Badge>}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -721,7 +721,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             </div>
           ))}
         </div>
-        {filteredUsers.length === 0 && <div className="p-6"><EmptyState icon={<Users size={28} />} title="Geen gebruikers gevonden" message="Pas je filter aan of voeg een nieuwe gebruiker toe." /></div>}
+        {filteredUsers.length === 0 && <div className="p-6"><EmptyState icon={<Users size={24} />} title="Geen gebruikers gevonden" message="Pas je filter aan of voeg een nieuwe gebruiker toe." /></div>}
       </TableShell>
 
       <ConfirmationModal isOpen={!!confirmDeleteId} onClose={() => setConfirmDeleteId(null)} onConfirm={handleDeleteUser} title="Gebruiker verwijderen" message="Weet je zeker dat je deze gebruiker wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt." />
@@ -737,7 +737,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
               <MicroLabel>Volledige Naam</MicroLabel>
               <input type="text" autoComplete="name" required aria-label="Volledige naam" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" placeholder="bijv. Jan Janssen" />
               {vindNaamBotsingen(newUser.name, users).length > 0 && (
-                <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</p>
+                <p className="text-xs font-medium text-amber-700">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</p>
               )}
             </div>
             <div className="space-y-1.5"><MicroLabel>Rol</MicroLabel><select aria-label="Rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
@@ -763,7 +763,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                   <MicroLabel>Volledige Naam</MicroLabel>
                   <input type="text" autoComplete="name" required aria-label="Volledige naam" value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all text-sm font-medium" />
                   {vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 && (
-                    <p className="text-xs font-medium text-amber-700 dark:text-amber-400">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</p>
+                    <p className="text-xs font-medium text-amber-700">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</p>
                   )}
                 </div>
                 <div className="space-y-1.5"><MicroLabel>Rol</MicroLabel><select aria-label="Rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })} className="control-input w-full px-4 py-2.5 rounded-2xl outline-none transition-all bg-surface-field text-sm font-medium"><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></select></div>
@@ -896,8 +896,8 @@ function RowMenuItem({ icon, label, onClick, disabled = false, tone = 'default' 
       className={cn(
         'flex w-full items-center gap-2.5 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors min-h-11',
         tone === 'danger'
-          ? 'text-red-600 hover:bg-red-50'
-          : 'text-slate-700 hover:bg-slate-100/70 dark:text-slate-200 dark:hover:bg-white/5',
+          ? 'text-red-700 hover:bg-red-50'
+          : 'text-slate-700 hover:bg-slate-100/70',
         disabled && 'opacity-40 cursor-not-allowed hover:bg-transparent',
       )}
     >

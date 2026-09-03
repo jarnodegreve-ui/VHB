@@ -197,7 +197,7 @@ export function ServicesView({ services }: { services: Service[] }) {
         {filteredServices.length === 0 && (
           <div className="px-6 py-6">
             <EmptyState
-              icon={<Clock size={28} />}
+              icon={<Clock size={24} />}
               title="Geen diensten gevonden"
               message={searchQuery ? `Geen diensten gevonden voor "${searchQuery}".` : 'Er zijn nog geen diensten beschikbaar.'}
             />

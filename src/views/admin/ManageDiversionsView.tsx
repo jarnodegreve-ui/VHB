@@ -186,8 +186,8 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
           return (
           <div key={div.id} className={cn('surface-card surface-card-hover p-5 md:p-6 rounded-3xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group', expired && 'opacity-60')}>
             <div className="flex items-start gap-5">
-              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-surface-muted text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-600')}>
-                <MapPin size={28} />
+              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-surface-muted text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-700')}>
+                <MapPin size={24} />
               </div>
               <div>
                 <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -241,7 +241,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         })}
         {diversions.length === 0 && (
           <EmptyState
-            icon={<MapPin size={28} />}
+            icon={<MapPin size={24} />}
             title="Geen actieve omleidingen"
             message="Er staan momenteel geen omleidingen in het systeem."
           />

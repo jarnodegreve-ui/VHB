@@ -2014,7 +2014,7 @@ export default function App() {
             'mx-auto w-14 h-14 rounded-2xl flex items-center justify-center ring-1 ring-white/10',
             revoked ? 'bg-red-500/15 text-red-300' : 'bg-oker-500/15 text-oker-400',
           )}>
-            {revoked ? <ShieldAlert size={26} /> : <Smartphone size={26} />}
+            {revoked ? <ShieldAlert size={24} /> : <Smartphone size={24} />}
           </div>
           <h1 className="mt-4 text-xl font-black text-white tracking-tight">
             {revoked ? 'Dit toestel is geblokkeerd' : 'Toestel wacht op goedkeuring'}
@@ -2199,7 +2199,7 @@ export default function App() {
                 className="control-input mt-1.5 w-full rounded-2xl bg-surface-field px-4 py-3 text-base font-medium outline-none sm:text-sm"
               />
               {probleemFout && (
-                <p className="mt-2 text-xs font-semibold text-red-600">Versturen lukte niet — controleer je verbinding en probeer opnieuw.</p>
+                <p className="mt-2 text-xs font-semibold text-red-700">Versturen lukte niet — controleer je verbinding en probeer opnieuw.</p>
               )}
               <div className="mt-4 flex justify-end gap-2.5">
                 <button
@@ -2223,9 +2223,9 @@ export default function App() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-900/20"
+            className="fixed inset-0 z-[110] flex items-center justify-center bg-ink/20"
           >
-            <div className="rounded-2xl border border-slate-200/80 bg-white/95 px-5 py-4 shadow-xl">
+            <div className="rounded-2xl border border-slate-200/80 bg-paper/95 px-5 py-4 shadow-xl">
               <div className="flex items-center gap-4">
                 <BrandSpinner size={24} />
                 <div>
@@ -2249,7 +2249,7 @@ export default function App() {
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setIsSidebarOpen(false)}
-            className="fixed inset-0 bg-slate-900/35 backdrop-blur-sm z-40 lg:hidden"
+            className="fixed inset-0 bg-ink/35 backdrop-blur-sm z-40 lg:hidden"
           />
         )}
       </AnimatePresence>
@@ -2486,10 +2486,10 @@ export default function App() {
                         aria-pressed={previewChauffeur}
                         className={cn(
                           'md:hidden p-2 rounded-lg transition-colors',
-                          previewChauffeur ? 'bg-oker-500/15 text-oker-600' : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800',
+                          previewChauffeur ? 'bg-oker-500/15 text-oker-700' : 'text-slate-500 hover:bg-slate-100/80 hover:text-slate-800',
                         )}
                       >
-                        <Eye size={17} />
+                        <Eye size={16} />
                       </button>
                     </>
                   )}
@@ -2510,12 +2510,12 @@ export default function App() {
                     title="Updates en meldingen"
                     className="relative p-2 text-slate-500 hover:bg-slate-100/80 hover:text-slate-800 rounded-lg transition-colors"
                   >
-                    <Bell size={17} />
+                    <Bell size={16} />
                     {/* Stip alleen voor chauffeurs: bij staf draagt de
                         werkvoorraad-knop hiernaast dit signaal al met een
                         teller — dubbel signaleren maakt beide zwakker. */}
                     {currentUser.role === 'chauffeur' && appBadgeCount > 0 && (
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oker-500 ring-2 ring-white dark:ring-slate-900" aria-hidden="true" />
+                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oker-500 ring-2 ring-paper" aria-hidden="true" />
                     )}
                   </button>
                   <UserMenu
@@ -2539,7 +2539,7 @@ export default function App() {
               keek je zonder het te weten naar verouderde data. */}
           {!isOnline && (
             <div className="mx-auto w-full max-w-[1200px]">
-              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/25 dark:bg-amber-500/10 dark:text-amber-300">
+              <div className="mb-4 flex items-center gap-2.5 rounded-2xl border border-amber-200/70 bg-amber-50/90 px-4 py-3 text-sm font-semibold text-amber-800">
                 <WifiOff size={14} className="shrink-0" />
                 <span>
                   Offline — wijzigingen komen niet door

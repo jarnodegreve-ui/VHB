@@ -448,7 +448,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       isDraftEdge && 'border-oker-500 bg-oker-100 ring-4 ring-oker-500/10'
                     )}
                   >
-                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-oker-600' : 'text-slate-400 group-hover:text-slate-600')}>{day}</span>
+                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-oker-700' : 'text-slate-400 group-hover:text-slate-600')}>{day}</span>
                     {occupancyCount > 0 && <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} />}
                   </button>
                 );
@@ -480,7 +480,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           <button
                             type="button"
                             onClick={() => handleCancel(req.id)}
-                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-surface-white text-2xs font-semibold text-red-600 hover:bg-red-50 transition-colors"
+                            className="ios-pressable px-3 py-2 rounded-xl border border-red-200 bg-surface-white text-2xs font-semibold text-red-700 hover:bg-red-50 transition-colors"
                           >
                             Annuleren
                           </button>
@@ -542,7 +542,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                     </span>
                     <div className="flex items-center gap-2">
                       <Button variant="danger" size="sm" onClick={handleBulkReject}>Weigeren ({selectedPendingIds.size})</Button>
-                      <Button variant="success" size="sm" icon={<Check size={13} />} onClick={handleBulkApprove}>Goedkeuren ({selectedPendingIds.size})</Button>
+                      <Button variant="success" size="sm" icon={<Check size={14} />} onClick={handleBulkApprove}>Goedkeuren ({selectedPendingIds.size})</Button>
                     </div>
                   </div>
                 )}
@@ -576,7 +576,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                               <span className="truncate text-sm font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
                               {conflictShifts.length > 0 && (
                                 <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
-                                  <AlertTriangle size={13} className="shrink-0 text-red-500" />
+                                  <AlertTriangle size={14} className="shrink-0 text-red-500" />
                                 </span>
                               )}
                             </span>
@@ -655,7 +655,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         ))}
                     </select>
                     {namensIemandAnders && (
-                      <p className="text-2xs font-medium text-oker-700 dark:text-oker-600">
+                      <p className="text-2xs font-medium text-oker-700">
                         Wordt meteen als goedgekeurd verlof vastgelegd — je hoeft het daarna niet nog eens te beoordelen.
                       </p>
                     )}
@@ -696,7 +696,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                           className={cn(
                             'aspect-square rounded-xl text-xs font-semibold transition-colors flex items-center justify-center',
                             isPast && 'text-slate-300 cursor-not-allowed',
-                            !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50 dark:hover:bg-oker-500/10',
+                            !isPast && !inRange && !edge && 'text-slate-500 hover:bg-oker-50',
                             !isPast && inRange && !edge && 'bg-oker-100 text-oker-700',
                             !isPast && edge && 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30',
                             !isPast && isToday && !inRange && !edge && 'ring-1 ring-oker-300',
@@ -776,8 +776,8 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         title={reviewLeave ? (users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend') : 'Verlofaanvraag'}
         subtitle={reviewLeave ? `Aangevraagd op ${formatDateHuman(reviewLeave.createdAt)}` : undefined}
         icon={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-600 dark:text-oker-400">
-            <UserIcon size={17} />
+          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
+            <UserIcon size={16} />
           </span>
         }
         footer={reviewLeave && reviewLeave.status === 'pending' ? (
@@ -801,7 +801,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               variant="success"
               size="lg"
               className="flex-1"
-              icon={<Check size={15} />}
+              icon={<Check size={16} />}
               onClick={() => { handleStatusUpdate(reviewLeave.id, 'approved', reviewLeave.status); setReviewLeave(null); }}
             >
               Goedkeuren
@@ -823,7 +823,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                 <StatusBadge status={reviewLeave.status} />
                 <Badge tone="slate">{formatLeaveType(reviewLeave.type)}</Badge>
                 {conflictShifts.length > 0 && (
-                  <Badge tone="red" icon={<AlertTriangle size={11} />}>
+                  <Badge tone="red" icon={<AlertTriangle size={12} />}>
                     {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'} ingepland
                   </Badge>
                 )}
@@ -887,7 +887,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
 
               {conflictShifts.length > 0 && (
                 <div>
-                  <MicroLabel className="text-red-600">Conflict met planning</MicroLabel>
+                  <MicroLabel className="text-red-700">Conflict met planning</MicroLabel>
                   <div className="mt-2 space-y-1.5">
                     {conflictShifts.slice(0, 5).map((s) => (
                       <div key={s.id} className="flex items-center justify-between rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs">
@@ -972,7 +972,7 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                 <div className="flex items-center gap-2 shrink-0">
                   {fresh && <Badge tone="oker">Nieuw</Badge>}
                   <StatusBadge status={req.status} />
-                  <ChevronDown size={15} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
+                  <ChevronDown size={16} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
                 </div>
               </button>
               {open && (

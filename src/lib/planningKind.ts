@@ -24,7 +24,7 @@ export const KIND_CLS: Record<CellKind, string> = {
   leave: 'bg-blue-50 text-blue-700',
   absence: 'bg-slate-100 text-slate-600',
   training: 'bg-emerald-50 text-emerald-700',
-  unknown: 'bg-red-50 text-red-600',
+  unknown: 'bg-red-50 text-red-700',
 };
 
 /** Platte tekstkleur (Excel-look van het maandgrid). */
@@ -33,7 +33,7 @@ export const KIND_TEXT: Record<CellKind, string> = {
   leave: 'text-blue-700 font-semibold',
   absence: 'text-slate-500',
   training: 'text-emerald-700 font-semibold',
-  unknown: 'text-red-600 font-semibold',
+  unknown: 'text-red-700 font-semibold',
 };
 
 /** Badge-tone (voor de Badge-primitive in het Planning-overzicht). */

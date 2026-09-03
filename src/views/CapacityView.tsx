@@ -16,6 +16,7 @@ import { KIND_CLS, KIND_LABEL, KIND_TEXT } from '../lib/planningKind';
 import type { User } from '../types';
 import { formatDayLong, MONTH_NAMES, WEEKDAY_LETTER_MON, WEEKDAY_SHORT_MON } from '../lib/format';
 import { kandidaatLabel, rangschikKandidaten } from '../lib/vervangers';
+import { DUR } from '../lib/motion';
 
 
 /** Vaste redenen voor een handmatige dienstwissel; bij 'Andere correctie' is
@@ -521,7 +522,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
           <div className="flex flex-wrap items-center gap-2">
             <label className="relative">
               <span className="sr-only">Zoek chauffeur</span>
-              <Search size={15} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <Search size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="search"
                 enterKeyHint="search"
@@ -609,7 +610,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', today ? 'text-oker-700' : 'text-slate-700')}>{h.day}</div>
                           <div className="mt-0.5 h-3 text-2xs font-bold leading-3">
                             {td && (
-                              <span className={td.kort === 'F' ? 'text-oker-600' : 'text-slate-400'}>{td.kort}</span>
+                              <span className={td.kort === 'F' ? 'text-oker-700' : 'text-slate-400'}>{td.kort}</span>
                             )}
                           </div>
                         </th>
@@ -666,7 +667,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           <span className="inline-flex items-center gap-1.5">
                             {isOwn && <span className="h-1.5 w-1.5 rounded-full bg-oker-500" aria-hidden />}
                             {drv.name}
-                            {isOwn && <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                            {isOwn && <span className="text-2xs font-semibold uppercase tracking-[0.08em] text-oker-700">jij</span>}
                           </span>
                         </td>
                         {visibleDates.map((iso) => {
@@ -695,7 +696,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                     // Excel — dat moet je in één oogopslag zien,
                                     // zonder de cel aan te klikken.
                                     cell.swapId
-                                      ? 'font-semibold text-red-600 dark:text-red-400 border-b border-dashed border-red-500/80'
+                                      ? 'font-semibold text-red-700 border-b border-dashed border-red-500/80'
                                       : KIND_TEXT[cell.kind],
                                   )}
                                   title={celTitel(cell, notes.has(noteKey(String(drv.id), iso)))}
@@ -704,7 +705,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                                   {/* Dienst staat nog open onder een afwezigheid:
                                       dít is het werk dat wacht. */}
                                   {cell.hiddenService && (
-                                    <TriangleAlert size={9} className="absolute left-0.5 top-0.5 text-amber-600 dark:text-amber-400" aria-label="dienst nog niet herverdeeld" />
+                                    <TriangleAlert size={12} className="absolute left-0.5 top-0.5 text-amber-700" aria-label="dienst nog niet herverdeeld" />
                                   )}
                                   {notes.has(noteKey(String(drv.id), iso)) && (
                                     <span className="absolute right-0.5 top-0.5 h-1.5 w-1.5 rounded-full bg-oker-500" aria-label="notitie aanwezig" />
@@ -737,9 +738,9 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                   type="button"
                   onClick={() => { setPendingEdge('last'); setViewMonth(new Date(year, monthIndex - 1, 1)); }}
                   aria-label="Vorige maand"
-                  className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                  className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] transition-colors"
                 >
-                  <ChevronLeft size={17} />
+                  <ChevronLeft size={16} />
                 </button>
                 <span className="text-sm font-semibold tracking-tight text-slate-800">{MONTH_NAMES[monthIndex]} {year}</span>
                 <div className="flex items-center">
@@ -751,18 +752,18 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       onClick={springNaarAandacht}
                       aria-label="Naar de volgende dag met een openstaande dienst"
                       title="Volgende dag met een openstaande dienst"
-                      className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-amber-600 dark:text-amber-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                      className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-amber-700 active:bg-black/[0.04] transition-colors"
                     >
-                      <TriangleAlert size={15} />
+                      <TriangleAlert size={16} />
                     </button>
                   )}
                   <button
                     type="button"
                     onClick={() => { setPendingEdge('first'); setViewMonth(new Date(year, monthIndex + 1, 1)); }}
                     aria-label="Volgende maand"
-                    className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors"
+                    className="ios-pressable flex h-11 w-11 items-center justify-center rounded-xl text-slate-400 active:bg-black/[0.04] transition-colors"
                   >
-                    <ChevronRight size={17} />
+                    <ChevronRight size={16} />
                   </button>
                 </div>
               </div>
@@ -808,7 +809,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           stille signaal als de oude daglabels en het desktop-
                           grid. Een ring om de hele knop las als een tweede,
                           lege pil naast de gevulde selectie (melding Jarno). */}
-                      <span className={cn('relative z-10 text-sm font-bold tabular-nums leading-tight transition-colors', !gekozen && vandaag && 'text-oker-600')}>
+                      <span className={cn('relative z-10 text-sm font-bold tabular-nums leading-tight transition-colors', !gekozen && vandaag && 'text-oker-700')}>
                         {d.getDate()}
                       </span>
                       {/* Typedag (F/V) — zelfde signaal als de desktop-dagkop. */}
@@ -829,7 +830,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                 key={mobielDag}
                 initial={reduceMotion ? false : { opacity: 0 }}
                 animate={{ opacity: 1 }}
-                transition={{ duration: 0.15, ease: 'easeOut' }}
+                transition={{ duration: DUR.fast, ease: 'easeOut' }}
                 className="surface-card rounded-3xl overflow-hidden"
               >
                 <div className="flex items-baseline justify-between gap-3 border-b border-slate-200/70 px-4 py-3">
@@ -857,24 +858,24 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           type="button"
                           onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
                           className={cn(
-                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-slate-100 last:border-b-0 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors',
+                            'w-full flex items-center gap-3 px-4 py-2.5 min-h-11 text-left border-b border-slate-100 last:border-b-0 active:bg-black/[0.04] transition-colors',
                             isOwn && 'bg-oker-50',
                           )}
                         >
                           <span className={cn(
-                            'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-black/5',
-                            cell.swapId ? 'bg-red-50 text-red-600' : KIND_CLS[cell.kind],
+                            'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums ring-1 ring-hairline',
+                            cell.swapId ? 'bg-red-50 text-red-700' : KIND_CLS[cell.kind],
                           )}>{cell.code}</span>
                           <span className={cn('min-w-0 flex-1 truncate text-sm font-semibold', isOwn ? 'text-oker-800' : 'text-slate-800')}>
                             {drv.name}
-                            {isOwn && <span className="ml-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                            {isOwn && <span className="ml-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-oker-700">jij</span>}
                           </span>
                           {/* Uren compact rechts; bij een open dienst de melding. */}
                           <span className="shrink-0 text-xs font-medium text-slate-400 tabular-nums">
                             {cell.hiddenService ? `dienst ${cell.hiddenService} open` : (cell.segments[0] ?? '')}
                           </span>
                           {cell.hiddenService && (
-                            <TriangleAlert size={13} className="shrink-0 text-amber-600 dark:text-amber-400" aria-label="dienst nog niet herverdeeld" />
+                            <TriangleAlert size={14} className="shrink-0 text-amber-700" aria-label="dienst nog niet herverdeeld" />
                           )}
                           {notes.has(noteKey(String(drv.id), mobielDag)) && (
                             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500" aria-label="notitie aanwezig" />
@@ -891,7 +892,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                       type="button"
                       onClick={() => setToonRust((v) => !v)}
                       aria-expanded={toonRust}
-                      className={cn('w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors', microLabelClass)}
+                      className={cn('w-full flex items-center justify-between gap-3 bg-slate-100/80 px-4 py-2.5 min-h-11 active:bg-black/[0.04] transition-colors', microLabelClass)}
                     >
                       <span>Vrij / afwezig · {dagRijen.rust.length}</span>
                       <ChevronRight size={14} className={cn('transition-transform', toonRust && 'rotate-90')} />
@@ -902,11 +903,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                         <>
                           <span className={cn(
                             'shrink-0 inline-block min-w-[46px] text-center rounded-md px-1.5 py-0.5 text-2xs font-semibold tabular-nums',
-                            cell ? cn('ring-1 ring-black/5', KIND_CLS[cell.kind]) : 'text-slate-300',
+                            cell ? cn('ring-1 ring-hairline', KIND_CLS[cell.kind]) : 'text-slate-300',
                           )}>{cell?.code ?? '—'}</span>
                           <span className={cn('min-w-0 flex-1 truncate text-sm font-medium', isOwn ? 'text-oker-800' : 'text-slate-600')}>
                             {drv.name}
-                            {isOwn && <span className="ml-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-oker-600">jij</span>}
+                            {isOwn && <span className="ml-1.5 text-2xs font-semibold uppercase tracking-[0.08em] text-oker-700">jij</span>}
                           </span>
                           <span className="shrink-0 text-xs font-medium text-slate-400">{cell?.label ?? ''}</span>
                         </>
@@ -921,7 +922,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           key={drv.id}
                           type="button"
                           onClick={() => { setSelected({ driverName: drv.name, driverId: String(drv.id), iso: mobielDag, cell }); setNoteDraft(notes.get(noteKey(String(drv.id), mobielDag)) ?? ''); }}
-                          className={cn(rijCls, 'active:bg-black/[0.04] dark:active:bg-white/[0.06] transition-colors')}
+                          className={cn(rijCls, 'active:bg-black/[0.04] transition-colors')}
                         >
                           {inhoud}
                         </button>
@@ -951,11 +952,11 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               </div>
             ))}
             <div className="flex items-center gap-2">
-              <TriangleAlert size={13} className="text-amber-600 dark:text-amber-400" />
+              <TriangleAlert size={14} className="text-amber-700" />
               <span className="font-medium text-slate-600">Dienst nog niet herverdeeld</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-block rounded-md bg-red-50 px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-red-600 ring-1 ring-black/5">4102</span>
+              <span className="inline-block rounded-md bg-red-50 px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-red-700 ring-1 ring-hairline">4102</span>
               <span className="font-medium text-slate-600">Geruild of overgezet</span>
             </div>
             <span className="font-medium text-slate-400">Leeg = niets gepland</span>
@@ -978,8 +979,8 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
 
             <div className="mt-4 flex items-center gap-2.5">
               <span className={cn(
-                'inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-black/5',
-                selected.cell.swapId ? 'bg-red-50 text-red-600' : KIND_CLS[selected.cell.kind],
+                'inline-block rounded-lg px-2.5 py-1 text-sm font-semibold tabular-nums ring-1 ring-hairline',
+                selected.cell.swapId ? 'bg-red-50 text-red-700' : KIND_CLS[selected.cell.kind],
               )}>{selected.cell.code}</span>
               <span className="text-sm font-semibold text-slate-700">{selected.cell.label}</span>
             </div>

@@ -91,7 +91,7 @@ export function PrintLeaveYearView({
         <div className="no-print flex justify-end mb-4">
           <button
             onClick={() => window.print()}
-            className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase tracking-[0.08em] hover:bg-slate-800 transition-colors"
+            className="px-4 py-2 bg-ink text-white rounded-xl text-xs font-black uppercase tracking-[0.08em] hover:bg-ink-soft transition-colors"
           >
             Print / Opslaan als PDF
           </button>
@@ -99,7 +99,7 @@ export function PrintLeaveYearView({
 
         {/* Header */}
         <header className="border-b-2 border-slate-900 pb-5 mb-7">
-          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-600">
+          <p className="text-[10px] font-black uppercase tracking-[0.08em] text-oker-700">
             VHB · Maldegem · Verlof-jaaroverzicht
           </p>
           <div className="mt-2 flex flex-wrap items-end justify-between gap-x-6 gap-y-4">
@@ -122,8 +122,8 @@ export function PrintLeaveYearView({
                 <p className="mt-1 text-xl font-black text-slate-900 tabular-nums leading-none">{balans.betaaldGebruikt}</p>
               </div>
               <div className="px-5">
-                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-600">Resterend</p>
-                <p className="mt-1 text-xl font-black text-oker-600 tabular-nums leading-none">{balans.betaaldResterend}</p>
+                <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-oker-700">Resterend</p>
+                <p className="mt-1 text-xl font-black text-oker-700 tabular-nums leading-none">{balans.betaaldResterend}</p>
               </div>
               <div className="px-5">
                 <p className="text-[9px] font-bold uppercase tracking-[0.08em] text-slate-400">Klein verlet</p>
@@ -189,7 +189,7 @@ export function PrintLeaveYearView({
 
         {pending.length > 0 && (
           <section className="print-card mt-8">
-            <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-600 border-b border-amber-200 pb-1.5 mb-2">
+            <h2 className="text-[10px] font-black uppercase tracking-[0.16em] text-amber-700 border-b border-amber-200 pb-1.5 mb-2">
               Nog niet beslist (telt niet mee in het saldo)
             </h2>
             <ul className="space-y-1 text-sm">

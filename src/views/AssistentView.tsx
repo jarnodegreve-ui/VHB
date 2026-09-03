@@ -57,7 +57,7 @@ export function AssistentView() {
           {berichten.length === 0 && !fout ? (
             <div className="h-full flex flex-col items-center justify-center text-center gap-4 py-10">
               <div className="w-12 h-12 rounded-2xl bg-oker-50/70 ring-1 ring-oker-100 flex items-center justify-center text-oker-700">
-                <Sparkles size={22} />
+                <Sparkles size={20} />
               </div>
               <div>
                 <p className="text-sm font-bold text-slate-800">Stel je planningsvraag</p>
@@ -132,7 +132,7 @@ export function AssistentView() {
             className="control-input flex-1 rounded-xl px-3.5 py-2.5 text-sm font-semibold outline-none"
             disabled={bezig}
           />
-          <Button type="submit" variant="primary" size="md" className="shrink-0" disabled={bezig || !invoer.trim()} icon={<Send size={15} />}>
+          <Button type="submit" variant="primary" size="md" className="shrink-0" disabled={bezig || !invoer.trim()} icon={<Send size={16} />}>
             Vraag
           </Button>
         </form>
