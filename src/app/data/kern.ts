@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { User } from '../../types';
 import { apiFetch } from '../../lib/api';
+import { veldfoutenUitAntwoord } from '../../lib/valideer';
 import type { Toast, ToastOpties } from '../../components/ToastStack';
 
 /**
@@ -32,6 +33,9 @@ export type DataBasis = {
 /** Collecties met per-record-revisies (`_rev` uit de GET-respons). */
 export type RecordKey = 'users' | 'diversions' | 'updates';
 
+/** Ontvanger van server-veldfouten (400 'Ongeldige invoer' → { veld: tekst }). */
+export type OpVeldfouten = (fouten: Record<string, string>) => void;
+
 /** Onderwerp van `perRecord`: één PUT / POST …/one / DELETE. */
 export type PerRecordOpts<T extends { id: string }> = {
   key: RecordKey;
@@ -49,6 +53,9 @@ export type PerRecordOpts<T extends { id: string }> = {
   applySaved?: (prev: T[], saved: T) => T[];
   refetch: () => Promise<void> | void;
   successToast?: string;
+  /** Veldfouten van een 400 terug naar het formulier (Field error-prop)
+   *  i.p.v. een toast; zonder callback blijft de toast het gedrag. */
+  opVeldfouten?: OpVeldfouten;
 };
 
 export type DataCtx = DataBasis & {
@@ -192,6 +199,14 @@ export function useDataKern(basis: DataBasis): DataCtx {
               : (data?.details || data?.error || `${opts.label} kon niet opgeslagen worden.`),
           'info',
         );
+        await opts.refetch();
+        return false;
+      }
+      // Validatiefout (400 met veldfouten): bij het veld tonen, niet als
+      // toast. De refetch draait de optimistische lijstwijziging terug.
+      const veldfouten = veldfoutenUitAntwoord(data);
+      if (veldfouten && opts.opVeldfouten) {
+        opts.opVeldfouten(veldfouten);
         await opts.refetch();
         return false;
       }

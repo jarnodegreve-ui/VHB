@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '../../types';
 import { apiFetch, apiJson } from '../../lib/api';
 import type { VervaldataRij, PendingDevice } from '../../lib/werkvoorraad';
-import { replaceById, withoutId, type DataCtx } from './kern';
+import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern';
 
 /**
  * Mensen: de gebruikerslijst (collectie- én per-record-savers), de
@@ -126,17 +126,18 @@ export function useMensenData(ctx: DataCtx) {
   };
 
   // Gebruikers (admin). Het record mag een `password` dragen (nieuw of reset);
-  // het serverrecord dat terugkomt is zonder.
-  const saveUser = (record: User & { password?: string }): Promise<boolean> =>
+  // het serverrecord dat terugkomt is zonder. `opVeldfouten` krijgt de
+  // veldfouten van een 400 (gedeeld schema) voor het formulier.
+  const saveUser = (record: User & { password?: string }, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<User>({
-      key: 'users', label: 'Deze gebruiker', method: 'PUT', url: `/api/users/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      key: 'users', label: 'Deze gebruiker', method: 'PUT', url: `/api/users/${encodeURIComponent(record.id)}`, id: record.id, body: record, opVeldfouten,
       responseKey: 'user', setList: setUsers,
       optimistic: (prev) => { const { password: _pw, ...zonder } = record; return replaceById(prev, zonder as User); },
       applySaved: replaceById, refetch: () => fetchUsers(), successToast: 'Gebruiker opgeslagen.',
     });
-  const createUser = (record: User & { password?: string }): Promise<boolean> =>
+  const createUser = (record: User & { password?: string }, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<User>({
-      key: 'users', label: 'Deze gebruiker', method: 'POST', url: '/api/users/one', id: record.id, body: record,
+      key: 'users', label: 'Deze gebruiker', method: 'POST', url: '/api/users/one', id: record.id, body: record, opVeldfouten,
       responseKey: 'user', setList: setUsers,
       optimistic: (prev) => { const { password: _pw, ...zonder } = record; return [...withoutId(prev, record.id), zonder as User]; },
       applySaved: replaceById, refetch: () => fetchUsers(), successToast: 'Gebruiker toegevoegd.',
