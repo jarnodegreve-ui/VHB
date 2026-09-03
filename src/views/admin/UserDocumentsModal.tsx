@@ -120,7 +120,7 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
                           <CheckCircle2 size={12} /> Geopend {formatDateHuman(doc.openedAt)}
                         </p>
                       ) : (
-                        <p className="mt-0.5 text-2xs font-medium text-slate-400">Nog niet geopend</p>
+                        <p className="mt-0.5 text-2xs font-medium text-slate-500">Nog niet geopend</p>
                       )}
                     </div>
                     <IconButton label="Openen" variant="secondary" onClick={() => doc.url && openPdfInNewTab(doc.url)}><Download size={16} /></IconButton>

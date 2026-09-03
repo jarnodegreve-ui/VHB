@@ -3,12 +3,14 @@ import { Check, ChevronDown, Pencil, ShieldAlert, ShieldCheck, Smartphone, Trash
 import type { User } from '../../types';
 import { apiJson } from '../../lib/api';
 import { getDeviceToken } from '../../lib/device';
-import { notify } from '../../lib/ui';
+import { cn, notify } from '../../lib/ui';
 import { formatDateHuman } from '../../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, IconButton, MicroLabel, Switch } from '../../components/primitives';
+import { Badge, Button, FilterChip, IconButton, MicroLabel, Switch } from '../../components/primitives';
+import { TableToolbar } from '../../components/Table';
 import { Card, CardHeader } from '../../components/Card';
 import { Input } from '../../components/Field';
+import { SkeletonRow } from '../../components/Skeleton';
 
 type Device = {
   userId: string;
@@ -25,12 +27,17 @@ const STATUS_BADGE: Record<Device['status'], { tone: 'emerald' | 'amber' | 'red'
   revoked: { tone: 'red', label: 'Geblokkeerd' },
 };
 
+type StatusFilter = 'all' | Device['status'];
+
 export function DevicesView({ users, currentUserId }: { users: User[]; currentUserId: string }) {
   const [devices, setDevices] = useState<Device[] | null>(null);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Device | null>(null);
   const [renaming, setRenaming] = useState<Device | null>(null);
   const [renameValue, setRenameValue] = useState('');
+  // Zoeken op gebruiker of toestelnaam + statusfilter over de gegroepeerde lijst.
+  const [zoek, setZoek] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
 
   const ownToken = getDeviceToken();
   const userName = (id: string) => users.find((u) => String(u.id) === String(id))?.name ?? `Onbekende gebruiker (${id})`;
@@ -113,27 +120,40 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
   };
 
   // Groepen standaard dichtgeklapt: met tientallen gebruikers is de lijst
-  // anders metershoog. Openklappen per gebruiker (wens Jarno).
+  // anders metershoog. Openklappen per gebruiker (wens Jarno). Zodra je
+  // zoekt of filtert klappen de gevonden groepen vanzelf open — anders zie
+  // je wel de naam maar niet het toestel dat matchte.
   const [openUsers, setOpenUsers] = useState<string[]>([]);
   const toggleUser = (id: string) => setOpenUsers((cur) => (
     cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
   ));
 
-  const pending = (devices ?? []).filter((d) => d.status === 'pending');
+  const alle = devices ?? [];
+  const pending = alle.filter((d) => d.status === 'pending');
+  const zoekTerm = zoek.trim().toLowerCase();
+  const filterActief = zoekTerm !== '' || statusFilter !== 'all';
+  const zichtbaar = alle.filter((d) => {
+    if (statusFilter !== 'all' && d.status !== statusFilter) return false;
+    if (!zoekTerm) return true;
+    return `${userName(d.userId)} ${d.name}`.toLowerCase().includes(zoekTerm);
+  });
+  const wisFilters = () => { setZoek(''); setStatusFilter('all'); };
   // Groepeer per gebruiker, in de volgorde van de gebruikerslijst (actief eerst).
   const byUser = new Map<string, Device[]>();
-  for (const d of devices ?? []) {
+  for (const d of zichtbaar) {
     const list = byUser.get(String(d.userId)) ?? [];
     list.push(d);
     byUser.set(String(d.userId), list);
   }
+  const telPerStatus = (status: Device['status']) => alle.filter((d) => d.status === status).length;
 
   const renderDevice = (device: Device, highlight = false) => (
     <div
       key={keyOf(device)}
-      className={`flex flex-col gap-2 rounded-xl border px-3 py-2 md:flex-row md:items-center md:justify-between ${
-        highlight ? 'border-amber-200 bg-amber-50/80' : 'border-slate-200/80 bg-paper/50'
-      }`}
+      className={cn(
+        'flex flex-col gap-2 rounded-xl border px-3 py-2 md:flex-row md:items-center md:justify-between',
+        highlight ? 'border-amber-200 bg-amber-50/80' : 'border-slate-200/80 bg-paper/50',
+      )}
     >
       <div className="flex min-w-0 items-center gap-3">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-slate-500">
@@ -231,14 +251,14 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           ) : (
             <>
               <span
-                className={`h-2 w-2 shrink-0 rounded-full ${device.status === 'approved' ? 'bg-emerald-500' : device.status === 'pending' ? 'bg-amber-500' : 'bg-red-500'}`}
+                className={cn('h-2 w-2 shrink-0 rounded-full', device.status === 'approved' ? 'bg-emerald-500' : device.status === 'pending' ? 'bg-amber-500' : 'bg-red-500')}
                 title={STATUS_BADGE[device.status].label}
               />
               <p className="truncate text-sm font-semibold text-slate-800">{device.name}</p>
               {device.status === 'revoked' && <Badge tone="red">Geblokkeerd</Badge>}
               {device.status === 'pending' && <Badge tone="amber">Wacht</Badge>}
               {isOwnCurrent(device) && <Badge tone="blue">Dit toestel</Badge>}
-              <span className="hidden md:inline shrink-0 text-2xs font-medium text-slate-400 tabular-nums">gezien {formatDateHuman(device.lastSeenAt)}</span>
+              <span className="hidden md:inline shrink-0 text-2xs font-medium text-slate-500 tabular-nums">gezien {formatDateHuman(device.lastSeenAt)}</span>
             </>
           )}
         </div>
@@ -310,43 +330,74 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       )}
 
       <Card>
-        <CardHeader title="Alle toestellen" />
+        <CardHeader title="Alle toestellen" description="Per gebruiker; klap een naam open voor de toestellen." />
         {devices === null ? (
-          <p className="mt-4 text-sm font-medium text-slate-500">Laden…</p>
+          <div className="mt-4 divide-y divide-slate-100" aria-busy="true" aria-label="Toestellen worden geladen">
+            <SkeletonRow className="px-2 py-3" />
+            <SkeletonRow className="px-2 py-3" />
+            <SkeletonRow className="px-2 py-3" />
+          </div>
         ) : devices.length === 0 ? (
           <div className="mt-4">
             <EmptyState
               icon={<Smartphone size={24} />}
               title="Nog geen toestellen"
-              message="Toestellen verschijnen hier zodra gebruikers inloggen. Draai eerst de user_devices-migratie als deze lijst leeg blijft."
+              message="Toestellen verschijnen hier zodra gebruikers inloggen. Blijft de lijst leeg, draai dan eerst de user_devices-migratie."
             />
           </div>
         ) : (
-          <div className="mt-3 divide-y divide-slate-100">
-            {[...byUser.entries()].map(([userId, list]) => {
-              const open = openUsers.includes(userId);
-              const attention = list.filter((d) => d.status !== 'approved').length;
-              return (
-                <div key={userId} className="py-1">
-                  {/* rauw: hele groepsrij is de knop (naam + telling + badge + chevron) */}
-                  <button
-                    type="button"
-                    onClick={() => toggleUser(userId)}
-                    aria-expanded={open}
-                    className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-soft-hover transition-colors"
-                  >
-                    <div className="flex min-w-0 items-center gap-2.5">
-                      <span className="truncate text-sm font-bold tracking-tight text-slate-800">{userName(userId)}</span>
-                      <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
-                      {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
+          <>
+            <TableToolbar
+              className="mt-4"
+              zoek={zoek}
+              onZoek={setZoek}
+              placeholder="Zoek op gebruiker of toestel…"
+              telling={`${zichtbaar.length} van ${alle.length} toestellen`}
+              filters={(
+                <>
+                  <FilterChip active={statusFilter === 'all'} onClick={() => setStatusFilter('all')}>Alles</FilterChip>
+                  <FilterChip active={statusFilter === 'pending'} onClick={() => setStatusFilter(statusFilter === 'pending' ? 'all' : 'pending')}>Wacht ({telPerStatus('pending')})</FilterChip>
+                  <FilterChip active={statusFilter === 'revoked'} onClick={() => setStatusFilter(statusFilter === 'revoked' ? 'all' : 'revoked')}>Geblokkeerd ({telPerStatus('revoked')})</FilterChip>
+                </>
+              )}
+            />
+            {zichtbaar.length === 0 ? (
+              <div className="mt-4">
+                <EmptyState
+                  icon={<Smartphone size={24} />}
+                  title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Geen toestellen met deze status'}
+                  message="Pas de zoekterm of het statusfilter aan."
+                  action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filter wissen</Button>}
+                />
+              </div>
+            ) : (
+              <div className="mt-3 divide-y divide-slate-100">
+                {[...byUser.entries()].map(([userId, list]) => {
+                  const open = filterActief || openUsers.includes(userId);
+                  const attention = list.filter((d) => d.status !== 'approved').length;
+                  return (
+                    <div key={userId} className="py-1">
+                      {/* rauw: hele groepsrij is de knop (naam + telling + badge + chevron) */}
+                      <button
+                        type="button"
+                        onClick={() => toggleUser(userId)}
+                        aria-expanded={open}
+                        className="flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-2 py-2 text-left hover:bg-surface-soft-hover transition-colors"
+                      >
+                        <div className="flex min-w-0 items-center gap-2.5">
+                          <span className="truncate text-sm font-semibold text-slate-800">{userName(userId)}</span>
+                          <span className="shrink-0 text-2xs font-medium text-slate-500 tabular-nums">{list.length} {list.length === 1 ? 'toestel' : 'toestellen'}</span>
+                          {attention > 0 && <Badge tone="amber" dot className="tabular-nums">{attention}</Badge>}
+                        </div>
+                        <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
+                      </button>
+                      {open && <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>}
                     </div>
-                    <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
-                  </button>
-                  {open && <div className="pb-1.5 pl-2">{list.map(renderDeviceCompact)}</div>}
-                </div>
-              );
-            })}
-          </div>
+                  );
+                })}
+              </div>
+            )}
+          </>
         )}
       </Card>
 

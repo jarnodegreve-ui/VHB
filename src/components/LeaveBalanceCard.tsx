@@ -38,7 +38,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
             style={{ width: `${Math.max(2, percentage)}%` }}
           />
         </div>
-        <p className="text-2xs font-medium text-slate-400">
+        <p className="text-2xs font-medium text-slate-500">
           {overBudget
             ? `${balance.betaaldGebruikt - balance.betaaldBudget} dagen boven budget.`
             : `${balance.betaaldResterend} ${balance.betaaldResterend === 1 ? 'dag' : 'dagen'} resterend.`}

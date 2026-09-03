@@ -84,7 +84,7 @@ export function OpsStat({
           dienstnummers en tijden. */}
       <p className="mt-0.5 text-2xl leading-8 font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">
         {text ?? <CountUp value={value ?? 0} />}
-        {suffix && <span className="text-sm font-semibold text-slate-400">{suffix}</span>}
+        {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
       </p>
       <p className={cn('mt-0.5 text-2xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
@@ -107,7 +107,7 @@ export function OpsStat({
               key={`${l.left}-${l.right ?? ''}`}
               className={cn(
                 'flex items-baseline justify-between gap-3 text-2xs font-mono font-medium tabular-nums',
-                l.done ? 'text-slate-400' : 'text-slate-600',
+                l.done ? 'text-slate-500' : 'text-slate-600',
               )}
             >
               <span className={cn('inline-flex items-center gap-1.5', l.done && 'line-through decoration-slate-300')}>
@@ -247,7 +247,7 @@ export function OpsRow({
         {secondary && <span className="mt-px block truncate text-xs font-normal text-slate-500">{secondary}</span>}
       </span>
       {trailing}
-      {meta && <span className="shrink-0 text-2xs font-medium text-slate-400">{meta}</span>}
+      {meta && <span className="shrink-0 text-2xs font-medium text-slate-500">{meta}</span>}
       <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
     </button>
   );

@@ -11,7 +11,7 @@ import { MicroLabel, microLabelClass } from './primitives';
 
 /**
  * Toon de volledige wijzigingsgeschiedenis van één specifieke entity
- * (dienst, verlofaanvraag, dienstruil, ...). Werkt alleen voor entries die
+ * (dienst, verlofaanvraag, dienstruil, …). Werkt alleen voor entries die
  * NA de entity-id migratie zijn gelogd — oudere entries hebben geen entity_id
  * en verschijnen niet hier. Wel beschikbaar via de globale Activiteit-view
  * voor admin.

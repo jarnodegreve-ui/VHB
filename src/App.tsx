@@ -554,7 +554,7 @@ export default function App() {
 
       // try/finally: wat er ook misgaat (netwerk, Supabase-lock-hang in een
       // ander tabblad, API-fout), de app mag NOOIT eeuwig op 'Sessie
-      // laden...' blijven staan — dan liever terugvallen op het loginscherm.
+      // laden…' blijven staan — dan liever terugvallen op het loginscherm.
       try {
         const { data } = await supabase.auth.getSession();
         if (!isMounted) return;
@@ -1149,7 +1149,7 @@ export default function App() {
                 <BrandSpinner size={24} />
                 <div>
                   <MicroLabel>Bezig</MicroLabel>
-                  <p className="text-sm font-semibold text-slate-800">Gegevens verwerken...</p>
+                  <p className="text-sm font-semibold text-slate-800">Gegevens verwerken…</p>
                 </div>
               </div>
             </Card>

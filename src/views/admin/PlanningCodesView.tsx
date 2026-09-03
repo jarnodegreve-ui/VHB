@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { AlertTriangle, Bus, Calendar, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
-import { EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, IconButton, segItemClass, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Input, Select } from '../../components/Field';
+import { Checkbox } from '../../components/Table';
+import { InfoTip } from '../../components/InfoTip';
 import { OpsStat } from '../../components/ops';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -20,11 +22,23 @@ const makeDraftKey = () =>
 const withDraftKeys = (codes: PlanningCode[]): DraftCode[] =>
   codes.map((code) => ({ ...code, _key: makeDraftKey() }));
 
+const CATEGORIE_OPTIES: Array<{ value: PlanningCode['category']; label: string }> = [
+  { value: 'service', label: 'Dienst' },
+  { value: 'absence', label: 'Afwezigheid' },
+  { value: 'leave', label: 'Verlof' },
+  { value: 'training', label: 'Opleiding' },
+  { value: 'unknown', label: 'Onbekend' },
+];
+
 export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: PlanningCode[]; onSave: (codes: PlanningCode[]) => Promise<boolean>; canAdminDelete: boolean }) {
   const [draftCodes, setDraftCodes] = useState<DraftCode[]>(() => withDraftKeys(codes));
   const [isSaving, setIsSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | PlanningCode['category']>('all');
   const [historyCode, setHistoryCode] = useState<PlanningCode | null>(null);
+  // Verwijderen vraagt eerst bevestiging (zoals in de andere beheer-views);
+  // op de sleutel i.p.v. de index, zodat een tussentijdse sortering of
+  // toevoeging nooit de verkeerde rij raakt.
+  const [pendingDelete, setPendingDelete] = useState<DraftCode | null>(null);
 
   useEffect(() => {
     setDraftCodes(withDraftKeys(codes));
@@ -51,12 +65,19 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     ]);
   };
 
-  const removeCode = (index: number) => {
+  const requestRemove = (code: DraftCode) => {
     if (!canAdminDelete) {
       notify('Codes verwijderen is alleen beschikbaar voor admins.', 'error');
       return;
     }
-    setDraftCodes((current) => current.filter((_, currentIndex) => currentIndex !== index));
+    setPendingDelete(code);
+  };
+
+  const removeCode = () => {
+    if (!pendingDelete) return;
+    const key = pendingDelete._key;
+    setDraftCodes((current) => current.filter((code) => code._key !== key));
+    setPendingDelete(null);
   };
 
   const handleSave = async () => {
@@ -91,18 +112,26 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     unknown: draftCodes.filter((code) => code.category === 'unknown').length,
   };
 
+  const uitleg = (
+    <InfoTip label="Uitleg bij de kolommen" align="right">
+      <p>Een matrixcode is wat in de Excel-cel staat (bv. <span className="font-mono">bv</span>, <span className="font-mono">z</span>). De categorie bepaalt hoe het portaal ermee omgaat.</p>
+      <p className="mt-2"><span className="font-semibold text-slate-700">Dienst</span>: telt als gewerkte dag. <span className="font-semibold text-slate-700">Betaald</span>: betaalde afwezigheid (verlofsaldo). <span className="font-semibold text-slate-700">Vrij</span>: vrije dag, geen inzet verwacht.</p>
+      <p className="mt-2">Wijzigingen gelden pas na Opslaan.</p>
+    </InfoTip>
+  );
+
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Planningsmatrix"
+        eyebrow="Planning"
         title="Planningscodes"
-        description="Beheer de betekenis van matrixcodes en bepaal welke codes als dienst, verlof of afwezigheid verwerkt mogen worden."
+        description="De betekenis van matrixcodes: welke tellen als dienst, verlof of afwezigheid."
         actions={(
           <>
-            <Button variant="secondary" size="lg" icon={<Plus size={16} />} onClick={addCode}>
+            <Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>
               Code toevoegen
             </Button>
-            <Button variant="primary" size="lg" onClick={handleSave} disabled={isSaving}>
+            <Button variant="primary" onClick={handleSave} disabled={isSaving}>
               {isSaving ? 'Opslaan…' : 'Opslaan'}
             </Button>
           </>
@@ -121,24 +150,19 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
 
       <Card as="section">
         <CardHeader
-          size="lg"
-          eyebrow="Werkset"
-          title="Codebeheer"
-          description="Voeg matrixcodes toe, wijzig hun betekenis en bepaal of ze als dienst, verlof of afwezigheid tellen."
-          aside={
-            <div className="flex flex-wrap items-center gap-2">
-              <Badge tone="slate">{filteredCodes.length} zichtbaar</Badge>
-              {!canAdminDelete ? (
-                <Badge tone="slate">Verwijderen: alleen admin</Badge>
-              ) : null}
-            </div>
-          }
+          title="Codes"
+          aside={(
+            <>
+              <Badge tone="slate" className="tabular-nums">{filteredCodes.length} zichtbaar</Badge>
+              {!canAdminDelete ? <Badge tone="slate">Verwijderen: alleen admin</Badge> : null}
+              {uitleg}
+            </>
+          )}
         />
 
-        {/* Eén rustige filterbalk — de vroegere twee omkaderde dozen
-            ("Filter" + "Interpretatie") maakten dit blok onnodig druk; wat
-            de categorieën betekenen staat al in de sectiebeschrijving. */}
-        <div className="mt-5 glass-segmented rounded-2xl inline-flex flex-wrap p-1">
+        {/* Eén rustige filterbalk — wat de categorieën betekenen staat in de
+            uitleg-popover. */}
+        <div className="mt-4 glass-segmented rounded-2xl inline-flex flex-wrap p-1">
           {[
             { key: 'all', label: 'Alles' },
             { key: 'service', label: 'Dienst' },
@@ -150,6 +174,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
             // rauw: segmented control op de glass-rail, klassen via segItemClass
             <button
               key={option.key}
+              type="button"
               onClick={() => setFilter(option.key as 'all' | PlanningCode['category'])}
               className={segItemClass(filter === option.key)}
             >
@@ -158,7 +183,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           ))}
         </div>
 
-        <TableShell className="mt-6">
+        <TableShell className="mt-5">
           {filteredCodes.length > 0 ? (
             <>
               <div className="hidden xl:block">
@@ -198,11 +223,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                               onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
                               className="min-w-0 px-2.5"
                             >
-                              <option value="service">Dienst</option>
-                              <option value="absence">Afwezigheid</option>
-                              <option value="leave">Verlof</option>
-                              <option value="training">Opleiding</option>
-                              <option value="unknown">Onbekend</option>
+                              {CATEGORIE_OPTIES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                             </Select>
                           </Td>
                           <Td>
@@ -214,20 +235,14 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                               placeholder="Beschrijving"
                             />
                           </Td>
-                          <Td>
-                            <label className="flex items-center justify-center">
-                              <input type="checkbox" checked={code.countsAsShift} onChange={(event) => updateCode(index, { countsAsShift: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
-                            </label>
+                          <Td className="text-center">
+                            <Checkbox label="Telt als dienst" checked={code.countsAsShift} onChange={(v) => updateCode(index, { countsAsShift: v })} />
                           </Td>
-                          <Td>
-                            <label className="flex items-center justify-center">
-                              <input type="checkbox" checked={code.isPaidAbsence} onChange={(event) => updateCode(index, { isPaidAbsence: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
-                            </label>
+                          <Td className="text-center">
+                            <Checkbox label="Betaalde afwezigheid" checked={code.isPaidAbsence} onChange={(v) => updateCode(index, { isPaidAbsence: v })} />
                           </Td>
-                          <Td>
-                            <label className="flex items-center justify-center">
-                              <input type="checkbox" checked={code.isDayOff} onChange={(event) => updateCode(index, { isDayOff: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
-                            </label>
+                          <Td className="text-center">
+                            <Checkbox label="Vrije dag" checked={code.isDayOff} onChange={(v) => updateCode(index, { isDayOff: v })} />
                           </Td>
                           <Td>
                             <div className="flex items-center justify-end gap-1">
@@ -237,12 +252,10 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                                 </IconButton>
                               )}
                               {canAdminDelete ? (
-                                <IconButton label="Verwijder code" variant="danger" size="sm" onClick={() => removeCode(index)}>
+                                <IconButton label="Verwijder code" variant="danger" size="sm" onClick={() => requestRemove(code)}>
                                   <Trash2 size={16} />
                                 </IconButton>
-                              ) : (
-                                <Badge tone="slate">Admin</Badge>
-                              )}
+                              ) : null}
                             </div>
                           </Td>
                         </tr>
@@ -270,11 +283,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                           value={code.category}
                           onChange={(event) => updateCode(index, { category: event.target.value as PlanningCode['category'] })}
                         >
-                          <option value="service">Dienst</option>
-                          <option value="absence">Afwezigheid</option>
-                          <option value="leave">Verlof</option>
-                          <option value="training">Opleiding</option>
-                          <option value="unknown">Onbekend</option>
+                          {CATEGORIE_OPTIES.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </Select>
                       </div>
                       <Input
@@ -285,26 +294,31 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
                         placeholder="Beschrijving"
                       />
                       <div className="grid gap-3 sm:grid-cols-3">
-                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-3 text-xs font-semibold text-slate-600">
+                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
                           Dienst
-                          <input type="checkbox" checked={code.countsAsShift} onChange={(event) => updateCode(index, { countsAsShift: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
-                        </label>
-                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-3 text-xs font-semibold text-slate-600">
+                          <Checkbox label="Telt als dienst" checked={code.countsAsShift} onChange={(v) => updateCode(index, { countsAsShift: v })} />
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
                           Betaald
-                          <input type="checkbox" checked={code.isPaidAbsence} onChange={(event) => updateCode(index, { isPaidAbsence: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
-                        </label>
-                        <label className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-3 text-xs font-semibold text-slate-600">
+                          <Checkbox label="Betaalde afwezigheid" checked={code.isPaidAbsence} onChange={(v) => updateCode(index, { isPaidAbsence: v })} />
+                        </div>
+                        <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-surface-row px-4 py-1.5 text-xs font-semibold text-slate-600">
                           Vrij
-                          <input type="checkbox" checked={code.isDayOff} onChange={(event) => updateCode(index, { isDayOff: event.target.checked })} className="h-4 w-4 rounded border-slate-300 text-oker-500 focus:ring-oker-500" />
-                        </label>
+                          <Checkbox label="Vrije dag" checked={code.isDayOff} onChange={(v) => updateCode(index, { isDayOff: v })} />
+                        </div>
                       </div>
-                      {canAdminDelete ? (
-                        <Button variant="danger" size="md" icon={<Trash2 size={16} />} onClick={() => removeCode(index)}>
-                          Verwijder Code
-                        </Button>
-                      ) : (
-                        <Badge tone="slate">Verwijderen admin-only</Badge>
-                      )}
+                      <div className="flex flex-wrap items-center gap-2">
+                        {code.code && (
+                          <Button variant="ghost" size="sm" icon={<History size={14} />} onClick={() => setHistoryCode(code)}>
+                            Geschiedenis
+                          </Button>
+                        )}
+                        {canAdminDelete ? (
+                          <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => requestRemove(code)}>
+                            Verwijder code
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                   );
                 })}
@@ -315,12 +329,24 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
               <EmptyState
                 icon={<Settings size={24} />}
                 title="Nog geen planningscodes"
-                message="Voeg hier de eerste matrixcodes toe zodat planners en admins hun betekenis centraal kunnen beheren."
+                message="Voeg de eerste matrixcodes toe zodat planners en admins hun betekenis centraal beheren."
+                action={<Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>Code toevoegen</Button>}
               />
             </div>
           )}
         </TableShell>
       </Card>
+
+      <ConfirmationModal
+        isOpen={pendingDelete !== null}
+        onClose={() => setPendingDelete(null)}
+        onConfirm={removeCode}
+        title="Code verwijderen?"
+        message={pendingDelete
+          ? `${pendingDelete.code ? `Code ${pendingDelete.code.toUpperCase()}` : 'Deze lege rij'} verdwijnt uit de lijst. Dit wordt pas definitief zodra je opslaat; matrixcellen met deze code gelden daarna als onbekend.`
+          : undefined}
+        confirmText="Verwijderen"
+      />
 
       <EntityHistoryModal
         open={!!historyCode}
@@ -332,5 +358,3 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     </PageShell>
   );
 }
-
-

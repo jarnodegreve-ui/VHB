@@ -5,6 +5,7 @@ import {
   Bell,
   Bus,
   CalendarClock,
+  CalendarCog,
   CalendarDays,
   IdCard,
   Inbox,
@@ -44,10 +45,10 @@ import { fetchMonthPlanning } from '../lib/monthPlanning';
 import { apiFetch, apiJson } from '../lib/api';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { Modal } from '../components/Modal';
-import { ModalHeader } from '../components/ui';
+import { EmptyState, ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
+import { Badge, Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Field, Input, Select, Textarea } from '../components/Field';
 import { cn, notify, telHref } from '../lib/ui';
@@ -197,7 +198,9 @@ export function PlannerDashboardWidgets({
   const sickTriggerRef = useRef<HTMLButtonElement | null>(null);
   const [sickForm, setSickForm] = useState({ userId: '', startDate: '', endDate: '', comment: '' });
   const [isSubmittingSick, setIsSubmittingSick] = useState(false);
-  const [sickError, setSickError] = useState('');
+  // Validatiefouten per veld (fase C15): bij het veld, niet onderaan of in
+  // een toast. Server-/netwerkfouten blijven via onSickReport → notify.
+  const [sickFouten, setSickFouten] = useState<{ userId?: string; endDate?: string }>({});
   // Stap 2 van de ziekmelding: de diensten die door de melding onbemand
   // achterblijven, meteen kunnen overzetten. Dít is de volgorde waarin het
   // echt gebeurt (chauffeur belt → registreren → wie rijdt het dan?), en het
@@ -504,6 +507,33 @@ export function PlannerDashboardWidgets({
     return iso === today ? `vandaag (${label})` : label;
   };
 
+  // "Begin hier" (fase C13): zonder chauffeurs of zonder geïmporteerde
+  // planning zeggen de tegels alleen maar 0 — dan is de volgende stap de
+  // boodschap, niet het cijfer. De strip en Open taken blijven staan
+  // (toestellen, vervaldata en aanvragen bestaan los van de planning).
+  const setupStap: { titel: string; tekst: string; actie?: { label: string; view: View } } | null =
+    totalDrivers === 0
+      ? {
+          titel: 'Nog geen chauffeurs',
+          tekst: 'Zonder chauffeursaccounts valt er niets in te plannen. Maak eerst de gebruikers aan; daarna vullen de tegels zich vanzelf.',
+          actie: isAdmin ? { label: 'Naar Gebruikers', view: 'gebruikers' } : undefined,
+        }
+      : shifts.length === 0
+        ? {
+            titel: 'Nog geen planning geladen',
+            tekst: 'Importeer de maandplanning uit Excel. Daarna zie je hier wie rijdt, wie vrij is en wat open staat.',
+            actie: { label: 'Planning importeren', view: 'beheer-roosters' },
+          }
+        : null;
+
+  // "Deze week": dekkingsstatus per dag (vandaag t/m +6) uit coverageDays —
+  // de derde kolom op brede schermen. null = nog niet geladen; een lege lijst
+  // of overal expected 0 = er zijn geen verwachte diensten ingesteld.
+  const weekEinde = isoDate(addDays(now, 6));
+  const weekDagen = (coverageDays ?? []).filter((d) => d.date >= today && d.date <= weekEinde).sort((a, b) => a.date.localeCompare(b.date));
+  const geenVerwachtingen = coverageDays !== null && (weekDagen.length === 0 || weekDagen.every((d) => d.expected === 0));
+  const weekOpen = weekDagen.reduce((n, d) => n + d.missing.length, 0);
+
   return (
     <section className="space-y-5">
       {/* === Operationele header === */}
@@ -553,7 +583,7 @@ export function PlannerDashboardWidgets({
             aria-haspopup="dialog"
             onClick={() => {
               setSickForm({ userId: '', startDate: todayKey, endDate: todayKey, comment: '' });
-              setSickError('');
+              setSickFouten({});
               setShowSickModal(true);
             }}
           >
@@ -572,6 +602,21 @@ export function PlannerDashboardWidgets({
           kolommen (5 is oneven). Mét laadplein: md = 6 tegels à span-2
           (rijen 3/3). Haal je hier een tegel weg of zet je er een bij, dan
           moeten deze tellingen mee. */}
+      {/* "Begin hier" bóven de strip, niet in de plaats ervan: de tegels
+          blijven het vaste anker van dit scherm (ook voor de smoke-test);
+          de lege staat zegt waarom ze op 0 staan en wat de volgende stap is. */}
+      {setupStap && (
+        <EmptyState
+          icon={<CalendarCog size={24} />}
+          title={setupStap.titel}
+          message={setupStap.tekst}
+          action={setupStap.actie ? (
+            <Button variant="primary" size="md" onClick={() => onNavigate(setupStap.actie!.view)}>
+              {setupStap.actie.label}
+            </Button>
+          ) : undefined}
+        />
+      )}
       <div className={cn('grid grid-cols-2 gap-3 md:grid-cols-6', laadplein ? 'xl:grid-cols-6' : 'xl:grid-cols-5')}>
         <OpsStat
           className="md:col-span-2 xl:col-span-1"
@@ -650,8 +695,10 @@ export function PlannerDashboardWidgets({
       {/* Gelijke helften. Ging in stappen: 2/3–1/3 was te scheef (Live
           activiteit kapte zijn regels af, "Chris Versluys — ziekte (2…"),
           60/40 hielp maar niet genoeg. Open taken heeft de breedte niet nodig
-          — dat zijn korte rijen en er staan er meestal maar twee of drie. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          — dat zijn korte rijen en er staan er meestal maar twee of drie.
+          Op xl+ komt er een derde kolom bij ("Deze week", fase C13); onder
+          xl blijft alles zoals het was. */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
         {/* Open taken — gecombineerde werkvoorraad */}
         <OpsPanel
           icon={<Inbox size={16} />}
@@ -833,6 +880,52 @@ export function PlannerDashboardWidgets({
             )
           )}
         </div>
+
+        {/* Derde kolom (alleen xl+): dekking per dag voor de komende week.
+            Onder xl verborgen — mobiel en lg blijven ongewijzigd; daar staat
+            dezelfde informatie een tik verder op Openstaande diensten. */}
+        <OpsPanel
+          className="hidden xl:block"
+          icon={<CalendarDays size={16} />}
+          title="Deze week"
+          aside={coverageDays === null ? 'laden…' : geenVerwachtingen ? undefined : weekOpen === 0 ? 'alles gedekt' : `${weekOpen} open`}
+          onSeeAll={() => onNavigate('dekking')}
+          seeAllLabel="Openstaande diensten"
+        >
+          {coverageDays === null ? (
+            <div className="space-y-1.5" aria-busy="true" aria-label="Dekking wordt geladen">
+              <SkeletonRow /><SkeletonRow /><SkeletonRow />
+            </div>
+          ) : geenVerwachtingen ? (
+            <EmptyState
+              icon={<AlertTriangle size={24} />}
+              title="Nog geen verwachte diensten"
+              message="Stel per dag-type in welke diensten er verwacht worden; dan zie je hier per dag wat er nog open staat."
+              action={(
+                <Button variant="secondary" size="sm" onClick={() => onNavigate('dekking')}>
+                  Verwachte diensten instellen
+                </Button>
+              )}
+            />
+          ) : (
+            <ul className="space-y-1.5">
+              {weekDagen.map((d) => {
+                const ok = d.missing.length === 0;
+                return (
+                  <li key={d.date} className="flex items-center justify-between gap-3 rounded-xl bg-surface-row px-3.5 py-2 ring-1 ring-hairline">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-medium text-slate-800">{formatDay(d.date)}</span>
+                      <span className="block truncate text-xs font-normal text-slate-500">
+                        {d.dayType}{!ok ? ` · dienst ${d.missing.slice(0, 3).join(', ')}${d.missing.length > 3 ? '…' : ''}` : ''}
+                      </span>
+                    </span>
+                    <Badge tone={ok ? 'emerald' : 'red'} dot className="shrink-0 tabular-nums">{d.covered}/{d.expected}</Badge>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </OpsPanel>
       </div>
 
       {/* === Popup: wie is er vandaag beschikbaar === */}
@@ -1037,11 +1130,13 @@ export function PlannerDashboardWidgets({
           onSubmit={async (e) => {
             e.preventDefault();
             if (isSubmittingSick || !onSickReport) return;
-            if (!sickForm.userId) { setSickError('Kies de chauffeur die ziek is.'); return; }
             const startDate = sickForm.startDate || todayKey;
             const endDate = sickForm.endDate || startDate;
-            if (endDate < startDate) { setSickError('De einddatum ligt vóór de startdatum.'); return; }
-            setSickError('');
+            const fouten: { userId?: string; endDate?: string } = {};
+            if (!sickForm.userId) fouten.userId = 'Kies de chauffeur die ziek is.';
+            if (endDate < startDate) fouten.endDate = 'De einddatum ligt vóór de startdatum.';
+            setSickFouten(fouten);
+            if (fouten.userId || fouten.endDate) return;
             setIsSubmittingSick(true);
             const ok = await onSickReport({ userId: sickForm.userId, startDate, endDate, comment: sickForm.comment })
               .finally(() => setIsSubmittingSick(false));
@@ -1061,12 +1156,14 @@ export function PlannerDashboardWidgets({
           }}
           className="p-6 md:p-7 space-y-4 overflow-y-auto overscroll-contain flex-1"
         >
-          <Field label="Chauffeur">
-            {({ id }) => (
+          <Field label="Chauffeur" required error={sickFouten.userId}>
+            {({ id, describedBy, invalid }) => (
               <Select
                 id={id}
+                aria-describedby={describedBy}
+                invalid={invalid}
                 value={sickForm.userId}
-                onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickError(''); }}
+                onChange={(e) => { setSickForm({ ...sickForm, userId: e.target.value }); setSickFouten((f) => ({ ...f, userId: undefined })); }}
               >
                 <option value="">Kies een chauffeur…</option>
                 {users
@@ -1083,18 +1180,20 @@ export function PlannerDashboardWidgets({
                   id={id}
                   type="date"
                   value={sickForm.startDate}
-                  onChange={(e) => setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate })}
+                  onChange={(e) => { setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>
-            <Field label="Tot en met">
-              {({ id }) => (
+            <Field label="Tot en met" error={sickFouten.endDate}>
+              {({ id, describedBy, invalid }) => (
                 <Input
                   id={id}
+                  aria-describedby={describedBy}
+                  invalid={invalid}
                   type="date"
                   value={sickForm.endDate}
                   min={sickForm.startDate}
-                  onChange={(e) => setSickForm({ ...sickForm, endDate: e.target.value })}
+                  onChange={(e) => { setSickForm({ ...sickForm, endDate: e.target.value }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>
@@ -1110,9 +1209,6 @@ export function PlannerDashboardWidgets({
               />
             )}
           </Field>
-          {sickError && (
-            <p role="alert" className="text-xs font-semibold text-red-700">{sickError}</p>
-          )}
           <p className="text-2xs font-medium text-slate-500">
             De dag(en) komen meteen als onbeschikbaar in de planning; de andere planners krijgen een melding.
           </p>
@@ -1287,7 +1383,7 @@ function FeedRow({ entry }: { entry: ActivityLogEntry }) {
         <p className="line-clamp-2 text-sm font-medium leading-snug text-slate-700">
           <span className="font-semibold text-slate-900">{entry.actorName}</span> · {entry.details || entry.action}
         </p>
-        <p className="text-2xs font-normal text-slate-400">{relTime(entry.createdAt)}</p>
+        <p className="text-2xs font-normal text-slate-500">{relTime(entry.createdAt)}</p>
       </div>
     </div>
   );

@@ -125,7 +125,7 @@ export function AssistentView() {
             value={invoer}
             enterKeyHint="send"
             onChange={(e) => setInvoer(e.target.value)}
-            placeholder="Bijv. wie kan zaterdag dienst 2603 rijden?"
+            placeholder="Bv. wie kan zaterdag dienst 2603 rijden?"
             aria-label="Je vraag aan de planner-assistent"
             className="flex-1 font-semibold"
             disabled={bezig}
@@ -136,7 +136,7 @@ export function AssistentView() {
         </form>
       </Card>
 
-      <p className="text-2xs font-medium text-slate-400 px-1">
+      <p className="text-2xs font-medium text-slate-500 px-1">
         De assistent baseert zich op de actuele planning maar kan fouten maken — controleer het advies vóór je toewijst. Gesprekken worden niet bewaard.
       </p>
     </PageShell>

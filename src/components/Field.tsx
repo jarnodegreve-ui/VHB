@@ -71,7 +71,21 @@ export const Textarea = forwardRef<HTMLTextAreaElement, TextareaHTMLAttributes<H
 export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSelectElement> & { invalid?: boolean }>(
   function Select({ invalid, className, children, ...rest }, ref) {
     return (
-      <select ref={ref} aria-invalid={invalid || undefined} className={cn(inputClass, 'appearance-none pr-9 bg-[length:16px_16px] bg-[right_0.75rem_center] bg-no-repeat', invalid && invalidClass, className)} style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239AA1A9' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")" }} {...rest}>
+      // Chevron als inline style (niet als bg-*-utilities): .control-input zet
+      // `background:` als shorthand en reset daarmee repeat/position — de
+      // pijl werd dan als patroon herhaald over het hele veld.
+      <select
+        ref={ref}
+        aria-invalid={invalid || undefined}
+        className={cn(inputClass, 'appearance-none pr-9', invalid && invalidClass, className)}
+        style={{
+          backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%239AA1A9' stroke-width='1.75' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")",
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 0.75rem center',
+          backgroundSize: '16px 16px',
+        }}
+        {...rest}
+      >
         {children}
       </select>
     );

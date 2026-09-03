@@ -117,11 +117,11 @@ export function CalendarSubscribeModal({
                   </Button>
                 </div>
 
-                <p className="mt-2 text-xs font-medium text-slate-400 leading-relaxed">
+                <p className="mt-2 text-xs font-medium text-slate-500 leading-relaxed">
                   Plak deze link in je agenda-app als <span className="font-bold text-slate-500">abonnement</span> (niet als import).
                   Wijzigingen in je rooster verschijnen daarna vanzelf, meestal binnen een uur.
                 </p>
-                <div className="mt-2 flex items-start gap-1.5 text-2xs font-medium text-slate-400">
+                <div className="mt-2 flex items-start gap-1.5 text-2xs font-medium text-slate-500">
                   <ShieldCheck size={14} className="text-slate-400 mt-0.5 shrink-0" />
                   <span>Deze link is persoonlijk — deel 'm niet, hij toont jouw diensten.</span>
                 </div>
@@ -135,7 +135,7 @@ export function CalendarSubscribeModal({
             <Button variant="secondary" className="mt-2" icon={<Download size={16} className="text-oker-500" />} onClick={() => { onDownload(); onClose(); }}>
               Download .ics-bestand
             </Button>
-            <p className="mt-1.5 text-xs font-medium text-slate-400">Een momentopname — updatet niet automatisch.</p>
+            <p className="mt-1.5 text-xs font-medium text-slate-500">Een momentopname — updatet niet automatisch.</p>
           </div>
         </div>
       </div>

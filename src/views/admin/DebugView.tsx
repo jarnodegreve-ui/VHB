@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
-import { Activity, Bug, DownloadCloud, FlaskConical, Mail, UploadCloud } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { Bug, DownloadCloud, FlaskConical, Mail, Plus, Trash2, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, Chip, MicroLabel } from '../../components/primitives';
+import { Badge, Button, Chip } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
+import { InfoTip } from '../../components/InfoTip';
 import { BUILD_INFO, getServiceWorkerVersion } from '../../lib/appVersion';
 import { isoDate } from '../../lib/availability';
 import { OcpiCard } from './OcpiCard';
@@ -24,6 +25,16 @@ const COLLECTION_LABELS: Record<string, string> = {
 };
 
 const TEST_SHIFT_ID_PREFIX = 'test-shift-';
+
+/** Eén sleutel/waarde-regel in een statuskaart. */
+function StatusRij({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-sm font-medium text-slate-600">{label}</span>
+      {children}
+    </div>
+  );
+}
 
 // onSaveShifts geeft in de praktijk savePlanning door, en dat is een
 // Promise<boolean> (false = de save is afgewezen). Het type stond op
@@ -187,7 +198,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       });
 
       if (!testResponse.ok) {
-        setTestResult(`Algemene POST test mislukt (${testResponse.status}). Dit duidt op een server/Vercel configuratie probleem.`);
+        setTestResult(`Algemene POST-test mislukt (${testResponse.status}). Dit duidt op een server-/Vercel-configuratieprobleem.`);
         return;
       }
 
@@ -196,7 +207,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       // verwijderen) en werd alleen door de minimum-één-admin-vangrail
       // tegengehouden — de test faalde daardoor ook altijd. De health-check
       // hieronder dekt de databaseverbinding al af.
-      setTestResult('Succes! API bereikbaar en POST-routing werkt.');
+      setTestResult('Succes: API bereikbaar en POST-routing werkt.');
     } catch (error: any) {
       setTestResult(`Fout: ${error.message}`);
     } finally {
@@ -208,7 +219,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
   const addTestShift = async () => {
     if (services.length === 0) {
-      notify('Geen diensten beschikbaar — voeg eerst een dienst toe via Beheer Dienstoverzicht.', 'error');
+      notify('Geen diensten beschikbaar — voeg eerst een dienst toe via Beheer dienstoverzicht.', 'error');
       return;
     }
     const sample = services[0];
@@ -245,160 +256,155 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
     getServiceWorkerVersion().then(setSwVersion);
   }, []);
 
+  const testOk = Boolean(testResult && testResult.startsWith('Succes'));
+
   return (
     <PageShell>
       <PageHeader
         eyebrow="Systeem"
         title="Systeemstatus"
+        description="Koppelingen, tabellen en health checks."
         actions={(
-          <div className="flex items-center gap-3">
-            <Button variant="primary" onClick={testWrite} disabled={isTesting}>
+          <>
+            <Button variant="secondary" onClick={testWrite} disabled={isTesting}>
               {isTesting ? 'Testen…' : 'Test schrijven'}
             </Button>
-            <Button variant="secondary" onClick={checkHealth} disabled={isCheckingHealth}>
+            <Button variant="primary" onClick={checkHealth} disabled={isCheckingHealth}>
               {isCheckingHealth ? 'Controleren…' : 'Status verversen'}
             </Button>
-          </div>
+          </>
         )}
       />
 
       {testResult && (
-        <div
-          className={cn(
-            'p-4 rounded-2xl text-sm font-semibold',
-            testResult.startsWith('Succes')
-              ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-              : 'bg-red-50 text-red-700 border border-red-100'
-          )}
-        >
-          {testResult}
-        </div>
+        <Card tone={testOk ? 'success' : 'danger'} padding="sm" role="status">
+          <p className={cn('text-sm font-semibold', testOk ? 'text-emerald-700' : 'text-red-700')}>{testResult}</p>
+        </Card>
       )}
 
       <Card>
-        <MicroLabel className="mb-4">Versie</MicroLabel>
-        <div className="space-y-3">
-          <div className="flex justify-between items-center gap-4">
-            <span className="text-sm font-medium text-slate-600">App-versie:</span>
+        <CardHeader title="Versie" />
+        <div className="mt-4 space-y-3">
+          <StatusRij label="App-versie">
             <span className="text-sm font-semibold text-slate-800 tabular-nums">v{BUILD_INFO.version}</span>
-          </div>
-          <div className="flex justify-between items-center gap-4">
-            <span className="text-sm font-medium text-slate-600">Build (commit):</span>
+          </StatusRij>
+          <StatusRij label="Build (commit)">
             {BUILD_INFO.sha ? (
               <a
                 href={`https://github.com/jarnodegreve-ui/VHB/commit/${BUILD_INFO.sha}`}
                 target="_blank"
                 rel="noreferrer"
-                className="text-xs font-mono text-oker-700 hover:text-oker-700 tabular-nums"
+                className="text-xs font-mono text-oker-700 tabular-nums"
               >
                 {BUILD_INFO.sha}
               </a>
             ) : (
-              <span className="text-xs font-mono text-slate-400">lokaal</span>
+              <span className="text-xs font-mono text-slate-500">lokaal</span>
             )}
-          </div>
-          <div className="flex justify-between items-center gap-4">
-            <span className="text-sm font-medium text-slate-600">Gebouwd op:</span>
+          </StatusRij>
+          <StatusRij label="Gebouwd op">
             <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(BUILD_INFO.builtAt).toLocaleString('nl-BE')}</span>
-          </div>
-          <div className="flex justify-between items-center gap-4">
-            <span className="text-sm font-medium text-slate-600">Service worker:</span>
+          </StatusRij>
+          <StatusRij label="Service worker">
             {swVersion ? (
               <Badge tone="emerald" dot>{swVersion}</Badge>
             ) : (
-              <span className="text-xs font-mono text-slate-400">niet actief</span>
+              <span className="text-xs font-mono text-slate-500">niet actief</span>
             )}
-          </div>
+          </StatusRij>
         </div>
       </Card>
 
       {healthData && (
         <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Card>
-              <MicroLabel className="mb-4">Supabase Status</MicroLabel>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-slate-600">Configuratie:</span>
+              <CardHeader title="Supabase" />
+              <div className="mt-4 space-y-3">
+                <StatusRij label="Configuratie">
                   <Badge tone={healthData.supabase === 'configured' ? 'emerald' : 'red'} dot>
                     {healthData.supabase}
                   </Badge>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-slate-600">Omgeving:</span>
+                </StatusRij>
+                <StatusRij label="Omgeving">
                   <span className="text-sm font-semibold text-slate-800">{healthData.env}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-slate-600">Server Tijd:</span>
-                  <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(healthData.time).toLocaleString()}</span>
-                </div>
+                </StatusRij>
+                <StatusRij label="Servertijd">
+                  <span className="text-xs font-mono text-slate-500 tabular-nums">{new Date(healthData.time).toLocaleString('nl-BE')}</span>
+                </StatusRij>
               </div>
             </Card>
 
             <Card>
-              <MicroLabel className="mb-4">E-mail</MicroLabel>
-              <div className="space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-slate-600">SMTP:</span>
+              <CardHeader
+                title="E-mail"
+                aside={(
+                  <InfoTip label="Uitleg bij e-mail" align="right">
+                    Zonder SMTP_USER/SMTP_PASS worden mails alleen gelogd, niet verstuurd — verlofbeslissingen en updates komen dan nergens aan. Een testmail is de enige echte bevestiging dat de SMTP-gegevens kloppen.
+                  </InfoTip>
+                )}
+              />
+              <div className="mt-4 space-y-3">
+                <StatusRij label="SMTP">
                   <Badge tone={healthData.smtp?.status === 'configured' ? 'emerald' : 'red'} dot>
                     {healthData.smtp?.status === 'configured' ? 'geconfigureerd' : 'niet geconfigureerd'}
                   </Badge>
-                </div>
+                </StatusRij>
                 {healthData.smtp?.status === 'configured' ? (
                   <>
-                    <div className="flex justify-between items-center gap-3">
-                      <span className="text-sm font-medium text-slate-600">Afzender:</span>
-                      <span className="text-xs font-mono text-slate-500 truncate">{healthData.smtp.from}</span>
-                    </div>
-                    <div className="flex justify-between items-center gap-3">
-                      <span className="text-sm font-medium text-slate-600">Server:</span>
-                      <span className="text-xs font-mono text-slate-500 truncate">{healthData.smtp.host}</span>
-                    </div>
+                    <StatusRij label="Afzender">
+                      <span className="min-w-0 truncate text-xs font-mono text-slate-500">{healthData.smtp.from}</span>
+                    </StatusRij>
+                    <StatusRij label="Server">
+                      <span className="min-w-0 truncate text-xs font-mono text-slate-500">{healthData.smtp.host}</span>
+                    </StatusRij>
                   </>
-                ) : (
-                  <p className="text-xs font-medium text-red-700">
-                    Zonder SMTP_USER/SMTP_PASS worden mails alleen gelogd, niet verstuurd — verlofbeslissingen en updates komen dan nergens aan.
-                  </p>
-                )}
+                ) : null}
                 <Button
                   variant="secondary"
                   size="sm"
-                  full
+                  className="w-full sm:w-auto"
                   onClick={sendTestEmail}
                   disabled={isMailTesting}
-                  icon={<Mail size={16} />}
+                  icon={<Mail size={14} />}
                 >
                   {isMailTesting ? 'Versturen…' : 'Stuur testmail naar mezelf'}
                 </Button>
                 {mailTest && (
-                  <p className={`text-xs font-medium break-words rounded-lg p-2 ${mailTest.ok ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
-                    {mailTest.message}
-                  </p>
+                  <Card tone={mailTest.ok ? 'success' : 'danger'} padding="sm" role="status">
+                    <p className={cn('break-words text-xs font-medium', mailTest.ok ? 'text-emerald-700' : 'text-red-700')}>{mailTest.message}</p>
+                  </Card>
                 )}
               </div>
             </Card>
 
             <Card>
-              <MicroLabel className="mb-4">Tabel Status</MicroLabel>
-              <div className="space-y-3">
+              <CardHeader
+                title="Tabellen"
+                aside={(
+                  <InfoTip label="Hulp bij problemen" align="right">
+                    Staat een tabel op "Fout", dan bestaat ze waarschijnlijk nog niet in Supabase of staan de rechten niet goed. Het volledige verwachte schema staat in <Chip>supabase/</Chip> in de repo (setup + migraties).
+                  </InfoTip>
+                )}
+              />
+              <div className="mt-4 space-y-3">
                 {Object.entries(healthData.tables || {}).map(([name, status]: [string, any]) => (
                   <div key={name} className="flex flex-col gap-1">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-slate-600 capitalize">{name}:</span>
+                    <StatusRij label={name}>
                       <Badge tone={status === 'OK' ? 'emerald' : 'red'} dot>
                         {status === 'OK' ? 'OK' : 'Fout'}
                       </Badge>
-                    </div>
-                    {status !== 'OK' && <p className="text-2xs text-red-700 font-mono break-all bg-red-50 p-2 rounded-lg mt-1">{status}</p>}
+                    </StatusRij>
+                    {status !== 'OK' && <p className="mt-1 break-all rounded-lg bg-red-50 p-2 font-mono text-2xs text-red-700">{status}</p>}
                   </div>
                 ))}
               </div>
             </Card>
-          </div>
 
-          <div className="bg-ink p-6 rounded-3xl text-white/75 font-mono text-xs overflow-auto max-h-64">
-            <MicroLabel className="mb-4 text-slate-500">Raw Health Data</MicroLabel>
-            <pre>{JSON.stringify(healthData, null, 2)}</pre>
+            <Card>
+              <CardHeader title="Ruwe health-data" description="Het volledige antwoord van de health check." />
+              <pre className="mt-4 max-h-64 overflow-auto rounded-2xl bg-ink p-4 font-mono text-xs text-white/75">{JSON.stringify(healthData, null, 2)}</pre>
+            </Card>
           </div>
         </div>
       )}
@@ -409,95 +415,102 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         <CardHeader
           icon={<DownloadCloud size={16} />}
           title="Back-up"
-          description="Download alle gegevens (gebruikers, planning, diensten, omleidingen, updates, verlof, dienstruilen, planningscodes en de audit-log) als één JSON-bestand. Bewaar dit op een veilige plek — het is je herstelpad als er ooit iets misgaat. De PDF-bestanden van omleidingen zitten er niet in; die staan apart in Supabase Storage."
+          description="Alle gegevens als één JSON-bestand — je herstelpad als er iets misgaat."
+          aside={(
+            <InfoTip label="Wat zit er in de back-up?" align="right">
+              <p>Gebruikers, planning, diensten, omleidingen, updates, verlof, dienstruilen, planningscodes en de audit-log. Bewaar het bestand op een veilige plek.</p>
+              <p className="mt-2">De PDF-bestanden van omleidingen zitten er niet in; die staan apart in Supabase Storage.</p>
+            </InfoTip>
+          )}
         />
         <div className="mt-4">
-          <Button variant="primary" onClick={downloadBackup} disabled={isExporting}>
+          <Button variant="primary" onClick={downloadBackup} disabled={isExporting} icon={<DownloadCloud size={16} />}>
             {isExporting ? 'Exporteren…' : 'Download volledige back-up'}
           </Button>
         </div>
       </Card>
 
-      <Card padding="lg" className="border-2 border-red-100">
+      {/* Gevarenzone: compact — één regel, uitleg in de popover, knop rechts. */}
+      <Card tone="danger">
         <CardHeader
           icon={<UploadCloud size={16} />}
           title="Herstellen vanuit back-up"
-          description={<>Zet alle gegevens terug naar de inhoud van een back-upbestand. <strong className="text-red-700">Dit overschrijft de huidige planning, gebruikers, verlof, dienstruilen en meer</strong> — gebruik dit enkel om een verlies te herstellen. Je krijgt eerst een overzicht te zien en moet bevestigen. De audit-log en import-historiek blijven ongewijzigd.</>}
+          description="Overschrijft de huidige gegevens met een back-upbestand; je bevestigt eerst een overzicht."
+          aside={(
+            <>
+              <InfoTip label="Uitleg bij herstellen" align="right">
+                <p>Zet planning, gebruikers, verlof, dienstruilen en de andere collecties terug naar de inhoud van het bestand — gebruik dit enkel om een verlies te herstellen.</p>
+                <p className="mt-2">De audit-log en de import-historiek blijven ongewijzigd.</p>
+              </InfoTip>
+              <Button variant="danger" size="sm" onClick={() => restoreInputRef.current?.click()}>
+                Kies back-upbestand…
+              </Button>
+            </>
+          )}
         />
-        <div className="mt-4">
-          <input
-            ref={restoreInputRef}
-            type="file"
-            accept="application/json,.json"
-            className="hidden"
-            onChange={(e) => handleRestoreFile(e.target.files?.[0])}
-          />
-          <Button variant="secondary" onClick={() => restoreInputRef.current?.click()}>
-            Kies back-upbestand…
-          </Button>
-        </div>
+        <input
+          ref={restoreInputRef}
+          type="file"
+          accept="application/json,.json"
+          className="hidden"
+          onChange={(e) => handleRestoreFile(e.target.files?.[0])}
+        />
       </Card>
 
       <Card padding="lg">
         <CardHeader
           icon={<Bug size={16} />}
           title="Recente client-fouten"
-          description={<>Fouten die bij gebruikers in de browser optraden (crashes én fout-toasts) worden automatisch gerapporteerd. Ze staan altijd in de Vercel-functielogs; hieronder verschijnen ze zodra de optionele <Chip>client_errors</Chip>-tabel in Supabase bestaat.</>}
+          aside={(
+            <InfoTip label="Uitleg bij client-fouten" align="right">
+              Fouten die bij gebruikers in de browser optraden (crashes én fout-toasts) worden automatisch gerapporteerd. Ze staan altijd in de Vercel-functielogs; hier verschijnen ze zodra de optionele <Chip>client_errors</Chip>-tabel in Supabase bestaat.
+            </InfoTip>
+          )}
         />
         <div className="mt-4 min-w-0">
-            {clientErrors === null ? (
-              <p className="text-sm font-medium text-slate-400">Niet beschikbaar.</p>
-            ) : clientErrors.length === 0 ? (
-              <p className="text-sm font-medium text-emerald-700">Geen fouten gerapporteerd. 🎉</p>
-            ) : (
-              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-                {clientErrors.slice(0, 25).map((e) => (
-                  <div key={e.id} className="rounded-xl bg-surface-soft border border-slate-200/70 p-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <Badge tone="red" dot>{e.source || 'onbekend'}</Badge>
-                      <span className="text-2xs font-mono text-slate-400 tabular-nums shrink-0">{new Date(e.createdAt).toLocaleString()}</span>
-                    </div>
-                    <p className="mt-1.5 text-xs font-medium text-slate-700 break-words">{e.message}</p>
-                    {(e.url || e.userId) && (
-                      <p className="mt-1 text-2xs font-mono text-slate-400 break-all">{[e.url, e.userId && `gebruiker ${e.userId}`].filter(Boolean).join(' · ')}</p>
-                    )}
+          {clientErrors === null ? (
+            <p className="text-sm font-medium text-slate-500">Niet beschikbaar.</p>
+          ) : clientErrors.length === 0 ? (
+            <p className="text-sm font-medium text-emerald-700">Geen fouten gerapporteerd.</p>
+          ) : (
+            <div className="max-h-72 space-y-2 overflow-y-auto pr-1">
+              {clientErrors.slice(0, 25).map((e) => (
+                <Card key={e.id} tone="muted" padding="sm" className="rounded-xl">
+                  <div className="flex items-center justify-between gap-3">
+                    <Badge tone="red" dot>{e.source || 'onbekend'}</Badge>
+                    <span className="shrink-0 font-mono text-2xs text-slate-500 tabular-nums">{new Date(e.createdAt).toLocaleString('nl-BE')}</span>
                   </div>
-                ))}
-              </div>
-            )}
+                  <p className="mt-1.5 break-words text-xs font-medium text-slate-700">{e.message}</p>
+                  {(e.url || e.userId) && (
+                    <p className="mt-1 break-all font-mono text-2xs text-slate-500">{[e.url, e.userId && `gebruiker ${e.userId}`].filter(Boolean).join(' · ')}</p>
+                  )}
+                </Card>
+              ))}
+            </div>
+          )}
         </div>
       </Card>
 
       <Card padding="lg">
         <CardHeader
           icon={<FlaskConical size={16} />}
-          title="Test-omgeving"
-          description={<>Maak een fictieve dienst aan op je eigen account om de chauffeur-flows (rooster, dienstruil, ...) te testen zonder een test-account aan te maken. Het dienstnummer en de tijden worden overgenomen van een bestaande dienst zodat het realistisch oogt. Busnummer <Chip>TEST</Chip> markeert het als test-data; cleanup-knop verwijdert ze allemaal in één keer.</>}
+          title="Testomgeving"
+          description="Een fictieve dienst op je eigen account om de chauffeursflows te testen."
+          aside={(
+            <InfoTip label="Uitleg bij de testomgeving" align="right">
+              Dienstnummer en tijden komen van een bestaande dienst zodat het realistisch oogt. Busnummer <Chip>TEST</Chip> markeert het als testdata; de opruimknop verwijdert al je fictieve diensten in één keer.
+            </InfoTip>
+          )}
         />
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button variant="primary" onClick={addTestShift}>
-            + Maak fictieve dienst voor mezelf
+          <Button variant="primary" icon={<Plus size={16} />} onClick={addTestShift}>
+            Fictieve dienst aanmaken
           </Button>
-          <Button variant="secondary" onClick={clearTestShifts} disabled={myTestShifts.length === 0}>
-            Verwijder mijn fictieve diensten ({myTestShifts.length})
+          <Button variant="secondary" icon={<Trash2 size={16} />} onClick={clearTestShifts} disabled={myTestShifts.length === 0}>
+            Fictieve diensten verwijderen ({myTestShifts.length})
           </Button>
         </div>
       </Card>
-
-      <div className="bg-oker-50 p-8 rounded-3xl border border-oker-100">
-        <div className="flex items-start gap-4">
-          <div className="p-3 bg-oker-500/15 text-oker-700 rounded-2xl">
-            <Activity size={24} />
-          </div>
-          <div>
-            <h4 className="text-card-title mb-2 text-oker-900">Hulp bij problemen</h4>
-            <p className="text-oker-800 text-sm leading-relaxed font-medium">
-              Als de tabellen hierboven "Error" of "Exception" aangeven, betekent dit dat de tabel waarschijnlijk nog niet bestaat in Supabase of dat de rechten niet goed staan.
-              Controleer dan in Supabase of de betreffende tabel bestaat en of de rechten goed staan — het volledige verwachte schema staat in <code className="bg-oker-100 px-1 rounded font-semibold">supabase/</code> in de repo (setup + migraties).
-            </p>
-          </div>
-        </div>
-      </div>
 
       <ConfirmationModal
         isOpen={restoreConfirmOpen}
@@ -508,7 +521,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         confirmText={isRestoring ? 'Bezig…' : 'Ja, alles terugzetten'}
         message={
           pendingRestore
-            ? `Je staat op het punt de huidige gegevens te overschrijven met de back-up${pendingRestore.exportedAt ? ` van ${new Date(pendingRestore.exportedAt).toLocaleString()}` : ''}. Dit wordt teruggezet: ${restorePreview.map((p) => `${p.label} (${p.count})`).join(' · ')}. Deze actie kan niet ongedaan gemaakt worden — maak desgewenst eerst een verse download-back-up.`
+            ? `Je staat op het punt de huidige gegevens te overschrijven met de back-up${pendingRestore.exportedAt ? ` van ${new Date(pendingRestore.exportedAt).toLocaleString('nl-BE')}` : ''}. Dit wordt teruggezet: ${restorePreview.map((p) => `${p.label} (${p.count})`).join(' · ')}. Deze actie kan niet ongedaan gemaakt worden — maak desgewenst eerst een verse back-up.`
             : ''
         }
       />

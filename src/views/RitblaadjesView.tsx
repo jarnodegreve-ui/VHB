@@ -5,7 +5,7 @@ import { notify, openPdfInNewTab } from '../lib/ui';
 import { prettySize } from '../lib/format';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
-import { Badge, Button, MicroLabel } from '../components/primitives';
+import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Skeleton } from '../components/Skeleton';
 
@@ -258,7 +258,60 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         />
       ) : (
         <div className="space-y-6">
-          <Card padding="lg">
+          {/* lg+: tabelrij (bestand, geplaatst, grootte, acties) — dezelfde
+              vorm als Mijn documenten; de grote kaart bleef op desktop half leeg. */}
+          <TableShell className="hidden lg:block">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="bg-slate-50/50">
+                  <Th>Ritblad</Th>
+                  <Th>Geplaatst</Th>
+                  <Th className="text-right">Grootte</Th>
+                  <Th className="text-right">Acties</Th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-t border-slate-100">
+                  <Td className="max-w-md">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-xl bg-oker-50 text-oker-700 ring-1 ring-oker-100 flex items-center justify-center shrink-0">
+                        <FileText size={16} />
+                      </div>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <p className="font-semibold text-slate-900 truncate">{current.filename}</p>
+                          {fromCache && <Badge tone="amber" dot>Offline</Badge>}
+                        </div>
+                        {formatSyncedAt(syncedAt) && (
+                          <p className="text-2xs font-medium text-slate-500">Laatst bijgewerkt {formatSyncedAt(syncedAt)}</p>
+                        )}
+                      </div>
+                    </div>
+                  </Td>
+                  <Td className="tabular-nums whitespace-nowrap">
+                    {formatUploadedAt(current.uploadedAt)}
+                    {current.uploadedBy ? <span className="block text-xs text-slate-500">door {current.uploadedBy}</span> : null}
+                  </Td>
+                  <Td className="text-right tabular-nums whitespace-nowrap">{current.sizeBytes ? prettySize(current.sizeBytes) : <span className="text-slate-400">—</span>}</Td>
+                  <Td className="text-right">
+                    <div className="inline-flex items-center gap-2">
+                      <Button variant="secondary" size="sm" disabled={!current.url} onClick={() => current.url && openPdfInNewTab(current.url)} icon={<Download size={14} />}>
+                        Openen
+                      </Button>
+                      {canDelete && (
+                        <Button variant="danger" size="sm" icon={<Trash2 size={14} />} onClick={() => setConfirmDeleteOpen(true)} title="Verwijder ritblad" aria-label="Verwijder ritblad">
+                          Verwijderen
+                        </Button>
+                      )}
+                    </div>
+                  </Td>
+                </tr>
+              </tbody>
+            </table>
+          </TableShell>
+
+          {/* Onder lg: de bestaande kaart. */}
+          <Card padding="lg" className="lg:hidden">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div className="flex items-start gap-4">
                 <div className="w-12 h-12 rounded-2xl bg-oker-50 text-oker-700 ring-1 ring-oker-100 flex items-center justify-center shrink-0">
@@ -275,7 +328,7 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
                     {current.sizeBytes ? ` · ${prettySize(current.sizeBytes)}` : ''}
                   </p>
                   {formatSyncedAt(syncedAt) && (
-                    <p className="mt-0.5 text-2xs font-medium text-slate-400">
+                    <p className="mt-0.5 text-2xs font-medium text-slate-500">
                       Laatst bijgewerkt {formatSyncedAt(syncedAt)}
                     </p>
                   )}
@@ -345,8 +398,8 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
           </Card>
 
           {!touchToestel && (
-            <p className="text-xs font-medium text-slate-400 text-center">
-              Werkt de preview niet op je toestel? Gebruik de <span className="text-slate-600 font-semibold">Download</span>-knop om het bestand lokaal te openen.
+            <p className="text-xs font-medium text-slate-500 text-center">
+              Werkt de preview niet op je toestel? Gebruik de <span className="text-slate-600 font-semibold">Openen</span>-knop om het bestand lokaal te openen.
             </p>
           )}
         </div>

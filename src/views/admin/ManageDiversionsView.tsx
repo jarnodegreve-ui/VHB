@@ -6,7 +6,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
 import { Badge, Button, IconButton } from '../../components/primitives';
-import { Card, CardHeader } from '../../components/Card';
+import { Card } from '../../components/Card';
 import { Field, Input, Textarea } from '../../components/Field';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
@@ -31,6 +31,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       return String(b.startDate || '').localeCompare(String(a.startDate || ''));
     });
   }, [diversions]);
+  const activeCount = useMemo(() => diversions.filter((d) => !isExpired(d)).length, [diversions]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [historyDiversion, setHistoryDiversion] = useState<Diversion | null>(null);
@@ -167,52 +168,44 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
 
   return (
     <PageShell>
+      {/* De enige primaire actie staat in de paginakop; de vroegere
+          "Nieuwe omleiding"-kaart met alleen een knop erin is weg. */}
       <PageHeader
-        eyebrow="Beheer"
+        eyebrow="Communicatie"
         title="Beheer omleidingen"
+        description={diversions.length > 0 ? `${activeCount} actief, ${diversions.length - activeCount} verlopen.` : 'Routewijzigingen en bijlagen voor chauffeurs.'}
+        actions={(
+          <Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>
+            Nieuwe omleiding
+          </Button>
+        )}
       />
-
-      <Card>
-        <CardHeader
-          title="Nieuwe omleiding"
-          description="Voeg een omleiding toe voor de chauffeurs."
-          aside={(
-            <Button variant="primary" size="lg" icon={<Plus size={16} />} className="w-full sm:w-auto" onClick={handleOpenAdd}>
-              Toevoegen
-            </Button>
-          )}
-        />
-      </Card>
 
       <div className="grid grid-cols-1 gap-4">
         {sortedDiversions.map(div => {
           const expired = isExpired(div);
           return (
-          <Card key={div.id} interactive className={cn('flex flex-col sm:flex-row items-start sm:items-center justify-between gap-6 group', expired && 'opacity-60')}>
-            <div className="flex items-start gap-5">
-              <div className={cn('w-14 h-14 rounded-2xl border flex items-center justify-center shrink-0 transition-transform duration-500 group-hover:scale-110', expired ? 'border-slate-200 bg-surface-muted text-slate-400' : 'border-oker-100 bg-oker-50 text-oker-700')}>
-                <MapPin size={24} />
+          <Card key={div.id} className={cn('flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between', expired && 'opacity-60')}>
+            <div className="flex min-w-0 items-start gap-4">
+              <div className={cn('flex h-11 w-11 shrink-0 items-center justify-center rounded-xl', expired ? 'bg-slate-500/12 text-slate-500' : 'bg-oker-500/15 text-oker-700')}>
+                <MapPin size={20} />
               </div>
-              <div>
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h4 className="text-card-title leading-tight">{div.title}</h4>
+              <div className="min-w-0">
+                <div className="mb-1 flex flex-wrap items-center gap-2">
+                  <h3 className="text-card-title leading-tight">{div.title}</h3>
                   <Badge tone="slate">Lijn {div.line}</Badge>
                   {expired && <Badge tone="slate">Verlopen</Badge>}
+                  {div.pdfUrl && <Badge tone="emerald" icon={<FileText size={12} />}>PDF</Badge>}
                 </div>
-                <div className="flex items-center gap-2 text-2xs text-slate-500 font-medium tabular-nums">
-                  <Calendar size={12} className="text-oker-400" />
-                  {div.startDate} {div.endDate ? `t/m ${div.endDate}` : '(Geen einddatum)'}
+                <div className="flex items-center gap-2 text-2xs font-medium text-slate-500 tabular-nums">
+                  <Calendar size={12} className="text-slate-400" />
+                  {div.startDate} {div.endDate ? `t/m ${div.endDate}` : '(geen einddatum)'}
                 </div>
               </div>
             </div>
 
-            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-3 pt-4 sm:pt-0 border-t sm:border-t-0 border-slate-50">
-              <div className="flex items-center gap-2">
-                {div.pdfUrl && (
-                  <div className="w-9 h-9 flex items-center justify-center text-emerald-700 bg-emerald-50 border border-emerald-100 rounded-xl" title="PDF beschikbaar">
-                    <FileText size={18} />
-                  </div>
-                )}
+            <div className="flex w-full items-center justify-between gap-3 border-t border-slate-100 pt-4 sm:w-auto sm:justify-end sm:border-t-0 sm:pt-0">
+              <div className="flex items-center gap-1">
                 <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryDiversion(div)}><History size={18} /></IconButton>
                 <IconButton label="Bewerken" variant="ghost" size="sm" onClick={() => handleOpenEdit(div)}><Pencil size={18} /></IconButton>
               </div>
@@ -224,8 +217,9 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         {diversions.length === 0 && (
           <EmptyState
             icon={<MapPin size={24} />}
-            title="Geen actieve omleidingen"
-            message="Er staan momenteel geen omleidingen in het systeem."
+            title="Nog geen omleidingen"
+            message="Chauffeurs zien een omleiding meteen op hun dashboard en onder Omleidingen."
+            action={<Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
           />
         )}
       </div>
@@ -234,7 +228,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
               <ModalHeader
                 title={editingId ? 'Omleiding bewerken' : 'Nieuwe omleiding'}
-                description="Vul de details in en upload eventueel een PDF."
+                description="Vul de details in en voeg eventueel een PDF toe."
                 onClose={() => setShowModal(false)}
               />
               <form onSubmit={handleSubmit} className="p-6 md:p-7 space-y-5 overflow-y-auto flex-1">
@@ -245,7 +239,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     required
                     value={formData.line}
                     onChange={(e) => setFormData({...formData, line: e.target.value})}
-                    placeholder="bijv. 1, 2 of Alle"
+                    placeholder="bv. 1, 2 of Alle"
                   />
                 </Field>
 
@@ -256,7 +250,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                     required
                     value={formData.title}
                     onChange={(e) => setFormData({...formData, title: e.target.value})}
-                    placeholder="bijv. Wegwerkzaamheden N70"
+                    placeholder="bv. Wegwerkzaamheden N70"
                   />
                 </Field>
 
@@ -281,7 +275,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                       onChange={(e) => setFormData({...formData, startDate: e.target.value})}
                     />
                   </Field>
-                  <Field label="Einddatum (Optioneel)" htmlFor="omleiding-eind">
+                  <Field label="Einddatum" hint="Leeg = tot hij verwijderd wordt." htmlFor="omleiding-eind">
                     <Input
                       id="omleiding-eind"
                       type="date"
@@ -291,7 +285,7 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                   </Field>
                 </div>
 
-                <Field label={<>PDF Bestand {editingId && '(Optioneel)'}</>} htmlFor="pdf-upload">
+                <Field label={editingId ? 'PDF-bestand (optioneel)' : 'PDF-bestand'} htmlFor="pdf-upload">
                   <div className="relative">
                     <input
                       type="file"
@@ -304,11 +298,11 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
                         bestandskiezer opent via het label, niet via een knop. */}
                     <label
                       htmlFor="pdf-upload"
-                      className="ios-pressable control-button-soft inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900"
+                      className="ios-pressable control-button-soft inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900"
                     >
                       <Upload size={16} />
                       <span className="truncate">
-                        {pdfFile ? pdfFile.name : (editingId ? 'Klik om PDF te vervangen' : 'Klik om PDF te selecteren')}
+                        {pdfFile ? pdfFile.name : (editingId ? 'PDF vervangen…' : 'PDF kiezen…')}
                       </span>
                     </label>
                   </div>
@@ -329,8 +323,8 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
         isOpen={!!confirmDeleteId}
         onClose={() => setConfirmDeleteId(null)}
         onConfirm={handleDelete}
-        title="Omleiding verwijderen"
-        message="Weet je zeker dat je deze omleiding wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+        title="Omleiding verwijderen?"
+        message="De omleiding verdwijnt voor alle chauffeurs. Dit kan niet ongedaan gemaakt worden."
       />
 
       <EntityHistoryModal
@@ -344,5 +338,3 @@ export function ManageDiversionsView({ diversions, onSave }: { diversions: Diver
     </PageShell>
   );
 }
-
-

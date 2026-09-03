@@ -96,7 +96,7 @@ export function ServicesView({ services }: { services: Service[] }) {
               </div>
               <Input
                 type="text"
-                placeholder="Zoek op dienst- of loopnummer..."
+                placeholder="Zoek op dienst- of loopnummer…"
                 aria-label="Zoek op dienst- of loopnummer"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}

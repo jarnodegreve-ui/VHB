@@ -118,7 +118,7 @@ export function OcpiCard() {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-slate-600">Configuratie (env):</span>
               {isLoading ? (
-                <span className="text-xs text-slate-400">laden…</span>
+                <span className="text-xs text-slate-500">laden…</span>
               ) : (
                 <Badge tone={status?.configured ? 'emerald' : 'red'} dot>
                   {status?.configured ? 'compleet' : 'ontbreekt'}
@@ -128,7 +128,7 @@ export function OcpiCard() {
             <div className="flex justify-between items-center">
               <span className="text-sm font-medium text-slate-600">Registratie:</span>
               {isLoading ? (
-                <span className="text-xs text-slate-400">laden…</span>
+                <span className="text-xs text-slate-500">laden…</span>
               ) : (
                 <Badge tone={status?.registered ? 'emerald' : 'red'} dot>
                   {status?.registered ? 'geregistreerd' : 'nog niet'}

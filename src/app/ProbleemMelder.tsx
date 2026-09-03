@@ -47,7 +47,7 @@ export function ProbleemMelder({ open, onClose, view }: { open: boolean; onClose
             <CardHeader title="Meld een probleem" description="Beschrijf kort wat er misging of niet klopte. Het scherm waar je nu bent sturen we automatisch mee." />
             <Field label="Wat ging er mis?" htmlFor="probleem-tekst" className="mt-4" error={fout ? 'Versturen lukte niet — controleer je verbinding en probeer opnieuw.' : undefined}>
               {({ id, describedBy, invalid }) => (
-                <Textarea id={id} aria-describedby={describedBy} invalid={invalid} value={tekst} onChange={(e) => setTekst(e.target.value)} maxLength={900} rows={4} placeholder="Bijv. de aftelling bij Chris klopt niet — hij is al klaar…" />
+                <Textarea id={id} aria-describedby={describedBy} invalid={invalid} value={tekst} onChange={(e) => setTekst(e.target.value)} maxLength={900} rows={4} placeholder="Bv. de aftelling bij Chris klopt niet — hij is al klaar…" />
               )}
             </Field>
             <div className="mt-4 flex justify-end gap-2.5">

@@ -5,11 +5,20 @@ import { cn } from '../lib/ui';
 import { markUpdatesRead } from '../lib/updateReads';
 import { formatUpdateDate } from '../lib/format';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button } from '../components/primitives';
+import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Card, CardHeader } from '../components/Card';
+import { useMinWidth } from '../lib/useMinWidth';
+
+/**
+ * Breekpunt als React-state (Tailwind `lg` = 1024 px). Onder `lg` de
+ * kaartlijst met "Lees meer"; daarboven master-detail (titels links, volledige
+ * tekst rechts). Lokaal — een gedeelde useMediaQuery ontbreekt nog in src/lib.
+ */
 
 export function UpdatesView({ updates }: { updates: Update[] }) {
   const [expandedUpdateIds, setExpandedUpdateIds] = useState<string[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const lg = useMinWidth(1024);
 
   // Openen van de Updates-weergave = gelezen. Markeer elke nog niet gemelde
   // update (los van het actieve filter) zodat de planner 'X/Y gelezen' ziet.
@@ -31,6 +40,10 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
     ));
   };
 
+  // Desktop: het nieuwste bericht staat standaard open; verdwijnt de keuze
+  // (bericht verwijderd), dan valt het paneel terug op het eerste.
+  const detail = lg ? updates.find((u) => u.id === selectedId) ?? updates[0] ?? null : null;
+
   return (
     <PageShell>
       <PageHeader
@@ -38,13 +51,84 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
         description="Berichten en mededelingen."
       />
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
-        {updates.length > 0 ? (
-          updates.map(update => {
+      {updates.length === 0 ? (
+        <EmptyState
+          icon={<Info size={24} />}
+          title="Geen updates"
+          message="Er zijn nog geen berichten geplaatst."
+        />
+      ) : lg ? (
+        /* Master-detail vanaf lg: lijst met titels/datum links (38 %), het
+           volledige bericht rechts. */
+        <div className="lg:grid lg:grid-cols-[minmax(0,38%)_1fr] lg:items-start lg:gap-5">
+          <ul className="space-y-2" aria-label="Berichten">
+            {updates.map((update) => {
+              const isCurrent = detail?.id === update.id;
+              return (
+                <Card
+                  key={update.id}
+                  as="li"
+                  padding="none"
+                  interactive
+                  aria-current={isCurrent ? 'true' : undefined}
+                  className={cn('relative overflow-hidden', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+                >
+                  <div className={cn('absolute top-0 left-0 w-1 h-full', update.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
+                  {/* rauw: lijstrij van het master-detail (kaart als knop: titel + datum + dringend-badge) */}
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(update.id)}
+                    className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-slate-50/50"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-card-title truncate">{update.title}</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-2">
+                        <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
+                          <Clock size={12} className="text-slate-300" />
+                          {formatUpdateDate(update.date)}
+                        </span>
+                        {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
+                      </div>
+                    </div>
+                    <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
+                  </button>
+                </Card>
+              );
+            })}
+          </ul>
+
+          {/* Detailpaneel: blijft in beeld terwijl de lijst scrolt. */}
+          <div className="lg:sticky lg:top-16" aria-live="polite">
+            {detail ? (
+              <Card key={detail.id} as="article" padding="lg" className="relative overflow-hidden" aria-label={detail.title}>
+                <div className={cn('absolute top-0 left-0 w-1 h-full', detail.isUrgent ? 'bg-red-500' : 'bg-slate-300')} />
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <MicroLabel>Bericht</MicroLabel>
+                    {detail.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
+                    <Clock size={12} className="text-slate-300" />
+                    {formatUpdateDate(detail.date)}
+                  </div>
+                </div>
+                <h2 className="mt-3 text-section-title">{detail.title}</h2>
+                <p className="mt-4 max-w-2xl text-sm font-normal leading-relaxed text-slate-600 whitespace-pre-wrap">{detail.content}</p>
+              </Card>
+            ) : (
+              <Card tone="dashed" padding="lg" className="text-center">
+                <p className="text-sm text-slate-500">Kies een bericht</p>
+              </Card>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-5">
+          {updates.map(update => {
             const isExpanded = expandedUpdateIds.includes(update.id);
             const shouldTruncate = update.content.length > 220;
             const visibleContent = shouldTruncate && !isExpanded
-              ? `${update.content.slice(0, 220).trimEnd()}...`
+              ? `${update.content.slice(0, 220).trimEnd()}…`
               : update.content;
 
             return (
@@ -60,7 +144,7 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                 <div className="flex flex-wrap gap-2">
                   {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
                 </div>
-                <div className="flex items-center gap-1.5 text-2xs font-medium text-slate-400 tabular-nums">
+                <div className="flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
                   <Clock size={12} className="text-slate-300" />
                   {formatUpdateDate(update.date)}
                 </div>
@@ -84,17 +168,9 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
               ) : null}
             </Card>
           );
-          })
-        ) : (
-          <div className="lg:col-span-2">
-            <EmptyState
-              icon={<Info size={24} />}
-              title="Geen updates"
-              message="Er zijn nog geen berichten geplaatst."
-            />
-          </div>
-        )}
-      </div>
+          })}
+        </div>
+      )}
     </PageShell>
   );
 }

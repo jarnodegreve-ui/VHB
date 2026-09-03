@@ -6,9 +6,10 @@ import { isoDate } from '../../lib/availability';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Modal } from '../../components/Modal';
-import { Badge, Button, Chip, MicroLabel, Td, Th } from '../../components/primitives';
+import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Select } from '../../components/Field';
+import { InfoTip } from '../../components/InfoTip';
 import type { VerwachtingAfwijking } from '../../lib/coverageGaps';
 import { VerwachtingAfwijkingLijst, ZiekteReeksRij, ziekteReeksSleutel, type ZiekteReeks } from '../../components/planningSignalen';
 
@@ -45,7 +46,6 @@ function InklapSectie({ title, aantal, tone, defaultOpen, children }: {
 }
 
 export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOverride, onMatrixImported }: { shifts: Shift[], onSave: (s: Shift[]) => void | boolean | Promise<void | boolean>, users: User[], history: PlanningMatrixImportHistory[], canAdminOverride: boolean, onMatrixImported: () => Promise<void> }) {
-  const [showExcelInfo, setShowExcelInfo] = useState(false);
   const [confirmSyncOpen, setConfirmSyncOpen] = useState(false);
   const [confirmClearOpen, setConfirmClearOpen] = useState(false);
   const [isMatrixImporting, setIsMatrixImporting] = useState(false);
@@ -456,37 +456,22 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
   return (
     <PageShell>
       <PageHeader
-        eyebrow="Planningbeheer"
+        eyebrow="Planning"
         title="Beheer roosters"
-        description="Importeer matrixplanning, bouw de actieve planning opnieuw op en controleer recente imports op problemen voordat je iets overschrijft."
+        description="Importeer de Excel-matrix, bouw de planning opnieuw op en controleer recente imports."
       />
       <div className="grid gap-4 xl:grid-cols-[1.4fr_minmax(0,0.9fr)]">
         <Card padding="lg">
           <CardHeader
-            size="lg"
-            eyebrow="Importbronnen"
-            title="Matrix en fallback-import"
-            description="Upload het originele Excel-bestand. De praktijk-tab wordt server-side gelezen — geen CSV-export of conversie nodig."
-            aside={showExcelInfo ? (
-              <Button variant="ghost" size="sm" onClick={() => setShowExcelInfo(false)}>
-                Info verbergen
-              </Button>
-            ) : (
-              <Button variant="ghost" size="sm" onClick={() => setShowExcelInfo(true)}>
-                Info tonen
-              </Button>
+            title="Excel-matrix importeren"
+            description="Upload het originele .xls/.xlsx-bestand; je controleert eerst een preview."
+            aside={(
+              <InfoTip label="Uitleg bij de import" align="right">
+                <p>De server leest de praktijk-tab van het hele bestand — geen CSV-export of conversie nodig.</p>
+                <p className="mt-2">De preview toont dagen, diensten, onbekende codes, niet-gematchte chauffeurs en services zonder uren. Alleen de gekozen periode wordt vervangen; planning daarbuiten blijft staan.</p>
+              </InfoTip>
             )}
           />
-
-          {showExcelInfo && (
-            <div className="mt-5 rounded-3xl border border-oker-100 bg-oker-50/80 p-5 text-sm">
-              <p className="font-bold text-oker-800">Importvolgorde</p>
-              <ol className="mt-3 list-decimal space-y-2 pl-5 text-oker-700">
-                <li>Upload het hele <Chip>.xls</Chip>/<Chip>.xlsx</Chip>-bestand. De server leest de praktijk-tab automatisch.</li>
-                <li>Controleer in de preview: dagen, diensten, onbekende codes, niet-gematchte chauffeurs en services zonder uren.</li>
-              </ol>
-            </div>
-          )}
 
           {(() => {
             if (!changesSinceImport) {
@@ -504,46 +489,48 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
               ? new Date(changesSinceImport.lastImport.createdAt).toLocaleString('nl-BE', { dateStyle: 'short', timeStyle: 'short' })
               : 'nog nooit';
 
-            const accent = hasChanges
-              ? { border: 'border-amber-200', bg: 'bg-amber-50/70', icon: 'bg-amber-100 text-amber-700', eyebrow: 'text-amber-700', body: 'text-amber-900', stamp: 'text-amber-700' }
-              : { border: 'border-emerald-200', bg: 'bg-emerald-50/70', icon: 'bg-emerald-100 text-emerald-700', eyebrow: 'text-emerald-700', body: 'text-emerald-900', stamp: 'text-emerald-700' };
-
+            // Neutraal vlak; de betekenis zit in één badge (amber = nog te
+            // controleren, emerald = in sync) — geen volledig gekleurd paneel.
             return (
-              <div className={cn('mt-6 rounded-3xl border p-5', accent.border, accent.bg)}>
-                {/* rauw: hele kaartkop (icoon + kop + samenvatting) klapt de lijst open */}
-                <button
-                  type="button"
-                  onClick={() => hasChanges && setChangesExpanded((v) => !v)}
-                  disabled={!hasChanges}
-                  className="flex w-full items-start justify-between gap-4 text-left disabled:cursor-default"
-                >
-                  <div className="flex items-start gap-3">
-                    <div className={cn('rounded-2xl p-2', accent.icon)}>
-                      {hasChanges ? <AlertTriangle size={18} /> : <Activity size={18} />}
-                    </div>
-                    <div>
-                      <MicroLabel className={accent.eyebrow}>Voor je uploadt</MicroLabel>
-                      <h4 className="mt-1 text-card-title">
-                        {hasChanges ? 'Wijzigingen sinds vorige import' : 'Geen wijzigingen sinds vorige import'}
-                      </h4>
-                      <p className={cn('mt-1 text-sm font-medium', accent.body)}>
+              <Card tone="muted" padding="sm" className="mt-5">
+                <div className="flex items-start gap-2">
+                  {/* rauw: hele kop (titel + samenvatting + chevron) klapt de lijst open */}
+                  <button
+                    type="button"
+                    onClick={() => hasChanges && setChangesExpanded((v) => !v)}
+                    disabled={!hasChanges}
+                    aria-expanded={hasChanges ? changesExpanded : undefined}
+                    className="flex min-w-0 flex-1 items-start justify-between gap-3 text-left disabled:cursor-default"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="text-sm font-semibold text-slate-800">
+                          {hasChanges ? 'Wijzigingen sinds vorige import' : 'Geen wijzigingen sinds vorige import'}
+                        </h3>
+                        <Badge tone={hasChanges ? 'amber' : 'emerald'} dot className="tabular-nums">
+                          {hasChanges ? `${totalChanges} te controleren` : 'In sync'}
+                        </Badge>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-500">
                         {hasChanges
-                          ? `${verlofSinds.length} verlof${verlofSinds.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd${ziekteSinds.length > 0 ? `, ${ziekteSinds.length} ziekteperiode${ziekteSinds.length === 1 ? '' : 's'} geregistreerd` : ''}. Dienstruilen voert het portaal automatisch door (ook na een import) — dit lijstje is ter controle voor je Excel-archief; verlof verwerk je wél in Excel.${ziekteSinds.length > 0 ? ' Ziekte hoeft niet vooraf in je Excel — na de import staan die diensten als te herverdelen klaar.' : ''}`
-                          : 'Geen verloven, dienstruilen of ziekmeldingen in de app sinds je laatste matrix-import. Excel en app zijn in sync.'}
+                          ? `${verlofSinds.length} verlof${verlofSinds.length === 1 ? '' : 'en'} en ${changesSinceImport.approvedSwaps.length} dienstruil${changesSinceImport.approvedSwaps.length === 1 ? '' : 'en'} goedgekeurd${ziekteSinds.length > 0 ? `, ${ziekteSinds.length} ziekteperiode${ziekteSinds.length === 1 ? '' : 's'} geregistreerd` : ''}.`
+                          : 'Geen verloven, dienstruilen of ziekmeldingen in de app sinds je laatste import.'}
+                        {' '}Laatste import: {lastImportLabel}.
                       </p>
-                      <MicroLabel className={cn('mt-1', accent.stamp)}>
-                        Laatste import: {lastImportLabel}
-                      </MicroLabel>
                     </div>
-                  </div>
-                  {hasChanges && (
-                    <ChevronDown size={18} className={cn('shrink-0 mt-1 transition-transform', accent.eyebrow, changesExpanded && 'rotate-180')} />
-                  )}
-                </button>
+                    {hasChanges && (
+                      <ChevronDown size={16} className={cn('mt-0.5 shrink-0 text-slate-400 transition-transform', changesExpanded && 'rotate-180')} />
+                    )}
+                  </button>
+                  <InfoTip label="Wat betekent dit?" align="right">
+                    <p>Dienstruilen voert het portaal automatisch door, ook na een import — dit lijstje is ter controle voor je Excel-archief. Verlof verwerk je wél in Excel.</p>
+                    <p className="mt-2">Ziekte hoeft niet vooraf in je Excel: na de import staan die diensten als te herverdelen klaar.</p>
+                  </InfoTip>
+                </div>
                 {hasChanges && changesExpanded && (
                   <div className="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
-                      <MicroLabel className={cn('mb-2', accent.eyebrow)}>Verlof</MicroLabel>
+                      <MicroLabel className="mb-2">Verlof</MicroLabel>
                       {verlofSinds.length > 0 ? (
                         <ul className="space-y-1.5 text-xs text-slate-700">
                           {verlofSinds.map((l) => (
@@ -563,7 +550,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       )}
                       {ziekteSinds.length > 0 && (
                         <>
-                          <MicroLabel className={cn('mb-2 mt-4', accent.eyebrow)}>Ziekte</MicroLabel>
+                          <MicroLabel className="mb-2 mt-4">Ziekte</MicroLabel>
                           <ul className="space-y-1.5 text-xs text-slate-700">
                             {ziekteSinds.map((l) => (
                               <li key={l.id} className="flex items-start gap-2">
@@ -580,7 +567,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       )}
                     </div>
                     <div>
-                      <MicroLabel className={cn('mb-2', accent.eyebrow)}>Dienstruil</MicroLabel>
+                      <MicroLabel className="mb-2">Dienstruil</MicroLabel>
                       {changesSinceImport.approvedSwaps.length > 0 ? (
                         <ul className="space-y-1.5 text-xs text-slate-700">
                           {changesSinceImport.approvedSwaps.map((s) => (
@@ -603,93 +590,72 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </div>
                   </div>
                 )}
-              </div>
+              </Card>
             );
           })()}
 
-          <div className="mt-6 grid gap-4">
-            <div className="rounded-3xl border border-emerald-100 bg-emerald-50/70 p-5">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <MicroLabel className="text-emerald-700">Primair</MicroLabel>
-                  <h4 className="mt-2 text-card-title">Excel-matrix uploaden</h4>
-                  <p className="mt-2 text-sm font-medium text-slate-600">
-                    Upload je originele <Chip>.xls</Chip>/<Chip>.xlsx</Chip>-bestand. De server leest de praktijk-tab; je krijgt een preview met per-chauffeur breakdown voor je iets overschrijft.
-                  </p>
-                  {pendingMatrixFilename && (
-                    <MicroLabel className="mt-2 text-emerald-700">
-                      Geladen: {pendingMatrixFilename}
-                    </MicroLabel>
-                  )}
-                </div>
-                <Badge tone="emerald">Aangeraden</Badge>
-              </div>
-              <label
-                className={cn(
-                  "ios-pressable mt-5 inline-flex w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all",
-                  isMatrixImporting ? "cursor-not-allowed bg-slate-200 text-slate-400" : "btn-primary"
-                )}
-              >
-                <Upload size={16} />
-                {isMatrixImporting ? 'Importeren…' : 'Excel-matrix uploaden'}
-                <input
-                  type="file"
-                  accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  className="hidden"
-                  onChange={handleMatrixFileUpload}
-                  disabled={isMatrixImporting}
-                />
-              </label>
-            </div>
-
+          {/* Label-als-knop voor het verborgen file-input (de native
+              bestandskiezer opent via het label). Zelfde maten als Button md. */}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <label
+              className={cn(
+                'ios-pressable inline-flex min-h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all sm:w-auto',
+                isMatrixImporting ? 'cursor-not-allowed bg-slate-200 text-slate-500' : 'btn-primary'
+              )}
+            >
+              <Upload size={16} />
+              {isMatrixImporting ? 'Importeren…' : 'Excel-matrix uploaden'}
+              <input
+                type="file"
+                accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                className="hidden"
+                onChange={handleMatrixFileUpload}
+                disabled={isMatrixImporting}
+              />
+            </label>
+            {pendingMatrixFilename && (
+              <span className="min-w-0 truncate text-xs font-medium text-slate-500">Geladen: {pendingMatrixFilename}</span>
+            )}
           </div>
         </Card>
 
         {canAdminOverride ? (
         <Card padding="lg">
           <CardHeader
-            size="lg"
-            eyebrow="Database"
-            title="Actieve planning herschrijven"
-            description="Bouw de planning opnieuw op uit de laatst geïmporteerde matrix, of wis de planning volledig wanneer een nieuwe later volgt."
+            title="Actieve planning"
+            description="Opnieuw opbouwen uit de laatst geïmporteerde matrix, of volledig wissen."
+            aside={(
+              <InfoTip label="Uitleg bij opnieuw opbouwen" align="right">
+                <p>Opnieuw opbouwen gebruikt de matrix die al in het portaal staat — je Excel hoef je niet opnieuw te uploaden.</p>
+                <p className="mt-2">Doe dit nadat je in het Dienstoverzicht tijden of loopnummers wijzigde: zo komen die bij de chauffeurs terecht. Handmatige wijzigingen in de planning gaan daarbij verloren.</p>
+              </InfoTip>
+            )}
           />
           <div className="mt-5 space-y-4">
-            <Card>
-              <MicroLabel>Opnieuw opbouwen</MicroLabel>
-              <p className="mt-2 text-sm font-medium text-slate-500">
-                Bouwt de planning opnieuw op uit de matrix die al in het portaal staat — je hoeft je Excel niet opnieuw te uploaden. Gebruik dit nadat je in het Dienstoverzicht iets wijzigde (tijden, loopnummers): die aanpassingen komen zo bij de chauffeurs terecht.
-              </p>
-              <Button
-                variant="success"
-                size="lg"
-                full
-                className="mt-5"
-                onClick={() => setConfirmSyncOpen(true)}
-                disabled={isSyncing}
-                title="Bouwt de planning opnieuw op uit de laatst geïmporteerde matrix"
-                icon={<RotateCcw size={16} className={isSyncing ? "animate-spin" : ""} />}
-              >
-                {isSyncing ? 'Opnieuw opbouwen…' : 'Planning opnieuw opbouwen'}
-              </Button>
-            </Card>
+            <Button
+              variant="primary"
+              className="w-full sm:w-auto"
+              onClick={() => setConfirmSyncOpen(true)}
+              disabled={isSyncing}
+              icon={<RotateCcw size={16} className={isSyncing ? 'animate-spin' : ''} />}
+            >
+              {isSyncing ? 'Opnieuw opbouwen…' : 'Planning opnieuw opbouwen'}
+            </Button>
 
-            <div className="rounded-3xl border border-red-200/70 bg-red-50/80 p-5">
-              <MicroLabel className="text-red-700">Leegmaken</MicroLabel>
-              <p className="mt-2 text-sm font-medium text-red-700/80">
-                Wis alle actieve roosterregels in het portaal. Handig wanneer de planning volledig vervangen wordt en je eerst een lege toestand wilt.
-              </p>
+            {/* Gevarenzone: compact, één regel + knop. */}
+            <Card tone="danger" padding="sm" className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm font-medium text-red-700">Wis alle actieve roosterregels uit het portaal.</p>
               <Button
                 variant="danger"
-                size="lg"
-                full
-                className="mt-5"
+                size="sm"
+                className="shrink-0"
                 onClick={() => setConfirmClearOpen(true)}
                 disabled={isClearingPlanning}
-                icon={<Trash2 size={16} />}
+                icon={<Trash2 size={14} />}
               >
                 {isClearingPlanning ? 'Wissen…' : 'Planning wissen'}
               </Button>
-            </div>
+            </Card>
           </div>
         </Card>
         ) : null}
@@ -697,25 +663,19 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
       <Card padding="lg">
         <CardHeader
-          size="lg"
-          eyebrow="Historiek"
           title="Recente matriximports"
-          description="Laatste importmomenten met de belangrijkste controlecijfers."
-          aside={<Badge tone="slate">{history.length} logs</Badge>}
+          description="Laatste importmomenten met hun controlecijfers."
+          aside={<Badge tone="slate" className="tabular-nums">{history.length} imports</Badge>}
         />
 
-        <div className="mt-6 space-y-3">
+        <div className="mt-5 space-y-3">
           {history.length > 0 ? history.slice(0, 8).map((entry) => {
             const hasIssues = entry.unknownCodes.length > 0 || entry.unmatchedDrivers.length > 0;
             return (
-              <Card key={entry.id}>
+              <Card key={entry.id} tone="muted" padding="sm">
                 <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        "h-2.5 w-2.5 rounded-full",
-                        hasIssues ? "bg-amber-500" : "bg-emerald-500"
-                      )} />
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
                       <p className="text-sm font-semibold text-slate-800 tabular-nums">
                         {new Date(entry.createdAt).toLocaleString('nl-BE', {
                           day: '2-digit',
@@ -725,10 +685,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           minute: '2-digit',
                         })}
                       </p>
+                      <Badge tone={hasIssues ? 'amber' : 'emerald'} dot>
+                        {hasIssues ? 'Controle nodig' : 'Volledig herkend'}
+                      </Badge>
                     </div>
-                    <MicroLabel className="mt-2">
-                      {hasIssues ? 'Controle nodig' : 'Volledig herkenbaar'}
-                    </MicroLabel>
                     {(entry.filename || entry.importedBy || (entry.periodStart && entry.periodEnd)) && (
                       <p className="mt-1.5 max-w-sm truncate text-xs text-slate-500">
                         {[
@@ -779,12 +739,15 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
       <Card padding="lg">
         <CardHeader
-          size="lg"
-          eyebrow="Export"
           title="Print maandrooster"
-          description="Genereer per chauffeur een maand-overzicht in print-/PDF-formaat."
+          description="Maandoverzicht per chauffeur, printklaar of als PDF."
+          aside={(
+            <InfoTip label="Uitleg bij printen" align="right">
+              Opent in een nieuw tabblad met een printvriendelijke layout. De printdialoog van je browser opent automatisch — kies daar "Opslaan als PDF" of druk direct af.
+            </InfoTip>
+          )}
         />
-        <div className="mt-6 grid gap-4 md:grid-cols-[1fr_auto_auto] items-end">
+        <div className="mt-5 grid gap-4 md:grid-cols-[1fr_auto_auto] items-end">
           <Field label="Chauffeur" htmlFor="print-chauffeur">
             <Select
               id="print-chauffeur"
@@ -823,19 +786,14 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             Open print-weergave
           </Button>
         </div>
-        <p className="mt-4 text-xs text-slate-400 font-medium">
-          Opent in een nieuw tabblad met een printvriendelijke layout. Browser-printdialoog opent automatisch — daar kan je "Opslaan als PDF" kiezen of direct afdrukken.
-        </p>
       </Card>
 
       <Card padding="lg">
         <CardHeader
-          size="lg"
-          eyebrow="Controle"
           title="Huidige planning"
-          description="Bekijk de actieve planning zoals die nu in het portaal beschikbaar is."
+          description="De actieve planning zoals ze nu in het portaal staat, vanaf vandaag."
         />
-        <div className="mt-6">
+        <div className="mt-5">
         {(() => {
           // All-chauffeurs-overzicht (ScheduleView is strikt per-chauffeur en
           // toonde met een synthetische admin altijd leeg). Toont de actieve
@@ -874,7 +832,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         <div key={s.id} className="flex items-center gap-3 px-3 py-2 text-sm">
                           <span className="font-semibold text-slate-800 min-w-0 flex-1 truncate">{nameById.get(String(s.driverId)) || `Chauffeur ${s.driverId}`}</span>
                           <span className="text-slate-500 tabular-nums">{s.line || '--'}</span>
-                          <span className="text-slate-400 text-xs tabular-nums whitespace-nowrap">{s.startTime}–{s.endTime}</span>
+                          <span className="text-slate-500 text-xs tabular-nums whitespace-nowrap">{s.startTime}–{s.endTime}</span>
                         </div>
                       ))}
                     </div>
@@ -918,39 +876,27 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         {matrixPreview && (
         <>
               <ModalHeader
-                eyebrow="Matrix Import Preview"
                 title="Controleer voor je deze periode vervangt"
-                description="Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen — planning buiten die periode blijft staan."
+                description="Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen — planning daarbuiten blijft staan."
               />
 
               <div className="p-6 md:p-7 space-y-6 overflow-y-auto flex-1">
-                <div className={cn(
-                  "rounded-3xl border p-5",
-                  matrixPreviewHasIssues ? "border-red-200 bg-red-50/80" : "border-emerald-200 bg-emerald-50/80"
-                )}>
-                  <div className="flex items-start gap-3">
-                    <div className={cn(
-                      "mt-0.5 h-3 w-3 rounded-full shrink-0",
-                      matrixPreviewHasIssues ? "bg-red-500" : "bg-emerald-500"
-                    )} />
-                    <div>
-                      <MicroLabel className={matrixPreviewHasIssues ? "text-red-700" : "text-emerald-700"}>
-                        {matrixPreviewHasIssues ? 'Import geblokkeerd' : 'Klaar voor import'}
-                      </MicroLabel>
-                      <p className={cn(
-                        "mt-2 text-sm font-medium",
-                        matrixPreviewHasIssues ? "text-red-800" : "text-emerald-800"
-                      )}>
-                        {matrixPreviewHasIssues
-                          ? 'Deze matrix bevat onbekende codes, niet-gematchte chauffeurs of conflicten met goedgekeurd verlof. Los deze eerst op (planningscodes toevoegen, naam corrigeren, Excel aanpassen of verlof annuleren) voor je opnieuw importeert.'
-                          : 'Geen onbekende codes, niet-gematchte chauffeurs of verlof-conflicten. Deze import is klaar om de planning te vervangen.'}
-                      </p>
-                    </div>
+                <Card tone={matrixPreviewHasIssues ? 'danger' : 'success'} padding="sm" className="flex items-start gap-3">
+                  <span className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', matrixPreviewHasIssues ? 'bg-red-500' : 'bg-emerald-500')} />
+                  <div>
+                    <p className={cn('text-sm font-semibold', matrixPreviewHasIssues ? 'text-red-700' : 'text-emerald-700')}>
+                      {matrixPreviewHasIssues ? 'Import geblokkeerd' : 'Klaar voor import'}
+                    </p>
+                    <p className={cn('mt-0.5 text-sm', matrixPreviewHasIssues ? 'text-red-800' : 'text-emerald-800')}>
+                      {matrixPreviewHasIssues
+                        ? 'Los eerst de onbekende codes, niet-gematchte chauffeurs of verlofconflicten op (planningscodes toevoegen, naam corrigeren, Excel aanpassen of verlof annuleren).'
+                        : 'Geen onbekende codes, niet-gematchte chauffeurs of verlofconflicten.'}
+                    </p>
                   </div>
-                </div>
+                </Card>
 
                 {matrixPreview.verlofConflicts.length > 0 && (
-                  <div className="rounded-3xl border border-red-200 bg-red-50/70 p-5">
+                  <Card tone="danger" padding="sm">
                     <div className="flex items-start gap-3">
                       <div className="rounded-2xl bg-red-100 p-2 text-red-700"><AlertTriangle size={18} /></div>
                       <div className="flex-1">
@@ -976,7 +922,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         </ul>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 )}
 
                 {/* Kolommen die de import bewust niet leest (ná "aantal"):
@@ -1169,7 +1115,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   </Card>
                 </div>
 
-                <div className="rounded-3xl border border-oker-100 bg-oker-50/80 p-5">
+                <Card tone="accent" padding="sm">
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div>
                       <MicroLabel className="text-oker-700">Wat wordt overschreven</MicroLabel>
@@ -1183,13 +1129,13 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         : 'Nog geen actieve planning'}
                     </Badge>
                   </div>
-                </div>
+                </Card>
 
                 {/* De periodes sluiten niet aan: dagen zonder planning tussen de
                     bestaande matrix en dit bestand. Meestal een verkeerd of
                     onvolledig bestand — informatief, blokkeert niet. */}
                 {matrixOverwriteSummary?.gap && (
-                  <div className="rounded-3xl border border-amber-200 bg-amber-50/70 p-5">
+                  <Card tone="warning" padding="sm">
                     <div className="flex items-start gap-3">
                       <div className="rounded-2xl bg-amber-100 p-2 text-amber-700"><AlertTriangle size={18} /></div>
                       <div>
@@ -1200,7 +1146,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         </p>
                       </div>
                     </div>
-                  </div>
+                  </Card>
                 )}
 
                 {/* Kleur volgt de zwaarste inhoud: rood alleen bij onbekende
@@ -1208,7 +1154,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     eigen kaart) — rode kop om amber inhoud gaf een gemengd
                     signaal op precies het scherm waar rood "geblokkeerd" is. */}
                 <InklapSectie
-                  title="Codes & chauffeur-matching"
+                  title="Codes en chauffeurs"
                   aantal={matrixPreview.unknownCodes.length + matrixPreview.unmatchedDrivers.length}
                   tone={matrixPreview.unknownCodes.length > 0 ? 'red' : matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'slate'}
                   defaultOpen={matrixPreview.unknownCodes.length > 0 || matrixPreview.unmatchedDrivers.length > 0}
@@ -1216,7 +1162,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <div className="grid gap-4 md:grid-cols-2">
                     <div className="rounded-2xl bg-surface-white ring-1 ring-hairline p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <MicroLabel className={matrixPreview.unknownCodes.length > 0 ? 'text-red-700' : 'text-slate-500'}>Onbekende Codes</MicroLabel>
+                        <MicroLabel className={matrixPreview.unknownCodes.length > 0 ? 'text-red-700' : 'text-slate-500'}>Onbekende codes</MicroLabel>
                         <Badge tone={matrixPreview.unknownCodes.length > 0 ? 'red' : 'emerald'} className="tabular-nums">{matrixPreview.unknownCodes.length}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
@@ -1230,14 +1176,14 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
 
                     <div className="rounded-2xl bg-surface-white ring-1 ring-hairline p-4">
                       <div className="flex items-center justify-between gap-3">
-                        <MicroLabel className={matrixPreview.unmatchedDrivers.length > 0 ? 'text-amber-700' : 'text-slate-500'}>Niet-Gematchte Chauffeurs</MicroLabel>
+                        <MicroLabel className={matrixPreview.unmatchedDrivers.length > 0 ? 'text-amber-700' : 'text-slate-500'}>Niet-gematchte chauffeurs</MicroLabel>
                         <Badge tone={matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} className="tabular-nums">{matrixPreview.unmatchedDrivers.length}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {matrixPreview.unmatchedDrivers.length > 0 ? matrixPreview.unmatchedDrivers.map((driver) => (
                           <Fragment key={driver}><Badge tone="amber">{driver}</Badge></Fragment>
                         )) : (
-                          <span className="text-sm font-medium text-slate-400">Alle chauffeurs werden herkend.</span>
+                          <span className="text-sm font-medium text-slate-500">Alle chauffeurs werden herkend.</span>
                         )}
                       </div>
                     </div>
@@ -1258,7 +1204,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 )}
 
                 {matrixPreview.perDriver.length > 0 && (
-                  <InklapSectie title="Per-chauffeur breakdown" aantal={matrixPreview.perDriver.length} tone="slate">
+                  <InklapSectie title="Per chauffeur" aantal={matrixPreview.perDriver.length} tone="slate">
                     <p className="text-2xs font-medium text-slate-500">
                       Stille gaten worden hier zichtbaar: een chauffeur met dagen-met-code maar nul diensten betekent ofwel allemaal afwezigheden, ofwel een service zonder geldige uren.
                     </p>

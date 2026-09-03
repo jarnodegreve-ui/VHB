@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Bell, ChevronDown, Eye, History, Pencil, Trash2 } from 'lucide-react';
+import { Bell, ChevronDown, Eye, History, Pencil, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
 import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, IconButton } from '../../components/primitives';
+import { Badge, Button, IconButton, Switch } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Textarea } from '../../components/Field';
+import { InfoTip } from '../../components/InfoTip';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 export function ManageUpdatesView({
@@ -120,48 +121,30 @@ export function ManageUpdatesView({
     setDeletingId(null);
   };
 
+  const urgentCount = updates.filter((u) => u.isUrgent).length;
+
   return (
     <PageShell>
-      <PageHeader eyebrow="Beheer" title="Beheer updates" />
+      <PageHeader eyebrow="Communicatie" title="Beheer updates" description="Nieuws en dringende meldingen voor de chauffeurs." />
       {/* Wrapper-div voor de scroll-ref: Card geeft (nog) geen ref door. */}
       <div ref={formRef} className="scroll-mt-4">
       <Card>
         <CardHeader
           icon={<Bell size={16} />}
-          title={editingId ? 'Update bewerken' : 'Nieuwe update publiceren'}
+          title={editingId ? 'Update bewerken' : 'Nieuwe update'}
+          aside={(
+            <InfoTip label="Uitleg bij dringende updates" align="right">
+              <p>Een dringende update krijgt een rode markering op het dashboard en verstuurt meteen een e-mail naar alle gebruikers; je ziet achteraf hoeveel chauffeurs ze geopend hebben.</p>
+              {!canSendUrgentEmail ? <p className="mt-2">Dringend verzenden is voorbehouden aan admins; planners kunnen gewone updates publiceren.</p> : null}
+            </InfoTip>
+          )}
         />
-        <form onSubmit={handlePublish} className="mt-6 space-y-6">
+        <form onSubmit={handlePublish} className="mt-5 space-y-5">
           <Field label="Titel" htmlFor="update-titel">
             <Input id="update-titel" type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
           </Field>
 
-          <div className="rounded-2xl border border-red-100 bg-red-50 p-4">
-            {canSendUrgentEmail ? (
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="isUrgent"
-                  className="w-5 h-5 rounded border-red-300 text-red-700 focus:ring-red-500"
-                  checked={updateForm.isUrgent}
-                  onChange={(e) => setUpdateForm({ ...updateForm, isUrgent: e.target.checked })}
-                />
-                <label htmlFor="isUrgent" className="text-sm font-semibold text-red-700 cursor-pointer flex items-center gap-2">
-                  <AlertTriangle size={16} /> Markeer als dringend (verstuurt automatische e-mail)
-                </label>
-              </div>
-            ) : (
-              <div>
-                <p className="text-sm font-semibold text-red-700 flex items-center gap-2">
-                  <AlertTriangle size={16} /> Dringende verzending admin-only
-                </p>
-                <p className="mt-2 text-sm font-medium text-red-700/80">
-                  Planners kunnen updates publiceren, maar geen dringende e-mails uitsturen naar alle gebruikers.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <Field label="Inhoud van het bericht" htmlFor="update-inhoud">
+          <Field label="Inhoud" htmlFor="update-inhoud">
             <Textarea
               id="update-inhoud"
               rows={7}
@@ -172,12 +155,28 @@ export function ManageUpdatesView({
             />
           </Field>
 
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-            <Button type="submit" variant="primary" size="lg" full disabled={isPublishing}>
+          {/* Neutraal ingezonken vlak met één schakelaar — het vroegere rode
+              paneel schreeuwde nog vóór er iets dringend was. */}
+          <Card tone="muted" padding="sm" className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-slate-800">Dringend</p>
+              <p className="mt-0.5 text-xs text-slate-500">
+                {canSendUrgentEmail ? 'Verstuurt meteen een e-mail naar alle gebruikers.' : 'Alleen een admin kan een update dringend versturen.'}
+              </p>
+            </div>
+            {canSendUrgentEmail ? (
+              <Switch label="Markeer als dringend" checked={updateForm.isUrgent} onChange={(v) => setUpdateForm({ ...updateForm, isUrgent: v })} />
+            ) : (
+              <Badge tone="slate">Alleen admin</Badge>
+            )}
+          </Card>
+
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <Button type="submit" variant="primary" className="w-full sm:w-auto" disabled={isPublishing}>
               {isPublishing ? (editingId ? 'Bijwerken…' : 'Publiceren…') : (editingId ? 'Update bijwerken' : 'Update publiceren')}
             </Button>
             {editingId ? (
-              <Button variant="secondary" size="lg" className="w-full sm:w-auto" onClick={handleCancelEdit}>
+              <Button variant="ghost" className="w-full sm:w-auto" onClick={handleCancelEdit}>
                 Annuleren
               </Button>
             ) : null}
@@ -188,9 +187,13 @@ export function ManageUpdatesView({
 
       <Card>
         <CardHeader
-          title="Bestaande updates"
-          description="Beheer gepubliceerde berichten en verwijder updates die niet meer zichtbaar mogen zijn."
-          aside={<Badge tone="slate" className="shrink-0 tabular-nums">{updates.length} zichtbaar</Badge>}
+          title="Gepubliceerde updates"
+          aside={(
+            <>
+              {urgentCount > 0 ? <Badge tone="red" className="tabular-nums">{urgentCount} dringend</Badge> : null}
+              <Badge tone="slate" className="shrink-0 tabular-nums">{updates.length} updates</Badge>
+            </>
+          )}
         />
 
         <div className="mt-5 max-h-[480px] overflow-y-auto overscroll-contain space-y-2 -mx-1 px-1">
@@ -204,11 +207,11 @@ export function ManageUpdatesView({
                   type="button"
                   onClick={() => toggleExpanded(update.id)}
                   aria-expanded={open}
-                  className="flex min-w-0 flex-1 items-center gap-2.5 text-left"
+                  className="flex min-h-11 min-w-0 flex-1 items-center gap-2.5 text-left"
                 >
-                  <span className="min-w-0 truncate text-sm font-bold tracking-tight text-slate-800">{update.title}</span>
+                  <span className="min-w-0 truncate text-sm font-semibold text-slate-800">{update.title}</span>
                   {update.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
-                  <span className="shrink-0 text-2xs font-medium text-slate-400 tabular-nums">{formatUpdateDate(update.date)}</span>
+                  <span className="shrink-0 text-2xs font-medium text-slate-500 tabular-nums">{formatUpdateDate(update.date)}</span>
                   <ChevronDown size={16} className={`shrink-0 text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                 </button>
                 <div className="flex shrink-0 items-center gap-0.5">

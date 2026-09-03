@@ -305,10 +305,10 @@ export function Chip({ tone = 'slate', mono = true, className, title, children }
 // === Tabel-primitieven ===
 
 /** Wrapper: kaart-oppervlak + horizontale scroll op smal scherm. */
-export function TableShell({ className, children }: { className?: string; children: ReactNode }) {
+export function TableShell({ className, sticky = false, children }: { className?: string; /** Kolomkop mag plakken (StickyThead): op md+ géén scrollcontainer, anders steelt die de sticky-context van de pagina. */ sticky?: boolean; children: ReactNode }) {
   return (
-    <div className={cn('surface-table rounded-3xl overflow-hidden', className)}>
-      <div className="overflow-x-auto">{children}</div>
+    <div className={cn('surface-table rounded-3xl', sticky ? 'overflow-x-auto md:overflow-clip' : 'overflow-hidden', className)}>
+      <div className={sticky ? undefined : 'overflow-x-auto'}>{children}</div>
     </div>
   );
 }

@@ -99,8 +99,10 @@ test('chauffeur vraagt verlof aan via de kalender-modal', async ({ page }) => {
   await modal.getByRole('button', { name: 'Volgende maand' }).click();
   await modal.getByRole('button', { name: '10', exact: true }).click();
   await modal.getByRole('button', { name: '12', exact: true }).click();
-  await expect(modal.getByLabel('Startdatum')).toHaveValue(/-10$/);
-  await expect(modal.getByLabel('Einddatum')).toHaveValue(/-12$/);
+  // De gekozen periode is een selectieweergave (geen input): de ISO-datum
+  // staat in data-datum, de zichtbare tekst is het korte daglabel.
+  await expect(modal.getByLabel('Startdatum')).toHaveAttribute('data-datum', /-10$/);
+  await expect(modal.getByLabel('Einddatum')).toHaveAttribute('data-datum', /-12$/);
 
   await modal.getByRole('button', { name: 'Aanvraag indienen' }).click();
 

@@ -408,7 +408,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
 
       <div className="grid md:grid-cols-2 gap-8">
         <div className="space-y-4">
-          <MicroLabel className="text-slate-500 ml-1">Mijn Verzoeken</MicroLabel>
+          <MicroLabel className="text-slate-500 ml-1">Mijn verzoeken</MicroLabel>
           {mySwaps.length > 0 ? (
             /* Compacte, uitklapbare rijen in een eigen scrollcontainer: deze
                lijst groeit onbegrensd mee met de historiek (wens Jarno). */
@@ -428,7 +428,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     >
                       <div className="min-w-0 flex items-baseline gap-2.5">
                         <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap">Dienst {info.line}</span>
-                        <span className="text-2xs font-medium text-slate-400 capitalize truncate">{formatDateHuman(info.date)}</span>
+                        <span className="text-2xs font-medium text-slate-500 capitalize truncate">{formatDateHuman(info.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <StatusBadge status={swap.status} />
@@ -484,7 +484,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         </div>
 
         <div className="space-y-4">
-          <MicroLabel className="text-slate-500 ml-1">Openstaande Dienstruilen</MicroLabel>
+          <MicroLabel className="text-slate-500 ml-1">Openstaande dienstruilen</MicroLabel>
           {availableSwaps.length > 0 ? (
             availableSwaps.map(swap => {
               const info = shiftInfoFor(swap);
@@ -618,7 +618,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="min-w-0">
                                 <span className="block font-semibold text-slate-800">{requester?.name}</span>
                                 {swap.targetDriverId && (
-                                  <span className="block text-2xs font-medium text-slate-400">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
+                                  <span className="block text-2xs font-medium text-slate-500">→ {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>
                                 )}
                               </span>
                               <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
@@ -781,9 +781,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 {/* ── Stap 1: kies je eigen (komende) dienst ── */}
                 {wizardStep === 1 && (
                   myShifts.length === 0 ? (
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-800">
-                      Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Je kan in de Debug-pagina een fictieve test-dienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
-                    </div>
+                    <Card tone="warning" padding="none" className="px-4 py-3 text-sm font-medium text-amber-800">
+                      Je hebt geen komende diensten om te ruilen. {isPlanner ? 'Via Systeemstatus kan je een fictieve testdienst aanmaken om de flow te proberen.' : 'Vraag de planning om hulp.'}
+                    </Card>
                   ) : (
                     <div className="space-y-2">
                       {(showAllShifts ? myShifts : myShifts.slice(0, 8)).map((s) => (
@@ -818,7 +818,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       {selectedShiftDate && <span className="capitalize"> · {formatDateHuman(selectedShiftDate)}</span>}
                     </p>
                     {matchLoading ? (
-                      <p className="text-sm font-medium text-slate-400 py-6 text-center">Beschikbaarheid laden…</p>
+                      <p className="text-sm font-medium text-slate-500 py-6 text-center">Beschikbaarheid laden…</p>
                     ) : (
                       <>
                         <div className="space-y-2">
@@ -866,9 +866,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </Button>
                         )}
                         {freeForDate && freeCount === 0 && !showBusyColleagues && (
-                          <p className="text-xs font-medium text-slate-400 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
+                          <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
                         )}
-                        <p className="text-2xs font-medium text-slate-400">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
+                        <p className="text-2xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
                       </>
                     )}
                   </>
@@ -956,7 +956,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         <p className="text-xs font-medium text-slate-500 pt-1">Wat neem je van {voornaam} over?</p>
                       )}
                       {isTakeover ? null : returnLoading ? (
-                        <p className="text-sm font-medium text-slate-400 py-6 text-center">Diensten laden…</p>
+                        <p className="text-sm font-medium text-slate-500 py-6 text-center">Diensten laden…</p>
                       ) : pickable.length === 0 && conflicted.length === 0 ? (
                         <p className="text-sm text-slate-500 py-4 text-center">Geen diensten of vrije dagen van {target?.name ?? 'deze collega'} gevonden in de komende 8 weken.</p>
                       ) : (
@@ -994,7 +994,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                 <Card key={`${o.date}|${o.code}`} tone="muted" padding="none" className="flex items-center justify-between gap-3 px-4 py-3 opacity-60">
                                   <span className="min-w-0">
                                     <span className="block text-sm font-semibold text-slate-500 capitalize">{formatDateHuman(o.date)}</span>
-                                    <span className="block text-xs font-medium text-slate-400">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`} — {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
+                                    <span className="block text-xs font-medium text-slate-500">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`} — {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
                                   </span>
                                 </Card>
                               ))}
@@ -1018,24 +1018,32 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         )}
                       </Field>
                       {isTakeover ? (
-                        <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
+                        <Card tone="accent" padding="none" className="px-4 py-3 text-sm font-medium text-slate-800">
                           Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — <strong>zonder tegenprestatie</strong>.
-                        </div>
+                        </Card>
                       ) : pick && (
-                        <div className="rounded-2xl border border-oker-200 bg-oker-50 px-4 py-3 text-sm font-medium text-slate-800">
+                        <Card tone="accent" padding="none" className="px-4 py-3 text-sm font-medium text-slate-800">
                           Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
-                        </div>
+                        </Card>
                       )}
-                      <Button
-                        type="submit"
-                        variant="primary"
-                        size="lg"
-                        full
-                        disabled={!selectedShift || !selectedTargetDriver || (isTakeover ? !takeoverCode : !returnPick) || isSubmitting}
-                      >
-                        {isSubmitting ? 'Versturen…' : isTakeover ? 'Vraag om over te nemen' : 'Ruilverzoek versturen'}
-                      </Button>
-                      <p className="text-2xs font-medium text-slate-400 text-center">{target?.name?.split(' ')[0] ?? 'Je collega'} moet eerst accepteren; daarna keurt de planner goed.</p>
+                      <div className="space-y-2">
+                        <Button
+                          type="submit"
+                          variant="primary"
+                          size="lg"
+                          full
+                          disabled={!selectedShift || !selectedTargetDriver || (isTakeover ? !takeoverCode : !returnPick) || isSubmitting}
+                        >
+                          {isSubmitting ? 'Versturen…' : isTakeover ? 'Vraag om over te nemen' : 'Ruilverzoek versturen'}
+                        </Button>
+                        {/* Reden waarom de knop nog uit staat, bij de knop —
+                            niet als toast na een klik die niets doet. */}
+                        {!isTakeover && !returnPick && !returnLoading ? (
+                          <p className="text-center text-xs text-slate-500">Kies eerst wat je van {voornaam} overneemt.</p>
+                        ) : (
+                          <p className="text-2xs font-medium text-slate-500 text-center">{voornaam} moet eerst accepteren; daarna keurt de planner goed.</p>
+                        )}
+                      </div>
                     </>
                   );
                 })()}

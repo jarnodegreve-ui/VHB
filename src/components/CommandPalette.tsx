@@ -154,7 +154,7 @@ export function CommandPalette({
                 aria-autocomplete="list"
                 className="no-focus-ring flex-1 bg-transparent outline-none text-base text-slate-900 placeholder:text-slate-400"
               />
-              <kbd className="hidden sm:inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+              <kbd className="hidden sm:inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-500">
                 esc
               </kbd>
             </div>
@@ -198,7 +198,7 @@ export function CommandPalette({
                       </span>
                       <span className="flex-1 min-w-0 truncate">{cmd.label}</span>
                       {cmd.hint && (
-                        <span className="hidden sm:block shrink-0 max-w-[45%] truncate text-xs font-normal text-slate-400">
+                        <span className="hidden sm:block shrink-0 max-w-[45%] truncate text-xs font-normal text-slate-500">
                           {cmd.hint}
                         </span>
                       )}
@@ -209,26 +209,26 @@ export function CommandPalette({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center gap-3 border-t border-slate-200/70 px-4 py-2 text-2xs text-slate-400">
+            <div className="flex items-center gap-3 border-t border-slate-200/70 px-4 py-2 text-2xs text-slate-500">
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-500">
                   ↑
                 </kbd>
-                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-500">
                   ↓
                 </kbd>
                 navigeren
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-500">
                   ↵
                 </kbd>
                 openen
               </span>
               <span aria-hidden="true">·</span>
               <span className="flex items-center gap-1">
-                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-400">
+                <kbd className="inline-flex items-center rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 text-2xs font-semibold text-slate-500">
                   esc
                 </kbd>
                 sluiten

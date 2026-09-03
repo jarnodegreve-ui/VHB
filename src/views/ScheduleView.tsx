@@ -18,6 +18,7 @@ import { shiftCategory } from '../lib/shiftTime';
 import { formatShortDayPadded, formatSyncedTime, WEEKDAY_SHORT_MON } from '../lib/format';
 import { downloadRoosterIcs } from '../lib/roosterIcs';
 import { openHuidigRitblad } from '../lib/ritblad';
+import { useMinWidth } from '../lib/useMinWidth';
 
 /**
  * Dagdeel-chip. Stond met alle drie op 'slate': dezelfde grijze badge voor
@@ -30,6 +31,12 @@ const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' |
   middag: { label: 'Middag', tone: 'slate' },
   avond: { label: 'Laat', tone: 'emerald' },
 };
+
+/**
+ * Breekpunt als React-state (Tailwind `xl` = 1280 px). Onder `xl` kiest de
+ * chauffeur lijst óf maand; daarboven staan ze naast elkaar. Lokaal — een
+ * gedeelde useMediaQuery ontbreekt nog in src/lib.
+ */
 
 type GroupedShift = {
   key: string;
@@ -82,6 +89,11 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
     setWeergaveState(w);
     try { window.localStorage.setItem('vhb-rooster-weergave', w); } catch { /* niet erg */ }
   };
+  // Vanaf xl staan lijst en maandkalender naast elkaar; de schakelaar is dan
+  // overbodig (de bewaarde keuze blijft gelden zodra het scherm weer smaller is).
+  const xl = useMinWidth(1280);
+  const toonLijst = xl || weergave === 'lijst';
+  const toonMaand = xl || weergave === 'maand';
 
   // Strict eigen diensten; voor het overzicht van alle chauffeurs gaat
   // planner/admin naar Beheer Roosters.
@@ -181,13 +193,14 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         }
       />
 
-      <div className="-mt-2 flex flex-wrap items-center justify-between gap-3">
-        {/* Weergave-wissel: lijst (default) of persoonlijk maandgrid */}
+      <div className="-mt-2 flex flex-wrap items-center justify-between gap-3 xl:justify-end">
+        {/* Weergave-wissel: lijst (default) of persoonlijk maandgrid — alleen
+            onder xl; daarboven staan beide naast elkaar. */}
         {/* Gedeelde .glass-segmented-rail, zoals Dienstoverzicht,
             Gebruikersbeheer en Planningscodes. Stond hier als eigen witte
             variant met een andere radius en padding — de enige toggle in de
             app die er anders uitzag. */}
-        <div className="glass-segmented inline-flex rounded-2xl p-1">
+        <div className="glass-segmented inline-flex rounded-2xl p-1 xl:hidden">
           {(['lijst', 'maand'] as const).map((w) => (
             /* rauw: segmented control op de glass-rail, klassen via segItemClass */
             <button
@@ -201,7 +214,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </div>
         {lastSyncedAt && (
-          <p className="text-2xs font-medium text-slate-400">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
+          <p className="text-2xs font-medium text-slate-500">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
         )}
       </div>
 
@@ -217,41 +230,49 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
         </Card>
       ) : upcoming.length === 0 && past.length === 0 ? (
         <EmptyState icon={<CalendarDays size={24} />} title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
-      ) : weergave === 'maand' ? (
-        <MonthCalendar
-          groups={grouped}
-          today={today}
-          leaves={leaveRequests.filter((l) => l.userId === user.id)}
-          noteFor={(d) => notes.find((n) => n.date === d)?.note}
-          onRequestSwap={onRequestSwap}
-        />
       ) : (
-        <>
-          {/* Toekomst */}
-          {upcoming.length > 0 && (
-            <ShiftList shifts={upcoming} today={today} noteFor={(d) => notes.find((n) => n.date === d)?.note} onRequestSwap={onRequestSwap} />
-          )}
+        /* xl+: lijst links, maandkalender rechts (elk 50 %). De lijst gebruikt
+           dan de compacte kaartvorm — de brede tabel past niet in een halve
+           kolom. Daaronder: één van beide, via de schakelaar hierboven. */
+        <div className={cn(xl && 'grid grid-cols-2 items-start gap-5')}>
+          {toonLijst && (
+            <div>
+              {/* Toekomst */}
+              {upcoming.length > 0 && (
+                <ShiftList shifts={upcoming} today={today} noteFor={(d) => notes.find((n) => n.date === d)?.note} onRequestSwap={onRequestSwap} compact={xl} />
+              )}
 
-          {/* Verleden — collapsed by default */}
-          {past.length > 0 && (
-            <div className="mt-6">
-              <Button
-                variant="ghost"
-                size="sm"
-                className="-ml-3"
-                onClick={() => setShowPast((v) => !v)}
-                icon={<ChevronDown size={14} className={cn('transition-transform', showPast && 'rotate-180')} />}
-              >
-                {showPast ? 'Verberg' : 'Toon'} verleden ({past.length})
-              </Button>
-              {showPast && (
-                <div className="mt-4 opacity-60">
-                  <ShiftList shifts={past} today={today} />
+              {/* Verleden — collapsed by default */}
+              {past.length > 0 && (
+                <div className="mt-6">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="-ml-3"
+                    onClick={() => setShowPast((v) => !v)}
+                    icon={<ChevronDown size={14} className={cn('transition-transform', showPast && 'rotate-180')} />}
+                  >
+                    {showPast ? 'Verberg' : 'Toon'} verleden ({past.length})
+                  </Button>
+                  {showPast && (
+                    <div className="mt-4 opacity-60">
+                      <ShiftList shifts={past} today={today} compact={xl} />
+                    </div>
+                  )}
                 </div>
               )}
             </div>
           )}
-        </>
+          {toonMaand && (
+            <MonthCalendar
+              groups={grouped}
+              today={today}
+              leaves={leaveRequests.filter((l) => l.userId === user.id)}
+              noteFor={(d) => notes.find((n) => n.date === d)?.note}
+              onRequestSwap={onRequestSwap}
+            />
+          )}
+        </div>
       )}
     </PageShell>
   );
@@ -396,7 +417,7 @@ function MonthCalendar({
                     )}
                   />
                 ) : isVrijeDag(iso) ? (
-                  <span className="text-2xs font-bold lowercase leading-none text-slate-400" title="Vrij — geen dienst ingepland">
+                  <span className="text-2xs font-bold lowercase leading-none text-slate-500" title="Vrij — geen dienst ingepland">
                     v
                   </span>
                 ) : null}
@@ -406,12 +427,12 @@ function MonthCalendar({
         </div>
 
         {/* Legende */}
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-2xs font-medium text-slate-400">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-slate-100 pt-3 text-2xs font-medium text-slate-500">
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold tabular-nums text-oker-700">2101</span> dienst</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> verlof</span>
           <span className="inline-flex items-center gap-1.5"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" /> aangevraagd</span>
           <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-oker-700">F</span> feestdag</span>
-          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-slate-400">v</span> vrij</span>
+          <span className="inline-flex items-center gap-1.5"><span className="text-2xs font-bold text-slate-500">v</span> vrij</span>
         </div>
       </Card>
 
@@ -422,7 +443,7 @@ function MonthCalendar({
         </MicroLabel>
         <p className="mt-0.5 text-sm font-semibold capitalize text-slate-900">{formatShiftDate(selected)}</p>
         {selectedTypedag && (
-          <p className={cn('mt-0.5 text-2xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-700' : 'text-slate-400')}>
+          <p className={cn('mt-0.5 text-2xs font-semibold', selectedTypedag.kort === 'F' ? 'text-oker-700' : 'text-slate-500')}>
             {selectedTypedag.titel}
           </p>
         )}
@@ -491,11 +512,11 @@ function MonthCalendar({
 
 // --- Subcomponent: gedeelde lijst voor toekomst en verleden ---
 
-function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedShift[]; today: string; noteFor?: (date: string) => string | undefined; onRequestSwap?: (shiftId: string) => void }) {
+function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: { shifts: GroupedShift[]; today: string; noteFor?: (date: string) => string | undefined; onRequestSwap?: (shiftId: string) => void; /** Altijd de kaartvorm (halve kolom naast de maandkalender op xl). */ compact?: boolean }) {
   return (
     <>
       {/* Desktop tabel */}
-      <TableShell className="hidden md:block">
+      <TableShell className={compact ? 'hidden' : 'hidden md:block'}>
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50/50">
@@ -543,7 +564,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
                       <Badge tone={pill.tone}>{pill.label}</Badge>
                       <span className="text-lg font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
-                        <span className="text-2xs font-medium text-slate-400">
+                        <span className="text-2xs font-medium text-slate-500">
                           ({g.segments.length} blokken)
                         </span>
                       )}
@@ -580,8 +601,8 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap }: { shifts: GroupedS
         </table>
       </TableShell>
 
-      {/* Mobile cards — compacter */}
-      <div className="md:hidden space-y-3">
+      {/* Mobile cards — compacter (en de lijstvorm naast de kalender op xl) */}
+      <div className={cn('space-y-3', !compact && 'md:hidden')}>
         {shifts.map((g) => {
           const isToday = g.date === today;
           const cat = shiftCategory(g.earliestStart);
