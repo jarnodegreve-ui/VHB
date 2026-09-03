@@ -448,14 +448,12 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           <div className="p-6">
             {zoekTerm ? (
               <EmptyState
-                icon={<Clock size={24} />}
                 title={`Geen resultaten voor “${zoek.trim()}”`}
                 message="Zoek op dienstnummer of loopnummer."
                 action={<Button variant="secondary" onClick={() => setZoek('')}>Zoekterm wissen</Button>}
               />
             ) : (
               <EmptyState
-                icon={<Clock size={24} />}
                 title="Nog geen diensten"
                 message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
                 action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => { setEditingId(null); setFormData(emptyForm); setShowModal(true); }}>Nieuwe dienst</Button>}

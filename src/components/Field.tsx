@@ -1,5 +1,7 @@
 import { forwardRef, useId, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
 import { cn } from '../lib/ui';
+import { DatePicker, type DatePickerProps } from './DatePicker';
+import { inputClass, invalidClass } from './controlClass';
 
 /**
  * Formulierveld-primitieven: één dialect voor label + control + hint + fout.
@@ -9,12 +11,12 @@ import { cn } from '../lib/ui';
  * - `Input`/`Textarea`/`Select` zijn de controls (klasse `.control-input`,
  *   radius xl, 16 px op mobiel tegen iOS-zoom). Met `invalid` kleurt de rand
  *   rood en staat `aria-invalid`.
+ * - `DateInput` is het datumveld: geen native date-input (oogt per
+ *   browser anders, Safari desktop het slechtst) maar de eigen DatePicker met
+ *   dezelfde waarde-API ('' of 'YYYY-MM-DD').
  * - Foutmeldingen horen hier, bij het veld — niet in een toast.
  */
-export const inputClass =
-  'control-input w-full rounded-xl px-3.5 py-2.5 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none disabled:cursor-not-allowed disabled:opacity-60';
-
-const invalidClass = '!border-red-300 focus:!border-red-400 focus:!shadow-[0_0_0_4px_rgba(239,68,68,0.14)]';
+export { inputClass };
 
 export function Field({
   label,
@@ -91,3 +93,14 @@ export const Select = forwardRef<HTMLSelectElement, SelectHTMLAttributes<HTMLSel
     );
   },
 );
+
+/**
+ * Datumveld in de stijl van `Input`, voor in een `Field`:
+ * `<Field label="Van">{({ id, describedBy, invalid }) => <DateInput id={id} aria-describedby={describedBy} invalid={invalid} value onChange />}</Field>`.
+ * Waarde-API zoals het native veld: `value` = '' of 'YYYY-MM-DD',
+ * `onChange(value)` met de string (geen event), `min`/`max`/`disabled`/`required`.
+ * `size="sm"` voor inline-navigatievelden (dekking, laadplein).
+ */
+export const DateInput = forwardRef<HTMLButtonElement, DatePickerProps>(function DateInput(props, ref) {
+  return <DatePicker ref={ref} {...props} />;
+});

@@ -153,3 +153,36 @@ describe('verlofBalans — custom budget per gebruiker', () => {
     expect(balance.betaaldBudget).toBe(24);
   });
 });
+
+describe('verlofBalans — aangevraagd (pending)', () => {
+  const aanvraag = (id: string, start: string, end: string, status: LeaveRequest['status'], type: LeaveRequest['type'] = 'betaald_verlof'): LeaveRequest => ({
+    id, userId: 'driver-1', startDate: start, endDate: end, type, status, createdAt: '2026-01-01T00:00:00Z',
+  });
+
+  it('telt openstaande aanvragen apart en trekt ze af van wat nog vrij is', () => {
+    const balance = verlofBalans([
+      aanvraag('a', '2026-07-01', '2026-07-05', 'approved'),
+      aanvraag('p', '2026-08-10', '2026-08-12', 'pending'),
+    ], 'driver-1', 2026);
+    expect(balance.betaaldGebruikt).toBe(5);
+    expect(balance.betaaldAangevraagd).toBe(3);
+    expect(balance.betaaldResterend).toBe(19);
+    expect(balance.betaaldVrij).toBe(16);
+  });
+
+  it('afgewezen, ingetrokken en klein-verlet-aanvragen tellen niet als aangevraagd', () => {
+    const balance = verlofBalans([
+      aanvraag('r', '2026-08-10', '2026-08-12', 'rejected'),
+      aanvraag('c', '2026-08-13', '2026-08-14', 'cancelled'),
+      aanvraag('k', '2026-08-15', '2026-08-15', 'pending', 'klein_verlet'),
+    ], 'driver-1', 2026);
+    expect(balance.betaaldAangevraagd).toBe(0);
+    expect(balance.betaaldVrij).toBe(24);
+  });
+
+  it('vrij wordt nooit negatief', () => {
+    const balance = verlofBalans([aanvraag('p', '2026-01-01', '2026-02-15', 'pending')], 'driver-1', 2026);
+    expect(balance.betaaldAangevraagd).toBe(46);
+    expect(balance.betaaldVrij).toBe(0);
+  });
+});

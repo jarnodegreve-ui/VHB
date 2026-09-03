@@ -40,7 +40,7 @@ import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
 import { Badge, Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
 import { Card } from '../components/Card';
-import { Field, Input, Select, Textarea } from '../components/Field';
+import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { cn, notify, telHref } from '../lib/ui';
 
 /**
@@ -1179,24 +1179,22 @@ export function PlannerDashboardWidgets({
           <div className="grid grid-cols-2 gap-3">
             <Field label="Van">
               {({ id }) => (
-                <Input
+                <DateInput
                   id={id}
-                  type="date"
                   value={sickForm.startDate}
-                  onChange={(e) => { setSickForm({ ...sickForm, startDate: e.target.value, endDate: sickForm.endDate < e.target.value ? e.target.value : sickForm.endDate }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
+                  onChange={(v) => { setSickForm({ ...sickForm, startDate: v, endDate: sickForm.endDate < v ? v : sickForm.endDate }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>
             <Field label="Tot en met" error={sickFouten.endDate}>
               {({ id, describedBy, invalid }) => (
-                <Input
+                <DateInput
                   id={id}
                   aria-describedby={describedBy}
                   invalid={invalid}
-                  type="date"
                   value={sickForm.endDate}
                   min={sickForm.startDate}
-                  onChange={(e) => { setSickForm({ ...sickForm, endDate: e.target.value }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
+                  onChange={(v) => { setSickForm({ ...sickForm, endDate: v }); setSickFouten((f) => ({ ...f, endDate: undefined })); }}
                 />
               )}
             </Field>

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import type { User, View } from '../types';
-import type { Toast } from '../components/ToastStack';
-import { useDataKern } from './data/kern';
+import { useDataKern, type ShowToast } from './data/kern';
 import { useActiviteitData } from './data/activiteit';
 import { usePlanningData } from './data/planning';
 import { useVerlofData } from './data/verlof';
@@ -38,7 +37,7 @@ export function useAppData({
   session: Session | null;
   currentUser: User | null;
   currentView: View;
-  showToast: (message: string, tone?: Toast['tone'], action?: Toast['action']) => void;
+  showToast: ShowToast;
   meldLaadfout: (bron: string) => void;
   beginLoading: () => void;
   endLoading: () => void;

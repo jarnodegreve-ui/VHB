@@ -5,6 +5,7 @@ import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } fro
 import { Modal } from '../components/Modal';
 import { Badge, Button, IconButton, MicroLabel, StatusBadge, TableShell, Td, Th } from '../components/primitives';
 import { Card } from '../components/Card';
+import { Avatar } from '../components/Avatar';
 import { Field, Textarea } from '../components/Field';
 import { SlideOver } from '../components/SlideOver';
 import { EntityHistoryModal } from '../components/EntityHistoryModal';
@@ -476,7 +477,6 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             </div>
           ) : (
             <EmptyState
-              icon={<ArrowLeftRight size={24} />}
               title="Nog geen ruilverzoeken"
               message='Wil je een dienst wisselen met een collega? Klik op "Dienstruil aanvragen" — je collega en de planner keuren daarna goed.'
             />
@@ -541,7 +541,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             })
           ) : (
             <EmptyState
-              icon={<ArrowLeftRight size={24} />}
+              variant="klaar"
               title="Geen openstaande dienstruilen"
               message="Stelt een collega jou een ruil voor, dan verschijnt die hier en krijg je een melding."
             />
@@ -578,7 +578,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             <div className="space-y-4 pt-8">
               <MicroLabel className="text-slate-500 ml-1">Beheer dienstruilen</MicroLabel>
               <EmptyState
-                icon={<ArrowLeftRight size={24} />}
+                variant="klaar"
                 title="Geen dienstruilen om te beoordelen"
                 message="Zodra een chauffeur een ruil aanvraagt en zijn collega akkoord gaat, verschijnt die hier."
               />
@@ -615,6 +615,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               title="Details bekijken"
                               className="group inline-flex items-center gap-1.5 text-left"
                             >
+                              <Avatar naam={requester?.name ?? 'Onbekend'} size="md" className="mr-1" />
                               <span className="min-w-0">
                                 <span className="block font-semibold text-slate-800">{requester?.name}</span>
                                 {swap.targetDriverId && (
@@ -693,6 +694,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             title="Details bekijken"
                             className="group flex items-center gap-1.5 text-left"
                           >
+                            <Avatar naam={requester?.name ?? 'Onbekend'} size="sm" className="mr-0.5" />
                             <span className="font-bold tracking-tight text-slate-800">
                               {requester?.name}
                               {swap.targetDriverId && <span className="font-medium text-slate-400"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
@@ -1057,11 +1059,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         onClose={() => setReviewSwap(null)}
         title={reviewSwap ? (users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend') : 'Dienstruil'}
         subtitle={reviewSwap ? `Aangevraagd op ${formatDateHuman(reviewSwap.createdAt)}` : undefined}
-        icon={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
-            <ArrowLeftRight size={16} />
-          </span>
-        }
+        icon={reviewSwap ? <Avatar naam={users.find((u) => u.id === reviewSwap.requesterId)?.name ?? 'Onbekend'} size="lg" /> : undefined}
         footer={reviewSwap ? (
           <div className="flex items-center gap-2">
             <Button

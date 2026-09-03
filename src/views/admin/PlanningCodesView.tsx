@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Bus, Calendar, History, Info, Plus, Settings, Trash2 } from 'lucide-react';
+import { AlertTriangle, Bus, Calendar, History, Info, Plus, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { metOngedaan } from '../../lib/ongedaan';
+import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, IconButton, segItemClass, TableShell, Td, Th } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Input, Select } from '../../components/Field';
@@ -35,10 +36,6 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
   const [isSaving, setIsSaving] = useState(false);
   const [filter, setFilter] = useState<'all' | PlanningCode['category']>('all');
   const [historyCode, setHistoryCode] = useState<PlanningCode | null>(null);
-  // Verwijderen vraagt eerst bevestiging (zoals in de andere beheer-views);
-  // op de sleutel i.p.v. de index, zodat een tussentijdse sortering of
-  // toevoeging nooit de verkeerde rij raakt.
-  const [pendingDelete, setPendingDelete] = useState<DraftCode | null>(null);
 
   useEffect(() => {
     setDraftCodes(withDraftKeys(codes));
@@ -65,19 +62,28 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
     ]);
   };
 
+  // Verwijderen gaat meteen uit de conceptlijst (definitief pas bij opslaan);
+  // de toast biedt 6 s "Ongedaan maken" = de rij op dezelfde plek terugzetten.
+  // Op de sleutel i.p.v. de index, zodat een tussentijdse sortering of
+  // toevoeging nooit de verkeerde rij raakt.
   const requestRemove = (code: DraftCode) => {
     if (!canAdminDelete) {
       notify('Codes verwijderen is alleen beschikbaar voor admins.', 'error');
       return;
     }
-    setPendingDelete(code);
-  };
-
-  const removeCode = () => {
-    if (!pendingDelete) return;
-    const key = pendingDelete._key;
-    setDraftCodes((current) => current.filter((code) => code._key !== key));
-    setPendingDelete(null);
+    const index = draftCodes.findIndex((c) => c._key === code._key);
+    void metOngedaan({
+      boodschap: `${code.code ? `Code ${code.code.toUpperCase()}` : 'Lege rij'} verwijderd — definitief zodra je opslaat.`,
+      uitvoeren: () => { setDraftCodes((current) => current.filter((c) => c._key !== code._key)); },
+      herstellen: () => {
+        setDraftCodes((current) => (
+          current.some((c) => c._key === code._key)
+            ? current
+            : [...current.slice(0, index), code, ...current.slice(index)]
+        ));
+      },
+      toast: (message, tone, action, opties) => notify(message, tone, { action, opties }),
+    });
   };
 
   const handleSave = async () => {
@@ -327,7 +333,6 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           ) : (
             <div className="p-6">
               <EmptyState
-                icon={<Settings size={24} />}
                 title="Nog geen planningscodes"
                 message="Voeg de eerste matrixcodes toe zodat planners en admins hun betekenis centraal beheren."
                 action={<Button variant="secondary" icon={<Plus size={16} />} onClick={addCode}>Code toevoegen</Button>}
@@ -336,17 +341,6 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           )}
         </TableShell>
       </Card>
-
-      <ConfirmationModal
-        isOpen={pendingDelete !== null}
-        onClose={() => setPendingDelete(null)}
-        onConfirm={removeCode}
-        title="Code verwijderen?"
-        message={pendingDelete
-          ? `${pendingDelete.code ? `Code ${pendingDelete.code.toUpperCase()}` : 'Deze lege rij'} verdwijnt uit de lijst. Dit wordt pas definitief zodra je opslaat; matrixcellen met deze code gelden daarna als onbekend.`
-          : undefined}
-        confirmText="Verwijderen"
-      />
 
       <EntityHistoryModal
         open={!!historyCode}

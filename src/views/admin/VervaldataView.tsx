@@ -9,7 +9,7 @@ import { Modal } from '../../components/Modal';
 import { OpsStat } from '../../components/ops';
 import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
-import { Field, Input } from '../../components/Field';
+import { DateInput, Field } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Td, Th, type BadgeTone } from '../../components/primitives';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 
@@ -273,7 +273,7 @@ export function VervaldataView({ users }: { users: User[] }) {
           <SkeletonRow className="px-5 py-4" />
         </Card>
       ) : rijen.length === 0 ? (
-        <EmptyState icon={<IdCard size={24} />} title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
+        <EmptyState title="Geen actieve chauffeurs" message="Zodra er chauffeurs in het systeem staan, verschijnen ze hier." />
       ) : (
         // `overflow-clip` i.p.v. TableShell: die maakt een scrollcontainer en
         // dan plakt de kolomkop niet meer onder de topbar. De tabel is
@@ -302,7 +302,6 @@ export function VervaldataView({ users }: { users: User[] }) {
           {gesorteerd.length === 0 ? (
             <div className="p-6">
               <EmptyState
-                icon={<IdCard size={24} />}
                 title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Geen chauffeurs voor dit filter'}
                 message={filter === 'verlopen' && !zoekTerm ? 'Niets verlopen — goed nieuws.' : 'Pas de zoekterm of het filter aan.'}
                 action={filterActief ? <Button variant="secondary" onClick={wisFilters}>Zoekterm en filter wissen</Button> : undefined}
@@ -383,11 +382,10 @@ export function VervaldataView({ users }: { users: User[] }) {
               {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
                 <Field key={soort} label={`${label} geldig tot`}>
                   {({ id }) => (
-                    <Input
+                    <DateInput
                       id={id}
-                      type="date"
                       value={draft[soort] ?? ''}
-                      onChange={(e) => setDraft((d) => ({ ...d, [soort]: e.target.value }))}
+                      onChange={(v) => setDraft((d) => ({ ...d, [soort]: v }))}
                     />
                   )}
                 </Field>

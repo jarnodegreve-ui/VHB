@@ -1,9 +1,10 @@
 import React from 'react';
-import { AlertTriangle, Inbox, X } from 'lucide-react';
+import { AlertTriangle, X } from 'lucide-react';
 import { cn } from '../lib/ui';
 import { Button } from './primitives';
 import { Modal } from './Modal';
 import { Skeleton, SkeletonRow } from './Skeleton';
+import { BrandMotief, type MotiefVariant } from './BrandMotief';
 
 export function PageShell({
   children,
@@ -173,17 +174,23 @@ export function ConfirmationModal({
 }
 
 /**
- * Empty-state: gedempte icoon-tegel + boodschap; zonder `icon` valt de tegel
- * terug op een inbox-icoon. Het busje (BrandBus-mascotte) is 01-09 volledig
+ * Empty-state: lus-motief (BrandMotief) + boodschap. `variant` kiest het
+ * motief: 'leeg' (niets hier), 'klaar' (alles afgehandeld — goud vinkje) of
+ * 'fout' (uitroep-accent). Met een expliciet `icon` blijft de gedempte
+ * icoon-tegel van vroeger. Het busje (BrandBus-mascotte) is 01-09 volledig
  * uitgefaseerd (vraag Jarno) — de git-historiek bewaart hem.
  */
 export function EmptyState({
   icon,
+  variant = 'leeg',
   title,
   message,
   action,
 }: {
+  /** Eigen icoon in de tegel; zonder icoon toont de staat het lus-motief. */
   icon?: React.ReactNode;
+  /** Motief zonder `icon`: 'klaar' waar leeg = alles afgehandeld/niets open. */
+  variant?: MotiefVariant;
   title: string;
   message?: string;
   /** Optionele call-to-action (knop/link) onder de uitleg — lege schermen
@@ -192,9 +199,11 @@ export function EmptyState({
 }) {
   return (
     <div className="text-center py-10 surface-card rounded-3xl !border-dashed">
-      <div className="w-14 h-14 bg-surface-muted rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">
-        {icon ?? <Inbox size={24} />}
-      </div>
+      {icon ? (
+        <div className="w-14 h-14 bg-surface-muted rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">{icon}</div>
+      ) : (
+        <BrandMotief variant={variant} className="mx-auto mb-4 h-12 w-24 text-slate-400" />
+      )}
       <h3 className="text-card-title">{title}</h3>
       {message ? <p className="mt-1.5 text-sm font-normal text-slate-500 max-w-md mx-auto">{message}</p> : null}
       {action ? <div className="mt-5 flex justify-center">{action}</div> : null}

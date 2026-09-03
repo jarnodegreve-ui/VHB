@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import type { Diversion, Update, User } from '../../types';
 import { apiFetch } from '../../lib/api';
-import { replaceById, withoutId, type DataCtx } from './kern';
+import { replaceById, withoutId, type DataCtx, type OpVeldfouten } from './kern';
+import { metOngedaan } from '../../lib/ongedaan';
 
 /**
  * Communicatie: updates (nieuws) en omleidingen — collectie- én
@@ -133,43 +134,76 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
     }
   };
 
-  // Omleidingen (planner/admin).
-  const saveDiversion = (record: Diversion): Promise<boolean> =>
+  // Omleidingen (planner/admin). `opVeldfouten` krijgt de veldfouten van een
+  // 400 (gedeeld schema) voor het formulier.
+  const saveDiversion = (record: Diversion, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Diversion>({
-      key: 'diversions', label: 'Deze omleiding', method: 'PUT', url: `/api/diversions/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      key: 'diversions', label: 'Deze omleiding', method: 'PUT', url: `/api/diversions/${encodeURIComponent(record.id)}`, id: record.id, body: record, opVeldfouten,
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById,
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding opgeslagen.',
     });
-  const createDiversion = (record: Diversion): Promise<boolean> =>
+  const postDiversion = (record: Diversion, successToast: string, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Diversion>({
-      key: 'diversions', label: 'Deze omleiding', method: 'POST', url: '/api/diversions/one', id: record.id, body: record,
+      key: 'diversions', label: 'Deze omleiding', method: 'POST', url: '/api/diversions/one', id: record.id, body: record, opVeldfouten,
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => [...withoutId(prev, record.id), record], applySaved: replaceById,
-      refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding toegevoegd.',
+      refetch: () => fetchDiversions(undefined, { silent: true }), successToast,
     });
-  const deleteDiversion = (id: string): Promise<boolean> =>
-    ctx.perRecord<Diversion>({
+  const createDiversion = (record: Diversion, opVeldfouten?: OpVeldfouten): Promise<boolean> => postDiversion(record, 'Omleiding toegevoegd.', opVeldfouten);
+  // Verwijderen gaat meteen (geen bevestigingsmodal); de toast biedt 6 s
+  // "Ongedaan maken" = hetzelfde record (zelfde id) opnieuw POST …/one.
+  const deleteDiversion = (id: string): Promise<boolean> => {
+    const record = diversions.find((d) => d.id === id);
+    const verwijder = () => ctx.perRecord<Diversion>({
       key: 'diversions', label: 'Deze omleiding', method: 'DELETE', url: `/api/diversions/${encodeURIComponent(id)}`, id,
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => withoutId(prev, id),
-      refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding verwijderd.',
+      refetch: () => fetchDiversions(undefined, { silent: true }), successToast: record ? undefined : 'Omleiding verwijderd.',
     });
+    if (!record) return verwijder();
+    return metOngedaan({
+      boodschap: `Omleiding ‘${record.title}’ verwijderd.`,
+      uitvoeren: verwijder,
+      // perRecord meldt zijn eigen fouten (409/netwerk) — daarom void.
+      herstellen: async () => {
+        if (await postDiversion(record, 'Omleiding hersteld.')) await fetchDiversions(undefined, { silent: true });
+      },
+      toast: showToast,
+    });
+  };
 
   // Updates (planner/admin). Geen success-toast: de view meldt zelf
   // "gepubliceerd/bijgewerkt" (en stuurt eventueel de dringende mail).
-  const saveUpdate = (record: Update): Promise<boolean> =>
+  const saveUpdate = (record: Update, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Update>({
-      key: 'updates', label: 'Deze update', method: 'PUT', url: `/api/updates/${encodeURIComponent(record.id)}`, id: record.id, body: record,
+      key: 'updates', label: 'Deze update', method: 'PUT', url: `/api/updates/${encodeURIComponent(record.id)}`, id: record.id, body: record, opVeldfouten,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById, refetch: () => fetchUpdates(),
     });
-  const createUpdate = (record: Update): Promise<boolean> =>
+  const postUpdate = (record: Update, successToast?: string, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
     ctx.perRecord<Update>({
-      key: 'updates', label: 'Deze update', method: 'POST', url: '/api/updates/one', id: record.id, body: record,
+      key: 'updates', label: 'Deze update', method: 'POST', url: '/api/updates/one', id: record.id, body: record, opVeldfouten,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => [record, ...withoutId(prev, record.id)], applySaved: replaceById, refetch: () => fetchUpdates(),
+      successToast,
     });
-  const deleteUpdate = (id: string): Promise<boolean> =>
-    ctx.perRecord<Update>({
+  const createUpdate = (record: Update, opVeldfouten?: OpVeldfouten): Promise<boolean> => postUpdate(record, undefined, opVeldfouten);
+  // Verwijderen gaat meteen; de toast biedt 6 s "Ongedaan maken" (zelfde
+  // record opnieuw POST …/one). Zonder bekend record blijft het bij de
+  // gewone verwijdering — de view meldt dan zelf.
+  const deleteUpdate = (id: string): Promise<boolean> => {
+    const record = updates.find((u) => u.id === id);
+    const verwijder = () => ctx.perRecord<Update>({
       key: 'updates', label: 'Deze update', method: 'DELETE', url: `/api/updates/${encodeURIComponent(id)}`, id,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => withoutId(prev, id), refetch: () => fetchUpdates(),
+      successToast: record ? undefined : 'Update verwijderd.',
     });
+    if (!record) return verwijder();
+    return metOngedaan({
+      boodschap: `Update ‘${record.title}’ verwijderd.`,
+      uitvoeren: verwijder,
+      herstellen: async () => {
+        if (await postUpdate(record, 'Update hersteld.')) await fetchUpdates();
+      },
+      toast: showToast,
+    });
+  };
 
   const resetCommunicatie = () => {
     setDiversions([]);

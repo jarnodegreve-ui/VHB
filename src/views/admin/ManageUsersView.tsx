@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
-import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload, Users } from 'lucide-react';
+import { valideer } from '../../lib/valideer';
+import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
+import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload } from 'lucide-react';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
@@ -13,7 +15,8 @@ import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabel
 import { useQueryParam } from '../../app/router';
 import { InfoTip } from '../../components/InfoTip';
 import { Card, CardHeader } from '../../components/Card';
-import { Field, Input, Select } from '../../components/Field';
+import { Avatar } from '../../components/Avatar';
+import { DateInput, Field, Input, Select } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
@@ -206,6 +209,12 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   const wisFilters = () => { setRoleFilter('all'); setAlleenNooitIn(false); setAlleenNietInPlanning(false); setUserSearch(''); };
 
   const [isSubmittingUser, setIsSubmittingUser] = useState(false);
+  // Veldfouten per formulier: het gedeelde schema vóór submit én de
+  // server-veldfouten van een 400 — bij het veld (Field error), niet als toast.
+  const [nieuwFouten, setNieuwFouten] = useState<Record<string, string>>({});
+  const [bewerkFouten, setBewerkFouten] = useState<Record<string, string>>({});
+  useEffect(() => { if (showAddModal) setNieuwFouten({}); }, [showAddModal]);
+  useEffect(() => { setBewerkFouten({}); }, [editingUser?.id]);
   // Naam-botsing-poort: de planning koppelt matrixcellen aan accounts op naam
   // (accent-/volgorde-ongevoelig), en bij twee accounts op dezelfde sleutel
   // weigert de server te kiezen — de chauffeur valt dan uit maandplanning,
@@ -221,9 +230,6 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   const handleAddUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isSubmittingUser) return;
-    if (!newUser.name) return;
-    if (!newUser.email) return notify('Een e-mailadres is verplicht om te kunnen inloggen.', 'error');
-    if (newUser.password.length < WACHTWOORD_MIN) return notify(`Gebruik een tijdelijk wachtwoord van minstens ${WACHTWOORD_MIN} tekens.`, 'error');
 
     const userToAdd: UserDraft = {
       id: typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -236,6 +242,12 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
       isActive: true,
     };
 
+    // Gedeeld contract (shared/schemas/user.ts): naam, e-mail (verplicht om
+    // te kunnen inloggen), tijdelijk wachtwoord, GSM — fouten bij het veld.
+    const check = valideer(nieuweUserFormulierSchema, userToAdd);
+    if (check.ok === false) return setNieuwFouten(check.fouten);
+    setNieuwFouten({});
+
     const botsingen = vindNaamBotsingen(userToAdd.name, users);
     if (botsingen.length > 0) {
       setConfirmNaamBotsing({ melding: naamBotsingMelding(botsingen), doorgaan: () => void voerToevoegenUit(userToAdd) });
@@ -246,7 +258,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
 
   const voerToevoegenUit = async (userToAdd: UserDraft) => {
     setIsSubmittingUser(true);
-    const success = await onCreateUser(userToAdd).finally(() => setIsSubmittingUser(false));
+    const success = await onCreateUser(userToAdd, setNieuwFouten).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     setShowAddModal(false);
     setNewUser({ name: '', role: 'chauffeur', employeeId: '', password: '', phone: '', email: '' });
@@ -261,8 +273,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
     e.preventDefault();
     if (isSubmittingUser) return;
     if (!editingUser) return;
-    if (!editingUser.email) return notify('Een e-mailadres is verplicht om te kunnen inloggen.', 'error');
-    if (editingUser.password && editingUser.password.length < WACHTWOORD_MIN) return notify(`Een nieuw wachtwoord moet minstens ${WACHTWOORD_MIN} tekens hebben.`, 'error');
+    // Gedeeld contract (shared/schemas/user.ts): fouten bij het veld.
+    const check = valideer(userFormulierSchema, editingUser);
+    if (check.ok === false) return setBewerkFouten(check.fouten);
+    setBewerkFouten({});
 
     const originalUser = users.find((u) => u.id === editingUser.id);
     const isOnlyActiveAdmin = originalUser?.role === 'admin' && originalUser.isActive !== false && activeAdmins.length === 1;
@@ -284,7 +298,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   const voerBijwerkenUit = async () => {
     if (!editingUser) return;
     setIsSubmittingUser(true);
-    const success = await onSaveUser(editingUser).finally(() => setIsSubmittingUser(false));
+    const success = await onSaveUser(editingUser, setBewerkFouten).finally(() => setIsSubmittingUser(false));
     if (!success) return;
     // Vervaldata pas ná een geslaagde user-save: alleen de gewijzigde soorten.
     const bestaand = userExpiries[editingUser.id] ?? {};
@@ -657,20 +671,25 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                       />
                     </Td>
                     <Td>
-                      <div className="font-semibold text-slate-800">{u.name}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                        <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
-                        {nietInPlanning(u) && (
-                          <Badge
-                            tone="amber"
-                            icon={<CalendarOff size={12} />}
-                            title={laatsteInPlanning(u)
-                              ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
-                              : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
-                          >
-                            Niet in planning
-                          </Badge>
-                        )}
+                      <div className="flex items-start gap-2.5">
+                        <Avatar naam={u.name} size="md" className="mt-px" />
+                        <div className="min-w-0">
+                          <div className="font-semibold text-slate-800">{u.name}</div>
+                          <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                            <Badge tone={ROLE_BADGE_TONE[u.role]} className="capitalize">{u.role}</Badge>
+                            {nietInPlanning(u) && (
+                              <Badge
+                                tone="amber"
+                                icon={<CalendarOff size={12} />}
+                                title={laatsteInPlanning(u)
+                                  ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                                  : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
+                              >
+                                Niet in planning
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
                       </div>
                     </Td>
                     {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
@@ -742,6 +761,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                     label={`Selecteer ${u.name}`}
                     className={cn('-ml-3 -mt-3', isBulkProtected(u) && 'opacity-30')}
                   />
+                  <Avatar naam={u.name} size="md" />
                   <div>
                     <div className="font-semibold text-slate-800 leading-tight">{u.name}</div>
                     <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -778,14 +798,12 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           <div className="p-6">
             {filterActief ? (
               <EmptyState
-                icon={<Users size={24} />}
                 title={userSearch.trim() ? `Geen resultaten voor “${userSearch.trim()}”` : 'Geen gebruikers voor deze filter'}
                 message="Pas de zoekterm of de filters aan."
                 action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filters wissen</Button>}
               />
             ) : (
               <EmptyState
-                icon={<Users size={24} />}
                 title="Nog geen gebruikers"
                 message="Voeg een medewerker toe of importeer een Excel-bestand."
                 action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>Gebruiker toevoegen</Button>}
@@ -808,15 +826,16 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
               label="Volledige naam"
               htmlFor="nieuw-naam"
               className="sm:col-span-2"
+              error={nieuwFouten.name}
               hint={vindNaamBotsingen(newUser.name, users).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</span> : undefined}
             >
               <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} placeholder="bv. Jan Janssen" />
             </Field>
-            <Field label="Rol" htmlFor="nieuw-rol"><Select id="nieuw-rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
-            <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr"><Input id="nieuw-personeelsnr" type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} placeholder="Optioneel" /></Field>
-            <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2"><Input id="nieuw-email" type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
-            <Field label="Tijdelijk wachtwoord" htmlFor="nieuw-wachtwoord"><Input id="nieuw-wachtwoord" type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} /></Field>
-            <Field label="GSM-nummer" htmlFor="nieuw-gsm"><Input id="nieuw-gsm" type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
+            <Field label="Rol" htmlFor="nieuw-rol" error={nieuwFouten.role}><Select id="nieuw-rol" value={newUser.role} onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
+            <Field label="Personeelsnummer" htmlFor="nieuw-personeelsnr" error={nieuwFouten.employeeId}><Input id="nieuw-personeelsnr" invalid={!!nieuwFouten.employeeId} type="text" autoComplete="off" value={newUser.employeeId} onChange={(e) => setNewUser({ ...newUser, employeeId: e.target.value })} placeholder="Optioneel" /></Field>
+            <Field label="E-mailadres" htmlFor="nieuw-email" className="sm:col-span-2" error={nieuwFouten.email}><Input id="nieuw-email" invalid={!!nieuwFouten.email} type="email" autoComplete="email" inputMode="email" required value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
+            <Field label="Tijdelijk wachtwoord" htmlFor="nieuw-wachtwoord" error={nieuwFouten.password}><Input id="nieuw-wachtwoord" invalid={!!nieuwFouten.password} type="password" autoComplete="new-password" value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} placeholder={`Minstens ${WACHTWOORD_MIN} tekens`} /></Field>
+            <Field label="GSM-nummer" htmlFor="nieuw-gsm" error={nieuwFouten.phone}><Input id="nieuw-gsm" invalid={!!nieuwFouten.phone} type="tel" autoComplete="tel" inputMode="tel" value={newUser.phone} onChange={(e) => setNewUser({ ...newUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
           </div>
           <div className="flex gap-3 pt-2">
             <Button variant="ghost" className="flex-1" onClick={() => setShowAddModal(false)}>Annuleren</Button>
@@ -835,20 +854,21 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                   label="Volledige naam"
                   htmlFor="bewerk-naam"
                   className="sm:col-span-2"
+                  error={bewerkFouten.name}
                   hint={vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</span> : undefined}
                 >
                   <Input id="bewerk-naam" type="text" autoComplete="name" required value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </Field>
-                <Field label="Rol" htmlFor="bewerk-rol"><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
-                <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr"><Input id="bewerk-personeelsnr" type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} /></Field>
-                <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2"><Input id="bewerk-email" type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
-                <Field label="Nieuw wachtwoord" htmlFor="bewerk-wachtwoord"><Input id="bewerk-wachtwoord" type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} placeholder="Optioneel" /></Field>
-                <Field label="GSM-nummer" htmlFor="bewerk-gsm"><Input id="bewerk-gsm" type="tel" autoComplete="tel" inputMode="tel" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
+                <Field label="Rol" htmlFor="bewerk-rol" error={bewerkFouten.role}><Select id="bewerk-rol" value={editingUser.role} onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value as any })}><option value="chauffeur">Chauffeur</option><option value="planner">Planner</option><option value="admin">Admin</option></Select></Field>
+                <Field label="Personeelsnummer" htmlFor="bewerk-personeelsnr" error={bewerkFouten.employeeId}><Input id="bewerk-personeelsnr" invalid={!!bewerkFouten.employeeId} type="text" autoComplete="off" value={editingUser.employeeId} onChange={(e) => setEditingUser({ ...editingUser, employeeId: e.target.value })} /></Field>
+                <Field label="E-mailadres" htmlFor="bewerk-email" className="sm:col-span-2" error={bewerkFouten.email}><Input id="bewerk-email" invalid={!!bewerkFouten.email} type="email" autoComplete="email" inputMode="email" value={editingUser.email || ''} onChange={(e) => setEditingUser({ ...editingUser, email: e.target.value })} placeholder="bv. jan@voorbeeld.be" /></Field>
+                <Field label="Nieuw wachtwoord" htmlFor="bewerk-wachtwoord" error={bewerkFouten.password}><Input id="bewerk-wachtwoord" invalid={!!bewerkFouten.password} type="password" autoComplete="new-password" value={editingUser.password || ''} onChange={(e) => setEditingUser({ ...editingUser, password: e.target.value })} placeholder="Optioneel" /></Field>
+                <Field label="GSM-nummer" htmlFor="bewerk-gsm" error={bewerkFouten.phone}><Input id="bewerk-gsm" invalid={!!bewerkFouten.phone} type="tel" autoComplete="tel" inputMode="tel" value={editingUser.phone || ''} onChange={(e) => setEditingUser({ ...editingUser, phone: e.target.value })} placeholder="Optioneel" /></Field>
                 {editingUser.role === 'chauffeur' && (
-                  <Field label="Sectie (maandplanning)" htmlFor="bewerk-sectie"><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
+                  <Field label="Sectie (maandplanning)" htmlFor="bewerk-sectie" error={bewerkFouten.section}><Select id="bewerk-sectie" value={editingUser.section || ''} onChange={(e) => setEditingUser({ ...editingUser, section: e.target.value || undefined })}><option value="">Geen sectie</option><option value="Reguliere">Reguliere</option><option value="Nacht">Nacht</option><option value="Flexi">Flexi</option><option value="Schoolvervoer">Schoolvervoer</option></Select></Field>
                 )}
-                <Field label="In dienst sinds" htmlFor="bewerk-startdatum" hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><Input id="bewerk-startdatum" type="date" value={editingUser.startDate || ''} onChange={(e) => setEditingUser({ ...editingUser, startDate: e.target.value || undefined })} /></Field>
-                <Field label="Verlofbudget (dagen)" htmlFor="bewerk-verlofbudget" className="sm:col-span-2" hint="Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).">
+                <Field label="In dienst sinds" htmlFor="bewerk-startdatum" error={bewerkFouten.startDate} hint="Bepaalt de anciënniteit-volgorde binnen een sectie in de Maandplanning."><DateInput id="bewerk-startdatum" invalid={Boolean(bewerkFouten.startDate)} value={editingUser.startDate || ''} onChange={(v) => setEditingUser({ ...editingUser, startDate: v || undefined })} /></Field>
+                <Field label="Verlofbudget (dagen)" htmlFor="bewerk-verlofbudget" className="sm:col-span-2" error={bewerkFouten.verlofBudget} hint="Vul in om af te wijken van de standaard 24 dagen (bv. anciënniteits-toeslag, deeltijds).">
                   <Input
                     id="bewerk-verlofbudget"
                     type="number"
@@ -868,11 +888,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                     <div className="grid gap-3 sm:grid-cols-3">
                       {Object.entries(EXPIRY_SOORT_LABELS).map(([soort, label]) => (
                         <Field key={soort} label={label} htmlFor={`bewerk-verval-${soort}`}>
-                          <Input
+                          <DateInput
                             id={`bewerk-verval-${soort}`}
-                            type="date"
                             value={vervalDraft[soort] ?? ''}
-                            onChange={(e) => setVervalDraft((d) => ({ ...d, [soort]: e.target.value }))}
+                            onChange={(v) => setVervalDraft((d) => ({ ...d, [soort]: v }))}
                           />
                         </Field>
                       ))}

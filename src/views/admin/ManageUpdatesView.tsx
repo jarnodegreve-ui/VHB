@@ -4,10 +4,12 @@ import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
-import { ConfirmationModal, EmptyState, PageHeader, PageShell } from '../../components/ui';
+import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, IconButton, Switch } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Textarea } from '../../components/Field';
+import { valideer } from '../../lib/valideer';
+import { updateSchema } from '../../../shared/schemas/update';
 import { InfoTip } from '../../components/InfoTip';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 import { DetailPaneel, MasterDetail } from '../../components/DetailPaneel';
@@ -28,8 +30,8 @@ export function ManageUpdatesView({
    *  per-record-savers hieronder niet doorgegeven zijn. */
   onSave: (u: Update[]) => Promise<boolean>;
   /** Per record (PUT/POST one/DELETE, useAppData). Optioneel tot App ze doorgeeft. */
-  onSaveUpdate?: (u: Update) => Promise<boolean>;
-  onCreateUpdate?: (u: Update) => Promise<boolean>;
+  onSaveUpdate?: (u: Update, opVeldfouten?: (fouten: Record<string, string>) => void) => Promise<boolean>;
+  onCreateUpdate?: (u: Update, opVeldfouten?: (fouten: Record<string, string>) => void) => Promise<boolean>;
   onDeleteUpdate?: (id: string) => Promise<boolean>;
   onSendUrgentEmail: (u: Update) => Promise<void>;
   canSendUrgentEmail: boolean;
@@ -37,6 +39,8 @@ export function ManageUpdatesView({
   const emptyUpdateForm = { title: '', category: 'algemeen', content: '', isUrgent: false };
   const [updateForm, setUpdateForm] = useState(emptyUpdateForm);
   const [isPublishing, setIsPublishing] = useState(false);
+  // Veldfouten: gedeeld schema vóór submit + server-veldfouten van een 400.
+  const [fouten, setFouten] = useState<Record<string, string>>({});
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   // Het bewerkformulier leeft in het DetailPaneel: desktop naast de lijst,
@@ -62,7 +66,6 @@ export function ManageUpdatesView({
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!updateForm.title || !updateForm.content) return;
 
     setIsPublishing(true);
     const updateToSave: Update = {
@@ -76,10 +79,19 @@ export function ManageUpdatesView({
       isUrgent: updateForm.isUrgent,
     };
 
+    // Gedeeld contract (shared/schemas/update.ts): fouten bij het veld.
+    const check = valideer(updateSchema, updateToSave);
+    if (check.ok === false) {
+      setFouten(check.fouten);
+      setIsPublishing(false);
+      return;
+    }
+    setFouten({});
+
     // Per record als App de savers doorgeeft; anders de hele lijst (terugval).
     const perRecord = editingId ? onSaveUpdate : onCreateUpdate;
     const success = perRecord
-      ? await perRecord(updateToSave)
+      ? await perRecord(updateToSave, setFouten)
       : await onSave(
         editingId
           ? updates.map((update) => update.id === editingId ? updateToSave : update)
@@ -103,6 +115,7 @@ export function ManageUpdatesView({
   const handleOpenAdd = () => {
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
+    setFouten({});
     setPaneelOpen(true);
   };
 
@@ -114,6 +127,7 @@ export function ManageUpdatesView({
       content: update.content,
       isUrgent: Boolean(update.isUrgent),
     });
+    setFouten({});
     setPaneelOpen(true);
   };
 
@@ -121,17 +135,17 @@ export function ManageUpdatesView({
     setPaneelOpen(false);
     setEditingId(null);
     setUpdateForm(emptyUpdateForm);
+    setFouten({});
   };
 
-  // Eén misklik naast 'Bewerk' verwijderde een update direct en definitief —
-  // nu eerst bevestigen, zoals in alle andere beheer-views.
-  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-
+  // Geen bevestigingsmodal meer: verwijderen gaat meteen en de datalaag
+  // toont 6 s een toast met "Ongedaan maken" (idee 1 Jarno, 03-09). Alleen
+  // de collectie-terugval (zonder onDeleteUpdate) meldt hier nog zelf.
   const handleDelete = async (id: string) => {
     setDeletingId(id);
     const success = onDeleteUpdate ? await onDeleteUpdate(id) : await onSave(updates.filter((update) => update.id !== id));
     if (success) {
-      notify('Update verwijderd.', 'success');
+      if (!onDeleteUpdate) notify('Update verwijderd.', 'success');
       if (id === editingId) handleCancelEdit();
     } else if (!onDeleteUpdate) {
       notify('Update kon niet worden verwijderd.', 'error');
@@ -222,7 +236,7 @@ export function ManageUpdatesView({
           {bewerkte && (
             <>
               <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setHistoryUpdate(bewerkte)}><History size={16} /></IconButton>
-              <IconButton label="Verwijder" variant="danger" disabled={deletingId === bewerkte.id} onClick={() => setConfirmDeleteId(bewerkte.id)}><Trash2 size={16} /></IconButton>
+              <IconButton label="Verwijder" variant="danger" disabled={deletingId === bewerkte.id} onClick={() => { void handleDelete(bewerkte.id); }}><Trash2 size={16} /></IconButton>
             </>
           )}
           <Button variant="secondary" size="lg" className="flex-1" onClick={handleCancelEdit}>
@@ -239,13 +253,14 @@ export function ManageUpdatesView({
       <form id={FORM_ID} onSubmit={handlePublish} className="space-y-5">
         {bewerkte && gelezenBadge(bewerkte) ? <div>{gelezenBadge(bewerkte)}</div> : null}
 
-        <Field label="Titel" htmlFor="update-titel">
-          <Input id="update-titel" type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
+        <Field label="Titel" htmlFor="update-titel" error={fouten.title}>
+          <Input id="update-titel" invalid={!!fouten.title} type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
         </Field>
 
-        <Field label="Inhoud" htmlFor="update-inhoud">
+        <Field label="Inhoud" htmlFor="update-inhoud" error={fouten.content}>
           <Textarea
             id="update-inhoud"
+            invalid={!!fouten.content}
             rows={7}
             className="min-h-[180px]"
             placeholder="Schrijf hier het bericht voor de chauffeurs…"
@@ -300,15 +315,6 @@ export function ManageUpdatesView({
         entityType="update"
         entityId={historyUpdate?.id ?? ''}
         title={historyUpdate?.title}
-      />
-
-      <ConfirmationModal
-        isOpen={!!confirmDeleteId}
-        onClose={() => setConfirmDeleteId(null)}
-        onConfirm={() => { if (confirmDeleteId) handleDelete(confirmDeleteId); }}
-        title="Update verwijderen?"
-        message="Deze update verdwijnt definitief voor alle chauffeurs. Dit kan niet ongedaan gemaakt worden."
-        confirmText="Verwijderen"
       />
     </PageShell>
   );

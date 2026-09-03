@@ -4131,3 +4131,93 @@ describe('per-record API (PUT / POST one / DELETE) — gebruikers, omleidingen, 
     });
   });
 });
+
+describe('gedeelde zod-contracten (shared/schemas): 400 met veldfouten', () => {
+  const REV = 'x-record-revision';
+  const revVan = async (pad: string, token: string, id: string): Promise<string> => {
+    const res = await api('GET', pad, { token });
+    return res.json.find((r: any) => String(r.id) === id)._rev as string;
+  };
+
+  it('POST /api/users/one: ongeldige e-mail → veldfouten.email (NL) + details, niets opgeslagen', async () => {
+    const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'Nieuw', email: 'nieuw@', role: 'chauffeur' } });
+    expect(res.status).toBe(400);
+    expect(res.json).toEqual({
+      error: 'Ongeldige invoer',
+      details: 'e-mailadres: Vul een geldig e-mailadres in',
+      veldfouten: { email: 'Vul een geldig e-mailadres in' },
+    });
+    expect(mem.users).toHaveLength(4);
+  });
+
+  it('POST /api/users/one: meerdere fouten tegelijk, elk bij zijn veld', async () => {
+    const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: '', role: 'baas', phone: 'bel me', password: 'kort', startDate: '1-1-2020' } });
+    expect(res.status).toBe(400);
+    expect(res.json.veldfouten).toEqual({
+      name: 'Vul een naam in',
+      role: 'Kies een rol',
+      phone: 'Vul een geldig telefoonnummer in',
+      password: 'Gebruik een wachtwoord van minstens 10 tekens',
+      startDate: 'Vul een datum in als JJJJ-MM-DD',
+    });
+  });
+
+  it('PUT /api/users/:id: veldfouten gaan vóór de revisie-check en wijzigen niets', async () => {
+    const rev = await revVan('/api/users', 'tok-admin', '3');
+    const res = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2], verlofBudget: -3 }, headers: { [REV]: rev } });
+    expect(res.status).toBe(400);
+    expect(res.json.veldfouten).toEqual({ verlofBudget: 'Verlofbudget kan niet negatief zijn' });
+    expect(mem.users.find((u: any) => u.id === '3')?.verlofBudget).toBeUndefined();
+    // Zonder revisie-header maar mét geldige body blijft de bestaande 400 (header ontbreekt).
+    const zonder = await api('PUT', '/api/users/3', { token: 'tok-admin', body: { ...mem.users[2] } });
+    expect(zonder.status).toBe(400);
+    expect(zonder.json.veldfouten).toBeUndefined();
+  });
+
+  it('POST /api/users (lijst): rij-fout → veldfouten["<rij>.<veld>"] en details noemt de rij', async () => {
+    const res = await api('POST', '/api/users', {
+      token: 'tok-admin',
+      body: [...mem.users, { id: '9', name: 'Nieuwe Collega', email: 'nieuw@vhb.be', role: 'chauffeur', isActive: true, password: 'kort' }],
+    });
+    expect(res.status).toBe(400);
+    expect(res.json.veldfouten).toEqual({ '4.password': 'Gebruik een wachtwoord van minstens 10 tekens' });
+    expect(res.json.details).toBe('Rij 5 (Nieuwe Collega): wachtwoord: Gebruik een wachtwoord van minstens 10 tekens');
+    expect(mem.users).toHaveLength(4);
+  });
+
+  it('POST /api/diversions/one: einddatum vóór startdatum → veldfouten.endDate', async () => {
+    const res = await api('POST', '/api/diversions/one', { token: 'tok-planner', body: { line: '1', title: 'X', description: 'y', startDate: '2026-09-10', endDate: '2026-09-01' } });
+    expect(res.status).toBe(400);
+    expect(res.json.veldfouten).toEqual({ endDate: 'Einddatum ligt vóór begindatum' });
+    expect(res.json.details).toBe('einddatum: Einddatum ligt vóór begindatum');
+    expect(mem.diversions).toHaveLength(0);
+  });
+
+  it('PUT /api/diversions/:id: ongeldige startdatum → veldfouten.startDate, record ongewijzigd', async () => {
+    mem.diversions = [{ id: 'o-1', line: '12', title: 'Werken N70', description: 'Omrijden via …', startDate: '2026-07-01' }];
+    const rev = await revVan('/api/diversions', 'tok-planner', 'o-1');
+    const res = await api('PUT', '/api/diversions/o-1', { token: 'tok-planner', body: { ...mem.diversions[0], startDate: '2026-02-30' }, headers: { [REV]: rev } });
+    expect(res.status).toBe(400);
+    expect(res.json.veldfouten).toEqual({ startDate: 'Vul een startdatum in als JJJJ-MM-DD' });
+    expect(mem.diversions[0].startDate).toBe('2026-07-01');
+  });
+
+  it('POST /api/updates/one: lege inhoud → veldfouten.content; POST /api/updates (lijst): onbekende categorie → 400, niets gewist', async () => {
+    const een = await api('POST', '/api/updates/one', { token: 'tok-planner', body: { date: '2026-09-03', title: 'X', content: '   ' } });
+    expect(een.status).toBe(400);
+    expect(een.json.veldfouten).toEqual({ content: 'Schrijf een bericht' });
+    expect(mem.updates).toHaveLength(6);
+
+    const lijst = await api('POST', '/api/updates', { token: 'tok-planner', body: [{ ...mem.updates[0], category: 'geheim' }, ...mem.updates.slice(1)] });
+    expect(lijst.status).toBe(400);
+    expect(lijst.json.veldfouten).toEqual({ '0.category': 'Onbekende categorie' });
+    expect(lijst.json.details).toBe('Rij 1 (Update 1): categorie: Onbekende categorie');
+    expect(mem.updates).toHaveLength(6);
+  });
+
+  it('bestaande 409-paden blijven: geldige body, bezet e-mailadres → 409 (geen 400)', async () => {
+    const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'Dubbel', email: 'a@vhb.be' } });
+    expect(res.status).toBe(409);
+    expect(res.json.conflict).toBe('email');
+  });
+});

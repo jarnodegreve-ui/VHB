@@ -12,7 +12,7 @@ import { OpsStat } from '../../components/ops';
 import { SkeletonTile } from '../../components/Skeleton';
 import { Badge, Button, IconButton, MicroLabel, microLabelClass, segItemClass, type BadgeTone } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
-import { Input } from '../../components/Field';
+import { DateInput } from '../../components/Field';
 import { MaandNavigatie } from '../../components/MaandNavigatie';
 
 /** Termijn-schakelaar in exact de app-standaard segmented-maat (rail
@@ -1044,27 +1044,25 @@ export function OcpiDashboardView() {
                     />
                   ) : (
                     // Vrije periode: twee datumvelden, begrensd op de eerste dag
-                    // met sessies en vandaag. Volgorde-fouten worden stil
-                    // rechtgezet (zie zetVan/zetTot) i.p.v. met een foutmelding.
+                    // met sessies en vandaag; de kiezers klemmen elkaar (van ≤
+                    // tot) en zetVan/zetTot vangen de rest stil op.
                     <div className="flex items-center gap-2" role="group" aria-label="Periodekeuze">
-                      <Input
-                        type="date"
+                      <DateInput
+                        size="sm"
                         value={periodeGekozen.van}
                         min={verbruik?.eersteDag ?? undefined}
-                        max={vandaag}
-                        onChange={(e) => zetVan(e.target.value)}
+                        max={periodeGekozen.tot || vandaag}
+                        onChange={zetVan}
                         aria-label="Van"
-                        className="w-auto px-3 py-2"
                       />
                       <span className="text-xs font-medium text-slate-500">t/m</span>
-                      <Input
-                        type="date"
+                      <DateInput
+                        size="sm"
                         value={periodeGekozen.tot}
-                        min={verbruik?.eersteDag ?? undefined}
+                        min={periodeGekozen.van || verbruik?.eersteDag || undefined}
                         max={vandaag}
-                        onChange={(e) => zetTot(e.target.value)}
+                        onChange={zetTot}
                         aria-label="Tot en met"
-                        className="w-auto px-3 py-2"
                       />
                     </div>
                   )}
@@ -1155,7 +1153,7 @@ export function OcpiDashboardView() {
           <div>
             <CardHeader size="lg" title="Storingen (ChargEye)" />
             {storingen.length === 0 ? (
-              <EmptyState title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
+              <EmptyState variant="klaar" title="Geen storingen" message="Alle laadpunten en laadbeurten van de afgelopen 7 dagen zijn in orde." />
             ) : (
               <Card padding="none" className="overflow-hidden">
                 <div className="divide-y divide-slate-100">

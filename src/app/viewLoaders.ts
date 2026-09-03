@@ -37,6 +37,7 @@ export const VIEW_LOADERS: Record<View, () => Promise<unknown>> = {
   'ocpi-monitoring': () => import('../views/admin/OcpiDashboardView'),
   'beheer-debug': () => import('../views/admin/DebugView'),
   instellingen: () => import('../views/InstellingenView'),
+  designsysteem: () => import('../views/admin/DesignsysteemView'),
 };
 
 const ZWAAR: ReadonlySet<View> = new Set<View>(['beheer-roosters', 'beheer-dienstoverzicht', 'gebruikers']);

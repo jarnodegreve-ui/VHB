@@ -38,7 +38,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import type { Session } from '@supabase/supabase-js';
 import { View, User } from './types';
 import { isSupabaseConfigured, supabase } from './lib/supabase';
-import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema } from './lib/ui';
+import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema, type ToastEventDetail } from './lib/ui';
 import { apiFetch, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { VIEW_LOADERS, prefetchView } from './app/viewLoaders';
@@ -49,7 +49,7 @@ import { usePullToRefresh } from './lib/usePullToRefresh';
 import { ViewLoader } from './components/ui';
 import { IconButton, MicroLabel } from './components/primitives';
 import { Card } from './components/Card';
-import { Toast, ToastStack } from './components/ToastStack';
+import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
@@ -61,6 +61,8 @@ import { CommandPalette, useCommandPaletteShortcut } from './components/CommandP
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
 import { useRealtimeSync } from './lib/realtime';
+import { SpeedInsights } from '@vercel/speed-insights/react';
+import { WatIsNieuwKaart } from './components/WatIsNieuwKaart';
 // Planner/admin-views lazy: chauffeurs (de bulk van de gebruikers) laden zo
 // géén beheer-code en vooral géén xlsx-bundel (~430 kB) bij het opstarten —
 // die zit alleen in ManageSchedules/ManageServices/Reports/ManageUsers.
@@ -96,6 +98,7 @@ const LazySwapRequestsView = lazyWithRetry(() => VIEW_LOADERS['ruil-verzoeken'](
 const LazyRitblaadjesView = lazyWithRetry(() => VIEW_LOADERS['ritblaadjes']().then((m) => ({ default: (m as typeof import('./views/RitblaadjesView')).RitblaadjesView })));
 const LazyDocumentsView = lazyWithRetry(() => VIEW_LOADERS['documenten']().then((m) => ({ default: (m as typeof import('./views/DocumentsView')).DocumentsView })));
 const LazyCapacityView = lazyWithRetry(() => VIEW_LOADERS['bezetting']().then((m) => ({ default: (m as typeof import('./views/CapacityView')).CapacityView })));
+const LazyDesignsysteemView = lazyWithRetry(() => VIEW_LOADERS['designsysteem']().then((m) => ({ default: (m as typeof import('./views/admin/DesignsysteemView')).DesignsysteemView })));
 const LazyInstellingenView = lazyWithRetry(() => VIEW_LOADERS['instellingen']().then((m) => ({ default: (m as typeof import('./views/InstellingenView')).InstellingenView })));
 const LazyPlannerDashboardWidgets = lazyWithRetry(() => import('./views/PlannerDashboardWidgets').then((module) => ({ default: module.PlannerDashboardWidgets })));
 const LazyServicesView = lazyWithRetry(() => import('./views/ServicesView').then((module) => ({ default: module.ServicesView })));
@@ -195,7 +198,7 @@ export default function App() {
     session,
     currentUser,
     currentView,
-    showToast: (m, t, a) => showToast(m, t, a),
+    showToast: (m, t, a, o) => showToast(m, t, a, o),
     meldLaadfout: (b) => meldLaadfout(b),
     beginLoading,
     endLoading,
@@ -502,7 +505,7 @@ export default function App() {
     setToasts((current) => current.filter((toast) => toast.id !== id));
   };
 
-  const showToast = (message: string, tone: Toast['tone'] = 'info', action?: Toast['action']) => {
+  const showToast = (message: string, tone: Toast['tone'] = 'info', action?: Toast['action'], opties?: ToastOpties) => {
     // Sessie loopt af: de catch-blokken van alle lopende calls komen hier
     // tegelijk binnen ("Kon de verlofaanvragen niet laden", "…de dienstruilen
     // niet laden", …). Dat waren vijf rode toasts én vijf regels in de
@@ -513,17 +516,22 @@ export default function App() {
     // anders blijven afgehandelde fouten (catch-blokken) onzichtbaar.
     if (tone === 'error') reportHandledError(message);
     const id = ++toastIdRef.current;
+    const ongedaan = opties?.ongedaan === true;
     setToasts((current) => {
       // Dezelfde melding niet stapelen: twee schermen die dezelfde bron
-      // ophalen gaven anders twee identieke toasts onder elkaar.
-      if (current.some((t) => t.message === message && t.tone === tone)) return current;
-      return [...current, { id, message, tone, action }];
+      // ophalen gaven anders twee identieke toasts onder elkaar. Ongedaan-
+      // toasts wél: twee snel na elkaar verwijderde items hebben elk hun
+      // eigen weg terug nodig.
+      if (!ongedaan && current.some((t) => t.message === message && t.tone === tone)) return current;
+      return [...current, { id, message, tone, action, ongedaan, duurMs: opties?.duurMs }];
     });
+    // Ongedaan-toasts tellen zelf af in ToastStack (pauze bij hover/focus).
+    if (ongedaan) return;
     // Fout-toasts bevatten vaak instructies ("probeer opnieuw") — die moeten
     // lang genoeg blijven staan om rustig te lezen. Succes/info mag snel weg.
     window.setTimeout(() => {
       setToasts((current) => current.filter((toast) => toast.id !== id));
-    }, tone === 'error' ? 10000 : 4200);
+    }, opties?.duurMs ?? (tone === 'error' ? 10000 : 4200));
   };
 
   /**
@@ -660,8 +668,8 @@ export default function App() {
 
   useEffect(() => {
     const handler = (event: Event) => {
-      const customEvent = event as CustomEvent<{ message: string; tone?: Toast['tone'] }>;
-      showToast(customEvent.detail.message, customEvent.detail.tone);
+      const { detail } = event as CustomEvent<ToastEventDetail>;
+      showToast(detail.message, detail.tone, detail.action, detail.opties);
     };
 
     window.addEventListener('vhb-toast', handler as EventListener);
@@ -1151,6 +1159,8 @@ export default function App() {
       <div className="parallax-bg" aria-hidden="true" />
 
       <ToastStack toasts={toasts} onDismiss={dismissToast} />
+      {/* Web-vitals (LCP/INP/CLS) per scherm naar Vercel Speed Insights; route = view-naam, niet de URL met parameters. */}
+      <SpeedInsights route={`/${resolvedCurrentView}`} />
       <OfflineBanner />
       <InstallPrompt />
       <ChangePasswordModal
@@ -1429,6 +1439,7 @@ export default function App() {
                   /* Planner/admin: Operations Center — één operationele cockpit
                      i.p.v. een dubbel dashboard. */
                   <Suspense fallback={<ViewLoader />}>
+                  <WatIsNieuwKaart rol={currentUser!.role} onNavigate={setCurrentView} className="mb-5" />
                   {/* Data (collecties, ziekmelding, verversen) leest de
                       cockpit zelf uit de AppDataContext. */}
                   <LazyPlannerDashboardWidgets
@@ -1534,6 +1545,7 @@ export default function App() {
                   />
                 </Suspense>
               ))}
+              {resolvedCurrentView === 'designsysteem' && <LazyDesignsysteemView />}
               {resolvedCurrentView === 'instellingen' && (
                 <LazyInstellingenView
                   user={currentUser}

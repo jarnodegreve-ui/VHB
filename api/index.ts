@@ -24,6 +24,11 @@ import { mountDeviceRoutes } from "./deviceRoutes.js";
 import { mountTelegramRoutes, stuurTelegram, telegramGeconfigureerd, formatGaten, formatVandaag, formatZiek, DAG_KORT, meldVerlofAanvraagTelegram, meldRuilTerValidatieTelegram } from "./telegram.js";
 import { mountCoverageRoutes, berekenDekkingsGaten, berekenVerwachtingsCheck, berekenCoverageAdvies } from "./coverageRoutes.js";
 import { invalidateUsersCache } from "./userCache.js";
+// Gedeelde API-contracten (zod) — zelfde schemas als de formulieren in src/.
+import { userBodySchema, userLijstSchema, WACHTWOORD_MIN } from "../shared/schemas/user.js";
+import { diversionBodySchema, diversionLijstSchema } from "../shared/schemas/diversion.js";
+import { updateBodySchema, updateLijstSchema } from "../shared/schemas/update.js";
+import { valideerLijst, valideerRecord } from "./_lib/valideer.js";
 import {
   RECORD_REVISION_HEADER,
   recordRevisionOf,
@@ -130,11 +135,8 @@ if (!process.env.CALENDAR_FEED_SECRET) {
   console.warn("[config] CALENDAR_FEED_SECRET ontbreekt — de agenda-feed is uitgeschakeld. Zet hem in de env om abonneren weer mogelijk te maken.");
 }
 
-/** Wachtwoordminimum, gespiegeld in de client (src/lib/wachtwoord.ts). 10
- *  i.p.v. 6: het wachtwoord alleen geeft toegang tot Supabase Auth
- *  (controle-ronde 27-08, bevinding 32). Supabase' eigen minimum staat in
- *  het dashboard (Auth → Password) en hoort hier niet onder te liggen. */
-const WACHTWOORD_MIN = 10;
+// Wachtwoordminimum (WACHTWOORD_MIN) komt uit shared/schemas/user.ts — één
+// bron voor client én server.
 
 /** Deeplink-URL voor een push-melding: de app opent op die pagina i.p.v. op
  *  het dashboard (controle-ronde 27-08, voorstel 44; zie src/lib/deeplink.ts). */
@@ -2107,13 +2109,11 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
-      // Wachtwoordminimum ook server-side (stond alleen in de UI): het
-      // wachtwoord alleen geeft toegang tot Supabase Auth, dus 6 tekens was te
-      // weinig (controle-ronde 27-08, bevinding 32). Leeg = geen wijziging.
-      const teKort = newData.find((u: any) => typeof u?.password === "string" && u.password.length > 0 && u.password.length < WACHTWOORD_MIN);
-      if (teKort) {
-        return res.status(400).json({ error: `Een wachtwoord moet minstens ${WACHTWOORD_MIN} tekens hebben.` });
-      }
+      // Gedeeld contract (shared/schemas/user.ts) — o.a. het wachtwoord-
+      // minimum, dat ooit alleen in de UI stond (controle-ronde 27-08,
+      // bevinding 32). 400 met veldfouten per rij; de data zelf gaat
+      // ongewijzigd door (sanitizeIncomingUser normaliseert al).
+      if (!valideerLijst(res, userLijstSchema, newData, (u: any) => u?.name)) return;
       const previousUsers = await getUsersData();
       // Revisie-check: twee admin-sessies die tegelijk bewerken overschreven
       // elkaar anders stil — en saveUsersData doet onomkeerbare Auth-deletes.
@@ -2158,17 +2158,8 @@ const isPlainRecord = (body: unknown): body is Record<string, unknown> =>
   !!body && typeof body === "object" && !Array.isArray(body);
 const newRecordId = () => crypto.randomUUID();
 
-/** Validatie die de collectie-POST ook doet (wachtwoordminimum) plus de
- *  basis van één record: naam en een geldig e-mailadres als er één is. */
-const validateUserRecord = (body: Record<string, unknown>): string | null => {
-  if (typeof body.name !== "string" || body.name.trim().length === 0) return "Naam ontbreekt.";
-  if (typeof body.password === "string" && body.password.length > 0 && body.password.length < WACHTWOORD_MIN) {
-    return `Een wachtwoord moet minstens ${WACHTWOORD_MIN} tekens hebben.`;
-  }
-  const email = normalizeEmail(typeof body.email === "string" ? body.email : undefined);
-  if (email && !email.includes("@")) return "Ongeldig e-mailadres.";
-  return null;
-};
+// Veldvalidatie (naam, e-mail, wachtwoordminimum, …) zit in het gedeelde
+// contract: userBodySchema via valideerRecord → 400 met veldfouten.
 /** Zelfde vangrail als saveUsersData, maar als nette 400 i.p.v. een 500. */
 const laatsteAdminVerdwijnt = (users: IncomingUser[]) => countAdmins(users.map(sanitizeIncomingUser)) === 0;
 const emailInGebruik = (users: AppUser[], email: string | undefined, eigenId: string) =>
@@ -2182,8 +2173,7 @@ app.post("/api/users/one", authenticate, requireRole("admin"), async (req: Authe
   try {
     const body = req.body;
     if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één gebruiker verwacht." });
-    const fout = validateUserRecord(body);
-    if (fout) return res.status(400).json({ error: fout });
+    if (!valideerRecord(res, userBodySchema, body)) return;
     const id = typeof body.id === "string" && body.id.trim() ? body.id.trim() : newRecordId();
     const previousUsers = await getUsersData();
     if (previousUsers.some((u) => String(u.id) === id)) {
@@ -2206,8 +2196,7 @@ app.put("/api/users/:id", authenticate, requireRole("admin"), async (req: Authen
     const id = String(req.params.id);
     const body = req.body;
     if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één gebruiker verwacht." });
-    const fout = validateUserRecord(body);
-    if (fout) return res.status(400).json({ error: fout });
+    if (!valideerRecord(res, userBodySchema, body)) return;
     const rev = requestedRecordRevision(req);
     if (!rev) return recordRevisionMissingResponse(res);
     const previousUsers = await getUsersData();
@@ -3073,6 +3062,8 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
   try {
     const newData = req.body;
     if (Array.isArray(newData)) {
+      // Gedeeld contract (shared/schemas/diversion.ts): 400 met veldfouten per rij.
+      if (!valideerLijst(res, diversionLijstSchema, newData, (d: any) => d?.title)) return;
       const previousDiversions = await getDiversionsData();
       if (revisionConflict(req, previousDiversions)) return revisionConflictResponse(res, "De omleidingen");
       const diversionsRemoved = detectMassDelete(previousDiversions, newData);
@@ -3093,12 +3084,8 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
 });
 
 // --- Omleidingen per record ---
-const validateDiversionRecord = (body: Record<string, unknown>): string | null => {
-  if (typeof body.title !== "string" || body.title.trim().length === 0) return "Titel ontbreekt.";
-  if (typeof body.startDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.startDate)) return "Startdatum ontbreekt of is ongeldig (JJJJ-MM-DD).";
-  if (body.endDate !== undefined && body.endDate !== null && body.endDate !== "" && (typeof body.endDate !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(body.endDate))) return "Einddatum is ongeldig (JJJJ-MM-DD).";
-  return null;
-};
+// Veldvalidatie (titel, datums, einddatum ≥ startdatum) zit in het gedeelde
+// contract: diversionBodySchema via valideerRecord → 400 met veldfouten.
 const diversionResponseRecord = async (id: string) => {
   const raw = (await getDiversionsData()).find((d: any) => String(d.id) === id);
   if (!raw) return null;
@@ -3110,8 +3097,7 @@ app.post("/api/diversions/one", authenticate, requireRole("planner", "admin"), a
   try {
     const body = req.body;
     if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één omleiding verwacht." });
-    const fout = validateDiversionRecord(body);
-    if (fout) return res.status(400).json({ error: fout });
+    if (!valideerRecord(res, diversionBodySchema, body)) return;
     const id = typeof body.id === "string" && body.id.trim() ? body.id.trim() : newRecordId();
     const previousDiversions = await getDiversionsData();
     if (previousDiversions.some((d: any) => String(d.id) === id)) {
@@ -3131,8 +3117,7 @@ app.put("/api/diversions/:id", authenticate, requireRole("planner", "admin"), as
     const id = String(req.params.id);
     const body = req.body;
     if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één omleiding verwacht." });
-    const fout = validateDiversionRecord(body);
-    if (fout) return res.status(400).json({ error: fout });
+    if (!valideerRecord(res, diversionBodySchema, body)) return;
     const rev = requestedRecordRevision(req);
     if (!rev) return recordRevisionMissingResponse(res);
     const previousDiversions = await getDiversionsData();
@@ -3357,6 +3342,8 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
     if (!Array.isArray(newData)) {
       return res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
+    // Gedeeld contract (shared/schemas/update.ts): 400 met veldfouten per rij.
+    if (!valideerLijst(res, updateLijstSchema, newData, (u: any) => u?.title)) return;
     const previousUpdates = await getUpdatesData();
     if (revisionConflict(req, previousUpdates)) return revisionConflictResponse(res, "De updates");
     const updatesRemoved = detectMassDelete(previousUpdates, newData);
@@ -3372,11 +3359,8 @@ app.post("/api/updates", authenticate, requireRole("planner", "admin"), async (r
 });
 
 // --- Updates per record ---
-const validateUpdateRecord = (body: Record<string, unknown>): string | null => {
-  if (typeof body.title !== "string" || body.title.trim().length === 0) return "Titel ontbreekt.";
-  if (typeof body.content !== "string" || body.content.trim().length === 0) return "Inhoud ontbreekt.";
-  return null;
-};
+// Veldvalidatie (titel, inhoud, datum) zit in het gedeelde contract:
+// updateBodySchema via valideerRecord → 400 met veldfouten.
 const updateResponseRecord = async (id: string) => {
   const u = (await getUpdatesData()).find((x: any) => String(x.id) === id);
   return u ? withRecordRevision(u, recordRevisionOf(u)) : null;
@@ -3386,8 +3370,7 @@ app.post("/api/updates/one", authenticate, requireRole("planner", "admin"), asyn
   try {
     const body = req.body;
     if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één update verwacht." });
-    const fout = validateUpdateRecord(body);
-    if (fout) return res.status(400).json({ error: fout });
+    if (!valideerRecord(res, updateBodySchema, body)) return;
     const id = typeof body.id === "string" && body.id.trim() ? body.id.trim() : newRecordId();
     const previousUpdates = await getUpdatesData();
     if (previousUpdates.some((u: any) => String(u.id) === id)) {
@@ -3408,8 +3391,7 @@ app.put("/api/updates/:id", authenticate, requireRole("planner", "admin"), async
     const id = String(req.params.id);
     const body = req.body;
     if (!isPlainRecord(body)) return res.status(400).json({ error: "Ongeldig formaat: één update verwacht." });
-    const fout = validateUpdateRecord(body);
-    if (fout) return res.status(400).json({ error: fout });
+    if (!valideerRecord(res, updateBodySchema, body)) return;
     const rev = requestedRecordRevision(req);
     if (!rev) return recordRevisionMissingResponse(res);
     const previousUpdates = await getUpdatesData();

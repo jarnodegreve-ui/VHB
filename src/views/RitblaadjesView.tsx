@@ -252,7 +252,6 @@ export function RitblaadjesView({ currentUser }: { currentUser: User }) {
         </Card>
       ) : !current ? (
         <EmptyState
-          icon={<FileText size={24} />}
           title="Nog geen ritblad beschikbaar"
           message={canEdit ? 'Upload een PDF om te delen met alle chauffeurs.' : 'Zodra er een nieuw ritblad is, verschijnt het hier.'}
         />
