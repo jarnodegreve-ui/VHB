@@ -85,7 +85,7 @@ jobs:
   visueel:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     env:
       # Zelfde dummy-env als de e2e-build: anders rendert de app de
       # "configuratie ontbreekt"-melding i.p.v. de schermen.
