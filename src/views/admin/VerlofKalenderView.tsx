@@ -1,4 +1,4 @@
-import { Fragment, useState } from 'react';
+import { Fragment, useEffect, useState } from 'react';
 import { typedagLabel } from '../../lib/typedag';
 import { CalendarOff, ChevronLeft, ChevronRight, Printer, Users } from 'lucide-react';
 import type { LeaveRequest, User } from '../../types';
@@ -10,6 +10,19 @@ import { Card } from '../../components/Card';
 import { Button, FilterChip, MicroLabel, microLabelClass, TableShell, Td, Th } from '../../components/primitives';
 import { SortTh, TableToolbar, useSort } from '../../components/Table';
 import { MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/format';
+import { useRouteParam } from '../../app/router';
+
+/** Maand in de URL (`/beheer/verlofkalender/2026-10`) — spiegel van `viewMonth`;
+ *  een ongeldige waarde wordt genegeerd. */
+const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
+const maandUitParam = (p: string | null): Date | null =>
+  p && MAAND_PARAM.test(p) ? new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1) : null;
+const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+/** Statuswoord in de cel-tooltip — Nederlands, zoals StatusBadge. */
+const STATUS_TEKST: Record<LeaveRequest['status'], string> = {
+  approved: 'goedgekeurd', pending: 'in behandeling', cancelled: 'geannuleerd', rejected: 'afgewezen',
+};
 
 
 
@@ -18,10 +31,18 @@ import { MONTH_NAMES, LEAVE_TYPE_LABELS, WEEKDAY_LETTER_MON } from '../../lib/fo
 const cellColor = leaveSolid;
 
 export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; leaveRequests: LeaveRequest[] }) {
+  const [maandParam, zetMaandParam] = useRouteParam(0);
   const [viewMonth, setViewMonth] = useState(() => {
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    return maandUitParam(maandParam) ?? new Date(now.getFullYear(), now.getMonth(), 1);
   });
+  // Maand → URL (replace, geen extra history-entry); de state blijft de bron.
+  // De huidige maand geeft een schone URL zonder parameter.
+  const monthParam = maandNaarParam(viewMonth);
+  useEffect(() => {
+    const gewenst = monthParam === maandNaarParam(new Date()) ? null : monthParam;
+    if ((maandParam ?? null) !== gewenst) zetMaandParam(gewenst);
+  }, [monthParam, maandParam, zetMaandParam]);
 
   const year = viewMonth.getFullYear();
   const monthIndex = viewMonth.getMonth();
@@ -140,7 +161,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
               aria-label="Vorige maand"
               icon={<ChevronLeft size={16} />}
             />
-            <span className="px-3 text-base font-semibold tracking-tight capitalize min-w-[150px] text-center text-slate-800">{monthName} {year}</span>
+            <span className="px-3 text-base font-semibold tracking-tight capitalize min-w-[150px] text-center text-slate-800 tabular-nums">{monthName} {year}</span>
             <Button
               variant="ghost"
               size="sm" className="min-h-11 min-w-11 justify-center"
@@ -194,7 +215,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                       <div className={microLabelClass}>{weekdayLetter(day)}</div>
                       <div className={cn('text-xs font-semibold mt-0.5 tabular-nums', isToday(day) ? 'text-oker-700' : 'text-slate-700')}>{day}</div>
                       {typedagLabel(dateIso(day)) && (
-                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-700' : 'text-slate-400')}>
+                        <div className={cn('text-2xs font-bold leading-3 mt-0.5', typedagLabel(dateIso(day))!.kort === 'F' ? 'text-oker-700' : 'text-slate-500')}>
                           {typedagLabel(dateIso(day))!.kort}
                         </div>
                       )}
@@ -227,7 +248,7 @@ export function VerlofKalenderView({ users, leaveRequests }: { users: User[]; le
                     {Array.from({ length: daysInMonth }, (_, i) => i + 1).map((day) => {
                       const leave = userMap?.get(day);
                       const title = leave
-                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type} — ${leave.status} (${leave.startDate}${leave.startDate !== leave.endDate ? ` t/m ${leave.endDate}` : ''})`
+                        ? `${LEAVE_TYPE_LABELS[leave.type] || leave.type} — ${STATUS_TEKST[leave.status] ?? leave.status} (${leave.startDate}${leave.startDate !== leave.endDate ? ` t/m ${leave.endDate}` : ''})`
                         : undefined;
                       return (
                         <td

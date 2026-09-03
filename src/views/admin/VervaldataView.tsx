@@ -11,7 +11,10 @@ import { SkeletonRow } from '../../components/Skeleton';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input } from '../../components/Field';
 import { Badge, Button, FilterChip, IconButton, Td, Th, type BadgeTone } from '../../components/primitives';
-import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
+
+/** Uitschakelbare kolommen: één per bewaakt document (Chauffeur, Eerst vervallend en Acties blijven altijd). */
+const KOLOMMEN = Object.entries(EXPIRY_SOORT_LABELS).map(([key, label]) => ({ key, label }));
 
 type ExpiryRow = { userId: string; soort: string; validUntil: string };
 type Filter = 'all' | 'verlopen' | 'binnen30' | 'binnen90' | 'zonder';
@@ -36,6 +39,8 @@ export function VervaldataView({ users }: { users: User[] }) {
   // Standaard: wie het eerst vervalt bovenaan; wie geen datums heeft komt
   // onderaan (null sorteert altijd als laatste).
   const sort = useSort<string>('eerste');
+  // Rijdichtheid + kolomkeuze, onthouden per toestel.
+  const voorkeur = useTabelVoorkeur('vervaldata', KOLOMMEN);
 
   const load = async () => {
     setIsLoading(true);
@@ -280,6 +285,8 @@ export function VervaldataView({ users }: { users: User[] }) {
               onZoek={setZoek}
               placeholder="Zoek chauffeur…"
               telling={`${gesorteerd.length} van ${rijen.length}`}
+              dichtheid={voorkeur.dichtheid}
+              kolommen={voorkeur.kolommen}
               filters={(
                 <>
                   <FilterChip active={filter === 'all'} onClick={() => setFilter('all')}>Alles</FilterChip>
@@ -304,11 +311,11 @@ export function VervaldataView({ users }: { users: User[] }) {
           ) : (
             <>
               <div className="hidden md:block">
-                <table className="w-full text-left border-collapse">
+                <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
                   <StickyThead>
                     <tr>
                       <SortTh kolom="naam" sort={sort}>Chauffeur</SortTh>
-                      {soorten.map(([soort, label]) => <SortTh key={soort} kolom={soort} sort={sort}>{label}</SortTh>)}
+                      {soorten.filter(([soort]) => voorkeur.zichtbaar(soort)).map(([soort, label]) => <SortTh key={soort} kolom={soort} sort={sort}>{label}</SortTh>)}
                       <SortTh kolom="eerste" sort={sort}>Eerst vervallend</SortTh>
                       <Th className="text-right">Acties</Th>
                     </tr>
@@ -324,7 +331,7 @@ export function VervaldataView({ users }: { users: User[] }) {
                           <p className={cn('font-semibold', rij.eerste !== null && rij.eerste < 0 ? 'text-red-700' : 'text-slate-800')}>{rij.user.name}</p>
                           {rij.user.employeeId ? <p className="text-2xs font-medium tabular-nums text-slate-500">{rij.user.employeeId}</p> : null}
                         </Td>
-                        {soorten.map(([soort, label]) => (
+                        {soorten.filter(([soort]) => voorkeur.zichtbaar(soort)).map(([soort, label]) => (
                           <Td key={soort}>{datumPil(rij, soort, label, false)}</Td>
                         ))}
                         <Td className={cn('text-xs font-medium tabular-nums', rij.eerste === null ? 'text-oker-700' : rij.eerste < 0 ? 'text-red-700' : 'text-slate-600')}>

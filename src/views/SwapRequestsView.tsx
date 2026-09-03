@@ -427,7 +427,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       className="w-full flex items-center justify-between gap-3 p-3.5 pl-4 text-left"
                     >
                       <div className="min-w-0 flex items-baseline gap-2.5">
-                        <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap">Dienst {info.line}</span>
+                        <span className="text-sm font-bold tracking-tight text-slate-800 whitespace-nowrap tabular-nums">Dienst {info.line}</span>
                         <span className="text-2xs font-medium text-slate-500 capitalize truncate">{formatDateHuman(info.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
@@ -438,7 +438,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                     {open && (
                       <div className="px-4 pb-4 pt-0.5">
                         {info.startTime && info.endTime && (
-                          <p className="text-xs font-medium text-slate-500 tabular-nums">{info.startTime} - {info.endTime}</p>
+                          <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
                         )}
                         {target && (
                           <p className="text-xs font-medium text-slate-500 mt-1.5">Aan: <span className="font-semibold text-slate-800">{target.name}</span></p>
@@ -494,10 +494,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 <Card key={swap.id} className="space-y-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
-                      <MicroLabel>Dienst {info.line}</MicroLabel>
+                      <MicroLabel className="tabular-nums">Dienst {info.line}</MicroLabel>
                       <p className="font-bold tracking-tight text-slate-800 mt-1 capitalize">{formatDateHuman(info.date)}</p>
                       {info.startTime && info.endTime && (
-                        <p className="text-xs font-medium text-slate-500 tabular-nums">{info.startTime} - {info.endTime}</p>
+                        <p className="text-xs font-mono font-medium text-slate-500 tabular-nums">{info.startTime} – {info.endTime}</p>
                       )}
                       <p className="text-xs font-medium text-slate-500">Door: {requester?.name}</p>
                       {isTakeoverSwap(swap) ? (
@@ -625,8 +625,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </button>
                           </Td>
                           <Td>
-                            <span className="font-semibold text-oker-700">Dienst {info.line}</span>
-                            <span className="text-slate-500 tabular-nums"> — {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${info.startTime} - ${info.endTime})` : ''}</span>
+                            <span className="font-semibold text-oker-700 tabular-nums">Dienst {info.line}</span>
+                            <span className="text-slate-500 tabular-nums"> — {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${info.startTime} – ${info.endTime})` : ''}</span>
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
@@ -640,8 +640,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   dát de vraag die telt (push bereikt weinigen). */}
                               {swap.status === 'approved' && swap.targetDriverId && (
                                 swap.targetSeenAt
-                                  ? <Badge tone="emerald" icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>gezien</Badge>
-                                  : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">niet bevestigd</Badge>
+                                  ? <Badge tone="emerald" icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>Gezien</Badge>
+                                  : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">Niet bevestigd</Badge>
                               )}
                             </span>
                           </Td>
@@ -699,8 +699,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             </span>
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
-                          <MicroLabel className="text-oker-700 mt-1">Dienst {info.line}</MicroLabel>
-                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} - ${info.endTime}` : ''}</p>
+                          <MicroLabel className="text-oker-700 mt-1 tabular-nums">Dienst {info.line}</MicroLabel>
+                          <p className="text-xs font-medium text-slate-500 mt-1 tabular-nums">{formatDateHuman(info.date)}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</p>
                           {isTakeoverSwap(swap) ? (
                             <div className="mt-1"><TakeoverBadge compact /></div>
                           ) : returnLabel(swap) && (
@@ -711,8 +711,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           <StatusBadge status={swap.status} />
                           {swap.status === 'approved' && swap.targetDriverId && (
                             swap.targetSeenAt
-                              ? <Badge tone="emerald" icon={<Check size={12} />}>gezien</Badge>
-                              : <Badge tone="slate">niet bevestigd</Badge>
+                              ? <Badge tone="emerald" icon={<Check size={12} />}>Gezien</Badge>
+                              : <Badge tone="slate">Niet bevestigd</Badge>
                           )}
                         </span>
                       </div>
@@ -943,7 +943,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="block text-sm font-bold text-slate-800">Zonder tegenprestatie</span>
                               <span className="block text-xs font-medium text-slate-500">
                                 {takeoverCode
-                                  ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) jij geeft niets terug.</>
+                                  ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) — jij geeft niets terug.</>
                                   : <>Kan niet: {voornaam} staat op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'} niet op vrij/bv/tk/ta</>}
                               </span>
                             </span>
@@ -989,7 +989,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           )}
                           {showAllReturns && conflicted.length > 0 && (
                             <div className="space-y-2">
-                              <MicroLabel className="text-slate-400">Niet mogelijk — jij bent die dag al ingepland</MicroLabel>
+                              <MicroLabel>Niet mogelijk — jij bent die dag al ingepland</MicroLabel>
                               {conflicted.map((o) => (
                                 <Card key={`${o.date}|${o.code}`} tone="muted" padding="none" className="flex items-center justify-between gap-3 px-4 py-3 opacity-60">
                                   <span className="min-w-0">
@@ -1146,9 +1146,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
                 <StatusBadge status={reviewSwap.status} />
-                <Badge tone="oker">Dienst {info.line}</Badge>
+                <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
                 {info.date && (
-                  <Badge tone="slate" className="tabular-nums">{info.date}{info.startTime && info.endTime ? ` · ${info.startTime} - ${info.endTime}` : ''}</Badge>
+                  <Badge tone="slate" className="tabular-nums">{info.date}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</Badge>
                 )}
                 {isTakeoverSwap(reviewSwap) && <TakeoverBadge compact />}
               </div>

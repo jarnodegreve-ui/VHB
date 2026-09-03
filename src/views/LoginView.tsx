@@ -204,9 +204,9 @@ export function LoginView({
                   transition={{ duration: DUR.base, ease: EASE }}
                   className="mb-7 text-center"
                 >
-                  <h2 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
+                  <h1 className="text-2xl font-bold text-white tracking-[-0.02em] leading-tight">
                     {headerCopy.title}
-                  </h2>
+                  </h1>
                   <p className="mt-2 text-sm text-slate-300 font-normal">{headerCopy.description}</p>
                 </motion.div>
               </AnimatePresence>

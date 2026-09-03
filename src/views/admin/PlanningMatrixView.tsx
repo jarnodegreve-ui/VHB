@@ -378,14 +378,14 @@ export function PlanningMatrixView({
                     {new Date(row.source_date).toLocaleDateString('nl-BE', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' })}
                   </p>
                   <div className="mt-1.5 flex items-center justify-between text-2xs font-medium text-slate-500 tabular-nums">
-                    <span>Dagtype {row.day_type || '-'}</span>
+                    <span>Dagtype {row.day_type || '—'}</span>
                     <span>{assignmentCount} codes</span>
                   </div>
                   <div className="mt-0.5 flex items-center justify-between text-2xs font-medium text-slate-500 tabular-nums">
                     <span>{generatedServices} diensten</span>
                     {rowUnknownCodes > 0 || rowUnmatchedDrivers > 0 || (generatedServices === 0 && assignmentCount > 0)
                       ? <span className="font-semibold text-amber-700">controle nodig</span>
-                      : <span>&nbsp;</span>}
+                      : null}
                   </div>
                   {(rowUnknownCodes > 0 || rowUnmatchedDrivers > 0) ? (
                     <div className="mt-2 flex flex-wrap gap-1.5">
@@ -425,7 +425,7 @@ export function PlanningMatrixView({
               <CardHeader
                 className="mb-5"
                 title={new Date(selectedRow.source_date).toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-                description={<>Dagtype {selectedRow.day_type || '-'} · {assignments.length} ingevulde chauffeurcodes.</>}
+                description={<span className="tabular-nums">Dagtype {selectedRow.day_type || '—'} · {assignments.length} ingevulde chauffeurcodes.</span>}
               />
 
               <div className="grid grid-cols-2 gap-3 md:grid-cols-3">

@@ -230,7 +230,7 @@ export function DashboardView({ notes = [],
           <h1 className="text-page-title">
             {greeting}, <span className="text-oker-700">{firstName}</span>
           </h1>
-          <p className="mt-0.5 text-sm font-normal text-slate-500">
+          <p className="mt-0.5 text-sm font-normal text-slate-500 tabular-nums">
             {formatDayLong(isoDate(now))} ·{' '}
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
@@ -248,7 +248,7 @@ export function DashboardView({ notes = [],
           {/* Statische stip — permanente beweging voor "alles is normaal"
               maakt van rust een alarm. */}
           <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
-          <span className={cn('text-2xs font-semibold', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
+          <span className={cn('text-2xs font-semibold tabular-nums', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
             {needsAttention
               ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
               : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
@@ -344,7 +344,7 @@ export function DashboardView({ notes = [],
               </span>
               <div>
                 <p className="text-sm font-semibold text-slate-800">Geen komende diensten</p>
-                <p className="text-xs font-normal text-slate-500">Er staat op dit moment niets ingepland.</p>
+                <p className="text-xs font-normal text-slate-600">Er staat op dit moment niets ingepland.</p>
               </div>
             </div>
           ) : (
@@ -431,7 +431,7 @@ export function DashboardView({ notes = [],
             </div>
             <Card tone="muted" padding="sm">
               <MicroLabel>Periode</MicroLabel>
-              <p className="mt-1.5 text-sm font-mono font-semibold text-slate-800 tabular-nums">
+              <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
                 {formatDateHuman(openDiversion.startDate)}
                 {openDiversion.endDate ? ` → ${formatDateHuman(openDiversion.endDate)}` : ' → einde onbekend'}
               </p>

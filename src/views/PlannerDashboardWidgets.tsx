@@ -939,7 +939,7 @@ export function PlannerDashboardWidgets({
       >
         {availableToday.length === 0 ? (
           <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">
-            Niemand beschikbaar vandaag — iedereen rijdt of is afwezig.
+            Niemand beschikbaar {peilLabel.toLowerCase()} — iedereen rijdt of is afwezig.
           </p>
         ) : (
           <ul className="space-y-0.5">
@@ -989,7 +989,7 @@ export function PlannerDashboardWidgets({
         subtitle={`${formatDay(peilDag)} · ${todayAbsent.length} ${todayAbsent.length === 1 ? 'collega' : "collega's"}`}
       >
         {todayAbsent.length === 0 ? (
-          <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">Iedereen inzetbaar vandaag.</p>
+          <p className="px-3 py-6 text-center text-sm font-medium text-slate-500">Iedereen inzetbaar {peilLabel.toLowerCase()}.</p>
         ) : (
           <ul className="space-y-0.5">
             {todayAbsent.map((a) => (
@@ -1043,7 +1043,7 @@ export function PlannerDashboardWidgets({
               <AlertTriangle size={16} />
             </span>
           }
-          eyebrow={ziekVervolg ? 'ziekmelding geregistreerd' : 'meteen onbeschikbaar'}
+          eyebrow={ziekVervolg ? 'Ziekmelding geregistreerd' : 'Meteen onbeschikbaar'}
           title={ziekVervolg ? 'Wie neemt de dienst over?' : 'Ziekmelding registreren'}
           onClose={closeSickModal}
         />

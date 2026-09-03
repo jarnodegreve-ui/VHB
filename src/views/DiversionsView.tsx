@@ -1,28 +1,24 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
 import { Calendar, ChevronRight, Download, FileText, MapPin, Search, X } from 'lucide-react';
 import { isExpiredDiversion } from '../lib/diversions';
 import type { Diversion } from '../types';
 import { formatDateHuman, formatSyncedTime } from '../lib/format';
 import { cn, openPdfInNewTab, safeDocumentHref } from '../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
-import { Badge, Button, IconButton, MicroLabel } from '../components/primitives';
+import { Badge, Button, IconButton } from '../components/primitives';
 import { Card } from '../components/Card';
 import { Input, Select } from '../components/Field';
-import { useMinWidth } from '../lib/useMinWidth';
+import { DetailPaneel, MasterDetail, useInlinePaneel } from '../components/DetailPaneel';
 
 /**
- * Breekpunt als React-state (Tailwind `lg` = 1024 px). Onder `lg` blijft het
- * uitklap-gedrag in de lijst; daarboven staat het detail rechts naast de lijst
- * (master-detail). Lokaal in deze view — een gedeelde useMediaQuery ontbreekt
- * nog in src/lib (zie rapport fase C10).
+ * Lijst + detail via het gedeelde DetailPaneel: op desktop staat de
+ * omleiding rechts naast de lijst, op mobiel opent ze in een SlideOver.
  */
-
 export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions: Diversion[]; lastSyncedAt?: number | null }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLine, setSelectedLine] = useState<string>('all');
-  const lg = useMinWidth(1024);
+  const inline = useInlinePaneel();
 
   // Get unique line numbers for the filter
   const uniqueLines = Array.from(new Set(diversions.map(div => div.line))).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
@@ -43,19 +39,14 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
     return matchesSearch && matchesLine;
   });
 
-  // Mobiel: alleen wat de chauffeur zelf opentikte. Desktop: valt terug op de
-  // eerste actieve omleiding in de (gefilterde) lijst, zodat het detailpaneel
-  // nooit leeg opent; verdwijnt de keuze uit de lijst door een filter, dan
-  // springt het paneel mee naar de eerste die overblijft.
-  const expanded = filteredDiversions.find((d) => d.id === selectedId) ?? null;
-  const detail = lg
-    ? expanded ?? filteredDiversions.find((d) => !isExpiredDiversion(d)) ?? filteredDiversions[0] ?? null
-    : expanded;
-
-  const kies = (div: Diversion) => {
-    if (lg) setSelectedId(div.id);
-    else setSelectedId(selectedId === div.id ? null : div.id);
-  };
+  // Mobiel: alleen wat de chauffeur zelf opentikte (SlideOver). Desktop: valt
+  // terug op de eerste actieve omleiding in de (gefilterde) lijst, zodat het
+  // paneel nooit leeg opent; verdwijnt de keuze uit de lijst door een filter,
+  // dan springt het paneel mee naar de eerste die overblijft.
+  const gekozen = filteredDiversions.find((d) => d.id === selectedId) ?? null;
+  const detail = inline
+    ? gekozen ?? filteredDiversions.find((d) => !isExpiredDiversion(d)) ?? filteredDiversions[0] ?? null
+    : gekozen;
 
   return (
     <PageShell>
@@ -107,30 +98,26 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
         <p className="-mt-2 text-2xs font-medium text-slate-500">Bijgewerkt om {formatSyncedTime(lastSyncedAt)} · sleep omlaag om te verversen</p>
       )}
 
-      {/* Master-detail vanaf lg: lijst links (38 %), detail rechts. Onder lg is
-          het de bestaande gestapelde lijst met uitklapdetail. */}
-      <div className="lg:grid lg:grid-cols-[minmax(0,38%)_1fr] lg:items-start lg:gap-5">
-        <div className="space-y-2">
-          {filteredDiversions.length > 0 ? (
-            filteredDiversions.map(div => {
-              const isOpen = !lg && expanded?.id === div.id;
-              const isCurrent = lg && detail?.id === div.id;
+      <MasterDetail
+        lijst={filteredDiversions.length > 0 ? (
+          <ul className="space-y-2" aria-label="Omleidingen">
+            {filteredDiversions.map(div => {
+              const isCurrent = detail?.id === div.id;
               return (
                 <Card
                   key={div.id}
+                  as="li"
                   padding="none"
                   interactive
                   aria-current={isCurrent ? 'true' : undefined}
-                  className={cn('overflow-hidden group duration-300', isExpiredDiversion(div) && 'opacity-60', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
+                  className={cn('overflow-hidden', isExpiredDiversion(div) && 'opacity-60', isCurrent && 'ring-1 ring-oker-400 bg-oker-50/40')}
                 >
                   {/* Compacte rij (verzoek Jarno): kleiner icoon, één titelregel,
-                      geen "Tik voor meer info"-hulpregel — de chevron is de
-                      affordance. Het uitklapdetail blijft ongewijzigd. */}
+                      geen hulpregel — de chevron is de affordance. */}
                   {/* rauw: lijstrij van het master-detail (kaart als knop: icoontegel + titel + badges + chevron) */}
                   <button
                     type="button"
-                    onClick={() => kies(div)}
-                    aria-expanded={lg ? undefined : isOpen}
+                    onClick={() => setSelectedId(div.id)}
                     className="w-full px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3 text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -143,86 +130,55 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                         {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
                       </div>
                     </div>
-                    <motion.div
-                      animate={{ rotate: isOpen ? 90 : 0 }}
-                      className={cn('p-1.5 shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')}
-                    >
-                      <ChevronRight size={20} />
-                    </motion.div>
+                    <ChevronRight size={20} className={cn('shrink-0', isCurrent ? 'text-oker-500' : 'text-slate-300')} />
                   </button>
-
-                  <AnimatePresence>
-                    {isOpen && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden bg-paper/35 border-t border-rim"
-                      >
-                        <div className="p-5 md:p-6 space-y-6">
-                          <div className="grid md:grid-cols-2 gap-8">
-                            <DiversionBody diversion={div} />
-                          </div>
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
                 </Card>
               );
-            })
-          ) : (
-            <div className="lg:col-span-2">
-              <EmptyState
-                icon={<Search size={24} />}
-                title={searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}
-                message={searchQuery ? `Geen omleidingen gevonden voor "${searchQuery}"` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
-                action={searchQuery ? (
-                  <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
-                    Wis zoekopdracht
-                  </Button>
-                ) : undefined}
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Detailpaneel (alleen lg+): blijft in beeld terwijl de lijst scrolt. */}
-        {lg && filteredDiversions.length > 0 && (
-          <div className="hidden lg:block lg:sticky lg:top-16" aria-live="polite">
-            {detail ? (
-              <Card key={detail.id} as="section" padding="lg" aria-label={`Omleiding ${detail.title}`}>
-                <div className="flex items-start gap-4">
-                  <div className="w-11 h-11 rounded-xl border border-oker-100 bg-oker-50 text-oker-700 flex items-center justify-center shrink-0">
-                    <MapPin size={18} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <MicroLabel>Omleiding</MicroLabel>
-                    <h2 className="mt-1 text-section-title">{detail.title}</h2>
-                    <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <Badge tone="oker">Lijn {detail.line}</Badge>
-                      {isExpiredDiversion(detail) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" dot>Actief</Badge>}
-                    </div>
-                  </div>
-                </div>
-                <div className="mt-6 border-t border-slate-100 pt-6">
-                  <DiversionBody diversion={detail} />
-                </div>
-              </Card>
-            ) : (
-              <Card tone="dashed" padding="lg" className="text-center">
-                <p className="text-sm text-slate-500">Kies een omleiding</p>
-              </Card>
-            )}
-          </div>
+            })}
+          </ul>
+        ) : (
+          <EmptyState
+            icon={<Search size={24} />}
+            title={searchQuery ? 'Geen resultaten' : 'Geen actieve omleidingen'}
+            message={searchQuery ? `Geen omleidingen gevonden voor "${searchQuery}"` : 'Er zijn op dit moment geen omleidingen. Zodra er een wordt toegevoegd, verschijnt ze hier.'}
+            action={searchQuery ? (
+              <Button variant="secondary" size="sm" onClick={() => setSearchQuery('')}>
+                Wis zoekopdracht
+              </Button>
+            ) : undefined}
+          />
         )}
-      </div>
+        paneel={filteredDiversions.length > 0 ? (
+          <DetailPaneel
+            open={!!detail}
+            onClose={() => setSelectedId(null)}
+            title={detail?.title ?? 'Omleiding'}
+            sleutel={detail?.id}
+            leegTekst="Kies een omleiding."
+            icon={(
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-oker-100 bg-oker-50 text-oker-700">
+                <MapPin size={16} />
+              </span>
+            )}
+          >
+            {detail && (
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge tone="oker">Lijn {detail.line}</Badge>
+                  {isExpiredDiversion(detail) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" dot>Actief</Badge>}
+                </div>
+                <DiversionBody diversion={detail} />
+              </div>
+            )}
+          </DetailPaneel>
+        ) : undefined}
+      />
     </PageShell>
   );
 }
 
 /**
- * Inhoud van één omleiding — omschrijving, periode en PDF-acties. Eén bron
- * voor het uitklapdetail (mobiel) en het detailpaneel (desktop).
+ * Inhoud van één omleiding — omschrijving, periode en PDF-acties.
  */
 function DiversionBody({ diversion: div }: { diversion: Diversion }) {
   return (

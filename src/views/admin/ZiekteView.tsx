@@ -524,7 +524,7 @@ export function ZiekteView({
                   {openDienstenLijst(detail).length > 0 && (
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <MicroLabel className="ml-1">
+                        <MicroLabel className="ml-1 tabular-nums">
                           Nog op naam ({openDienstenLijst(detail).length})
                         </MicroLabel>
                         {/* Wizard: batch-advies vult per gat de beste passende

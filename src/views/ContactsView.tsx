@@ -131,7 +131,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
   return (
     <PageShell>
       <PageHeader
-        title="Contactlijst"
+        title="Contacten"
         description="Contactgegevens van alle medewerkers."
         actions={lg ? undefined : zoekveld}
       />
@@ -199,7 +199,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
               <>
                 <div className="mt-5 rounded-2xl bg-slate-50/80 px-4 py-3.5">
                   <MicroLabel>Telefoonnummer</MicroLabel>
-                  <p className="mt-1 text-xl font-bold tracking-tight text-slate-900 tabular-nums select-all">{selected.phone}</p>
+                  <p className="mt-1 text-xl font-mono font-bold tracking-tight text-slate-900 tabular-nums select-all">{selected.phone}</p>
                 </div>
                 <div className="mt-4 flex flex-col sm:flex-row gap-2">
                   <a

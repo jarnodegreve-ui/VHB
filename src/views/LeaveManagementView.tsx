@@ -9,7 +9,7 @@ import { Button, IconButton, MicroLabel, microLabelClass, StatusBadge, Badge, st
 import { Card } from '../components/Card';
 import { Field, Select, Textarea } from '../components/Field';
 import { MaandNavigatie } from '../components/MaandNavigatie';
-import { SlideOver } from '../components/SlideOver';
+import { DetailPaneel } from '../components/DetailPaneel';
 import { verlofBalans, daysBetween } from '../lib/leaveBalance';
 import { LeaveBalanceCard } from '../components/LeaveBalanceCard';
 import { shiftsConflictingWithLeave } from '../lib/conflicts';
@@ -26,6 +26,15 @@ import { formatLeaveType, WEEKDAY_SHORT_MON } from '../lib/format';
 // verder over aanvragen beoordelen gaat.
 export function LeaveManagementView({ user, leaveRequests, users, onSave, onDecide, lastSeenDecisionAt, onMarkDecisionsSeen, shifts = [] }: { user: User; leaveRequests: LeaveRequest[]; users: User[]; onSave: (l: LeaveRequest[]) => void | boolean | Promise<void | boolean>; onDecide?: (id: string, status: LeaveRequest['status'], seenStatus?: string) => Promise<boolean>; lastSeenDecisionAt?: string | null; onMarkDecisionsSeen?: () => void; shifts?: Shift[] }) {
   const [showRequestModal, setShowRequestModal] = useState(false);
+  // /verlof?nieuw=1 (command palette "Verlof aanvragen"): meteen het
+  // aanvraagformulier openen en de parameter weer uit de URL halen.
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.get('nieuw') !== '1') return;
+    url.searchParams.delete('nieuw');
+    window.history.replaceState(window.history.state, '', url.pathname + url.search + url.hash);
+    setShowRequestModal(true);
+  }, []);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Bevestigingen via ConfirmationModal i.p.v. kale window.confirm
   // (browser-popup met "vhb-five.vercel.app meldt…" schrikt chauffeurs af).
@@ -396,6 +405,176 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
   for (let i = 0; i < startOffset; i++) calendarDays.push(null);
   for (let i = 1; i <= daysInMonth; i++) calendarDays.push(i);
 
+  /** Beoordeling in het gedeelde DetailPaneel: volledige context (saldo,
+   *  dekking, conflicten, toelichting) + beslissing zonder paginawissel.
+   *  Op desktop bovenaan de linkerkolom, op mobiel een SlideOver. */
+  function renderBeoordelingPaneel() {
+    const pending = reviewLeave?.status === 'pending';
+    // Goedgekeurd verlof dat nog loopt kan de planner hier annuleren (zelfde
+    // bevestiging als in de datumkaart); afgesloten aanvragen tonen alleen
+    // de historiek.
+    const annuleerbaar = !!reviewLeave && reviewLeave.status === 'approved' && reviewLeave.endDate >= today && isPlanner;
+    return (
+      <DetailPaneel
+        open={!!reviewLeave}
+        onClose={() => setReviewLeave(null)}
+        plakkend={false}
+        verbergLeeg
+        sleutel={reviewLeave?.id}
+        title={reviewLeave ? (users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend') : 'Verlofaanvraag'}
+        subtitle={reviewLeave ? `Aangevraagd op ${formatDateHuman(reviewLeave.createdAt)}` : undefined}
+        icon={
+          <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
+            <UserIcon size={16} />
+          </span>
+        }
+        footer={reviewLeave ? (
+          <div className="flex items-center gap-2">
+            <IconButton
+              label="Wijzigingsgeschiedenis"
+              variant="ghost"
+              onClick={() => { setHistoryLeave(reviewLeave); }}
+            >
+              <History size={16} />
+            </IconButton>
+            {pending ? (
+              <>
+                <Button
+                  variant="danger"
+                  size="lg"
+                  className="flex-1"
+                  onClick={() => { handleStatusUpdate(reviewLeave.id, 'rejected', reviewLeave.status); setReviewLeave(null); }}
+                >
+                  Afwijzen
+                </Button>
+                <Button
+                  variant="success"
+                  size="lg"
+                  className="flex-1"
+                  icon={<Check size={16} />}
+                  onClick={() => { handleStatusUpdate(reviewLeave.id, 'approved', reviewLeave.status); setReviewLeave(null); }}
+                >
+                  Goedkeuren
+                </Button>
+              </>
+            ) : annuleerbaar ? (
+              <Button variant="danger" size="lg" className="flex-1" onClick={() => handleCancel(reviewLeave.id)}>
+                Verlof annuleren
+              </Button>
+            ) : (
+              <Button variant="secondary" size="lg" className="flex-1" onClick={() => setReviewLeave(null)}>
+                Sluiten
+              </Button>
+            )}
+          </div>
+        ) : undefined}
+      >
+        {reviewLeave && (() => {
+          const requester = users.find((u) => u.id === reviewLeave.userId);
+          const conflictShifts = shiftsConflictingWithLeave(shifts, reviewLeave);
+          const dayCount = Math.max(1, daysBetween(reviewLeave.startDate, reviewLeave.endDate));
+          const requestYear = parseInt(reviewLeave.startDate.slice(0, 4), 10);
+          const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester?.verlofBudget);
+          const exceeds = reviewLeave.type === 'betaald_verlof'
+            && balance.betaaldGebruikt + dayCount > balance.betaaldBudget;
+          return (
+            <div className="space-y-5">
+              <div className="flex flex-wrap items-center gap-2">
+                <StatusBadge status={reviewLeave.status} />
+                <Badge tone="slate">{formatLeaveType(reviewLeave.type)}</Badge>
+                {conflictShifts.length > 0 && (
+                  <Badge tone="red" icon={<AlertTriangle size={12} />}>
+                    {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'} ingepland
+                  </Badge>
+                )}
+              </div>
+
+              <Card tone="muted" padding="sm">
+                <MicroLabel className="text-slate-500">Periode</MicroLabel>
+                <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
+                  {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
+                  <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'dag' : 'dagen'})</span>
+                </p>
+              </Card>
+
+              {/* Saldo-context van de aanvrager — beslis met het budget in beeld. */}
+              {reviewLeave.type === 'betaald_verlof' && (
+                <Card tone={exceeds ? 'danger' : 'success'} padding="none" className="px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <MicroLabel className={exceeds ? 'text-red-700' : 'text-emerald-700'}>
+                      Verlofsaldo {requestYear}
+                    </MicroLabel>
+                    <span className={cn('text-sm font-semibold tabular-nums', exceeds ? 'text-red-700' : 'text-emerald-700')}>
+                      {balance.betaaldGebruikt + dayCount} / {balance.betaaldBudget}
+                    </span>
+                  </div>
+                  <p className="mt-1 text-xs font-normal text-slate-600">
+                    {exceeds
+                      ? `Deze aanvraag gaat ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget} ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget === 1 ? 'dag' : 'dagen'} over het jaarbudget.`
+                      : `Na goedkeuring resteren ${balance.betaaldBudget - balance.betaaldGebruikt - dayCount} dagen.`}
+                  </p>
+                </Card>
+              )}
+
+              {/* Dekkingsimpact: hoeveel andere chauffeurs zijn deze periode al
+                  afwezig (goedgekeurd verlof/ziekte) — beslis met het gat in beeld. */}
+              {(() => {
+                const others = leaveRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(reviewLeave.userId));
+                const overlap = others.filter((r) => r.startDate <= reviewLeave.endDate && r.endDate >= reviewLeave.startDate);
+                const uniqueOthers = new Set(overlap.map((r) => String(r.userId))).size;
+                if (uniqueOthers === 0) return null;
+                let peak = 0;
+                const cur = new Date(`${reviewLeave.startDate}T00:00:00`);
+                const end = new Date(`${reviewLeave.endDate}T00:00:00`);
+                for (let guard = 0; cur <= end && guard < 400; guard++) {
+                  const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
+                  const c = overlap.filter((r) => r.startDate <= iso && r.endDate >= iso).length;
+                  if (c > peak) peak = c;
+                  cur.setDate(cur.getDate() + 1);
+                }
+                return (
+                  <Card tone="muted" padding="none" className="px-4 py-3">
+                    <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
+                    <p className="mt-1 text-xs font-normal text-slate-600">
+                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} afwezig in deze periode{peak > 1 ? ` — tot ${peak} tegelijk op de drukste dag` : ''}.
+                    </p>
+                  </Card>
+                );
+              })()}
+
+              {conflictShifts.length > 0 && (
+                <div>
+                  <MicroLabel className="text-red-700">Conflict met planning</MicroLabel>
+                  <div className="mt-2 space-y-1.5">
+                    {conflictShifts.slice(0, 5).map((s) => (
+                      <div key={s.id} className="flex items-center justify-between rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs">
+                        <span className="font-semibold text-slate-800 tabular-nums">{s.date}</span>
+                        <span className="font-medium text-slate-600 tabular-nums">Dienst {s.line} · {s.startTime}–{s.endTime}</span>
+                      </div>
+                    ))}
+                    {conflictShifts.length > 5 && (
+                      <p className="text-2xs font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs font-normal text-slate-500">Bij goedkeuring moeten deze diensten herverdeeld worden.</p>
+                </div>
+              )}
+
+              {reviewLeave.comment && (
+                <div>
+                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
+                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
+                    {reviewLeave.comment}
+                  </p>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+      </DetailPaneel>
+    );
+  }
+
   return (
     <PageShell className="pb-20">
       <PageHeader
@@ -416,6 +595,12 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           minmax(0,1fr) + min-w-0 klemt alles op de viewport. */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <div className="min-w-0 lg:col-span-8 space-y-6">
+          {/* Beoordeling: op desktop een paneel bovenaan deze kolom (breed
+              genoeg voor saldo, dekking en conflicten; scrolt in beeld bij
+              openen), op mobiel een SlideOver. Alleen zichtbaar terwijl er
+              een aanvraag open staat — een lege-staat-kaart boven de
+              kalender zou ruis zijn. */}
+          {renderBeoordelingPaneel()}
           <Card padding="lg" {...swipeHandlers}>
             <div className="flex flex-wrap items-center justify-between gap-4 mb-8">
               <MaandNavigatie label={monthName} labelClassName="text-lg font-bold tracking-tight min-w-[160px]" onVorige={goToPrevMonth} onVolgende={goToNextMonth}>
@@ -453,7 +638,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       isDraftEdge && 'border-oker-500 bg-oker-100 ring-4 ring-oker-500/10'
                     )}
                   >
-                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-oker-700' : 'text-slate-400 group-hover:text-slate-600')}>{day}</span>
+                    <span className={cn('text-sm font-semibold transition-colors', (isSelected || isInDraftRange) ? 'text-oker-700' : 'text-slate-500 group-hover:text-slate-600')}>{day}</span>
                     {occupancyCount > 0 && <div className={cn('w-1.5 h-1.5 rounded-full mt-1.5', statusColor)} />}
                   </button>
                 );
@@ -474,22 +659,25 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   {getRequestsForDate(selectedDate).length > 0 ? getRequestsForDate(selectedDate).map((req) => {
                     const requester = users.find((u) => u.id === req.userId);
                     return (
-                      <Card key={req.id} tone="muted" padding="sm" className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-10 h-10 bg-surface-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100"><UserIcon size={20} /></div>
-                          <div>
-                            <p className="font-semibold text-slate-800 text-sm">{requester?.name}</p>
-                            <MicroLabel>{formatLeaveType(req.type)}</MicroLabel>
+                      <Card key={req.id} tone="muted" padding="none" className="flex flex-wrap items-center justify-between gap-3 px-3 py-2">
+                        {/* rauw: rij-inhoud (naam + type + periode + chevron) als knop naast de snelle actie — opent het detailpaneel */}
+                        <button
+                          type="button"
+                          onClick={() => setReviewLeave(req)}
+                          className="group flex min-h-11 min-w-0 flex-1 items-center gap-3 text-left"
+                        >
+                          <div className="w-10 h-10 bg-surface-white rounded-xl flex items-center justify-center text-slate-400 border border-slate-100 shrink-0"><UserIcon size={20} /></div>
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate font-semibold text-slate-800 text-sm">{requester?.name}</p>
+                            <p className="text-2xs font-medium text-slate-500 tabular-nums">{formatLeaveType(req.type)} · {req.startDate} – {req.endDate}</p>
                           </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xs font-medium text-slate-500 tabular-nums">{req.startDate} – {req.endDate}</span>
-                          {isPlanner && (
-                            <Button variant="danger" size="sm" onClick={() => handleCancel(req.id)}>
-                              Annuleren
-                            </Button>
-                          )}
-                        </div>
+                          <ChevronRightSmall size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
+                        </button>
+                        {isPlanner && (
+                          <Button variant="danger" size="sm" onClick={() => handleCancel(req.id)}>
+                            Annuleren
+                          </Button>
+                        )}
                       </Card>
                     );
                   }) : <p className="text-center py-4 text-sm text-slate-500">Geen afwezigen op deze dag.</p>}
@@ -583,7 +771,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                             <span className="flex items-center gap-2">
                               <span className="truncate text-sm font-semibold text-slate-800">{requester?.name ?? 'Onbekend'}</span>
                               {conflictShifts.length > 0 && (
-                                <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
+                                <span title={`${conflictShifts.length} ingeplande dienst(en) in deze periode`} aria-label={`${conflictShifts.length} ingeplande dienst(en) in deze periode`}>
                                   <AlertTriangle size={14} className="shrink-0 text-red-500" />
                                 </span>
                               )}
@@ -824,151 +1012,6 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               </form>
       </Modal>
 
-      {/* Beoordeling in een side panel: volledige context + beslissing
-          zonder paginawissel. */}
-      <SlideOver
-        open={!!reviewLeave}
-        onClose={() => setReviewLeave(null)}
-        title={reviewLeave ? (users.find((u) => u.id === reviewLeave.userId)?.name ?? 'Onbekend') : 'Verlofaanvraag'}
-        subtitle={reviewLeave ? `Aangevraagd op ${formatDateHuman(reviewLeave.createdAt)}` : undefined}
-        icon={
-          <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700">
-            <UserIcon size={16} />
-          </span>
-        }
-        footer={reviewLeave && reviewLeave.status === 'pending' ? (
-          <div className="flex items-center gap-2">
-            <Button
-              variant="ghost"
-              size="md"
-              icon={<History size={14} />}
-              onClick={() => { setHistoryLeave(reviewLeave); }}
-              aria-label="Wijzigingsgeschiedenis"
-            />
-            <Button
-              variant="danger"
-              size="lg"
-              className="flex-1"
-              onClick={() => { handleStatusUpdate(reviewLeave.id, 'rejected', reviewLeave.status); setReviewLeave(null); }}
-            >
-              Afwijzen
-            </Button>
-            <Button
-              variant="success"
-              size="lg"
-              className="flex-1"
-              icon={<Check size={16} />}
-              onClick={() => { handleStatusUpdate(reviewLeave.id, 'approved', reviewLeave.status); setReviewLeave(null); }}
-            >
-              Goedkeuren
-            </Button>
-          </div>
-        ) : undefined}
-      >
-        {reviewLeave && (() => {
-          const requester = users.find((u) => u.id === reviewLeave.userId);
-          const conflictShifts = shiftsConflictingWithLeave(shifts, reviewLeave);
-          const dayCount = Math.max(1, daysBetween(reviewLeave.startDate, reviewLeave.endDate));
-          const requestYear = parseInt(reviewLeave.startDate.slice(0, 4), 10);
-          const balance = verlofBalans(leaveRequests, reviewLeave.userId, requestYear, requester?.verlofBudget);
-          const exceeds = reviewLeave.type === 'betaald_verlof'
-            && balance.betaaldGebruikt + dayCount > balance.betaaldBudget;
-          return (
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={reviewLeave.status} />
-                <Badge tone="slate">{formatLeaveType(reviewLeave.type)}</Badge>
-                {conflictShifts.length > 0 && (
-                  <Badge tone="red" icon={<AlertTriangle size={12} />}>
-                    {conflictShifts.length} {conflictShifts.length === 1 ? 'dienst' : 'diensten'} ingepland
-                  </Badge>
-                )}
-              </div>
-
-              <Card tone="muted" padding="sm">
-                <MicroLabel className="text-slate-500">Periode</MicroLabel>
-                <p className="mt-1.5 text-sm font-semibold text-slate-800 tabular-nums">
-                  {reviewLeave.startDate}{reviewLeave.startDate !== reviewLeave.endDate ? ` → ${reviewLeave.endDate}` : ''}
-                  <span className="ml-2 font-medium text-slate-500">({dayCount} {dayCount === 1 ? 'dag' : 'dagen'})</span>
-                </p>
-              </Card>
-
-              {/* Saldo-context van de aanvrager — beslis met het budget in beeld. */}
-              {reviewLeave.type === 'betaald_verlof' && (
-                <Card tone={exceeds ? 'danger' : 'success'} padding="none" className="px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <MicroLabel className={exceeds ? 'text-red-700' : 'text-emerald-700'}>
-                      Verlofsaldo {requestYear}
-                    </MicroLabel>
-                    <span className={cn('text-sm font-semibold tabular-nums', exceeds ? 'text-red-700' : 'text-emerald-700')}>
-                      {balance.betaaldGebruikt + dayCount} / {balance.betaaldBudget}
-                    </span>
-                  </div>
-                  <p className="mt-1 text-xs font-normal text-slate-600">
-                    {exceeds
-                      ? `Deze aanvraag gaat ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget} ${balance.betaaldGebruikt + dayCount - balance.betaaldBudget === 1 ? 'dag' : 'dagen'} over het jaarbudget.`
-                      : `Na goedkeuring resteren ${balance.betaaldBudget - balance.betaaldGebruikt - dayCount} dagen.`}
-                  </p>
-                </Card>
-              )}
-
-              {/* Dekkingsimpact: hoeveel andere chauffeurs zijn deze periode al
-                  afwezig (goedgekeurd verlof/ziekte) — beslis met het gat in beeld. */}
-              {(() => {
-                const others = leaveRequests.filter((r) => r.status === 'approved' && String(r.userId) !== String(reviewLeave.userId));
-                const overlap = others.filter((r) => r.startDate <= reviewLeave.endDate && r.endDate >= reviewLeave.startDate);
-                const uniqueOthers = new Set(overlap.map((r) => String(r.userId))).size;
-                if (uniqueOthers === 0) return null;
-                let peak = 0;
-                const cur = new Date(`${reviewLeave.startDate}T00:00:00`);
-                const end = new Date(`${reviewLeave.endDate}T00:00:00`);
-                for (let guard = 0; cur <= end && guard < 400; guard++) {
-                  const iso = `${cur.getFullYear()}-${String(cur.getMonth() + 1).padStart(2, '0')}-${String(cur.getDate()).padStart(2, '0')}`;
-                  const c = overlap.filter((r) => r.startDate <= iso && r.endDate >= iso).length;
-                  if (c > peak) peak = c;
-                  cur.setDate(cur.getDate() + 1);
-                }
-                return (
-                  <Card tone="muted" padding="none" className="px-4 py-3">
-                    <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
-                    <p className="mt-1 text-xs font-normal text-slate-600">
-                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} afwezig in deze periode{peak > 1 ? ` — tot ${peak} tegelijk op de drukste dag` : ''}.
-                    </p>
-                  </Card>
-                );
-              })()}
-
-              {conflictShifts.length > 0 && (
-                <div>
-                  <MicroLabel className="text-red-700">Conflict met planning</MicroLabel>
-                  <div className="mt-2 space-y-1.5">
-                    {conflictShifts.slice(0, 5).map((s) => (
-                      <div key={s.id} className="flex items-center justify-between rounded-lg bg-red-50 border border-red-100 px-3 py-2 text-xs">
-                        <span className="font-semibold text-slate-800 tabular-nums">{s.date}</span>
-                        <span className="font-medium text-slate-600 tabular-nums">Dienst {s.line} · {s.startTime}–{s.endTime}</span>
-                      </div>
-                    ))}
-                    {conflictShifts.length > 5 && (
-                      <p className="text-2xs font-medium text-slate-500">+ {conflictShifts.length - 5} andere diensten in deze periode.</p>
-                    )}
-                  </div>
-                  <p className="mt-2 text-xs font-normal text-slate-500">Bij goedkeuring moeten deze diensten herverdeeld worden.</p>
-                </div>
-              )}
-
-              {reviewLeave.comment && (
-                <div>
-                  <MicroLabel>Toelichting van de aanvrager</MicroLabel>
-                  <p className="mt-2 whitespace-pre-wrap rounded-xl bg-surface-soft border border-slate-100 px-4 py-3 text-sm font-normal leading-relaxed text-slate-700">
-                    {reviewLeave.comment}
-                  </p>
-                </div>
-              )}
-            </div>
-          );
-        })()}
-      </SlideOver>
-
       <EntityHistoryModal
         open={!!historyLeave}
         onClose={() => setHistoryLeave(null)}
@@ -988,6 +1031,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
       />
     </PageShell>
   );
+
 }
 
 /** Eén helft van de "Van — Tot"-selectieweergave in de aanvraag-modal.

@@ -8,7 +8,8 @@ import { sortedNameToken, vindNaamBotsingen } from '../../lib/planning';
 import { ConfirmationModal, CredentialsModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
 import { Badge, Button, FilterChip, IconButton, MicroLabel, segItemClass, Td, Th, Switch } from '../../components/primitives';
-import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
+import { useQueryParam } from '../../app/router';
 import { InfoTip } from '../../components/InfoTip';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Select } from '../../components/Field';
@@ -22,6 +23,14 @@ type UserDraft = User & { password?: string };
 
 /** Rol → badge-tint (presentatie, geen logica). */
 const ROLE_BADGE_TONE = { admin: 'oker', planner: 'blue', chauffeur: 'slate' } as const;
+
+/** Uitschakelbare kolommen van de gebruikerstabel (Medewerker en Acties blijven altijd). */
+const KOLOMMEN = [
+  { key: 'status', label: 'Status' },
+  { key: 'meldingen', label: 'Meldingen' },
+  { key: 'laatst', label: 'Laatst actief' },
+  { key: 'sessies', label: 'Sessies' },
+] as const;
 
 export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', currentUser, shifts = [], leaveRequests = [], swaps = [] }: { users: User[]; onSave: (u: UserDraft[]) => Promise<boolean>; title?: string; currentUser: User; shifts?: Shift[]; leaveRequests?: LeaveRequest[]; swaps?: SwapRequest[] }) {
   const [isImporting, setIsImporting] = useState(false);
@@ -110,7 +119,11 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
   // Planning-filter: toon alleen chauffeurs die nergens in de matrix staan.
   const [alleenNietInPlanning, setAlleenNietInPlanning] = useState(false);
   // Naam-zoekveld: met 42 accounts is scrollen traag; zoeken is de kortste weg.
-  const [userSearch, setUserSearch] = useState('');
+  // De zoekterm staat in de URL (?zoek=…): een refresh of gedeelde link
+  // behoudt de zoekopdracht.
+  const [userSearch, setUserSearch] = useQueryParam('zoek');
+  // Rijdichtheid + kolomkeuze, onthouden per toestel.
+  const voorkeur = useTabelVoorkeur('gebruikers', KOLOMMEN);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [confirmResetUser, setConfirmResetUser] = useState<User | null>(null);
   const [resetPasswordValue, setResetPasswordValue] = useState('');
@@ -561,6 +574,8 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
             onZoek={setUserSearch}
             placeholder="Zoek op naam, personeelsnr of e-mail…"
             telling={`${sortedUsers.length} van ${zichtbareUsers.length}`}
+            dichtheid={voorkeur.dichtheid}
+            kolommen={voorkeur.kolommen}
             filters={(
               <>
                 <div className="glass-segmented inline-flex rounded-2xl p-1">
@@ -596,7 +611,7 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
         </div>
         {sortedUsers.length > 0 && (
           <div className="hidden md:block">
-            <table className="w-full text-left border-collapse">
+            <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
               <StickyThead>
                 <tr>
                   <Th className="w-12 !py-1">
@@ -608,10 +623,10 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                     />
                   </Th>
                   <SortTh kolom="naam" sort={sort}>Medewerker</SortTh>
-                  <SortTh kolom="status" sort={sort}>Status</SortTh>
-                  <SortTh kolom="meldingen" sort={sort} title="Heeft deze medewerker meldingen aan staan op minstens één toestel?">Meldingen</SortTh>
-                  <SortTh kolom="laatst" sort={sort}>Laatst actief</SortTh>
-                  <SortTh kolom="sessies" sort={sort}>Sessies</SortTh>
+                  {voorkeur.zichtbaar('status') && <SortTh kolom="status" sort={sort}>Status</SortTh>}
+                  {voorkeur.zichtbaar('meldingen') && <SortTh kolom="meldingen" sort={sort} title="Heeft deze medewerker meldingen aan staan op minstens één toestel?">Meldingen</SortTh>}
+                  {voorkeur.zichtbaar('laatst') && <SortTh kolom="laatst" sort={sort}>Laatst actief</SortTh>}
+                  {voorkeur.zichtbaar('sessies') && <SortTh kolom="sessies" sort={sort}>Sessies</SortTh>}
                   <Th className="text-right">Acties</Th>
                 </tr>
               </StickyThead>
@@ -644,15 +659,17 @@ export function ManageUsersView({ users, onSave, title = 'Gebruikersbeheer', cur
                         )}
                       </div>
                     </Td>
-                    <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>
+                    {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
                     {/* Zonder abonnement komt géén enkele melding aan. */}
-                    <Td>
-                      {pushUserIds.has(String(u.id))
-                        ? <Badge tone="emerald" icon={<Bell size={12} />}>Aan</Badge>
-                        : <Badge tone="slate" icon={<BellOff size={12} />}>Uit</Badge>}
-                    </Td>
-                    <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>
-                    <Td><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-surface-soft text-slate-400')}>{u.activeSessions || 0}</span></Td>
+                    {voorkeur.zichtbaar('meldingen') && (
+                      <Td>
+                        {pushUserIds.has(String(u.id))
+                          ? <Badge tone="emerald" icon={<Bell size={12} />}>Aan</Badge>
+                          : <Badge tone="slate" icon={<BellOff size={12} />}>Uit</Badge>}
+                      </Td>
+                    )}
+                    {voorkeur.zichtbaar('laatst') && <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>}
+                    {voorkeur.zichtbaar('sessies') && <Td><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-surface-soft text-slate-500')}>{u.activeSessions || 0}</span></Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
                         <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>

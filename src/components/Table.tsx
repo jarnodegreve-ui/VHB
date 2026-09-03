@@ -1,7 +1,10 @@
-import { ArrowDown, ArrowUp, ArrowUpDown, Check, Search, X } from 'lucide-react';
-import { useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Check, Columns3, Search, X } from 'lucide-react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useCallback, useEffect, useId, useMemo, useState, type InputHTMLAttributes, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
-import { IconButton, Td, Th } from './primitives';
+import { DUR, EASE } from '../lib/motion';
+import { Button, IconButton, MicroLabel, segItemClass, Td, Th } from './primitives';
+import { useDropdown } from './useDropdown';
 
 /**
  * Tabel-bouwstenen voor de beheerkant (fase C11):
@@ -11,9 +14,155 @@ import { IconButton, Td, Th } from './primitives';
  * - `BulkBar`: balk die verschijnt zodra er rijen geselecteerd zijn.
  * - `StickyThead`: kolomkop die onder de topbar blijft plakken bij scrollen.
  * - `Paginering`: eenvoudige "vorige/volgende + N per pagina".
+ * - `useTabelVoorkeur`: rijdichtheid + kolomkeuze, per tabel onthouden in
+ *   localStorage; de toolbar toont er de schakelaar en het kolommenmenu voor.
  */
 
-export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling, filters, acties, className }: {
+// === Tabelvoorkeur: dichtheid + kolomkeuze ===
+
+export type Dichtheid = 'compact' | 'comfortabel';
+
+/**
+ * Klassen op de <table> per dichtheid. Compact knijpt de rijen alleen met een
+ * muis (op touch blijft het raakvlak) en zet de celtekst op text-xs; de
+ * selectors `[&_td]`/`[&_th]` winnen op specificiteit van de basismaten in
+ * Td/Th, zodat de primitieven zelf ongemoeid blijven.
+ */
+export const DICHTHEID_TABEL: Record<Dichtheid, string> = {
+  comfortabel: '',
+  compact: 'sm:pointer-fine:[&_td]:py-1.5 sm:pointer-fine:[&_th]:py-1.5 sm:pointer-fine:[&_th_button]:min-h-8 [&_td]:text-xs',
+};
+
+export type KolomKeuze<K extends string = string> = { key: K; label: string };
+
+type VoorkeurOpslag = { dichtheid: Dichtheid; verborgen: string[] };
+
+const VOORKEUR_PREFIX = 'vhb-tabel:';
+
+const leesVoorkeur = (sleutel: string): VoorkeurOpslag => {
+  const standaard: VoorkeurOpslag = { dichtheid: 'comfortabel', verborgen: [] };
+  try {
+    const raw = window.localStorage.getItem(VOORKEUR_PREFIX + sleutel);
+    if (!raw) return standaard;
+    const p = JSON.parse(raw) as Partial<VoorkeurOpslag>;
+    return {
+      dichtheid: p.dichtheid === 'compact' ? 'compact' : 'comfortabel',
+      verborgen: Array.isArray(p.verborgen) ? p.verborgen.filter((k): k is string => typeof k === 'string') : [],
+    };
+  } catch {
+    // privémodus / kapotte JSON: gewoon de standaard
+    return standaard;
+  }
+};
+
+/**
+ * Dichtheid ('compact' | 'comfortabel') en verborgen kolommen van één tabel,
+ * onthouden per `sleutel` in localStorage. We bewaren de vérborgen kolommen
+ * (niet de zichtbare): een kolom die er later bijkomt staat dan standaard
+ * aan. `keuzes` zijn de uitschakelbare kolommen — verplichte kolommen (naam,
+ * acties) geef je niet mee en blijven dus altijd staan.
+ */
+export function useTabelVoorkeur<K extends string = never>(sleutel: string, keuzes?: ReadonlyArray<KolomKeuze<K>>) {
+  const [voorkeur, setVoorkeur] = useState<VoorkeurOpslag>(() => leesVoorkeur(sleutel));
+  useEffect(() => {
+    try { window.localStorage.setItem(VOORKEUR_PREFIX + sleutel, JSON.stringify(voorkeur)); } catch { /* privémodus */ }
+  }, [sleutel, voorkeur]);
+
+  const setDichtheid = useCallback((dichtheid: Dichtheid) => setVoorkeur((v) => ({ ...v, dichtheid })), []);
+  const toggleKolom = useCallback((key: string) => setVoorkeur((v) => ({
+    ...v,
+    verborgen: v.verborgen.includes(key) ? v.verborgen.filter((k) => k !== key) : [...v.verborgen, key],
+  })), []);
+  const toonAlles = useCallback(() => setVoorkeur((v) => ({ ...v, verborgen: [] })), []);
+
+  const verborgen = useMemo(() => new Set(voorkeur.verborgen), [voorkeur.verborgen]);
+  const zichtbaar = useCallback((key: K) => !verborgen.has(key), [verborgen]);
+
+  return {
+    /** Voor `TableToolbar dichtheid`. */
+    dichtheid: { waarde: voorkeur.dichtheid, onChange: setDichtheid },
+    /** Voor `TableToolbar kolommen` — undefined als er geen keuzes zijn. */
+    kolommen: keuzes && keuzes.length > 0 ? { keuzes, verborgen, onToggle: toggleKolom, onAlles: toonAlles } : undefined,
+    /** Op de <table> zetten. */
+    tabelClass: DICHTHEID_TABEL[voorkeur.dichtheid],
+    zichtbaar,
+  };
+}
+
+export type DichtheidProps = { waarde: Dichtheid; onChange: (d: Dichtheid) => void };
+export type KolommenProps = {
+  keuzes: ReadonlyArray<KolomKeuze<string>>;
+  verborgen: ReadonlySet<string>;
+  onToggle: (key: string) => void;
+  onAlles?: () => void;
+};
+
+const DICHTHEID_LABELS: Record<Dichtheid, string> = { comfortabel: 'Comfortabel', compact: 'Compact' };
+
+/** Segmented "Comfortabel | Compact". Alleen op md+: mobiel toont kaartlijsten, geen tabel. */
+function DichtheidSchakelaar({ waarde, onChange }: DichtheidProps) {
+  return (
+    <div className="glass-segmented hidden md:inline-flex rounded-xl p-1" role="group" aria-label="Rijdichtheid">
+      {(['comfortabel', 'compact'] as const).map((d) => (
+        // rauw: segmented control op de glass-rail, klassen via segItemClass
+        <button key={d} type="button" aria-pressed={waarde === d} onClick={() => onChange(d)} className={segItemClass(waarde === d, 'px-3 py-1.5')}>
+          {DICHTHEID_LABELS[d]}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Kolommenmenu: één Checkbox per uitschakelbare kolom, in een opaak vlak. */
+function KolommenMenu({ keuzes, verborgen, onToggle, onAlles }: KolommenProps) {
+  const { open, setOpen, wortel } = useDropdown();
+  const id = useId();
+  const aantalVerborgen = keuzes.filter((k) => verborgen.has(k.key)).length;
+  return (
+    <div ref={wortel} className="relative hidden md:block">
+      <IconButton
+        label={aantalVerborgen > 0 ? `Kolommen kiezen (${aantalVerborgen} verborgen)` : 'Kolommen kiezen'}
+        size="sm"
+        variant={aantalVerborgen > 0 ? 'secondary' : 'ghost'}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <Columns3 size={16} />
+      </IconButton>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            role="dialog"
+            aria-label="Kolommen"
+            initial={{ opacity: 0, y: -4, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.98 }}
+            transition={{ duration: DUR.fast, ease: EASE }}
+            style={{ transformOrigin: 'top right' }}
+            className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl bg-paper p-1.5 ring-1 ring-hairline shadow-xl"
+          >
+            <MicroLabel className="px-2.5 pb-1 pt-1.5">Kolommen</MicroLabel>
+            {keuzes.map((k) => {
+              const inputId = `${id}-${k.key}`;
+              return (
+                <div key={k.key} className="flex items-center gap-1.5 rounded-lg pl-1 pr-2 transition-colors hover:bg-slate-100/70">
+                  <Checkbox id={inputId} checked={!verborgen.has(k.key)} onChange={() => onToggle(k.key)} label={`Kolom ${k.label} tonen`} />
+                  <label htmlFor={inputId} className="flex-1 cursor-pointer select-none py-1.5 text-sm font-medium text-slate-700">{k.label}</label>
+                </div>
+              );
+            })}
+            {onAlles && aantalVerborgen > 0 && (
+              <Button variant="ghost" size="sm" full className="mt-1" onClick={onAlles}>Alle kolommen tonen</Button>
+            )}
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling, filters, acties, dichtheid, kolommen, className }: {
   zoek?: string;
   onZoek?: (v: string) => void;
   placeholder?: string;
@@ -21,6 +170,10 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
   telling?: ReactNode;
   filters?: ReactNode;
   acties?: ReactNode;
+  /** Rijdichtheid-schakelaar (uit `useTabelVoorkeur().dichtheid`). */
+  dichtheid?: DichtheidProps;
+  /** Kolommenmenu (uit `useTabelVoorkeur().kolommen`). */
+  kolommen?: KolommenProps;
   className?: string;
 }) {
   return (
@@ -46,6 +199,8 @@ export function TableToolbar({ zoek, onZoek, placeholder = 'Zoeken…', telling,
       {filters ? <div className="flex flex-wrap items-center gap-1.5">{filters}</div> : null}
       <div className="flex items-center gap-2.5 md:ml-auto">
         {telling ? <span className="text-xs font-medium tabular-nums text-slate-500">{telling}</span> : null}
+        {dichtheid ? <DichtheidSchakelaar {...dichtheid} /> : null}
+        {kolommen ? <KolommenMenu {...kolommen} /> : null}
         {acties}
       </div>
     </div>

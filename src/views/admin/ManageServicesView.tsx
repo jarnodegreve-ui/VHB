@@ -6,7 +6,7 @@ import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { cn, notify, downloadBlob } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
 import { Badge, Button, IconButton, MicroLabel, Td, Th } from '../../components/primitives';
-import { SortTh, StickyThead, TableToolbar, useSort } from '../../components/Table';
+import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
@@ -43,6 +43,8 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   // is die onzichtbare standaardsleutel.
   const [zoek, setZoek] = useState('');
   const sort = useSort<'volgorde' | 'dienst' | 'loop1' | 'start'>('volgorde');
+  // Rijdichtheid, onthouden per toestel.
+  const voorkeur = useTabelVoorkeur('dienstoverzicht');
   const zoekTerm = zoek.trim().toLowerCase();
   const gefilterd = zoekTerm
     ? services.filter((s) => [s.serviceNumber, s.loopnr, s.loopnr2, s.loopnr3].filter(Boolean).join(' ').toLowerCase().includes(zoekTerm))
@@ -343,12 +345,13 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             onZoek={setZoek}
             placeholder="Zoek op dienst- of loopnummer…"
             telling={`${gesorteerd.length} van ${services.length}`}
+            dichtheid={voorkeur.dichtheid}
           />
         </div>
 
         {gesorteerd.length > 0 && (
           <div className="hidden md:block">
-            <table className="w-full text-left border-collapse">
+            <table className={cn('w-full text-left border-collapse', voorkeur.tabelClass)}>
               <StickyThead>
                 <tr>
                   {/* Zelfde indeling als het totaaloverzicht van de planning

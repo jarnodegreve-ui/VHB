@@ -26,6 +26,14 @@ import {
 import { normalizeCode, type DayTypeBron, type VerwachtingAfwijking, type VerwachtingVoorstel } from '../lib/coverageGaps';
 import { VerwachtingAfwijkingLijst } from '../components/planningSignalen';
 import { bouwKalenderUitzonderingen } from '../lib/schoolkalender';
+import { useRouteParam } from '../app/router';
+
+/** Maand in de URL (`/openstaande-diensten/2026-10`) — spiegel van `viewMonth`;
+ *  een ongeldige waarde wordt genegeerd. */
+const MAAND_PARAM = /^\d{4}-(0[1-9]|1[0-2])$/;
+const maandUitParam = (p: string | null): Date | null =>
+  p && MAAND_PARAM.test(p) ? new Date(Number(p.slice(0, 4)), Number(p.slice(5, 7)) - 1, 1) : null;
+const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
 
 // Weergave-volgorde maandag-eerst; dow = JS getUTCDay (0=zondag..6=zaterdag).
@@ -46,9 +54,10 @@ const WEEKDAY_ORDER: { dow: number; label: string }[] = [
  * (datumreeksen die afwijken, bv. schoolvakantie of feestdag).
  */
 export function CoverageView() {
+  const [maandParam, zetMaandParam] = useRouteParam(0);
   const [viewMonth, setViewMonth] = useState(() => {
     const n = new Date();
-    return new Date(n.getFullYear(), n.getMonth(), 1);
+    return maandUitParam(maandParam) ?? new Date(n.getFullYear(), n.getMonth(), 1);
   });
   const [config, setConfig] = useState<CoverageConfig | null>(null);
   // Bewerkbare config-state.
@@ -84,6 +93,13 @@ export function CoverageView() {
   const from = `${year}-${String(monthIndex + 1).padStart(2, '0')}-01`;
   const lastDay = new Date(year, monthIndex + 1, 0).getDate();
   const to = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+  // Maand → URL (replace, geen extra history-entry); de state blijft de bron.
+  // De huidige maand geeft een schone URL zonder parameter.
+  const monthParam = maandNaarParam(viewMonth);
+  useEffect(() => {
+    const gewenst = monthParam === maandNaarParam(new Date()) ? null : monthParam;
+    if ((maandParam ?? null) !== gewenst) zetMaandParam(gewenst);
+  }, [monthParam, maandParam, zetMaandParam]);
 
   useEffect(() => {
     let cancelled = false;
@@ -436,7 +452,7 @@ export function CoverageView() {
         actions={(
           <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" icon={<ChevronLeft size={18} />} aria-label="Vorige maand" onClick={() => setViewMonth(new Date(year, monthIndex - 1, 1))} />
-            <span className="px-3 text-sm font-bold tracking-tight capitalize min-w-[130px] text-center">{MONTH_NAMES[monthIndex]} {year}</span>
+            <span className="px-3 text-sm font-bold tracking-tight capitalize min-w-[130px] text-center tabular-nums">{MONTH_NAMES[monthIndex]} {year}</span>
             <Button variant="ghost" size="sm" icon={<ChevronRight size={18} />} aria-label="Volgende maand" onClick={() => setViewMonth(new Date(year, monthIndex + 1, 1))} />
             <Button
               variant="secondary"
@@ -520,7 +536,7 @@ export function CoverageView() {
                             {config.services.map((svc) => {
                               const on = selected.has(svc);
                               return (
-                                <FilterChip key={svc} active={on} onClick={() => toggleService(i, svc)} className="tabular-nums">
+                                <FilterChip key={svc} active={on} onClick={() => toggleService(i, svc)} className="font-mono tabular-nums">
                                   {svc}
                                 </FilterChip>
                               );
@@ -576,7 +592,7 @@ export function CoverageView() {
                               </Button>
                             )}
                           </div>
-                          <p className="mt-2 text-2xs font-medium text-slate-500 tabular-nums">{v.codes.map((c) => c.code).join(' · ')}</p>
+                          <p className="mt-2 text-2xs font-mono font-medium text-slate-500 tabular-nums">{v.codes.map((c) => c.code).join(' · ')}</p>
                         </Card>
                       );
                     })}
@@ -597,7 +613,7 @@ export function CoverageView() {
                 >
                   <div>
                     <MicroLabel className="text-slate-500">Standaard per weekdag</MicroLabel>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">{weekdayPeriods.length > 0 ? `Basis + ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : 'Basis-toewijzing'} — welk dag-type elke weekdag standaard is.</p>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5 tabular-nums">{weekdayPeriods.length > 0 ? `Basis + ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : 'Basis-toewijzing'} — welk dag-type elke weekdag standaard is.</p>
                   </div>
                   <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', weekdagenOpen && 'rotate-180')} />
                 </button>
@@ -606,7 +622,7 @@ export function CoverageView() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   {WEEKDAY_ORDER.map(({ dow, label }) => (
                     <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
-                      <span className="text-sm font-bold text-slate-700">{label}</span>
+                      <span className="text-label">{label}</span>
                       <Select
                         value={weekdays[dow] || ''}
                         onChange={(e) => setWeekday(dow, e.target.value)}
@@ -656,7 +672,7 @@ export function CoverageView() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                         {WEEKDAY_ORDER.map(({ dow, label }) => (
                           <div key={dow} className="flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 ring-hairline px-3 py-2">
-                            <span className="text-sm font-bold text-slate-700">{label}</span>
+                            <span className="text-label">{label}</span>
                             <Select
                               value={p.weekdays[dow] || ''}
                               onChange={(e) => setPeriodWeekday(i, dow, e.target.value)}
@@ -687,7 +703,7 @@ export function CoverageView() {
                 >
                   <div>
                     <MicroLabel className="text-slate-500">Uitzonderingen</MicroLabel>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">
+                    <p className="text-xs font-medium text-slate-500 mt-0.5 tabular-nums">
                       {overrides.length === 0 ? 'Nog geen uitzonderingen' : `${overrides.length} ingesteld${verlopenAantal > 0 ? ` · ${verlopenAantal} verlopen` : ''}`} — een periode die afwijkt van de weekdag-standaard.
                     </p>
                   </div>
@@ -723,7 +739,7 @@ export function CoverageView() {
                         <div key={i} className="space-y-1">
                           <div className="flex flex-wrap items-center gap-2">
                             <Input type="date" value={o.from} onChange={(e) => updateOverride(i, 'from', e.target.value)} aria-label="Van" aria-describedby={foutId} invalid={!o.from || omgekeerd} className="w-auto" />
-                            <span className="text-2xs font-bold text-slate-500">t/m</span>
+                            <span className="text-label">t/m</span>
                             <Input type="date" value={o.to} onChange={(e) => updateOverride(i, 'to', e.target.value)} aria-label="Tot en met" aria-describedby={foutId} invalid={!o.to || omgekeerd} className="w-auto" />
                             <span className="text-slate-400 font-semibold">→</span>
                             <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" aria-describedby={foutId} invalid={!o.dayType} className="w-auto">
@@ -771,7 +787,7 @@ export function CoverageView() {
                     { label: 'Vakantie vrijdag', waarde: kalVr, zet: setKalVr },
                   ] as const).map(({ label, waarde, zet }) => (
                     <div key={label} className={cn('flex items-center justify-between gap-3 rounded-xl bg-surface-white ring-1 px-3 py-2', kalFout && !waarde ? 'ring-red-200' : 'ring-hairline')}>
-                      <span className="text-sm font-bold text-slate-700">{label}</span>
+                      <span className="text-label">{label}</span>
                       <Select
                         value={waarde}
                         onChange={(e) => { zet(e.target.value); setKalFout(''); }}
@@ -931,7 +947,7 @@ export function CoverageView() {
                             title="Klik om te zien wie vrij is"
                             className="inline-flex min-h-9 max-w-full items-center gap-1.5 rounded-lg bg-red-100 text-red-800 px-2 py-1 text-2xs font-semibold ring-1 ring-red-200 hover:bg-red-200 hover:ring-red-300 transition-colors cursor-pointer"
                           >
-                            <span className="tabular-nums">{svc}</span>
+                            <span className="font-mono tabular-nums">{svc}</span>
                             {info && (
                               <span className="flex min-w-0 items-baseline gap-1 font-medium">
                                 <span className="min-w-0 truncate text-red-700/90">· {info.name}</span>
