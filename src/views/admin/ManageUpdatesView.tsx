@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Bell, ChevronRight, Eye, History, Plus, Trash2 } from 'lucide-react';
+import { Bell, ChevronRight, History, Plus, Trash2 } from 'lucide-react';
 import type { Update } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
@@ -183,14 +183,17 @@ export function ManageUpdatesView({
 
   const urgentCount = updates.filter((u) => u.isUrgent).length;
 
-  const gelezenBadge = (update: Update) => (
-    update.isUrgent && totalChauffeurs > 0 ? (
-      <span className="inline-flex items-center gap-1 rounded-full bg-surface-muted px-2 py-0.5 text-2xs font-semibold text-slate-500 tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
-        <Eye size={12} />
-        {readCounts[update.id] ?? 0}/{totalChauffeurs} gelezen
-      </span>
-    ) : null
-  );
+  // Stille chip (neutraal vlak, puntje groen zodra iedereen ze las) — de
+  // vroegere eigen pil is één Badge geworden (afwerking 04-09, nr. 6).
+  const gelezenBadge = (update: Update) => {
+    if (!update.isUrgent || totalChauffeurs === 0) return null;
+    const gelezen = readCounts[update.id] ?? 0;
+    return (
+      <Badge tone={gelezen >= totalChauffeurs ? 'emerald' : 'slate'} stil className="tabular-nums" title="Aantal chauffeurs dat deze update geopend heeft">
+        {gelezen}/{totalChauffeurs} gelezen
+      </Badge>
+    );
+  };
 
   const lijst = (
     <Card>
@@ -237,7 +240,7 @@ export function ManageUpdatesView({
           <EmptyState
             title="Nog geen updates"
             message="Publiceer je eerste nieuwsbericht of veiligheidsmelding — chauffeurs zien het meteen op hun dashboard."
-            action={<Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
+            action={<Button variant="secondary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
           />
         )}
       </div>
@@ -252,7 +255,7 @@ export function ManageUpdatesView({
       subtitle={bewerkte ? `Gepubliceerd ${formatUpdateDate(bewerkte.date)}` : 'Chauffeurs zien de update meteen op hun dashboard.'}
       sleutel={editingId ?? 'nieuw'}
       leegTekst="Kies een update om te bewerken, of maak een nieuwe."
-      leegActie={<Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
+      leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
       chip={bewerkte ? (
         <>
           {bewerkte.isUrgent && <Badge tone="red" dot>Dringend</Badge>}

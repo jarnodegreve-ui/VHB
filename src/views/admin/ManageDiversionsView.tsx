@@ -258,7 +258,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
                     <h3 className="text-card-title leading-snug">{div.title}</h3>
                     <Badge tone="slate">Lijn {div.line}</Badge>
                     {expired && <Badge tone="slate">Verlopen</Badge>}
-                    {div.pdfUrl && <Badge tone="emerald" icon={<FileText size={12} />}>PDF</Badge>}
+                    {div.pdfUrl && <Badge tone="slate" icon={<FileText size={12} />}>PDF</Badge>}
                   </div>
                   <div className="mt-0.5 flex items-center gap-2 text-2xs font-medium text-slate-500 tabular-nums">
                     <Calendar size={12} className="text-slate-400" />
@@ -277,7 +277,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       icon={<MapPin size={24} />}
       title="Nog geen omleidingen"
       message="Chauffeurs zien een omleiding meteen op hun dashboard en onder Omleidingen."
-      action={<Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
+      action={<Button variant="secondary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
     />
   );
 
@@ -289,8 +289,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       subtitle={bewerkte ? `${bewerkte.title} — lijn ${bewerkte.line}` : 'Vul de details in en voeg eventueel een PDF toe.'}
       sleutel={editingId ?? 'nieuw'}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
-      leegActie={<Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
-      chip={bewerkte ? (isExpired(bewerkte) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" dot>Actief</Badge>) : undefined}
+      leegActie={<Button variant="secondary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
+      chip={bewerkte ? (isExpired(bewerkte) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" stil>Actief</Badge>) : undefined}
       acties={bewerkte ? (
         <ActieMenu
           size="sm"

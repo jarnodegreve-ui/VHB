@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { dienstoverzichtCsv } from '../../lib/dienstoverzichtExport';
 import { Clock, Download, History, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { cn, notify, downloadBlob } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
+import { Button, MicroLabel, Td, Th } from '../../components/primitives';
 import { ActieMenu } from '../../components/ActieMenu';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { Field, Input } from '../../components/Field';
@@ -23,6 +23,8 @@ const hasValidTime = (start?: string, end?: string) =>
 export function ManageServicesView({ services, onSave, canAdminOverride }: { services: Service[], onSave: (s: Service[], opts?: { bulkReplace?: boolean }) => Promise<boolean> | boolean | void, canAdminOverride: boolean }) {
   const [showModal, setShowModal] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  // Verborgen file-input voor de Excel-import; het "…"-menu in de kop klikt hem aan.
+  const importRef = useRef<HTMLInputElement>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [historyService, setHistoryService] = useState<Service | null>(null);
@@ -289,41 +291,12 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   const uiterste = (u: { serviceNumber: string; minuten: number } | null) =>
     u ? `${u.serviceNumber} · ${formatDienstDuur(u.minuten)}` : '—';
 
-  // Excel importeren + CSV downloaden: secundair, in het zijvak — "Nieuwe
-  // dienst" blijft de enige primaire knop in de paginakop.
+  // Excel importeren + CSV downloaden zitten in het "…"-menu van de paginakop
+  // (afwerking 04-09, nr. 7); het zijvak toont alleen nog de kerncijfers.
   const zijvak = (
     <Zijvak
       titel="Overzicht"
-      voet={(
-        <div className="flex flex-wrap items-center gap-2">
-          {canAdminOverride ? (
-            <>
-              <input
-                type="file"
-                accept=".xlsx, .xls"
-                className="hidden"
-                id="services-upload"
-                onChange={handleFileUpload}
-                disabled={isImporting}
-              />
-              <label
-                htmlFor="services-upload"
-                className={cn(
-                  'control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 transition-all hover:text-slate-900 min-h-11 sm:pointer-fine:min-h-8',
-                  isImporting && 'cursor-not-allowed opacity-50'
-                )}
-              >
-                <Upload size={14} />
-                {isImporting ? 'Importeren…' : 'Excel importeren'}
-              </label>
-            </>
-          ) : null}
-          <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={downloadCSV} disabled={services.length === 0}>
-            CSV downloaden
-          </Button>
-          {!canAdminOverride ? <Badge tone="slate">Excel-import alleen voor admins</Badge> : null}
-        </div>
-      )}
+      voet={canAdminOverride ? undefined : 'Excel-import is alleen voor admins; CSV downloaden kan via het menu (…) in de kop.'}
     >
       <ZijvakRij label="Diensten" waarde={stat.diensten} mono />
       <ZijvakRij label="Loops" waarde={stat.loops} mono />
@@ -339,7 +312,18 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         title="Beheer dienstoverzicht"
         description="Voeg diensten toe, bewerk of verwijder ze."
         actions={(
-          <div className="flex flex-wrap items-center gap-3">
+          <>
+            {/* Eén gouden knop; import en export in het "…"-menu ernaast, zodat
+                er op mobiel geen drie knoppen stapelen (afwerking 04-09, nr. 7). */}
+            <input ref={importRef} type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
+            <ActieMenu
+              label="Meer acties"
+              align="left"
+              items={[
+                ...(canAdminOverride ? [{ label: isImporting ? 'Bezig met importeren…' : 'Excel importeren', icon: <Upload size={16} />, disabled: isImporting, onClick: () => importRef.current?.click() }] : []),
+                { label: 'CSV downloaden', icon: <Download size={16} />, disabled: services.length === 0, onClick: downloadCSV },
+              ]}
+            />
             <Button
               variant="primary"
               icon={<Plus size={16} />}
@@ -367,7 +351,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             >
               Nieuwe dienst
             </Button>
-          </div>
+          </>
         )}
       />
 
@@ -485,7 +469,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
               <EmptyState
                 title="Nog geen diensten"
                 message="Voeg handmatig een dienst toe of importeer een Excel-bestand."
-                action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => { setEditingId(null); setFormData(emptyForm); setShowModal(true); }}>Nieuwe dienst</Button>}
+                action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => { setEditingId(null); setFormData(emptyForm); setShowModal(true); }}>Nieuwe dienst</Button>}
               />
             )}
           </div>
