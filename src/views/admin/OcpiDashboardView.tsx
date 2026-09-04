@@ -194,6 +194,9 @@ const statusTone = (s?: string): BadgeTone => {
   }
 };
 const statusLabel = (s?: string) => STATUS_LABEL[(s ?? '').toUpperCase()] ?? (s ?? 'Onbekend');
+/** Stille pil (neutraal vlak + puntje) voor gewone statussen; storing en
+ *  gereserveerd houden een gekleurd vlak (afwerking 04-09, nr. 6). */
+const stilStatus = (tone: BadgeTone) => tone !== 'red' && tone !== 'amber';
 
 /** Eén bron voor de rijstructuur van een laadpunt (verzoek Jarno 07-08):
  *  laadpunt · bus · SoC-pil · statuspil. "Vol" is 100% batterij óf laden
@@ -844,7 +847,7 @@ export function OcpiDashboardView() {
                       Laadpunt {gekozenPunt.evse_id ?? gekozenPunt.uid}{bus ? ` · bus ${bus}` : ''}
                     </h3>
                     <span className="flex shrink-0 items-center gap-2">
-                      <Badge tone={statusTone(gekozenPunt.status)} dot>{statusLabel(gekozenPunt.status)}</Badge>
+                      <Badge tone={statusTone(gekozenPunt.status)} dot stil={stilStatus(statusTone(gekozenPunt.status))}>{statusLabel(gekozenPunt.status)}</Badge>
                       {/* Expliciete sluitknop: tik-buiten en ESC bestaan, maar
                           een popup zonder zichtbare uitgang is op een telefoon
                           een raadsel. */}
@@ -894,7 +897,7 @@ export function OcpiDashboardView() {
                             Laadpunt {nummer}{bus ? ` · bus ${bus}` : ''}
                           </span>
                           {st.soc !== null && (
-                            <Badge tone={st.vol ? 'emerald' : 'blue'} className="shrink-0 font-mono tabular-nums">{st.soc}%</Badge>
+                            <Badge tone={st.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono tabular-nums">{st.soc}%</Badge>
                           )}
                         </div>
                         <p className="mt-0.5 text-2xs text-slate-500 tabular-nums">
@@ -904,7 +907,7 @@ export function OcpiDashboardView() {
                       </div>
                       {/* nowrap: op iPad-breedte wikkelde "Laden · 112 kW" naar
                           twee regels en werden de kaarten ongelijk hoog. */}
-                      <Badge tone={st.vol ? 'emerald' : 'blue'} dot className="shrink-0 whitespace-nowrap">
+                      <Badge tone={st.vol ? 'emerald' : 'blue'} stil className="shrink-0 whitespace-nowrap">
                         {st.label ?? 'Laden'}
                       </Badge>
                     </Card>
@@ -985,14 +988,14 @@ export function OcpiDashboardView() {
                                           {busVoorLaadpunt(evse.evse_id) ? `bus ${busVoorLaadpunt(evse.evse_id)}` : ''}
                                         </span>
                                         {s.soc !== null && (
-                                          <Badge tone={s.vol ? 'emerald' : 'blue'} className="shrink-0 font-mono tabular-nums">{s.soc}%</Badge>
+                                          <Badge tone={s.vol ? 'emerald' : 'blue'} stil className="shrink-0 font-mono tabular-nums">{s.soc}%</Badge>
                                         )}
                                       </span>
                                       {/* Vol = groen, ook al staat de paal
                                           technisch nog op CHARGING — anders
                                           stond "Laden voltooid" in een blauwe
                                           pil naast een groene 100%-pil. */}
-                                      <Badge tone={s.vol ? 'emerald' : statusTone(evse.status)} dot className="shrink-0 whitespace-nowrap">
+                                      <Badge tone={s.vol ? 'emerald' : statusTone(evse.status)} dot stil={s.vol || stilStatus(statusTone(evse.status))} className="shrink-0 whitespace-nowrap">
                                         {s.label ?? statusLabel(evse.status)}
                                       </Badge>
                                     </button>

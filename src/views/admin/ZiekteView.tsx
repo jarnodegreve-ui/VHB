@@ -535,7 +535,9 @@ export function ZiekteView({
                               <Button variant="secondary" size="sm" disabled={batchLaden || verdeelBezig} onClick={() => void haalKandidatenVoorstel(detail)}>
                                 {batchLaden ? 'Advies berekenen…' : 'Stel kandidaten voor'}
                               </Button>
-                              <Button variant="primary" size="sm" disabled={verdeelBezig || batchLaden || teVerdelen === 0} onClick={() => setVerdeelConfirm(true)}>
+                              {/* Secundair: de enige gouden knop in dit detail is "Opslaan"
+                                  bij de einddatum (afwerking 04-09, nr. 5). */}
+                              <Button variant="secondary" size="sm" disabled={verdeelBezig || batchLaden || teVerdelen === 0} onClick={() => setVerdeelConfirm(true)}>
                                 {verdeelBezig ? 'Bezig…' : `Verdeel alles (${teVerdelen})`}
                               </Button>
                             </div>
@@ -578,7 +580,7 @@ export function ZiekteView({
                                       dienst.date,
                                     ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
                                   </Select>
-                                  <Button variant="primary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id || verdeelBezig} onClick={() => void zetOver(detail, dienst)}>
+                                  <Button variant="secondary" size="md" disabled={!vervangerPerDienst[dienst.id] || wisselBezig === dienst.id || verdeelBezig} onClick={() => void zetOver(detail, dienst)}>
                                     {wisselBezig === dienst.id ? 'Bezig…' : 'Zet over'}
                                   </Button>
                                 </div>

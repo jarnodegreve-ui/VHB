@@ -86,6 +86,7 @@ const BADGE_TONES: Record<BadgeTone, { chip: string; dot: string }> = {
 export function Badge({
   tone = 'slate',
   dot = false,
+  stil = false,
   icon,
   className,
   title,
@@ -94,6 +95,10 @@ export function Badge({
   tone?: BadgeTone;
   /** Status-dot vóór het label (voor live/lopende toestanden). */
   dot?: boolean;
+  /** Stil: neutrale chip met alleen een gekleurd puntje in `tone` — voor
+   *  informatieve status (actief, geconfigureerd, gelezen). Kleur op het
+   *  hele vlak alleen als er iets fout of dringend is (afwerking 04-09, nr. 6). */
+  stil?: boolean;
   icon?: ReactNode;
   className?: string;
   /** Native tooltip (bv. bevestigingstijdstip bij het gezien-vinkje). */
@@ -101,9 +106,10 @@ export function Badge({
   children: ReactNode;
 }) {
   const t = BADGE_TONES[tone];
+  const chip = stil ? BADGE_TONES.slate.chip : t.chip;
   return (
-    <span title={title} className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium', t.chip, className)}>
-      {dot && <span className={cn('h-1.5 w-1.5 rounded-full', t.dot)} />}
+    <span title={title} className={cn('inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-2xs font-medium', chip, className)}>
+      {(dot || stil) && <span className={cn('h-1.5 w-1.5 rounded-full', t.dot)} />}
       {icon}
       {children}
     </span>
@@ -124,9 +130,11 @@ const STATUS_TONES: Record<string, { tone: BadgeTone; label: string }> = {
 const statusTone = (status: string) => STATUS_TONES[status] ?? { tone: 'slate' as BadgeTone, label: status };
 
 /** Status van een aanvraag (verlof/ruil) als consistente badge. */
-export function StatusBadge({ status, className }: { status: string; className?: string }) {
+export function StatusBadge({ status, className, stil }: { status: string; className?: string; /** Neutrale chip + gekleurd puntje (zie Badge). */ stil?: boolean }) {
   const m = statusTone(status);
-  return <Badge tone={m.tone} dot className={className}>{m.label}</Badge>;
+  // Afgewezen/dringend blijft gekleurd: dat is een signaal, geen status.
+  const kleur = stil && m.tone !== 'red' ? { stil: true } : { dot: true };
+  return <Badge tone={m.tone} {...kleur} className={className}>{m.label}</Badge>;
 }
 
 /** Accentkleur (bg-klasse) van een status — voor een statusstreep langs een

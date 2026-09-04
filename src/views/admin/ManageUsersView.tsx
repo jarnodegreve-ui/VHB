@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
-import { Bell, BellOff, CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload } from 'lucide-react';
+import { CalendarOff, FolderOpen, History, Info, LogIn, MoreHorizontal, Pause, Play, Plus, RotateCcw, Send, Trash2, Upload } from 'lucide-react';
 import type { User } from '../../types';
 import { useAppDataContext } from '../../app/AppDataContext';
 import { cn, notify } from '../../lib/ui';
@@ -13,7 +13,7 @@ import { apiFetch } from '../../lib/api';
 import { Badge, Button, FilterChip, IconButton, MicroLabel, segItemClass, Td, Th, Switch } from '../../components/primitives';
 import { BulkBar, Checkbox, SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { useQueryParam } from '../../app/router';
-import { InfoTip } from '../../components/InfoTip';
+import { ActieMenu } from '../../components/ActieMenu';
 import { Card, CardHeader } from '../../components/Card';
 import { Avatar } from '../../components/Avatar';
 import { DateInput, Field, Input, Select } from '../../components/Field';
@@ -50,6 +50,8 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   //   bewerken, toevoegen, verwijderen en de snelle pauzeer/activeer-knop.
   const { users, saveUsers: onSave, saveUser: onSaveUser, createUser: onCreateUser, deleteUser: onDeleteUser, shifts, leaveRequests, swaps } = useAppDataContext();
   const [isImporting, setIsImporting] = useState(false);
+  // Verborgen file-input voor de Excel-import; het "…"-menu in de kop klikt hem aan.
+  const importRef = useRef<HTMLInputElement>(null);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingUser, setEditingUser] = useState<UserDraft | null>(null);
   // Vervaldata (Code 95 / medische schifting): aparte mini-API naast
@@ -472,7 +474,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           .filter((u) => u.name && u.name.length > 1);
 
         if (importedUsers.length === 0) {
-          return notify(`Geen geldige gebruikers gevonden. Gevonden kolommen: ${keys.join(', ')}`, 'error');
+          return notify(`Geen geldige gebruikers gevonden. Gebruik de kolommen Naam, E-mail en Rol (optioneel Wachtwoord). Gevonden kolommen: ${keys.join(', ')}`, 'error');
         }
 
         const newUsersList: UserDraft[] = [...users];
@@ -508,7 +510,9 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
             perToken.set(token, [...(perToken.get(token) ?? []), u.name]);
           }
           const dubbeleNamen = [...perToken.values()].filter((namen) => namen.length > 1).map((namen) => namen[0]);
-          const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die worden bijgewerkt. Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
+          // De uitleg over bestaande accounts stond vroeger in een (i) naast
+          // de importknop; nu de import in het "…"-menu zit, hoort ze hier.
+          const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die op naam worden bijgewerkt (hun wachtwoord blijft ongemoeid). Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
           setPendingImportUsers(newUsersList);
           setPendingImportMessage(dubbeleNamen.length > 0 ? `${basis} Let op: na deze import bestaan er meerdere accounts met dezelfde naam (${dubbeleNamen.join(', ')}) — die namen zijn dan niet aan de planning te koppelen.` : basis);
         }
@@ -543,19 +547,18 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
         description="Medewerkers, rollen en accountacties."
         actions={(
           <>
-            <span className="inline-flex items-center gap-1">
-              <label className={cn('control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900', isImporting && 'cursor-not-allowed opacity-50')}>
-                <Upload size={16} />
-                {isImporting ? 'Bezig…' : 'Excel importeren'}
-                <input type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
-              </label>
-              <InfoTip label="Uitleg bij de Excel-import" align="right">
-                Gebruik bij voorkeur de kolommen <span className="font-mono font-semibold text-slate-800">Naam, E-mail, Rol</span>. Voor nieuwe accounts kun je optioneel ook <span className="font-mono font-semibold text-slate-800">Wachtwoord</span> toevoegen, zodat er meteen een login aangemaakt wordt. Bestaande gebruikers worden op naam bijgewerkt; hun wachtwoord blijft ongemoeid.
-              </InfoTip>
-            </span>
-            <Button variant="secondary" icon={<Send size={16} />} onClick={() => setShowBroadcast(true)}>
-              Document naar iedereen
-            </Button>
+            {/* Eén gouden knop in de kop; Excel-import en het document-
+                rondsturen zitten in het "…"-menu ernaast — zo stapelen er op
+                mobiel geen drie knoppen (afwerking 04-09, nr. 5 en 7). */}
+            <input ref={importRef} type="file" accept=".xlsx, .xls" className="hidden" onChange={handleFileUpload} disabled={isImporting} />
+            <ActieMenu
+              label="Meer acties"
+              align="left"
+              items={[
+                { label: isImporting ? 'Bezig met importeren…' : 'Excel importeren', icon: <Upload size={16} />, disabled: isImporting, onClick: () => importRef.current?.click() },
+                { label: 'Document naar iedereen', icon: <Send size={16} />, onClick: () => setShowBroadcast(true) },
+              ]}
+            />
             <Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>
               Gebruiker toevoegen
             </Button>
@@ -579,12 +582,13 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
               <div className="flex flex-wrap items-center gap-2">
                 {/* Uitrol-teller: hoeveel actieve medewerkers kunnen de
                     meldingen die de app verstuurt écht ontvangen? */}
-                <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} icon={<Bell size={12} />}>
+                <Badge tone={pushMetAan > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">
                   {pushMetAan} van {pushTotaal} met meldingen
                 </Badge>
                 {/* Adoptie: hoeveel chauffeurs logden ooit in? Rood zolang er
-                    nog een groep is die je persoonlijk moet meekrijgen. */}
-                <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} icon={<LogIn size={12} />}>
+                    nog een groep is die je persoonlijk moet meekrijgen;
+                    daarna een stille chip. */}
+                <Badge tone={nooitIngelogd > 0 ? 'red' : 'emerald'} stil={nooitIngelogd === 0} className="tabular-nums">
                   {chauffeursOoitIn} van {actieveChauffeurs.length} chauffeurs ooit ingelogd
                 </Badge>
                 {/* Accounts zonder één cel in de geïmporteerde planning:
@@ -692,17 +696,17 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                         </div>
                       </div>
                     </Td>
-                    {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
+                    {voorkeur.zichtbaar('status') && <Td><Badge tone={u.isActive !== false ? 'emerald' : 'slate'} stil>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge></Td>}
                     {/* Zonder abonnement komt géén enkele melding aan. */}
                     {voorkeur.zichtbaar('meldingen') && (
                       <Td>
                         {pushUserIds.has(String(u.id))
-                          ? <Badge tone="emerald" icon={<Bell size={12} />}>Aan</Badge>
-                          : <Badge tone="slate" icon={<BellOff size={12} />}>Uit</Badge>}
+                          ? <Badge tone="emerald" stil>Aan</Badge>
+                          : <Badge tone="slate" stil>Uit</Badge>}
                       </Td>
                     )}
                     {voorkeur.zichtbaar('laatst') && <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>}
-                    {voorkeur.zichtbaar('sessies') && <Td><span className={cn('inline-flex h-7 w-7 items-center justify-center rounded-lg border text-xs font-semibold tabular-nums', (u.activeSessions || 0) > 0 ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-slate-100 bg-surface-soft text-slate-500')}>{u.activeSessions || 0}</span></Td>}
+                    {voorkeur.zichtbaar('sessies') && <Td><Badge tone={(u.activeSessions || 0) > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">{u.activeSessions || 0}</Badge></Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
                         <Button variant="secondary" size="sm" onClick={() => setEditingUser(u)}>Bewerken</Button>
@@ -773,10 +777,10 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                   </div>
                 </div>
                 <div className="flex shrink-0 flex-col items-end gap-1.5">
-                  <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} dot>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
+                  <Badge tone={u.isActive !== false ? 'emerald' : 'slate'} stil>{u.isActive !== false ? 'Actief' : 'Gepauzeerd'}</Badge>
                   {pushUserIds.has(String(u.id))
-                    ? <Badge tone="emerald" icon={<Bell size={12} />}>Meldingen aan</Badge>
-                    : <Badge tone="slate" icon={<BellOff size={12} />}>Meldingen uit</Badge>}
+                    ? <Badge tone="emerald" stil>Meldingen aan</Badge>
+                    : <Badge tone="slate" stil>Meldingen uit</Badge>}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3 pt-1">
@@ -806,7 +810,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
               <EmptyState
                 title="Nog geen gebruikers"
                 message="Voeg een medewerker toe of importeer een Excel-bestand."
-                action={<Button variant="primary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>Gebruiker toevoegen</Button>}
+                action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>Gebruiker toevoegen</Button>}
               />
             )}
           </div>

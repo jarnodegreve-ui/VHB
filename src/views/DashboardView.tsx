@@ -258,32 +258,26 @@ export function DashboardView({ notes = [],
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        {/* Dark: eigen verfijnde afwerking i.p.v. de globale amber-overrides
-            (modderig bruin) — zelfde recept als de planner-statuspil. */}
-        <div
-          className={cn(
-            'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
-            needsAttention
-              ? 'border-amber-200 bg-amber-50'
-              : 'border-emerald-100 bg-emerald-50',
-          )}
-        >
-          {/* Statische stip — permanente beweging voor "alles is normaal"
-              maakt van rust een alarm. */}
-          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
-          <span className={cn('text-2xs font-semibold tabular-nums', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
-            {needsAttention
-              ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
-              : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
-          </span>
-        </div>
+        {/* Stille chip met gekleurd puntje: "Dienst vandaag" en "in
+            behandeling" zijn informatie, geen alarm (afwerking 04-09, nr. 6).
+            De stip staat stil — beweging voor "alles is normaal" maakt van
+            rust een alarm. */}
+        <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="w-fit tabular-nums">
+          {needsAttention
+            ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
+            : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
+        </Badge>
       </div>
 
       {/* === Status-strip ===
           Zelfde raster als het Operations Center: mobiel 2 kolommen, breed
           6 — de 'volgende dienst' krijgt dubbele breedte omdat daar het
           dienstnummer, de tijden en de loopnummers in passen. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
+      {/* Twee rijen op breed: Vandaag + Volgende dienst (elk de helft), daaronder
+          de drie kleine tegels (elk een derde). Op één rij van zeven kolommen
+          werden de kleine tegels smal en zo hoog als de Vandaag-tegel, met
+          afgeknipte labels (Jarno 04-09). */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         {/* Vandaag: het dienstnummer als kop, hoelang nog als boodschap, de
             delen als regels en de dienstbalk (wijzerplaat) eronder — dezelfde
             taal als Mijn dag. Op mobiel over de volle breedte. */}
@@ -291,7 +285,7 @@ export function DashboardView({ notes = [],
           icon={<Clock size={16} />}
           // Mobiel volle breedte; breed altijd dubbel (balk + regels), op
           // md alleen bij meerdere delen.
-          className={cn('col-span-2 md:col-span-1 xl:col-span-2', todayLines.length > 1 && 'md:col-span-2')}
+          className={cn('col-span-2 md:col-span-1 xl:col-span-3', todayLines.length > 1 && 'md:col-span-2')}
           // Kleur alleen als er nú iets gebeurt (oker = lopende dienst);
           // een gewone geplande dag is rusttoestand en blijft slate.
           tone={activeBlok ? 'oker' : 'slate'}
@@ -309,7 +303,7 @@ export function DashboardView({ notes = [],
         <OpsStat
           icon={<Calendar size={16} />}
           tone="slate"
-          className="col-span-2 md:col-span-1 xl:col-span-2"
+          className="col-span-2 md:col-span-1 xl:col-span-3"
           label="Volgende dienst"
           badge={nextShift ? <ServiceChip serviceNumber={serviceNumberOf(nextShift)} /> : undefined}
           text={nextShift ? formatShortDay(nextShift.date) : '—'}
@@ -321,6 +315,7 @@ export function DashboardView({ notes = [],
         <OpsStat
           icon={<Plane size={16} />}
           tone="slate"
+          className="xl:col-span-2"
           label="Verlofsaldo"
           value={balans.betaaldResterend}
           suffix={` / ${balans.betaaldBudget}`}
@@ -331,6 +326,7 @@ export function DashboardView({ notes = [],
         <OpsStat
           icon={<CalendarDays size={16} />}
           tone="slate"
+          className="xl:col-span-2"
           label="Deze maand"
           value={thisMonthShiftCount}
           sub="diensten ingepland"
@@ -339,6 +335,7 @@ export function DashboardView({ notes = [],
         <OpsStat
           icon={<MapPin size={16} />}
           tone={liveDiversions.length > 0 ? 'amber' : 'slate'}
+          className="xl:col-span-2"
           label="Omleidingen"
           value={liveDiversions.length}
           sub={liveDiversions.length === 1 ? 'actieve omleiding' : 'actieve omleidingen'}
@@ -357,8 +354,9 @@ export function DashboardView({ notes = [],
           seeAllLabel="Mijn rooster"
         >
           {upcomingShifts.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
+            /* Neutrale lege staat: geen groen vlak voor een rusttoestand. */
+            <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
                 <Clock size={16} />
               </span>
               <div>
@@ -391,10 +389,11 @@ export function DashboardView({ notes = [],
           onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
         >
           {newestDiversions.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
+            <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
                 <MapPin size={16} />
               </span>
+
               <div>
                 <p className="text-sm font-semibold text-slate-800">Vrije baan</p>
                 <p className="text-xs font-normal text-slate-500">Geen omleidingen op het netwerk.</p>

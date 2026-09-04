@@ -507,7 +507,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         <h3 className="text-sm font-semibold text-slate-800">
                           {hasChanges ? 'Wijzigingen sinds vorige import' : 'Geen wijzigingen sinds vorige import'}
                         </h3>
-                        <Badge tone={hasChanges ? 'amber' : 'emerald'} dot className="tabular-nums">
+                        <Badge tone={hasChanges ? 'amber' : 'emerald'} dot stil={!hasChanges} className="tabular-nums">
                           {hasChanges ? `${totalChanges} te controleren` : 'In sync'}
                         </Badge>
                       </div>
@@ -632,8 +632,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             )}
           />
           <div className="mt-5 space-y-4">
+            {/* Secundair: de gouden knop van dit scherm is "Excel-matrix
+                uploaden" (afwerking 04-09, nr. 5). */}
             <Button
-              variant="primary"
+              variant="secondary"
               className="w-full sm:w-auto"
               onClick={() => setConfirmSyncOpen(true)}
               disabled={isSyncing}
@@ -685,7 +687,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           minute: '2-digit',
                         })}
                       </p>
-                      <Badge tone={hasIssues ? 'amber' : 'emerald'} dot>
+                      <Badge tone={hasIssues ? 'amber' : 'emerald'} dot stil={!hasIssues}>
                         {hasIssues ? 'Controle nodig' : 'Volledig herkend'}
                       </Badge>
                     </div>
@@ -702,10 +704,10 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone="slate" className="tabular-nums">{entry.importedDays} dagen</Badge>
                     <Badge tone="slate" className="tabular-nums">{entry.generatedShifts} diensten</Badge>
-                    <Badge tone={entry.unknownCodes.length > 0 ? 'red' : 'emerald'} className="tabular-nums">
+                    <Badge tone={entry.unknownCodes.length > 0 ? 'red' : 'emerald'} stil={entry.unknownCodes.length === 0} className="tabular-nums">
                       {entry.unknownCodes.length} onbekend
                     </Badge>
-                    <Badge tone={entry.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} className="tabular-nums">
+                    <Badge tone={entry.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} stil={entry.unmatchedDrivers.length === 0} className="tabular-nums">
                       {entry.unmatchedDrivers.length} chauffeur
                     </Badge>
                     {canAdminOverride && entry.snapshotPath && (
@@ -773,7 +775,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             />
           </Field>
           <Button
-            variant="primary"
+            variant="secondary"
             disabled={!printDriverId || !printMonth}
             onClick={() => {
               const url = `${window.location.origin}${window.location.pathname}?print-driver=${encodeURIComponent(printDriverId)}&print-month=${encodeURIComponent(printMonth)}`;
@@ -815,9 +817,9 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           return (
             <>
               <div className="flex flex-wrap gap-2 mb-4">
-                <Badge tone="oker" dot>{upcoming.length} diensten vanaf vandaag</Badge>
-                <Badge tone="slate" dot>{byDate.size} dagen</Badge>
-                <Badge tone="slate" dot>{driverCount} chauffeurs</Badge>
+                <Badge tone="oker" stil className="tabular-nums">{upcoming.length} diensten vanaf vandaag</Badge>
+                <Badge tone="slate" stil className="tabular-nums">{byDate.size} dagen</Badge>
+                <Badge tone="slate" stil className="tabular-nums">{driverCount} chauffeurs</Badge>
               </div>
               <div className="space-y-4 max-h-[28rem] overflow-y-auto pr-1">
                 {[...byDate.entries()].map(([date, daysShifts]) => (
@@ -968,7 +970,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         <div className="flex flex-wrap items-center gap-1.5">
                           <span className="font-semibold">Nieuw in dit bestand:</span>
                           {matrixPreview.chauffeursNieuw.map((naam) => (
-                            <Badge key={naam} tone="emerald">{naam}</Badge>
+                            <Badge key={naam} tone="emerald" stil>{naam}</Badge>
                           ))}
                         </div>
                       )}
@@ -1158,7 +1160,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <div className="rounded-2xl bg-surface-white ring-1 ring-hairline p-4">
                       <div className="flex items-center justify-between gap-3">
                         <MicroLabel className={matrixPreview.unknownCodes.length > 0 ? 'text-red-700' : 'text-slate-500'}>Onbekende codes</MicroLabel>
-                        <Badge tone={matrixPreview.unknownCodes.length > 0 ? 'red' : 'emerald'} className="tabular-nums">{matrixPreview.unknownCodes.length}</Badge>
+                        <Badge tone={matrixPreview.unknownCodes.length > 0 ? 'red' : 'emerald'} stil={matrixPreview.unknownCodes.length === 0} className="tabular-nums">{matrixPreview.unknownCodes.length}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {matrixPreview.unknownCodes.length > 0 ? matrixPreview.unknownCodes.map((code) => (
@@ -1172,7 +1174,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     <div className="rounded-2xl bg-surface-white ring-1 ring-hairline p-4">
                       <div className="flex items-center justify-between gap-3">
                         <MicroLabel className={matrixPreview.unmatchedDrivers.length > 0 ? 'text-amber-700' : 'text-slate-500'}>Niet-gematchte chauffeurs</MicroLabel>
-                        <Badge tone={matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} className="tabular-nums">{matrixPreview.unmatchedDrivers.length}</Badge>
+                        <Badge tone={matrixPreview.unmatchedDrivers.length > 0 ? 'amber' : 'emerald'} stil={matrixPreview.unmatchedDrivers.length === 0} className="tabular-nums">{matrixPreview.unmatchedDrivers.length}</Badge>
                       </div>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {matrixPreview.unmatchedDrivers.length > 0 ? matrixPreview.unmatchedDrivers.map((driver) => (

@@ -202,7 +202,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
               <p className="truncate font-semibold text-slate-900">{device.name}</p>
-              {isOwnCurrent(device) ? <Badge tone="blue">Dit toestel</Badge> : null}
+              {isOwnCurrent(device) ? <Badge tone="blue" stil>Dit toestel</Badge> : null}
             </div>
             <MicroLabel className="mt-0.5">
               {userName(device.userId)} · geregistreerd {formatDateHuman(device.createdAt)}
@@ -210,8 +210,11 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           </div>
           <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
         </button>
+        {/* Secundair: bij meerdere wachtende toestellen stonden hier evenveel
+            gouden knoppen; de gouden "Keur goed" staat in het detailpaneel
+            (afwerking 04-09, nr. 5). */}
         <Button
-          variant="primary"
+          variant="secondary"
           size="sm"
           icon={<ShieldCheck size={14} />}
           disabled={busyKey === keyOf(device)}
@@ -251,7 +254,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
           <span className="truncate text-sm font-semibold text-slate-800">{device.name}</span>
           {device.status === 'revoked' && <Badge tone="red">Geblokkeerd</Badge>}
           {device.status === 'pending' && <Badge tone="amber">Wacht</Badge>}
-          {isOwnCurrent(device) && <Badge tone="blue">Dit toestel</Badge>}
+          {isOwnCurrent(device) && <Badge tone="blue" stil>Dit toestel</Badge>}
         </span>
         <ChevronRight size={14} className={cn('shrink-0 transition-colors', isCurrent ? 'text-oker-500' : 'text-slate-300 group-hover:text-slate-600')} />
       </button>
@@ -357,8 +360,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       leegTekst="Kies een toestel."
       chip={gekozen ? (
         <>
-          <Badge tone={STATUS_BADGE[gekozen.status].tone} dot>{STATUS_BADGE[gekozen.status].label}</Badge>
-          {isOwnCurrent(gekozen) ? <Badge tone="blue">Dit toestel</Badge> : null}
+          <Badge tone={STATUS_BADGE[gekozen.status].tone} dot stil={gekozen.status === 'approved'}>{STATUS_BADGE[gekozen.status].label}</Badge>
+          {isOwnCurrent(gekozen) ? <Badge tone="blue" stil>Dit toestel</Badge> : null}
         </>
       ) : undefined}
       acties={gekozen && !isOwnCurrent(gekozen) ? (
