@@ -5,11 +5,14 @@ import type { Service } from '../../types';
 import { isValidBusvakTime, normalizeTimeString } from '../../lib/shiftTime';
 import { cn, notify, downloadBlob } from '../../lib/ui';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, IconButton, MicroLabel, Td, Th } from '../../components/primitives';
+import { Badge, Button, MicroLabel, Td, Th } from '../../components/primitives';
+import { ActieMenu } from '../../components/ActieMenu';
 import { SortTh, StickyThead, TableToolbar, useSort, useTabelVoorkeur } from '../../components/Table';
 import { Field, Input } from '../../components/Field';
 import { Modal } from '../../components/Modal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
+import { Zijvak, ZijvakLayout, ZijvakRij } from '../../components/Zijvak';
+import { dienstStatistiek, formatDienstDuur } from '../../lib/dienstStatistiek';
 
 // Een deel telt alleen als het een geldige begin- én eindtijd (HH:MM) heeft.
 // Zo tonen we voor 1- of 2-delige diensten geen '--'-placeholder in de lege
@@ -60,6 +63,19 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
   });
   /** "04:36–07:52" — en-dash, zoals de chauffeursweergave. */
   const tijdvak = (van: string, tot: string) => `${van}–${tot}`;
+  // Rij-acties in één "…"-menu (ActieMenu): drie losse iconknoppen maakten de
+  // Acties-kolom te breed om naast het zijvak te passen op 1440 px.
+  const rijActies = (s: Service) => (
+    <ActieMenu
+      size="sm"
+      label={`Acties voor dienst ${s.serviceNumber}`}
+      items={[
+        { label: 'Bewerken', icon: <Pencil size={16} />, onClick: () => handleEdit(s) },
+        { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setHistoryService(s) },
+        ...(canAdminOverride ? [{ label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, onClick: () => handleDelete(s.id) }] : []),
+      ]}
+    />
+  );
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!canAdminOverride) {
@@ -268,6 +284,54 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
     setPendingImportCount(0);
   };
 
+  // Kerncijfers voor het zijvak — over de hele lijst, niet het zoekresultaat.
+  const stat = dienstStatistiek(services);
+  const uiterste = (u: { serviceNumber: string; minuten: number } | null) =>
+    u ? `${u.serviceNumber} · ${formatDienstDuur(u.minuten)}` : '—';
+
+  // Excel importeren + CSV downloaden: secundair, in het zijvak — "Nieuwe
+  // dienst" blijft de enige primaire knop in de paginakop.
+  const zijvak = (
+    <Zijvak
+      titel="Overzicht"
+      voet={(
+        <div className="flex flex-wrap items-center gap-2">
+          {canAdminOverride ? (
+            <>
+              <input
+                type="file"
+                accept=".xlsx, .xls"
+                className="hidden"
+                id="services-upload"
+                onChange={handleFileUpload}
+                disabled={isImporting}
+              />
+              <label
+                htmlFor="services-upload"
+                className={cn(
+                  'control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold text-slate-700 transition-all hover:text-slate-900 min-h-11 sm:pointer-fine:min-h-8',
+                  isImporting && 'cursor-not-allowed opacity-50'
+                )}
+              >
+                <Upload size={14} />
+                {isImporting ? 'Importeren…' : 'Excel importeren'}
+              </label>
+            </>
+          ) : null}
+          <Button variant="secondary" size="sm" icon={<Download size={14} />} onClick={downloadCSV} disabled={services.length === 0}>
+            CSV downloaden
+          </Button>
+          {!canAdminOverride ? <Badge tone="slate">Excel-import alleen voor admins</Badge> : null}
+        </div>
+      )}
+    >
+      <ZijvakRij label="Diensten" waarde={stat.diensten} mono />
+      <ZijvakRij label="Loops" waarde={stat.loops} mono />
+      <ZijvakRij label="Langste dienst" waarde={uiterste(stat.langste)} mono />
+      <ZijvakRij label="Kortste dienst" waarde={uiterste(stat.kortste)} mono />
+    </Zijvak>
+  );
+
   return (
     <PageShell>
       <PageHeader
@@ -276,34 +340,6 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         description="Voeg diensten toe, bewerk of verwijder ze."
         actions={(
           <div className="flex flex-wrap items-center gap-3">
-            {canAdminOverride ? (
-              <>
-                <input
-                  type="file"
-                  accept=".xlsx, .xls"
-                  className="hidden"
-                  id="services-upload"
-                  onChange={handleFileUpload}
-                  disabled={isImporting}
-                />
-                <label
-                  htmlFor="services-upload"
-                  className={cn(
-                    'control-button-soft ios-pressable inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold text-slate-700 transition-all hover:text-slate-900',
-                    isImporting && 'cursor-not-allowed opacity-50'
-                  )}
-                  title="Importeer vanuit Excel"
-                >
-                  <Upload size={16} />
-                  {isImporting ? 'Importeren…' : 'Excel importeren'}
-                </label>
-              </>
-            ) : (
-              <Badge tone="slate">Excel-import alleen voor admins</Badge>
-            )}
-            <Button variant="secondary" icon={<Download size={16} />} onClick={downloadCSV} title="Download als CSV">
-              CSV downloaden
-            </Button>
             <Button
               variant="primary"
               icon={<Plus size={16} />}
@@ -335,6 +371,9 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
         )}
       />
 
+      {/* Desktop: tabel als hoofdkolom + zijvak (afwerkingsronde 04-09);
+          xl omdat de acht kolommen op lg naast een vak te krap zitten. */}
+      <ZijvakLayout breekpunt="xl" zijvak={zijvak}>
       {/* `overflow-clip` i.p.v. TableShell: die maakt een scrollcontainer en
           dan plakt de kolomkop niet meer onder de topbar. De tabel is
           desktop-only (mobiel = kaartlijst), dus horizontaal scrollen hoeft niet. */}
@@ -384,13 +423,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
                     <Td className="tabular-nums whitespace-nowrap">
                       {hasValidTime(s.startTime3, s.endTime3) ? tijdvak(s.startTime3!, s.endTime3!) : ''}
                     </Td>
-                    <Td className="text-right">
-                      <div className="flex items-center justify-end gap-1">
-                        <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryService(s)}><History size={16} /></IconButton>
-                        <IconButton label="Dienst bewerken" variant="ghost" size="sm" onClick={() => handleEdit(s)}><Pencil size={16} /></IconButton>
-                        {canAdminOverride ? <IconButton label="Dienst verwijderen" variant="danger" size="sm" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></IconButton> : null}
-                      </div>
-                    </Td>
+                    <Td className="w-14 text-right">{rijActies(s)}</Td>
                   </tr>
                 ))}
               </tbody>
@@ -404,11 +437,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
             <div key={s.id} className="p-5 space-y-4 hover:bg-slate-50/50 transition-colors">
               <div className="flex justify-between items-center">
                 <span className="text-card-title tabular-nums">{s.serviceNumber}</span>
-                <div className="flex items-center gap-1">
-                  <IconButton label="Wijzigingsgeschiedenis" variant="ghost" size="sm" onClick={() => setHistoryService(s)}><History size={16} /></IconButton>
-                  <IconButton label="Dienst bewerken" variant="ghost" size="sm" onClick={() => handleEdit(s)}><Pencil size={16} /></IconButton>
-                  {canAdminOverride ? <IconButton label="Dienst verwijderen" variant="danger" size="sm" onClick={() => handleDelete(s.id)}><Trash2 size={16} /></IconButton> : null}
-                </div>
+                {rijActies(s)}
               </div>
 
               <div className="grid grid-cols-1 gap-3">
@@ -462,6 +491,7 @@ export function ManageServicesView({ services, onSave, canAdminOverride }: { ser
           </div>
         )}
       </div>
+      </ZijvakLayout>
 
       <Modal open={showModal} onClose={() => setShowModal(false)} maxWidth="lg" className="flex flex-col !p-0">
         <ModalHeader title={editingId ? 'Dienst bewerken' : 'Nieuwe dienst'} onClose={() => setShowModal(false)} />

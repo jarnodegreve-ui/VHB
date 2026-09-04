@@ -3,6 +3,7 @@ import { cn } from '../lib/ui';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Card } from './Card';
 import { SlideOver } from './SlideOver';
+import { EmptyState } from './ui';
 
 /**
  * Hét detailpaneel van het portaal — één patroon voor "iets uit een lijst
@@ -15,7 +16,8 @@ import { SlideOver } from './SlideOver';
  * Desktop heeft bewust geen sluitkruis: het paneel staat gewoon naast de
  * lijst. Een andere rij kiezen wisselt de inhoud; acties in de footer
  * (opslaan, beslissen, annuleren) roepen `onClose` aan waar dat past, en
- * het paneel valt dan terug op de lege staat ("Kies een …").
+ * het paneel valt dan terug op de lege staat ("Kies een …") — één rustige
+ * compacte rij, geen hoge kaart (afwerkingsronde 04-09, nr. 2 en 4).
  */
 const LG = 1024;
 
@@ -27,6 +29,63 @@ const LG = 1024;
  */
 export function useInlinePaneel() {
   return useMinWidth(LG);
+}
+
+/**
+ * Standaardkeuze voor master-detail met eigen selectiestaat (bewerkformulier,
+ * toestel): op desktop staat het eerste item open zodra de lijst er is en er
+ * niets gekozen is; verdwijnt het gekozen item uit de lijst (verwijderd,
+ * weggefilterd), dan schuift de keuze door naar het item op dezelfde plek
+ * (de buur). Mobiel doet niets — daar opent een keuze een SlideOver. Zet
+ * `actief` uit terwijl het paneel iets anders toont dan een item (bv. het
+ * lege "nieuw"-formulier), zodat de preselectie dat niet kaapt.
+ *
+ * Geeft `inline` terug (lg+), zodat de view op mobiel wél kan sluiten na een
+ * actie waar desktop gewoon op het item blijft staan.
+ */
+export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, actief = true }: {
+  items: T[];
+  sleutelVan: (item: T) => string;
+  /** Sleutel van de huidige keuze (null = niets gekozen). */
+  gekozen: string | null;
+  kies: (item: T) => void;
+  /** Keuze wissen bij de wissel naar mobiel als ze automatisch was — anders
+   *  schuift daar ineens een SlideOver open. */
+  wis?: () => void;
+  actief?: boolean;
+}) {
+  const inline = useMinWidth(LG);
+  const vorige = useRef<string[]>([]);
+  // Sleutel van de laatste automatische keuze; null zodra de gebruiker zelf koos.
+  const automatisch = useRef<string | null>(null);
+
+  // Zonder deps: goedkoop (één map over de lijst) en zo mist hij nooit een
+  // wissel — kiezen gebeurt alleen als er echt iets ontbreekt.
+  useEffect(() => {
+    const sleutels = items.map(sleutelVan);
+    if (inline && actief && sleutels.length > 0) {
+      if (gekozen === null) {
+        kies(items[0]);
+        automatisch.current = sleutels[0];
+      } else if (!sleutels.includes(gekozen)) {
+        const i = vorige.current.indexOf(gekozen);
+        const doel = items[Math.min(Math.max(i, 0), items.length - 1)];
+        kies(doel);
+        automatisch.current = sleutelVan(doel);
+      } else if (gekozen !== automatisch.current) {
+        automatisch.current = null;
+      }
+    }
+    vorige.current = sleutels;
+  });
+
+  useEffect(() => {
+    if (inline || automatisch.current === null) return;
+    automatisch.current = null;
+    wis?.();
+  }, [inline, wis]);
+
+  return inline;
 }
 
 /**
@@ -54,6 +113,8 @@ export function DetailPaneel({
   title,
   subtitle,
   icon,
+  chip,
+  acties,
   footer,
   children,
   breedte = 'md',
@@ -70,6 +131,12 @@ export function DetailPaneel({
   subtitle?: string;
   /** Icoontegel links van de titel (zelf sizen, bv. h-9 w-9). */
   icon?: ReactNode;
+  /** Statuschip(s) naast de titel (Badge). Op mobiel in een rij boven de inhoud. */
+  chip?: ReactNode;
+  /** Secundaire acties rechts in de kop (IconButton of ActieMenu: geschiedenis,
+   *  verwijderen …); de footer houdt zo alleen de primaire knoppen. Op mobiel
+   *  in dezelfde rij boven de inhoud (de SlideOver-kop heeft het sluitkruis). */
+  acties?: ReactNode;
   /** Actieknoppen onderaan: vast in beeld, los van de scrollende inhoud. */
   footer?: ReactNode;
   children: ReactNode;
@@ -106,6 +173,12 @@ export function DetailPaneel({
   if (!inline) {
     return (
       <SlideOver open={open} onClose={onClose} title={title} subtitle={subtitle} icon={icon} width={breedte} footer={footer}>
+        {chip || acties ? (
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">{chip}</div>
+            {acties ? <div className="flex shrink-0 items-center gap-1">{acties}</div> : null}
+          </div>
+        ) : null}
         {children}
       </SlideOver>
     );
@@ -115,10 +188,7 @@ export function DetailPaneel({
     if (verbergLeeg) return null;
     return (
       <div ref={wortel} className={cn(plakkend && 'lg:sticky lg:top-16', className)} aria-live="polite">
-        <Card tone="dashed" padding="lg" className="text-center">
-          <p className="text-sm text-slate-500">{leegTekst}</p>
-          {leegActie ? <div className="mt-4 flex justify-center">{leegActie}</div> : null}
-        </Card>
+        <EmptyState compact title={leegTekst} action={leegActie} />
       </div>
     );
   }
@@ -136,9 +206,13 @@ export function DetailPaneel({
         <div className="flex items-start gap-3 border-b border-slate-200/70 p-5 md:p-6">
           {icon}
           <div className="min-w-0 flex-1">
-            <h2 className="text-section-title truncate">{title}</h2>
+            <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+              <h2 className="text-section-title min-w-0 truncate">{title}</h2>
+              {chip}
+            </div>
             {subtitle ? <p className="mt-0.5 text-sm text-slate-500 truncate">{subtitle}</p> : null}
           </div>
+          {acties ? <div className="-my-1 flex shrink-0 items-center gap-1">{acties}</div> : null}
         </div>
         <div key={sleutel} className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-5 md:p-6">
           {children}

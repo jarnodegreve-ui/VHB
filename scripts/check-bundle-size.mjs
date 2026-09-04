@@ -10,7 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import zlib from 'node:zlib';
 
-const BUDGET_KB = 600; // gzip, alle JS in dist/assets samen (stand 30/07: 499 kB)
+const BUDGET_KB = 600; // gzip, alle JS in dist/assets samen zónder de lazy pdf/xlsx-chunks (stand 04/09: ±445 kB)
 
 const dir = 'dist/assets';
 if (!fs.existsSync(dir)) {
@@ -24,6 +24,10 @@ for (const f of fs.readdirSync(dir)) {
     // pdfjs (viewer + worker, ±510 kB gz) laadt alleen bij het openen van een
     // ritblad — lazy chunk, telt niet mee in het startbudget.
     if (/^pdf(\.worker)?[.-]/.test(f)) continue;
+    // xlsx (±160 kB gz) laadt alleen bij Excel-import/-export in de
+    // beheerschermen — ook lazy, telt sinds 04-09 niet meer mee (de
+    // dependency-bump van react/supabase duwde het totaal net over 600).
+    if (/^xlsx[.-]/.test(f)) continue;
   const size = zlib.gzipSync(fs.readFileSync(path.join(dir, f))).length;
   total += size;
   perFile.push([f, size]);

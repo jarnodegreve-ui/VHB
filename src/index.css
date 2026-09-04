@@ -212,6 +212,16 @@
 /* Dispatch-ladder: donker is ontwórpen, niet afgeleid — oppervlakken
    near-opaque (crisper dan de oude alpha-mengsels) en hairlines een
    fractie helderder zodat rijen en kaarten definitie houden op carbon. */
+/* Desktop-schaal (afwerkingsronde 04-09, nr. 1): op een breed scherm is de
+   mobiele maatvoering te klein — alles rem-gebaseerd schaalt mee met de
+   wortel, dus één regel geeft het hele portaal 6 % meer lucht en letter
+   (16 → 17 px basis). px-waarden (max-w-[1200px], logo) blijven staan. */
+@media (min-width: 1280px) {
+  html {
+    font-size: 106.25%;
+  }
+}
+
 html.dark {
   --tile-bg: rgba(23, 24, 26, 0.95);
   --tile-border: 1px solid rgba(255, 255, 255, 0.09);
