@@ -34,10 +34,12 @@ export function DienstBalk({
   const balkH = compact ? 'h-1' : 'h-1.5';
 
   return (
-    <div className={cn('relative', compact ? 'pt-4 pb-4' : 'pt-5 pb-5', className)} role="img" aria-label={omschrijving}>
+    // Bovenruimte = tijdlabel (16) + lucht + streepjes (8) + lucht: het label
+    // van de wijzer stak anders boven de kaartlijn uit (Jarno 04-09).
+    <div className={cn('relative', compact ? 'pt-6 pb-4' : 'pt-8 pb-5', className)} role="img" aria-label={omschrijving}>
       {/* Uurstreepjes boven de balk (niet in de tegel). */}
       {!compact && (
-        <div aria-hidden="true" className="absolute inset-x-0 top-3 h-2">
+        <div aria-hidden="true" className="absolute inset-x-0 top-5 h-2">
           {g.streepjes.map((s) => (
             <span
               key={s.pct}
@@ -77,8 +79,8 @@ export function DienstBalk({
             <span className={cn('block w-0.5 rounded-full bg-oker-500', compact ? 'h-3' : 'h-4')} />
             <span
               className={cn(
-                'absolute bottom-full left-1/2 mb-0.5 whitespace-nowrap font-mono font-bold tabular-nums text-oker-700',
-                compact ? 'text-2xs' : 'text-xs',
+                'absolute bottom-full left-1/2 whitespace-nowrap font-mono font-bold tabular-nums text-oker-700',
+                compact ? 'mb-0.5 text-2xs' : 'mb-2.5 text-xs',
                 wijzer < 8 ? 'translate-x-0' : wijzer > 92 ? '-translate-x-full' : '-translate-x-1/2',
               )}
             >
