@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, ShieldAlert, ShieldCheck, Smartphone, Trash2 } from 'lucide-react';
 import type { User } from '../../types';
 import { apiJson } from '../../lib/api';
@@ -11,7 +11,7 @@ import { TableToolbar } from '../../components/Table';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input } from '../../components/Field';
 import { SkeletonRow } from '../../components/Skeleton';
-import { DetailPaneel, MasterDetail } from '../../components/DetailPaneel';
+import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
 
 type Device = {
   userId: string;
@@ -141,17 +141,38 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]
   ));
 
-  const alle = devices ?? [];
-  const pending = alle.filter((d) => d.status === 'pending');
+  const alle = useMemo(() => devices ?? [], [devices]);
+  const pending = useMemo(() => alle.filter((d) => d.status === 'pending'), [alle]);
   const gekozen = alle.find((d) => keyOf(d) === gekozenKey) ?? null;
   const zoekTerm = zoek.trim().toLowerCase();
   const filterActief = zoekTerm !== '' || statusFilter !== 'all';
-  const zichtbaar = alle.filter((d) => {
+  const zichtbaar = useMemo(() => alle.filter((d) => {
     if (statusFilter !== 'all' && d.status !== statusFilter) return false;
     if (!zoekTerm) return true;
     return `${userName(d.userId)} ${d.name}`.toLowerCase().includes(zoekTerm);
-  });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [alle, statusFilter, zoekTerm, users]);
   const wisFilters = () => { setZoek(''); setStatusFilter('all'); };
+
+  // Desktop: het eerste toestel staat standaard open — de wachtrij eerst
+  // (dat is wat de admin hier komt doen), anders het eerste zichtbare; na
+  // schrappen schuift de keuze door naar de buur. De groep van een
+  // automatisch gekozen toestel klapt open, anders zie je de keuze niet.
+  const volgorde = useMemo(
+    () => [...pending, ...zichtbaar.filter((d) => d.status !== 'pending')],
+    [pending, zichtbaar],
+  );
+  const wisKeuze = useCallback(() => setGekozenKey(null), []);
+  useStandaardKeuze({
+    items: volgorde,
+    sleutelVan: keyOf,
+    gekozen: gekozenKey,
+    kies: (d) => {
+      kies(d);
+      setOpenUsers((cur) => (cur.includes(String(d.userId)) ? cur : [...cur, String(d.userId)]));
+    },
+    wis: wisKeuze,
+  });
   // Groepeer per gebruiker, in de volgorde van de gebruikerslijst (actief eerst).
   const byUser = new Map<string, Device[]>();
   for (const d of zichtbaar) {
@@ -262,6 +283,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         ) : devices.length === 0 ? (
           <div className="mt-4">
             <EmptyState
+              icon={<Smartphone size={20} />}
               title="Nog geen toestellen"
               message="Toestellen verschijnen hier zodra gebruikers inloggen. Blijft de lijst leeg, draai dan eerst de user_devices-migratie."
             />
@@ -285,9 +307,10 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             {zichtbaar.length === 0 ? (
               <div className="mt-4">
                 <EmptyState
+                  compact
                   title={zoekTerm ? `Geen resultaten voor “${zoek.trim()}”` : 'Geen toestellen met deze status'}
                   message="Pas de zoekterm of het statusfilter aan."
-                  action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filter wissen</Button>}
+                  action={<Button variant="secondary" size="sm" onClick={wisFilters}>Wis filters</Button>}
                 />
               </div>
             ) : (
@@ -332,6 +355,17 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       subtitle={gekozen ? userName(gekozen.userId) : undefined}
       sleutel={gekozenKey ?? undefined}
       leegTekst="Kies een toestel."
+      chip={gekozen ? (
+        <>
+          <Badge tone={STATUS_BADGE[gekozen.status].tone} dot>{STATUS_BADGE[gekozen.status].label}</Badge>
+          {isOwnCurrent(gekozen) ? <Badge tone="blue">Dit toestel</Badge> : null}
+        </>
+      ) : undefined}
+      acties={gekozen && !isOwnCurrent(gekozen) ? (
+        <IconButton label="Toestel schrappen" title="Schrappen" variant="danger" size="sm" disabled={bezig} onClick={() => setConfirmDelete(gekozen)}>
+          <Trash2 size={16} />
+        </IconButton>
+      ) : undefined}
       icon={(
         <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-surface-muted text-slate-500">
           <Smartphone size={16} />
@@ -339,11 +373,6 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       )}
       footer={gekozen ? (
         <div className="flex items-center gap-2">
-          {!isOwnCurrent(gekozen) && (
-            <IconButton label="Toestel schrappen" title="Schrappen" variant="danger" disabled={bezig} onClick={() => setConfirmDelete(gekozen)}>
-              <Trash2 size={16} />
-            </IconButton>
-          )}
           {gekozen.status !== 'approved' && (
             <Button variant="primary" size="lg" className="flex-1" icon={<ShieldCheck size={16} />} disabled={bezig} onClick={() => void act(gekozen, 'approve')}>
               Keur goed
@@ -362,11 +391,6 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
     >
       {gekozen && (
         <div className="space-y-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge tone={STATUS_BADGE[gekozen.status].tone} dot>{STATUS_BADGE[gekozen.status].label}</Badge>
-            {isOwnCurrent(gekozen) ? <Badge tone="blue">Dit toestel</Badge> : null}
-          </div>
-
           <form onSubmit={(e) => { e.preventDefault(); void submitRename(gekozen); }}>
             <Field label="Naam" hint="Bv. „iPhone van Jan” — zo herken je het toestel in de lijst.">
               {({ id }) => (
@@ -436,7 +460,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
 
       {/* Lijst links, toestel-detail (naam, status, data, acties) rechts;
           op mobiel opent het detail als SlideOver. */}
-      <MasterDetail lijst={lijst} paneel={paneel} />
+      <MasterDetail lijst={lijst} paneel={devices !== null && devices.length === 0 ? undefined : paneel} />
 
       <ConfirmationModal
         isOpen={!!confirmDelete}
