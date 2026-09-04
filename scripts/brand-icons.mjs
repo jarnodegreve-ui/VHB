@@ -59,10 +59,12 @@ const beeldmerkCarbon = inner.replace(/#FFFFFF|#E2A323/g, TEGEL);
 // Afgeronde hoeken op de tab-/app-iconen (iOS-achtige radius); apple-touch en
 // maskable blijven vol — het OS maskeert die zelf. Maskable: safe-zone is een
 // cirkel van 80 % → een 2:1-beeldmerk past tot ±730 px, we houden 680.
-const ICOON = tileSvg({ rx: 224, markWidth: 760, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
+// markWidth 760 → 880 (04-09, Jarno: logo mocht groter op het icoon); de
+// maskable blijft binnen de veilige 80 %-cirkel (819 px op 1024).
+const ICOON = tileSvg({ rx: 224, markWidth: 880, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
 const FAVICON = tileSvg({ rx: 200, markWidth: 920, title: 'VHB', body: monogram, geom: MONOGRAM, fill: GOUD });
-const VOL = tileSvg({ rx: 0, markWidth: 760, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
-const MASKABLE = tileSvg({ rx: 0, markWidth: 680, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
+const VOL = tileSvg({ rx: 0, markWidth: 880, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
+const MASKABLE = tileSvg({ rx: 0, markWidth: 780, title: 'VHB app-icoon', body: beeldmerkCarbon, fill: GOUD });
 
 fs.writeFileSync(path.join(OUT, 'vhb-icoon.svg'), ICOON);
 fs.writeFileSync(path.join(OUT, 'vhb-favicon.svg'), FAVICON);

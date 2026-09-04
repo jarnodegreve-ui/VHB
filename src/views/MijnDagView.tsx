@@ -236,14 +236,19 @@ export function MijnDagView({
               const pct = nuPct(rij);
               const eersteRij = i === 0;
               const laatsteRij = i === rijen.length - 1;
+              // Nu-markering (Jarno 04-09): geen lijn dwars door de rij, maar
+              // een kort gouden streepje op de rail (de wijzer op een
+              // radio-schaal) en het "nu"-venster als lipje óver de
+              // rechterrand van de kaart. De rail van het lopende blok krijgt
+              // een fijne streepjesschaal, zie hieronder.
               const nuLijn = pct !== null && (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 z-10 flex -translate-y-1/2 items-center gap-2"
+                  className="pointer-events-none absolute inset-x-0 z-10 flex -translate-y-1/2 items-center"
                   style={{ top: `${pct}%` }}
                 >
-                  <span className="h-0.5 flex-1 bg-oker-500" />
-                  <span className="mr-4 rounded-full bg-oker-500 px-2 py-0.5 text-2xs font-bold tabular-nums text-slate-950">
+                  <span className="ml-5 h-0.5 w-5 -translate-x-1 rounded-full bg-oker-500" />
+                  <span className="ml-auto -mr-2 rounded-full bg-oker-500 px-2 py-0.5 text-2xs font-bold tabular-nums text-slate-950 shadow-sm">
                     nu {nuLabel}
                   </span>
                 </span>
@@ -280,6 +285,16 @@ export function MijnDagView({
                       Gereden blokken dempen hun inhoud, niet de nu-lijn erover. */}
                   <span className={cn('relative flex w-3 shrink-0 justify-center', gereden && 'opacity-60')}>
                     <span className={cn('absolute left-1/2 w-px bg-slate-200', eersteRij && laatsteRij && 'hidden', eersteRij ? 'top-4' : 'top-0', laatsteRij ? 'h-4' : 'bottom-0')} />
+                    {/* Streepjesschaal (radio-wijzerplaat) langs het lopende blok:
+                        elke streep = een stukje dienst, de gouden wijzer schuift
+                        erlangs. Alleen decoratie; de voortgang zelf staat in de
+                        progressbar hieronder. */}
+                    {bezig && (
+                      <span
+                        className="absolute inset-y-4 left-1/2 w-2 -translate-x-1/2 opacity-70"
+                        style={{ backgroundImage: 'repeating-linear-gradient(to bottom, var(--color-slate-300) 0 1px, transparent 1px 7px)' }}
+                      />
+                    )}
                     <span
                       className={cn(
                         'relative mt-2.5 h-3 w-3 shrink-0 rounded-full',
