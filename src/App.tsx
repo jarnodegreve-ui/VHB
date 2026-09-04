@@ -1227,7 +1227,7 @@ export default function App() {
         aria-label="Zijbalk"
         inert={!isSidebarOpen && !isDesktopNav}
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform pt-[env(safe-area-inset-top,0px)] lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         // Zachte uitloop zonder overshoot — de bounce voelde gedateerd en
@@ -1296,7 +1296,7 @@ export default function App() {
             de refreshing-state. */}
         <div
           ref={ptrIndicatorRef}
-          className="pointer-events-none absolute inset-x-0 top-0 z-40 flex justify-center opacity-0"
+          className="pointer-events-none absolute inset-x-0 top-[env(safe-area-inset-top,0px)] z-40 flex justify-center opacity-0"
         >
           <div className="mt-2 flex h-9 w-9 items-center justify-center rounded-full bg-surface-white shadow-md ring-1 ring-hairline">
             <RefreshCw size={18} data-ptr-icon className={cn('text-oker-500', ptrRefreshing && 'animate-spin')} />
@@ -1320,6 +1320,7 @@ export default function App() {
               vaste -mx-4 stopte de sticky topbar + haarlijn in landscape met
               notch ~30px vóór de schermrand (de inset is dan ~47px). */}
           <div className="sticky top-0 z-30 -mx-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:-mx-7 mb-5">
+            <div className="statusbalk-strook" aria-hidden="true" />
             <header className={cn("topbar px-[max(1rem,env(safe-area-inset-left),env(safe-area-inset-right))] md:px-7", isScrolled && "topbar--scrolled")}>
               <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between gap-3 py-2.5 min-h-12">
                 <div className="flex items-center gap-2 min-w-0">

@@ -24,7 +24,14 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0D0D0F" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+    <!-- black-translucent + eigen donkere strook (.statusbalk-strook) i.p.v.
+         "black": met de opake statusbalk schoof de webview op iPhone na een
+         herlaad soms achter de statusbalk (topbar "bleef steken", Jarno
+         04-09) — een WebKit-eigenaardigheid van standalone + viewport-fit.
+         Nu ligt de inhoud altijd onder de statusbalk en schilderen we de
+         strook zelf via env(safe-area-inset-top): elke start ziet er
+         hetzelfde uit. -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="VHB" />
     <!-- VHB-icoon (definitief logo, pakket 2026-08): carbon beeldmerk op de
          goud-tegel (01-09, match met het tab-icoon); bron + generator:

@@ -488,6 +488,16 @@ html.dark {
       background-color var(--duration-slow) var(--ease-standard);
   }
 
+  /* Statusbalk-strook (iOS standalone, black-translucent): de inhoud ligt
+     onder de statusbalk; deze strook schildert die zone zelf donker, zodat
+     de witte statusbalktekst leesbaar blijft (ook in licht thema) en de
+     topbar nooit meer achter de statusbalk schuift. Buiten standalone is
+     de inset 0 en is de strook onzichtbaar. */
+  .statusbalk-strook {
+    height: env(safe-area-inset-top, 0px);
+    background: var(--color-ink);
+  }
+
   /* Topbar: full-width werkbalk met haarlijn-onderrand. */
   .topbar {
     /* Near-opaque i.p.v. backdrop-blur: een sticky bar met backdrop-filter
