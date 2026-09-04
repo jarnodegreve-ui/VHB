@@ -114,7 +114,8 @@ test.describe('smoke: ingelogde chauffeur', () => {
     // "Volgende dienst" = de eerstvolgende andere dag (de delen van vandaag
     // staan in de Vandaag-tegel): dag als waarde, dag-woord als subregel en
     // de delen van die dag als regels.
-    await expect(page.getByText('morgen', { exact: true })).toBeVisible();
+    // Subregel = "za 5 sep · morgen" (dag + afstand); het nummer staat groot erboven.
+    await expect(page.getByText(/· morgen$/)).toBeVisible();
     await expect(page.getByText('06:12–09:30').first()).toBeVisible();
     // "Vandaag" toont álle blokken van de gesplitste dienst, elk met loop
     // (tijden en loopnummers in twee uitgelijnde kolommen).
