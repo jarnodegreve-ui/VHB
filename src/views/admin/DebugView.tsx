@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { Bug, DownloadCloud, FlaskConical, Mail, Plus, Trash2, UploadCloud } from 'lucide-react';
+import { Bug, DownloadCloud, FlaskConical, Mail, Plus, RefreshCw, Trash2, UploadCloud } from 'lucide-react';
 import type { Service, Shift, User } from '../../types';
 import { cn, downloadBlob, notify } from '../../lib/ui';
 import { ConfirmationModal, PageHeader, PageShell } from '../../components/ui';
@@ -7,6 +7,7 @@ import { apiFetch } from '../../lib/api';
 import { Badge, Button, Chip } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { InfoTip } from '../../components/InfoTip';
+import { ActieMenu } from '../../components/ActieMenu';
 import { BUILD_INFO, getServiceWorkerVersion } from '../../lib/appVersion';
 import { isoDate } from '../../lib/availability';
 import { OcpiCard } from './OcpiCard';
@@ -266,10 +267,16 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         description="Koppelingen, tabellen en health checks."
         actions={(
           <>
-            <Button variant="secondary" onClick={testWrite} disabled={isTesting}>
-              {isTesting ? 'Testen…' : 'Test schrijven'}
-            </Button>
-            <Button variant="primary" onClick={checkHealth} disabled={isCheckingHealth}>
+            {/* Eén knop in de kop; de schrijftest zit in het "…"-menu ernaast
+                (afwerking 04-09, nr. 7). */}
+            <ActieMenu
+              label="Meer acties"
+              align="left"
+              items={[
+                { label: isTesting ? 'Testen…' : 'Test schrijven', icon: <FlaskConical size={16} />, disabled: isTesting, onClick: () => { void testWrite(); } },
+              ]}
+            />
+            <Button variant="primary" icon={<RefreshCw size={16} className={isCheckingHealth ? 'animate-spin' : ''} />} onClick={checkHealth} disabled={isCheckingHealth}>
               {isCheckingHealth ? 'Controleren…' : 'Status verversen'}
             </Button>
           </>
@@ -307,7 +314,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           </StatusRij>
           <StatusRij label="Service worker">
             {swVersion ? (
-              <Badge tone="emerald" dot>{swVersion}</Badge>
+              <Badge tone="emerald" stil>{swVersion}</Badge>
             ) : (
               <span className="text-xs font-mono text-slate-500">niet actief</span>
             )}
@@ -322,7 +329,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
               <CardHeader title="Supabase" />
               <div className="mt-4 space-y-3">
                 <StatusRij label="Configuratie">
-                  <Badge tone={healthData.supabase === 'configured' ? 'emerald' : 'red'} dot>
+                  <Badge tone={healthData.supabase === 'configured' ? 'emerald' : 'red'} dot stil={healthData.supabase === 'configured'}>
                     {healthData.supabase}
                   </Badge>
                 </StatusRij>
@@ -346,7 +353,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
               />
               <div className="mt-4 space-y-3">
                 <StatusRij label="SMTP">
-                  <Badge tone={healthData.smtp?.status === 'configured' ? 'emerald' : 'red'} dot>
+                  <Badge tone={healthData.smtp?.status === 'configured' ? 'emerald' : 'red'} dot stil={healthData.smtp?.status === 'configured'}>
                     {healthData.smtp?.status === 'configured' ? 'geconfigureerd' : 'niet geconfigureerd'}
                   </Badge>
                 </StatusRij>
@@ -391,7 +398,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 {Object.entries(healthData.tables || {}).map(([name, status]: [string, any]) => (
                   <div key={name} className="flex flex-col gap-1">
                     <StatusRij label={name}>
-                      <Badge tone={status === 'OK' ? 'emerald' : 'red'} dot>
+                      <Badge tone={status === 'OK' ? 'emerald' : 'red'} dot stil={status === 'OK'}>
                         {status === 'OK' ? 'OK' : 'Fout'}
                       </Badge>
                     </StatusRij>
@@ -424,7 +431,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           )}
         />
         <div className="mt-4">
-          <Button variant="primary" onClick={downloadBackup} disabled={isExporting} icon={<DownloadCloud size={16} />}>
+          <Button variant="secondary" onClick={downloadBackup} disabled={isExporting} icon={<DownloadCloud size={16} />}>
             {isExporting ? 'Exporteren…' : 'Download volledige back-up'}
           </Button>
         </div>
@@ -503,7 +510,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           )}
         />
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <Button variant="primary" icon={<Plus size={16} />} onClick={addTestShift}>
+          <Button variant="secondary" icon={<Plus size={16} />} onClick={addTestShift}>
             Fictieve dienst aanmaken
           </Button>
           <Button variant="secondary" icon={<Trash2 size={16} />} onClick={clearTestShifts} disabled={myTestShifts.length === 0}>
