@@ -38,7 +38,7 @@ import { Modal } from '../components/Modal';
 import { EmptyState, ModalHeader } from '../components/ui';
 import { ServiceChip } from '../components/ServiceChip';
 import { OpsPanel, OpsRow, OpsStat, relTime } from '../components/ops';
-import { Badge, Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
+import { Button, Chip, microLabelClass, segItemClass } from '../components/primitives';
 import { Card } from '../components/Card';
 import { DateInput, Field, Select, Textarea } from '../components/Field';
 import { cn, notify, telHref } from '../lib/ui';
@@ -703,7 +703,7 @@ export function PlannerDashboardWidgets({
           — dat zijn korte rijen en er staan er meestal maar twee of drie.
           Op xl+ komt er een derde kolom bij ("Deze week", fase C13); onder
           xl blijft alles zoals het was. */}
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {/* Open taken — gecombineerde werkvoorraad */}
         <OpsPanel
           icon={<Inbox size={16} />}
@@ -887,13 +887,11 @@ export function PlannerDashboardWidgets({
               </OpsPanel>
             )
           )}
-        </div>
-
-        {/* Derde kolom (alleen xl+): dekking per dag voor de komende week.
-            Onder xl verborgen — mobiel en lg blijven ongewijzigd; daar staat
-            dezelfde informatie een tik verder op Openstaande diensten. */}
+          {/* Deze week als compacte strook onder de activiteit (afwerking 04-09,
+              nr. 10): zeven dagcellen i.p.v. een derde smalle kolom met
+              afgekapte regels. Mobiel: een tik verder op Openstaande diensten. */}
         <OpsPanel
-          className="hidden xl:block"
+          className="hidden lg:block"
           icon={<CalendarDays size={16} />}
           title="Deze week"
           aside={coverageDays === null ? 'laden…' : geenVerwachtingen ? undefined : weekOpen === 0 ? 'alles gedekt' : `${weekOpen} open`}
@@ -916,25 +914,30 @@ export function PlannerDashboardWidgets({
               )}
             />
           ) : (
-            <ul className="space-y-1.5">
+            <ul className="grid grid-cols-7 gap-1.5" aria-label="Dekking per dag">
               {weekDagen.map((d) => {
                 const ok = d.missing.length === 0;
+                const dag = new Date(`${d.date}T00:00:00`);
                 return (
-                  <li key={d.date} className="flex items-center justify-between gap-3 rounded-xl bg-surface-row px-3.5 py-2 ring-1 ring-hairline">
-                    <span className="min-w-0">
-                      <span className="block truncate text-sm font-medium text-slate-800">{formatDay(d.date)}</span>
-                      <span className="block truncate text-xs font-normal text-slate-500">
-                        {d.dayType}{!ok ? ` · dienst ${d.missing.slice(0, 3).join(', ')}${d.missing.length > 3 ? '…' : ''}` : ''}
-                      </span>
-                    </span>
-                    {/* Gedekt = stille chip; een gat blijft rood (dat vraagt actie). */}
-                    <Badge tone={ok ? 'emerald' : 'red'} stil={ok} dot={!ok} className="shrink-0 tabular-nums">{d.covered}/{d.expected}</Badge>
+                  <li
+                    key={d.date}
+                    title={ok ? `${formatDay(d.date)} · gedekt` : `${formatDay(d.date)} · open: ${d.missing.join(', ')}`}
+                    className={cn('flex flex-col items-center gap-1 rounded-xl px-1 py-2 ring-1 ring-hairline', ok ? 'bg-surface-row' : 'bg-red-500/8')}
+                  >
+                    <span className="text-micro">{dag.toLocaleDateString('nl-BE', { weekday: 'short' }).replace('.', '')}</span>
+                    <span className="font-mono text-sm font-semibold tabular-nums text-slate-800">{dag.getDate()}</span>
+                    {ok ? (
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-label="gedekt" />
+                    ) : (
+                      <span className="rounded-full bg-red-500/12 px-1.5 text-2xs font-bold tabular-nums text-red-700">{d.missing.length}</span>
+                    )}
                   </li>
                 );
               })}
             </ul>
           )}
         </OpsPanel>
+        </div>
       </div>
 
       {/* === Popup: wie is er vandaag beschikbaar === */}

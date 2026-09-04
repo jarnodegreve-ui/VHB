@@ -1341,6 +1341,22 @@ export default function App() {
                   >
                     {currentMeta.title}
                   </h2>
+                  {/* Zoekveld op desktop (afwerking 04-09, nr. 9): het ⌘K-palette
+                      als zichtbaar veld in de balk, zoals in Linear/Vercel —
+                      de balk was verder leeg. Het is een knop in veld-look:
+                      klikken opent het palette, typen gebeurt dáár. */}
+                  {/* rauw: zoekveld-knop met eigen veld-look (kbd-hint rechts), geen Button-variant */}
+                  <button
+                    type="button"
+                    onClick={() => setIsCommandPaletteOpen(true)}
+                    className="control-input hidden lg:flex ml-3 h-9 w-80 shrink-0 items-center gap-2 rounded-xl px-3 text-left text-sm text-slate-500 transition-colors hover:text-slate-700"
+                    aria-label="Zoeken (⌘K)"
+                    aria-keyshortcuts="Meta+K Control+K"
+                  >
+                    <Search size={16} className="shrink-0" />
+                    <span className="flex-1 truncate">Zoek scherm, persoon of actie</span>
+                    <kbd className="rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 font-mono text-2xs text-slate-600">⌘K</kbd>
+                  </button>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {/* Zoekknop bewust weg (Jarno: "vrij zinloos") — het

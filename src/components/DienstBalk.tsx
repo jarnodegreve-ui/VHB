@@ -36,10 +36,26 @@ export function DienstBalk({
   return (
     // Bovenruimte = tijdlabel (16) + lucht + streepjes (8) + lucht: het label
     // van de wijzer stak anders boven de kaartlijn uit (Jarno 04-09).
-    <div className={cn('relative', compact ? 'pt-6 pb-4' : 'pt-8 pb-5', className)} role="img" aria-label={omschrijving}>
+    // Vaste zones van boven naar onder: tijdlabel (top-1.5, 16 px) · lucht ·
+    // uurstreepjes (top-[26px], 8 px) · lucht · balk (pt-10). Zo raakt het
+    // label nooit de kaartlijn erboven of de streepjes (Jarno 04-09).
+    <div className={cn('relative', compact ? 'pt-7 pb-4' : 'pt-10 pb-5', className)} role="img" aria-label={omschrijving}>
+      {wijzer !== null && (
+        <span
+          aria-hidden="true"
+          className={cn(
+            'absolute whitespace-nowrap font-mono font-bold tabular-nums leading-4 text-oker-700 transition-[left] duration-1000',
+            compact ? 'top-0.5 text-2xs' : 'top-1.5 text-xs',
+            wijzer < 8 ? 'translate-x-0' : wijzer > 92 ? '-translate-x-full' : '-translate-x-1/2',
+          )}
+          style={{ left: `${wijzer}%` }}
+        >
+          {label}
+        </span>
+      )}
       {/* Uurstreepjes boven de balk (niet in de tegel). */}
       {!compact && (
-        <div aria-hidden="true" className="absolute inset-x-0 top-5 h-2">
+        <div aria-hidden="true" className="absolute inset-x-0 top-[26px] h-2">
           {g.streepjes.map((s) => (
             <span
               key={s.pct}
@@ -77,15 +93,6 @@ export function DienstBalk({
             style={{ left: `${wijzer}%` }}
           >
             <span className={cn('block w-0.5 rounded-full bg-oker-500', compact ? 'h-3' : 'h-4')} />
-            <span
-              className={cn(
-                'absolute bottom-full left-1/2 whitespace-nowrap font-mono font-bold tabular-nums text-oker-700',
-                compact ? 'mb-0.5 text-2xs' : 'mb-2.5 text-xs',
-                wijzer < 8 ? 'translate-x-0' : wijzer > 92 ? '-translate-x-full' : '-translate-x-1/2',
-              )}
-            >
-              {label}
-            </span>
           </span>
         )}
       </div>
