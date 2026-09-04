@@ -105,18 +105,22 @@ export function OpsStat({
           {lines.map((l) => (
             <div
               key={`${l.left}-${l.right ?? ''}`}
+              // flex-wrap + nowrap links: in een smalle tegel (twee kolommen op
+              // mobiel) brak "15:56–25:20" op het streepje in twee regels naast
+              // "loop 4614" (Jarno 04-09). Nu blijft de tijd heel en zakt het
+              // rechterdeel naar een eigen regel, rechts uitgelijnd.
               className={cn(
-                'flex items-baseline justify-between gap-3 text-2xs font-mono font-medium tabular-nums',
+                'flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 text-2xs font-mono font-medium tabular-nums',
                 l.done ? 'text-slate-500' : 'text-slate-600',
               )}
             >
-              <span className={cn('inline-flex items-center gap-1.5', l.done && 'line-through decoration-slate-300')}>
+              <span className={cn('inline-flex items-center gap-1.5 whitespace-nowrap', l.done && 'line-through decoration-slate-300')}>
                 {/* "Nu"-stip: het blok dat op dit moment loopt. */}
                 {l.active && <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-oker-500 animate-pulse" aria-label="nu bezig" />}
                 {l.left}
               </span>
               {l.right && (
-                <span className={cn('shrink-0 text-slate-500', l.done && 'text-slate-400')}>{l.right}</span>
+                <span className={cn('ml-auto shrink-0 text-slate-500', l.done && 'text-slate-400')}>{l.right}</span>
               )}
             </div>
           ))}
