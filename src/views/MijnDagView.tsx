@@ -12,6 +12,7 @@ import { OpsRow } from '../components/ops';
 import { Button, Chip, segItemClass } from '../components/primitives';
 import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
+import { DienstBalk } from '../components/DienstBalk';
 
 /**
  * Mijn dag — het broekzakscherm van de chauffeur.
@@ -119,22 +120,10 @@ export function MijnDagView({
     });
   });
   const blokken = rijen.filter((r): r is Extract<Rij, { soort: 'blok' }> => r.soort === 'blok');
-  const laatste = blokken[blokken.length - 1];
-  const eerste = blokken[0];
 
   // "Nu" in minuten t.o.v. middernacht van vandaag (de peildag bij offset 0).
   const nuMin = now.getHours() * 60 + now.getMinutes();
   const nuLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
-  /** Positie (0–100) van de nu-lijn binnen een rij; null als "nu" er niet in valt. */
-  const nuPct = (r: Rij): number | null => {
-    if (!isVandaag || !eerste || !laatste) return null;
-    // Vóór de eerste start: lijn bovenaan het eerste blok; na het einde: onderaan het laatste.
-    if (nuMin < eerste.start) return r === eerste ? 0 : null;
-    if (nuMin >= laatste.end) return r === laatste ? 100 : null;
-    if (nuMin < r.start || nuMin >= r.end) return null;
-    return ((nuMin - r.start) / Math.max(1, r.end - r.start)) * 100;
-  };
-
   // Statuszin: "Dienst 2101 · 2 delen · tot 17:29" / "Vrij vandaag".
   const dagWoord = isVandaag ? 'vandaag' : 'morgen';
   const statuszin = (() => {
@@ -233,30 +222,16 @@ export function MijnDagView({
         <Card as="section" padding="none" aria-label="Tijdlijn van de dienst">
           <ol className="py-2">
             {rijen.map((rij, i) => {
-              const pct = nuPct(rij);
               const eersteRij = i === 0;
               const laatsteRij = i === rijen.length - 1;
-              // Nu-markering (Jarno 04-09): geen lijn dwars door de rij, maar
-              // een kort gouden streepje op de rail (de wijzer op een
-              // radio-schaal) en het "nu"-venster als lipje óver de
-              // rechterrand van de kaart. De rail van het lopende blok krijgt
-              // een fijne streepjesschaal, zie hieronder.
-              // Het "nu"-venster zelf hangt niet meer op deze hoogte (het
-              // overlapte de loop-chip bij een dienst die net begonnen was,
-              // Jarno 04-09) maar onder de voortgangsbalk, op de punt van de
-              // vulling — zie `nuVenster` hieronder.
-              const nuLijn = pct !== null && (
-                <span
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-5 z-10 h-0.5 w-5 -translate-x-1 -translate-y-1/2 rounded-full bg-oker-500"
-                  style={{ top: `${pct}%` }}
-                />
-              );
+              // Bij één blok is er niets om langs te reizen: geen rail, geen
+              // stip (Jarno 04-09). De dienstbalk onderaan is dan het
+              // instrument; bij meerdere delen blijft de rail de rode draad.
+              const metRail = rijen.length > 1;
 
               if (rij.soort === 'pauze') {
                 return (
                   <li key={`pauze-${rij.start}`} className="relative flex gap-4 px-5 py-3">
-                    {nuLijn}
                     <span className="relative flex w-3 shrink-0 justify-center">
                       <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-slate-300" />
                     </span>
@@ -268,83 +243,60 @@ export function MijnDagView({
               }
 
               const { shift, nr, gereden, bezig, start, end } = rij;
-              const voortgang = bezig ? Math.max(0, Math.min(100, ((nuMin - start) / Math.max(1, end - start)) * 100)) : null;
               const resterend = bezig ? end - nuMin : null;
               const totStart = isVandaag && !gereden && !bezig && start > nuMin ? start - nuMin : null;
               const sub = [
                 blokken.length > 1 ? `deel ${nr}/${blokken.length}` : null,
                 fmtDuur(end - start),
-                gereden ? 'gereden' : resterend !== null ? `nog ${fmtDuur(resterend)}` : totStart !== null ? `start over ${fmtDuur(totStart)}` : null,
+                gereden ? 'gereden' : totStart !== null ? `start over ${fmtDuur(totStart)}` : null,
               ].filter(Boolean).join(' · ');
 
               return (
                 <li key={shift.id} className="relative flex gap-4 px-5 py-4">
-                  {nuLijn}
-                  {/* Rail met stip: gedempt (gereden), oker (bezig) of open (nog te rijden).
-                      Gereden blokken dempen hun inhoud, niet de nu-lijn erover. */}
-                  <span className={cn('relative flex w-3 shrink-0 justify-center', gereden && 'opacity-60')}>
-                    <span className={cn('absolute left-1/2 w-px bg-slate-200', eersteRij && laatsteRij && 'hidden', eersteRij ? 'top-4' : 'top-0', laatsteRij ? 'h-4' : 'bottom-0')} />
-                    {/* Streepjesschaal (radio-wijzerplaat) langs het lopende blok:
-                        elke streep = een stukje dienst, de gouden wijzer schuift
-                        erlangs. Alleen decoratie; de voortgang zelf staat in de
-                        progressbar hieronder. */}
-                    {bezig && (
+                  {/* Rail met stip: gedempt (gereden), oker (bezig) of open (nog te rijden). */}
+                  {metRail && (
+                    <span className={cn('relative flex w-3 shrink-0 justify-center', gereden && 'opacity-60')}>
+                      <span className={cn('absolute left-1/2 w-px bg-slate-200', eersteRij ? 'top-4' : 'top-0', laatsteRij ? 'h-4' : 'bottom-0')} />
                       <span
-                        className="absolute -inset-y-3 left-1/2 w-2 -translate-x-1/2 opacity-70"
-                        style={{ backgroundImage: 'repeating-linear-gradient(to bottom, var(--color-slate-300) 0 1px, transparent 1px 7px)' }}
+                        className={cn(
+                          'relative mt-2.5 h-3 w-3 shrink-0 rounded-full',
+                          gereden ? 'bg-slate-300' : bezig ? 'bg-oker-500 ring-4 ring-oker-500/20' : 'border-2 border-slate-300 bg-surface-white',
+                        )}
                       />
-                    )}
-                    <span
-                      className={cn(
-                        'relative mt-2.5 h-3 w-3 shrink-0 rounded-full',
-                        gereden ? 'bg-slate-300' : bezig ? 'bg-oker-500 ring-4 ring-oker-500/20' : 'border-2 border-slate-300 bg-surface-white',
-                      )}
-                    />
-                  </span>
+                    </span>
+                  )}
                   <div className={cn('min-w-0 flex-1', gereden && 'opacity-60')}>
                     <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                       {/* Groot en mono: tijden zijn het instrumentpaneel, leesbaar op armlengte. */}
                       <p className={cn('text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em]', gereden ? 'text-slate-500' : 'text-slate-900')}>
                         {shift.startTime}–{shift.endTime}
                       </p>
+                      {/* De boodschap rechts van de tijd, groot en goud: hoelang nog. */}
+                      {resterend !== null && (
+                        <p className="text-xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-oker-700">nog {fmtDuur(resterend)}</p>
+                      )}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+                      <p className="text-sm font-medium tabular-nums text-slate-500">{sub}</p>
                       <span className="flex items-center gap-1.5">
                         {dienstnummers.length > 1 && <ServiceChip serviceNumber={serviceNumberOf(shift)} tone={bezig ? 'oker' : 'slate'} />}
                         {shift.loopnr?.trim() && <Chip tone={bezig ? 'oker' : 'slate'} className="text-xs">loop {shift.loopnr.trim()}</Chip>}
                       </span>
                     </div>
-                    <p className={cn('mt-1 text-sm font-medium tabular-nums', bezig ? 'text-oker-800' : 'text-slate-500')}>{sub}</p>
-                    {voortgang !== null && (
-                      <div className="relative mt-2.5 mb-6">
-                        <div
-                          className="h-1 overflow-hidden rounded-full bg-slate-200/70"
-                          role="progressbar"
-                          aria-valuenow={Math.round(voortgang)}
-                          aria-valuemin={0}
-                          aria-valuemax={100}
-                          aria-label="voortgang van het lopende blok"
-                        >
-                          <div className="h-full rounded-full bg-oker-500 transition-[width] duration-1000" style={{ width: `${voortgang}%` }} />
-                        </div>
-                        {/* "nu"-venster op de punt van de vulling, onder de balk;
-                            aan de randen blijft het binnen de balk (geen
-                            overlap met chips of kaartrand). */}
-                        <span
-                          aria-hidden="true"
-                          className={cn(
-                            'absolute top-2.5 rounded-full bg-oker-500 px-2 py-0.5 text-2xs font-bold tabular-nums text-slate-950 transition-[left] duration-1000',
-                            voortgang < 10 ? '' : voortgang > 90 ? '-translate-x-full' : '-translate-x-1/2',
-                          )}
-                          style={{ left: `${voortgang}%` }}
-                        >
-                          nu {nuLabel}
-                        </span>
-                      </div>
-                    )}
                   </div>
                 </li>
               );
             })}
           </ol>
+          {/* De wijzerplaat van de dag: één balk van eerste start tot laatste
+              einde, pauzes als gaten, uurstreepjes, wijzer op "nu". */}
+          <div className="border-t border-slate-100 px-5 pb-1">
+            <DienstBalk
+              delen={blokken.map((b) => ({ start: b.start, end: b.end, loopnr: b.shift.loopnr }))}
+              nuMin={isVandaag ? nuMin : null}
+              nuLabel={nuLabel}
+            />
+          </div>
         </Card>
       )}
 

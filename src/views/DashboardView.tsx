@@ -15,6 +15,7 @@ import { Badge, Button, MicroLabel } from '../components/primitives';
 import { Card } from '../components/Card';
 import { WatIsNieuwKaart } from '../components/WatIsNieuwKaart';
 import { ServiceChip } from '../components/ServiceChip';
+import { DienstBalk } from '../components/DienstBalk';
 
 /**
  * Chauffeursdashboard — zelfde Operations Center-taal als het planner/admin-
@@ -81,30 +82,42 @@ export function DashboardView({ notes = [],
   const todayParts = myShifts
     .filter((s) => s.date === today)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
-  // Voortgang binnen een blok: zelfde impliciete-nachtdienst-regel als
-  // isShiftActiveAt (eind ≤ start = +24u).
+  const todayLines = todayParts.map((p) => ({
+    left: `${p.startTime}–${p.endTime}`,
+    right: p.loopnr ? `loop ${p.loopnr}` : undefined,
+    done: hasShiftEnded(p, now),
+    active: isShiftActiveAt(p, now),
+  }));
   const toMin = (t: string) => {
     const [h, m] = t.split(':').map(Number);
     return (h ?? 0) * 60 + (m ?? 0);
   };
-  const blockProgress = (p: { startTime: string; endTime: string }): number => {
+  // Dienstbalk-delen in minuten (eind ≤ start = nachtdienst, +24u).
+  const balkDelen = todayParts.map((p) => {
     const start = toMin(p.startTime);
     let end = toMin(p.endTime);
     if (end <= start) end += 1440;
-    let nowMin = now.getHours() * 60 + now.getMinutes();
-    if (nowMin < start) nowMin += 1440;
-    return ((nowMin - start) / Math.max(1, end - start)) * 100;
-  };
-  const todayLines = todayParts.map((p) => {
-    const active = isShiftActiveAt(p, now);
-    return {
-      left: `${p.startTime}–${p.endTime}`,
-      right: p.loopnr ? `loop ${p.loopnr}` : undefined,
-      done: hasShiftEnded(p, now),
-      active,
-      progress: active ? blockProgress(p) : undefined,
-    };
+    return { start, end, loopnr: p.loopnr };
   });
+  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
+  const fmtDuur = (minuten: number) => {
+    const u = Math.floor(minuten / 60);
+    const m = minuten % 60;
+    if (u === 0) return `${m}min`;
+    if (m === 0) return `${u}u`;
+    return `${u}u ${String(m).padStart(2, '0')}min`;
+  };
+  // Statusregel van de Vandaag-tegel: hoelang nog (bezig), wanneer het begint, of klaar.
+  const activeBlok = balkDelen.find((d) => nowMin >= d.start && nowMin < d.end);
+  const volgendBlok = balkDelen.find((d) => d.start > nowMin);
+  const todayStatus = todayParts.length === 0
+    ? 'geen dienst gepland'
+    : activeBlok
+      ? `nog ${fmtDuur(activeBlok.end - nowMin)}`
+      : volgendBlok
+        ? `start over ${fmtDuur(volgendBlok.start - nowMin)}`
+        : 'dienst gereden';
   // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
   const todayServices = [...new Set(todayParts.map((p) => String(p.line || '').trim()).filter(Boolean))];
   const todayNote = notes.find((n) => n.date === today)?.note;
@@ -115,8 +128,14 @@ export function DashboardView({ notes = [],
       const [hours, minutes] = s.startTime.split(':').map(Number);
       return { ...s, startDateTime: new Date(year, month - 1, day, hours, minutes) };
     })
-    .filter((s) => s.startDateTime > now)
+    // Ná vandaag: de delen van vandaag staan al in de Vandaag-tegel, dus
+    // "volgende dienst" is de eerstvolgende andere dag (zoals op Mijn dag).
+    .filter((s) => s.date > today)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
+  // Alle delen van die volgende dag, voor de regels in de tegel.
+  const nextParts = nextShift
+    ? myShifts.filter((s) => s.date === nextShift.date).sort((a, b) => a.startTime.localeCompare(b.startTime))
+    : [];
 
   // Verlopen omleidingen horen niet in tegel/paneel: "actief" moet actief zijn
   // (zelfde regel als het beheer-dashboard sinds #251).
@@ -264,43 +283,39 @@ export function DashboardView({ notes = [],
           Zelfde raster als het Operations Center: mobiel 2 kolommen, breed
           6 — de 'volgende dienst' krijgt dubbele breedte omdat daar het
           dienstnummer, de tijden en de loopnummers in passen. */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
+        {/* Vandaag: het dienstnummer als kop, hoelang nog als boodschap, de
+            delen als regels en de dienstbalk (wijzerplaat) eronder — dezelfde
+            taal als Mijn dag. Op mobiel over de volle breedte. */}
         <OpsStat
           icon={<Clock size={16} />}
-          className={todayLines.length > 1 ? 'md:col-span-2 xl:col-span-2' : undefined}
+          // Mobiel volle breedte; breed altijd dubbel (balk + regels), op
+          // md alleen bij meerdere delen.
+          className={cn('col-span-2 md:col-span-1 xl:col-span-2', todayLines.length > 1 && 'md:col-span-2')}
           // Kleur alleen als er nú iets gebeurt (oker = lopende dienst);
           // een gewone geplande dag is rusttoestand en blijft slate.
-          tone={todayLines.some((l) => l.active) ? 'oker' : 'slate'}
+          tone={activeBlok ? 'oker' : 'slate'}
           label="Vandaag"
-          // Dienstnummer als kop, de blokken eronder: geen herhaling van
-          // dezelfde tijd in groot én klein.
           text={todayParts.length === 0 ? 'Vrij' : todayServices.join(' / ') || todayParts[0].startTime}
-          sub={
-            todayParts.length === 0
-              ? 'geen dienst gepland'
-              : todayLines.length > 1
-                ? `${todayLines.length} delen · tot ${todayParts[todayParts.length - 1].endTime}`
-                : `tot ${todayParts[0].endTime}`
-          }
+          sub={todayStatus}
+          subClassName={activeBlok ? 'text-sm font-semibold text-oker-800' : 'text-sm font-semibold text-slate-600'}
           lines={todayLines}
+          balk={todayParts.length > 0 ? <DienstBalk compact delen={balkDelen} nuMin={nowMin} nuLabel={nowLabel} className="mt-1" /> : undefined}
           note={todayNote}
-          onClick={onNavigate ? () => onNavigate('rooster') : undefined}
+          onClick={onNavigate ? () => onNavigate('mijn-dag') : undefined}
         />
-        {/* Bewust kaal (verzoek Jarno): het dienstnummer volstaat hier,
-            de blokken/uren staan in "Komende diensten" en het rooster. */}
+        {/* Volgende dienst: de dag is hier de informatie, het dienstnummer
+            staat als chip in de kop; eronder wanneer en de delen. */}
         <OpsStat
           icon={<Calendar size={16} />}
           tone="slate"
+          className="col-span-2 md:col-span-1 xl:col-span-2"
           label="Volgende dienst"
-          text={nextShift ? serviceNumberOf(nextShift) : '—'}
-          // De subregel ís hier de boodschap (wanneer rijd ik?) — dus een
-          // maat groter dan de standaard tegel-subtekst.
+          badge={nextShift ? <ServiceChip serviceNumber={serviceNumberOf(nextShift)} /> : undefined}
+          text={nextShift ? formatShortDay(nextShift.date) : '—'}
           subClassName="text-sm font-semibold text-slate-600"
-          sub={
-            nextShift
-              ? `${relativeDay(nextShift.date)} · ${formatShortDay(nextShift.date)}`
-              : 'niets ingepland'
-          }
+          sub={nextShift ? relativeDay(nextShift.date) : 'niets ingepland'}
+          lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
         <OpsStat
