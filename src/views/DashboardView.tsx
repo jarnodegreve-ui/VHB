@@ -298,17 +298,17 @@ export function DashboardView({ notes = [],
           note={todayNote}
           onClick={onNavigate ? () => onNavigate('mijn-dag') : undefined}
         />
-        {/* Volgende dienst: de dag is hier de informatie, het dienstnummer
-            staat als chip in de kop; eronder wanneer en de delen. */}
+        {/* Volgende dienst: dienstnummer groot, eronder de dag en de delen. */}
         <OpsStat
           icon={<Calendar size={16} />}
           tone="slate"
           className="col-span-2 md:col-span-1 xl:col-span-3"
           label="Volgende dienst"
-          badge={nextShift ? <ServiceChip serviceNumber={serviceNumberOf(nextShift)} /> : undefined}
-          text={nextShift ? formatShortDay(nextShift.date) : '—'}
+          // Dienstnummer groot, net als in de Vandaag-tegel (Jarno 04-09:
+          // het nummer is het belangrijkste); dag + afstand op de subregel.
+          text={nextShift ? serviceNumberOf(nextShift) : '—'}
           subClassName="text-sm font-semibold text-slate-600"
-          sub={nextShift ? relativeDay(nextShift.date) : 'niets ingepland'}
+          sub={nextShift ? `${formatShortDay(nextShift.date)} · ${relativeDay(nextShift.date)}` : 'niets ingepland'}
           lines={nextParts.map((p) => ({ left: `${p.startTime}–${p.endTime}`, right: p.loopnr ? `loop ${p.loopnr}` : undefined }))}
           onClick={onNavigate ? () => onNavigate('rooster') : undefined}
         />
