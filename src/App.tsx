@@ -1355,7 +1355,7 @@ export default function App() {
                   >
                     <Search size={16} className="shrink-0" />
                     <span className="flex-1 truncate">Zoek scherm, persoon of actie</span>
-                    <kbd className="rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 font-mono text-2xs text-slate-500">⌘K</kbd>
+                    <kbd className="rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 font-mono text-2xs text-slate-600">⌘K</kbd>
                   </button>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">

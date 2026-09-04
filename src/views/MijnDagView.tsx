@@ -193,13 +193,22 @@ export function MijnDagView({
             ))}
           </div>
         </div>
-        {/* De statuszin ís de boodschap — groter dan een gewone subregel. */}
-        <p className="mt-2 flex items-center gap-2 text-base font-semibold text-slate-800 tabular-nums">
-          {blokken.some((b) => b.bezig) && (
-            <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-oker-500" aria-label="dienst bezig" />
-          )}
-          {statuszin}
-        </p>
+        {/* De statuszin ís de boodschap — het dienstnummer voorop en groot:
+            "welke dienst rijd ik" is het belangrijkste wat hier staat
+            (Jarno 04-09). */}
+        {delen.length === 0 ? (
+          <p className="mt-2 text-base font-semibold text-slate-800">{statuszin}</p>
+        ) : (
+          <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            <span className="inline-flex items-center gap-2 rounded-xl bg-oker-500 px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-[-0.01em] text-slate-950">
+              {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-slate-950/60 animate-pulse" aria-label="dienst bezig" />}
+              {dienstnummers.length > 1 ? dienstnummers.join(' / ') : dienstnummers[0] ?? '--'}
+            </span>
+            <p className="text-base font-semibold text-slate-800 tabular-nums">
+              {delen.length > 1 ? `${delen.length} delen · tot ${delen[delen.length - 1].endTime}` : `${delen[0].startTime}–${delen[delen.length - 1].endTime}`}
+            </p>
+          </div>
+        )}
       </header>
 
       {/* === Tijdlijn === */}
@@ -271,7 +280,7 @@ export function MijnDagView({
                     <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                       <p className="text-sm font-medium tabular-nums text-slate-500">{sub}</p>
                       <span className="flex items-center gap-1.5">
-                        {dienstnummers.length > 1 && <ServiceChip serviceNumber={serviceNumberOf(shift)} tone={bezig ? 'oker' : 'slate'} />}
+                        <ServiceChip serviceNumber={serviceNumberOf(shift)} tone={bezig ? 'oker' : 'slate'} />
                         {shift.loopnr?.trim() && <Chip tone={bezig ? 'oker' : 'slate'} className="text-xs">loop {shift.loopnr.trim()}</Chip>}
                       </span>
                     </div>
