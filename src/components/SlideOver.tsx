@@ -148,6 +148,7 @@ export function SlideOver({
               widthClass,
             )}
           >
+            <div className="statusbalk-strook shrink-0" aria-hidden="true" />
             {/* Landscape: iOS negeert de portrait-lock uit het manifest, dus
                 header, inhoud en footer respecteren de zij-insets — anders valt
                 het sluitkruis deels achter de notch-hoek. */}

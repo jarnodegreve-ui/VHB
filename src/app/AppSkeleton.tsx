@@ -33,6 +33,7 @@ export function AppSkeleton() {
         </div>
       </aside>
       <main className="flex-1 min-w-0 flex flex-col overflow-hidden">
+        <div className="statusbalk-strook" aria-hidden="true" />
         <header className="topbar px-4 md:px-7">
           <div className="mx-auto flex w-full max-w-[1200px] items-center justify-between py-2.5 min-h-12">
             <span className="lg:hidden"><BrandLogo tone="licht" variant="beeldmerk" laden className="h-6 w-auto select-none block dark:hidden" /><BrandLogo tone="donker" variant="beeldmerk" laden className="h-6 w-auto select-none hidden dark:block" /></span>
