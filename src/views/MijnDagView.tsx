@@ -200,8 +200,10 @@ export function MijnDagView({
           <p className="mt-2 text-base font-semibold text-slate-800">{statuszin}</p>
         ) : (
           <div className="mt-2.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="inline-flex items-center gap-2 rounded-xl bg-oker-500 px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-[-0.01em] text-slate-950">
-              {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-slate-950/60 animate-pulse" aria-label="dienst bezig" />}
+            {/* Tint i.p.v. vol goud (Jarno 04-09: te fel/druk): groot en mono
+                blijft de nadruk, het goud is voor de balk en "nog …". */}
+            <span className="inline-flex items-center gap-2 rounded-xl border border-oker-500/30 bg-oker-500/12 px-3 py-1.5 font-mono text-xl font-bold tabular-nums tracking-[-0.01em] text-oker-800">
+              {blokken.some((b) => b.bezig) && <span className="h-2 w-2 shrink-0 rounded-full bg-oker-500 animate-pulse" aria-label="dienst bezig" />}
               {dienstnummers.length > 1 ? dienstnummers.join(' / ') : dienstnummers[0] ?? '--'}
             </span>
             <p className="text-base font-semibold text-slate-800 tabular-nums">
@@ -280,8 +282,11 @@ export function MijnDagView({
                     <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
                       <p className="text-sm font-medium tabular-nums text-slate-500">{sub}</p>
                       <span className="flex items-center gap-1.5">
-                        <ServiceChip serviceNumber={serviceNumberOf(shift)} tone={bezig ? 'oker' : 'slate'} />
-                        {shift.loopnr?.trim() && <Chip tone={bezig ? 'oker' : 'slate'} className="text-xs">loop {shift.loopnr.trim()}</Chip>}
+                        {/* Dienstchip alleen als de dag meerdere dienstnummers heeft (anders
+                            staat hij al groot in de kop); chips neutraal — bezig zie je aan
+                            de balk en de "nog"-tekst. */}
+                        {dienstnummers.length > 1 && <ServiceChip serviceNumber={serviceNumberOf(shift)} />}
+                        {shift.loopnr?.trim() && <Chip className="text-xs">loop {shift.loopnr.trim()}</Chip>}
                       </span>
                     </div>
                   </div>
