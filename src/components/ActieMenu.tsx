@@ -40,6 +40,20 @@ export function ActieMenu({
   const wortel = useRef<HTMLDivElement>(null);
   const lijst = useRef<HTMLDivElement>(null);
   const id = useId();
+  // Viewport-bewust: `align` is de voorkeur; valt het menu buiten beeld
+  // (bv. "…" links in een mobiele kop), dan klapt het naar de andere kant.
+  const [kant, setKant] = useState<'left' | 'right'>(align);
+  useEffect(() => {
+    if (!open) {
+      setKant(align);
+      return;
+    }
+    const el = lijst.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    if (align === 'right' && r.left < 8) setKant('left');
+    else if (align === 'left' && r.right > window.innerWidth - 8) setKant('right');
+  }, [open, align]);
 
   useEffect(() => {
     if (!open) return;
@@ -91,7 +105,7 @@ export function ActieMenu({
           aria-label={label}
           className={cn(
             'absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline shadow-xl',
-            align === 'right' ? 'right-0' : 'left-0',
+            kant === 'right' ? 'right-0' : 'left-0',
           )}
         >
           {items.map((item, i) => (
