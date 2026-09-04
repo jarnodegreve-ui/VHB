@@ -3,7 +3,6 @@ import { AlertTriangle, Calendar, FileText, MapPin } from 'lucide-react';
 import { activeDiversions } from '../lib/diversions';
 import { isoDate } from '../lib/availability';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
-import { openHuidigRitblad } from '../lib/ritblad';
 import { hasShiftEnded, isShiftActiveAt } from '../lib/shiftTime';
 import { cn } from '../lib/ui';
 import type { Diversion, Shift, User, View } from '../types';
@@ -13,6 +12,7 @@ import { Button, Chip, segItemClass } from '../components/primitives';
 import { ServiceChip } from '../components/ServiceChip';
 import { Skeleton, SkeletonRow } from '../components/Skeleton';
 import { DienstBalk } from '../components/DienstBalk';
+import { RitbladViewer } from '../components/RitbladViewer';
 
 /**
  * Mijn dag — het broekzakscherm van de chauffeur.
@@ -81,7 +81,8 @@ export function MijnDagView({
   const [now, setNow] = useState(new Date());
   // Vandaag | Morgen — 's avonds is "wanneer moet ik morgen beginnen" dé vraag.
   const [dagOffset, setDagOffset] = useState<0 | 1>(0);
-  const [ritbladBezig, setRitbladBezig] = useState(false);
+  // Ritblad per dienst: de viewer zoekt de pagina's van het dienstnummer in de bundel.
+  const [ritbladOpen, setRitbladOpen] = useState(false);
 
   useEffect(() => {
     const timer = setInterval(() => setNow(new Date()), 60000);
@@ -150,15 +151,6 @@ export function MijnDagView({
   };
 
   const liveOmleidingen = activeDiversions(diversions);
-
-  const openRitblad = async () => {
-    setRitbladBezig(true);
-    try {
-      await openHuidigRitblad();
-    } finally {
-      setRitbladBezig(false);
-    }
-  };
 
   if (isInitialLoad) {
     return (
@@ -308,11 +300,15 @@ export function MijnDagView({
         </Card>
       )}
 
-      {/* === Ritblad: één blad voor iedereen, dus alleen bij de dienst van vandáág === */}
+      {/* === Ritblad: de bundel is voor iedereen, maar de viewer toont meteen de
+          pagina's van jóuw dienstnummer (Jarno 04-09); alleen bij vandaag. === */}
       {isVandaag && delen.length > 0 && (
-        <Button variant="secondary" size="lg" full icon={<FileText size={18} />} onClick={openRitblad} disabled={ritbladBezig}>
-          {ritbladBezig ? 'Ritblad wordt geopend…' : 'Ritblad van vandaag'}
-        </Button>
+        <>
+          <Button variant="secondary" size="lg" full icon={<FileText size={18} />} onClick={() => setRitbladOpen(true)}>
+            Ritblad van vandaag
+          </Button>
+          <RitbladViewer dienstnummer={dienstnummers} open={ritbladOpen} onClose={() => setRitbladOpen(false)} />
+        </>
       )}
 
       {/* === Omleidingen: allemaal, met lijnnummer — de koppeling omleiding ↔

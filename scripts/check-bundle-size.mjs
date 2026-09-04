@@ -21,6 +21,9 @@ let total = 0;
 const perFile = [];
 for (const f of fs.readdirSync(dir)) {
   if (!f.endsWith('.js')) continue;
+    // pdfjs (viewer + worker, ±510 kB gz) laadt alleen bij het openen van een
+    // ritblad — lazy chunk, telt niet mee in het startbudget.
+    if (/^pdf(\.worker)?[.-]/.test(f)) continue;
   const size = zlib.gzipSync(fs.readFileSync(path.join(dir, f))).length;
   total += size;
   perFile.push([f, size]);
