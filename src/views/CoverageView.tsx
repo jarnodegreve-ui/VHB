@@ -10,7 +10,8 @@ import { Card, CardHeader } from '../components/Card';
 import { DateInput, Input, Select } from '../components/Field';
 import { Modal } from '../components/Modal';
 import { fetchCoverageAdvies, kandidaatMeta, segmentenLabel, type CoverageAdvies } from '../lib/advisor';
-import { formatShortDay, MONTH_NAMES } from '../lib/format';
+import { formatDateHuman, formatShortDay, MONTH_NAMES } from '../lib/format';
+import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
 import {
   fetchCoverageConfig,
   fetchCoverageGaps,
@@ -148,6 +149,23 @@ export function CoverageView() {
   }, [from, to]);
 
   const refetchGaps = () => laadGaps(from, to);
+
+  // Laatste matrix-import (voor het zijvak) — best-effort, zelfde bron als
+  // Beheer roosters; zonder antwoord gewoon een streepje.
+  const [laatsteImport, setLaatsteImport] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await apiFetch('/api/planning-matrix/changes-since-import');
+        if (!res.ok) return;
+        const data = await res.json();
+        const at = data && typeof data === 'object' ? data.lastImport?.createdAt : null;
+        if (!cancelled && typeof at === 'string') setLaatsteImport(at);
+      } catch { /* stil: geen import-info is geen fout */ }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   /** Wijs het gekozen gat toe aan een vrije chauffeur — de matrix én de
    *  planning worden server-side bijgewerkt, daarna verdwijnt het gat hier. */
@@ -431,6 +449,30 @@ export function CoverageView() {
   }, [gaps, totalMissing]);
   const anyExpectations = useMemo(() => dayTypes.some((dt) => dt.services.length > 0), [dayTypes]);
   const visibleDays = onlyGaps ? gaps.filter((d) => d.missing.length > 0) : gaps;
+  const dagenMetGaten = useMemo(() => gaps.filter((d) => d.missing.length > 0).length, [gaps]);
+
+  // Zijvak "Deze maand": de cijfers die je anders uit de lijst moet tellen,
+  // plus wat er ingesteld is en wanneer de planning voor het laatst geladen
+  // is (afwerkingsronde 04-09).
+  const zijvak = (
+    <Zijvak
+      titel="Deze maand"
+      voet={config && !anyExpectations ? (
+        <Button variant="secondary" size="sm" icon={<Settings2 size={14} />} onClick={() => setShowConfig(true)}>
+          Instellen
+        </Button>
+      ) : undefined}
+    >
+      <ZijvakRij label="Dagen met gaten" waarde={loading ? '…' : dagenMetGaten} mono />
+      <ZijvakRij label="Open diensten" waarde={loading ? '…' : totalMissing} mono />
+      <ZijvakRij
+        label="Dag-types"
+        waarde={!config ? '…' : dayTypeNames.length === 0 ? 'nog niet ingesteld' : dayTypeNames.length}
+        mono={!!config && dayTypeNames.length > 0}
+      />
+      <ZijvakRij label="Laatste import" waarde={laatsteImport ? formatDateHuman(laatsteImport) : '—'} mono={!!laatsteImport} />
+    </Zijvak>
+  );
 
   /** Uitleg bij het dag-type van een dag: waar komt het vandaan? */
   const bronUitleg = (bron?: DayTypeBron): string | undefined => {
@@ -467,6 +509,9 @@ export function CoverageView() {
         )}
       />
 
+      {/* Desktop: instellingen + gatenlijst als hoofdkolom, het zijvak
+          ernaast; de maandnavigatie blijft in de kop. */}
+      <ZijvakLayout zijvak={zijvak}>
       {error && <Card tone="danger" padding="sm" className="text-sm font-semibold text-red-700">{error}</Card>}
 
       {/* === Instellingen === */}
@@ -489,7 +534,7 @@ export function CoverageView() {
               <Skeleton className="h-9 w-3/5" rounded="2xl" />
             </div>
           ) : config.services.length === 0 ? (
-            <EmptyState title="Geen diensten in het dienstoverzicht om uit te kiezen." />
+            <EmptyState compact title="Geen diensten in het dienstoverzicht om uit te kiezen." />
           ) : (
             <>
               {/* 1. Dag-types + verwachte diensten */}
@@ -868,9 +913,7 @@ export function CoverageView() {
           message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
         />
       ) : visibleDays.length === 0 ? (
-        <Card padding="lg" className="text-center">
-          <p className="text-sm font-bold text-emerald-700">Geen openstaande diensten in {MONTH_NAMES[monthIndex].toLowerCase()} {year}.</p>
-        </Card>
+        <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />
       ) : (
         <Card padding="none" className="overflow-hidden divide-y divide-slate-100">
           {visibleDays.map((d) => {
@@ -963,6 +1006,7 @@ export function CoverageView() {
           })}
         </Card>
       )}
+      </ZijvakLayout>
 
       {/* Advies voor het gekozen gat: wie is vrij én bij wie past de dienst? */}
       <Modal open={!!pick} onClose={() => setPick(null)} maxWidth="sm" className="flex max-h-[88dvh] flex-col !overflow-hidden !p-0">
