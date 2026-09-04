@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AlertTriangle, Bus, Calendar, History, Info, Plus, Trash2 } from 'lucide-react';
+import { History, Plus, Trash2 } from 'lucide-react';
 import type { PlanningCode } from '../../types';
 import { notify } from '../../lib/ui';
 import { metOngedaan } from '../../lib/ongedaan';
@@ -9,7 +9,7 @@ import { Card, CardHeader } from '../../components/Card';
 import { Input, Select } from '../../components/Field';
 import { Checkbox } from '../../components/Table';
 import { InfoTip } from '../../components/InfoTip';
-import { OpsStat } from '../../components/ops';
+import { Zijvak, ZijvakLayout, ZijvakRij } from '../../components/Zijvak';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
 
 // Draft-rijen krijgen een stabiele key, los van de (bewerkbare) code-tekst.
@@ -144,16 +144,26 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
         )}
       />
 
-      {/* 4 tegels → gat-vrij op elke breedte (mobiel 2×2, breed 4 op een
-          rij). "Totaal" staat al als teller bij de tabel. OpsStat i.p.v.
-          StatCard (vaste regel voor KPI-strips). */}
-      <div className="grid grid-cols-2 gap-3 xl:grid-cols-4">
-        <OpsStat icon={<Bus size={16} />} tone="slate" label="Diensten" value={summary.service} sub="tellen als dienst" />
-        <OpsStat icon={<Calendar size={16} />} tone="emerald" label="Verlof" value={summary.leave} sub="betaalde afwezigheid" />
-        <OpsStat icon={<AlertTriangle size={16} />} tone="amber" label="Afwezigheid" value={summary.absence} sub="niet inzetbaar" />
-        <OpsStat icon={<Info size={16} />} tone={summary.unknown > 0 ? 'amber' : 'slate'} label="Onbekend" value={summary.unknown} sub="nog te verfijnen" />
-      </div>
-
+      {/* Desktop: codelijst als hoofdkolom, de tellers per categorie in het
+          zijvak (afwerkingsronde 04-09) — de vier KPI-tegels rekten de
+          mobiele stapel uit tot één brede strook. */}
+      <ZijvakLayout
+        breekpunt="xl"
+        zijvak={(
+          <Zijvak
+            titel="Overzicht"
+            voet={summary.unknown > 0
+              ? `${summary.unknown} ${summary.unknown === 1 ? 'code staat' : 'codes staan'} nog op Onbekend — kies een categorie zodat het portaal er iets mee kan.`
+              : 'Wijzigingen gelden pas na Opslaan.'}
+          >
+            <ZijvakRij label="Diensten" waarde={summary.service} mono />
+            <ZijvakRij label="Verlof" waarde={summary.leave} mono />
+            <ZijvakRij label="Afwezigheid" waarde={summary.absence} mono />
+            <ZijvakRij label="Onbekend" waarde={summary.unknown} mono />
+            <ZijvakRij label="Totaal" waarde={draftCodes.length} mono />
+          </Zijvak>
+        )}
+      >
       <Card as="section">
         <CardHeader
           title="Codes"
@@ -341,6 +351,7 @@ export function PlanningCodesView({ codes, onSave, canAdminDelete }: { codes: Pl
           )}
         </TableShell>
       </Card>
+      </ZijvakLayout>
 
       <EntityHistoryModal
         open={!!historyCode}

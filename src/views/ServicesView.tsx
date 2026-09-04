@@ -6,6 +6,8 @@ import { dienstoverzichtCsv } from '../lib/dienstoverzichtExport';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, Chip, MicroLabel, segItemClass, TableShell, Td, Th } from '../components/primitives';
 import { Input } from '../components/Field';
+import { Zijvak, ZijvakLayout, ZijvakRij } from '../components/Zijvak';
+import { dienstStatistiek, formatDienstDuur } from '../lib/dienstStatistiek';
 
 export function ServicesView({ services }: { services: Service[] }) {
   const [searchQuery, setSearchQuery] = useState('');
@@ -55,6 +57,11 @@ export function ServicesView({ services }: { services: Service[] }) {
     void downloadBlob(`dienstoverzicht_${new Date().toISOString().split('T')[0]}.csv`, blob);
   };
 
+  // Kerncijfers voor het zijvak — over álle diensten, niet het zoekresultaat.
+  const stat = dienstStatistiek(services);
+  const uiterste = (u: { serviceNumber: string; minuten: number } | null) =>
+    u ? `${u.serviceNumber} · ${formatDienstDuur(u.minuten)}` : '—';
+
   return (
     <PageShell>
       <PageHeader
@@ -82,14 +89,6 @@ export function ServicesView({ services }: { services: Service[] }) {
                 {sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
               </button>
             </div>
-            <Button
-              variant="secondary"
-              onClick={downloadCSV}
-              title="Download als CSV"
-              icon={<Download size={16} className="text-oker-500" />}
-            >
-              <span className="hidden sm:inline">CSV</span>
-            </Button>
             <div className="relative flex-1 md:w-64 group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
@@ -107,6 +106,25 @@ export function ServicesView({ services }: { services: Service[] }) {
         )}
       />
 
+      {/* Desktop: tabel als hoofdkolom, kerncijfers + CSV in het zijvak
+          (afwerkingsronde 04-09); zonder diensten voegt het vak niets toe. */}
+      <ZijvakLayout
+        zijvak={services.length > 0 ? (
+          <Zijvak
+            titel="Overzicht"
+            voet={(
+              <Button variant="secondary" size="sm" onClick={downloadCSV} icon={<Download size={14} className="text-oker-500" />}>
+                CSV downloaden
+              </Button>
+            )}
+          >
+            <ZijvakRij label="Diensten" waarde={stat.diensten} mono />
+            <ZijvakRij label="Loops" waarde={stat.loops} mono />
+            <ZijvakRij label="Langste dienst" waarde={uiterste(stat.langste)} mono />
+            <ZijvakRij label="Kortste dienst" waarde={uiterste(stat.kortste)} mono />
+          </Zijvak>
+        ) : undefined}
+      >
       <TableShell>
         {/* Desktop Table View */}
         <div className="hidden md:block">
@@ -210,6 +228,7 @@ export function ServicesView({ services }: { services: Service[] }) {
           </div>
         )}
       </TableShell>
+      </ZijvakLayout>
     </PageShell>
   );
 }

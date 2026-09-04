@@ -7,6 +7,7 @@ import { apiFetch } from '../lib/api';
 import { Badge, Button, MicroLabel, TableShell, Td, Th } from '../components/primitives';
 import { Card } from '../components/Card';
 import { SkeletonRow } from '../components/Skeleton';
+import { Zijvak, ZijvakLayout, ZijvakRij, ZijvakTekst } from '../components/Zijvak';
 import { EXPIRY_SOORT_LABELS, formatDateHuman, prettySize } from '../lib/format';
 
 export type UserDocument = {
@@ -72,9 +73,24 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
     openPdfInNewTab(doc.url);
   };
 
+  // Laatst geplaatste document (voor het zijvak) — uit de lijst zelf.
+  const laatste = docs.reduce<string | null>((acc, d) => (!acc || d.uploadedAt > acc ? d.uploadedAt : acc), null);
+
   return (
     <PageShell>
       <PageHeader title="Mijn documenten" description="Documenten die de planning voor jou klaarzet vind je hier terug." />
+
+      {/* Desktop: lijst als hoofdkolom, uitleg + laatste datum in het zijvak
+          (afwerkingsronde 04-09). */}
+      <ZijvakLayout
+        zijvak={(
+          <Zijvak titel="Zo werkt het">
+            <ZijvakTekst>De planning zet documenten voor je klaar; Openen toont het bestand. Zodra je het opent, ziet de planning dat ook.</ZijvakTekst>
+            <ZijvakRij label="Documenten" waarde={loading ? '…' : docs.length} mono />
+            <ZijvakRij label="Laatste document" waarde={laatste ? formatDateHuman(laatste) : '—'} mono={!!laatste} />
+          </Zijvak>
+        )}
+      >
 
       {verval.length > 0 && (
         <Card padding="none" className="divide-y divide-slate-100 overflow-hidden">
@@ -179,6 +195,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
           </Card>
         </>
       )}
+      </ZijvakLayout>
     </PageShell>
   );
 }
