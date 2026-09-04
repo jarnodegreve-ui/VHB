@@ -241,17 +241,16 @@ export function MijnDagView({
               // radio-schaal) en het "nu"-venster als lipje óver de
               // rechterrand van de kaart. De rail van het lopende blok krijgt
               // een fijne streepjesschaal, zie hieronder.
+              // Het "nu"-venster zelf hangt niet meer op deze hoogte (het
+              // overlapte de loop-chip bij een dienst die net begonnen was,
+              // Jarno 04-09) maar onder de voortgangsbalk, op de punt van de
+              // vulling — zie `nuVenster` hieronder.
               const nuLijn = pct !== null && (
                 <span
                   aria-hidden="true"
-                  className="pointer-events-none absolute inset-x-0 z-10 flex -translate-y-1/2 items-center"
+                  className="pointer-events-none absolute left-5 z-10 h-0.5 w-5 -translate-x-1 -translate-y-1/2 rounded-full bg-oker-500"
                   style={{ top: `${pct}%` }}
-                >
-                  <span className="ml-5 h-0.5 w-5 -translate-x-1 rounded-full bg-oker-500" />
-                  <span className="ml-auto -mr-2 rounded-full bg-oker-500 px-2 py-0.5 text-2xs font-bold tabular-nums text-slate-950 shadow-sm">
-                    nu {nuLabel}
-                  </span>
-                </span>
+                />
               );
 
               if (rij.soort === 'pauze') {
@@ -291,7 +290,7 @@ export function MijnDagView({
                         progressbar hieronder. */}
                     {bezig && (
                       <span
-                        className="absolute inset-y-4 left-1/2 w-2 -translate-x-1/2 opacity-70"
+                        className="absolute -inset-y-3 left-1/2 w-2 -translate-x-1/2 opacity-70"
                         style={{ backgroundImage: 'repeating-linear-gradient(to bottom, var(--color-slate-300) 0 1px, transparent 1px 7px)' }}
                       />
                     )}
@@ -315,15 +314,30 @@ export function MijnDagView({
                     </div>
                     <p className={cn('mt-1 text-sm font-medium tabular-nums', bezig ? 'text-oker-800' : 'text-slate-500')}>{sub}</p>
                     {voortgang !== null && (
-                      <div
-                        className="mt-2.5 h-1 overflow-hidden rounded-full bg-slate-200/70"
-                        role="progressbar"
-                        aria-valuenow={Math.round(voortgang)}
-                        aria-valuemin={0}
-                        aria-valuemax={100}
-                        aria-label="voortgang van het lopende blok"
-                      >
-                        <div className="h-full rounded-full bg-oker-500 transition-[width] duration-1000" style={{ width: `${voortgang}%` }} />
+                      <div className="relative mt-2.5 mb-6">
+                        <div
+                          className="h-1 overflow-hidden rounded-full bg-slate-200/70"
+                          role="progressbar"
+                          aria-valuenow={Math.round(voortgang)}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label="voortgang van het lopende blok"
+                        >
+                          <div className="h-full rounded-full bg-oker-500 transition-[width] duration-1000" style={{ width: `${voortgang}%` }} />
+                        </div>
+                        {/* "nu"-venster op de punt van de vulling, onder de balk;
+                            aan de randen blijft het binnen de balk (geen
+                            overlap met chips of kaartrand). */}
+                        <span
+                          aria-hidden="true"
+                          className={cn(
+                            'absolute top-2.5 rounded-full bg-oker-500 px-2 py-0.5 text-2xs font-bold tabular-nums text-slate-950 transition-[left] duration-1000',
+                            voortgang < 10 ? '' : voortgang > 90 ? '-translate-x-full' : '-translate-x-1/2',
+                          )}
+                          style={{ left: `${voortgang}%` }}
+                        >
+                          nu {nuLabel}
+                        </span>
                       </div>
                     )}
                   </div>
