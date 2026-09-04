@@ -9,6 +9,8 @@ import { BulkBar, Checkbox, Paginering, SortTh, TableToolbar, useSort } from '..
 import { Skeleton, SkeletonRow, SkeletonTile } from '../../components/Skeleton';
 import { Avatar } from '../../components/Avatar';
 import { BrandMotief } from '../../components/BrandMotief';
+import { ActieMenu } from '../../components/ActieMenu';
+import { Zijvak, ZijvakRij, ZijvakTekst } from '../../components/Zijvak';
 import { DUR } from '../../lib/motion';
 import { notify } from '../../lib/ui';
 
@@ -68,7 +70,7 @@ function Rij({ label, children }: { label: string; children: ReactNode }) {
 
 const INHOUD = [
   ['kleur', 'Kleur'], ['typografie', 'Typografie'], ['maat', 'Maat en beweging'], ['knoppen', 'Knoppen'], ['labels', 'Badges en chips'],
-  ['kaarten', 'Kaarten'], ['personen', 'Personen'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
+  ['kaarten', 'Kaarten'], ['zijvak', 'Zijvak en menu'], ['personen', 'Personen'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
 ] as const;
 
 export function DesignsysteemView() {
@@ -222,6 +224,27 @@ export function DesignsysteemView() {
             <CardHeader eyebrow="Eyebrow" title="Titel met uitleg" description="Een beschrijving van één regel onder de titel." aside={<InfoTip label="Uitleg bij deze kaart">Zo ziet een InfoTip eruit: korte uitleg in een popover, geen alinea in de kaart.</InfoTip>} />
           </Card>
         </Rij>
+      </Sectie>
+
+      <Sectie id="zijvak" titel="Zijvak en actiemenu" uitleg="Zijvak: het vaste rechtervak naast een enkelkolomscherm (cijfers, laatste wijziging, hulp) — gedempt, sticky. ActieMenu: secundaire acties achter '…', zodat een scherm één gouden knop houdt.">
+        <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_20rem]">
+          <Card padding="sm" className="flex items-center justify-between gap-3">
+            <p className="text-sm text-slate-600">Hoofdinhoud met één primaire actie en de rest in het menu.</p>
+            <span className="flex items-center gap-2">
+              <Button variant="primary" size="sm"><Plus size={16} />Nieuw</Button>
+              <ActieMenu size="sm" items={[
+                { label: 'Excel importeren', icon: <Download size={16} />, onClick: () => notify('Excel importeren', 'info') },
+                { label: 'CSV downloaden', icon: <Download size={16} />, onClick: () => notify('CSV downloaden', 'info') },
+                { label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, onClick: () => notify('Verwijderd', 'info') },
+              ]} />
+            </span>
+          </Card>
+          <Zijvak titel="Deze maand" voet={<ZijvakTekst>Cijfers volgen de geladen planning.</ZijvakTekst>}>
+            <ZijvakRij label="Dagen met gaten" waarde="3" mono />
+            <ZijvakRij label="Open diensten" waarde="4" mono />
+            <ZijvakRij label="Laatste import" waarde="zo 30 aug" />
+          </Zijvak>
+        </div>
       </Sectie>
 
       <Sectie id="personen" titel="Personen" uitleg="Avatar met initialen en een vaste, gedempte tint per naam — zodat lijsten scanbaar worden zonder extra kleur. De ingelogde gebruiker in de topbar blijft goud.">
