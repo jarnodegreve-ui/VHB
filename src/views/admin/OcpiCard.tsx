@@ -100,7 +100,7 @@ export function OcpiCard() {
               </Button>
             )}
             <Button
-              variant="primary"
+              variant="secondary"
               onClick={register}
               disabled={isRegistering || (status ? !status.configured : false)}
             >
@@ -120,7 +120,7 @@ export function OcpiCard() {
               {isLoading ? (
                 <span className="text-xs text-slate-500">laden…</span>
               ) : (
-                <Badge tone={status?.configured ? 'emerald' : 'red'} dot>
+                <Badge tone={status?.configured ? 'emerald' : 'red'} dot stil={Boolean(status?.configured)}>
                   {status?.configured ? 'compleet' : 'ontbreekt'}
                 </Badge>
               )}
@@ -130,7 +130,7 @@ export function OcpiCard() {
               {isLoading ? (
                 <span className="text-xs text-slate-500">laden…</span>
               ) : (
-                <Badge tone={status?.registered ? 'emerald' : 'red'} dot>
+                <Badge tone={status?.registered ? 'emerald' : 'red'} dot stil={Boolean(status?.registered)}>
                   {status?.registered ? 'geregistreerd' : 'nog niet'}
                 </Badge>
               )}

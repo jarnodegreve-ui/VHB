@@ -477,7 +477,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
           return (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={reviewLeave.status} />
+                <StatusBadge status={reviewLeave.status} stil />
                 <Badge tone="slate">{formatLeaveType(reviewLeave.type)}</Badge>
                 {conflictShifts.length > 0 && (
                   <Badge tone="red" icon={<AlertTriangle size={12} />}>
@@ -495,13 +495,15 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
               </Card>
 
               {/* Saldo-context van de aanvrager — beslis met het budget in beeld. */}
+              {/* Rood alleen als het budget overschreden wordt; een saldo dat
+                  klopt is informatie en blijft neutraal (afwerking 04-09, nr. 6). */}
               {reviewLeave.type === 'betaald_verlof' && (
-                <Card tone={exceeds ? 'danger' : 'success'} padding="none" className="px-4 py-3">
+                <Card tone={exceeds ? 'danger' : 'muted'} padding="none" className="px-4 py-3">
                   <div className="flex items-center justify-between gap-3">
-                    <MicroLabel className={exceeds ? 'text-red-700' : 'text-emerald-700'}>
+                    <MicroLabel className={exceeds ? 'text-red-700' : 'text-slate-500'}>
                       Verlofsaldo {requestYear}
                     </MicroLabel>
-                    <span className={cn('text-sm font-semibold tabular-nums', exceeds ? 'text-red-700' : 'text-emerald-700')}>
+                    <span className={cn('text-sm font-semibold tabular-nums', exceeds ? 'text-red-700' : 'text-slate-800')}>
                       {balance.betaaldGebruikt + dayCount} / {balance.betaaldBudget}
                     </span>
                   </div>
@@ -607,9 +609,10 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   </Button>
                 )}
               </MaandNavigatie>
-              <div className="flex flex-wrap gap-4">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-emerald-500 rounded-full" /><span className="text-xs font-medium text-slate-500">Voldoende</span></div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 bg-amber-500 rounded-full" /><span className="text-xs font-medium text-slate-500">Krap</span></div>
+              {/* Legende als stille chips — zelfde puntjes als in de dagcellen. */}
+              <div className="flex flex-wrap gap-2">
+                <Badge tone="emerald" stil>Voldoende</Badge>
+                <Badge tone="amber" stil>Krap</Badge>
               </div>
             </div>
             <div className="grid grid-cols-7 gap-3">
@@ -1088,7 +1091,8 @@ function MyLeaveSection({ title, count, emptyText, requests, isNew, onCancel, on
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {fresh && <Badge tone="oker">Nieuw</Badge>}
-                  <StatusBadge status={req.status} />
+                  <StatusBadge status={req.status} stil />
+
                   <ChevronDown size={16} className={cn('text-slate-400 transition-transform duration-200', open && 'rotate-180')} />
                 </div>
               </button>

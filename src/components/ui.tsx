@@ -28,8 +28,12 @@ export function PageHeader({
   actions?: React.ReactNode;
 }) {
   return (
-    <header className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div className="max-w-3xl">
+    // flex-wrap: op mobiel staat de (nu ene) primaire knop + "…" naast de
+    // titel zolang dat past; bij een lange titel zakt de actie eronder.
+    // Voorheen stapelden drie volle-breedte-knoppen onder de kop
+    // (afwerking 04-09, nr. 7).
+    <header className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3 md:items-end">
+      <div className="min-w-0 flex-1 basis-[14rem] max-w-3xl">
         {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
         {/* Eén h1 per scherm, in de page-title-rol (24/30 px, bold — geen
             black): de kop wint het van de rest door máát, niet door gewicht. */}
@@ -40,7 +44,7 @@ export function PageHeader({
           <p className="mt-2 text-sm font-normal leading-relaxed text-slate-500">{description}</p>
         ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap items-center gap-3">{actions}</div> : null}
+      {actions ? <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2 md:gap-3">{actions}</div> : null}
     </header>
   );
 }

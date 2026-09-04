@@ -199,7 +199,9 @@ export function VervaldataView({ users }: { users: User[] }) {
     }
     const dagen = rij.dagen[soort] ?? dagenTot(datum);
     return (
-      <Badge key={soort} tone={chipTone(dagen)} dot className="whitespace-nowrap tabular-nums">
+      // Stil (neutraal vlak + gekleurd puntje) zolang er niets dringend is;
+      // binnen 30 dagen of verlopen blijft het vlak gekleurd.
+      <Badge key={soort} tone={chipTone(dagen)} dot stil={dagen > 30} className="whitespace-nowrap tabular-nums">
         {metLabel ? `${label}: ` : ''}
         <span title={formatDateHuman(datum)}>{kortDatum(datum)}</span>
         <span className="text-slate-500">· {dagenTekst(dagen)}</span>

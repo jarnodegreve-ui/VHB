@@ -5,6 +5,7 @@ import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, downloadBlob, notify } from '../lib/ui';
 import { weekRangeLabel } from '../lib/week';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
+import { ActieMenu } from '../components/ActieMenu';
 import { apiFetch } from '../lib/api';
 import { SkeletonRow } from '../components/Skeleton';
 import { Button, Chip, IconButton, MicroLabel, microLabelClass, Td, Th } from '../components/primitives';
@@ -581,17 +582,23 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
             <Button variant="secondary" size="sm" className="ml-1" onClick={goToday}>
               Vandaag
             </Button>
-            {/* Terugexport: alleen staf — sluit de Excel-cyclus (bewerken op
-                de actuele stand i.p.v. de verouderde upload). */}
+            {/* Terugexport + maandoverzicht: alleen staf — sluit de Excel-
+                cyclus (bewerken op de actuele stand i.p.v. de verouderde
+                upload). In een actiemenu zodat de kop op mobiel niet
+                stapelt (afwerking 04-09, nr. 7). */}
             {canEditNotes && (
-              <>
-                <Button variant="secondary" size="sm" icon={<Download size={14} />} disabled={isExporteren} onClick={() => void exporteerExcel()}>
-                  {isExporteren ? 'Bezig…' : 'Excel'}
-                </Button>
-                <Button variant="secondary" size="sm" icon={<Table2 size={14} />} onClick={() => void openOverzicht()}>
-                  Overzicht
-                </Button>
-              </>
+              <ActieMenu
+                size="sm"
+                label="Meer acties"
+                // ml-auto: op mobiel wikkelt de kop en stond de knop links,
+                // waardoor het (rechts uitgelijnde) menu buiten beeld viel.
+                className="ml-auto"
+                items={[
+
+                  { label: isExporteren ? 'Excel wordt gemaakt…' : 'Excel exporteren', icon: <Download size={16} />, disabled: isExporteren, onClick: () => void exporteerExcel() },
+                  { label: 'Maandoverzicht', icon: <Table2 size={16} />, onClick: () => void openOverzicht() },
+                ]}
+              />
             )}
           </div>
         )}
@@ -1063,7 +1070,10 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
                           placeholder="bv. Neem bus 412 — eerst tanken."
                           className="h-20"
                         />
-                        <Button variant="primary" size="sm" full className="mt-2" disabled={isSavingNote} onClick={() => void saveNote()}>
+                        {/* Secundair: de ene gouden knop van dit venster is
+                            "Dienst overzetten…" (afwerking 04-09, nr. 5). */}
+                        <Button variant="secondary" size="sm" full className="mt-2" disabled={isSavingNote} onClick={() => void saveNote()}>
+
                           {isSavingNote ? 'Opslaan…' : noteDraft.trim() ? 'Notitie opslaan' : notes.has(noteKey(selected.driverId, selected.iso)) ? 'Notitie verwijderen' : 'Notitie opslaan'}
                         </Button>
                       </>

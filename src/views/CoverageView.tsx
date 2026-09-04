@@ -630,7 +630,7 @@ export function CoverageView() {
                             <span className="text-sm font-bold text-slate-700 capitalize">{v.dayType}</span>
                             <Badge tone="slate" className="tabular-nums">{v.codes.length} diensten · {v.dagen} dagen</Badge>
                             {lijstKloptAl ? (
-                              <Badge tone="emerald" className="ml-auto shrink-0">Lijst klopt al</Badge>
+                              <Badge tone="emerald" stil className="ml-auto shrink-0">Lijst klopt al</Badge>
                             ) : (
                               <Button variant="secondary" size="sm" className="ml-auto shrink-0" onClick={() => pasVoorstelToe(v)}>
                                 {huidig === null ? 'Maak dag-type met deze lijst' : `Vervang lijst (nu ${huidig.length})`}
@@ -893,7 +893,7 @@ export function CoverageView() {
               )}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1.5 font-semibold text-emerald-700"><Check size={16} /> Alle verwachte diensten zijn ingevuld</span>
+            <span className="inline-flex items-center gap-1.5 font-semibold text-slate-700"><Check size={16} className="text-emerald-700" /> Alle verwachte diensten zijn ingevuld</span>
           )}
         </div>
         <FilterChip active={onlyGaps} onClick={() => setOnlyGaps((v) => !v)}>
@@ -951,11 +951,12 @@ export function CoverageView() {
                   </div>
                 </div>
                 <div className="shrink-0 sm:w-28">
-                  <Badge tone={ok ? 'emerald' : 'red'} dot className="tabular-nums">{d.covered}/{d.expected} gedekt</Badge>
+                  {/* Gedekt = stille chip; een gat blijft rood (afwerking 04-09, nr. 6). */}
+                  <Badge tone={ok ? 'emerald' : 'red'} stil={ok} dot={!ok} className="tabular-nums">{d.covered}/{d.expected} gedekt</Badge>
                 </div>
                 <div className="min-w-0 flex-1">
                   {ok ? (
-                    <span className="text-xs font-medium text-emerald-700 inline-flex items-center gap-1"><Check size={14} /> volledig gedekt</span>
+                    <span className="text-xs font-medium text-slate-500 inline-flex items-center gap-1"><Check size={14} className="text-emerald-700" /> volledig gedekt</span>
                   ) : (
                     <div className="flex flex-wrap gap-2">
                       {d.missing.map((svc) => {
@@ -1049,10 +1050,13 @@ export function CoverageView() {
 
                   {passend.length > 0 ? (
                     <div>
-                      <MicroLabel className="text-emerald-700 tabular-nums">Voorstel — {passend.length} passend</MicroLabel>
+                      <MicroLabel className="tabular-nums">Voorstel — {passend.length} passend</MicroLabel>
+                      {/* Neutrale rijen met een groen icoon: een passende kandidaat is
+                          informatie, het advies-label draagt de nadruk. */}
                       <div className="mt-2 flex flex-col gap-1.5">
                         {passend.map((k, i) => (
-                          <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-emerald-50/70 ring-1 ring-emerald-100 px-3 py-2">
+                          <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-surface-row ring-1 ring-hairline px-3 py-2">
+
                             <UserCheck size={16} className="text-emerald-700 shrink-0" />
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5">

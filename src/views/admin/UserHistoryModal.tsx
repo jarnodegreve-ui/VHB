@@ -97,7 +97,7 @@ export function UserHistoryModal({
                     </p>
                     <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? ` — "${l.comment}"` : ''}</p>
                   </div>
-                  <StatusBadge status={l.status} className="shrink-0" />
+                  <StatusBadge status={l.status} stil className="shrink-0" />
                 </Card>
               ))}
             </div>
@@ -126,7 +126,7 @@ export function UserHistoryModal({
                         <span className="font-medium text-slate-500">{isRequester ? 'Aan' : 'Van'}</span>
                         <span className="font-semibold text-slate-800 truncate">{userName(counterpartId)}</span>
                       </div>
-                      <StatusBadge status={s.status} className="shrink-0" />
+                      <StatusBadge status={s.status} stil className="shrink-0" />
                     </div>
                     <p className="text-xs font-medium text-slate-500 tabular-nums">
                       {s.shiftLine ? `Dienst ${s.shiftLine}` : 'Dienst onbekend'}

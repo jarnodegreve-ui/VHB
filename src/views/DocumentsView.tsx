@@ -107,7 +107,10 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                   <MicroLabel className="mt-0.5">Geldig tot {formatDateHuman(e.validUntil)}</MicroLabel>
                 </div>
                 {Number.isFinite(dagen) && (
-                  <Badge tone={dagen < 0 ? 'red' : dagen <= 30 ? 'amber' : 'emerald'} dot className="shrink-0 whitespace-nowrap">
+                  /* Verlopen/bijna verlopen vraagt aandacht (kleur); "in orde" is
+                     een stille chip (afwerking 04-09, nr. 6). */
+                  <Badge tone={dagen < 0 ? 'red' : dagen <= 30 ? 'amber' : 'emerald'} dot={dagen <= 30} stil={dagen > 30} className="shrink-0 whitespace-nowrap">
+
                     {dagen < 0 ? 'Verlopen' : dagen === 0 ? 'Verloopt vandaag' : dagen <= 60 ? `Nog ${dagen} ${dagen === 1 ? 'dag' : 'dagen'}` : 'In orde'}
                   </Badge>
                 )}
