@@ -358,13 +358,20 @@ export default function App() {
   const themaGekozenRef = useRef(false);
   useEffect(() => {
     let stored: string | null = null;
+    let effectief: string | null = null;
     try {
       stored = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-theme') : null;
+      effectief = typeof window !== 'undefined' ? window.localStorage.getItem('vhb-theme-effectief') : null;
     } catch {
       // localStorage geblokkeerd (privacy-modus) — val terug op licht.
     }
     themaGekozenRef.current = stored === 'dark' || stored === 'light';
-    const initial: 'light' | 'dark' = stored === 'dark' || stored === 'light' ? stored : 'light';
+    // Zonder expliciete keuze: begin met wat er de vorige keer effectief
+    // stond (de rol-standaard van planner/admin = donker). Het bootscript in
+    // index.html zette dat al vóór de eerste paint; hier 'light' forceren
+    // haalde de dark-klasse weer weg tot het profiel binnen was — vandaar de
+    // lichte flits van skeleton naar dashboard (Jarno 04-09).
+    const initial: 'light' | 'dark' = stored === 'dark' || stored === 'light' ? stored : effectief === 'dark' ? 'dark' : 'light';
     setTheme(initial);
     if (typeof document !== 'undefined') {
       document.documentElement.classList.toggle('dark', initial === 'dark');

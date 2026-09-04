@@ -1254,22 +1254,26 @@ function DriverShiftRows({ items, emptyText }: { items: { id: string; name: stri
     <ul className="space-y-0.5">
       {items.map((d) => (
         <li key={d.id} className="flex items-center gap-3 rounded-xl px-3 py-2">
+          {/* Bel-icoon vóór de naam in een vaste kolom: achter de naam
+              sprong het per naamlengte heen en weer (Jarno 04-09). Zonder
+              nummer blijft de kolom leeg zodat de namen uitgelijnd blijven.
+              Klein tel-doelwit met marge-compensatie zodat de rij niet
+              hoger wordt (vraag Jarno 01-09). */}
+          {d.phone ? (
+            <a
+              href={telHref(d.phone)}
+              aria-label={`Bel ${d.name}`}
+              title={d.phone}
+              className="-my-1.5 -ml-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center self-start rounded-lg text-slate-400 transition-colors hover:bg-slate-100/80 hover:text-oker-700"
+            >
+              <Phone size={14} />
+            </a>
+          ) : (
+            <span aria-hidden="true" className="-ml-1.5 h-8 w-8 shrink-0" />
+          )}
           <span className="min-w-0 flex-1">
             <span className="flex items-center gap-1.5">
               <span className="truncate text-sm font-semibold text-slate-800">{d.name}</span>
-              {/* Meteen kunnen bellen (ziekmelding komt telefonisch binnen):
-                  klein tel-doelwit, met marge-compensatie zodat de rij niet
-                  hoger wordt (vraag Jarno 01-09). */}
-              {d.phone && (
-                <a
-                  href={telHref(d.phone)}
-                  aria-label={`Bel ${d.name}`}
-                  title={d.phone}
-                  className="-my-1.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100/80 hover:text-oker-700"
-                >
-                  <Phone size={14} />
-                </a>
-              )}
             </span>
             {/* Elk dienstblok als eigen element, met een stip ertussen en
                 flex-wrap: bij één of twee blokken staat het op één regel zoals

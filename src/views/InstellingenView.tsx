@@ -12,13 +12,16 @@ import type { User, View } from '../types';
  */
 function Rij({ icoon, titel, uitleg, rechts }: { icoon: React.ReactNode; titel: string; uitleg: string; rechts: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-3 py-3.5 first:pt-0 last:pb-0 border-b last:border-b-0 border-slate-100">
+    // flex-wrap + min-w op de tekst: op een smal scherm (lang e-mailadres
+    // naast "Wachtwoord wijzigen") zakt de knop onder de tekst i.p.v. dat de
+    // tekst eronder doorloopt (Jarno 04-09). break-words als extra vangnet.
+    <div className="flex flex-wrap items-start gap-3 py-3.5 first:pt-0 last:pb-0 border-b last:border-b-0 border-slate-100">
       <span className="mt-0.5 inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">{icoon}</span>
-      <div className="min-w-0 flex-1">
+      <div className="min-w-[11rem] flex-1 basis-0">
         <p className="text-sm font-semibold text-slate-900">{titel}</p>
-        <p className="mt-0.5 text-sm text-slate-500 leading-relaxed">{uitleg}</p>
+        <p className="mt-0.5 break-words text-sm text-slate-500 leading-relaxed">{uitleg}</p>
       </div>
-      <div className="shrink-0 pt-0.5">{rechts}</div>
+      <div className="ml-auto shrink-0 pt-0.5">{rechts}</div>
     </div>
   );
 }
