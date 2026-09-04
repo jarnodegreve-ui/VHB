@@ -111,10 +111,11 @@ test.describe('smoke: ingelogde chauffeur', () => {
     await expect(page.getByText(/loop 4500/).first()).toBeVisible();
     // De omleiding staat in het paneel.
     await expect(page.getByText('Werken Markt')).toBeVisible();
-    // "Volgende dienst": dienstnummer groot + dag-taal, geen detailregels.
-    // Vóór 13:39 lokale tijd is de volgende dienst het middagblok van
-    // vandaag, daarna die van morgen — beide dag-woorden zijn dus geldig.
-    await expect(page.getByText(/(vandaag|morgen) · /)).toBeVisible();
+    // "Volgende dienst" = de eerstvolgende andere dag (de delen van vandaag
+    // staan in de Vandaag-tegel): dag als waarde, dag-woord als subregel en
+    // de delen van die dag als regels.
+    await expect(page.getByText('morgen', { exact: true })).toBeVisible();
+    await expect(page.getByText('06:12–09:30').first()).toBeVisible();
     // "Vandaag" toont álle blokken van de gesplitste dienst, elk met loop
     // (tijden en loopnummers in twee uitgelijnde kolommen).
     // .first(): 's ochtends staat het middagblok óók bij "Komende diensten",

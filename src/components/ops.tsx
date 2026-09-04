@@ -39,6 +39,8 @@ export function OpsStat({
   sub,
   subClassName,
   lines,
+  badge,
+  balk,
   meter,
   note,
   onClick,
@@ -57,7 +59,11 @@ export function OpsStat({
   /** Optionele detailregels onder de subtekst (bv. de blokken van een
    *  dienst): `left` (tijden) en `right` (loopnummer) staan in twee nette
    *  kolommen onder elkaar. `done` toont een al gereden blok gedempt. */
-  lines?: Array<{ left: string; right?: string; done?: boolean; active?: boolean; progress?: number }>;
+  lines?: Array<{ left: string; right?: string; done?: boolean; active?: boolean }>;
+  /** Chip naast het label (bv. dienstnummer bij "Volgende dienst"). */
+  badge?: ReactNode;
+  /** Instrument onder de regels — bv. de DienstBalk (compact). */
+  balk?: ReactNode;
   /** Optionele voortgangsbalk (0–100) onder de subtekst — bv. verlofsaldo.
    *  Kleurt emerald → amber (>80%) → red (>100 gebruikt). */
   meter?: number;
@@ -68,24 +74,27 @@ export function OpsStat({
 }) {
   const inner = (
     <>
-      <div className="flex items-start justify-between">
-        <span className={cn('inline-flex h-8 w-8 items-center justify-center rounded-lg', STAT_TONES[tone])}>
-          {icon}
+      {/* Kop: icoon en label op één regel (het pijltje is weg — de hele tegel
+          is klikbaar), rechts een optionele chip. Compacter dan de oude
+          icoon-boven-label-opbouw: ±40 px minder in de smalle mobiele tegel
+          (Jarno 04-09). */}
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span className={cn('inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
+            {icon}
+          </span>
+          <span className="truncate text-xs font-medium text-slate-500">{label}</span>
         </span>
-        {onClick && <ArrowUpRight size={14} className="text-slate-300 transition-colors group-hover:text-slate-500" />}
       </div>
-      {/* Vaste twee-regel-zone (leading-4 × min-h-8): labels van één en twee
-          regels ("BESCHIKBAAR" vs "CHAUFFEURS ACTIEF") duwden de cijfers
-          anders naar verschillende hoogtes — de hele strip oogde rommelig
-          (melding Jarno). Nu start elk cijfer en elke subtekst op exact
-          dezelfde lijn. */}
-      <p className="mt-2.5 text-xs leading-4 min-h-8 font-medium text-slate-500">{label}</p>
       {/* Mono: de cijfers zijn het instrumentpaneel — zelfde accent als
           dienstnummers en tijden. */}
-      <p className="mt-0.5 text-2xl leading-8 font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">
-        {text ?? <CountUp value={value ?? 0} />}
-        {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
-      </p>
+      <div className="mt-2.5 flex items-baseline justify-between gap-2">
+        <p className="min-w-0 truncate text-2xl leading-8 font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">
+          {text ?? <CountUp value={value ?? 0} />}
+          {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
+        </p>
+        {badge && <span className="shrink-0">{badge}</span>}
+      </div>
       <p className={cn('mt-0.5 text-2xs font-medium text-slate-500 truncate', subClassName)}>{sub}</p>
       {typeof meter === 'number' && (
         <div className="mt-2 h-1.5 rounded-full bg-surface-muted overflow-hidden">
@@ -94,11 +103,6 @@ export function OpsStat({
             style={{ width: `${Math.max(3, Math.min(100, meter))}%` }}
           />
         </div>
-      )}
-      {note && (
-        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-2xs font-medium leading-snug text-oker-800">
-          {note}
-        </p>
       )}
       {lines && lines.length > 0 && (
         <div className="mt-1.5 space-y-0.5">
@@ -124,26 +128,13 @@ export function OpsStat({
               )}
             </div>
           ))}
-          {/* Voortgang van het lopende blok: dun oker lijntje dat meegroeit
-              met de dienst (sluit aan bij de nu-stip en het doorstrepen). */}
-          {(() => {
-            const activeLine = lines.find((l) => l.active && typeof l.progress === 'number');
-            if (!activeLine) return null;
-            const pct = Math.max(0, Math.min(100, activeLine.progress!));
-            return (
-              <div
-                className="mt-1.5 h-0.5 overflow-hidden rounded-full bg-slate-200/70"
-                role="progressbar"
-                aria-valuenow={Math.round(pct)}
-                aria-valuemin={0}
-                aria-valuemax={100}
-                aria-label="voortgang van het lopende blok"
-              >
-                <div className="h-full rounded-full bg-oker-500 transition-[width] duration-1000" style={{ width: `${pct}%` }} />
-              </div>
-            );
-          })()}
         </div>
+      )}
+      {balk}
+      {note && (
+        <p className="mt-2 rounded-lg bg-oker-500/10 px-2 py-1.5 text-2xs font-medium leading-snug text-oker-800">
+          {note}
+        </p>
       )}
     </>
   );

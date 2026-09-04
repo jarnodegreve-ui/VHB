@@ -17,6 +17,22 @@ export type WatIsNieuwItem = {
 
 export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
   {
+    id: '2026-09-05',
+    titel: 'Mijn dag en ritblad',
+    regels: {
+      chauffeur: [
+        'Ritblad van vandaag opent meteen jouw blad: de pagina van je dienstnummer, met zoom.',
+        'Mijn dag: één balk van start tot einde met je pauzes en de tijd van nu.',
+        'Op het dashboard zie je in de Vandaag-tegel hoelang je nog moet.',
+      ],
+      staf: [
+        'Mijn dag en de Vandaag-tegel tonen de dienst als één balk met pauzes en de tijd van nu.',
+        'Ritblad van vandaag opent voor chauffeurs meteen de pagina van hun dienstnummer.',
+      ],
+    },
+    bekijk: { chauffeur: 'mijn-dag' },
+  },
+  {
     id: '2026-09-04',
     titel: 'Nieuw in het portaal',
     regels: {
