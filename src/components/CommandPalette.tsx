@@ -143,7 +143,7 @@ export function CommandPalette({
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: DUR.fast, ease: EASE }}
-          className="fixed inset-0 z-[120] flex items-start justify-center px-4"
+          className="fixed inset-0 z-[120] flex items-start justify-center px-4 pt-[env(safe-area-inset-top,0px)]"
           onClick={onClose}
         >
           {/* Backdrop */}
