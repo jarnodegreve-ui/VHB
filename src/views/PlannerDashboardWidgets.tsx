@@ -599,7 +599,9 @@ export function PlannerDashboardWidgets({
           title={setupStap.titel}
           message={setupStap.tekst}
           action={setupStap.actie ? (
-            <Button variant="primary" size="md" onClick={() => onNavigate(setupStap.actie!.view)}>
+            // Secundair: de enige gouden knop van de cockpit is "Ziek melden"
+            // in de kop (afwerking 04-09, nr. 5).
+            <Button variant="secondary" size="md" onClick={() => onNavigate(setupStap.actie!.view)}>
               {setupStap.actie.label}
             </Button>
           ) : undefined}
@@ -826,9 +828,12 @@ export function PlannerDashboardWidgets({
               </p>
             )}
             {attentionCount === 0 && (
-              <Card tone="success" padding="none" className="flex items-center gap-3 px-4 py-3.5">
-                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
+              /* Neutrale kaart met alleen een groen vinkje: "alles ok" is
+                 rusttoestand, geen melding (afwerking 04-09, nr. 6). */
+              <Card tone="muted" padding="none" className="flex items-center gap-3 px-4 py-3.5">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-paper text-emerald-700 ring-1 ring-hairline">
                   <CheckCircle2 size={16} />
+
                 </span>
                 <div>
                   <p className="text-sm font-semibold text-slate-800">Alles ok</p>
@@ -922,7 +927,8 @@ export function PlannerDashboardWidgets({
                         {d.dayType}{!ok ? ` · dienst ${d.missing.slice(0, 3).join(', ')}${d.missing.length > 3 ? '…' : ''}` : ''}
                       </span>
                     </span>
-                    <Badge tone={ok ? 'emerald' : 'red'} dot className="shrink-0 tabular-nums">{d.covered}/{d.expected}</Badge>
+                    {/* Gedekt = stille chip; een gat blijft rood (dat vraagt actie). */}
+                    <Badge tone={ok ? 'emerald' : 'red'} stil={ok} dot={!ok} className="shrink-0 tabular-nums">{d.covered}/{d.expected}</Badge>
                   </li>
                 );
               })}
@@ -936,7 +942,7 @@ export function PlannerDashboardWidgets({
         open={showAvailable}
         onClose={() => setShowAvailable(false)}
         icon={<UserCheck size={16} />}
-        iconClassName="bg-emerald-50 text-emerald-700"
+        iconClassName="bg-surface-muted text-slate-600"
         title="Beschikbare chauffeurs"
         subtitle={`${formatDay(peilDag)} · ${availableToday.length} ${availableToday.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
@@ -987,7 +993,7 @@ export function PlannerDashboardWidgets({
         open={showAbsent}
         onClose={() => setShowAbsent(false)}
         icon={<CalendarClock size={16} />}
-        iconClassName="bg-amber-50 text-amber-700"
+        iconClassName="bg-surface-muted text-slate-600"
         title={`${peilLabel} afwezig`}
         subtitle={`${formatDay(peilDag)} · ${todayAbsent.length} ${todayAbsent.length === 1 ? 'collega' : "collega's"}`}
       >
@@ -1025,7 +1031,7 @@ export function PlannerDashboardWidgets({
         open={showDriving}
         onClose={() => setShowDriving(false)}
         icon={<Bus size={16} />}
-        iconClassName="bg-emerald-50 text-emerald-700"
+        iconClassName="bg-surface-muted text-slate-600"
         title="Chauffeurs actief"
         subtitle={`nu aan het rijden · ${drivingNow.length} ${drivingNow.length === 1 ? 'chauffeur' : 'chauffeurs'}`}
       >
@@ -1103,12 +1109,16 @@ export function PlannerDashboardWidgets({
                             d.date,
                           ).map((k) => <option key={k.user.id} value={String(k.user.id)}>{kandidaatLabel(k)}</option>)}
                         </Select>
+                        {/* Secundair per rij: er staan er zoveel als er
+                            diensten open zijn; de ene primaire van dit
+                            venster is "Klaar" zodra alles overgezet is. */}
                         <Button
-                          variant="primary"
+                          variant="secondary"
                           size="md"
                           disabled={!vervangerPerDienst[d.id] || wisselBezig === d.id}
                           onClick={() => void zetDienstOver(d)}
                         >
+
                           {wisselBezig === d.id ? 'Bezig…' : 'Zet over'}
                         </Button>
                       </div>

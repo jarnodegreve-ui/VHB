@@ -10,6 +10,7 @@ import { Badge, Button, Chip, MicroLabel, microLabelClass, segItemClass, TableSh
 import { Card } from '../components/Card';
 import { MaandNavigatie } from '../components/MaandNavigatie';
 import { CalendarSubscribeModal } from '../components/CalendarSubscribeModal';
+import { ActieMenu } from '../components/ActieMenu';
 import { SkeletonRow } from '../components/Skeleton';
 import { cn } from '../lib/ui';
 import { shiftIdsWithConflict } from '../lib/conflicts';
@@ -31,9 +32,11 @@ const maandNaarParam = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 
 /**
  * Dagdeel-chip. Stond met alle drie op 'slate': dezelfde grijze badge voor
  * Vroeg, Middag en Laat, dus de kleur droeg geen informatie en kostte alleen
- * breedte. De tinten volgen nu het moment van de dag — gedempt, want het is
- * een terzijde naast het dienstnummer, geen statusmelding.
+ * breedte. De tinten volgen nu het moment van de dag — als stille chip (alleen
+ * het puntje kleurt), want het is een terzijde naast het dienstnummer, geen
+ * statusmelding (afwerking 04-09, nr. 6).
  */
+
 const CATEGORY_PILL: Record<string, { label: string; tone: 'amber' | 'emerald' | 'slate' }> = {
   ochtend: { label: 'Vroeg', tone: 'amber' },
   middag: { label: 'Middag', tone: 'slate' },
@@ -195,13 +198,22 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
             : 'Overzicht van je komende diensten.'
         }
         actions={
-          <Button
-            variant="secondary"
-            icon={<CalendarPlus size={16} className="text-oker-500" />}
-            onClick={() => setCalendarOpen(true)}
-          >
-            Aan agenda toevoegen
-          </Button>
+          /* Geen kopknop voor de agenda-koppeling: dat is een eenmalige
+             instelling, geen dagelijkse handeling — ze zit in het actiemenu,
+             samen met het ritblad van vandaag (afwerking 04-09, nr. 7). */
+          <ActieMenu
+            label="Meer acties"
+            // ml-auto: op mobiel staat de kop-actie links onder de titel en
+            // klapte het menu (rechts uitgelijnd) buiten beeld.
+            className="ml-auto"
+            items={[
+
+              ...(upcoming.some((g) => g.date === today)
+                ? [{ label: 'Ritblad van vandaag', icon: <FileText size={16} />, onClick: () => void openHuidigRitblad() }]
+                : []),
+              { label: 'Aan agenda toevoegen', icon: <CalendarPlus size={16} />, onClick: () => setCalendarOpen(true) },
+            ]}
+          />
         }
       />
 
@@ -497,7 +509,7 @@ function MonthCalendar({
                   <Badge tone="red" icon={<AlertTriangle size={12} />}>Verlof-conflict</Badge>
                 )}
                 {g.openSwap && (
-                  <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
+                  <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                 )}
               </div>
               <div className="mt-1.5 space-y-1.5 pl-1">
@@ -580,14 +592,14 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                           </span>
                         )}
                         {g.openSwap && (
-                          <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
+                          <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                         )}
                       </div>
                     </div>
                   </Td>
                   <Td className="px-6 py-4">
                     <div className="inline-flex items-center gap-2">
-                      <Badge tone={pill.tone}>{pill.label}</Badge>
+                      <Badge tone={pill.tone} stil>{pill.label}</Badge>
                       <span className="text-lg font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
                       {g.segments.length > 1 && (
                         <span className="text-2xs font-medium text-slate-500 tabular-nums">
@@ -662,12 +674,12 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                   )}
                   {g.openSwap && (
                     <div className="mt-1">
-                      <Badge tone={openSwapTone(g.openSwap)} icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
+                      <Badge tone={openSwapTone(g.openSwap)} stil icon={<ArrowLeftRight size={12} />}>{openSwapLabel(g.openSwap)}</Badge>
                     </div>
                   )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
-                  <Badge tone={pill.tone}>{pill.label}</Badge>
+                  <Badge tone={pill.tone} stil>{pill.label}</Badge>
                   <span className="text-base font-mono font-semibold text-oker-700 tabular-nums">{g.line}</span>
                 </div>
               </div>

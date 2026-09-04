@@ -164,7 +164,8 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
               <div className="space-y-5">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge tone="oker">Lijn {detail.line}</Badge>
-                  {isExpiredDiversion(detail) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" dot>Actief</Badge>}
+                  {isExpiredDiversion(detail) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" stil>Actief</Badge>}
+
                 </div>
                 <DiversionBody diversion={detail} />
               </div>

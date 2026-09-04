@@ -258,25 +258,15 @@ export function DashboardView({ notes = [],
             {now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' })}
           </p>
         </div>
-        {/* Dark: eigen verfijnde afwerking i.p.v. de globale amber-overrides
-            (modderig bruin) — zelfde recept als de planner-statuspil. */}
-        <div
-          className={cn(
-            'inline-flex w-fit items-center gap-2 rounded-full border px-3 py-1.5',
-            needsAttention
-              ? 'border-amber-200 bg-amber-50'
-              : 'border-emerald-100 bg-emerald-50',
-          )}
-        >
-          {/* Statische stip — permanente beweging voor "alles is normaal"
-              maakt van rust een alarm. */}
-          <span className={cn('inline-flex h-2 w-2 rounded-full', needsAttention ? 'bg-amber-500' : 'bg-emerald-500')} />
-          <span className={cn('text-2xs font-semibold tabular-nums', needsAttention ? 'text-amber-700' : 'text-emerald-700')}>
-            {needsAttention
-              ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
-              : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
-          </span>
-        </div>
+        {/* Stille chip met gekleurd puntje: "Dienst vandaag" en "in
+            behandeling" zijn informatie, geen alarm (afwerking 04-09, nr. 6).
+            De stip staat stil — beweging voor "alles is normaal" maakt van
+            rust een alarm. */}
+        <Badge tone={needsAttention ? 'amber' : 'emerald'} stil className="w-fit tabular-nums">
+          {needsAttention
+            ? `${pendingLeaveMine.length} aanvraag${pendingLeaveMine.length === 1 ? '' : 'en'} in behandeling`
+            : todaysShift ? 'Dienst vandaag' : 'Vrij vandaag'}
+        </Badge>
       </div>
 
       {/* === Status-strip ===
@@ -357,8 +347,9 @@ export function DashboardView({ notes = [],
           seeAllLabel="Mijn rooster"
         >
           {upcomingShifts.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
+            /* Neutrale lege staat: geen groen vlak voor een rusttoestand. */
+            <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
                 <Clock size={16} />
               </span>
               <div>
@@ -391,10 +382,11 @@ export function DashboardView({ notes = [],
           onSeeAll={onNavigate ? () => onNavigate('omleidingen') : undefined}
         >
           {newestDiversions.length === 0 ? (
-            <div className="flex items-center gap-3 rounded-xl bg-emerald-50 border border-emerald-100 px-4 py-3.5">
-              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-500/12 text-emerald-700">
+            <div className="flex items-center gap-3 rounded-xl bg-surface-row px-4 py-3.5 ring-1 ring-hairline">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-slate-500/12 text-slate-500">
                 <MapPin size={16} />
               </span>
+
               <div>
                 <p className="text-sm font-semibold text-slate-800">Vrije baan</p>
                 <p className="text-xs font-normal text-slate-500">Geen omleidingen op het netwerk.</p>

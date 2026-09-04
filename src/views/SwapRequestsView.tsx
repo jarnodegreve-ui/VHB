@@ -17,9 +17,10 @@ import { notify } from '../lib/ui';
 type ReturnOption = { date: string; code: string; isFree: boolean };
 
 /** Vaste visuele identiteit van de overname (ruil zonder tegenprestatie) —
- *  overal dezelfde badge i.p.v. losse blauwe tekstregels per lijst. */
+ *  overal dezelfde badge i.p.v. losse blauwe tekstregels per lijst. Stil:
+ *  het is een soort, geen signaal (afwerking 04-09, nr. 6). */
 const TakeoverBadge = ({ compact = false }: { compact?: boolean }) => (
-  <Badge tone="blue" icon={<Handshake size={12} />}>
+  <Badge tone="blue" stil icon={<Handshake size={12} />}>
     {compact ? 'Overname' : 'Overname — geen tegenprestatie'}
   </Badge>
 );
@@ -432,7 +433,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                         <span className="text-2xs font-medium text-slate-500 capitalize truncate">{formatDateHuman(info.date)}</span>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
-                        <StatusBadge status={swap.status} />
+                        <StatusBadge status={swap.status} stil />
                         <ChevronDown size={16} className={`text-slate-400 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
                       </div>
                     </button>
@@ -508,7 +509,8 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       )}
                     </div>
                     <span className="shrink-0">
-                      {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <StatusBadge status={swap.status} />}
+                      {/* "Jouw antwoord" vraagt actie en blijft amber; de status is stil. */}
+                      {canRespond ? <Badge tone="amber" dot>Jouw antwoord</Badge> : <StatusBadge status={swap.status} stil />}
                     </span>
                   </div>
                   {swap.reason && <p className="text-xs text-slate-500 italic">"{swap.reason}"</p>}
@@ -638,12 +640,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </Td>
                           <Td>
                             <span className="inline-flex items-center gap-1.5">
-                              <StatusBadge status={swap.status} />
+                              <StatusBadge status={swap.status} stil />
                               {/* Weet de nieuwe rijder het al? Bij approved is
                                   dát de vraag die telt (push bereikt weinigen). */}
                               {swap.status === 'approved' && swap.targetDriverId && (
                                 swap.targetSeenAt
-                                  ? <Badge tone="emerald" icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>Gezien</Badge>
+                                  ? <Badge tone="emerald" stil icon={<Check size={12} />} title={`Bevestigd op ${formatDateHuman(swap.targetSeenAt.slice(0, 10))}`}>Gezien</Badge>
                                   : <Badge tone="slate" title="De chauffeur bevestigde de wissel nog niet in de app">Niet bevestigd</Badge>
                               )}
                             </span>
@@ -664,7 +666,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                 </>
                               ) : (
                                 <>
-                                  <Badge tone="amber" dot className="whitespace-nowrap">Wacht op collega</Badge>
+                                  <Badge tone="amber" stil className="whitespace-nowrap">Wacht op collega</Badge>
                                   <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
                                 </>
                               ))}
@@ -712,10 +714,10 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           )}
                         </div>
                         <span className="flex shrink-0 flex-col items-end gap-1">
-                          <StatusBadge status={swap.status} />
+                          <StatusBadge status={swap.status} stil />
                           {swap.status === 'approved' && swap.targetDriverId && (
                             swap.targetSeenAt
-                              ? <Badge tone="emerald" icon={<Check size={12} />}>Gezien</Badge>
+                              ? <Badge tone="emerald" stil icon={<Check size={12} />}>Gezien</Badge>
                               : <Badge tone="slate">Niet bevestigd</Badge>
                           )}
                         </span>
@@ -742,7 +744,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </>
                         ) : (
                           <div className="flex-1 flex items-center justify-between gap-2">
-                            <Badge tone="amber" dot>Wacht op collega</Badge>
+                            <Badge tone="amber" stil>Wacht op collega</Badge>
                             <Button variant="danger" size="sm" onClick={() => handleStatusUpdate(swap.id, 'rejected')}>
                               Afwijzen
                             </Button>
@@ -853,9 +855,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                                   <span className="shrink-0 inline-flex items-center gap-2">
                                     {freeForDate && (
                                       code && code !== 'vrij'
-                                        ? <Badge tone="emerald" dot>{code}</Badge>
+                                        ? <Badge tone="emerald" stil>{code}</Badge>
                                         : free || code
-                                          ? <Badge tone="emerald" dot>vrij</Badge>
+                                          ? <Badge tone="emerald" stil>vrij</Badge>
                                           : <Badge tone="slate">bezet</Badge>
                                     )}
                                     <ChevronRight size={16} className="text-slate-300" />
@@ -1115,7 +1117,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               </>
             ) : (
               <>
-                <Badge tone="amber" dot className="mr-auto">Wacht op collega</Badge>
+                <Badge tone="amber" stil className="mr-auto">Wacht op collega</Badge>
                 <Button
                   variant="danger"
                   size="lg"
@@ -1145,8 +1147,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
           return (
             <div className="space-y-5">
               <div className="flex flex-wrap items-center gap-2">
-                <StatusBadge status={reviewSwap.status} />
+                <StatusBadge status={reviewSwap.status} stil />
                 <Badge tone="oker" className="tabular-nums">Dienst {info.line}</Badge>
+
                 {info.date && (
                   <Badge tone="slate" className="tabular-nums">{info.date}{info.startTime && info.endTime ? ` · ${info.startTime} – ${info.endTime}` : ''}</Badge>
                 )}
