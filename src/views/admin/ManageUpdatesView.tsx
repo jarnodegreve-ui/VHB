@@ -5,14 +5,15 @@ import { cn, notify } from '../../lib/ui';
 import { formatUpdateDate } from '../../lib/format';
 import { fetchUpdateReadCounts } from '../../lib/updateReads';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
-import { Badge, Button, IconButton, Switch } from '../../components/primitives';
+import { Badge, Button, Switch } from '../../components/primitives';
 import { Card, CardHeader } from '../../components/Card';
 import { Field, Input, Textarea } from '../../components/Field';
 import { valideer } from '../../lib/valideer';
 import { updateSchema } from '../../../shared/schemas/update';
 import { InfoTip } from '../../components/InfoTip';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-import { DetailPaneel, MasterDetail } from '../../components/DetailPaneel';
+import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
+import { ActieMenu } from '../../components/ActieMenu';
 
 const FORM_ID = 'update-form';
 
@@ -101,10 +102,15 @@ export function ManageUpdatesView({
       if (updateForm.isUrgent && canSendUrgentEmail) {
         await onSendUrgentEmail(updateToSave);
       }
-      setUpdateForm(emptyUpdateForm);
-      setEditingId(null);
-      setPaneelOpen(false);
       notify(editingId ? 'Update bijgewerkt.' : 'Update gepubliceerd.', 'success');
+      if (inline) {
+        // Desktop: het paneel blijft naast de lijst en toont de (nieuwe) update.
+        handleEdit(updateToSave);
+      } else {
+        setUpdateForm(emptyUpdateForm);
+        setEditingId(null);
+        setPaneelOpen(false);
+      }
     } else if (!perRecord) {
       // De per-record-saver meldt zelf wat er misging (409 → ververst).
       notify('Update kon niet worden opgeslagen. Controleer de foutmelding hierboven en probeer opnieuw.', 'error');
@@ -138,6 +144,26 @@ export function ManageUpdatesView({
     setFouten({});
   };
 
+  // Desktop: de nieuwste update staat standaard open in het paneel; na
+  // verwijderen schuift de keuze door naar de buur. Het lege "nieuw"-
+  // formulier (paneel open zonder editingId) wordt niet gekaapt.
+  const inline = useStandaardKeuze({
+    items: updates,
+    sleutelVan: (u) => u.id,
+    gekozen: paneelOpen ? editingId : null,
+    actief: !(paneelOpen && editingId === null),
+    kies: handleEdit,
+    wis: handleCancelEdit,
+  });
+  const bewerkte = editingId ? updates.find((u) => u.id === editingId) ?? null : null;
+
+  // Annuleren: desktop zet het formulier terug op het item (het paneel blijft
+  // naast de lijst staan); mobiel sluit de SlideOver.
+  const annuleer = () => {
+    if (inline && bewerkte) handleEdit(bewerkte);
+    else handleCancelEdit();
+  };
+
   // Geen bevestigingsmodal meer: verwijderen gaat meteen en de datalaag
   // toont 6 s een toast met "Ongedaan maken" (idee 1 Jarno, 03-09). Alleen
   // de collectie-terugval (zonder onDeleteUpdate) meldt hier nog zelf.
@@ -146,7 +172,9 @@ export function ManageUpdatesView({
     const success = onDeleteUpdate ? await onDeleteUpdate(id) : await onSave(updates.filter((update) => update.id !== id));
     if (success) {
       if (!onDeleteUpdate) notify('Update verwijderd.', 'success');
-      if (id === editingId) handleCancelEdit();
+      // Mobiel sluit de SlideOver; desktop laat useStandaardKeuze doorschuiven
+      // naar de buur van de verwijderde update.
+      if (id === editingId && !inline) handleCancelEdit();
     } else if (!onDeleteUpdate) {
       notify('Update kon niet worden verwijderd.', 'error');
     }
@@ -154,7 +182,6 @@ export function ManageUpdatesView({
   };
 
   const urgentCount = updates.filter((u) => u.isUrgent).length;
-  const bewerkte = editingId ? updates.find((u) => u.id === editingId) ?? null : null;
 
   const gelezenBadge = (update: Update) => (
     update.isUrgent && totalChauffeurs > 0 ? (
@@ -225,7 +252,23 @@ export function ManageUpdatesView({
       subtitle={bewerkte ? `Gepubliceerd ${formatUpdateDate(bewerkte.date)}` : 'Chauffeurs zien de update meteen op hun dashboard.'}
       sleutel={editingId ?? 'nieuw'}
       leegTekst="Kies een update om te bewerken, of maak een nieuwe."
-      leegActie={<Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
+      leegActie={<Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe update</Button>}
+      chip={bewerkte ? (
+        <>
+          {bewerkte.isUrgent && <Badge tone="red" dot>Dringend</Badge>}
+          {gelezenBadge(bewerkte)}
+        </>
+      ) : undefined}
+      acties={bewerkte ? (
+        <ActieMenu
+          size="sm"
+          label="Meer acties"
+          items={[
+            { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setHistoryUpdate(bewerkte) },
+            { label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, disabled: deletingId === bewerkte.id, onClick: () => { void handleDelete(bewerkte.id); } },
+          ]}
+        />
+      ) : undefined}
       icon={(
         <span className={cn('inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl', updateForm.isUrgent ? 'bg-red-500/12 text-red-700' : 'bg-oker-500/15 text-oker-700')}>
           <Bell size={16} />
@@ -233,13 +276,7 @@ export function ManageUpdatesView({
       )}
       footer={(
         <div className="flex items-center gap-2">
-          {bewerkte && (
-            <>
-              <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setHistoryUpdate(bewerkte)}><History size={16} /></IconButton>
-              <IconButton label="Verwijder" variant="danger" disabled={deletingId === bewerkte.id} onClick={() => { void handleDelete(bewerkte.id); }}><Trash2 size={16} /></IconButton>
-            </>
-          )}
-          <Button variant="secondary" size="lg" className="flex-1" onClick={handleCancelEdit}>
+          <Button variant="secondary" size="lg" className="flex-1" onClick={annuleer}>
             Annuleren
           </Button>
           <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" disabled={isPublishing || !updateForm.title || !updateForm.content}>
@@ -251,8 +288,6 @@ export function ManageUpdatesView({
       {/* De publiceer-knop staat in de footer (buiten het formulier) en
           koppelt via form={FORM_ID}. */}
       <form id={FORM_ID} onSubmit={handlePublish} className="space-y-5">
-        {bewerkte && gelezenBadge(bewerkte) ? <div>{gelezenBadge(bewerkte)}</div> : null}
-
         <Field label="Titel" htmlFor="update-titel" error={fouten.title}>
           <Input id="update-titel" invalid={!!fouten.title} type="text" placeholder="Onderwerp van de update" value={updateForm.title} onChange={(e) => setUpdateForm({ ...updateForm, title: e.target.value })} />
         </Field>
@@ -307,7 +342,9 @@ export function ManageUpdatesView({
         )}
       />
 
-      <MasterDetail lijst={lijst} paneel={paneel} />
+      {/* Zonder updates (en zonder open "nieuw"-formulier) vult de lijstkaart
+          met haar lege staat de volle breedte — geen leeg paneel ernaast. */}
+      <MasterDetail lijst={lijst} paneel={updates.length === 0 && !paneelOpen ? undefined : paneel} />
 
       <EntityHistoryModal
         open={!!historyUpdate}

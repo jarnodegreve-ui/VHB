@@ -4,13 +4,14 @@ import type { Diversion } from '../../types';
 import { cn, notify } from '../../lib/ui';
 import { EmptyState, PageHeader, PageShell } from '../../components/ui';
 import { apiFetch } from '../../lib/api';
-import { Badge, Button, IconButton } from '../../components/primitives';
+import { Badge, Button } from '../../components/primitives';
 import { Card } from '../../components/Card';
 import { DateInput, Field, Input, Textarea } from '../../components/Field';
 import { valideer } from '../../lib/valideer';
 import { diversionSchema } from '../../../shared/schemas/diversion';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
-import { DetailPaneel, MasterDetail } from '../../components/DetailPaneel';
+import { DetailPaneel, MasterDetail, useStandaardKeuze } from '../../components/DetailPaneel';
+import { ActieMenu } from '../../components/ActieMenu';
 
 /** Verlopen = einddatum vóór vandaag; zonder einddatum blijft een omleiding
  *  actief tot hij verwijderd wordt. */
@@ -125,6 +126,27 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
 
   const sluitPaneel = () => setPaneelOpen(false);
 
+  // Desktop: de eerste omleiding staat standaard open in het paneel; na
+  // verwijderen schuift de keuze door naar de buur. Het lege "nieuw"-
+  // formulier (paneel open zonder editingId) wordt niet gekaapt.
+  const inline = useStandaardKeuze({
+    items: sortedDiversions,
+    sleutelVan: (d) => d.id,
+    gekozen: paneelOpen ? editingId : null,
+    actief: !(paneelOpen && editingId === null),
+    kies: handleOpenEdit,
+    wis: sluitPaneel,
+  });
+
+  const bewerkte = editingId ? diversions.find((d) => d.id === editingId) ?? null : null;
+
+  // Annuleren: desktop zet het formulier terug op het item (het paneel blijft
+  // naast de lijst staan); mobiel sluit de SlideOver.
+  const annuleer = () => {
+    if (inline && bewerkte) handleOpenEdit(bewerkte);
+    else sluitPaneel();
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (isUploading) return;
@@ -170,6 +192,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       } else {
         onSave(diversions.map((d) => (d.id === editingId ? bijgewerkt : d)));
       }
+      // Desktop blijft op het opgeslagen item staan (vers formulier).
+      if (inline) return handleOpenEdit(bijgewerkt);
     } else {
       const diversionToAdd: Diversion = {
         id: targetId,
@@ -185,6 +209,8 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       } else {
         onSave([...diversions, diversionToAdd]);
       }
+      // Desktop opent meteen de nieuwe omleiding in het paneel.
+      if (inline) return handleOpenEdit(diversionToAdd);
     }
 
     sluitPaneel();
@@ -198,10 +224,10 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     } else {
       onSave(diversions.filter((d) => d.id !== id));
     }
-    if (id === editingId) sluitPaneel();
+    // Mobiel sluit de SlideOver; desktop laat useStandaardKeuze doorschuiven
+    // naar de buur van het verwijderde item.
+    if (id === editingId && !inline) sluitPaneel();
   };
-
-  const bewerkte = editingId ? diversions.find((d) => d.id === editingId) ?? null : null;
 
   const lijst = sortedDiversions.length > 0 ? (
     <ul className="space-y-2" aria-label="Omleidingen">
@@ -263,7 +289,18 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       subtitle={bewerkte ? `${bewerkte.title} — lijn ${bewerkte.line}` : 'Vul de details in en voeg eventueel een PDF toe.'}
       sleutel={editingId ?? 'nieuw'}
       leegTekst="Kies een omleiding om te bewerken, of maak een nieuwe."
-      leegActie={<Button variant="primary" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
+      leegActie={<Button variant="primary" size="sm" icon={<Plus size={16} />} onClick={handleOpenAdd}>Nieuwe omleiding</Button>}
+      chip={bewerkte ? (isExpired(bewerkte) ? <Badge tone="slate">Verlopen</Badge> : <Badge tone="emerald" dot>Actief</Badge>) : undefined}
+      acties={bewerkte ? (
+        <ActieMenu
+          size="sm"
+          label="Meer acties"
+          items={[
+            { label: 'Wijzigingsgeschiedenis', icon: <History size={16} />, onClick: () => setHistoryDiversion(bewerkte) },
+            { label: 'Verwijderen', icon: <Trash2 size={16} />, gevaarlijk: true, scheiding: true, onClick: () => { void handleDelete(bewerkte.id); } },
+          ]}
+        />
+      ) : undefined}
       icon={(
         <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-oker-500/15 text-oker-700">
           <MapPin size={16} />
@@ -271,13 +308,7 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
       )}
       footer={(
         <div className="flex items-center gap-2">
-          {bewerkte && (
-            <>
-              <IconButton label="Wijzigingsgeschiedenis" variant="ghost" onClick={() => setHistoryDiversion(bewerkte)}><History size={16} /></IconButton>
-              <IconButton label="Verwijderen" variant="danger" onClick={() => { void handleDelete(bewerkte.id); }}><Trash2 size={16} /></IconButton>
-            </>
-          )}
-          <Button variant="secondary" size="lg" className="flex-1" onClick={sluitPaneel}>
+          <Button variant="secondary" size="lg" className="flex-1" onClick={annuleer}>
             Annuleren
           </Button>
           <Button type="submit" form={FORM_ID} variant="primary" size="lg" className="flex-1" disabled={isUploading}>
@@ -388,7 +419,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
         )}
       />
 
-      <MasterDetail lijst={lijst} paneel={paneel} />
+      {/* Zonder omleidingen (en zonder open "nieuw"-formulier) vult de lege
+          staat van de lijst de volle breedte — geen leeg paneel ernaast. */}
+      <MasterDetail lijst={lijst} paneel={sortedDiversions.length === 0 && !paneelOpen ? undefined : paneel} />
 
       <EntityHistoryModal
         open={!!historyDiversion}

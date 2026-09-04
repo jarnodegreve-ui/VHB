@@ -477,8 +477,9 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             </div>
           ) : (
             <EmptyState
+              compact
               title="Nog geen ruilverzoeken"
-              message='Wil je een dienst wisselen met een collega? Klik op "Dienstruil aanvragen" — je collega en de planner keuren daarna goed.'
+              message="Klik op “Dienstruil aanvragen” — je collega en de planner keuren daarna goed."
             />
           )}
         </div>
@@ -541,6 +542,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
             })
           ) : (
             <EmptyState
+              compact
               variant="klaar"
               title="Geen openstaande dienstruilen"
               message="Stelt een collega jou een ruil voor, dan verschijnt die hier en krijg je een melding."
