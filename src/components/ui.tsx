@@ -186,7 +186,13 @@ export function EmptyState({
   title,
   message,
   action,
+  compact = false,
+  className,
 }: {
+  /** Compact: één rustige rij (motief klein links, tekst ernaast) — voor
+   *  detailpanelen en zijvakken, waar een hoge lege kaart uit de toon valt. */
+  compact?: boolean;
+  className?: string;
   /** Eigen icoon in de tegel; zonder icoon toont de staat het lus-motief. */
   icon?: React.ReactNode;
   /** Motief zonder `icon`: 'klaar' waar leeg = alles afgehandeld/niets open. */
@@ -197,16 +203,35 @@ export function EmptyState({
    *  geven zo altijd een volgende stap. */
   action?: React.ReactNode;
 }) {
+  if (compact) {
+    return (
+      <div className={cn('surface-muted flex items-center gap-4 rounded-2xl px-4 py-3.5', className)}>
+        {icon ? (
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-muted text-slate-400">{icon}</div>
+        ) : (
+          <BrandMotief variant={variant} className="h-7 w-14 shrink-0 text-slate-400" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-sm font-semibold text-slate-800">{title}</p>
+          {message ? <p className="mt-0.5 text-xs text-slate-500">{message}</p> : null}
+        </div>
+        {action ? <div className="shrink-0">{action}</div> : null}
+      </div>
+    );
+  }
+  // Rustige gedempte kaart i.p.v. de hoge stippellijn-kaart: een lege staat
+  // is geen dropzone, en op desktop vulde die kaart een half scherm
+  // (afwerkingsronde 04-09, nr. 4).
   return (
-    <div className="text-center py-10 surface-card rounded-3xl !border-dashed">
+    <div className={cn('surface-muted rounded-2xl px-6 py-7 text-center', className)}>
       {icon ? (
-        <div className="w-14 h-14 bg-surface-muted rounded-2xl flex items-center justify-center mx-auto mb-4 text-slate-400">{icon}</div>
+        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-surface-muted text-slate-400">{icon}</div>
       ) : (
-        <BrandMotief variant={variant} className="mx-auto mb-4 h-12 w-24 text-slate-400" />
+        <BrandMotief variant={variant} className="mx-auto mb-3 h-9 w-[4.5rem] text-slate-400" />
       )}
-      <h3 className="text-card-title">{title}</h3>
-      {message ? <p className="mt-1.5 text-sm font-normal text-slate-500 max-w-md mx-auto">{message}</p> : null}
-      {action ? <div className="mt-5 flex justify-center">{action}</div> : null}
+      <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+      {message ? <p className="mx-auto mt-1 max-w-md text-xs leading-relaxed text-slate-500">{message}</p> : null}
+      {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   );
 }

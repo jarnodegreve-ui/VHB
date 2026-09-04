@@ -317,7 +317,7 @@ export function Th({ className, children, title, sort }: { className?: string; c
   // Sentence-case, geen caps: tabelkoppen zijn leestekst, geen eyebrow.
   // `sort` zet aria-sort voor sorteerbare kolommen (maandoverzicht).
   return (
-    <th title={title} aria-sort={sort} className={cn('px-4 py-3 sm:pointer-fine:py-2.5 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
+    <th title={title} aria-sort={sort} className={cn('px-4 py-3 text-left text-xs font-medium text-slate-500 whitespace-nowrap', className)}>
       {children}
     </th>
   );
@@ -326,7 +326,7 @@ export function Th({ className, children, title, sort }: { className?: string; c
 export function Td({ className, children }: { className?: string; children?: ReactNode }) {
   // Compacter op desktop-met-muis (dispatch-dichtheid); op touch blijft de
   // rij hoog genoeg als raakvlak.
-  return <td className={cn('px-4 py-3 sm:pointer-fine:py-2.5 text-sm text-slate-700', className)}>{children}</td>;
+  return <td className={cn('px-4 py-3 text-sm text-slate-700', className)}>{children}</td>;
 }
 
 // === Switch ===
