@@ -107,8 +107,11 @@ export function ServicesView({ services }: { services: Service[] }) {
       />
 
       {/* Desktop: tabel als hoofdkolom, kerncijfers + CSV in het zijvak
-          (afwerkingsronde 04-09); zonder diensten voegt het vak niets toe. */}
+          (afwerkingsronde 04-09); zonder diensten voegt het vak niets toe.
+          Pas vanaf xl: op iPad-landscape (lg) kneep het vak van 20 rem de
+          tabel tot ±340 px (controle 05-09, nr. 18). */}
       <ZijvakLayout
+        breekpunt="xl"
         zijvak={services.length > 0 ? (
           <Zijvak
             titel="Overzicht"
