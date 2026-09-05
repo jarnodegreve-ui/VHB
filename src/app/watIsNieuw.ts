@@ -43,7 +43,7 @@ export const WAT_IS_NIEUW: WatIsNieuwItem[] = [
       ],
       staf: [
         'Beheertabellen: zoeken, sorteren, bulkacties en kolomvoorkeuren.',
-        'Lijst en detail naast elkaar op een breed scherm; ⌘K zoekt ook personen en acties.',
+        'Lijst en detail naast elkaar op een breed scherm.',
         'Verwijderen kan je zes seconden ongedaan maken vanuit de melding.',
       ],
     },

@@ -19,17 +19,9 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 import { useHistoryDismiss } from './lib/useHistoryDismiss';
 import {
   Bell,
-  CalendarPlus,
   Eye,
-  KeyRound,
-  LifeBuoy,
-  LogOut,
   Menu,
-  Moon,
   RefreshCw,
-  Search,
-  Sun,
-  UserRound,
   WifiOff,
   X,
 } from 'lucide-react';
@@ -57,7 +49,6 @@ import { UserMenu } from './components/UserMenu';
 import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
 import { berekenWerkvoorraad } from './lib/werkvoorraad';
 import { BrandSpinner } from './components/BrandSpinner';
-import { CommandPalette, useCommandPaletteShortcut } from './components/CommandPalette';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { LoginView } from './views/LoginView';
 import { useRealtimeSync } from './lib/realtime';
@@ -137,7 +128,6 @@ export default function App() {
   // Admin-only preview: toont het portaal (nav + dashboard) zoals een chauffeur
   // het ziet. Puur visueel — rechten/data blijven admin. Reset bij herladen.
   const [previewChauffeur, setPreviewChauffeur] = useState(false);
-  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(false);
   const [showChangePassword, setShowChangePassword] = useState(false);
@@ -274,7 +264,6 @@ export default function App() {
   }, [isSidebarOpen, isDesktopNav]);
 
   // ⌘K / Ctrl+K opent het command palette
-  useCommandPaletteShortcut(() => setIsCommandPaletteOpen(true));
 
   // Supabase Realtime: live sync van leave/swaps/diversions/updates/planning.
   // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
@@ -1227,7 +1216,7 @@ export default function App() {
         aria-label="Zijbalk"
         inert={!isSidebarOpen && !isDesktopNav}
         className={cn(
-          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform pt-[env(safe-area-inset-top,0px)] lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
+          "fixed inset-y-0 left-0 w-[17rem] max-w-[80vw] panel-dark flex flex-col z-50 transition-transform duration-500 transform lg:w-[17.5rem] lg:max-w-none lg:relative lg:translate-x-0",
           isSidebarOpen ? "translate-x-0" : "-translate-x-full"
         )}
         // Zachte uitloop zonder overshoot — de bounce voelde gedateerd en
@@ -1238,6 +1227,9 @@ export default function App() {
         // notch (controle-ronde 27-08, nr. 35).
         style={{ transitionTimingFunction: 'cubic-bezier(0.22, 1, 0.36, 1)', paddingLeft: 'env(safe-area-inset-left)' }}
       >
+        {/* Statusbalkzone donker houden zolang de lade open is (licht thema: de
+            lade is licht, de statusbalktekens wit — controle 05-09, nr. 14). */}
+        <div className="statusbalk-strook shrink-0 lg:hidden" aria-hidden="true" />
         <div className="shrink-0 px-5 pt-4 pb-3 flex items-center justify-center relative text-center">
           {/* Géén transform/transition-all op de logoknop: Safari rastert een
               element met schaal-animatie als bitmap-laag en schaalt die —
@@ -1341,22 +1333,6 @@ export default function App() {
                   >
                     {currentMeta.title}
                   </h2>
-                  {/* Zoekveld op desktop (afwerking 04-09, nr. 9): het ⌘K-palette
-                      als zichtbaar veld in de balk, zoals in Linear/Vercel —
-                      de balk was verder leeg. Het is een knop in veld-look:
-                      klikken opent het palette, typen gebeurt dáár. */}
-                  {/* rauw: zoekveld-knop met eigen veld-look (kbd-hint rechts), geen Button-variant */}
-                  <button
-                    type="button"
-                    onClick={() => setIsCommandPaletteOpen(true)}
-                    className="control-input hidden lg:flex ml-3 h-9 w-80 shrink-0 items-center gap-2 rounded-xl px-3 text-left text-sm text-slate-500 transition-colors hover:text-slate-700"
-                    aria-label="Zoeken (⌘K)"
-                    aria-keyshortcuts="Meta+K Control+K"
-                  >
-                    <Search size={16} className="shrink-0" />
-                    <span className="flex-1 truncate">Zoek scherm, persoon of actie</span>
-                    <kbd className="rounded-md border border-slate-200 bg-surface-soft px-1.5 py-0.5 font-mono text-2xs text-slate-600">⌘K</kbd>
-                  </button>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
                   {/* Zoekknop bewust weg (Jarno: "vrij zinloos") — het
@@ -1393,11 +1369,6 @@ export default function App() {
                       onNavigate={setCurrentView}
                     />
                   )}
-                  {/* Zoeken: op desktop via ⌘K (knop bewust weg, Jarno); op
-                      een telefoon is er geen sneltoets, dus daar wél een knop. */}
-                  <IconButton label="Zoeken" variant="ghost" size="sm" className="lg:hidden" onClick={() => setIsCommandPaletteOpen(true)}>
-                    <Search size={16} />
-                  </IconButton>
                   <IconButton
                     label="Meldingen"
                     title="Updates en meldingen"
@@ -1612,33 +1583,6 @@ export default function App() {
       />
 
       {/* ⌘K Command Palette */}
-      <CommandPalette
-        open={isCommandPaletteOpen}
-        onClose={() => setIsCommandPaletteOpen(false)}
-        onNavigate={(v) => { setCurrentView(v); setIsSidebarOpen(false); }}
-        role={effectiveRole}
-        acties={[
-          { id: 'actie-verlof', label: 'Verlof aanvragen', hint: 'Opent het aanvraagformulier', icon: <CalendarPlus size={16} />, keywords: 'verlof aanvragen vakantie nieuw', action: () => { setCurrentView('verlof'); window.history.replaceState(window.history.state, '', '/verlof?nieuw=1'); } },
-          { id: 'actie-thema', label: theme === 'light' ? 'Donkere modus' : 'Lichte modus', hint: 'Thema wisselen', icon: theme === 'light' ? <Moon size={16} /> : <Sun size={16} />, keywords: 'thema donker licht dark light', action: toggleTheme },
-          { id: 'actie-agenda', label: 'Agenda-koppeling', hint: 'Rooster in je agenda', icon: <CalendarPlus size={16} />, keywords: 'agenda ics abonneren kalender', action: () => setShowAgenda(true) },
-          { id: 'actie-wachtwoord', label: 'Wachtwoord wijzigen', icon: <KeyRound size={16} />, keywords: 'wachtwoord password', action: () => setShowChangePassword(true) },
-          { id: 'actie-probleem', label: 'Meld een probleem', icon: <LifeBuoy size={16} />, keywords: 'probleem bug melden feedback', action: () => setShowProbleemMelder(true) },
-          { id: 'actie-uitloggen', label: 'Uitloggen', icon: <LogOut size={16} />, keywords: 'uitloggen afmelden logout', action: () => { void handleLogout(); } },
-          // Collega zoeken: alleen bij een zoekterm (anders overspoelt de lijst).
-          ...users.filter((u) => u.isActive !== false).map((u) => ({
-            id: `persoon-${u.id}`,
-            label: u.name,
-            hint: isRealAdmin ? 'Gebruiker openen' : 'Contact',
-            icon: <UserRound size={16} />,
-            keywords: `chauffeur collega persoon ${u.role ?? ''}`,
-            alleenBijZoeken: true,
-            action: () => {
-              if (isRealAdmin) { setCurrentView('gebruikers'); window.history.replaceState(window.history.state, '', `/beheer/gebruikers?zoek=${encodeURIComponent(u.name)}`); }
-              else setCurrentView('contacten');
-            },
-          })),
-        ]}
-      />
     </AppDataProvider>
   );
 }
