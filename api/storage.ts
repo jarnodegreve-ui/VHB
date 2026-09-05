@@ -12,6 +12,7 @@ import type {
   ServiceRecord,
   ShiftRecord,
   SwapRecord,
+  AppUserIntern,
 } from "./types.js";
 import {
   countAdmins,
@@ -1048,7 +1049,7 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes }: 
 
 // --- Users ---
 
-export const getUsersData = async (): Promise<AppUser[]> => {
+export const getUsersData = async (): Promise<AppUserIntern[]> => {
   const client = requireDb();
   const rows = await paginatedFetch((from, to) =>
     client.from('users').select('*').order('id', { ascending: true }).range(from, to),
@@ -1165,7 +1166,15 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
       }
       createdAccounts.push({ email: currentEmail, name: sanitizedUser.name });
       if (!sanitizedUser.isActive && data.user) await zetAuthBan(data.user.id, true);
+      if (data.user) await koppelAuthIdStil(String(sanitizedUser.id), data.user.id);
       continue;
+    }
+
+    // Profiel hoort bij dít Auth-account (nieuw gekoppeld, of admin wees een
+    // adres toe waar al een Auth-account op stond) — koppeling meteen
+    // vastleggen, anders liep de sessie-identiteit (authid) achter (SQL-review 05-09).
+    if ((previousUser as AppUserIntern | undefined)?.authId !== currentAuthUser.id) {
+      await koppelAuthIdStil(String(sanitizedUser.id), currentAuthUser.id);
     }
 
     if (previousEmail && previousEmail !== currentEmail) {
@@ -1219,6 +1228,28 @@ const zetAuthBan = async (authUserId: string, gebannen: boolean) => {
  * Voorheen liep elke login/logout via saveUsersData (replace-all incl.
  * Supabase-auth-sync): gelijktijdige logins raceten met elkaar én met
  * admin-bewerkingen (een net verwijderde gebruiker kon zo terugkomen). */
+/** Koppel een profiel aan zijn Supabase Auth-uid (eerste keer dat de
+ *  gebruiker met dit account aanmeldt). Daarna geldt de uid als identiteit. */
+export const koppelAuthId = async (userId: string, authId: string): Promise<void> => {
+  const client = requireDb();
+  const { error } = await client.from('users').update({ authid: authId }).eq('id', String(userId));
+  if (error) throw error;
+};
+
+/** Zelfde, maar best-effort: vóór migratie 2026-09-05_users_authid.sql
+ *  bestaat de kolom niet en mag een gebruikers-save daar niet op falen. */
+let koppelStilGemeld = false;
+const koppelAuthIdStil = async (userId: string, authId: string): Promise<void> => {
+  try {
+    await koppelAuthId(userId, authId);
+  } catch (err: any) {
+    if (!koppelStilGemeld) {
+      koppelStilGemeld = true;
+      console.error("[users] authid koppelen mislukt (migratie users.authid gedraaid?):", err?.message ?? err);
+    }
+  }
+};
+
 export const updateUserSessionMeta = async (
   userId: string,
   fields: { lastLogin?: string; activeSessions?: number },

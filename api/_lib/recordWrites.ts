@@ -63,6 +63,9 @@ type WriteOpts = {
   /** Collectie-samenvatting ("N gebruikers verwerkt …") meeloggen. De
    *  per-record-routes zetten dit uit: de per-entity regel zegt al alles. */
   samenvatting?: boolean;
+  /** Herstel na "Ongedaan maken": zelfde record terug — geen push, en het
+   *  auditspoor zegt "hersteld" i.p.v. "toegevoegd" (controle 05-09). */
+  herstel?: boolean;
 };
 
 // --- Gebruikers ---
@@ -163,7 +166,7 @@ export const verwerkDiversionsOpslag = async (
   // Per-omleiding audit entries
   const divDiff = diffDiversionChanges(previousDiversions, newData);
   for (const d of divDiff.added) {
-    await logActivity(req, "diversions", "Omleiding toegevoegd", fmtDiversion(d), { type: "diversion", id: d.id });
+    await logActivity(req, "diversions", opts.herstel ? "Omleiding hersteld" : "Omleiding toegevoegd", fmtDiversion(d), { type: "diversion", id: d.id });
   }
   for (const d of divDiff.changed) {
     await logActivity(req, "diversions", "Omleiding gewijzigd", fmtDiversion(d), { type: "diversion", id: d.id });
@@ -198,7 +201,7 @@ export const verwerkUpdatesOpslag = async (
   // Per-update audit entries
   const updDiff = diffUpdateChanges(previousUpdates, newData);
   for (const u of updDiff.added) {
-    await logActivity(req, "updates", "Update toegevoegd", fmtUpdate(u), { type: "update", id: u.id });
+    await logActivity(req, "updates", opts.herstel ? "Update hersteld" : "Update toegevoegd", fmtUpdate(u), { type: "update", id: u.id });
   }
   for (const u of updDiff.changed) {
     await logActivity(req, "updates", "Update gewijzigd", fmtUpdate(u), { type: "update", id: u.id });
@@ -210,7 +213,7 @@ export const verwerkUpdatesOpslag = async (
   // Nieuwe update → push naar alle actieve chauffeurs. Urgente updates mailen
   // al (aparte flow); een push zorgt dat óók gewone updates niet onopgemerkt
   // blijven tot iemand de app toevallig opent.
-  if (updDiff.added.length > 0) {
+  if (updDiff.added.length > 0 && !opts.herstel) {
     const chauffeurIds = (await getUsersData()).filter((u) => u.role === "chauffeur" && u.isActive !== false).map((u) => String(u.id));
     for (const u of updDiff.added) {
       await sendPushToUsers(chauffeurIds, {

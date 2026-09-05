@@ -10,11 +10,11 @@ import type {
   Role,
   SwapRecord,
   SwapType,
-} from "./types.js";
+ AppUserIntern } from "./types.js";
 
 export const normalizeEmail = (email?: string | null) => email?.trim().toLowerCase() || undefined;
 
-export const toPublicUser = (user: any): AppUser => ({
+export const toPublicUser = (user: any): AppUserIntern => ({
   id: String(user.id),
   name: user.name,
   role: user.role,
@@ -24,6 +24,7 @@ export const toPublicUser = (user: any): AppUser => ({
   isActive: user.isActive ?? user.isactive,
   phone: user.phone,
   email: user.email,
+  authId: typeof (user.authId ?? user.authid) === 'string' ? (user.authId ?? user.authid) : undefined,
   verlofBudget: typeof (user.verlofBudget ?? user.verlofbudget) === 'number'
     ? (user.verlofBudget ?? user.verlofbudget)
     : undefined,
@@ -42,7 +43,7 @@ export const toPublicUser = (user: any): AppUser => ({
 export const isActieveStaf = (user: Pick<AppUser, "role" | "isActive">): boolean =>
   user.isActive !== false && (user.role === "planner" || user.role === "admin");
 
-export const toRoleScopedUser = (user: AppUser, role: Role, viewerId?: string): AppUser => {
+const scopeUser = (user: AppUser, role: Role, viewerId?: string): AppUser => {
   if (role === "admin") {
     return user;
   }
@@ -1004,4 +1005,12 @@ const DIGEST_RUIS = [
 export const isDigestRuis = (message?: string | null): boolean => {
   const m = String(message ?? "").toLowerCase();
   return DIGEST_RUIS.some((patroon) => m.includes(patroon));
+};
+
+/** Rol-afhankelijke weergave van een gebruiker, zónder de Auth-koppeling:
+ *  `authId` is server-intern (sessie-identiteit) en gaat nooit naar de client. */
+export const toRoleScopedUser = (user: AppUser, role: Role, viewerId?: string): AppUser => {
+  const { authId: _weg, ...schoon } = scopeUser(user, role, viewerId) as AppUserIntern;
+  void _weg;
+  return schoon;
 };

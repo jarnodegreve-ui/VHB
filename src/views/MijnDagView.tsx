@@ -90,10 +90,15 @@ export function MijnDagView({
   }, []);
 
   const vandaag = isOffset(now, 0);
-  const peildag = isOffset(now, dagOffset);
-  const isVandaag = dagOffset === 0;
-
   const mijnShifts = shifts.filter((s) => s.driverId === user.id);
+  // Nachtdienst over middernacht: zolang de dienst van gisteren nog loopt,
+  // blijft dát de dag van dit scherm en telt "nu" door in busvak-tijd
+  // (00:30 = 24:30) — anders viel de dienst om 00:00 weg (controle 05-09).
+  const gisteren = isOffset(now, -1);
+  const nachtdienstLoopt = mijnShifts.some((s) => s.date === gisteren && isShiftActiveAt(s, now));
+  const dagBasis = nachtdienstLoopt ? -1 : 0;
+  const peildag = isOffset(now, dagBasis + dagOffset);
+  const isVandaag = dagOffset === 0;
   const delen = mijnShifts
     .filter((s) => s.date === peildag)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
@@ -123,7 +128,7 @@ export function MijnDagView({
   const blokken = rijen.filter((r): r is Extract<Rij, { soort: 'blok' }> => r.soort === 'blok');
 
   // "Nu" in minuten t.o.v. middernacht van vandaag (de peildag bij offset 0).
-  const nuMin = now.getHours() * 60 + now.getMinutes();
+  const nuMin = now.getHours() * 60 + now.getMinutes() + (nachtdienstLoopt ? 1440 : 0);
   const nuLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
   // Statuszin: "Dienst 2101 · 2 delen · tot 17:29" / "Vrij vandaag".
   const dagWoord = isVandaag ? 'vandaag' : 'morgen';
@@ -175,7 +180,7 @@ export function MijnDagView({
       <header className="px-1 pt-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-micro">{hoofdletter(dagWoord)}</p>
+            <p className="text-micro">{nachtdienstLoopt && isVandaag ? 'Nog bezig · dienst van gisteren' : hoofdletter(dagWoord)}</p>
             <h1 className="text-page-title mt-1">{hoofdletter(formatDayLong(peildag))}</h1>
           </div>
           <div className="glass-segmented inline-flex shrink-0 rounded-2xl p-1" role="group" aria-label="Dag kiezen">

@@ -3118,7 +3118,7 @@ app.post("/api/diversions/one", authenticate, requireRole("planner", "admin"), a
     if (previousDiversions.some((d: any) => String(d.id) === id)) {
       return res.status(409).json({ error: "Er bestaat al een omleiding met dit id.", conflict: "exists" });
     }
-    await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, { ...body, id }], { samenvatting: false });
+    await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, { ...body, id }], { samenvatting: false, herstel: String(req.get("x-herstel") ?? "") === "1" });
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
     res.status(201).json({ success: true, diversion: await diversionResponseRecord(id) });
   } catch (err: any) {
@@ -3392,7 +3392,9 @@ app.post("/api/updates/one", authenticate, requireRole("planner", "admin"), asyn
       return res.status(409).json({ error: "Er bestaat al een update met dit id.", conflict: "exists" });
     }
     // Nieuwste bovenaan, zoals de UI de lijst opbouwt.
-    await verwerkUpdatesOpslag(req, previousUpdates, [{ ...body, id }, ...previousUpdates], { samenvatting: false, pushUrl: viewUrl("updates") });
+    // X-Herstel: 1 = "Ongedaan maken" na verwijderen → geen tweede push.
+    const herstel = String(req.get("x-herstel") ?? "") === "1";
+    await verwerkUpdatesOpslag(req, previousUpdates, [{ ...body, id }, ...previousUpdates], { samenvatting: false, herstel, pushUrl: viewUrl("updates") });
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getUpdatesData()));
     res.status(201).json({ success: true, update: await updateResponseRecord(id) });
   } catch (err: any) {

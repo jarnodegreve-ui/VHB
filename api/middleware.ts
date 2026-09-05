@@ -3,9 +3,9 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { supabase } from "./db.js";
 import { DEVICE_GATE_EXEMPT, DEVICE_GATE_SETTING_KEY, evaluateDeviceGate, isMissingTableError, type DeviceGateSetting } from "./deviceGate.js";
 import { normalizeEmail } from "./helpers.js";
-import { getAppSetting, getDevice } from "./storage.js";
-import { getUsersCached } from "./userCache.js";
-import type { AppUser, AuthenticatedRequest, Role } from "./types.js";
+import { getAppSetting, getDevice, koppelAuthId } from "./storage.js";
+import { getUsersCached, invalidateUsersCache } from "./userCache.js";
+import type { AppUser, AppUserIntern, AuthenticatedRequest, Role } from "./types.js";
 
 // --- Toestel-whitelist (zie supabase/user_devices.sql + api/deviceGate.ts) ---
 // Chauffeurs mogen de API alleen gebruiken vanaf een goedgekeurd toestel;
@@ -78,7 +78,8 @@ export const resolveOptionalUser = async (req: express.Request): Promise<AppUser
   try {
     const check = await verifieerToken(token);
     if (check.ok === false) return null;
-    return await findUserByEmail(check.email);
+    const gevonden = await findAppUser({ id: check.id, email: check.email });
+    return gevonden === "koppeling" ? null : gevonden;
   } catch {
     return null;
   }
@@ -148,14 +149,42 @@ const getBearerToken = (req: express.Request) => {
   return header.slice("Bearer ".length);
 };
 
-const findUserByEmail = async (email?: string | null): Promise<AppUser | null> => {
-  const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail) return null;
-
+/**
+ * Token → portaalprofiel. Sinds 05-09 (controle-ronde, security 7) is de
+ * Auth-uid de identiteit: een profiel dat al gekoppeld is, wordt alleen op
+ * `authId` gevonden. Het e-mailadres dient nog één keer, bij de eerste
+ * aanmelding, om te koppelen (self-heal) — daarna kan iemand die zijn
+ * Auth-e-mail wijzigt naar dat van een collega niet meer in diens profiel
+ * terechtkomen ("koppeling" → 403).
+ */
+let koppelFoutGemeld = false;
+const findAppUser = async (check: { id: string; email: string | null }): Promise<AppUserIntern | null | "koppeling"> => {
   // Gecachte lijst: de auth-hot-path draait bij elke request en hoeft niet
   // telkens de volledige users-tabel op te halen (zie userCache.ts).
-  const users = await getUsersCached();
-  return users.find((user) => normalizeEmail(user.email) === normalizedEmail) || null;
+  const users = (await getUsersCached()) as AppUserIntern[];
+  const opAuth = users.find((user) => user.authId && user.authId === check.id);
+  if (opAuth) return opAuth;
+
+  const normalizedEmail = normalizeEmail(check.email);
+  if (!normalizedEmail) return null;
+  const opEmail = users.find((user) => normalizeEmail(user.email) === normalizedEmail) || null;
+  if (!opEmail) return null;
+  if (opEmail.authId && opEmail.authId !== check.id) return "koppeling";
+  // Eerste aanmelding met dit Auth-account: koppelen (best-effort; mislukt
+  // het, dan blijft e-mail deze keer de sleutel en proberen we het volgende
+  // request opnieuw).
+  try {
+    await koppelAuthId(opEmail.id, check.id);
+    invalidateUsersCache();
+  } catch (err: any) {
+    // Vóór de migratie 2026-09-05_users_authid.sql bestaat de kolom niet:
+    // één keer melden, verder stil (e-mail blijft dan de sleutel).
+    if (!koppelFoutGemeld) {
+      koppelFoutGemeld = true;
+      console.error("[auth] authId koppelen mislukt (migratie users.authid gedraaid?):", err?.message ?? err);
+    }
+  }
+  return { ...opEmail, authId: check.id };
 };
 
 export const authenticate = async (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
@@ -178,7 +207,11 @@ export const authenticate = async (req: AuthenticatedRequest, res: express.Respo
   }
   const authUser = { id: check.id, email: check.email ?? undefined };
 
-  const appUser = await findUserByEmail(check.email);
+  const gevonden = await findAppUser({ id: check.id, email: check.email });
+  if (gevonden === "koppeling") {
+    return res.status(403).json({ error: "Dit profiel is aan een andere aanmelding gekoppeld. Neem contact op met de planning." });
+  }
+  const appUser = gevonden;
   if (!appUser) {
     return res.status(403).json({ error: "Geen gebruikersprofiel gevonden voor dit account." });
   }
