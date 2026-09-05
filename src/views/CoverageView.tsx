@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { CalendarPlus, ChevronDown, ChevronLeft, ChevronRight, Settings2, AlertTriangle, Check, X, UserCheck, UserX, Plus } from 'lucide-react';
 import { BrandSpinner } from '../components/BrandSpinner';
 import { cn, notify } from '../lib/ui';
+import { isoDate } from '../lib/datum';
 import { Skeleton, SkeletonTile } from '../components/Skeleton';
 import { ConfirmationModal, EmptyState, ModalHeader, PageHeader, PageShell } from '../components/ui';
 import { apiFetch } from '../lib/api';
@@ -323,8 +324,8 @@ export function CoverageView() {
     // Lokale kalenderdag, niet de UTC-dag: tussen 00:00 en 02:00 was
     // "vandaag" nog gisteren en werd een net verlopen feestdag toch voorgezet
     // terwijl de lijst eronder hem al als verlopen toonde (controle-ronde
-    // 27-08, bevinding 27). Zelfde vorm als overrideVandaag hieronder.
-    const vandaag = new Date().toLocaleDateString('en-CA');
+    // 27-08, bevinding 27). Zelfde bron als overrideVandaag hieronder.
+    const vandaag = isoDate(new Date());
     const { uitzonderingen, overgeslagen } = bouwKalenderUitzonderingen({
       feestdagType: kalFeest || undefined,
       vakantieTypes: { maDiWo: kalMaDiWo || undefined, donderdag: kalDo || undefined, vrijdag: kalVr || undefined },
@@ -349,7 +350,7 @@ export function CoverageView() {
   // Gesorteerd + verlopen gemarkeerd (nr. 5): de kalender-voorzet kan er
   // tientallen injecteren — chronologisch lezen en oude opruimen moet licht
   // blijven. De originele index reist mee voor de update/verwijder-handlers.
-  const overrideVandaag = new Date().toLocaleDateString('en-CA');
+  const overrideVandaag = isoDate(new Date());
   const gesorteerdeOverrides = useMemo(
     () => overrides
       .map((o, i) => ({ o, i, verlopen: Boolean(o.to && o.to < overrideVandaag) }))

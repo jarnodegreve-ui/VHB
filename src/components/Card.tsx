@@ -55,7 +55,7 @@ export const Card = forwardRef<HTMLElement, HTMLAttributes<HTMLElement> & {
  * rechts (telling, knop, filter). Vervangt de zes handgeschreven
  * sectiekop-dialecten (font-semibold/bold, slate-800/900, met/zonder
  * tracking) door één vorm. `size="lg"` voor de grotere beheer-subsectie
- * (was AdminSubsectionHeader).
+ * (verving de oude AdminSubsectionHeader uit ui.tsx, verwijderd 05-09).
  */
 export function CardHeader({
   eyebrow,

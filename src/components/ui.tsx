@@ -49,29 +49,6 @@ export function PageHeader({
   );
 }
 
-export function AdminSubsectionHeader({
-  eyebrow,
-  title,
-  description,
-  aside,
-}: {
-  eyebrow?: string;
-  title: string;
-  description?: string;
-  aside?: React.ReactNode;
-}) {
-  return (
-    <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-      <div className="max-w-3xl">
-        {eyebrow ? <p className="text-micro">{eyebrow}</p> : null}
-        <h2 className={cn('text-section-title', eyebrow && 'mt-1.5')}>{title}</h2>
-        {description ? <p className="mt-1 text-sm font-normal text-slate-500">{description}</p> : null}
-      </div>
-      {aside ? <div className="flex flex-wrap items-center gap-3">{aside}</div> : null}
-    </div>
-  );
-}
-
 /**
  * Vaste kop voor een Modal: eyebrow (optioneel), titel, beschrijving
  * (optioneel) en een optionele sluitknop rechts. Eén padding (`p-6 md:p-7`),
