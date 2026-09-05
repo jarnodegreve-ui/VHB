@@ -31,7 +31,8 @@ export const normalizeTimeString = (t: string): string => {
   return `${m[1].padStart(2, '0')}:${m[2]}`;
 };
 
-const parseHHMM = (t: string): number | null => {
+/** 'HH:MM' → minuten; busvak-uren tot 47 toegestaan (26:16 = dag erna). null bij vuil. */
+export const parseHHMM = (t: string): number | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
   if (!m) return null;
   const h = Number(m[1]);
@@ -41,7 +42,7 @@ const parseHHMM = (t: string): number | null => {
 };
 
 /** Lokale yyyy-mm-dd (geen UTC-shift — zelfde conventie als isoDate elders). */
-const localIso = (d: Date): string =>
+export const localIso = (d: Date): string =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 /**
@@ -162,7 +163,8 @@ export const minutesUntilShiftStart = (
  * Reken hierbij op tabular-nums in de weergave: zonder gelijke cijferbreedte
  * verschuift de tekst nog steeds elke minuut mee.
  */
-const formatDuration = (minuten: number): string => {
+/** "3u 16min" / "47min" / "2u" — dé duurnotatie van het portaal. */
+export const formatDuration = (minuten: number): string => {
   const u = Math.floor(minuten / 60);
   const m = minuten % 60;
   if (u === 0) return `${m}min`;
@@ -175,3 +177,16 @@ export const formatRemaining = (minuten: number): string => `nog ${formatDuratio
 
 /** Tijd tot een dienst begint: "over 1u 32min". */
 export const formatStartsIn = (minuten: number): string => `over ${formatDuration(minuten)}`;
+
+/**
+ * Start/eind van een dienstblok in minuten t.o.v. middernacht van de
+ * dienstdag; eind ≤ start = impliciete nachtdienst (+24u). Eén plek voor de
+ * regel die MijnDagView, DashboardView en de dienstbalk vroeger elk zelf
+ * hadden (controle-ronde 05-09, dode code 26).
+ */
+export const shiftWindowMinutes = (s: { startTime: string; endTime: string }): { start: number; end: number } | null => {
+  const start = parseHHMM(s.startTime);
+  const end = parseHHMM(s.endTime);
+  if (start === null || end === null) return null;
+  return { start, end: end <= start ? end + 1440 : end };
+};
