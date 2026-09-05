@@ -2754,9 +2754,16 @@ app.get("/api/cron/error-digest", async (req, res) => {
     // Default 1440 min (24u): de cron draait dagelijks — een Hobby-plan staat
     // geen vaker-dan-daagse cron toe. Op Pro kun je de cron frequenter zetten
     // en deze env navenant verlagen (bv. 60 voor uurlijks).
+    // Weekoverzicht i.p.v. dagoverzicht (Jarno 05-09: dagelijkse mail was
+    // storend): de cron blijft dagelijks draaien (vervaldata-pushes en het
+    // dekkingsoverzicht horen elke dag), maar de mail gaat alleen op de
+    // ERROR_DIGEST_WEEKDAG (0 = zondag … 6; standaard 1 = maandag) en kijkt
+    // dan zeven dagen terug. ERROR_DIGEST_WEEKDAG=elke = weer dagelijks.
+    const weekdag = (process.env.ERROR_DIGEST_WEEKDAG ?? "1").trim().toLowerCase();
+    const mailVandaag = weekdag === "elke" || String(new Date().getDay()) === weekdag;
     const intervalMin = Number(process.env.ERROR_DIGEST_INTERVAL_MIN) > 0
       ? Number(process.env.ERROR_DIGEST_INTERVAL_MIN)
-      : 1440;
+      : weekdag === "elke" ? 1440 : 10080;
     const minCount = Number(process.env.ERROR_DIGEST_MIN_COUNT) > 0
       ? Number(process.env.ERROR_DIGEST_MIN_COUNT)
       : 0;
@@ -2899,6 +2906,11 @@ app.get("/api/cron/error-digest", async (req, res) => {
       return res.json({ success: true, count: errors.length, ignored: filtered, alerted: false });
     }
 
+    if (!mailVandaag) {
+      await logCronHeartbeat("error-digest", `Geen mail vandaag (weekoverzicht op weekdag ${weekdag}); ${errors.length} meldingen in de wachtrij`);
+      return res.json({ success: true, count: errors.length, ignored: filtered, alerted: false, reason: "weekoverzicht" });
+    }
+
     // Bepaal de ontvangers.
     const recipients = await systemMailRecipients();
     if (recipients.length === 0) {
@@ -2931,7 +2943,10 @@ app.get("/api/cron/error-digest", async (req, res) => {
       .join("\n");
     const moreLine = sorted.length > 15 ? `\n…en nog ${sorted.length - 15} andere foutsoorten.` : "";
 
-    const windowLabel = intervalMin % 60 === 0 ? `${intervalMin / 60} uur` : `${intervalMin} min`;
+    const windowLabel = intervalMin % 1440 === 0 && intervalMin > 1440
+      ? `${intervalMin / 1440} dagen`
+      : intervalMin % 60 === 0 ? `${intervalMin / 60} uur` : `${intervalMin} min`;
+    const overzichtNaam = weekdag === "elke" ? "dagoverzicht" : "weekoverzicht";
 
     // Hoeveel toestellen/gebruikers raakte het? Dát is het signaal, niet het
     // aantal meldingen: 16 meldingen van één toestel is iemand die zit te
@@ -2947,7 +2962,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
     // ⚠️ bij 16 meldingen van je eigen toestel las als een storing terwijl er
     // niets aan de hand was. Wat er wél toe doet — hoeveel mensen geraakt
     // zijn — staat nu in de onderwerpregel.
-    const subject = `VHB Portaal · dagoverzicht — ${impact}`;
+    const subject = `VHB Portaal · ${overzichtNaam} — ${impact}`;
     const inleiding = errors.length === 0
       ? `In de afgelopen ${windowLabel} zijn er geen meldingen binnengekomen.`
       : `In de afgelopen ${windowLabel}: ${errors.length} melding${errors.length === 1 ? "" : "en"} van ${gebruikers.size} ${gebruikers.size === 1 ? "toestel" : "toestellen"} (${sorted.length} unieke soorten).`;
@@ -2963,7 +2978,7 @@ app.get("/api/cron/error-digest", async (req, res) => {
 
     const result = await sendEmail({ to: recipients, subject, text, html, context: "error-digest" });
     console.log(`[error-digest] ${errors.length} fouten, mail naar ${recipients.length} ontvanger(s), mocked=${result.mocked}`);
-    await logCronHeartbeat("error-digest", `Dagoverzicht verstuurd: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
+    await logCronHeartbeat("error-digest", `${overzichtNaam[0].toUpperCase()}${overzichtNaam.slice(1)} verstuurd: ${impact}${filtered ? `, ${filtered} als ruis genegeerd` : ""} → ${recipients.length} ontvanger(s).`);
     res.json({ success: true, count: errors.length, alerted: true, recipients: recipients.length, mocked: result.mocked });
   } catch (err: any) {
     console.error("[error-digest] mislukt:", err?.message || err);

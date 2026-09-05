@@ -8,7 +8,7 @@
  *    summarize-helpers blijven de échte implementatie.
  * De handlers zelf (api/index.ts) draaien dus integraal.
  */
-import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach, vi } from 'vitest';
 import type { AddressInfo } from 'node:net';
 
 // Dynamisch geladen ná de env-set hieronder (statische imports worden
@@ -1407,6 +1407,31 @@ describe('wees-documenten opruimen', () => {
 });
 
 describe('foutmelding-digest (cron)', () => {
+  // De digest mailt sinds 05-09 standaard één keer per week; de bestaande
+  // tests draaien met 'elke' (dagelijks) zodat de dag van de testrun er niet
+  // toe doet. De weekregel zelf heeft een eigen test.
+  beforeEach(() => { process.env.ERROR_DIGEST_WEEKDAG = 'elke'; });
+  afterEach(() => { delete process.env.ERROR_DIGEST_WEEKDAG; });
+
+  it('mailt op een andere dag dan de ingestelde weekdag niets, maar draait wel', async () => {
+    const andereDag = String((new Date().getDay() + 1) % 7);
+    process.env.ERROR_DIGEST_WEEKDAG = andereDag;
+    mem.emailsSent.length = 0;
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(res.json.reason).toBe('weekoverzicht');
+    expect(mem.emailsSent).toHaveLength(0);
+  });
+
+  it('noemt het een weekoverzicht en kijkt zeven dagen terug op de ingestelde weekdag', async () => {
+    process.env.ERROR_DIGEST_WEEKDAG = String(new Date().getDay());
+    mem.emailsSent.length = 0;
+    const res = await api('GET', '/api/cron/error-digest', { headers: { Authorization: 'Bearer test-cron-secret' } });
+    expect(res.status).toBe(200);
+    expect(mem.emailsSent).toHaveLength(1);
+    expect(mem.emailsSent[0].subject).toContain('weekoverzicht');
+    expect(mem.emailsSent[0].text).toContain('7 dagen');
+  });
   const recent = () => new Date().toISOString();
 
   it('weigert zonder of met fout secret (401)', async () => {
@@ -3209,6 +3234,8 @@ describe('advisor: ketting-voorstellen en collega-samenvatting', () => {
 });
 
 describe('digest: proactieve sectie openstaande diensten', () => {
+  beforeEach(() => { process.env.ERROR_DIGEST_WEEKDAG = 'elke'; });
+  afterEach(() => { delete process.env.ERROR_DIGEST_WEEKDAG; });
   it('mailt de gaten van de komende 7 dagen mét advies en pusht de planning', async () => {
     // Morgen (lokale klok — valt hoe dan ook binnen het Brusselse 7-dagenvenster):
     // dienst 12 is bemand in de matrix, dienst 11 wordt verwacht maar staat open.
@@ -3396,6 +3423,7 @@ describe('telegram-webhook — secret, koppeling en commando\'s', () => {
     zetTelegramVerzenderVoorTests(async (v: any) => { verzonden.push(v); return true; });
     process.env.TELEGRAM_WEBHOOK_SECRET = 'test-secret';
     process.env.TELEGRAM_CHAT_ID = '777';
+    process.env.TELEGRAM_MELDINGEN = 'aan';
     delete process.env.TELEGRAM_BOT_TOKEN; // answerCallbackQuery wordt dan een no-op
   });
 
@@ -3404,6 +3432,7 @@ describe('telegram-webhook — secret, koppeling en commando\'s', () => {
     zetTelegramVerzenderVoorTests(null);
     delete process.env.TELEGRAM_WEBHOOK_SECRET;
     delete process.env.TELEGRAM_CHAT_ID;
+    delete process.env.TELEGRAM_MELDINGEN;
   });
 
   it('weigert zonder (juiste) secret-header, en is dicht zonder geconfigureerd secret', async () => {
