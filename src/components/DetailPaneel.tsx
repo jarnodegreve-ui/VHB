@@ -36,9 +36,14 @@ export function useInlinePaneel() {
  * toestel): op desktop staat het eerste item open zodra de lijst er is en er
  * niets gekozen is; verdwijnt het gekozen item uit de lijst (verwijderd,
  * weggefilterd), dan schuift de keuze door naar het item op dezelfde plek
- * (de buur). Mobiel doet niets — daar opent een keuze een SlideOver. Zet
- * `actief` uit terwijl het paneel iets anders toont dan een item (bv. het
- * lege "nieuw"-formulier), zodat de preselectie dat niet kaapt.
+ * (de buur). Is er geen buur meer (lijst leeg) of staat het scherm op
+ * mobiel, dan wordt de keuze gewist via `wis` — anders bleef het paneel op
+ * een verdwenen record staan (bewerkbaar formulier, Opslaan zonder `_rev`;
+ * controle 05-09, nr. 11). Komt het item terug (ongedaan maken), dan kiest
+ * desktop het opnieuw als eerste item. Verder doet mobiel niets — daar
+ * opent een keuze een SlideOver. Zet `actief` uit terwijl het paneel iets
+ * anders toont dan een item (bv. het lege "nieuw"-formulier), zodat de
+ * preselectie dat niet kaapt.
  *
  * Geeft `inline` terug (lg+), zodat de view op mobiel wél kan sluiten na een
  * actie waar desktop gewoon op het item blijft staan.
@@ -63,15 +68,23 @@ export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, ac
   // wissel — kiezen gebeurt alleen als er echt iets ontbreekt.
   useEffect(() => {
     const sleutels = items.map(sleutelVan);
-    if (inline && actief && sleutels.length > 0) {
-      if (gekozen === null) {
-        kies(items[0]);
-        automatisch.current = sleutels[0];
-      } else if (!sleutels.includes(gekozen)) {
+    if (gekozen !== null && !sleutels.includes(gekozen)) {
+      // Het gekozen item staat niet (meer) in de lijst.
+      if (inline && actief && sleutels.length > 0) {
         const i = vorige.current.indexOf(gekozen);
         const doel = items[Math.min(Math.max(i, 0), items.length - 1)];
         kies(doel);
         automatisch.current = sleutelVan(doel);
+      } else {
+        // Geen buur (lijst leeg) of mobiel: keuze wissen, zodat het paneel
+        // niet op een verwijderd record blijft staan.
+        automatisch.current = null;
+        wis?.();
+      }
+    } else if (inline && actief && sleutels.length > 0) {
+      if (gekozen === null) {
+        kies(items[0]);
+        automatisch.current = sleutels[0];
       } else if (gekozen !== automatisch.current) {
         automatisch.current = null;
       }

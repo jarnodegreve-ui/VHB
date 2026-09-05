@@ -1,5 +1,5 @@
 import { MONTH_NAMES, WEEKDAY_SHORT_SUN } from './format';
-import { addDagen, maandPlus } from './datum';
+import { addDagen, isoDate, maandPlus } from './datum';
 
 /**
  * Kalenderhelpers voor de datumkiezer (DatePicker.tsx). Alles op ISO-strings
@@ -17,9 +17,8 @@ const naarIso = (d: Date) => d.toISOString().slice(0, 10);
 export const isIsoDag = (s: string | undefined | null): s is string =>
   !!s && ISO_DAG_RE.test(s) && !Number.isNaN(vanIso(s).getTime()) && naarIso(vanIso(s)) === s;
 
-/** Vandaag als 'YYYY-MM-DD' in lokale tijd (geen toISOString: die kantelt rond middernacht naar UTC). */
-export const vandaagIso = (nu: Date = new Date()): string =>
-  `${nu.getFullYear()}-${String(nu.getMonth() + 1).padStart(2, '0')}-${String(nu.getDate()).padStart(2, '0')}`;
+/** Vandaag als 'YYYY-MM-DD' in lokale tijd — dunne wrapper om `isoDate` (datum.ts). */
+export const vandaagIso = (nu: Date = new Date()): string => isoDate(nu);
 
 /** 'YYYY-MM' van een dag. */
 export const maandVan = (iso: string) => iso.slice(0, 7);

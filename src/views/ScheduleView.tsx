@@ -534,12 +534,12 @@ function MonthCalendar({
         )}
 
         {selected === today && selectedGroups.length > 0 && (
-          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} className="text-oker-500" />}>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} />}>
             Ritblad van vandaag
           </Button>
         )}
         {onRequestSwap && selected >= today && selectedGroups.length > 0 && !selectedGroups.some((g) => g.hasConflict || g.openSwap) && (
-          <Button variant="secondary" size="sm" className="mt-3" onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)} icon={<ArrowLeftRight size={14} className="text-oker-500" />}>
+          <Button variant="secondary" size="sm" className="mt-3" onClick={() => onRequestSwap(selectedGroups[0].segments[0].id)} icon={<ArrowLeftRight size={14} />}>
             Deze dienst ruilen
           </Button>
         )}
@@ -705,7 +705,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
 
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {onRequestSwap && !g.hasConflict && !g.openSwap && (
-                  <Button variant="secondary" size="sm" onClick={() => onRequestSwap(g.segments[0].id)} icon={<ArrowLeftRight size={14} className="text-oker-500" />}>
+                  <Button variant="secondary" size="sm" onClick={() => onRequestSwap(g.segments[0].id)} icon={<ArrowLeftRight size={14} />}>
                     Deze dienst ruilen
                   </Button>
                 )}
@@ -713,7 +713,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                     per dienst — bij een dienst van volgende week zou deze knop
                     suggereren dat het dát blad is. */}
                 {isToday && (
-                  <Button variant="secondary" size="sm" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} className="text-oker-500" />}>
+                  <Button variant="secondary" size="sm" onClick={() => void openHuidigRitblad()} icon={<FileText size={14} />}>
                     Ritblad van vandaag
                   </Button>
                 )}

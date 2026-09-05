@@ -105,6 +105,35 @@ describe('DatePicker', () => {
     await act(async () => { root.unmount(); });
   });
 
+  it('required in een formulier: leeg blokkeert de native validatie en opent de kiezer, gevuld valideert', async () => {
+    const { root, container } = await monteer(
+      <form>
+        <DatePicker id="d" name="datum" required value="" onChange={() => {}} aria-label="Datum" />
+      </form>,
+    );
+    const form = container.querySelector('form')!;
+    const trigger = container.querySelector<HTMLButtonElement>('button#d')!;
+    expect(form.checkValidity()).toBe(false);
+    expect(dialoog()).toBeNull();
+    // reportValidity vuurt `invalid` op de spiegel → geen ballon, wél de kiezer.
+    await act(async () => { form.reportValidity(); });
+    expect(dialoog()).not.toBeNull();
+    expect(trigger.getAttribute('aria-expanded')).toBe('true');
+    await act(async () => { toets(dialoog()!, 'Escape'); });
+    await wachtTotDicht();
+    await act(async () => { root.unmount(); });
+
+    const gevuld = await monteer(
+      <form>
+        <DatePicker id="e" name="datum" required value="2026-09-08" onChange={() => {}} aria-label="Datum" />
+      </form>,
+    );
+    const form2 = gevuld.container.querySelector('form')!;
+    expect(form2.checkValidity()).toBe(true);
+    expect(new FormData(form2).get('datum')).toBe('2026-09-08');
+    await act(async () => { gevuld.root.unmount(); });
+  });
+
   it('DateInput in een Field: label, hint en fout hangen aan de trigger', async () => {
     const { root, container } = await monteer(
       <Field label="Van" error="Kies een datum." htmlFor="van">

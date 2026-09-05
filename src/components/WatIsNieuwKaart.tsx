@@ -22,7 +22,9 @@ export function WatIsNieuwKaart({ rol, onNavigate, className }: { rol: string; o
   };
   return (
     <Card tone="muted" padding="sm" className={cn('flex flex-col gap-3 sm:flex-row sm:items-start', className)} role="region" aria-label="Wat is nieuw">
-      <div className="mt-0.5 hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-oker-500/15 text-oker-700 sm:flex">
+      {/* Icoontegel en bullets neutraal; het goud zit alleen in de badge
+          "Nieuw" (hooguit twee gouden accenten per scherm, controle 05-09 nr. 20). */}
+      <div className="mt-0.5 hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600 sm:flex">
         <Sparkles size={16} />
       </div>
       <div className="min-w-0 flex-1">
@@ -33,7 +35,7 @@ export function WatIsNieuwKaart({ rol, onNavigate, className }: { rol: string; o
         <ul className="mt-1.5 space-y-1 text-sm text-slate-600">
           {regels.map((regel) => (
             <li key={regel} className="flex gap-2">
-              <span className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-oker-500" aria-hidden="true" />
+              <span className="mt-[0.55em] h-1 w-1 shrink-0 rounded-full bg-slate-400" aria-hidden="true" />
               <span>{regel}</span>
             </li>
           ))}

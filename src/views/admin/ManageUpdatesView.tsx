@@ -145,8 +145,9 @@ export function ManageUpdatesView({
   };
 
   // Desktop: de nieuwste update staat standaard open in het paneel; na
-  // verwijderen schuift de keuze door naar de buur. Het lege "nieuw"-
-  // formulier (paneel open zonder editingId) wordt niet gekaapt.
+  // verwijderen schuift de keuze door naar de buur, of sluit het paneel als
+  // de lijst leeg is. Het lege "nieuw"-formulier (paneel open zonder
+  // editingId) wordt niet gekaapt.
   const inline = useStandaardKeuze({
     items: updates,
     sleutelVan: (u) => u.id,
@@ -172,9 +173,11 @@ export function ManageUpdatesView({
     const success = onDeleteUpdate ? await onDeleteUpdate(id) : await onSave(updates.filter((update) => update.id !== id));
     if (success) {
       if (!onDeleteUpdate) notify('Update verwijderd.', 'success');
-      // Mobiel sluit de SlideOver; desktop laat useStandaardKeuze doorschuiven
-      // naar de buur van de verwijderde update.
-      if (id === editingId && !inline) handleCancelEdit();
+      // Stond de update open, dan regelt useStandaardKeuze de rest: desktop
+      // schuift door naar de buur, en zonder buur (of op mobiel) sluit het
+      // paneel — het formulier mag niet op een verwijderd record blijven
+      // staan. Komt de update terug via "Ongedaan maken", dan staat ze op
+      // desktop meteen weer open.
     } else if (!onDeleteUpdate) {
       notify('Update kon niet worden verwijderd.', 'error');
     }

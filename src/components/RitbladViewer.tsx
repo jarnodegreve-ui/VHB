@@ -6,10 +6,9 @@ import { Modal } from './Modal';
 import { Button, IconButton } from './primitives';
 import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
-import { apiFetch } from '../lib/api';
 import { openPdfInNewTab } from '../lib/ui';
 import { openHuidigRitblad } from '../lib/ritblad';
-import { laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
+import { haalRitbladMeta, laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
 
 /**
  * In-app ritbladviewer per dienst: toont uit de gedeelde ritblad-bundel
@@ -24,8 +23,6 @@ import { laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbl
  * formaat), dan blijft de volledige bundel één tik weg — dat is de
  * bestaande openHuidigRitblad()/openPdfInNewTab-route, ongewijzigd.
  */
-
-type Meta = { url?: string; filename?: string; uploadedAt?: string };
 
 type Staat =
   | { soort: 'laden' }
@@ -122,46 +119,52 @@ export function RitbladViewer({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollBreedte, setScrollBreedte] = useState(0);
 
-  // Bundel ophalen (via de service-worker-cache, dus ook offline) → pdfjs →
-  // pagina's zoeken (gecached per bundel). Sluiten of een ander nummer
-  // breekt een lopende zoektocht netjes af.
+  // Metadata vers ophalen → bundel (via de service-worker-cache, dus ook
+  // offline) → pdfjs → pagina's zoeken (gecached per bundel). Sluiten of een
+  // ander nummer breekt af via het AbortSignal: de zoeklus stopt, en een
+  // document dat pas ná het sluiten binnenkomt wordt meteen vernietigd —
+  // anders bleef het in de pdfjs-worker hangen (cleanup zag nog `doc === null`).
   useEffect(() => {
     if (!open) return;
-    let actief = true;
+    const afbreker = new AbortController();
+    const { signal } = afbreker;
     let doc: PDFDocumentProxy | null = null;
+    const ruimOp = () => { doc?.loadingTask.destroy().catch(() => undefined); doc = null; };
     setStaat({ soort: 'laden' });
     setZoomIdx(0);
     (async () => {
-      const res = await apiFetch('/api/ritblaadje');
-      if (!res.ok) throw new Error(`Server antwoordde ${res.status}`);
-      const meta = (await res.json()) as Meta | null;
-      if (!actief) return;
+      const meta = await haalRitbladMeta();
+      if (signal.aborted) return;
       if (!meta?.url) {
         setStaat({ soort: 'geen-bundel' });
         return;
       }
-      doc = await laadRitbladDocument(meta.url);
-      if (!actief) return;
+      // Verlopen signed URL (storage-fout) → één keer verse metadata en opnieuw.
+      const geladen = await laadRitbladDocument(meta.url, async () => (await haalRitbladMeta())?.url ?? null);
+      if (signal.aborted) {
+        geladen.loadingTask.destroy().catch(() => undefined);
+        return;
+      }
+      doc = geladen;
       // Cache-sleutel: het uploadtijdstip; zonder dat (oude metadata) het
       // query-loze pad, dat óók pas bij een nieuwe upload wijzigt.
       const versie = meta.uploadedAt || new URL(meta.url).pathname;
       const gevonden = new Set<number>();
       for (const n of nummers) {
-        for (const p of await zoekPaginasVoorDienstGecached(doc, n, versie)) gevonden.add(p);
+        for (const p of await zoekPaginasVoorDienstGecached(doc, n, versie, signal)) gevonden.add(p);
       }
-      if (!actief) return;
+      if (signal.aborted) return;
       const paginas = [...gevonden].sort((a, b) => a - b);
       const basis = { url: meta.url, totaal: doc.numPages, bundelDatum: formatBundelDatum(meta.uploadedAt) };
       setStaat(paginas.length ? { soort: 'klaar', doc, paginas, ...basis } : { soort: 'niets', ...basis });
     })().catch((err: unknown) => {
+      if (signal.aborted) return; // sluiten is geen fout
       console.warn('Ritblad laden mislukte:', err);
-      if (actief) setStaat({ soort: 'fout' });
+      setStaat({ soort: 'fout' });
     });
     return () => {
-      actief = false;
-      // Ook een document dat nog onderweg was: de promise-keten hierboven
-      // stopt bij `!actief`, maar het worker-geheugen moet vrij.
-      doc?.loadingTask.destroy().catch(() => undefined);
+      afbreker.abort();
+      ruimOp();
     };
     // nummerSleutel vat `nummers` samen; een nieuwe array met dezelfde
     // nummers mag niet opnieuw laden.

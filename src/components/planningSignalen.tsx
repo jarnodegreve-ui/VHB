@@ -66,7 +66,7 @@ export function ZiekteReeksRij({ reeks, bezig, klaar, disabled, onRegistreer }: 
         <span className="font-bold">{reeks.naam}</span>
         {' — ziek '}
         <span className="tabular-nums">{formatShortDay(reeks.van)}{reeks.tot !== reeks.van ? ` → ${formatShortDay(reeks.tot)}` : ''}</span>
-        <span className="text-slate-400 tabular-nums"> · {reeks.dagen} {reeks.dagen === 1 ? 'dag' : 'dagen'}</span>
+        <span className="text-slate-500 tabular-nums"> · {reeks.dagen} {reeks.dagen === 1 ? 'dag' : 'dagen'}</span>
       </span>
       {klaar ? (
         <Badge tone="emerald">Geregistreerd</Badge>

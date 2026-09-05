@@ -10,8 +10,8 @@ export type ToastOpties = {
   duurMs?: number;
   /** Ongedaan-variant (Gmail/Linear-gevoel): de actie is al gebeurd, de
    *  toast is dé weg terug. 6 s zichtbaar met een aflopende hairline,
-   *  pauzeert zolang de muis erop staat of de knop focus heeft; de toast
-   *  telt zelf af (ToastStack), niet de showToast-timer in App. */
+   *  pauzeert zolang de muis erop staat of de knop focus heeft; de stack
+   *  telt af (ToastStack, ook buiten beeld), niet de showToast-timer in App. */
   ongedaan?: boolean;
 };
 
@@ -52,60 +52,112 @@ const prefersReducedMotion = () =>
  *  halve scherm; de oudste vallen weg, de nieuwste blijven. */
 const MAX_VISIBLE = 2;
 
+type KlokStaat = {
+  resterend: number;
+  /** performance.now() bij de laatste start; null zolang de klok stilstaat. */
+  start: number | null;
+  timer: number | null;
+  raf: number | null;
+};
+
+/** Wat de zichtbare toast nodig heeft om de hairline te tekenen: loopt de
+ *  klok (lijn glijdt in `resterend` ms naar nul) of staat hij stil (lijn
+ *  bevriest op de huidige fractie). */
+type KlokWeergave = { loopt: boolean; resterend: number };
+
 /**
- * Aftellen voor een ongedaan-toast, met pauze. `resterend` is de tijd die
- * nog over is; `loopt` zegt of de klok tikt. De hairline volgt dezelfde
- * klok: loopt hij, dan glijdt de lijn in `resterend` ms naar nul; staat hij
- * stil, dan bevriest de lijn op de huidige fractie.
+ * Eén klok per ongedaan-toast, beheerd door de stack en niet door de
+ * zichtbare toast-component. Zo loopt de aftelling gewoon door als een toast
+ * uit beeld valt (verdrongen door nieuwere, MAX_VISIBLE) en komt hij niet
+ * later met een verse 6 s terug (controle 05-09, nr. 12). De klok start
+ * zodra de toast in de lijst staat en stopt zodra hij eruit is.
+ *
+ * `pauzeer`/`hervat` zijn voor de zichtbare toast (muis erop, focus op de
+ * knop); `hervat` is idempotent — een lopende klok start niet opnieuw.
  */
-function useAftellen(duurMs: number, onKlaar: () => void) {
-  const resterendRef = useRef(duurMs);
-  const startRef = useRef<number | null>(null);
-  const timerRef = useRef<number | null>(null);
-  const onKlaarRef = useRef(onKlaar);
-  onKlaarRef.current = onKlaar;
-  const [klok, setKlok] = useState({ loopt: false, resterend: duurMs });
+function useOngedaanKlokken(toasts: Toast[], onDismiss: (id: number) => void) {
+  const staten = useRef(new Map<number, KlokStaat>()).current;
+  const [weergave, setWeergave] = useState<Record<number, KlokWeergave>>({});
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
-  const hervat = useCallback(() => {
-    if (timerRef.current !== null) return;
-    startRef.current = performance.now();
-    timerRef.current = window.setTimeout(() => {
-      timerRef.current = null;
-      onKlaarRef.current();
-    }, resterendRef.current);
-    setKlok({ loopt: true, resterend: resterendRef.current });
+  const toon = useCallback((id: number, stand: KlokWeergave) => {
+    setWeergave((cur) => ({ ...cur, [id]: stand }));
   }, []);
 
-  const pauzeer = useCallback(() => {
-    if (timerRef.current === null) return;
-    window.clearTimeout(timerRef.current);
-    timerRef.current = null;
-    const verstreken = performance.now() - (startRef.current ?? performance.now());
-    resterendRef.current = Math.max(0, resterendRef.current - verstreken);
-    setKlok({ loopt: false, resterend: resterendRef.current });
-  }, []);
+  const hervat = useCallback((id: number) => {
+    const s = staten.get(id);
+    if (!s || s.timer !== null) return;
+    s.start = performance.now();
+    s.timer = window.setTimeout(() => {
+      s.timer = null;
+      onDismissRef.current(id);
+    }, s.resterend);
+    toon(id, { loopt: true, resterend: s.resterend });
+  }, [staten, toon]);
+
+  const pauzeer = useCallback((id: number) => {
+    const s = staten.get(id);
+    if (!s || s.timer === null) return;
+    window.clearTimeout(s.timer);
+    s.timer = null;
+    const verstreken = performance.now() - (s.start ?? performance.now());
+    s.resterend = Math.max(0, s.resterend - verstreken);
+    s.start = null;
+    toon(id, { loopt: false, resterend: s.resterend });
+  }, [staten, toon]);
+
+  const stop = useCallback((id: number) => {
+    const s = staten.get(id);
+    if (!s) return;
+    if (s.timer !== null) window.clearTimeout(s.timer);
+    if (s.raf !== null) {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(s.raf);
+      window.clearTimeout(s.raf);
+    }
+    staten.delete(id);
+  }, [staten]);
 
   useEffect(() => {
-    // Eerst één frame op de volle lijn schilderen, dan pas de transitie
-    // starten — anders is er niets om vanaf te glijden.
-    const raf = typeof requestAnimationFrame === 'function'
-      ? requestAnimationFrame(hervat)
-      : window.setTimeout(hervat, 0);
-    return () => {
-      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
-      window.clearTimeout(raf);
-      if (timerRef.current !== null) window.clearTimeout(timerRef.current);
-      timerRef.current = null;
-    };
-  }, [hervat]);
+    const ids = new Set<number>();
+    for (const t of toasts) {
+      if (!t.ongedaan) continue;
+      ids.add(t.id);
+      if (staten.has(t.id)) continue;
+      const s: KlokStaat = { resterend: t.duurMs ?? ONGEDAAN_DUUR_MS, start: null, timer: null, raf: null };
+      staten.set(t.id, s);
+      // Eerst één frame op de volle lijn schilderen, dan pas de transitie
+      // starten — anders is er niets om vanaf te glijden.
+      const begin = () => { s.raf = null; hervat(t.id); };
+      s.raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(begin) : window.setTimeout(begin, 0);
+    }
+    let opgeruimd = false;
+    for (const id of [...staten.keys()]) {
+      if (ids.has(id)) continue;
+      stop(id);
+      opgeruimd = true;
+    }
+    if (opgeruimd) {
+      setWeergave((cur) => Object.fromEntries(Object.entries(cur).filter(([id]) => ids.has(Number(id)))));
+    }
+  }, [toasts, staten, hervat, stop]);
 
-  return { klok, pauzeer, hervat };
+  // Stack weg: alle klokken stoppen.
+  useEffect(() => () => { for (const id of [...staten.keys()]) stop(id); }, [staten, stop]);
+
+  return { weergave, pauzeer, hervat };
 }
 
-/** Ongedaan-variant: eigen klok (pauze bij hover/focus) + hairline die afloopt. */
-function OngedaanToast({ toast, reduced, onDismiss }: { toast: Toast; reduced: boolean; onDismiss: (id: number) => void }) {
+/** Ongedaan-variant: klok uit de stack (pauze bij hover/focus) + hairline die afloopt. */
+function OngedaanToast({ toast, reduced, klok, pauzeer, hervat, onDismiss }: {
+  toast: Toast;
+  reduced: boolean;
+  klok: KlokWeergave;
+  pauzeer: () => void;
+  hervat: () => void;
+  onDismiss: (id: number) => void;
+}) {
   const duur = toast.duurMs ?? ONGEDAAN_DUUR_MS;
-  const { klok, pauzeer, hervat } = useAftellen(duur, () => onDismiss(toast.id));
   // Muis én focus kunnen los van elkaar pauzeren; de klok loopt pas weer
   // als allebei weg zijn.
   const hoverRef = useRef(false);
@@ -114,6 +166,25 @@ function OngedaanToast({ toast, reduced, onDismiss }: { toast: Toast; reduced: b
     if (hoverRef.current || focusRef.current) pauzeer();
     else hervat();
   };
+
+  // Bij (her)verschijnen de hairline eerst op de huidige stand schilderen en
+  // dan pas laten glijden; verdwijnt de toast terwijl de muis erop staat
+  // (verdrongen), dan komt er geen mouseleave meer — dus dan zelf hervatten.
+  const pauzeerRef = useRef(pauzeer);
+  const hervatRef = useRef(hervat);
+  pauzeerRef.current = pauzeer;
+  hervatRef.current = hervat;
+  useEffect(() => {
+    pauzeerRef.current();
+    const begin = () => { if (!hoverRef.current && !focusRef.current) hervatRef.current(); };
+    const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame(begin) : window.setTimeout(begin, 0);
+    return () => {
+      if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(raf);
+      window.clearTimeout(raf);
+      hervatRef.current();
+    };
+  }, []);
+
   const fractie = klok.loopt ? 0 : klok.resterend / duur;
   const tone = TONE_STYLES[toast.tone ?? 'success'];
   const ToneIcon = tone.icon;
@@ -182,6 +253,7 @@ export function ToastStack({
 }) {
   const reduced = prefersReducedMotion();
   const visible = toasts.slice(-MAX_VISIBLE);
+  const { weergave, pauzeer, hervat } = useOngedaanKlokken(toasts, onDismiss);
 
   return (
     <div
@@ -216,7 +288,14 @@ export function ToastStack({
               className="rounded-2xl border border-slate-200 bg-paper/95 px-4 py-3 shadow-lg backdrop-blur-sm touch-pan-y"
             >
               {toast.ongedaan ? (
-                <OngedaanToast toast={toast} reduced={reduced} onDismiss={onDismiss} />
+                <OngedaanToast
+                  toast={toast}
+                  reduced={reduced}
+                  klok={weergave[toast.id] ?? { loopt: false, resterend: toast.duurMs ?? ONGEDAAN_DUUR_MS }}
+                  pauzeer={() => pauzeer(toast.id)}
+                  hervat={() => hervat(toast.id)}
+                  onDismiss={onDismiss}
+                />
               ) : (
               <div className="flex items-start gap-3">
                 <div

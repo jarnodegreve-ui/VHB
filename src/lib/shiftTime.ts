@@ -1,3 +1,5 @@
+import { addDays, isoDate } from './datum';
+
 /**
  * Categoriseert een dienst op starttijd voor visuele groepering/kleurcode.
  * Ochtend: vóór 09:00 — Middag: 09:00–14:59 — Avond: 15:00+.
@@ -31,7 +33,8 @@ export const normalizeTimeString = (t: string): string => {
   return `${m[1].padStart(2, '0')}:${m[2]}`;
 };
 
-const parseHHMM = (t: string): number | null => {
+/** 'HH:MM' → minuten; busvak-uren tot 47 toegestaan (26:16 = dag erna). null bij vuil. */
+export const parseHHMM = (t: string): number | null => {
   const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
   if (!m) return null;
   const h = Number(m[1]);
@@ -40,9 +43,9 @@ const parseHHMM = (t: string): number | null => {
   return h * 60 + min;
 };
 
-/** Lokale yyyy-mm-dd (geen UTC-shift — zelfde conventie als isoDate elders). */
-const localIso = (d: Date): string =>
-  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+/** Alias van `isoDate` (datum.ts) — de ene bron voor de lokale dag; blijft
+ *  bestaan voor wie hem uit deze module importeert. */
+export const localIso = isoDate;
 
 /**
  * Is dit dienstsegment op dit moment bezig? Gesplitste diensten zijn aparte
@@ -65,14 +68,12 @@ export const isShiftActiveAt = (
   // busvak-uren ≥ 24 zijn al volgende-dag.
   const endNorm = end <= start ? end + 24 * 60 : end;
   const nowMin = now.getHours() * 60 + now.getMinutes();
-  if (shift.date === localIso(now)) {
+  if (shift.date === isoDate(now)) {
     return nowMin >= start && nowMin < endNorm;
   }
   // Dienst van gisteren die na middernacht nog loopt: bekijk 'nu' als
   // minuten voorbij gisterenmiddernacht.
-  const yesterday = new Date(now);
-  yesterday.setDate(yesterday.getDate() - 1);
-  if (shift.date !== localIso(yesterday)) return false;
+  if (shift.date !== isoDate(addDays(now, -1))) return false;
   const nowSinceShiftDay = nowMin + 24 * 60;
   return nowSinceShiftDay >= start && nowSinceShiftDay < endNorm;
 };
@@ -96,7 +97,7 @@ export const hasShiftEnded = (
   const endNorm = end < start ? end + 24 * 60 : end;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const dayDiff = Math.round(
-    (new Date(`${localIso(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
+    (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
   );
   if (dayDiff < 0) return false; // dienstdag ligt nog in de toekomst
   return nowMin + dayDiff * 24 * 60 >= endNorm;
@@ -121,7 +122,7 @@ export const minutesUntilShiftEnd = (
   const endNorm = end <= start ? end + 24 * 60 : end;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const dagVerschil = Math.round(
-    (new Date(`${localIso(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
+    (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
   );
   const resterend = endNorm - (nowMin + dagVerschil * 24 * 60);
   return resterend > 0 ? resterend : null;
@@ -144,7 +145,7 @@ export const minutesUntilShiftStart = (
   if (start === null) return null;
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const dagVerschil = Math.round(
-    (new Date(`${localIso(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
+    (new Date(`${isoDate(now)}T00:00:00`).getTime() - new Date(`${shift.date}T00:00:00`).getTime()) / 86400000,
   );
   const tot = start - (nowMin + dagVerschil * 24 * 60);
   return tot > 0 ? tot : null;
@@ -162,7 +163,8 @@ export const minutesUntilShiftStart = (
  * Reken hierbij op tabular-nums in de weergave: zonder gelijke cijferbreedte
  * verschuift de tekst nog steeds elke minuut mee.
  */
-const formatDuration = (minuten: number): string => {
+/** "3u 16min" / "47min" / "2u" — dé duurnotatie van het portaal. */
+export const formatDuration = (minuten: number): string => {
   const u = Math.floor(minuten / 60);
   const m = minuten % 60;
   if (u === 0) return `${m}min`;
@@ -175,3 +177,16 @@ export const formatRemaining = (minuten: number): string => `nog ${formatDuratio
 
 /** Tijd tot een dienst begint: "over 1u 32min". */
 export const formatStartsIn = (minuten: number): string => `over ${formatDuration(minuten)}`;
+
+/**
+ * Start/eind van een dienstblok in minuten t.o.v. middernacht van de
+ * dienstdag; eind ≤ start = impliciete nachtdienst (+24u). Eén plek voor de
+ * regel die MijnDagView, DashboardView en de dienstbalk vroeger elk zelf
+ * hadden (controle-ronde 05-09, dode code 26).
+ */
+export const shiftWindowMinutes = (s: { startTime: string; endTime: string }): { start: number; end: number } | null => {
+  const start = parseHHMM(s.startTime);
+  const end = parseHHMM(s.endTime);
+  if (start === null || end === null) return null;
+  return { start, end: end <= start ? end + 1440 : end };
+};

@@ -83,13 +83,13 @@ export function OpsStat({
           <span className={cn('inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg', STAT_TONES[tone])}>
             {icon}
           </span>
-          <span className="truncate text-xs font-medium text-slate-500">{label}</span>
+          <span className="truncate text-label">{label}</span>
         </span>
       </div>
       {/* Mono: de cijfers zijn het instrumentpaneel — zelfde accent als
-          dienstnummers en tijden. */}
+          dienstnummers en tijden (rol text-stat, index.css). */}
       <div className="mt-2.5 flex items-baseline justify-between gap-2">
-        <p className="min-w-0 truncate text-2xl leading-8 font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">
+        <p className="min-w-0 truncate text-stat text-slate-900">
           {text ?? <CountUp value={value ?? 0} />}
           {suffix && <span className="text-sm font-semibold text-slate-500">{suffix}</span>}
         </p>
@@ -190,7 +190,7 @@ export function OpsPanel({
           <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-slate-500/12 text-slate-600">
             {icon}
           </span>
-          <h3 className="text-sm font-semibold tracking-tight text-slate-900">{title}</h3>
+          <h3 className="text-card-title">{title}</h3>
         </div>
         {aside && (
           <span className="text-xs font-medium text-slate-500">{aside}</span>

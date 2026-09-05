@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { AlertTriangle, Calendar, FileText, MapPin } from 'lucide-react';
 import { activeDiversions } from '../lib/diversions';
-import { isoDate } from '../lib/availability';
+import { addDays, isoDate } from '../lib/availability';
 import { formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
-import { hasShiftEnded, isShiftActiveAt } from '../lib/shiftTime';
+import { formatDuration, hasShiftEnded, isShiftActiveAt, shiftWindowMinutes } from '../lib/shiftTime';
 import { cn } from '../lib/ui';
 import type { Diversion, Shift, User, View } from '../types';
 import { Card } from '../components/Card';
@@ -28,30 +28,6 @@ import { RitbladViewer } from '../components/RitbladViewer';
  * busvak-notatie ("26:16") en een impliciete nachtdienst (eind ≤ start)
  * dezelfde regel volgen als isShiftActiveAt.
  */
-
-/** 'HH:MM' → minuten (uren ≥ 24 toegestaan, busvak-notatie); null bij vuil. */
-const toMin = (t: string): number | null => {
-  const m = /^(\d{1,2}):(\d{2})/.exec(String(t ?? '').trim());
-  if (!m) return null;
-  return Number(m[1]) * 60 + Number(m[2]);
-};
-
-/** Start/eind van een blok in minuten; eind ≤ start = +24u (nachtdienst). */
-const blokVenster = (s: { startTime: string; endTime: string }): { start: number; end: number } | null => {
-  const start = toMin(s.startTime);
-  const end = toMin(s.endTime);
-  if (start === null || end === null) return null;
-  return { start, end: end <= start ? end + 1440 : end };
-};
-
-/** "3u 16min" / "47min" / "2u" — zelfde vorm als de aftellingen in shiftTime. */
-const fmtDuur = (minuten: number): string => {
-  const u = Math.floor(minuten / 60);
-  const m = minuten % 60;
-  if (u === 0) return `${m}min`;
-  if (m === 0) return `${u}u`;
-  return `${u}u ${String(m).padStart(2, '0')}min`;
-};
 
 /** "Lijn 5 & 8" vs "5": prefix alleen wanneer 't nog niet in de data zit. */
 const lineLabel = (line: string) =>
@@ -108,7 +84,7 @@ export function MijnDagView({
   // Tijdlijn-rijen: blok, pauze, blok, … (pauze alleen als er echt tijd tussen zit).
   const rijen: Rij[] = [];
   delen.forEach((shift, i) => {
-    const v = blokVenster(shift);
+    const v = shiftWindowMinutes(shift);
     if (!v) return;
     const vorige = rijen[rijen.length - 1];
     if (vorige && vorige.soort === 'blok' && v.start > vorige.end) {
@@ -244,7 +220,7 @@ export function MijnDagView({
                       <span className="absolute inset-y-0 left-1/2 border-l border-dashed border-slate-300" />
                     </span>
                     <p className="text-sm font-medium text-slate-500 tabular-nums">
-                      pauze · {fmtDuur(rij.end - rij.start)}
+                      pauze · {formatDuration(rij.end - rij.start)}
                     </p>
                   </li>
                 );
@@ -255,8 +231,8 @@ export function MijnDagView({
               const totStart = isVandaag && !gereden && !bezig && start > nuMin ? start - nuMin : null;
               const sub = [
                 blokken.length > 1 ? `deel ${nr}/${blokken.length}` : null,
-                fmtDuur(end - start),
-                gereden ? 'gereden' : totStart !== null ? `start over ${fmtDuur(totStart)}` : null,
+                formatDuration(end - start),
+                gereden ? 'gereden' : totStart !== null ? `start over ${formatDuration(totStart)}` : null,
               ].filter(Boolean).join(' · ');
 
               return (
@@ -281,7 +257,7 @@ export function MijnDagView({
                       </p>
                       {/* De boodschap rechts van de tijd, groot en goud: hoelang nog. */}
                       {resterend !== null && (
-                        <p className="text-xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-oker-700">nog {fmtDuur(resterend)}</p>
+                        <p className="text-xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-oker-700">nog {formatDuration(resterend)}</p>
                       )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -385,7 +361,5 @@ export function MijnDagView({
 
 /** Lokale yyyy-mm-dd van vandaag + n dagen (geen UTC-shift). */
 function isOffset(now: Date, n: number): string {
-  const d = new Date(now);
-  d.setDate(d.getDate() + n);
-  return isoDate(d);
+  return isoDate(addDays(now, n));
 }

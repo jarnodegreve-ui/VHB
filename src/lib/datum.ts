@@ -1,18 +1,36 @@
 /**
- * Kalenderrekenen op ISO-datumstrings, zonder tijdzones: alles in het UTC-
- * frame, zodat een dag nooit verschuift door zomertijd of de lokale klok.
- * Eén bron aan de clientkant — stond als addDagen/maandPlus verspreid over
- * schoolkalender, vervangers en het laadpalen-dashboard (controle-ronde
- * 27-08, bevindingen 41 en 43). De API-kant heeft zijn eigen exemplaar in
- * api/helpers.ts (addDagenIso): api/ en src/ delen bewust geen code.
+ * Dé datumhelpers van de client, in twee families:
+ *
+ *  - Date-objecten in lokale tijd: `isoDate` (Date → 'YYYY-MM-DD' van de dag
+ *    die de gebruiker beleeft, nooit toISOString — die kantelt 's nachts naar
+ *    de UTC-dag) en `addDays` (kalenderrekenen via setDate, dus DST-veilig).
+ *  - ISO-strings zonder tijdzone: `addDagen`/`maandPlus` rekenen op de
+ *    string zelf; een dag verschuift zo nooit door zomertijd of de klok.
+ *
+ * Eén bron — stond als addDagen/maandPlus verspreid over schoolkalender,
+ * vervangers en het laadpalen-dashboard (controle-ronde 27-08, 41 en 43) en
+ * als isoDate/vandaagIso/localIso/toLocaleDateString('en-CA') plus drie
+ * dag-optellers over availability, kalender, shiftTime, typedag en
+ * CoverageView (controle-ronde 05-09, 27). `availability.ts` re-exporteert
+ * isoDate/addDays voor de bestaande importeurs. De API-kant heeft zijn eigen
+ * exemplaar in api/helpers.ts (addDagenIso): api/ en src/ delen bewust geen
+ * code.
  */
 
-/** "YYYY-MM-DD" ± n dagen. */
-export const addDagen = (iso: string, n: number): string => {
-  const d = new Date(`${iso}T00:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + n);
-  return d.toISOString().slice(0, 10);
+/** Lokale 'YYYY-MM-DD' van een Date (geen UTC-shift). */
+export const isoDate = (d: Date): string =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/** Date ± n dagen, in lokale kalenderdagen (setDate: DST-veilig). */
+export const addDays = (d: Date, n: number): Date => {
+  const out = new Date(d);
+  out.setDate(out.getDate() + n);
+  return out;
 };
+
+/** "YYYY-MM-DD" ± n dagen (via lokale middernacht + addDays; in BE bestaat
+ *  lokale middernacht altijd, de zomertijd wisselt om 02:00). */
+export const addDagen = (iso: string, n: number): string => isoDate(addDays(new Date(`${iso}T00:00:00`), n));
 
 /** "YYYY-MM" ± n maanden, over jaargrenzen heen. */
 export const maandPlus = (maand: string, delta: number): string => {

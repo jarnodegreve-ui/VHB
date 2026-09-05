@@ -158,7 +158,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                     <Td className="tabular-nums whitespace-nowrap">{formatDateHuman(doc.uploadedAt)}</Td>
                     <Td className="text-right tabular-nums whitespace-nowrap">{doc.sizeBytes != null ? prettySize(doc.sizeBytes) : <span className="text-slate-400">—</span>}</Td>
                     <Td className="text-right">
-                      <Button variant="secondary" size="sm" onClick={() => openDoc(doc)} aria-label={`Open ${doc.filename}`} icon={<Download size={14} className="text-oker-500" />}>
+                      <Button variant="secondary" size="sm" onClick={() => openDoc(doc)} aria-label={`Open ${doc.filename}`} icon={<Download size={14} />}>
                         Openen
                       </Button>
                     </Td>
@@ -189,7 +189,7 @@ export function DocumentsView({ currentUser, onSeen }: { currentUser: User; onSe
                   className="shrink-0"
                   onClick={() => openDoc(doc)}
                   aria-label={`Open ${doc.filename}`}
-                  icon={<Download size={16} className="text-oker-500" />}
+                  icon={<Download size={16} />}
                 >
                   Openen
                 </Button>

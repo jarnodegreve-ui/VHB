@@ -418,6 +418,7 @@ html.dark {
        text-card-title    h2/h3 in een kaart of paneel
        text-label         veldlabel / tabelkop (sentence-case)
        text-micro         uppercase eyebrow (MicroLabel)
+       text-stat          groot cijfer in een KPI-tegel/statkaart (mono, kleur per plek)
      Body = text-sm (13) / text-base (16); code = font-mono.
      In @layer components: een kleur-utility ernaast (text-oker-700) wint
      dan van de rol-kleur, zoals bedoeld. */
@@ -466,6 +467,18 @@ html.dark {
     text-transform: uppercase;
     letter-spacing: 0.1em;
     color: var(--color-slate-400);
+  }
+  .text-stat {
+    /* Groot cijfer (OpsStat, statkaarten in beheer): mono = instrument-
+       signaal, tabular zodat kolommen niet verspringen. Geen kleur: die
+       zet de plek zelf (text-slate-900, text-oker-700, …) — controle 05-09
+       nr. 23. */
+    font-family: var(--font-mono);
+    font-size: 1.5rem;
+    line-height: 2rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
   }
 
 }

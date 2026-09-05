@@ -140,6 +140,7 @@ export function DesignsysteemView() {
           <p className="text-sm text-slate-600">Body · text-sm slate-600 — De dienst begint om 05:42 aan de stelplaats.</p>
           <p className="text-label">Label · text-label</p>
           <p className="text-micro">Micro · text-micro</p>
+          <p className="text-stat text-slate-900">2116 · text-stat</p>
           <p className="text-sm tabular-nums text-slate-600">Cijfers · tabular-nums 05:42 · 2601 · 24 dagen</p>
         </div>
       </Sectie>

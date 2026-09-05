@@ -173,7 +173,10 @@ export function MicroLabel({ className, children }: { className?: string; childr
 export function segItemClass(actief: boolean, className?: string) {
   return cn(
     'ios-pressable rounded-xl px-3.5 py-2 text-xs font-semibold transition-all',
-    actief ? 'bg-oker-500 text-slate-950 shadow-sm shadow-oker-500/30' : 'text-slate-500 hover:text-slate-700',
+    // Actief = neutrale 'papieren' chip (iOS/Linear-patroon) i.p.v. vol goud:
+    // een schakelaar is geen actie, en naast een gouden knop (Ziek melden)
+    // gaf dat twee gouden vlakken in één kop (controle 05-09, nr. 19).
+    actief ? 'bg-paper text-slate-900 shadow-sm ring-1 ring-hairline' : 'text-slate-500 hover:text-slate-700',
     className,
   );
 }

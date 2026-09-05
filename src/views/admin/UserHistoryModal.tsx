@@ -67,17 +67,17 @@ export function UserHistoryModal({
         <div className="grid grid-cols-3 gap-3">
           <Card tone="muted" padding="sm">
             <MicroLabel>Diensten</MicroLabel>
-            <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{allShifts.length}</p>
+            <p className="mt-1 text-stat text-slate-900">{allShifts.length}</p>
             <p className="text-2xs font-medium text-slate-500 mt-1">{upcomingShifts.length} komende</p>
           </Card>
           <Card tone="muted" padding="sm">
             <MicroLabel>Verlof</MicroLabel>
-            <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{approvedLeaveCount}</p>
+            <p className="mt-1 text-stat text-slate-900">{approvedLeaveCount}</p>
             <p className="text-2xs font-medium text-slate-500 mt-1">goedgekeurd</p>
           </Card>
           <Card tone="muted" padding="sm">
             <MicroLabel>Dienstruilen</MicroLabel>
-            <p className="mt-1 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{userSwaps.length}</p>
+            <p className="mt-1 text-stat text-slate-900">{userSwaps.length}</p>
             <p className="text-2xs font-medium text-slate-500 mt-1">totaal</p>
           </Card>
         </div>

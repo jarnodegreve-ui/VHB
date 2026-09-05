@@ -127,8 +127,9 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
   const sluitPaneel = () => setPaneelOpen(false);
 
   // Desktop: de eerste omleiding staat standaard open in het paneel; na
-  // verwijderen schuift de keuze door naar de buur. Het lege "nieuw"-
-  // formulier (paneel open zonder editingId) wordt niet gekaapt.
+  // verwijderen schuift de keuze door naar de buur, of sluit het paneel als
+  // de lijst leeg is. Het lege "nieuw"-formulier (paneel open zonder
+  // editingId) wordt niet gekaapt.
   const inline = useStandaardKeuze({
     items: sortedDiversions,
     sleutelVan: (d) => d.id,
@@ -224,9 +225,11 @@ export function ManageDiversionsView({ diversions, onSave, onSaveDiversion, onCr
     } else {
       onSave(diversions.filter((d) => d.id !== id));
     }
-    // Mobiel sluit de SlideOver; desktop laat useStandaardKeuze doorschuiven
-    // naar de buur van het verwijderde item.
-    if (id === editingId && !inline) sluitPaneel();
+    // Stond het item open, dan regelt useStandaardKeuze de rest: desktop
+    // schuift door naar de buur, en zonder buur (of op mobiel) sluit het
+    // paneel — het formulier mag niet op een verwijderd record blijven
+    // staan. Komt het item terug via "Ongedaan maken", dan staat het op
+    // desktop meteen weer open.
   };
 
   const lijst = sortedDiversions.length > 0 ? (

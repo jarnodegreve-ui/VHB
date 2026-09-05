@@ -14,7 +14,9 @@ import { apiFetch } from './api';
  */
 export async function openHuidigRitblad(): Promise<void> {
   try {
-    const res = await apiFetch('/api/ritblaadje');
+    // no-store: anders kan de SW-cache een signed URL van >1 u teruggeven
+    // (controle 05-09, nr. 9 — zelfde regel als de viewer).
+    const res = await apiFetch('/api/ritblaadje', { cache: 'no-store' });
     if (!res.ok) throw new Error(`Server antwoordde ${res.status}`);
     const data = await res.json();
     if (!data?.url) {
