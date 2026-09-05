@@ -89,7 +89,7 @@ export function ServicesView({ services }: { services: Service[] }) {
                 {sortBy === 'time' && (sortOrder === 'asc' ? <ChevronUp size={12} /> : <ChevronDown size={12} />)}
               </button>
             </div>
-            <div className="relative flex-1 md:w-64 group">
+            <div className="relative min-w-0 flex-1 md:w-64 group">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                 <Search size={16} className="text-slate-400 group-focus-within:text-oker-500 transition-colors" />
               </div>

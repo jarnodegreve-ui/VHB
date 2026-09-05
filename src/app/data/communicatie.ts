@@ -142,9 +142,10 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById,
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast: 'Omleiding opgeslagen.',
     });
-  const postDiversion = (record: Diversion, successToast: string, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
+  const postDiversion = (record: Diversion, successToast: string, opVeldfouten?: OpVeldfouten, herstel = false): Promise<boolean> =>
     ctx.perRecord<Diversion>({
       key: 'diversions', label: 'Deze omleiding', method: 'POST', url: '/api/diversions/one', id: record.id, body: record, opVeldfouten,
+      headers: herstel ? { 'X-Herstel': '1' } : undefined,
       responseKey: 'diversion', setList: setDiversions, optimistic: (prev) => [...withoutId(prev, record.id), record], applySaved: replaceById,
       refetch: () => fetchDiversions(undefined, { silent: true }), successToast,
     });
@@ -164,7 +165,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       uitvoeren: verwijder,
       // perRecord meldt zijn eigen fouten (409/netwerk) — daarom void.
       herstellen: async () => {
-        if (await postDiversion(record, 'Omleiding hersteld.')) await fetchDiversions(undefined, { silent: true });
+        if (await postDiversion(record, 'Omleiding hersteld.', undefined, true)) await fetchDiversions(undefined, { silent: true });
       },
       toast: showToast,
     });
@@ -177,9 +178,11 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       key: 'updates', label: 'Deze update', method: 'PUT', url: `/api/updates/${encodeURIComponent(record.id)}`, id: record.id, body: record, opVeldfouten,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => replaceById(prev, record), applySaved: replaceById, refetch: () => fetchUpdates(),
     });
-  const postUpdate = (record: Update, successToast?: string, opVeldfouten?: OpVeldfouten): Promise<boolean> =>
+  const postUpdate = (record: Update, successToast?: string, opVeldfouten?: OpVeldfouten, herstel = false): Promise<boolean> =>
     ctx.perRecord<Update>({
       key: 'updates', label: 'Deze update', method: 'POST', url: '/api/updates/one', id: record.id, body: record, opVeldfouten,
+      // Herstel = geen tweede push naar alle chauffeurs (controle 05-09).
+      headers: herstel ? { 'X-Herstel': '1' } : undefined,
       responseKey: 'update', setList: setUpdates, optimistic: (prev) => [record, ...withoutId(prev, record.id)], applySaved: replaceById, refetch: () => fetchUpdates(),
       successToast,
     });
@@ -199,7 +202,7 @@ export function useCommunicatieData(ctx: DataCtx & { users: User[] }) {
       boodschap: `Update ‘${record.title}’ verwijderd.`,
       uitvoeren: verwijder,
       herstellen: async () => {
-        if (await postUpdate(record, 'Update hersteld.')) await fetchUpdates();
+        if (await postUpdate(record, 'Update hersteld.', undefined, true)) await fetchUpdates();
       },
       toast: showToast,
     });

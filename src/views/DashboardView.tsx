@@ -75,12 +75,20 @@ export function DashboardView({ notes = [],
   // Lokale dag (isoDate) i.p.v. toISOString(): die laatste gaf 's nachts in
   // BE de UTC-dag terug, waardoor 'Vandaag' de verkeerde/geen dienst toonde.
   const today = isoDate(now);
-  const todaysShift = myShifts.find((shift) => shift.date === today);
+  // Nachtdienst over middernacht: zolang de dienst van gisteren nog loopt, is
+  // dát de "dienstdag" van de tegel en telt "nu" door in busvak-tijd
+  // (controle 05-09).
+  const gisterenDate = new Date(now);
+  gisterenDate.setDate(gisterenDate.getDate() - 1);
+  const gisteren = isoDate(gisterenDate);
+  const nachtdienstLoopt = myShifts.some((s) => s.date === gisteren && isShiftActiveAt(s, now));
+  const dienstDag = nachtdienstLoopt ? gisteren : today;
+  const todaysShift = myShifts.find((shift) => shift.date === dienstDag);
   // Alle delen van de dienst van vandaag (een gesplitste dienst = meerdere
   // planning-rijen), op starttijd. Al gereden delen blijven staan maar
   // worden gedempt getoond — zo zie je in één oogopslag wat nog komt.
   const todayParts = myShifts
-    .filter((s) => s.date === today)
+    .filter((s) => s.date === dienstDag)
     .sort((a, b) => a.startTime.localeCompare(b.startTime));
   const todayLines = todayParts.map((p) => ({
     left: `${p.startTime}–${p.endTime}`,
@@ -99,7 +107,7 @@ export function DashboardView({ notes = [],
     if (end <= start) end += 1440;
     return { start, end, loopnr: p.loopnr };
   });
-  const nowMin = now.getHours() * 60 + now.getMinutes();
+  const nowMin = now.getHours() * 60 + now.getMinutes() + (nachtdienstLoopt ? 1440 : 0);
   const nowLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
   const fmtDuur = (minuten: number) => {
     const u = Math.floor(minuten / 60);
@@ -130,7 +138,7 @@ export function DashboardView({ notes = [],
     })
     // Ná vandaag: de delen van vandaag staan al in de Vandaag-tegel, dus
     // "volgende dienst" is de eerstvolgende andere dag (zoals op Mijn dag).
-    .filter((s) => s.date > today)
+    .filter((s) => s.date > dienstDag)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())[0];
   // Alle delen van die volgende dag, voor de regels in de tegel.
   const nextParts = nextShift

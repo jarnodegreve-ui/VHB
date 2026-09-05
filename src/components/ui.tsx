@@ -44,7 +44,7 @@ export function PageHeader({
           <p className="mt-2 text-sm font-normal leading-relaxed text-slate-500">{description}</p>
         ) : null}
       </div>
-      {actions ? <div className="ml-auto flex shrink-0 flex-wrap items-center justify-end gap-2 md:gap-3">{actions}</div> : null}
+      {actions ? <div className="ml-auto flex min-w-0 max-w-full flex-wrap items-center justify-end gap-2 md:gap-3">{actions}</div> : null}
     </header>
   );
 }

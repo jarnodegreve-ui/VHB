@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { ShieldAlert, Smartphone } from 'lucide-react';
 import { BrandLogo } from '../components/BrandLogo';
 import { Button } from '../components/primitives';
-import { cn } from '../lib/ui';
+import { applyThemeColorMeta, cn } from '../lib/ui';
 
 /**
  * Schermen vóór de app zelf: sessie/profiel laden, toestel wacht op
@@ -13,8 +13,18 @@ import { cn } from '../lib/ui';
 function CarbonAchtergrond() {
   useEffect(() => {
     const html = document.documentElement;
+    // Zelfde recept als LoginView: de carbon-schermen zijn altijd-donker met
+    // hun eigen kleuren, dus `.dark` (omgekeerde schalen) moet even uit —
+    // anders werd slate-300 er onleesbaar op (controle 05-09).
+    const wasDark = html.classList.contains('dark');
+    html.classList.remove('dark');
     html.classList.add('login-donker');
-    return () => html.classList.remove('login-donker');
+    applyThemeColorMeta(true);
+    return () => {
+      if (wasDark) html.classList.add('dark');
+      html.classList.remove('login-donker');
+      applyThemeColorMeta(wasDark);
+    };
   }, []);
   return null;
 }

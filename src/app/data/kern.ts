@@ -45,6 +45,8 @@ export type PerRecordOpts<T extends { id: string }> = {
   url: string;
   id: string;
   body?: unknown;
+  /** Extra request-headers (bv. `X-Herstel: 1` bij ongedaan maken). */
+  headers?: Record<string, string>;
   /** Sleutel van het record in de respons-JSON ('user' | 'diversion' | 'update'). */
   responseKey: string;
   setList: React.Dispatch<React.SetStateAction<T[]>>;
@@ -174,7 +176,7 @@ export function useDataKern(basis: DataBasis): DataCtx {
     try {
       const response = await apiFetch(opts.url, {
         method: opts.method,
-        headers: needsRevision && rev ? { [RECORD_REVISION_HEADER]: rev } : {},
+        headers: { ...(opts.headers ?? {}), ...(needsRevision && rev ? { [RECORD_REVISION_HEADER]: rev } : {}) },
         body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
       });
       const data = await response.json().catch(() => ({} as any));

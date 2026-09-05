@@ -140,6 +140,7 @@ vi.mock('../api/storage.js', async (importOriginal) => {
   return {
     ...orig,
     getUsersData: async () => mem.users,
+    koppelAuthId: async (userId: string, authId: string) => { const u = mem.users.find((x: any) => String(x.id) === String(userId)); if (u) u.authId = authId; },
     getPlanningNotes: async (o: any) => mem.planningNotes.filter((n: any) => (!o.driverId || n.driverId === o.driverId) && n.date >= o.fromIso && n.date <= o.toIso),
     upsertPlanningNote: async (driverId: string, date: string, note: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); mem.planningNotes.push({ driverId, date, note }); },
     getUserExpiries: async () => mem.userExpiries,
@@ -467,6 +468,37 @@ beforeEach(() => {
 });
 
 describe('authenticatie & rollen', () => {
+  // Sessie-identiteit = Auth-uid (controle-ronde 05-09, security 7): de
+  // eerste aanmelding koppelt het profiel; daarna telt het e-mailadres niet
+  // meer, zodat een gewijzigd Auth-e-mailadres niemand in andermans profiel brengt.
+  it('koppelt bij de eerste aanmelding de Auth-uid aan het profiel', async () => {
+    const res = await api('GET', '/api/users', { headers: { Authorization: 'Bearer tok-a' } });
+    expect(res.status).toBe(200);
+    expect(mem.users.find((u: any) => u.id === '3')?.authId).toBe('auth-tok-a');
+    // …en de uid gaat niet naar de client.
+    expect(res.json.some((u: any) => 'authId' in u && u.authId !== undefined)).toBe(false);
+  });
+
+  it('weigert een token met het e-mailadres van een profiel dat aan een ándere uid gekoppeld is', async () => {
+    const chauffeurA = mem.users.find((u: any) => u.id === '3');
+    chauffeurA.authId = 'auth-iemand-anders';
+    invalidateUsersCache();
+    const res = await api('GET', '/api/users', { headers: { Authorization: 'Bearer tok-a' } });
+    expect(res.status).toBe(403);
+    expect(res.json.error).toContain('andere aanmelding');
+    // Het profiel blijft ongewijzigd (geen stille herkoppeling).
+    expect(chauffeurA.authId).toBe('auth-iemand-anders');
+  });
+
+  it('vindt een gekoppeld profiel op uid, ook als het e-mailadres in Auth intussen anders is', async () => {
+    const chauffeurA = mem.users.find((u: any) => u.id === '3');
+    chauffeurA.authId = 'auth-tok-a';
+    chauffeurA.email = 'nieuw-adres@vhb.be'; // profiel-mail wijkt af van het token-mail
+    invalidateUsersCache();
+    const res = await api('GET', '/api/users', { headers: { Authorization: 'Bearer tok-a' } });
+    expect(res.status).toBe(200);
+  });
+
   it('weigert requests zonder token (401)', async () => {
     const res = await api('GET', '/api/leave');
     expect(res.status).toBe(401);

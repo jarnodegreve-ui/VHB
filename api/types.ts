@@ -21,6 +21,13 @@ export interface AppUser {
   startDate?: string;
 }
 
+/** Server-intern: profiel mét de Supabase Auth-uid waaraan het gekoppeld is
+ *  (sinds 05-09 de identiteit voor de sessie; e-mail is alleen nog de eerste
+ *  koppeling). Gaat nooit naar de client — toRoleScopedUser strookt hem. */
+export interface AppUserIntern extends AppUser {
+  authId?: string;
+}
+
 export interface IncomingUser extends AppUser {
   password?: string;
 }

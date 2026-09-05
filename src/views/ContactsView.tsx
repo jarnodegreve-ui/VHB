@@ -200,7 +200,7 @@ export function ContactsView({ users, currentUser }: { users: User[], currentUse
                 <div className="mt-4 flex flex-col sm:flex-row gap-2">
                   <a
                     href={telHref(selected.phone)}
-                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-700 text-white px-4 py-3 text-sm font-semibold hover:bg-emerald-800 transition-colors"
+                    className="flex-1 inline-flex items-center justify-center gap-2 rounded-2xl bg-emerald-500/15 text-emerald-800 px-4 py-3 text-sm font-semibold transition-colors hover:bg-emerald-500/25"
                   >
                     <Phone size={16} /> Bellen
                   </a>
