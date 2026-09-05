@@ -70,12 +70,22 @@ export const zetTelegramVerzenderVoorTests = (v: typeof echteVerzender | null) =
 
 /** Stuur een bericht naar de gekoppelde planner-chat. Best-effort: nooit
  *  throwen — een kapotte Telegram-config mag geen enkele flow breken. */
+/** Proactieve Telegram-meldingen (briefing, verlof/ruil-meldingen, ziek-
+ *  alert, dekkingsgaten) staan standaard UIT (Jarno 05-09: "voorlopig
+ *  storend"). Aanzetten met env TELEGRAM_MELDINGEN=aan. Antwoorden van de bot
+ *  op een commando (`antwoord: true`) gaan altijd door — die vraag je zelf. */
+export const telegramMeldingenAan = (): boolean => (process.env.TELEGRAM_MELDINGEN ?? "uit").toLowerCase() === "aan";
+
 export const stuurTelegram = async (
   tekst: string,
-  opts?: { knoppen?: TelegramKnop[][]; chatId?: string },
+  opts?: { knoppen?: TelegramKnop[][]; chatId?: string; /** Antwoord op een bot-commando: nooit onderdrukt. */ antwoord?: boolean },
 ): Promise<boolean> => {
   const chatId = opts?.chatId ?? gekoppeldeChat();
   if (!chatId) return false;
+  if (!opts?.antwoord && !telegramMeldingenAan()) {
+    console.log("[telegram] melding onderdrukt (TELEGRAM_MELDINGEN staat niet op 'aan')");
+    return false;
+  }
   return verzender({ chatId, tekst, knoppen: opts?.knoppen });
 };
 
@@ -448,6 +458,10 @@ Controleer rij- en rusttijden voor je beslist.`,
 };
 
 export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
+  // Antwoorden op commando's/knoppen gaan altijd door, ook met de proactieve
+  // meldingen uit (zie stuurTelegram).
+  const antwoord = (tekst: string, opts?: { knoppen?: TelegramKnop[][]; chatId?: string }) =>
+    stuurTelegram(tekst, { ...opts, antwoord: true });
   app.post("/api/telegram/webhook", async (req, res) => {
     try {
       // Secret-validatie eerst; zonder geconfigureerd secret is de webhook
@@ -480,11 +494,11 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           await answerCallback(cbId, "Advies berekenen…");
           try {
             const advies = await deps.berekenCoverageAdvies(String(date ?? ""), String(code ?? ""));
-            await stuurTelegram(formatAdvies(String(date ?? ""), String(code ?? ""), advies), {
+            await antwoord(formatAdvies(String(date ?? ""), String(code ?? ""), advies), {
               knoppen: adviesKnoppen(String(date ?? ""), String(code ?? ""), advies),
             });
           } catch {
-            await stuurTelegram(`Advies voor dienst ${escapeHtml(String(code ?? ""))} kon niet berekend worden.`);
+            await antwoord(`Advies voor dienst ${escapeHtml(String(code ?? ""))} kon niet berekend worden.`);
           }
         } else if (data.startsWith("lv|") || data.startsWith("rl|")) {
           // Stap 1 van een beslissing: expliciete bevestiging vragen — één
@@ -493,7 +507,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           await answerCallback(cbId);
           const label = besluit === "approved" ? "goedkeuren" : "afwijzen";
           const emoji = besluit === "approved" ? "✅" : "❌";
-          await stuurTelegram(
+          await antwoord(
             `${soort === "lv" ? "Verlofaanvraag" : "Dienstruil"} <b>${label}</b>?`,
             { knoppen: [[{ tekst: `${emoji} Ja, ${label}`, data: `${soort}2|${id}|${besluit}` }, { tekst: "Annuleren", data: "nvt" }]] },
           );
@@ -507,7 +521,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           const [, id, besluit] = data.split("|");
           await answerCallback(cbId, "Beslissing doorvoeren…");
           const uit = await deps.beslisVerlof({ id: String(id ?? ""), status: String(besluit ?? ""), ifStatus: "pending", actor: BOT_ACTOR });
-          await stuurTelegram("fout" in uit ? `⚠️ ${escapeHtml(uit.fout.error)}` : `✅ ${escapeHtml(uit.melding)}`);
+          await antwoord("fout" in uit ? `⚠️ ${escapeHtml(uit.fout.error)}` : `✅ ${escapeHtml(uit.melding)}`);
           } finally {
             inFlight.delete(data);
           }
@@ -521,7 +535,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           const [, id, besluit] = data.split("|");
           await answerCallback(cbId, "Beslissing doorvoeren…");
           const uit = await deps.beslisRuil({ id: String(id ?? ""), status: String(besluit ?? ""), ifStatus: "accepted", actor: BOT_ACTOR });
-          await stuurTelegram("fout" in uit ? `⚠️ ${escapeHtml(uit.fout.error)}` : `✅ ${escapeHtml(uit.melding)}`);
+          await antwoord("fout" in uit ? `⚠️ ${escapeHtml(uit.fout.error)}` : `✅ ${escapeHtml(uit.melding)}`);
           } finally {
             inFlight.delete(data);
           }
@@ -546,14 +560,14 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
             false,
           );
           if ("fout" in uit) {
-            await stuurTelegram(`⚠️ ${escapeHtml(uit.fout.error)}`);
+            await antwoord(`⚠️ ${escapeHtml(uit.fout.error)}`);
           } else {
             const diensten: Array<{ date: string; nummers: string[] }> = uit.openDienstenIso ?? [];
             const regels = diensten.slice(0, 6).map((d) => `• ${DAG_KORT(d.date)}: ${escapeHtml(d.nummers.join(" / "))}`);
             if (diensten.length > 6) regels.push(`• …en nog ${diensten.length - 6} dagen`);
             const knoppen = kandidaatKnoppen(diensten.map((d) => ({ date: d.date, code: d.nummers[0] })), 6);
             const periode = start === String(eind ?? "") ? DAG_KORT(start) : `${DAG_KORT(start)} t/m ${DAG_KORT(String(eind ?? ""))}`;
-            await stuurTelegram(
+            await antwoord(
               [
                 `🤒 <b>Ziek gemeld:</b> ${escapeHtml(uit.targetName)} (${periode})${bijgesteld ? " — start bijgesteld naar vandaag" : ""}.`,
                 diensten.length > 0 ? `Diensten die openvallen:\n${regels.join("\n")}` : "Geen diensten op naam in deze periode.",
@@ -567,7 +581,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
         } else if (data.startsWith("wt|")) {
           const [, date, code, userId] = data.split("|");
           await answerCallback(cbId);
-          await stuurTelegram(
+          await antwoord(
             `Dienst <b>${escapeHtml(String(code ?? ""))}</b> op ${DAG_KORT(String(date ?? ""))} toewijzen?`,
             { knoppen: [[{ tekst: "✅ Ja, wijs toe", data: `wt2|${date}|${code}|${userId}` }, { tekst: "Annuleren", data: "nvt" }]] },
           );
@@ -581,7 +595,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           const [, date, code, userId] = data.split("|");
           await answerCallback(cbId, "Toewijzen…");
           const uit = await deps.wijsDienstToe({ date: String(date ?? ""), serviceNumber: String(code ?? ""), driverId: String(userId ?? "") }, BOT_ACTOR);
-          await stuurTelegram(
+          await antwoord(
             "fout" in uit
               ? `⚠️ ${escapeHtml(uit.fout.error)}`
               : `✅ Dienst ${escapeHtml(uit.serviceNumber)} op ${DAG_KORT(uit.date)} toegewezen aan <b>${escapeHtml(uit.driverName)}</b> — de chauffeur krijgt een melding.`,
@@ -608,7 +622,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
       // berichten van wie dan ook: stil negeren.
       if (!bekend) {
         if (tekst.startsWith("/start")) {
-          await stuurTelegram(
+          await antwoord(
             `Deze chat heeft id <code>${escapeHtml(vanChat)}</code>.\nZet die waarde als TELEGRAM_CHAT_ID in de Vercel-omgeving en redeploy — daarna is de bot gekoppeld.`,
             { chatId: vanChat },
           );
@@ -626,36 +640,36 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
       const eindWeek = addDagenIso(vandaag, 6);
 
       if (cmd === "/start" || cmd === "/help") {
-        await stuurTelegram(HULP);
+        await antwoord(HULP);
       } else if (cmd === "/gaten") {
         const dagen = await deps.berekenDekkingsGaten(vandaag, eindWeek);
         const { tekst: bericht, knoppen } = formatGaten(dagen);
-        await stuurTelegram(bericht, { knoppen });
+        await antwoord(bericht, { knoppen });
       } else if (cmd === "/ziek") {
-        await stuurTelegram(await formatZiek());
+        await antwoord(await formatZiek());
       } else if (cmd === "/vandaag") {
         const dagen = await deps.berekenDekkingsGaten(vandaag, vandaag);
-        await stuurTelegram(await formatVandaag(dagen));
+        await antwoord(await formatVandaag(dagen));
       } else if (cmd === "/wie") {
-        await stuurTelegram(await formatWie(arg, vandaag, eindWeek));
+        await antwoord(await formatWie(arg, vandaag, eindWeek));
       } else if (cmd === "/rooster") {
-        await stuurTelegram(await formatRooster(arg, vandaag, eindWeek));
+        await antwoord(await formatRooster(arg, vandaag, eindWeek));
       } else if (cmd === "/dienst") {
-        await stuurTelegram(await formatDienst(arg));
+        await antwoord(await formatDienst(arg));
       } else if (cmd === "/ziekmeld") {
         const zmUit = await bereidZiekmeldingVoor(arg, vandaag);
-        if (typeof zmUit === "string") await stuurTelegram(zmUit);
-        else await stuurTelegram(zmUit.tekst, { knoppen: zmUit.knoppen });
+        if (typeof zmUit === "string") await antwoord(zmUit);
+        else await antwoord(zmUit.tekst, { knoppen: zmUit.knoppen });
       } else if (cmd.startsWith("/")) {
-        await stuurTelegram(`Dat commando ken ik niet.\n\n${HULP}`);
+        await antwoord(`Dat commando ken ik niet.\n\n${HULP}`);
       } else if (tekst) {
         // Vrije tekst = een vraag aan de planner-assistent (zelfde leestools
         // en beknoptheidscontract als in het portaal). Zachte uurlimiet.
         if (!(await chatBinnenLimiet())) {
-          await stuurTelegram("Even rustig aan — maximaal 20 assistent-vragen per uur via de bot. Probeer het straks opnieuw of gebruik de Assistent in het portaal.");
+          await antwoord("Even rustig aan — maximaal 20 assistent-vragen per uur via de bot. Probeer het straks opnieuw of gebruik de Assistent in het portaal.");
         } else {
           const uit = await deps.draaiPlannerChat([{ role: "user", content: tekst.slice(0, 1000) }]);
-          await stuurTelegram("antwoord" in uit ? escapeHtml(uit.antwoord) : `⚠️ ${escapeHtml(uit.error)}`);
+          await antwoord("antwoord" in uit ? escapeHtml(uit.antwoord) : `⚠️ ${escapeHtml(uit.error)}`);
         }
       }
       return res.json({ ok: true });
