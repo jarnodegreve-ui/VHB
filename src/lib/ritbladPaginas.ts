@@ -13,12 +13,17 @@
  * tekstlaag lezen kost op een oudere iPhone een paar seconden.
  */
 
+import { apiFetch } from './api';
+
 // Minimale vorm van wat we van pdfjs gebruiken — zo blijven de tests vrij
 // van een echte PDF én van de pdfjs-import (die in jsdom geen worker heeft).
 // (items zijn `unknown`: pdfjs mengt TextItem en TextMarkedContent — wij
 // lezen alleen `str` waar dat een string is.)
 export type RitbladPagina = { getTextContent(): Promise<{ items: readonly unknown[] }> };
 export type RitbladDocument = { numPages: number; getPage(nummer: number): Promise<RitbladPagina> };
+
+/** Wat /api/ritblaadje teruggeeft (null = geen bundel geüpload). */
+export type RitbladMeta = { url?: string; filename?: string; uploadedAt?: string };
 
 export const PAGINAS_CACHE_KEY = 'vhb-ritblad-paginas';
 
@@ -68,26 +73,39 @@ export const staatInKop = (tekst: string, re: RegExp): boolean => {
   return positie < Math.max(KOP_MIN_TEKENS, tekst.length * KOP_AANDEEL);
 };
 
+/** Gooit een AbortError zodra het signaal afgebroken is. De zoektocht
+ *  moet dan als geheel mislukken — niet stil doorlopen met een vernietigd
+ *  document, want dan ziet elke pagina eruit als "kapot, overslaan" en zou
+ *  een leeg/onvolledig resultaat als waarheid in de cache belanden. */
+const controleerAfgebroken = (signal: AbortSignal | undefined): void => {
+  if (signal?.aborted) throw new DOMException('Ritblad zoeken afgebroken', 'AbortError');
+};
+
 /**
  * Pagina's (1-gebaseerd, oplopend) waarop het dienstnummer als los getal
  * voorkomt. Staat het nummer op minstens één pagina in de kop, dan tellen
  * alleen die pagina's (vermeldingen op andermans blad vallen af); anders
  * alle pagina's met een vermelding. Leeg bij een scan zonder tekstlaag of
  * als niets matcht — de viewer valt dan terug op de volledige bundel.
+ * Met `signal` (viewer gesloten) stopt de lus met een AbortError.
  */
-export async function zoekPaginasVoorDienst(doc: RitbladDocument, dienstnummer: string): Promise<number[]> {
+export async function zoekPaginasVoorDienst(doc: RitbladDocument, dienstnummer: string, signal?: AbortSignal): Promise<number[]> {
   const nummer = dienstnummer.trim();
   if (!nummer) return [];
   const re = dienstnummerRegex(nummer);
   const inKop: number[] = [];
   const elders: number[] = [];
   for (let n = 1; n <= doc.numPages; n++) {
+    controleerAfgebroken(signal);
     let tekst = '';
     try {
       const pagina = await doc.getPage(n);
       tekst = paginaTekst((await pagina.getTextContent()).items);
     } catch {
-      continue; // één kapotte pagina mag de rest niet tegenhouden
+      // Eén kapotte pagina mag de rest niet tegenhouden — tenzij de fout
+      // komt doordat het document intussen vernietigd is (viewer dicht).
+      controleerAfgebroken(signal);
+      continue;
     }
     if (!re.test(tekst)) continue;
     if (telViercijferigeNummers(tekst) > MAX_NUMMERS_PER_BLAD) continue;
@@ -135,12 +153,48 @@ export async function zoekPaginasVoorDienstGecached(
   doc: RitbladDocument,
   dienstnummer: string,
   uploadedAt: string,
+  signal?: AbortSignal,
 ): Promise<number[]> {
   const gecached = leesPaginasUitCache(uploadedAt, dienstnummer);
   if (gecached) return gecached;
-  const paginas = await zoekPaginasVoorDienst(doc, dienstnummer);
+  const paginas = await zoekPaginasVoorDienst(doc, dienstnummer, signal);
+  controleerAfgebroken(signal); // nooit een afgebroken zoektocht bewaren
   schrijfPaginasNaarCache(uploadedAt, dienstnummer, paginas);
   return paginas;
+}
+
+// === Metadata + bytes ophalen ===
+
+/**
+ * Metadata van de bundel, altijd vers van de server (`cache: 'no-store'`).
+ * De service worker serveert /api/ritblaadje normaal stale-while-revalidate;
+ * dat gaf de viewer een gecachte signed URL van soms > 1 uur oud → Supabase
+ * 400 op de PDF → "kon niet geladen worden", en pas de tweede tik werkte.
+ * Op no-store doet de SW network-first en valt hij alleen offline terug op
+ * zijn cache — dan komt de PDF zelf ook uit de SW-cache (query-loos pad),
+ * dus de oude token deert daar niet.
+ */
+export async function haalRitbladMeta(): Promise<RitbladMeta | null> {
+  const res = await apiFetch('/api/ritblaadje', { cache: 'no-store' });
+  if (!res.ok) throw new Error(`Server antwoordde ${res.status}`);
+  return (await res.json()) as RitbladMeta | null;
+}
+
+/**
+ * De bytes van de bundel via `fetch` (dus door de service worker: cache-
+ * first op /ritblaadjes/ → offline uit cache). Antwoordt de storage met een
+ * fout — in de praktijk een verlopen signed URL — dan wordt via `versUrl`
+ * één keer een verse URL gevraagd en opnieuw geprobeerd. Vangnet voor het
+ * geval de metadata tóch uit een cache kwam (SW zonder no-store-steun).
+ */
+export async function haalBundelBytes(url: string, versUrl?: () => Promise<string | null>): Promise<Uint8Array> {
+  let res = await fetch(url);
+  if (!res.ok && versUrl) {
+    const nieuw = await versUrl();
+    if (nieuw && nieuw !== url) res = await fetch(nieuw);
+  }
+  if (!res.ok) throw new Error(`Bundel ophalen mislukte (${res.status})`);
+  return new Uint8Array(await res.arrayBuffer());
 }
 
 // === pdfjs laden (lazy) ===
@@ -175,14 +229,15 @@ export function laadPdfjs(): Promise<Pdfjs> {
 
 /**
  * De bundel openen als pdfjs-document. De bytes halen we zelf op met
- * `fetch`: zo loopt het verzoek door de service worker (cache-first op het
- * /ritblaadjes/-pad → werkt offline) i.p.v. door pdfjs' eigen range-
- * requests, die de SW-cache omzeilen.
+ * `fetch` (haalBundelBytes): zo loopt het verzoek door de service worker
+ * (cache-first op het /ritblaadjes/-pad → werkt offline) i.p.v. door pdfjs'
+ * eigen range-requests, die de SW-cache omzeilen.
  */
-export async function laadRitbladDocument(url: string): Promise<import('pdfjs-dist').PDFDocumentProxy> {
-  const [pdfjs, res] = await Promise.all([laadPdfjs(), fetch(url)]);
-  if (!res.ok) throw new Error(`Bundel ophalen mislukte (${res.status})`);
-  const data = new Uint8Array(await res.arrayBuffer());
+export async function laadRitbladDocument(
+  url: string,
+  versUrl?: () => Promise<string | null>,
+): Promise<import('pdfjs-dist').PDFDocumentProxy> {
+  const [pdfjs, data] = await Promise.all([laadPdfjs(), haalBundelBytes(url, versUrl)]);
   // pdfjs v6 compileert niets meer via new Function() (de oude
   // isEvalSupported-vlag bestaat niet meer) — werkt dus onder de CSP zonder
   // 'unsafe-eval'; de build-controle in het harnas bevestigt dat.

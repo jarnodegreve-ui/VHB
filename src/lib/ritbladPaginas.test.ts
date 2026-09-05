@@ -1,13 +1,19 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   MAX_NUMMERS_PER_BLAD,
   PAGINAS_CACHE_KEY,
   dienstnummerRegex,
+  haalBundelBytes,
+  haalRitbladMeta,
   telViercijferigeNummers,
   zoekPaginasVoorDienst,
   zoekPaginasVoorDienstGecached,
   type RitbladDocument,
 } from './ritbladPaginas';
+
+// apiFetch trekt de Supabase-client mee; hier alleen de aanroep vastleggen.
+const apiFetchMock = vi.hoisted(() => vi.fn());
+vi.mock('./api', () => ({ apiFetch: apiFetchMock }));
 
 /** Gemockte pdfjs-doc: één string per pagina, gesplitst in tekst-items
  *  zoals pdfjs dat doet (per woord/positie). */
@@ -114,6 +120,19 @@ describe('zoekPaginasVoorDienst', () => {
     doc.getPage.mockImplementationOnce(async () => { throw new Error('kapot'); });
     await expect(zoekPaginasVoorDienst(doc, '2116')).resolves.toEqual([2]);
   });
+
+  it('stopt met een AbortError zodra het signaal afgebroken is (viewer gesloten)', async () => {
+    const doc = maakDoc([['Dienst', '2116'], ['Dienst', '2116'], ['Dienst', '2116']]);
+    const afbreker = new AbortController();
+    // Sluiten midden in de zoektocht: het document wordt dan vernietigd en
+    // elke volgende getPage faalt — dat mag niet als "pagina overslaan" tellen.
+    doc.getPage.mockImplementationOnce(async () => {
+      afbreker.abort();
+      throw new Error('Worker was destroyed');
+    });
+    await expect(zoekPaginasVoorDienst(doc, '2116', afbreker.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(doc.getPage).toHaveBeenCalledTimes(1);
+  });
 });
 
 /** In-memory localStorage: Node ≥ 22 zet zelf een (lege, functieloze)
@@ -179,5 +198,87 @@ describe('zoekPaginasVoorDienstGecached', () => {
     window.localStorage.setItem(PAGINAS_CACHE_KEY, '{niet-json');
     const doc = maakDoc([['Dienst', '2116']]);
     await expect(zoekPaginasVoorDienstGecached(doc, '2116', 'v1')).resolves.toEqual([1]);
+  });
+
+  it('bewaart een afgebroken zoektocht niet (anders stond een onvolledig resultaat vast voor de hele bundel)', async () => {
+    const doc = maakDoc([['Dienst', '2116'], ['Dienst', '2116']]);
+    const afbreker = new AbortController();
+    doc.getPage.mockImplementationOnce(async () => {
+      afbreker.abort();
+      throw new Error('Worker was destroyed');
+    });
+    await expect(zoekPaginasVoorDienstGecached(doc, '2116', 'v1', afbreker.signal)).rejects.toMatchObject({ name: 'AbortError' });
+    expect(window.localStorage.getItem(PAGINAS_CACHE_KEY)).toBeNull();
+  });
+});
+
+describe('haalRitbladMeta', () => {
+  beforeEach(() => apiFetchMock.mockReset());
+
+  it('vraagt de metadata altijd vers op (cache: no-store — de SW doet dan network-first)', async () => {
+    apiFetchMock.mockResolvedValue(new Response(JSON.stringify({ url: 'https://s/ritblaadjes/x.pdf?token=1', uploadedAt: 'v1' })));
+    await expect(haalRitbladMeta()).resolves.toEqual({ url: 'https://s/ritblaadjes/x.pdf?token=1', uploadedAt: 'v1' });
+    expect(apiFetchMock).toHaveBeenCalledWith('/api/ritblaadje', { cache: 'no-store' });
+  });
+
+  it('geeft null door als er geen bundel is en gooit bij een serverfout', async () => {
+    apiFetchMock.mockResolvedValueOnce(new Response('null'));
+    await expect(haalRitbladMeta()).resolves.toBeNull();
+    apiFetchMock.mockResolvedValueOnce(new Response('', { status: 500 }));
+    await expect(haalRitbladMeta()).rejects.toThrow('500');
+  });
+});
+
+describe('haalBundelBytes', () => {
+  const OUD = 'https://s/ritblaadjes/x.pdf?token=oud';
+  const NIEUW = 'https://s/ritblaadjes/x.pdf?token=nieuw';
+  const pdf = () => new Response(new Uint8Array([0x25, 0x50, 0x44, 0x46]), { status: 200 });
+  const fetchMock = vi.fn<(url: string) => Promise<Response>>();
+
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal('fetch', fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('geeft de bytes terug bij een geslaagde fetch zonder de verse URL te vragen', async () => {
+    fetchMock.mockResolvedValue(pdf());
+    const versUrl = vi.fn(async () => NIEUW);
+    await expect(haalBundelBytes(OUD, versUrl)).resolves.toEqual(new Uint8Array([0x25, 0x50, 0x44, 0x46]));
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(versUrl).not.toHaveBeenCalled();
+  });
+
+  it('haalt bij een verlopen signed URL (400) één keer verse metadata en probeert opnieuw', async () => {
+    fetchMock.mockResolvedValueOnce(new Response('expired', { status: 400 })).mockResolvedValueOnce(pdf());
+    const versUrl = vi.fn(async () => NIEUW);
+    await expect(haalBundelBytes(OUD, versUrl)).resolves.toHaveLength(4);
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([OUD, NIEUW]);
+    expect(versUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('gooit als ook de verse URL faalt, of als er geen verse URL komt', async () => {
+    fetchMock.mockResolvedValue(new Response('expired', { status: 400 }));
+    await expect(haalBundelBytes(OUD, async () => NIEUW)).rejects.toThrow('400');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+
+    fetchMock.mockClear();
+    await expect(haalBundelBytes(OUD, async () => null)).rejects.toThrow('400');
+    expect(fetchMock).toHaveBeenCalledTimes(1); // dezelfde/geen URL opnieuw proberen heeft geen zin
+  });
+
+  it('offline: de service worker beantwoordt de fetch uit zijn cache (query-loos pad) — geen herkansing nodig', async () => {
+    // De SW matcht /ritblaadjes/ ongeacht de (verlopen) token en geeft de
+    // gecachte PDF; vanuit de app is dat gewoon een geslaagde fetch. De
+    // metadata kwam dan uit de SW-fallback; een verse URL is er niet.
+    fetchMock.mockImplementation(async (url) => (url.includes('/ritblaadjes/') ? pdf() : Promise.reject(new TypeError('Failed to fetch'))));
+    const versUrl = vi.fn(async () => { throw new TypeError('Failed to fetch'); });
+    await expect(haalBundelBytes(OUD, versUrl)).resolves.toHaveLength(4);
+    expect(versUrl).not.toHaveBeenCalled();
+  });
+
+  it('gooit de netwerkfout door als er ook geen gecachte PDF is (koud offline)', async () => {
+    fetchMock.mockRejectedValue(new TypeError('Failed to fetch'));
+    await expect(haalBundelBytes(OUD)).rejects.toThrow('Failed to fetch');
   });
 });

@@ -6,7 +6,9 @@
 // - Ritblaadje-metadata (/api/ritblaadje): stale-while-revalidate — toon
 //   meteen de gecachte versie, ververs op de achtergrond. Veilig want het
 //   ritblaadje is één gedeelde resource (id "current"), geen per-gebruiker
-//   data.
+//   data. Vraagt de app om een verse kopie (cache: 'no-store'), dan
+//   network-first met de cache als offline-fallback: de signed URL in de
+//   metadata verloopt na een uur, en de in-app viewer wil hem vers.
 // - Ritblaadje-PDF (ondertekende storage-URL met /ritblaadjes/ in pad):
 //   cache-first met achtergrond-revalidate, zodat de PDF offline blijft
 //   werken in de iframe + download. Cache-key = URL zónder query: signed
@@ -55,6 +57,16 @@
 // SW-update; het terugkerende "14 releases zonder bump"-gat kan niet meer.
 // (In `vite dev` blijft de placeholder staan — daar is geen SW-cache-zorg.)
 const CACHE_NAME = 'vhb-portaal-__VHB_BUILD_ID__';
+// Lazy chunks die óók zonder eerste online-gebruik in de cache horen: de
+// pdfjs-viewer + worker voor "Ritblad van vandaag". Ze staan niet in
+// index.html (precacheShell ziet ze niet) en krijgen per build een nieuwe
+// hash, dus na een deploy werkte het ritblad offline pas na één online
+// opening (controle-ronde 05-09, bevinding 15). vite.config.ts stempelt de
+// komma-gescheiden asset-paden uit de build-output; in `vite dev` blijft de
+// placeholder staan → lege lijst. xlsx blijft bewust buiten de lijst: alleen
+// beheer-import/-export, achter een bureau mét netwerk — geen offline-behoefte.
+const PRECACHE_EXTRA_RAW = '__VHB_PRECACHE_EXTRA__';
+const PRECACHE_EXTRA = PRECACHE_EXTRA_RAW.startsWith('__') ? [] : PRECACHE_EXTRA_RAW.split(',').filter(Boolean);
 // Trage netwerken: na zoveel ms navigatie-fetch de gecachte shell tonen.
 const NAV_TIMEOUT_MS = 3000;
 const ME_API = '/api/me';
@@ -92,6 +104,19 @@ async function precacheShell() {
         .then((r) => (r.ok ? cache.put(pad, r) : null))
         .catch(() => null),
     ),
+  );
+  // De pdf-chunks (±1,7 MB) zijn onveranderlijk per hash: staat dezelfde
+  // bestandsnaam al in een oudere cache (pdfjs zelf wijzigde niet), dan
+  // kopiëren we die i.p.v. hem op een 4G-verbinding opnieuw te downloaden.
+  await Promise.all(
+    PRECACHE_EXTRA.filter((pad) => !assets.includes(pad)).map(async (pad) => {
+      try {
+        const bestaand = await caches.match(pad);
+        if (bestaand) return cache.put(pad, bestaand);
+        const r = await fetch(new Request(pad, { cache: 'reload' }));
+        if (r.ok) await cache.put(pad, r);
+      } catch (_) { /* best-effort: eerste online opening cachet hem alsnog */ }
+    }),
   );
 }
 
@@ -193,18 +218,22 @@ self.addEventListener('fetch', (event) => {
   // === Ritblaadje-metadata — stale-while-revalidate ===
   // Keyed op de volledige URL (incl. query), dus per gebruiker/dag apart.
   // Blijft bewust SWR: metadata die zelden wijzigt en waar een generatie
-  // vertraging niemand schaadt.
+  // vertraging niemand schaadt. Uitzondering: vraagt de app om een verse
+  // kopie (cache: 'no-store' of 'reload' — de in-app viewer, die de signed
+  // URL meteen zelf fetcht), dan network-first; de gecachte versie dient
+  // dan alleen als offline-fallback (de PDF zelf komt dan óók uit de cache,
+  // onder het query-loze pad, dus de verlopen token deert niet).
   if (url.pathname === RITBLAADJE_API) {
+    const wilVers = req.cache === 'no-store' || req.cache === 'reload';
     event.respondWith(
       caches.open(CACHE_NAME).then((cache) =>
         cache.match(req).then((cached) => {
-          const network = fetch(req)
-            .then((res) => {
-              if (res && res.ok) cache.put(req, res.clone());
-              return res;
-            })
-            .catch(() => cached);
-          return cached || network;
+          const network = fetch(req).then((res) => {
+            if (res && res.ok) cache.put(req, res.clone());
+            return res;
+          });
+          if (wilVers) return network.catch(() => cached || Response.error());
+          return cached || network.catch(() => cached || Response.error());
         }),
       ),
     );
