@@ -52,19 +52,9 @@ export function conflictIds(day: AvailabilityDay): string[] {
 }
 
 // --- Datum-helpers (lokale tijd, ISO yyyy-mm-dd) ---
-
-export const isoDate = (d: Date): string => {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-};
-
-export const addDays = (d: Date, n: number): Date => {
-  const out = new Date(d);
-  out.setDate(out.getDate() + n);
-  return out;
-};
+// Wonen sinds 05-09 in datum.ts (één bron); hier her-geëxporteerd voor de
+// vele bestaande importeurs.
+export { isoDate, addDays } from './datum';
 
 /**
  * Diensten die nog op naam staan van een chauffeur die die dag goedgekeurd

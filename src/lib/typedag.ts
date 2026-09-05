@@ -17,6 +17,8 @@
  * paasvakantie schuiven met Pasen mee).
  */
 
+import { addDays, isoDate } from './datum';
+
 type Typedag = 'schooldag' | 'vakantiedag' | 'zaterdag' | 'zon-feestdag';
 
 /** Gauss-computus: paaszondag voor een gegeven jaar (westerse kalender). */
@@ -35,21 +37,20 @@ const paaszondag = (jaar: number): Date => {
   const m = Math.floor((a + 11 * h + 22 * l) / 451);
   const maand = Math.floor((h + l - 7 * m + 114) / 31); // 3 = maart, 4 = april
   const dag = ((h + l - 7 * m + 114) % 31) + 1;
-  return new Date(Date.UTC(jaar, maand - 1, dag));
+  // Lokale middernacht, zodat isoDate/addDays (lokale kalender, DST-veilig)
+  // er rechtstreeks op kunnen rekenen.
+  return new Date(jaar, maand - 1, dag);
 };
-
-const isoUTC = (d: Date): string => d.toISOString().slice(0, 10);
-const plusDagen = (d: Date, n: number): Date => new Date(d.getTime() + n * 86400000);
 
 /** Wettelijke Belgische feestdagen van een jaar, als iso → naam. */
 export const feestdagenVanJaar = (jaar: number): Record<string, string> => {
   const pasen = paaszondag(jaar);
   return {
     [`${jaar}-01-01`]: 'Nieuwjaar',
-    [isoUTC(plusDagen(pasen, 1))]: 'Paasmaandag',
+    [isoDate(addDays(pasen, 1))]: 'Paasmaandag',
     [`${jaar}-05-01`]: 'Dag van de Arbeid',
-    [isoUTC(plusDagen(pasen, 39))]: 'O.L.H. Hemelvaart',
-    [isoUTC(plusDagen(pasen, 50))]: 'Pinkstermaandag',
+    [isoDate(addDays(pasen, 39))]: 'O.L.H. Hemelvaart',
+    [isoDate(addDays(pasen, 50))]: 'Pinkstermaandag',
     [`${jaar}-07-21`]: 'Nationale feestdag',
     [`${jaar}-08-15`]: 'O.L.V. Hemelvaart',
     [`${jaar}-11-01`]: 'Allerheiligen',
