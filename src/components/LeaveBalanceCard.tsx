@@ -32,7 +32,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
           <span className={microLabelClass}>Betaald verlof</span>
           <span className={cn('text-xs font-bold', overBudget ? 'text-red-700' : 'text-slate-600')}>
             <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.betaaldVrij}</span>
-            <span className="text-slate-400"> / {budget} vrij</span>
+            <span className="text-slate-500"> / {budget} vrij</span>
           </span>
         </div>
         <div
@@ -72,7 +72,7 @@ export function LeaveBalanceCard({ balance, year, compact = false }: { balance: 
         <span className={microLabelClass}>Klein verlet</span>
         <span className="text-xs font-bold text-slate-600">
           <span className={cn('font-bold tabular-nums', compact ? 'text-base' : 'text-lg')}>{balance.kleinVerletDagen}</span>
-          <span className="text-slate-400"> {balance.kleinVerletDagen === 1 ? 'dag' : 'dagen'}</span>
+          <span className="text-slate-500"> {balance.kleinVerletDagen === 1 ? 'dag' : 'dagen'}</span>
         </span>
       </div>
     </Card>

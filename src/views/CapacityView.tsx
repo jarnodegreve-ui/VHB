@@ -1017,7 +1017,7 @@ export function CapacityView({ currentUser }: { currentUser: User }) {
               <Chip tone="red" mono={false} className="ring-1 ring-hairline">4102</Chip>
               <span className="font-medium text-slate-600">Geruild of overgezet</span>
             </div>
-            <span className="font-medium text-slate-400">Leeg = niets gepland</span>
+            <span className="font-medium text-slate-500">Leeg = niets gepland</span>
           </Card>
         </>
       )}

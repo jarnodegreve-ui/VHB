@@ -113,7 +113,7 @@ export function ServicesView({ services }: { services: Service[] }) {
           <Zijvak
             titel="Overzicht"
             voet={(
-              <Button variant="secondary" size="sm" onClick={downloadCSV} icon={<Download size={14} className="text-oker-500" />}>
+              <Button variant="secondary" size="sm" onClick={downloadCSV} icon={<Download size={14} />}>
                 CSV downloaden
               </Button>
             )}

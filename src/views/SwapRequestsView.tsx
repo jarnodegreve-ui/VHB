@@ -701,7 +701,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                             <Avatar naam={requester?.name ?? 'Onbekend'} size="sm" className="mr-0.5" />
                             <span className="font-bold tracking-tight text-slate-800">
                               {requester?.name}
-                              {swap.targetDriverId && <span className="font-medium text-slate-400"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
+                              {swap.targetDriverId && <span className="font-medium text-slate-500"> → {users.find(u => u.id === swap.targetDriverId)?.name || 'onbekend'}</span>}
                             </span>
                             <ChevronRight size={14} className="shrink-0 text-slate-300 transition-colors group-hover:text-slate-600" />
                           </button>
@@ -1160,7 +1160,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                 <MicroLabel className="text-slate-500">{isTakeoverSwap(reviewSwap) ? 'Overname' : 'Ruil'}</MicroLabel>
                 <p className="mt-1.5 text-sm font-semibold text-slate-800">
                   {requester?.name ?? 'Onbekend'}
-                  <span className="mx-1.5 font-medium text-slate-400">→</span>
+                  <span className="mx-1.5 font-medium text-slate-500">→</span>
                   {target?.name ?? 'open verzoek'}
                 </p>
                 {isTakeoverSwap(reviewSwap) ? (

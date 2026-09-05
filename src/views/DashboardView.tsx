@@ -6,7 +6,7 @@ import { getDaypartGreeting } from '../lib/interactive';
 import { cn, openPdfInNewTab } from '../lib/ui';
 import { formatDateHuman, formatDayLong, formatShortDay, formatShortDayPadded, serviceNumberOf } from '../lib/format';
 import { isoDate } from '../lib/availability';
-import { hasShiftEnded, isShiftActiveAt } from '../lib/shiftTime';
+import { formatDuration, hasShiftEnded, isShiftActiveAt, parseHHMM, shiftWindowMinutes } from '../lib/shiftTime';
 import { verlofBalans } from '../lib/leaveBalance';
 import { Skeleton, SkeletonRow, SkeletonTile } from '../components/Skeleton';
 import { SlideOver } from '../components/SlideOver';
@@ -96,35 +96,24 @@ export function DashboardView({ notes = [],
     done: hasShiftEnded(p, now),
     active: isShiftActiveAt(p, now),
   }));
-  const toMin = (t: string) => {
-    const [h, m] = t.split(':').map(Number);
-    return (h ?? 0) * 60 + (m ?? 0);
-  };
-  // Dienstbalk-delen in minuten (eind ≤ start = nachtdienst, +24u).
-  const balkDelen = todayParts.map((p) => {
-    const start = toMin(p.startTime);
-    let end = toMin(p.endTime);
-    if (end <= start) end += 1440;
-    return { start, end, loopnr: p.loopnr };
+  // Dienstbalk-delen in minuten (eind ≤ start = nachtdienst, +24u) — zelfde
+  // venster-regel als Mijn dag (shiftWindowMinutes); een deel met vuile tijden
+  // valt weg uit de balk.
+  const balkDelen = todayParts.flatMap((p) => {
+    const venster = shiftWindowMinutes(p);
+    return venster ? [{ ...venster, loopnr: p.loopnr }] : [];
   });
   const nowMin = now.getHours() * 60 + now.getMinutes() + (nachtdienstLoopt ? 1440 : 0);
   const nowLabel = now.toLocaleTimeString('nl-BE', { hour: '2-digit', minute: '2-digit' });
-  const fmtDuur = (minuten: number) => {
-    const u = Math.floor(minuten / 60);
-    const m = minuten % 60;
-    if (u === 0) return `${m}min`;
-    if (m === 0) return `${u}u`;
-    return `${u}u ${String(m).padStart(2, '0')}min`;
-  };
   // Statusregel van de Vandaag-tegel: hoelang nog (bezig), wanneer het begint, of klaar.
   const activeBlok = balkDelen.find((d) => nowMin >= d.start && nowMin < d.end);
   const volgendBlok = balkDelen.find((d) => d.start > nowMin);
   const todayStatus = todayParts.length === 0
     ? 'geen dienst gepland'
     : activeBlok
-      ? `nog ${fmtDuur(activeBlok.end - nowMin)}`
+      ? `nog ${formatDuration(activeBlok.end - nowMin)}`
       : volgendBlok
-        ? `start over ${fmtDuur(volgendBlok.start - nowMin)}`
+        ? `start over ${formatDuration(volgendBlok.start - nowMin)}`
         : 'dienst gereden';
   // Dienstnummers van vandaag, gededupliceerd (meestal één dienst).
   const todayServices = [...new Set(todayParts.map((p) => String(p.line || '').trim()).filter(Boolean))];
@@ -133,8 +122,8 @@ export function DashboardView({ notes = [],
   const nextShift = myShifts
     .map((s) => {
       const [year, month, day] = s.date.split('-').map(Number);
-      const [hours, minutes] = s.startTime.split(':').map(Number);
-      return { ...s, startDateTime: new Date(year, month - 1, day, hours, minutes) };
+      const startMin = parseHHMM(s.startTime) ?? 0;
+      return { ...s, startDateTime: new Date(year, month - 1, day, 0, startMin) };
     })
     // Ná vandaag: de delen van vandaag staan al in de Vandaag-tegel, dus
     // "volgende dienst" is de eerstvolgende andere dag (zoals op Mijn dag).
@@ -160,8 +149,8 @@ export function DashboardView({ notes = [],
   const upcomingShifts = myShifts
     .map((s) => {
       const [year, month, day] = s.date.split('-').map(Number);
-      const [hours, minutes] = s.startTime.split(':').map(Number);
-      return { ...s, startDateTime: new Date(year, month - 1, day, hours, minutes) };
+      const startMin = parseHHMM(s.startTime) ?? 0;
+      return { ...s, startDateTime: new Date(year, month - 1, day, 0, startMin) };
     })
     .filter((s) => s.startDateTime > now)
     .sort((a, b) => a.startDateTime.getTime() - b.startDateTime.getTime())
@@ -374,14 +363,17 @@ export function DashboardView({ notes = [],
             </div>
           ) : (
             <div className="space-y-1.5">
-              {upcomingShifts.map((shift) => (
+              {/* Alleen de eerstvolgende dienst krijgt goud; de rest blijft
+                  neutraal — hooguit twee gouden accenten per scherm (naam in de
+                  groet + Vandaag-tegel), controle 05-09 nr. 20. */}
+              {upcomingShifts.map((shift, i) => (
                 <Fragment key={shift.id}>
                   <OpsRow
-                    tone="oker"
+                    tone={i === 0 ? 'oker' : 'slate'}
                     icon={<Calendar size={16} />}
                     primary={formatShortDayPadded(shift.date)}
                     secondary={`${shift.startTime}–${shift.endTime}${shift.loopnr ? ` · loop ${shift.loopnr}` : ''}`}
-                    trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone="oker" />}
+                    trailing={<ServiceChip serviceNumber={serviceNumberOf(shift)} tone={i === 0 ? 'oker' : 'slate'} />}
                     onClick={() => onNavigate?.('rooster')}
                   />
                 </Fragment>

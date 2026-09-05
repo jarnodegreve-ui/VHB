@@ -82,6 +82,44 @@ function titleAlsEnigeUitleg(bron) {
   return treffers;
 }
 
+/**
+ * (c2) Tekst-elementen (p/span/div/td/…) met `text-slate-400` in hun className
+ * — ook wanneer dat blok over meerdere regels loopt — waarvan de inhoud
+ * echte leestekst is: letters of cijfers in literale tekst of in een
+ * string-literal binnen `{…}`. Inhoud met alleen symbolen ("—", "→", "·"),
+ * alleen `{expressie}` zonder string, of alleen kind-elementen (icoon) telt
+ * als decoratie/placeholder en wordt overgeslagen.
+ */
+function slate400Leestekst(bron) {
+  const treffers = [];
+  const TEKST_TAGS = /^(?:p|span|div|td|th|li|a|label|h[1-6]|small|strong|em|b|dt|dd|legend|summary|figcaption)$/;
+  const tagRe = /<([A-Za-z][\w.]*)\b([^<>]*?(?:\{[^{}]*\}[^<>]*?)*?)(\/?)>/g;
+  for (const m of bron.matchAll(tagRe)) {
+    const [heel, naam, attrs, zelfSluitend] = m;
+    if (zelfSluitend || !TEKST_TAGS.test(naam)) continue;
+    // Niet: placeholder:/hover:/group-hover:-varianten, en `!text-slate-400`
+    // (bewuste override op een donker vlak).
+    if (!/(?<![:\w!-])text-slate-400\b/.test(attrs)) continue;
+    const rest = bron.slice(m.index + heel.length);
+    const paar = new RegExp(`<${naam}\\b[^<>]*?(?<!\/)>|</${naam}>`, 'g');
+    let diepte = 1; let einde = -1;
+    for (const t of rest.matchAll(paar)) {
+      diepte += t[0].startsWith('</') ? -1 : 1;
+      if (diepte === 0) { einde = t.index; break; }
+    }
+    if (einde < 0) continue;
+    const inhoud = rest.slice(0, einde).replace(/\{\/\*[\s\S]*?\*\/\}/g, '');
+    // Literale tekst = alles buiten tags en buiten {…}; uit de expressies
+    // tellen alleen string-literals mee ('dag', "onbekend").
+    const strings = [...inhoud.matchAll(/\{[^{}]*\}/g)].flatMap((e) => [...e[0].matchAll(/(['"`])((?:(?!\1)[^\\]|\\.)*)\1/g)].map((q) => q[2]));
+    const literaal = inhoud.replace(/\{[^{}]*\}/g, ' ').replace(/<[^<>]*>/g, ' ');
+    const tekst = `${literaal} ${strings.join(' ')}`;
+    if (!/[\p{L}\p{N}]/u.test(tekst)) continue;
+    treffers.push({ index: m.index, tag: `<${naam}>` });
+  }
+  return treffers;
+}
+
 function loop(dir) {
   for (const naam of fs.readdirSync(dir)) {
     const p = path.join(dir, naam);
@@ -108,13 +146,27 @@ function loop(dir) {
     // (c) text-slate-400 op leestekst (te licht, ±2,5:1): alleen voor iconen,
     // placeholders en decoratie. Per regel: kleur + tekstmaat, geen icoon.
     if (!PRINT.test(p)) {
+      const gemeld = new Set();
       bron.split('\n').forEach((l, i) => {
         const zonderPlaceholder = l.replace(/placeholder:text-slate-400/g, '');
         if (!/\btext-slate-400\b/.test(zonderPlaceholder)) return;
         if (!/\btext-(?:2xs|xs|sm|base)\b/.test(l)) return;
         if (/\bsize=\{/.test(l) && !/<(?:p|span|div|td|th|li|a|button|label|h[1-6])\b/.test(l)) return;
+        gemeld.add(i + 1);
         waarschuw(rel, i + 1, 'text-slate-400 op leestekst (gebruik text-slate-500; slate-400 alleen voor iconen/placeholder)');
       });
+      // (c2) Zelfde regel per tekst-element, over regelgrenzen heen: een
+      // multi-line className-blok, of een <span className="text-slate-400">
+      // dat de tekstmaat van zijn ouder erft (controle 05-09 nr. 21). Dezelfde
+      // uitzonderingen: placeholder:/hover:-varianten, een `!`-override
+      // (bewust, login), en inhoud zonder letters/cijfers (icoon, streepje,
+      // pijl, `{icoon}`) — dat is decoratie, geen leestekst.
+      for (const t of slate400Leestekst(bron)) {
+        const lijn = bron.slice(0, t.index).split('\n').length;
+        if (gemeld.has(lijn)) continue;
+        gemeld.add(lijn);
+        waarschuw(rel, lijn, `text-slate-400 op leestekst in ${t.tag} (gebruik text-slate-500; slate-400 alleen voor iconen/placeholder)`);
+      }
     }
     // Rauwe <button> buiten de primitieven: toegestaan mét een `rauw:`-toelichting op de regel(s) erboven.
     if (!PRIMITIVES.test(p)) {

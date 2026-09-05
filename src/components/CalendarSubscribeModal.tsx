@@ -132,7 +132,7 @@ export function CalendarSubscribeModal({
           {/* Eenmalig downloaden */}
           <div className="mt-5 pt-4 border-t border-slate-100">
             <MicroLabel>Of eenmalig</MicroLabel>
-            <Button variant="secondary" className="mt-2" icon={<Download size={16} className="text-oker-500" />} onClick={() => { onDownload(); onClose(); }}>
+            <Button variant="secondary" className="mt-2" icon={<Download size={16} />} onClick={() => { onDownload(); onClose(); }}>
               Download .ics-bestand
             </Button>
             <p className="mt-1.5 text-xs font-medium text-slate-500">Een momentopname — updatet niet automatisch.</p>
