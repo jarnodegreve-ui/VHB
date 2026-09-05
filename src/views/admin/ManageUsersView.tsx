@@ -705,7 +705,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                           : <Badge tone="slate" stil>Uit</Badge>}
                       </Td>
                     )}
-                    {voorkeur.zichtbaar('laatst') && <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-400">Nooit</span>}</Td>}
+                    {voorkeur.zichtbaar('laatst') && <Td className="tabular-nums whitespace-nowrap">{u.lastLogin ? formatDateTimeHuman(u.lastLogin) : <span className="text-slate-500">Nooit</span>}</Td>}
                     {voorkeur.zichtbaar('sessies') && <Td><Badge tone={(u.activeSessions || 0) > 0 ? 'emerald' : 'slate'} stil className="tabular-nums">{u.activeSessions || 0}</Badge></Td>}
                     <Td className="text-right">
                       <div className="relative flex items-center justify-end gap-1.5">
