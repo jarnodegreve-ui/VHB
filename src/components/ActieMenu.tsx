@@ -1,13 +1,17 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 import { IconButton } from './primitives';
 
 /**
  * Actiemenu ("…"): secundaire acties van een scherm of rij in één menu, zodat
  * de paginakop één primaire knop houdt (afwerkingsronde 04-09, nr. 5 en 7).
  * Zelfde popover-taal als het kolommenmenu in Table.tsx: opaak bg-paper,
- * haarlijn, klik buiten / Escape sluit, pijltjes navigeren.
+ * haarlijn, klik buiten / Escape sluit, pijltjes navigeren. Escape en het
+ * kiezen van een item zetten de focus terug op de trigger; de terugknop op
+ * mobiel sluit het menu i.p.v. het scherm (useHistoryDismiss, zoals de
+ * DatePicker). Items zijn ≥44 px op touch (controle-ronde 05-09, nr. 17).
  */
 export type ActieMenuItem = {
   label: string;
@@ -40,6 +44,20 @@ export function ActieMenu({
   const wortel = useRef<HTMLDivElement>(null);
   const lijst = useRef<HTMLDivElement>(null);
   const id = useId();
+
+  // De trigger is de eerste knop in de wortel die niet in de lijst zit — ook
+  // bij een eigen `trigger`, waar we geen ref op kunnen zetten.
+  const triggerElement = () =>
+    Array.from(wortel.current?.querySelectorAll<HTMLElement>('button, [tabindex]') ?? []).find((el) => !lijst.current?.contains(el));
+
+  const sluit = useCallback((focusTerug = false) => {
+    setOpen(false);
+    if (focusTerug) triggerElement()?.focus();
+  }, []);
+
+  // Terugknop/swipe-back op mobiel sluit het menu i.p.v. het scherm.
+  useHistoryDismiss(open, () => setOpen(false));
+
   // Viewport-bewust: `align` is de voorkeur; valt het menu buiten beeld
   // (bv. "…" links in een mobiele kop), dan klapt het naar de andere kant.
   const [kant, setKant] = useState<'left' | 'right'>(align);
@@ -62,7 +80,11 @@ export function ActieMenu({
     };
     const toets = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        setOpen(false);
+        // Alleen het menu sluit: een omliggende Modal/SlideOver luistert op
+        // window en zou anders in dezelfde toets mee dichtklappen.
+        e.stopPropagation();
+        e.preventDefault();
+        sluit(true);
         return;
       }
       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
@@ -83,7 +105,7 @@ export function ActieMenu({
       document.removeEventListener('touchstart', buiten);
       document.removeEventListener('keydown', toets);
     };
-  }, [open]);
+  }, [open, sluit]);
 
   const toggle = () => setOpen((o) => !o);
   const triggerEl = trigger ? (
@@ -116,11 +138,16 @@ export function ActieMenu({
                 role="menuitem"
                 disabled={item.disabled}
                 onClick={() => {
-                  setOpen(false);
+                  // Focus eerst terug op de trigger: opent de actie een modal,
+                  // dan onthoudt die de trigger als terugkeerpunt (niet het
+                  // menu-item, dat meteen verdwijnt).
+                  sluit(true);
                   item.onClick();
                 }}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors',
+                  // min-h-11 = 44 px aanraakminimum; op een fijne pointer (muis)
+                  // compacter, zoals Button (primitives.tsx).
+                  'flex w-full min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-sm font-medium transition-colors sm:pointer-fine:min-h-9',
                   'disabled:cursor-not-allowed disabled:opacity-50',
                   item.gevaarlijk ? 'text-red-700 hover:bg-red-500/10' : 'text-slate-700 hover:bg-slate-100/70',
                 )}
