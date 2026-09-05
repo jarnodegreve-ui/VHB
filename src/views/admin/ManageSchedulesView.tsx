@@ -578,7 +578,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                                 {' → '}
                                 <span className="font-semibold">{s.targetName || '?'}</span>
                                 {s.swapType === 'overname' && (
-                                  <span className="text-slate-400"> · overname (geen tegenprestatie)</span>
+                                  <span className="text-slate-500"> · overname (geen tegenprestatie)</span>
                                 )}
                               </span>
                             </li>
@@ -711,7 +711,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {entry.unmatchedDrivers.length} chauffeur
                     </Badge>
                     {canAdminOverride && entry.snapshotPath && (
-                      <Button variant="secondary" size="sm" icon={<RotateCcw size={14} className="text-oker-500" />} disabled={isRestoring} onClick={() => setRestoreEntry(entry)}>
+                      <Button variant="secondary" size="sm" icon={<RotateCcw size={14} />} disabled={isRestoring} onClick={() => setRestoreEntry(entry)}>
                         Zet terug
                       </Button>
                     )}
@@ -826,7 +826,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                   <div key={date}>
                     <MicroLabel className="mb-1.5">
                       {new Date(`${date}T00:00:00`).toLocaleDateString('nl-BE', { weekday: 'long', day: '2-digit', month: 'long' })}
-                      <span className="ml-2 text-slate-400">· {daysShifts.length}</span>
+                      <span className="ml-2 text-slate-500">· {daysShifts.length}</span>
                     </MicroLabel>
                     <div className="rounded-2xl border border-slate-200/70 divide-y divide-slate-100">
                       {daysShifts.map((s) => (
@@ -1049,19 +1049,19 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 <div className="grid gap-4 md:grid-cols-4">
                   <Card tone="muted" padding="sm">
                     <MicroLabel>Dagen</MicroLabel>
-                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.importedDays}</p>
+                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.importedDays}</p>
                   </Card>
                   <Card tone="muted" padding="sm">
                     <MicroLabel>Chauffeurs</MicroLabel>
-                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.detectedDrivers}</p>
+                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.detectedDrivers}</p>
                   </Card>
                   <Card tone="muted" padding="sm">
                     <MicroLabel>Diensten</MicroLabel>
-                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.generatedShifts}</p>
+                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.generatedShifts}</p>
                   </Card>
                   <Card tone="muted" padding="sm">
                     <MicroLabel>Afwezigheden</MicroLabel>
-                    <p className="mt-2 text-2xl font-mono font-semibold tabular-nums tracking-[-0.01em] text-slate-900">{matrixPreview.skippedAbsences}</p>
+                    <p className="mt-2 text-stat text-slate-900">{matrixPreview.skippedAbsences}</p>
                   </Card>
                 </div>
 
