@@ -13,20 +13,45 @@ const BUILD_INFO = {
   builtAt: new Date().toISOString(),
 };
 
-// Stempelt de service-worker-cache-naam bij elke build: public/sw.js bevat
-// de placeholder __VHB_BUILD_ID__; hier wordt hij vervangen door de
-// commit-SHA (Vercel) of de buildtijd (lokaal). Zo wijzigt sw.js bij élke
-// deploy en pikt een standalone PWA de nieuwe versie vanzelf op — de
-// handmatige CACHE_NAME-bump werd structureel vergeten (14 releases lang).
-const stampServiceWorker = () => ({
-  name: 'vhb-stamp-sw',
-  closeBundle() {
-    const swPath = path.resolve(__dirname, 'dist/sw.js');
-    if (!fs.existsSync(swPath)) return;
-    const id = BUILD_INFO.sha || BUILD_INFO.builtAt.replace(/[-:TZ.]/g, '').slice(0, 12);
-    fs.writeFileSync(swPath, fs.readFileSync(swPath, 'utf-8').replaceAll('__VHB_BUILD_ID__', id));
-  },
-});
+// Lazy chunks die de service worker bij installatie mee moet precachen:
+// pdfjs-viewer (pdf-*.js) + worker (pdf.worker.min-*.js — de `?worker`-
+// wrapper-chunk én het echte worker-script, dat als asset geëmitteerd wordt).
+// Zelfde patroon als scripts/check-bundle-size.mjs, maar op de build-output
+// i.p.v. de map, en zonder de .map-bestanden. xlsx blijft bewust buiten de
+// precache (zie public/sw.js).
+const PRECACHE_EXTRA_PATROON = /^assets\/pdf(\.worker)?[.-][^/]*\.js$/;
+
+// Stempelt bij elke build twee placeholders in public/sw.js:
+//  - __VHB_BUILD_ID__ → commit-SHA (Vercel) of buildtijd (lokaal), als
+//    cache-naam. Zo wijzigt sw.js bij élke deploy en pikt een standalone PWA
+//    de nieuwe versie vanzelf op — de handmatige CACHE_NAME-bump werd
+//    structureel vergeten (14 releases lang).
+//  - __VHB_PRECACHE_EXTRA__ → komma-gescheiden paden van de lazy pdf-chunks,
+//    zodat "Ritblad van vandaag" ook offline werkt zonder eerst één keer
+//    online geopend te zijn (bevinding 15, controle-ronde 05-09).
+const stampServiceWorker = () => {
+  let precacheExtra: string[] = [];
+  return {
+    name: 'vhb-stamp-sw',
+    generateBundle(_opties: unknown, bundle: Record<string, unknown>) {
+      precacheExtra = Object.keys(bundle)
+        .filter((naam) => PRECACHE_EXTRA_PATROON.test(naam))
+        .sort()
+        .map((naam) => `/${naam}`);
+    },
+    closeBundle() {
+      const swPath = path.resolve(__dirname, 'dist/sw.js');
+      if (!fs.existsSync(swPath)) return;
+      const id = BUILD_INFO.sha || BUILD_INFO.builtAt.replace(/[-:TZ.]/g, '').slice(0, 12);
+      fs.writeFileSync(
+        swPath,
+        fs.readFileSync(swPath, 'utf-8')
+          .replaceAll('__VHB_BUILD_ID__', id)
+          .replaceAll('__VHB_PRECACHE_EXTRA__', precacheExtra.join(',')),
+      );
+    },
+  };
+};
 
 export default defineConfig(() => {
   return {
