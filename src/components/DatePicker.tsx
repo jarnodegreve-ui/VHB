@@ -338,18 +338,24 @@ export const DatePicker = forwardRef<HTMLButtonElement, DatePickerProps>(functio
       </button>
       {/* Verborgen spiegel voor formulieren: draagt `name` mee in FormData en
           laat `required` door de native validatie lopen (opent de kiezer i.p.v.
-          een ballon op een onzichtbaar veld). */}
+          een ballon op een onzichtbaar veld). Bewust níet `readOnly`: read-only
+          velden zijn per HTML-spec uitgesloten van constraint validation, dus
+          `required` deed niets en een leeg verplicht veld submitte gewoon
+          (controle-ronde 05-09, nr. 10). Onbedienbaar via tabIndex/aria-hidden/
+          pointer-events; de waarde komt uitsluitend via de kiezer. */}
       {(name || required) && (
         <input
           type="text"
           tabIndex={-1}
           aria-hidden="true"
-          readOnly
           name={name}
           required={required}
           disabled={disabled}
           value={value}
-          className="sr-only"
+          autoComplete="off"
+          className="sr-only pointer-events-none"
+          onChange={() => { /* waarde komt via de kiezer */ }}
+          onKeyDown={(e) => e.preventDefault()}
           onInvalid={(e) => { e.preventDefault(); triggerRef.current?.focus(); openKiezer(); }}
           onFocus={() => triggerRef.current?.focus()}
         />
