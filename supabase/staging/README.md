@@ -27,7 +27,7 @@ Alles in de **SQL Editor** van het staging-project plakken en draaien, één
 bestand per keer, in exact deze volgorde. Elk bestand is idempotent; loopt
 iets fout, dan rolt dat bestand terug en kan je het na de fix opnieuw
 draaien. De volgorde is op 06-09-2026 volledig doorlopen op een verse
-`supabase/postgres:17`-instantie (alle 54 bestanden + seed 2×).
+`supabase/postgres:17`-instantie (alle 53 bestanden + seed 2×, plus de schema-probes uit `api/schemaProbes.ts`).
 
 **Basis (setup en de ongedateerde migraties, in afhankelijkheidsvolgorde)**
 
