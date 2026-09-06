@@ -6,7 +6,7 @@ import type { Werkvoorraad } from '../lib/werkvoorraad';
 import { EXPIRY_SOORT_LABELS, formatShortDay } from '../lib/format';
 import { useDropdown } from './useDropdown';
 import { IconButton } from './primitives';
-import { DUR } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 
 /**
  * Werkvoorraad-knop in de topbar (idee Jarno 31-08): één plek die vanuit élk
@@ -188,9 +188,8 @@ export function WerkvoorraadMenu({
           role="menu"
           aria-label="Open taken"
           initial={{ opacity: 0, scale: 0.97, y: -4 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.97, y: -4 }}
-          transition={{ duration: DUR.fast, ease: 'easeOut' }}
+          animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
+          exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: DUR.fast, ease: EASE } }}
           style={{ transformOrigin: 'top right' }}
           /* Mobiel: fixed met inset-x zodat het paneel de viewport volgt —
              absoluut verankerd aan de knop viel het links buiten beeld

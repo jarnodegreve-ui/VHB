@@ -2,13 +2,25 @@ import React, { useState } from 'react';
 import { motion } from 'motion/react';
 import { ChevronRight } from 'lucide-react';
 import { cn } from '../lib/ui';
+import { overgangActief } from '../lib/overgang';
 import { MicroLabel, microLabelClass } from './primitives';
 
 
-export function NavItem({ icon, label, active, onClick, badge }: { icon: React.ReactNode, label: string, active: boolean, onClick: () => void, badge?: number }) {
+export function NavItem({ icon, label, active, onClick, onPrefetch, badge }: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+  /** Stil voorladen van de bijhorende view zodra de muis of vinger het item
+   *  raakt (prefetchView) — de klik erna voelt instant. */
+  onPrefetch?: () => void;
+  badge?: number;
+}) {
   return (
     <button
       onClick={onClick}
+      onPointerEnter={onPrefetch}
+      onTouchStart={onPrefetch}
       aria-current={active ? 'page' : undefined}
       className={cn(
         "group relative flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-150",
@@ -21,7 +33,11 @@ export function NavItem({ icon, label, active, onClick, badge }: { icon: React.R
       {active && (
         <motion.span
           layoutId="nav-active-rail"
-          transition={{ type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+          // Tijdens een route-overgang schuift de rail via de view transition
+          // (eigen naam); de veer zou dan onder de snapshot lopen en na
+          // afloop verspringen — zie src/lib/overgang.ts.
+          transition={overgangActief() ? { duration: 0 } : { type: 'spring', stiffness: 420, damping: 34, mass: 0.7 }}
+          style={{ viewTransitionName: 'nav-actief-rail' }}
           className="absolute left-0 top-1/2 -translate-y-1/2 h-5 w-[3px] rounded-full bg-oker-500"
         />
       )}

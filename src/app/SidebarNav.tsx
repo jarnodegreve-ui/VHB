@@ -2,6 +2,7 @@ import type { Role, View } from '../types';
 import { MicroLabel } from '../components/primitives';
 import { NavItem, NavSection, NavSubLabel } from '../components/Navigation';
 import { sidebarRoutes, type RouteDef } from './routes';
+import { prefetchView } from './viewLoaders';
 
 /**
  * Zijbalk-navigatie, volledig uit de routetabel (routes.tsx): secties,
@@ -32,6 +33,7 @@ export function SidebarNav({
         active={currentView === r.view}
         badge={badges[r.view] || undefined}
         onClick={() => onNavigate(r.view)}
+        onPrefetch={() => prefetchView(r.view)}
       />
     );
   };

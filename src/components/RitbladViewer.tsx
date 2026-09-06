@@ -11,6 +11,7 @@ import { openHuidigRitblad } from '../lib/ritblad';
 import { isRitbladOpgeslagen } from '../lib/ritbladCache';
 import { useOnline } from '../lib/useOnline';
 import { haalRitbladMeta, laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
+import { Fout, GeenBereik, NietGevonden } from './illustraties';
 
 /**
  * In-app ritbladviewer per dienst: toont uit de gedeelde ritblad-bundel
@@ -261,6 +262,7 @@ export function RitbladViewer({
           <div className="w-full">
             <EmptyState
               variant="fout"
+              illustratie={typeof navigator !== 'undefined' && navigator.onLine === false ? <GeenBereik /> : <Fout />}
               title="Ritblad kon niet geladen worden"
               message="Controleer je verbinding, of open de volledige bundel zoals voorheen."
               action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => openHuidigRitblad()}>Volledige bundel openen</Button>}
@@ -273,6 +275,7 @@ export function RitbladViewer({
         <div className="flex flex-1 items-center p-4">
           <div className="w-full">
             <EmptyState
+              illustratie={<NietGevonden />}
               title={`Geen apart blad gevonden voor ${nummerTekst}`}
               message="De bundel bevat geen pagina waarop dit dienstnummer herkenbaar staat — of het bestand is een scan zonder tekst. De volledige bundel werkt wel."
               action={<Button variant="primary" icon={<FileText size={16} />} onClick={() => openPdfInNewTab(staat.url)}>Volledige bundel openen</Button>}

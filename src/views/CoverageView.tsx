@@ -394,7 +394,7 @@ export function CoverageView() {
         ? prev.map((dt) => (zelfdeNaam(dt.name) ? { ...dt, services: codes } : dt))
         : [...prev, { name: v.dayType, services: codes }];
     });
-    notify(`Lijst voor "${v.dayType}" klaargezet (${codes.length} diensten) — controleer en klik op Opslaan.`, 'success');
+    notify(`Lijst voor “${v.dayType}” klaargezet (${codes.length} diensten) — controleer en klik op Opslaan.`, 'success');
   };
 
   const handleSave = async () => {
@@ -911,7 +911,7 @@ export function CoverageView() {
       ) : !anyExpectations ? (
         <EmptyState
           title="Nog geen verwachte diensten ingesteld"
-          message='Klik op "Instellen" en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
+          message='Klik op “Instellen” en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
         />
       ) : visibleDays.length === 0 ? (
         <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />

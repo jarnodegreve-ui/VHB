@@ -4,7 +4,7 @@ import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { cn } from '../lib/ui';
 import type { User } from '../types';
 import { useDropdown } from './useDropdown';
-import { DUR } from '../lib/motion';
+import { DUR, EASE, EASE_SPRING } from '../lib/motion';
 
 /**
  * Avatar-menu in de topbar (mock Jarno 30-08): goud cirkeltje met initialen
@@ -91,9 +91,8 @@ export function UserMenu({
           role="menu"
           aria-label="Account"
           initial={{ opacity: 0, scale: 0.97, y: -4 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.97, y: -4 }}
-          transition={{ duration: DUR.fast, ease: 'easeOut' }}
+          animate={{ opacity: 1, scale: 1, y: 0, transition: { duration: DUR.fast, ease: EASE_SPRING } }}
+          exit={{ opacity: 0, scale: 0.97, y: -4, transition: { duration: DUR.fast, ease: EASE } }}
           style={{ transformOrigin: 'top right' }}
           className="absolute right-0 top-full mt-2 w-64 rounded-2xl bg-paper ring-1 ring-hairline shadow-xl p-1.5 z-50"
         >

@@ -13,6 +13,7 @@ import { ActieMenu } from '../../components/ActieMenu';
 import { Zijvak, ZijvakRij, ZijvakTekst } from '../../components/Zijvak';
 import { DUR } from '../../lib/motion';
 import { notify } from '../../lib/ui';
+import { AllesGedaan, Fout, GeenBereik, LegeLijst, NietGevonden } from '../../components/illustraties';
 
 /**
  * Designsysteem — alle bouwstenen, tokens en toestanden op één pagina
@@ -71,6 +72,15 @@ function Rij({ label, children }: { label: string; children: ReactNode }) {
 const INHOUD = [
   ['kleur', 'Kleur'], ['typografie', 'Typografie'], ['maat', 'Maat en beweging'], ['knoppen', 'Knoppen'], ['labels', 'Badges en chips'],
   ['kaarten', 'Kaarten'], ['zijvak', 'Zijvak en menu'], ['personen', 'Personen'], ['formulier', 'Formulier'], ['tabel', 'Tabel'], ['feedback', 'Feedback'],
+  ['illustraties', 'Illustraties'],
+] as const;
+
+const ILLUSTRATIES = [
+  { naam: 'LegeLijst', gebruik: 'lege lijst, inbox, nog geen …', El: LegeLijst },
+  { naam: 'AllesGedaan', gebruik: 'niets te doen, alles afgehandeld', El: AllesGedaan },
+  { naam: 'GeenBereik', gebruik: 'offline, geen verbinding', El: GeenBereik },
+  { naam: 'Fout', gebruik: 'iets ging mis, scherm kon niet laden', El: Fout },
+  { naam: 'NietGevonden', gebruik: 'geen zoekresultaat, 404', El: NietGevonden },
 ] as const;
 
 export function DesignsysteemView() {
@@ -320,7 +330,7 @@ export function DesignsysteemView() {
               <tr key={r.id}>
                 <Td><Checkbox checked={gekozen.has(r.id)} onChange={(v) => setGekozen((s) => { const n = new Set(s); if (v) n.add(r.id); else n.delete(r.id); return n; })} label={`Selecteer ${r.naam}`} /></Td>
                 <Td>{r.naam}</Td>
-                <Td className="text-right"><Chip>{r.dienst}</Chip></Td>
+                <Td num><Chip>{r.dienst}</Chip></Td>
                 <Td><StatusBadge status={r.status} /></Td>
               </tr>
             ))}
@@ -350,6 +360,28 @@ export function DesignsysteemView() {
           <Button variant="secondary" size="sm" onClick={() => notify('Dat is niet gelukt. Probeer opnieuw.', 'error')}>Fout</Button>
           <Button variant="secondary" size="sm" onClick={() => notify('Even geduld, de import loopt.', 'info')}>Info</Button>
           <Button variant="secondary" size="sm" onClick={() => notify('Omleiding ‘Lijn 12 · Werken Stationsstraat’ verwijderd.', 'info', { action: { label: 'Ongedaan maken', run: () => notify('Omleiding hersteld.', 'success') }, opties: { ongedaan: true } })}>Ongedaan maken</Button>
+        </Rij>
+      </Sectie>
+
+      <Sectie id="illustraties" titel="Illustraties" uitleg="Vijf lijntekeningen op het lus-motief van het logo (src/components/illustraties): lijnen in currentColor, één gouden segment als merkcitaat. Voor de belangrijkste lege staten via EmptyState illustratie={…}; op mobiel 96 px hoog, op desktop 128.">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          {ILLUSTRATIES.map(({ naam, gebruik, El }) => (
+            <Card key={naam} tone="muted" padding="sm" className="flex flex-col items-center gap-2 text-center">
+              <span className="text-slate-400"><El className="h-24 lg:h-32" /></span>
+              <p className="text-card-title">{naam}</p>
+              <p className="text-xs text-slate-500">{gebruik}</p>
+            </Card>
+          ))}
+        </div>
+        <Rij label="In EmptyState">
+          <div className="w-full">
+            <EmptyState illustratie={<AllesGedaan />} variant="klaar" title="Niets te doen vandaag" message="Alle aanvragen zijn afgehandeld — een rustpunt." />
+          </div>
+        </Rij>
+        <Rij label="Compact">
+          <div className="w-full">
+            <EmptyState compact illustratie={<NietGevonden />} title="Geen resultaten" message="Pas je zoekopdracht aan." />
+          </div>
         </Rij>
       </Sectie>
     </PageShell>

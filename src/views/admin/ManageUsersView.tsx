@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { AanwezigOpScherm } from '../../components/AanwezigOpScherm';
 import { WACHTWOORD_MIN } from '../../lib/wachtwoord';
 import { valideer } from '../../lib/valideer';
 import { nieuweUserFormulierSchema, userFormulierSchema } from '../../../shared/schemas/user';
@@ -22,6 +23,7 @@ import { UserHistoryModal } from './UserHistoryModal';
 import { UserDocumentsModal } from './UserDocumentsModal';
 import { BroadcastDocumentModal } from './BroadcastDocumentModal';
 import { EntityHistoryModal } from '../../components/EntityHistoryModal';
+import { LegeLijst, NietGevonden } from '../../components/illustraties';
 
 type UserDraft = User & { password?: string };
 
@@ -547,6 +549,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
         description="Medewerkers, rollen en accountacties."
         actions={(
           <>
+            <AanwezigOpScherm />
             {/* Eén gouden knop in de kop; Excel-import en het document-
                 rondsturen zitten in het "…"-menu ernaast — zo stapelen er op
                 mobiel geen drie knoppen (afwerking 04-09, nr. 5 en 7). */}
@@ -802,12 +805,14 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           <div className="p-6">
             {filterActief ? (
               <EmptyState
+                illustratie={<NietGevonden />}
                 title={userSearch.trim() ? `Geen resultaten voor “${userSearch.trim()}”` : 'Geen gebruikers voor deze filter'}
                 message="Pas de zoekterm of de filters aan."
                 action={<Button variant="secondary" onClick={wisFilters}>Zoekterm en filters wissen</Button>}
               />
             ) : (
               <EmptyState
+                illustratie={<LegeLijst />}
                 title="Nog geen gebruikers"
                 message="Voeg een medewerker toe of importeer een Excel-bestand."
                 action={<Button variant="secondary" icon={<Plus size={16} />} onClick={() => setShowAddModal(true)}>Gebruiker toevoegen</Button>}

@@ -7,6 +7,7 @@ import { cn } from '../lib/ui';
 import { supabase } from '../lib/supabase';
 import { applyThemeColorMeta, LOGIN_MELDING_KEY } from '../lib/ui';
 import { BrandLogo } from '../components/BrandLogo';
+import { OmgevingLabel } from '../components/OmgevingLabel';
 import { DUR, EASE } from '../lib/motion';
 
 
@@ -185,6 +186,8 @@ export function LoginView({
           {/* Compact op elke maat (2× verkleind op vraag van Jarno 30-08):
               144 px mobiel / 176 px desktop. */}
           <BrandLogo tone="donker" naamregelAfstand={70} className="w-36 sm:w-44 h-auto select-none" />
+          {/* Staging-label (alleen met VITE_OMGEVING=staging): testers zien meteen dat dit productie niet is. */}
+          <OmgevingLabel className="mt-4" />
         </motion.div>
 
         {/* Stille form-card: één zachte entrance-fade, verder niets. */}

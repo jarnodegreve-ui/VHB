@@ -23,7 +23,7 @@ import {
   Smartphone,
   Zap,
 } from 'lucide-react';
-import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf } from '../lib/format';
+import { EXPIRY_SOORT_LABELS, formatDayLong, formatShortDay, serviceNumberOf, metEenheid } from '../lib/format';
 import type { ActivityLogEntry, LeaveRequest, Shift, User, View } from '../types';
 import { useAppDataContext } from '../app/AppDataContext';
 import { getDaypartGreeting } from '../lib/interactive';
@@ -625,7 +625,7 @@ export function PlannerDashboardWidgets({
         sub={laadplein.outOfOrder > 0
           ? `${laadplein.outOfOrder} in storing`
           : laadplein.totalPowerKw > 0
-            ? `${laadplein.totalPowerKw} kW op dit moment`
+            ? `${metEenheid(laadplein.totalPowerKw, 'kW')} op dit moment`
             : 'laadpunten bezet'}
         onClick={isAdmin ? () => onNavigate('ocpi-monitoring') : undefined}
       />

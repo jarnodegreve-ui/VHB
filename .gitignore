@@ -13,3 +13,6 @@ coverage/
 /playwright-report/
 /blob-report/
 /playwright/.cache/
+
+# Lighthouse CI (rapporten, lokaal en in CI als artifact)
+/.lighthouseci/

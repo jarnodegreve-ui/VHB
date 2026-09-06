@@ -2,8 +2,10 @@ import type { ReactNode } from 'react';
 import { motion } from 'motion/react';
 import { Menu } from 'lucide-react';
 import { routeVan } from '../app/routes';
+import { prefetchView } from '../app/viewLoaders';
 import type { Role, View } from '../types';
 import { cn } from '../lib/ui';
+import { overgangActief } from '../lib/overgang';
 
 type NavSlot = {
   view: View;
@@ -106,6 +108,9 @@ export function BottomNav({
             <li key={slot.view} className="flex-auto min-w-0">
               <button
                 onClick={() => onSelect(slot.view)}
+                // Voorladen bij aanraken/hover: de chunk is binnen vóór de tik landt.
+                onPointerEnter={() => prefetchView(slot.view)}
+                onTouchStart={() => prefetchView(slot.view)}
                 aria-current={isActive ? 'page' : undefined}
                 aria-label={slot.label}
                 className={cn(
@@ -119,7 +124,10 @@ export function BottomNav({
                 {isActive && (
                   <motion.span
                     layoutId="bottom-nav-active"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                    // Zelfde afspraak als de sidebar-rail: tijdens een route-
+                    // overgang schuift de tab via de view transition.
+                    transition={overgangActief() ? { duration: 0 } : { type: 'spring', stiffness: 380, damping: 30, mass: 0.7 }}
+                    style={{ viewTransitionName: 'dock-actief' }}
                     className="absolute inset-0 rounded-lg bg-oker-100"
                   />
                 )}

@@ -33,7 +33,10 @@ import { applyThemeColorMeta, cn, LOGIN_MELDING_KEY, onthoudEffectiefThema, verg
 import { apiFetch, vernieuwSessie } from './lib/api';
 import { lazyWithRetry } from './lib/lazyRetry';
 import { VIEW_LOADERS, prefetchView } from './app/viewLoaders';
-import { reportHandledError, setMonitoringUser } from './lib/monitoring';
+import { addBreadcrumb, reportHandledError, setMonitoringUser } from './lib/monitoring';
+import { useAanwezigheid } from './lib/presence';
+import { meldLive } from './lib/liveSignaal';
+import { AanwezigheidStack } from './components/AanwezigheidStack';
 import { fetchPushPublicKey, getExistingSubscription, isPushSupported, subscribeToPush, unsubscribeFromPush } from './lib/push';
 import { deriveDeviceName, deviceHeaders } from './lib/device';
 import { usePullToRefresh } from './lib/usePullToRefresh';
@@ -44,6 +47,7 @@ import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
+import { OmgevingLabel } from './components/OmgevingLabel';
 import { UserMenu } from './components/UserMenu';
 import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
 import { MeldingenBel } from './components/MeldingenBel';
@@ -112,6 +116,9 @@ export default function App() {
   // Waar we zijn = de URL (src/app/router.ts): terugknop, deeplinks en
   // refresh-op-dezelfde-plek werken daardoor vanzelf.
   const { view: currentView, navigeer } = useRoute();
+  // Aanwezigheid (staf ziet elkaar in de topbar) + broodkruimel per schermwissel (foutrapporten).
+  useAanwezigheid(!!session && !!currentUser, { userId: String(currentUser?.id ?? ''), naam: currentUser?.name ?? '', rol: currentUser?.role, view: currentView });
+  useEffect(() => { addBreadcrumb('navigatie', currentView); }, [currentView]);
   const [isLoading, setIsLoading] = useState(false);
   // Netwerkstatus voor de topbar-pill (was hardcoded "Online").
   const [isOnline, setIsOnline] = useState(() => (typeof navigator === 'undefined' ? true : navigator.onLine));
@@ -271,15 +278,18 @@ export default function App() {
   // Activeert pas wanneer gebruiker is ingelogd (session present) — anders
   // gebeurt er niets.
   useRealtimeSync(!!session && !!currentUser, {
-    refetchLeave: () => fetchLeave(),
-    refetchSwaps: () => fetchSwaps(),
-    refetchDiversions: () => fetchDiversions(undefined, { silent: true }),
-    refetchUpdates: () => fetchUpdates(),
+    // meldLive: stille "… bijgewerkt"-toast (max één per 10 s per collectie,
+    // niet na een eigen schrijfactie) — src/lib/liveSignaal.ts.
+    refetchLeave: () => { meldLive('verlof'); return fetchLeave(); },
+    refetchSwaps: () => { meldLive('ruil'); return fetchSwaps(); },
+    refetchDiversions: () => { meldLive('omleidingen'); return fetchDiversions(undefined, { silent: true }); },
+    refetchUpdates: () => { meldLive('updates'); return fetchUpdates(); },
     refetchNotes: () => fetchMyNotes(),
     // Meldingencentrum: eigen rijen → bel + badge live.
     refetchMeldingen: () => fetchMeldingen(),
     meldingenUserId: currentUser ? String(currentUser.id) : undefined,
     refetchPlanning: () => {
+      meldLive('planning');
       // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
       const planningFilter = currentUser?.role === 'chauffeur'
         ? { driverId: String(currentUser.id) }
@@ -590,6 +600,11 @@ export default function App() {
 
         setSession(data.session);
         if (data.session) {
+          // Chunk van de landingsview alvast ophalen, parallel met /api/me —
+          // anders begon die download pas ná het profiel (prestatiebudget
+          // 09-2026). Niet op het loginscherm: daar zou hij het kritieke pad
+          // beconcurreren. currentView = de view bij het opstarten (lege deps).
+          prefetchView(currentView);
           await initializeAuthenticatedApp(data.session.access_token, data.session.user.id);
         }
       } catch (error) {
@@ -797,7 +812,7 @@ export default function App() {
       throw new Error('Ongeldig profiel-antwoord van de server.');
     }
     setCurrentUser(data);
-    setMonitoringUser(String(data.id));
+    setMonitoringUser(String(data.id), data.role);
     forceSignOutRef.current = false; // geldige sessie → her-arm de auto-logout
     return data as User;
   };
@@ -946,9 +961,12 @@ export default function App() {
     const w = window as any;
     const cb = () => {
       // De schermen die hierna het vaakst geopend worden (per rol), stil.
+      // Dashboard/Mijn dag/Rooster voorop (prestatiebudget 09-2026): wie op
+      // een deeplink landt heeft het dashboard nog niet, en Mijn dag is de
+      // eerste tik van elke chauffeur. Al geladen = gratis (module-cache).
       const volgende: View[] = currentUser.role === 'chauffeur'
-        ? ['rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
-        : ['verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
+        ? ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'omleidingen', 'ruil-verzoeken']
+        : ['dashboard', 'mijn-dag', 'rooster', 'verlof', 'dekking', 'bezetting', 'verlof-kalender', 'ruil-verzoeken'];
       volgende.forEach((v) => prefetchView(v));
     };
     const idleId = typeof w.requestIdleCallback === 'function'
@@ -1328,6 +1346,8 @@ export default function App() {
                       dubbele titeling boven de vouw is weg. */}
                   {/* Titel verschijnt pas zodra de paginakop (h1) weggescrold
                       is — anders stond dezelfde naam twee keer boven de vouw. */}
+                  {/* Staging-label (alleen met VITE_OMGEVING=staging) — nooit een preview voor productie aanzien. */}
+                  <OmgevingLabel className="shrink-0" />
                   <h2
                     aria-hidden={!isScrolled || undefined}
                     className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-200', isScrolled ? 'opacity-100' : 'opacity-0')}
@@ -1374,6 +1394,7 @@ export default function App() {
                       ongelezen-teller; de werkvoorraad-knop hiernaast blijft
                       de open taken van staf tellen. */}
                   <MeldingenBel onNavigate={setCurrentView} actief={resolvedCurrentView === 'meldingen'} />
+                  {isPlanner && <AanwezigheidStack />}
                   <UserMenu
                     user={currentUser}
                     initials={userInitials}
