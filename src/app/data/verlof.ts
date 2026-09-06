@@ -37,7 +37,7 @@ export function useVerlofData(ctx: DataCtx & { refreshCoverageGaps: () => Promis
         headers: ctx.revisionHeader('leave'),
         body: JSON.stringify(newLeave),
       });
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 428) {
         showToast('De verlofaanvragen zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchLeave();
         return false;

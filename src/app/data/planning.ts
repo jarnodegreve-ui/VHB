@@ -62,7 +62,7 @@ export function usePlanningData(ctx: DataCtx) {
         headers: ctx.revisionHeader('planning'),
         body: JSON.stringify(newShifts),
       });
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 428) {
         showToast('De planning is intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchPlanning();
         return false;
@@ -120,7 +120,7 @@ export function usePlanningData(ctx: DataCtx) {
         headers: opts?.bulkReplace ? { 'x-bulk-replace': '1' } : ctx.revisionHeader('services'),
         body: JSON.stringify(newServices),
       });
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 428) {
         showToast('Het dienstoverzicht is intussen door iemand anders gewijzigd — ik ververs het, probeer je wijziging opnieuw.', 'info');
         await fetchServices();
         return false;
@@ -191,7 +191,7 @@ export function usePlanningData(ctx: DataCtx) {
         headers: ctx.revisionHeader('planningCodes'),
         body: JSON.stringify(newCodes),
       });
-      if (response.status === 409) {
+      if (response.status === 409 || response.status === 428) {
         showToast('De planningscodes zijn intussen door iemand anders gewijzigd — ik ververs ze, probeer je wijziging opnieuw.', 'info');
         await fetchPlanningCodes();
         return false;
