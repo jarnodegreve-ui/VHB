@@ -57,6 +57,14 @@
 // SW-update; het terugkerende "14 releases zonder bump"-gat kan niet meer.
 // (In `vite dev` blijft de placeholder staan — daar is geen SW-cache-zorg.)
 const CACHE_NAME = 'vhb-portaal-__VHB_BUILD_ID__';
+// Ritbladen + Mijn-dag-API: build-ONAFHANKELIJKE cache 'vhb-ritbladen'
+// (next-level 2, 06-09). Overleeft deploys — de app-cache hierboven wordt bij
+// elke activate vervangen, en dan was het ritblad offline weg tot de eerste
+// online opening. Pure helpers (sleutel, snoei, welke API-paden) staan in
+// sw-ritbladen.js zodat vitest ze kan testen. Uitgaan van het bestand: geen
+// try/catch — zonder dit script is de SW kapot en dat moet zichtbaar zijn.
+importScripts('/sw-ritbladen.js');
+const RITBLADEN_CACHE = self.VHB_RITBLADEN.RITBLADEN_CACHE;
 // Lazy chunks die óók zonder eerste online-gebruik in de cache horen: de
 // pdfjs-viewer + worker voor "Ritblad van vandaag". Ze staan niet in
 // index.html (precacheShell ziet ze niet) en krijgen per build een nieuwe
@@ -130,7 +138,8 @@ self.addEventListener('activate', (event) => {
       const heeftShell = Boolean(await cache.match('/'));
       if (heeftShell) {
         const keys = await caches.keys();
-        await Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)));
+        // De ritbladen-cache is build-onafhankelijk en blijft staan.
+        await Promise.all(keys.filter((k) => k !== CACHE_NAME && k !== RITBLADEN_CACHE).map((k) => caches.delete(k)));
       }
       await self.clients.claim();
     })(),
@@ -148,7 +157,38 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+  // Mijn dag / dashboard melden de ritblad-bundel van vandaag/morgen aan:
+  // alvast ophalen en bewaren (query-loze sleutel), daarna snoeien tot
+  // MAX_RITBLADEN. Best-effort: offline = gewoon niets doen.
+  if (event.data && event.data.type === 'cache-ritbladen') {
+    const bewaar = cacheRitbladen(self.VHB_RITBLADEN.ritbladUrlsUitBericht(event.data)).catch(() => {});
+    if (typeof event.waitUntil === 'function') event.waitUntil(bewaar);
+  }
 });
+
+async function cacheRitbladen(items) {
+  if (items.length === 0) return;
+  const cache = await caches.open(RITBLADEN_CACHE);
+  for (const { url, key } of items) {
+    try {
+      // Al aanwezig = niets doen (dezelfde bundel wisselt niet van inhoud
+      // onder hetzelfde pad; een nieuwe upload krijgt een nieuw pad).
+      if (await cache.match(key)) continue;
+      const res = await fetch(url, { mode: 'cors' });
+      if (res && res.ok) await cache.put(key, res);
+    } catch (_) { /* geen bereik of cors-fout — de fetch-handler cachet hem bij de eerste weergave */ }
+  }
+  await snoeiRitbladen(cache);
+}
+
+// Hooguit MAX_RITBLADEN PDF's; de API-antwoorden in dezelfde cache tellen
+// niet mee (sw-ritbladen.js). Cache.keys() geeft de invoegvolgorde, dus de
+// oudste bundels gaan eerst.
+async function snoeiRitbladen(cache) {
+  const keys = await cache.keys();
+  const weg = self.VHB_RITBLADEN.snoeiSleutels(keys.map((r) => r.url));
+  await Promise.all(weg.map((k) => cache.delete(k)));
+}
 
 self.addEventListener('fetch', (event) => {
   const req = event.request;
@@ -161,17 +201,22 @@ self.addEventListener('fetch', (event) => {
   // Opaque responses zijn prima om in een iframe te tonen of te downloaden.
   if (url.pathname.includes(RITBLAADJE_PDF_MARKER)) {
     // Query strippen: het signed-URL-token wisselt per fetch, maar het is
-    // hetzelfde PDF-bestand — één cache-entry per pad.
-    const cacheKey = url.origin + url.pathname;
+    // hetzelfde PDF-bestand — één cache-entry per pad. In de build-
+    // onafhankelijke ritbladen-cache (overleeft deploys), gesnoeid tot
+    // MAX_RITBLADEN zodra er een nieuwe bundel bijkomt.
+    const cacheKey = self.VHB_RITBLADEN.ritbladCacheKey(url.href);
     event.respondWith(
-      caches.open(CACHE_NAME).then((cache) =>
+      caches.open(RITBLADEN_CACHE).then((cache) =>
         cache.match(cacheKey).then((cached) => {
           // Met cors-mode i.p.v. de opaque originele request: zo is de status
           // leesbaar en cachen we alléén een echte 200. Een verlopen signed
           // URL (Supabase-400) is óók opaque en overschreef anders de goede PDF.
           const network = fetch(url.href, { mode: 'cors' })
             .then((res) => {
-              if (res && res.ok) cache.put(cacheKey, res.clone());
+              if (res && res.ok) {
+                const copy = res.clone();
+                cache.put(cacheKey, copy).then(() => snoeiRitbladen(cache)).catch(() => {});
+              }
               return res;
             })
             // Cors-fout (geen CORS-headers/redirect): gecachte PDF, of anders de
@@ -200,17 +245,26 @@ self.addEventListener('fetch', (event) => {
   // goedgekeurde ruil de planning echt doorvoert, is dat niet cosmetisch meer:
   // de chauffeur zag dan nog zijn oude dienst. Een dienst is te belangrijk om
   // uit een oude cache te serveren.
-  if (url.pathname === ME_API || url.pathname === PLANNING_API) {
+  //
+  // Sinds 06-09 (Mijn dag offline) geldt hetzelfde voor /api/diversions en
+  // /api/planning-notes, en staan deze antwoorden in de build-onafhankelijke
+  // ritbladen-cache: na een deploy bleef de koude offline start anders
+  // hangen tot de eerste online opening (de app-cache wordt dan vervangen).
+  // De sleutel is de volledige URL (incl. ?driverId=&month= / ?from=&to=),
+  // dus per gebruiker/venster apart; uitloggen wist alle caches (ui.ts).
+  // (De ritblad-metadata staat óók in die lijst, maar blijft SWR — zie
+  // het blok hieronder.)
+  if (url.pathname !== RITBLAADJE_API && (url.pathname === ME_API || url.pathname === PLANNING_API || self.VHB_RITBLADEN.isMijnDagApi(url.pathname))) {
     event.respondWith(
       fetch(req)
         .then((res) => {
           if (res && res.ok) {
             const copy = res.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(req, copy));
+            caches.open(RITBLADEN_CACHE).then((cache) => cache.put(req, copy));
           }
           return res;
         })
-        .catch(() => caches.open(CACHE_NAME).then((cache) => cache.match(req)).then((c) => c || Response.error())),
+        .catch(() => caches.open(RITBLADEN_CACHE).then((cache) => cache.match(req)).then((c) => c || Response.error())),
     );
     return;
   }
@@ -226,7 +280,7 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname === RITBLAADJE_API) {
     const wilVers = req.cache === 'no-store' || req.cache === 'reload';
     event.respondWith(
-      caches.open(CACHE_NAME).then((cache) =>
+      caches.open(RITBLADEN_CACHE).then((cache) =>
         cache.match(req).then((cached) => {
           const network = fetch(req).then((res) => {
             if (res && res.ok) cache.put(req, res.clone());

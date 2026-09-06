@@ -12,7 +12,8 @@ import { defineConfig, devices } from '@playwright/test';
  * Eenmalig lokaal: `npx playwright install chromium`.
  */
 
-const PORT = 4173;
+// E2E_PORT: parallelle sessies/worktrees kiezen elk een vrije poort (4173 blijft de standaard).
+const PORT = Number(process.env.E2E_PORT) > 0 ? Number(process.env.E2E_PORT) : 4173;
 
 /** Specs die alleen op het desktop-project horen (én a11y, dat op beide draait). */
 const DESKTOP_SPECS = /(desktop|a11y)\.spec\.ts$/;
@@ -70,7 +71,7 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
-      VITE_SUPABASE_URL: 'http://localhost:4173',
+      VITE_SUPABASE_URL: `http://localhost:${PORT}`,
       VITE_SUPABASE_ANON_KEY: 'e2e-dummy-anon-key',
     },
   },

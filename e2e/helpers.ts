@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Request } from '@playwright/test';
 import { ADMIN, CHAUFFEUR, USERS, seedPagina } from '../scripts/audit-fixtures.mjs';
 
 /**
@@ -10,7 +10,7 @@ import { ADMIN, CHAUFFEUR, USERS, seedPagina } from '../scripts/audit-fixtures.m
 export { ADMIN, CHAUFFEUR, USERS };
 
 export type Fixture = Record<string, unknown>;
-export type Extra = (pad: string, request: { method(): string }) => unknown;
+export type Extra = (pad: string, request: Request) => unknown;
 
 /** Sessie + api-mocks; `extra` overschrijft één of meer collecties. */
 export async function seed(page: Page, opties: { user: Fixture; view?: string; thema?: 'light' | 'dark'; extra?: Extra }) {

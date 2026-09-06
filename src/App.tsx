@@ -1394,7 +1394,9 @@ export default function App() {
           {/* Offline-banner: de topbar-pill is desktop-only (hidden lg:flex),
               dus op de iPhone — hét toestel — was een uitval onzichtbaar en
               keek je zonder het te weten naar verouderde data. */}
-          {!isOnline && (
+          {/* Mijn dag draagt zijn eigen stille offline-chip (06-09) —
+              daar geen kaart erbovenop. */}
+          {!isOnline && resolvedCurrentView !== 'mijn-dag' && (
             <div className="mx-auto w-full max-w-[1200px]">
               <Card tone="warning" padding="none" className="mb-4 flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-amber-800">
                 <WifiOff size={14} className="shrink-0" />

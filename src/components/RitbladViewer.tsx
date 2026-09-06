@@ -8,6 +8,8 @@ import { BrandSpinner } from './BrandSpinner';
 import { EmptyState } from './ui';
 import { openPdfInNewTab } from '../lib/ui';
 import { openHuidigRitblad } from '../lib/ritblad';
+import { isRitbladOpgeslagen } from '../lib/ritbladCache';
+import { useOnline } from '../lib/useOnline';
 import { haalRitbladMeta, laadRitbladDocument, zoekPaginasVoorDienstGecached } from '../lib/ritbladPaginas';
 
 /**
@@ -137,6 +139,11 @@ export function RitbladViewer({
   const nummerSleutel = nummers.join('/');
   const [staat, setStaat] = useState<Staat>({ soort: 'laden' });
   const [zoomIdx, setZoomIdx] = useState(0);
+  // Offline én de bundel staat in de ritbladen-cache → "Opgeslagen exemplaar"
+  // in de subregel (stil; geen banner). Online komt het blad óók uit de cache
+  // (cache-first met revalidate), maar dan is dat geen boodschap.
+  const online = useOnline();
+  const [opgeslagen, setOpgeslagen] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [scrollBreedte, setScrollBreedte] = useState(0);
 
@@ -170,6 +177,7 @@ export function RitbladViewer({
       // Cache-sleutel: het uploadtijdstip; zonder dat (oude metadata) het
       // query-loze pad, dat óók pas bij een nieuwe upload wijzigt.
       const versie = meta.uploadedAt || new URL(meta.url).pathname;
+      void isRitbladOpgeslagen(meta.url).then((ja) => { if (!signal.aborted) setOpgeslagen(ja); });
       const gevonden = new Set<number>();
       for (const n of nummers) {
         for (const p of await zoekPaginasVoorDienstGecached(doc, n, versie, signal)) gevonden.add(p);
@@ -210,11 +218,12 @@ export function RitbladViewer({
   const titel = nummers.length > 1 ? `Ritblad · diensten ${nummers.join(' / ')}` : `Ritblad · dienst ${nummers[0] ?? '--'}`;
   const nummerTekst = nummers.length > 1 ? `diensten ${nummers.join(' / ')}` : `dienst ${nummers[0] ?? '--'}`;
 
+  const opgeslagenLabel = !online && opgeslagen ? ' · opgeslagen exemplaar' : '';
   const subregel = (() => {
     switch (staat.soort) {
       case 'laden': return 'Ritblad zoeken…';
-      case 'klaar': return `${somPaginas(staat.paginas)} van ${staat.totaal}${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}`;
-      case 'niets': return `${staat.totaal} pagina's${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}`;
+      case 'klaar': return `${somPaginas(staat.paginas)} van ${staat.totaal}${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${opgeslagenLabel}`;
+      case 'niets': return `${staat.totaal} pagina's${staat.bundelDatum ? ` · bundel van ${staat.bundelDatum}` : ''}${opgeslagenLabel}`;
       default: return null;
     }
   })();
