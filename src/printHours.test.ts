@@ -6,7 +6,7 @@ describe('minutesBetween (maandprint)', () => {
   it('gewone dienst', () => {
     expect(minutesBetween('08:00', '16:30')).toBe(510);
   });
-  it('impliciete nachtdienst (eind ≤ start) telt +24u — was 0', () => {
+  it('impliciete nachtdienst (eind ≤ start) telt +24u, was 0', () => {
     expect(minutesBetween('22:00', '06:00')).toBe(480);
   });
   it('busvak-notatie blijft correct', () => {

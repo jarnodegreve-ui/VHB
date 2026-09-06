@@ -76,11 +76,11 @@ export function UserDocumentsModal({ user, onClose }: { user: User; onClose: () 
   // Op de gedeelde Modal met `boven` (was een eigen portal op z-[120]) —
   // zo krijgt hij ook ESC, focus-trap en scroll-lock.
   return (
-    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={`Documenten — ${user.name}`} boven>
+    <Modal open onClose={onClose} maxWidth="lg" ariaLabel={`Documenten, ${user.name}`} boven>
       <div className="flex max-h-[85dvh] flex-col overflow-hidden">
           <ModalHeader
             leading={<div className="w-10 h-10 rounded-2xl bg-oker-50 text-oker-700 flex items-center justify-center shrink-0"><FileText size={20} /></div>}
-            title={`Documenten — ${user.name}`}
+            title={`Documenten, ${user.name}`}
             description={`Alleen ${user.name.split(' ')[0]} ziet deze bestanden.`}
             onClose={onClose}
           />

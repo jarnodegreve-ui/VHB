@@ -104,7 +104,7 @@ export function useDataKern(basis: DataBasis): DataCtx {
   };
   const guardCollectionLoaded = (key: string, label: string): boolean => {
     if (loadedCollectionsRef.current.has(key)) return true;
-    showToast(`${label} is nog niet geladen — opslaan is geblokkeerd om dataverlies te voorkomen. Vernieuw de pagina en probeer het opnieuw.`, 'error');
+    showToast(`${label} is nog niet geladen, opslaan is geblokkeerd om dataverlies te voorkomen. Vernieuw de pagina en probeer het opnieuw.`, 'error');
     return false;
   };
   const clearLoadedCollections = () => {
@@ -168,7 +168,7 @@ export function useDataKern(basis: DataBasis): DataCtx {
     if (needsRevision && !rev) {
       // Geen revisie bekend (lijst nooit vers geladen sinds een bulk-save):
       // eerst verversen, dan opnieuw proberen — nooit blind overschrijven.
-      showToast(`${opts.label} is nog niet vers geladen — ik ververs de lijst, probeer het daarna opnieuw.`, 'info');
+      showToast(`${opts.label} is nog niet vers geladen, ik ververs de lijst, probeer het daarna opnieuw.`, 'info');
       await opts.refetch();
       return false;
     }
@@ -198,9 +198,9 @@ export function useDataKern(basis: DataBasis): DataCtx {
         // dan de keuze die de optimistische verwijdering had weggeschoven.
         showToast(
           response.status === 404
-            ? `${opts.label} is intussen door iemand anders verwijderd — ik ververs de lijst.`
+            ? `${opts.label} is intussen door iemand anders verwijderd, ik ververs de lijst.`
             : data?.conflict === 'record' || data?.conflict === 'revision'
-              ? `${opts.label} is intussen door iemand anders gewijzigd — ik ververs de lijst, probeer je wijziging opnieuw.`
+              ? `${opts.label} is intussen door iemand anders gewijzigd, ik ververs de lijst, probeer je wijziging opnieuw.`
               : (data?.details || data?.error || `${opts.label} kon niet opgeslagen worden.`),
           'info',
         );
@@ -250,7 +250,7 @@ export function useDataKern(basis: DataBasis): DataCtx {
         return true;
       }
       if (response.status === 409 || response.status === 404) {
-        showToast(data.error || 'Dit is intussen al behandeld door een collega — de lijst is ververst.', 'info');
+        showToast(data.error || 'Dit is intussen al behandeld door een collega, de lijst is ververst.', 'info');
         void refetch();
         return false;
       }

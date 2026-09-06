@@ -258,7 +258,7 @@ test('collega accepteert een aan hem gerichte ruil (PATCH met ifStatus-guard)', 
   expect(patched!.body).toMatchObject({ status: 'accepted', ifStatus: 'pending' });
 
   // Lokale update: de tussenstand "wacht op de planner" verschijnt.
-  await expect(page.getByText('Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).')).toBeVisible();
+  await expect(page.getByText('Je accepteerde deze ruil, de planner valideert nog (rij-/rusttijden).')).toBeVisible();
 
   expect(pageErrors, `page errors:\n${pageErrors.join('\n')}`).toEqual([]);
 });

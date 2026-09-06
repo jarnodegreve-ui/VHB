@@ -387,7 +387,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
             </Button>
           )}
           {isOwnCurrent(gekozen) && (
-            <p className="flex-1 text-xs text-slate-500">Dit is het toestel waarmee je nu bent aangemeld — blokkeren of schrappen kan niet.</p>
+            <p className="flex-1 text-xs text-slate-500">Dit is het toestel waarmee je nu bent aangemeld, blokkeren of schrappen kan niet.</p>
           )}
         </div>
       ) : undefined}
@@ -395,7 +395,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
       {gekozen && (
         <div className="space-y-5">
           <form onSubmit={(e) => { e.preventDefault(); void submitRename(gekozen); }}>
-            <Field label="Naam" hint="Bv. „iPhone van Jan” — zo herken je het toestel in de lijst.">
+            <Field label="Naam" hint="Bv. „iPhone van Jan”, zo herken je het toestel in de lijst.">
               {({ id }) => (
                 <div className="flex items-center gap-2">
                   <Input
@@ -443,8 +443,8 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         <CardHeader
           title="Toestel-goedkeuring"
           description={gateEnabled === false
-            ? 'Uit — elk toestel wordt bij aanmelden automatisch goedgekeurd en aan de lijst toegevoegd. Geblokkeerde toestellen blijven geblokkeerd.'
-            : 'Aan — elk nieuw toestel (behalve het eerste per chauffeur) wacht op jouw goedkeuring voordat het toegang krijgt.'}
+            ? 'Uit, elk toestel wordt bij aanmelden automatisch goedgekeurd en aan de lijst toegevoegd. Geblokkeerde toestellen blijven geblokkeerd.'
+            : 'Aan, elk nieuw toestel (behalve het eerste per chauffeur) wacht op jouw goedkeuring voordat het toegang krijgt.'}
           aside={(
             <Switch
               checked={gateEnabled !== false}
@@ -456,7 +456,7 @@ export function DevicesView({ users, currentUserId }: { users: User[]; currentUs
         />
         {gateEnabled === false && (
           <p className="mt-3 rounded-xl bg-amber-50 border border-amber-100 px-3.5 py-2.5 text-xs font-medium text-amber-800">
-            Tijdelijk bedoeld — bv. bij de uitrol naar alle chauffeurs. Zet de goedkeuring daarna weer aan; alles wat intussen aanmeldde staat dan al goedgekeurd in de lijst.
+            Tijdelijk bedoeld, bv. bij de uitrol naar alle chauffeurs. Zet de goedkeuring daarna weer aan; alles wat intussen aanmeldde staat dan al goedgekeurd in de lijst.
           </p>
         )}
       </Card>

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { isoWeekNumber, isoWeekOf, weekRangeLabel } from './week';
 
-describe('week — ISO-weeknummers', () => {
+describe('week, ISO-weeknummers', () => {
   it('week 1 bevat 4 januari', () => {
     expect(isoWeekNumber(new Date(2026, 0, 4))).toBe(1);
     expect(isoWeekNumber(new Date(2026, 0, 1))).toBe(1); // do 1 jan 2026 → week 1

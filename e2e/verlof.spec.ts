@@ -108,7 +108,7 @@ test('chauffeur vraagt verlof aan via de kalender-modal', async ({ page }) => {
 
   // De app bevestigt en de payload bevat één nieuwe pending-aanvraag van
   // deze chauffeur met exact de gekozen periode.
-  await expect(page.getByText('Aanvraag ingediend — de planner beoordeelt ze.')).toBeVisible();
+  await expect(page.getByText('Aanvraag ingediend, de planner beoordeelt ze.')).toBeVisible();
   expect(postedLeave, 'POST /api/leave is nooit verstuurd').not.toBeNull();
   const nieuwe = (postedLeave ?? []).filter((r) => r.status === 'pending' && r.userId === CHAUFFEUR.id);
   expect(nieuwe).toHaveLength(1);

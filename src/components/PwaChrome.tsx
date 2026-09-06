@@ -56,7 +56,7 @@ export function OfflineBanner() {
             {/* amber-400: 300 wordt in donker een transparante tint (omgekeerde schalen). */}
             <WifiOff size={16} className="text-amber-400 shrink-0" />
             <span className="text-xs font-bold tracking-tight">
-              Offline — je ziet mogelijk verouderde gegevens
+              Offline, je ziet mogelijk verouderde gegevens
             </span>
           </div>
         </motion.div>

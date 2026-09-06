@@ -130,7 +130,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const toestel = (await listAllDevices()).find((d) => d.userId === String(appUser.id) && toestelId(d.deviceToken) === id);
       if (!toestel) return res.status(404).json({ error: "Toestel niet gevonden." });
       if (toestel.deviceToken === ownToken && String(req.query["ook-dit"] ?? "") !== "1") {
-        return res.status(400).json({ error: "Dit is het toestel waarop je nu werkt — gebruik Uitloggen.", code: "huidig_toestel" });
+        return res.status(400).json({ error: "Dit is het toestel waarop je nu werkt, gebruik Uitloggen.", code: "huidig_toestel" });
       }
       if (toestel.status !== "revoked") {
         await setDeviceStatus(String(appUser.id), toestel.deviceToken, "revoked", String(appUser.id));
@@ -205,7 +205,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
             .map((u) => String(u.id));
           await sendPushToUsers(adminIds, {
             title: "Nieuw toestel wacht op goedkeuring",
-            body: `${appUser.name} — ${device.name}`,
+            body: `${appUser.name}, ${device.name}`,
             url: "/",
           });
         }
@@ -325,7 +325,7 @@ export const mountDeviceRoutes = (app: express.Express) => {
       const userDeviceCount = (await listAllDevices()).filter((d) => d.userId === userId).length;
       if (userDeviceCount <= 1) {
         return res.status(400).json({
-          error: "Je kunt het laatste toestel van een gebruiker niet schrappen — blokkeer het, of deactiveer het account.",
+          error: "Je kunt het laatste toestel van een gebruiker niet schrappen, blokkeer het, of deactiveer het account.",
           code: "last_device",
         });
       }

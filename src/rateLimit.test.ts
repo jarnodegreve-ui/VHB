@@ -41,7 +41,7 @@ describe('createRateLimiter', () => {
   });
 });
 
-describe('gedeelde store (Upstash) — fallback-gedrag', () => {
+describe('gedeelde store (Upstash), fallback-gedrag', () => {
   it('sharedCheck geeft null zonder configuratie, zodat de in-memory limiter blijft werken', async () => {
     const { sharedCheck, hasSharedStore } = await import('../api/rateLimit');
     // In de testomgeving staan de env-vars niet: nooit een remote call doen.

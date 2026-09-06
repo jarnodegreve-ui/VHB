@@ -163,7 +163,7 @@ export const beoordeelKandidaat = (invoer: {
   const grens = MIN_RUST_UREN * 60;
   const redenen: string[] = [];
   // Categorische reden eerst: sectie vóór de tijd- en reeksregels.
-  if (isSchoolvervoerSectie(invoer.sectie)) redenen.push("schoolvervoerchauffeur — springt niet in op een lijndienst");
+  if (isSchoolvervoerSectie(invoer.sectie)) redenen.push("schoolvervoerchauffeur, springt niet in op een lijndienst");
   if (rustVoor !== null && rustVoor < grens) redenen.push(`maar ${formatUren(rustVoor)} rust na de dienst van de dag ervoor`);
   if (rustNa !== null && rustNa < grens) redenen.push(`maar ${formatUren(rustNa)} rust vóór de dienst van de dag erna`);
   if (dagen > MAX_WERKDAGEN_NA_ELKAAR) redenen.push(`zou ${dagen} dagen na elkaar werken`);
@@ -333,7 +333,7 @@ export const adviesSamenvatting = (invoer: {
   kettingen: KettingVoorstel[];
 }): string => {
   if (invoer.kandidaten.length === 0) {
-    return `Niemand is vrij op deze dag — dienst ${invoer.code} is alleen op te lossen door te schuiven met de planning.`;
+    return `Niemand is vrij op deze dag, dienst ${invoer.code} is alleen op te lossen door te schuiven met de planning.`;
   }
   const passend = invoer.kandidaten.filter((k) => k.past);
   if (passend.length > 0) {
@@ -351,11 +351,11 @@ export const adviesSamenvatting = (invoer: {
       : invoer.kandidaten.length > 1
         ? " Bij de rest past dit niet zonder een regel te breken."
         : "";
-    return `Ik zou ${eerste.name} vragen — ${delen.join(", ")}.${staart}`;
+    return `Ik zou ${eerste.name} vragen, ${delen.join(", ")}.${staart}`;
   }
   if (invoer.kettingen.length > 0) {
     const k = invoer.kettingen[0];
-    return `Niemand is vrij én passend voor dienst ${invoer.code}. Wél mogelijk via een ruil: laat ${k.naarNaam} dienst ${k.viaCode} (${k.viaTijden}) overnemen van ${k.vanNaam} — dan kan ${k.vanNaam} dienst ${invoer.code} rijden.`;
+    return `Niemand is vrij én passend voor dienst ${invoer.code}. Wél mogelijk via een ruil: laat ${k.naarNaam} dienst ${k.viaCode} (${k.viaTijden}) overnemen van ${k.vanNaam}, dan kan ${k.vanNaam} dienst ${invoer.code} rijden.`;
   }
   const dichtstbij = invoer.kandidaten[0];
   return `Dit past bij niemand zonder een regel te breken, en ook een ruil in één stap lost het niet op. ${dichtstbij.name} komt het dichtst in de buurt (${dichtstbij.redenen.join(" en ")}).`;

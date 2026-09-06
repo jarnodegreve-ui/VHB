@@ -92,7 +92,7 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen', () => {
   });
 });
 
-describe('parsePlanningMatrixXlsxMetWaarschuwingen — kolommen ná "aantal"', () => {
+describe('parsePlanningMatrixXlsxMetWaarschuwingen, kolommen ná "aantal"', () => {
   it('waarschuwt voor een naamachtige kolom achter de aantal-kolom', async () => {
     const { parsePlanningMatrixXlsxMetWaarschuwingen } = await import('../api/helpers');
     const buffer = buildXlsx([
@@ -134,7 +134,7 @@ describe('parsePlanningMatrixXlsxMetWaarschuwingen — kolommen ná "aantal"', (
   });
 });
 
-describe('parsePlanningMatrixXlsxMetWaarschuwingen — golden file: echte praktijk-structuur', () => {
+describe('parsePlanningMatrixXlsxMetWaarschuwingen, golden file: echte praktijk-structuur', () => {
   // Structuurgetrouwe kopie van de echte VHB-praktijk-tab (geanonimiseerd):
   // 38 chauffeurskolommen, dan "aantal", dan het tellingen-blok dat elke
   // chauffeursnaam nóg drie keer als kopje herhaalt. Precies die herhaling

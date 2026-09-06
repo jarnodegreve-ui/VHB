@@ -9,8 +9,8 @@ import { CHAUFFEUR, seed } from './helpers';
 const nu = Date.now();
 const iso = (msTerug: number) => new Date(nu - msTerug).toISOString();
 const MELDINGEN = [
-  { id: 'm1', titel: 'Verlof goedgekeurd', tekst: 'Betaald verlof (10 – 12 aug) — beslist door Planning.', soort: 'verlof', doel: 'verlof', createdAt: iso(3600e3) },
-  { id: 'm2', titel: 'Rooster bijgewerkt', tekst: 'Je rooster is gewijzigd — bekijk je diensten.', soort: 'planning', doel: 'rooster', createdAt: iso(5 * 3600e3) },
+  { id: 'm1', titel: 'Verlof goedgekeurd', tekst: 'Betaald verlof (10 – 12 aug), beslist door Planning.', soort: 'verlof', doel: 'verlof', createdAt: iso(3600e3) },
+  { id: 'm2', titel: 'Rooster bijgewerkt', tekst: 'Je rooster is gewijzigd, bekijk je diensten.', soort: 'planning', doel: 'rooster', createdAt: iso(5 * 3600e3) },
   { id: 'm3', titel: 'Nieuwe update', tekst: 'Nieuwe zomeruniformen beschikbaar', soort: 'update', doel: 'updates', createdAt: iso(3 * 864e5), gelezenOp: iso(2 * 864e5) },
 ];
 

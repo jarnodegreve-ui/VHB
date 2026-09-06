@@ -1,7 +1,7 @@
 {
   "name": "VHB Portaal",
   "short_name": "VHB",
-  "description": "Intern operationeel portaal voor Van Hoorebeke en Zoon — planning, omleidingen, verlof en updates.",
+  "description": "Intern operationeel portaal voor Van Hoorebeke en Zoon, planning, omleidingen, verlof en updates.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

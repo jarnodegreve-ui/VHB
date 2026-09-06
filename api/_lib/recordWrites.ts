@@ -107,7 +107,7 @@ export const verwerkUsersOpslag = async (
     }
   }
   for (const { user: u, fields } of userDiff.changed) {
-    await logActivity(req, "users", "Gebruiker gewijzigd", `${u.name} — ${fields.join(', ')}.`, { type: "user", id: u.id });
+    await logActivity(req, "users", "Gebruiker gewijzigd", `${u.name}, ${fields.join(', ')}.`, { type: "user", id: u.id });
   }
   for (const u of userDiff.removed) {
     await logActivity(req, "users", "Gebruiker verwijderd", `${u.name} (${u.role}).`, { type: "user", id: u.id });
@@ -145,7 +145,7 @@ export const verwerkUsersOpslag = async (
 
 // --- Omleidingen ---
 
-const fmtDiversion = (d: any) => `${d.title} (lijn ${d.line}) — ${d.startDate}${d.endDate ? ` t/m ${d.endDate}` : ''}.`;
+const fmtDiversion = (d: any) => `${d.title} (lijn ${d.line}), ${d.startDate}${d.endDate ? ` t/m ${d.endDate}` : ''}.`;
 
 export const verwerkDiversionsOpslag = async (
   req: AuthenticatedRequest,

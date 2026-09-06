@@ -173,7 +173,7 @@ export function BrandLogo({
       width={VB_W}
       height={hoogte}
       role="img"
-      aria-label="VHB — Van Hoorebeke & Zoon"
+      aria-label="VHB, Van Hoorebeke & Zoon"
       className={className}
       style={{ overflow: 'visible' }}
     >

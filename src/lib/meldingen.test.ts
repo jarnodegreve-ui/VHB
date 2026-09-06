@@ -6,7 +6,7 @@ const m = (id: string, createdAt: string, extra: Partial<Melding> = {}): Melding
   id, titel: `Melding ${id}`, soort: 'planning', createdAt, ...extra,
 });
 
-describe('meldingen — helpers', () => {
+describe('meldingen, helpers', () => {
   it('dagVan geeft de lokale dag; ongeldig = leeg', () => {
     expect(dagVan('2026-09-06T10:00:00.000Z')).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(dagVan('nonsens')).toBe('');

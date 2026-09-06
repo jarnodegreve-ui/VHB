@@ -133,7 +133,7 @@ function FoutenSectie() {
     setBezig(groep.fingerprint);
     try {
       await apiJson('/api/client-errors/status', { method: 'POST', body: JSON.stringify({ fingerprint: groep.fingerprint, status, release: RELEASE }) });
-      notify(status === 'opgelost' ? 'Gemarkeerd als opgelost — komt hij in een nieuwere release terug, dan heropent hij vanzelf.' : status === 'genegeerd' ? 'Genegeerd — blijft ook uit de weekmail.' : 'Heropend.', 'success');
+      notify(status === 'opgelost' ? 'Gemarkeerd als opgelost, komt hij in een nieuwere release terug, dan heropent hij vanzelf.' : status === 'genegeerd' ? 'Genegeerd, blijft ook uit de weekmail.' : 'Heropend.', 'success');
       await laad();
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Status opslaan is mislukt.', 'error');
@@ -319,7 +319,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
       setPendingRestore(parsed);
       setRestoreConfirmOpen(true);
     } catch {
-      notify('Kon het bestand niet lezen — is het een geldig JSON-back-upbestand?', 'error');
+      notify('Kon het bestand niet lezen, is het een geldig JSON-back-upbestand?', 'error');
     } finally {
       if (restoreInputRef.current) restoreInputRef.current.value = '';
     }
@@ -454,7 +454,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
 
   const addTestShift = async () => {
     if (services.length === 0) {
-      notify('Geen diensten beschikbaar — voeg eerst een dienst toe via Beheer dienstoverzicht.', 'error');
+      notify('Geen diensten beschikbaar, voeg eerst een dienst toe via Beheer dienstoverzicht.', 'error');
       return;
     }
     const sample = services[0];
@@ -580,7 +580,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
                 title="E-mail"
                 aside={(
                   <InfoTip label="Uitleg bij e-mail" align="right">
-                    Zonder SMTP_USER/SMTP_PASS worden mails alleen gelogd, niet verstuurd — verlofbeslissingen en updates komen dan nergens aan. Een testmail is de enige echte bevestiging dat de SMTP-gegevens kloppen.
+                    Zonder SMTP_USER/SMTP_PASS worden mails alleen gelogd, niet verstuurd, verlofbeslissingen en updates komen dan nergens aan. Een testmail is de enige echte bevestiging dat de SMTP-gegevens kloppen.
                   </InfoTip>
                 )}
               />
@@ -655,7 +655,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         <CardHeader
           icon={<DownloadCloud size={16} />}
           title="Back-up"
-          description="Alle gegevens als één JSON-bestand — je herstelpad als er iets misgaat."
+          description="Alle gegevens als één JSON-bestand, je herstelpad als er iets misgaat."
           aside={(
             <InfoTip label="Wat zit er in de back-up?" align="right">
               <p>Gebruikers, planning, diensten, omleidingen, updates, verlof, dienstruilen, planningscodes en de audit-log. Bewaar het bestand op een veilige plek.</p>
@@ -679,7 +679,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
           aside={(
             <>
               <InfoTip label="Uitleg bij herstellen" align="right">
-                <p>Zet planning, gebruikers, verlof, dienstruilen en de andere collecties terug naar de inhoud van het bestand — gebruik dit enkel om een verlies te herstellen.</p>
+                <p>Zet planning, gebruikers, verlof, dienstruilen en de andere collecties terug naar de inhoud van het bestand, gebruik dit enkel om een verlies te herstellen.</p>
                 <p className="mt-2">De audit-log en de import-historiek blijven ongewijzigd.</p>
               </InfoTip>
               <Button variant="danger" size="sm" onClick={() => restoreInputRef.current?.click()}>
@@ -729,7 +729,7 @@ export function DebugView({ currentUser, shifts, services, onSaveShifts }: { cur
         confirmText={isRestoring ? 'Bezig…' : 'Ja, alles terugzetten'}
         message={
           pendingRestore
-            ? `Je staat op het punt de huidige gegevens te overschrijven met de back-up${pendingRestore.exportedAt ? ` van ${new Date(pendingRestore.exportedAt).toLocaleString('nl-BE')}` : ''}. Dit wordt teruggezet: ${restorePreview.map((p) => `${p.label} (${p.count})`).join(' · ')}. Deze actie kan niet ongedaan gemaakt worden — maak desgewenst eerst een verse back-up.`
+            ? `Je staat op het punt de huidige gegevens te overschrijven met de back-up${pendingRestore.exportedAt ? ` van ${new Date(pendingRestore.exportedAt).toLocaleString('nl-BE')}` : ''}. Dit wordt teruggezet: ${restorePreview.map((p) => `${p.label} (${p.count})`).join(' · ')}. Deze actie kan niet ongedaan gemaakt worden, maak desgewenst eerst een verse back-up.`
             : ''
         }
       />

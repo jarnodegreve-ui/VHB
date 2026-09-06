@@ -20,8 +20,8 @@ export function VerwachtingAfwijkingLijst({ afwijkingen }: { afwijkingen: Verwac
           <span>
             <span className="font-bold capitalize">{a.dayType}</span>
             <span className="tabular-nums"> ({a.dagen} {a.dagen === 1 ? 'dag' : 'dagen'})</span>
-            {a.nooitGereden.length > 0 && <> — verwacht maar nooit gereden: <span className="font-bold tabular-nums">{a.nooitGereden.join(', ')}</span></>}
-            {a.nietVerwacht.length > 0 && <>{a.nooitGereden.length > 0 ? ' · ' : ' — '}wél gereden maar niet in de verwachting: <span className="font-bold tabular-nums">{a.nietVerwacht.map((x) => x.code).join(', ')}</span></>}
+            {a.nooitGereden.length > 0 && <>, verwacht maar nooit gereden: <span className="font-bold tabular-nums">{a.nooitGereden.join(', ')}</span></>}
+            {a.nietVerwacht.length > 0 && <>{a.nooitGereden.length > 0 ? ' · ' : ', '}wél gereden maar niet in de verwachting: <span className="font-bold tabular-nums">{a.nietVerwacht.map((x) => x.code).join(', ')}</span></>}
           </span>
         </li>
       ))}
@@ -64,7 +64,7 @@ export function ZiekteReeksRij({ reeks, bezig, klaar, disabled, onRegistreer }: 
     <li className="flex min-h-11 flex-wrap items-center gap-2 rounded-xl bg-surface-white ring-1 ring-amber-200/70 px-3 py-2">
       <span className="min-w-0 flex-1 text-xs font-medium text-slate-700">
         <span className="font-bold">{reeks.naam}</span>
-        {' — ziek '}
+        {', ziek '}
         <span className="tabular-nums">{formatShortDay(reeks.van)}{reeks.tot !== reeks.van ? ` → ${formatShortDay(reeks.tot)}` : ''}</span>
         <span className="text-slate-500 tabular-nums"> · {reeks.dagen} {reeks.dagen === 1 ? 'dag' : 'dagen'}</span>
       </span>
@@ -72,10 +72,10 @@ export function ZiekteReeksRij({ reeks, bezig, klaar, disabled, onRegistreer }: 
         <Badge tone="emerald">Geregistreerd</Badge>
       ) : !reeks.userId ? (
         reeks.ambigu
-          ? <Badge tone="amber" title="Deze naam matcht meerdere accounts — maak de namen uniek in het gebruikersbeheer, dan kan er geregistreerd worden.">Meerdere accounts</Badge>
-          : <Badge tone="slate" title="Deze Excel-naam is niet aan een account te koppelen — controleer de schrijfwijze of maak het account aan.">Geen account</Badge>
+          ? <Badge tone="amber" title="Deze naam matcht meerdere accounts, maak de namen uniek in het gebruikersbeheer, dan kan er geregistreerd worden.">Meerdere accounts</Badge>
+          : <Badge tone="slate" title="Deze Excel-naam is niet aan een account te koppelen, controleer de schrijfwijze of maak het account aan.">Geen account</Badge>
       ) : reeks.actief === false ? (
-        <Badge tone="slate" title="Dit account staat gepauzeerd — activeer het in het gebruikersbeheer om de ziekte te registreren.">Account gepauzeerd</Badge>
+        <Badge tone="slate" title="Dit account staat gepauzeerd, activeer het in het gebruikersbeheer om de ziekte te registreren.">Account gepauzeerd</Badge>
       ) : (
         <Button variant="secondary" size="sm" className="shrink-0" disabled={disabled} onClick={() => onRegistreer(reeks)}>
           {bezig ? 'Bezig…' : 'Registreer ziekte'}

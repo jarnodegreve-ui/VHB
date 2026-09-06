@@ -287,12 +287,12 @@ export const replacePlanningAndMatrix = async (rows: PlanningMatrixRow[], shifts
   });
   if (!rpcError) return;
   if (!isMissingDbFunction(rpcError)) throw rpcError;
-  console.warn('replace_planning_and_matrix_periode ontbreekt (migratie niet gedraaid?) — val terug op het niet-atomische periode-pad.');
+  console.warn('replace_planning_and_matrix_periode ontbreekt (migratie niet gedraaid?), val terug op het niet-atomische periode-pad.');
   const dates = rows.map((r) => String(r.source_date)).filter(Boolean).sort();
   const spanStart = dates[0];
   const spanEnd = dates[dates.length - 1];
   if (!spanStart || !spanEnd) {
-    throw new Error("Matrixrijen zonder geldige source_date — periode niet af te leiden.");
+    throw new Error("Matrixrijen zonder geldige source_date, periode niet af te leiden.");
   }
   const { error: matrixDeleteError } = await client
     .from('planning_matrix_rows').delete().gte('source_date', spanStart).lte('source_date', spanEnd);
@@ -965,7 +965,7 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes }: 
       const nameKey = toLookupToken(driverName);
       const sortedKey = sortedNameToken(driverName);
       if (ambiguousNameKeys.has(nameKey) || ambiguousNameKeys.has(sortedKey)) {
-        unmatchedDrivers.add(`${driverName} (ambigu: meerdere gebruikers met deze naam — maak de namen uniek in gebruikersbeheer)`);
+        unmatchedDrivers.add(`${driverName} (ambigu: meerdere gebruikers met deze naam, maak de namen uniek in gebruikersbeheer)`);
         continue;
       }
       const driver = usersByName.get(nameKey) || usersByName.get(sortedKey);
@@ -1789,7 +1789,7 @@ export const logClientError = async (entry: ClientErrorEntry) => {
         clientErrorsUitgebreid = true;
         return;
       }
-      if (!isMissingColumnError(error)) return; // tabel ontbreekt of andere fout — stil
+      if (!isMissingColumnError(error)) return; // tabel ontbreekt of andere fout, stil
       clientErrorsUitgebreid = false;
     }
     await db.from("client_errors").insert(basis);

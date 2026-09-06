@@ -286,7 +286,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         }
         const label = status === 'approved' ? 'goedgekeurd' : 'geweigerd';
         if (ok === ids.length) notify(`${ok} ${ok === 1 ? 'aanvraag' : 'aanvragen'} ${label}.`, 'success');
-        else notify(`${ok} van ${ids.length} ${label} — de rest was intussen al behandeld.`, 'info');
+        else notify(`${ok} van ${ids.length} ${label}, de rest was intussen al behandeld.`, 'info');
       })();
       return;
     }
@@ -535,7 +535,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   <Card tone="muted" padding="none" className="px-4 py-3">
                     <MicroLabel className="text-slate-500">Dekking deze periode</MicroLabel>
                     <p className="mt-1 text-xs font-normal text-slate-600">
-                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} afwezig in deze periode{peak > 1 ? ` — tot ${peak} tegelijk op de drukste dag` : ''}.
+                      {uniqueOthers === 1 ? 'Er is al 1 andere chauffeur' : `Er zijn al ${uniqueOthers} andere chauffeurs`} afwezig in deze periode{peak > 1 ? `, tot ${peak} tegelijk op de drukste dag` : ''}.
                     </p>
                   </Card>
                 );
@@ -853,7 +853,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                         </Select>
                         {namensIemandAnders && (
                           <p className="text-2xs font-medium text-oker-700">
-                            Wordt meteen als goedgekeurd verlof vastgelegd — je hoeft het daarna niet nog eens te beoordelen.
+                            Wordt meteen als goedgekeurd verlof vastgelegd, je hoeft het daarna niet nog eens te beoordelen.
                           </p>
                         )}
                       </>
@@ -933,7 +933,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                   {periodeFout ? (
                     <p role="alert" className="text-xs font-medium text-red-700">{periodeFout}</p>
                   ) : (
-                    <p className="text-xs text-slate-500">Kies de dagen in de kalender — dezelfde dag twee keer voor één dag verlof.</p>
+                    <p className="text-xs text-slate-500">Kies de dagen in de kalender, dezelfde dag twee keer voor één dag verlof.</p>
                   )}
                 </div>
                 <Field label="Type verlof">
@@ -1018,7 +1018,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
         onClose={() => setHistoryLeave(null)}
         entityType="leave"
         entityId={historyLeave?.id ?? ''}
-        title={historyLeave ? `${users.find((u) => u.id === historyLeave.userId)?.name || 'Onbekend'} — ${historyLeave.startDate} t/m ${historyLeave.endDate}` : undefined}
+        title={historyLeave ? `${users.find((u) => u.id === historyLeave.userId)?.name || 'Onbekend'}, ${historyLeave.startDate} t/m ${historyLeave.endDate}` : undefined}
       />
 
       <ConfirmationModal

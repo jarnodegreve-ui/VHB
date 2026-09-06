@@ -18,7 +18,7 @@ describe('monitoring: broodkruimels en rapportcontext', () => {
     expect(kruimels[9].tekst).toBe('scherm-13');
   });
 
-  it('stuurt release, scherm, rol, online-status en kruimels mee — zonder naam of e-mail', async () => {
+  it('stuurt release, scherm, rol, online-status en kruimels mee, zonder naam of e-mail', async () => {
     setMonitoringUser('42', 'planner');
     addBreadcrumb('navigatie', 'verlof');
     reportHandledError('Kon het verlof niet laden.');

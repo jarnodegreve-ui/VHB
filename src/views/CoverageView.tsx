@@ -180,11 +180,11 @@ export function CoverageView() {
       });
       const body = await res.json().catch(() => ({} as any));
       if (!res.ok) { notify(body.error || 'Toewijzen is mislukt.', 'error'); return; }
-      notify(`Dienst ${pick.code} toegewezen aan ${kandidaat.name} — de chauffeur krijgt een melding.`, 'success');
+      notify(`Dienst ${pick.code} toegewezen aan ${kandidaat.name}, de chauffeur krijgt een melding.`, 'success');
       setPick(null);
       await refetchGaps();
     } catch {
-      notify('Toewijzen is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      notify('Toewijzen is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
     } finally {
       setAssignBusy(null);
     }
@@ -338,7 +338,7 @@ export function CoverageView() {
     }
     setKalFout('');
     setOverrides((prev) => [...prev, ...uitzonderingen]);
-    notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''} — controleer de lijst en klik op Opslaan.`, 'success');
+    notify(`${uitzonderingen.length} uitzondering${uitzonderingen.length === 1 ? '' : 'en'} voorgezet${overgeslagen > 0 ? ` (${overgeslagen} al gedekt)` : ''}, controleer de lijst en klik op Opslaan.`, 'success');
   };
 
   // --- Uitzonderingen ---
@@ -394,7 +394,7 @@ export function CoverageView() {
         ? prev.map((dt) => (zelfdeNaam(dt.name) ? { ...dt, services: codes } : dt))
         : [...prev, { name: v.dayType, services: codes }];
     });
-    notify(`Lijst voor “${v.dayType}” klaargezet (${codes.length} diensten) — controleer en klik op Opslaan.`, 'success');
+    notify(`Lijst voor “${v.dayType}” klaargezet (${codes.length} diensten), controleer en klik op Opslaan.`, 'success');
   };
 
   const handleSave = async () => {
@@ -608,7 +608,7 @@ export function CoverageView() {
                 >
                   <div>
                     <MicroLabel className="text-slate-500">Lijsten uit de planning</MicroLabel>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5">Stel de dienstenlijsten voor op basis van wat er deze maand echt rijdt — de kortste weg na een dienstregelingswissel.</p>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5">Stel de dienstenlijsten voor op basis van wat er deze maand echt rijdt, de kortste weg na een dienstregelingswissel.</p>
                   </div>
                   <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', voorstelOpen && 'rotate-180')} />
                 </button>
@@ -618,7 +618,7 @@ export function CoverageView() {
                   {voorstelLaden ? 'Berekenen…' : `Haal voorstel op (${MONTH_NAMES[monthIndex].toLowerCase()} ${year})`}
                 </Button>
                 {voorstellen !== null && (voorstellen.length === 0 ? (
-                  <p className="text-sm text-slate-500">Geen voorstel mogelijk — te weinig dagen per dag-type in deze maand.</p>
+                  <p className="text-sm text-slate-500">Geen voorstel mogelijk, te weinig dagen per dag-type in deze maand.</p>
                 ) : (
                   <div className="space-y-2">
                     {voorstellen.map((v) => {
@@ -659,7 +659,7 @@ export function CoverageView() {
                 >
                   <div>
                     <MicroLabel className="text-slate-500">Standaard per weekdag</MicroLabel>
-                    <p className="text-xs font-medium text-slate-500 mt-0.5 tabular-nums">{weekdayPeriods.length > 0 ? `Basis + ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : 'Basis-toewijzing'} — welk dag-type elke weekdag standaard is.</p>
+                    <p className="text-xs font-medium text-slate-500 mt-0.5 tabular-nums">{weekdayPeriods.length > 0 ? `Basis + ${weekdayPeriods.length} ${weekdayPeriods.length === 1 ? 'periode' : 'periodes'}` : 'Basis-toewijzing'}, welk dag-type elke weekdag standaard is.</p>
                   </div>
                   <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', weekdagenOpen && 'rotate-180')} />
                 </button>
@@ -675,7 +675,7 @@ export function CoverageView() {
                         aria-label={`Dag-type voor ${label}`}
                         className="w-auto max-w-[55%]"
                       >
-                        <option value="">— geen —</option>
+                        <option value="">geen</option>
                         {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                       </Select>
                     </div>
@@ -689,7 +689,7 @@ export function CoverageView() {
                 <div className="mt-4 space-y-3">
                   <div className="flex items-start justify-between gap-3">
                     <p className="text-xs font-medium text-slate-500">
-                      Vanaf een datum kan een ándere toewijzing gelden — bv. het schooljaar-regime vanaf 1 september. De recentste ingangsdatum vóór een dag wint; uitzonderingen hieronder gaan altijd voor.
+                      Vanaf een datum kan een ándere toewijzing gelden, bv. het schooljaar-regime vanaf 1 september. De recentste ingangsdatum vóór een dag wint; uitzonderingen hieronder gaan altijd voor.
                     </p>
                     <Button variant="secondary" size="sm" icon={<Plus size={14} />} className="shrink-0" onClick={addWeekdayPeriod}>
                       Periode
@@ -710,7 +710,7 @@ export function CoverageView() {
                         {/* Zonder ingangsdatum wordt de periode bij Opslaan
                             stil weggelaten — zeg dat bij het veld. */}
                         {!/^\d{4}-\d{2}-\d{2}$/.test(p.vanaf) && (
-                          <span id={`periode-${i}-fout`} className="text-xs font-medium text-red-700">Kies een ingangsdatum — anders wordt de periode niet opgeslagen.</span>
+                          <span id={`periode-${i}-fout`} className="text-xs font-medium text-red-700">Kies een ingangsdatum, anders wordt de periode niet opgeslagen.</span>
                         )}
                         <IconButton label="Periode verwijderen" variant="danger" size="sm" className="ml-auto" onClick={() => removeWeekdayPeriod(i)}><X size={16} /></IconButton>
                       </div>
@@ -724,7 +724,7 @@ export function CoverageView() {
                               aria-label={`Dag-type voor ${label} vanaf ${p.vanaf || 'de ingangsdatum'}`}
                               className="w-auto max-w-[55%]"
                             >
-                              <option value="">— geen —</option>
+                              <option value="">geen</option>
                               {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                             </Select>
                           </div>
@@ -749,7 +749,7 @@ export function CoverageView() {
                   <div>
                     <MicroLabel className="text-slate-500">Uitzonderingen</MicroLabel>
                     <p className="text-xs font-medium text-slate-500 mt-0.5 tabular-nums">
-                      {overrides.length === 0 ? 'Nog geen uitzonderingen' : `${overrides.length} ingesteld${verlopenAantal > 0 ? ` · ${verlopenAantal} verlopen` : ''}`} — een periode die afwijkt van de weekdag-standaard.
+                      {overrides.length === 0 ? 'Nog geen uitzonderingen' : `${overrides.length} ingesteld${verlopenAantal > 0 ? ` · ${verlopenAantal} verlopen` : ''}`}, een periode die afwijkt van de weekdag-standaard.
                     </p>
                   </div>
                   <ChevronDown size={16} className={cn('shrink-0 text-slate-400 transition-transform', uitzonderingenOpen && 'rotate-180')} />
@@ -770,7 +770,7 @@ export function CoverageView() {
                   </div>
                 </div>
                 {overrides.length === 0 ? (
-                  <p className="text-sm text-slate-500">Geen uitzonderingen — elke dag volgt de weekdag-standaard.</p>
+                  <p className="text-sm text-slate-500">Geen uitzonderingen, elke dag volgt de weekdag-standaard.</p>
                 ) : (
                   <div className="space-y-2">
                     {gesorteerdeOverrides.map(({ o, i, verlopen }) => {
@@ -778,7 +778,7 @@ export function CoverageView() {
                       // zeg dat bij de rij zelf (fase C15), niet pas achteraf.
                       const onvolledig = !o.from || !o.to || !o.dayType;
                       const omgekeerd = !!o.from && !!o.to && o.to < o.from;
-                      const rijFout = omgekeerd ? 'Tot en met ligt vóór Van.' : onvolledig ? 'Onvolledig — wordt niet opgeslagen.' : '';
+                      const rijFout = omgekeerd ? 'Tot en met ligt vóór Van.' : onvolledig ? 'Onvolledig, wordt niet opgeslagen.' : '';
                       const foutId = rijFout ? `uitzondering-${i}-fout` : undefined;
                       return (
                         <div key={i} className="space-y-1">
@@ -788,7 +788,7 @@ export function CoverageView() {
                             <DateInput size="sm" value={o.to} min={o.from || undefined} onChange={(v) => updateOverride(i, 'to', v)} aria-label="Tot en met" aria-describedby={foutId} invalid={!o.to || omgekeerd} />
                             <span className="text-slate-400 font-semibold">→</span>
                             <Select value={o.dayType} onChange={(e) => updateOverride(i, 'dayType', e.target.value)} aria-label="Dag-type" aria-describedby={foutId} invalid={!o.dayType} className="w-auto">
-                              <option value="">— kies type —</option>
+                              <option value="">kies type</option>
                               {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                             </Select>
                             {verlopen && <Badge tone="slate">Verlopen</Badge>}
@@ -841,7 +841,7 @@ export function CoverageView() {
                         invalid={!!kalFout && !waarde}
                         className="w-auto max-w-[55%]"
                       >
-                        <option value="">— overslaan —</option>
+                        <option value="">overslaan</option>
                         {dayTypeNames.map((n) => <option key={n} value={n}>{n}</option>)}
                       </Select>
                     </div>
@@ -873,7 +873,7 @@ export function CoverageView() {
             <div className="min-w-0">
               <MicroLabel className="text-amber-700">Verwachtingen wijken af van de planning</MicroLabel>
               <p className="mt-1 text-sm font-medium text-amber-900">
-                Sommige dag-type-lijsten sporen niet met wat er deze maand echt gereden wordt — meestal een dienstregelingswissel die nog niet in de dekkingsinstellingen verwerkt is. Pas de lijsten aan via Instellen.
+                Sommige dag-type-lijsten sporen niet met wat er deze maand echt gereden wordt, meestal een dienstregelingswissel die nog niet in de dekkingsinstellingen verwerkt is. Pas de lijsten aan via Instellen.
               </p>
               <VerwachtingAfwijkingLijst afwijkingen={expCheck} />
             </div>
@@ -889,7 +889,7 @@ export function CoverageView() {
               <AlertTriangle size={16} /> {totalMissing} niet-ingevulde {totalMissing === 1 ? 'dienst' : 'diensten'} deze maand
               {uitvalSplit.doorAfwezigheid > 0 && (
                 <span className="font-medium text-slate-500">
-                  — {uitvalSplit.zonderChauffeur > 0 ? `${uitvalSplit.zonderChauffeur} zonder chauffeur · ` : ''}{uitvalSplit.doorAfwezigheid} door afwezigheid{uitvalSplit.namen.length === 1 ? ` (${uitvalSplit.namen[0]})` : ` (${uitvalSplit.namen.length} chauffeurs)`}
+                 , {uitvalSplit.zonderChauffeur > 0 ? `${uitvalSplit.zonderChauffeur} zonder chauffeur · ` : ''}{uitvalSplit.doorAfwezigheid} door afwezigheid{uitvalSplit.namen.length === 1 ? ` (${uitvalSplit.namen[0]})` : ` (${uitvalSplit.namen.length} chauffeurs)`}
                 </span>
               )}
             </span>
@@ -911,7 +911,7 @@ export function CoverageView() {
       ) : !anyExpectations ? (
         <EmptyState
           title="Nog geen verwachte diensten ingesteld"
-          message='Klik op “Instellen” en kies per dag-type welke diensten horen te draaien — daarna ziet dit scherm elke onbemande dienst.'
+          message='Klik op “Instellen” en kies per dag-type welke diensten horen te draaien, daarna ziet dit scherm elke onbemande dienst.'
         />
       ) : visibleDays.length === 0 ? (
         <EmptyState variant="klaar" title={`Geen openstaande diensten in ${MONTH_NAMES[monthIndex].toLowerCase()} ${year}.`} message="Alle verwachte diensten zijn ingevuld." />
@@ -1045,13 +1045,13 @@ export function CoverageView() {
 
                   {advies.tijdenOnbekend && (
                     <p className="text-2xs font-semibold text-amber-800">
-                      Dienst {pick.code} heeft geen tijden in het dienstoverzicht — de rustcheck kon niet, alleen de 6-dagenregel is toegepast.
+                      Dienst {pick.code} heeft geen tijden in het dienstoverzicht, de rustcheck kon niet, alleen de 6-dagenregel is toegepast.
                     </p>
                   )}
 
                   {passend.length > 0 ? (
                     <div>
-                      <MicroLabel className="tabular-nums">Voorstel — {passend.length} passend</MicroLabel>
+                      <MicroLabel className="tabular-nums">Voorstel, {passend.length} passend</MicroLabel>
                       {/* Neutrale rijen met een groen icoon: een passende kandidaat is
                           informatie, het advies-label draagt de nadruk. */}
                       <div className="mt-2 flex flex-col gap-1.5">
@@ -1081,7 +1081,7 @@ export function CoverageView() {
                     </div>
                   ) : (
                     <p className="text-sm font-medium text-slate-500">
-                      Niemand bij wie deze dienst zonder meer past — hieronder wie wél vrij is, met wat er wringt.
+                      Niemand bij wie deze dienst zonder meer past, hieronder wie wél vrij is, met wat er wringt.
                     </p>
                   )}
 
@@ -1090,11 +1090,11 @@ export function CoverageView() {
                       uit (Maandplanning) en wijst daarna het gat toe. */}
                   {passend.length === 0 && advies.kettingen.length > 0 && (
                     <div>
-                      <MicroLabel className="text-oker-700 tabular-nums">Via een ruil — {advies.kettingen.length} {advies.kettingen.length === 1 ? 'optie' : 'opties'}</MicroLabel>
+                      <MicroLabel className="text-oker-700 tabular-nums">Via een ruil, {advies.kettingen.length} {advies.kettingen.length === 1 ? 'optie' : 'opties'}</MicroLabel>
                       <div className="mt-2 flex flex-col gap-1.5">
                         {advies.kettingen.map((k) => (
                           <div key={`${k.vanId}-${k.naarId}`} className="rounded-xl bg-surface-field ring-1 ring-hairline px-3 py-2.5 text-sm font-medium text-slate-700">
-                            <span className="font-bold">{k.naarNaam}</span> neemt dienst <span className="font-bold tabular-nums">{k.viaCode}</span> <span className="text-slate-500 tabular-nums">({k.viaTijden})</span> over van <span className="font-bold">{k.vanNaam}</span> — dan kan {k.vanNaam} dienst <span className="font-bold tabular-nums">{pick.code}</span> rijden. Beide schakels voldoen aan alle regels.
+                            <span className="font-bold">{k.naarNaam}</span> neemt dienst <span className="font-bold tabular-nums">{k.viaCode}</span> <span className="text-slate-500 tabular-nums">({k.viaTijden})</span> over van <span className="font-bold">{k.vanNaam}</span>, dan kan {k.vanNaam} dienst <span className="font-bold tabular-nums">{pick.code}</span> rijden. Beide schakels voldoen aan alle regels.
                           </div>
                         ))}
                       </div>
@@ -1104,7 +1104,7 @@ export function CoverageView() {
 
                   {nietPassend.length > 0 && (
                     <div>
-                      <MicroLabel className="text-rose-700 tabular-nums">Vrij, maar past niet — {nietPassend.length}</MicroLabel>
+                      <MicroLabel className="text-rose-700 tabular-nums">Vrij, maar past niet, {nietPassend.length}</MicroLabel>
                       <div className="mt-2 flex flex-col gap-1.5">
                         {nietPassend.map((k) => (
                           <div key={k.id} className="flex min-h-11 items-center gap-2 rounded-xl bg-rose-50/60 ring-1 ring-rose-100 px-3 py-2">
@@ -1145,7 +1145,7 @@ export function CoverageView() {
         onConfirm={() => { const k = assignConfirm; setAssignConfirm(null); if (k) void wijsToe(k); }}
         title="Dienst toewijzen?"
         message={pick && assignConfirm
-          ? `Dienst ${pick.code} op ${dayLabel(pick.date)} wordt toegewezen aan ${assignConfirm.name}.${assignConfirm.redenen.length > 0 ? ` Let op — dit wijkt af van het advies: ${assignConfirm.redenen.join(', en ')}.` : ''} De planning wordt meteen bijgewerkt en de chauffeur krijgt een melding.`
+          ? `Dienst ${pick.code} op ${dayLabel(pick.date)} wordt toegewezen aan ${assignConfirm.name}.${assignConfirm.redenen.length > 0 ? ` Let op, dit wijkt af van het advies: ${assignConfirm.redenen.join(', en ')}.` : ''} De planning wordt meteen bijgewerkt en de chauffeur krijgt een melding.`
           : ''}
         confirmText="Toewijzen"
         cancelText="Annuleren"

@@ -488,9 +488,9 @@ export default function App() {
     const result = await subscribeToPush(pushPublicKey, headers);
     if (result === 'subscribed') {
       setPushEnabled(true);
-      showToast('Meldingen ingeschakeld — je krijgt voortaan een seintje bij planning, verlof en dienstruil.', 'success');
+      showToast('Meldingen ingeschakeld, je krijgt voortaan een seintje bij planning, verlof en dienstruil.', 'success');
     } else if (result === 'denied') {
-      showToast('Meldingen geweigerd — sta notificaties toe in je browserinstellingen en probeer opnieuw.', 'info');
+      showToast('Meldingen geweigerd, sta notificaties toe in je browserinstellingen en probeer opnieuw.', 'info');
     } else {
       showToast('Meldingen inschakelen is mislukt.', 'error');
     }
@@ -1124,7 +1124,7 @@ export default function App() {
             void initializeAuthenticatedApp(session.access_token, session.user?.id);
           } else {
             setDeviceBlocked(status);
-            showToast('Nog niet goedgekeurd — vraag de planning om dit toestel goed te keuren.', 'info');
+            showToast('Nog niet goedgekeurd, vraag de planning om dit toestel goed te keuren.', 'info');
           }
         }}
       />
@@ -1422,7 +1422,7 @@ export default function App() {
               <Card tone="warning" padding="none" className="mb-4 flex items-center gap-2.5 px-4 py-3 text-sm font-semibold text-amber-800">
                 <WifiOff size={14} className="shrink-0" />
                 <span>
-                  Offline — wijzigingen komen niet door
+                  Offline, wijzigingen komen niet door
                   {lastSyncedAt ? ` · laatst bijgewerkt ${formatSyncedTime(lastSyncedAt)}` : ''}
                 </span>
               </Card>

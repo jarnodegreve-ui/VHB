@@ -70,7 +70,7 @@ describe('isShiftActiveAt: rijdt deze chauffeur nú, op basis van de segmenttijd
   });
 });
 
-describe('hasShiftEnded — randgevallen uit de controleronde 30/07', () => {
+describe('hasShiftEnded, randgevallen uit de controleronde 30/07', () => {
   it('nachtdienst pas voorbij ná de eindtijd de volgende dag', () => {
     const shift = { date: '2026-07-29', startTime: '22:00', endTime: '06:00' };
     expect(hasShiftEnded(shift, new Date('2026-07-30T05:00:00'))).toBe(false);

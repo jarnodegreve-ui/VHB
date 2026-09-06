@@ -83,7 +83,7 @@ export function LoginView({
   const uitlogReden = reden === 'account'
     ? 'Je account is gedeactiveerd. Neem contact op met de planning.'
     : reden === 'sessie'
-      ? 'Je sessie is verlopen omdat je een tijdje weg was. Log opnieuw in — er is niets van je werk verloren.'
+      ? 'Je sessie is verlopen omdat je een tijdje weg was. Log opnieuw in, er is niets van je werk verloren.'
       : '';
 
   const resetFeedback = () => {
@@ -164,7 +164,7 @@ export function LoginView({
   const headerCopy = recoveryMode
     ? { title: 'Nieuw wachtwoord', description: 'Kies een nieuw wachtwoord voor je account.' }
     : mode === 'forgot'
-      ? { title: 'Wachtwoord vergeten', description: 'Vul je e-mail in — we sturen een reset-link.' }
+      ? { title: 'Wachtwoord vergeten', description: 'Vul je e-mail in, we sturen een reset-link.' }
       : { title: 'Inloggen', description: 'Meld je aan om verder te gaan.' };
 
   // min-h-dvh i.p.v. 100vh: in Safari (vóór "Zet op beginscherm") stond de

@@ -659,7 +659,7 @@ export function OcpiDashboardView() {
               />
             </div>
             {vermogen.staven.length === 0 ? (
-              <p className="text-sm text-slate-500">Nog geen vermogens-snapshots — de eerste verschijnt bij de volgende sync (elk kwartier).</p>
+              <p className="text-sm text-slate-500">Nog geen vermogens-snapshots, de eerste verschijnt bij de volgende sync (elk kwartier).</p>
             ) : (
               <>
                 {(() => {
@@ -1171,7 +1171,7 @@ export function OcpiDashboardView() {
                         <p className="min-w-0 text-sm font-medium text-slate-700 max-sm:line-clamp-2 sm:truncate">
                           <span className="font-semibold text-slate-800">{nummer ? `Laadpunt ${nummer}` : 'Onbekend laadpunt'}{bus ? ` · bus ${bus}` : ''}</span>
                           <span className="text-slate-500">
-                            {' — '}
+                            {', '}
                             {st.soort === 'laadpunt'
                               ? `in storing (${statusLabel(st.status).toLowerCase()})`
                               : `laadbeurt mislukt (${st.classificatie})${st.wanneer ? ` · ${new Date(st.wanneer).toLocaleString('nl-BE', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}` : ''}`}

@@ -95,7 +95,7 @@ export function UserHistoryModal({
                     <p className="text-sm font-semibold text-slate-800">
                       {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
                     </p>
-                    <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? ` — "${l.comment}"` : ''}</p>
+                    <p className="text-xs font-medium text-slate-500">{formatLeaveType(l.type)}{l.comment ? `, "${l.comment}"` : ''}</p>
                   </div>
                   <StatusBadge status={l.status} stil className="shrink-0" />
                 </Card>

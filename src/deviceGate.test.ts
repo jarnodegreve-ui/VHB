@@ -51,7 +51,7 @@ describe('evaluateDeviceGate met de schakelaar uit (gateEnabled=false)', () => {
     expect(evaluateDeviceGate('chauffeur', '/api/planning', { status: 'pending' }, false).allow).toBe(true);
   });
 
-  it('houdt een GEBLOKKEERD toestel ook dan tegen — de schakelaar heropent geen gestolen telefoon', () => {
+  it('houdt een GEBLOKKEERD toestel ook dan tegen, de schakelaar heropent geen gestolen telefoon', () => {
     const verdict = evaluateDeviceGate('chauffeur', '/api/planning', { status: 'revoked' }, false);
     expect(verdict.allow).toBe(false);
     expect(verdict.body?.code).toBe('device_revoked');

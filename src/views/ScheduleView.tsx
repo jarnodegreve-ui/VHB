@@ -72,7 +72,7 @@ const formatShiftDate = (date: string) =>
 
 /** Badge-tekst voor een dienst waarvoor een eigen ruilaanvraag loopt. */
 const openSwapLabel = (swap: SwapRequest) => {
-  if (swap.status === 'accepted') return 'Collega akkoord — wacht op planner';
+  if (swap.status === 'accepted') return 'Collega akkoord, wacht op planner';
   return swap.swapType === 'overname' ? 'Overname aangevraagd' : 'Ruil aangevraagd';
 };
 
@@ -254,7 +254,7 @@ export function ScheduleView({ notes = [], user, shifts: allShifts, leaveRequest
           ))}
         </Card>
       ) : upcoming.length === 0 && past.length === 0 ? (
-        <EmptyState illustratie={<LegeLijst />} title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier — je krijgt er een melding van." />
+        <EmptyState illustratie={<LegeLijst />} title="Nog geen diensten gepland" message="Zodra de planner het rooster publiceert, verschijnen je diensten hier, je krijgt er een melding van." />
       ) : (
         /* xl+: lijst links, maandkalender rechts (elk 50 %). De lijst gebruikt
            dan de compacte kaartvorm — de brede tabel past niet in een halve
@@ -456,7 +456,7 @@ function MonthCalendar({
                     )}
                   />
                 ) : isVrijeDag(iso) ? (
-                  <span className="text-2xs font-bold lowercase leading-none text-slate-500" title="Vrij — geen dienst ingepland">
+                  <span className="text-2xs font-bold lowercase leading-none text-slate-500" title="Vrij, geen dienst ingepland">
                     v
                   </span>
                 ) : null}
@@ -495,7 +495,7 @@ function MonthCalendar({
             )}
           >
             {formatLeaveType(selectedLeave.type)}
-            {selectedLeave.status === 'pending' && ' — aangevraagd, wacht op de planner'}
+            {selectedLeave.status === 'pending' && ', aangevraagd, wacht op de planner'}
           </p>
         )}
 
@@ -670,7 +670,7 @@ function ShiftList({ shifts, today, noteFor, onRequestSwap, compact = false }: {
                       <Badge tone="red" icon={<AlertTriangle size={12} />}>
                         Verlof-conflict
                       </Badge>
-                      <p className="text-2xs font-medium text-red-700 mt-1">Je hebt hier verlof — bel de planner.</p>
+                      <p className="text-2xs font-medium text-red-700 mt-1">Je hebt hier verlof, bel de planner.</p>
                     </div>
                   )}
                   {g.openSwap && (

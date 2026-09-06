@@ -141,7 +141,7 @@ export const formatGaten = (dagen: DayGap[]): { tekst: string; knoppen: Telegram
       // Telegram anders het hele (briefing)bericht weigeren.
       return info ? `${escapeHtml(code)} (${escapeHtml(info.name)} · ${escapeHtml(info.reason)})` : escapeHtml(code);
     });
-    regels.push(`<b>${DAG_KORT(d.date)}</b>${d.dayType ? ` · ${escapeHtml(d.dayType)}` : ""} — ${items.join(", ")}`);
+    regels.push(`<b>${DAG_KORT(d.date)}</b>${d.dayType ? ` · ${escapeHtml(d.dayType)}` : ""}, ${items.join(", ")}`);
   }
   const knoppen = kandidaatKnoppen(metGaten.flatMap((d) => d.missing.map((code) => ({ date: d.date, code }))));
   const totaal = metGaten.reduce((n, d) => n + d.missing.length, 0);
@@ -184,7 +184,7 @@ export const formatZiek = async (): Promise<string> => {
     const start = String(l.startDate);
     const eind = String(l.endDate);
     const status = start > vandaag ? `vanaf ${DAG_KORT(start)}` : `t/m ${DAG_KORT(eind)}`;
-    return `• ${escapeHtml(naam(String(l.userId)))} — ${status}`;
+    return `• ${escapeHtml(naam(String(l.userId)))}, ${status}`;
   });
   return `🤒 <b>Ziek gemeld (${actueel.length})</b>\n${regels.join("\n")}`;
 };
@@ -225,7 +225,7 @@ const dienstSegmenten = (s: any): string[] => [
 
 /** /dienst <code>: de tijden uit het Dienstoverzicht (of de planningscode-uitleg). */
 const formatDienst = async (code: string): Promise<string> => {
-  if (!code) return "Gebruik: /dienst &lt;nummer&gt; — bv. /dienst 2601.";
+  if (!code) return "Gebruik: /dienst &lt;nummer&gt;, bv. /dienst 2601.";
   const [services, codes] = await Promise.all([getServicesData(), getPlanningCodesData()]);
   const svc = (services as any[]).find((s) => toLookupToken(String(s.serviceNumber ?? "")) === toLookupToken(code));
   if (svc) {
@@ -239,7 +239,7 @@ const formatDienst = async (code: string): Promise<string> => {
 
 /** /wie <code>: wie rijdt deze dienst in [van, tot] (ruil-correct). */
 const formatWie = async (code: string, van: string, tot: string): Promise<string> => {
-  if (!code) return "Gebruik: /wie &lt;dienstnummer&gt; — bv. /wie 2114.";
+  if (!code) return "Gebruik: /wie &lt;dienstnummer&gt;, bv. /wie 2114.";
   const [rijen, users] = await Promise.all([planningInVenster(van, tot), getUsersData()]);
   const naam = (id: string) => (users as any[]).find((u) => String(u.id) === id)?.name ?? `Onbekend (${id})`;
   const perDag = new Map<string, Set<string>>();
@@ -253,7 +253,7 @@ const formatWie = async (code: string, van: string, tot: string): Promise<string
   const regels = [...perDag.entries()]
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([d, namen]) => `• ${DAG_KORT(d)}: ${[...namen].map(escapeHtml).join(", ")}`);
-  return `🚌 <b>Dienst ${escapeHtml(code)}</b> — ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}:\n${regels.join("\n")}`;
+  return `🚌 <b>Dienst ${escapeHtml(code)}</b>, ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}:\n${regels.join("\n")}`;
 };
 
 /** Fuzzy chauffeur-match op naam: één treffer of een nette uitlegtekst.
@@ -273,7 +273,7 @@ const vindChauffeur = async (query: string): Promise<{ chauffeur: any } | { meld
 /** /rooster <naam>: iemands week — diensten uit de planning (ruil-correct),
  *  andere dagen de matrix-code (vrij/ziek/bv…). */
 const formatRooster = async (query: string, van: string, tot: string): Promise<string> => {
-  if (!query) return "Gebruik: /rooster &lt;naam&gt; — bv. /rooster Danny.";
+  if (!query) return "Gebruik: /rooster &lt;naam&gt;, bv. /rooster Danny.";
   const treffer = await vindChauffeur(query);
   if ("melding" in treffer) return treffer.melding;
   const u = treffer.chauffeur;
@@ -295,24 +295,24 @@ const formatRooster = async (query: string, van: string, tot: string): Promise<s
     const cel = matrixCodesForDate(matrix as any[], [{ id: String(u.id), name: String(u.name) }], d).get(String(u.id));
     regels.push(`• ${DAG_KORT(d)}: ${cel ? escapeHtml(cel) : "—"}`);
   }
-  return `📋 <b>${escapeHtml(String(u.name))}</b> — ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}:\n${regels.join("\n")}`;
+  return `📋 <b>${escapeHtml(String(u.name))}</b>, ${DAG_KORT(van)} t/m ${DAG_KORT(tot)}:\n${regels.join("\n")}`;
 };
 
 /** /ziekmeld <naam> [t/m <wanneer>]: interpretatie tonen + bevestigknop.
  *  De knop-tik is de bevestiging; registratie loopt via dezelfde kern als
  *  het portaal (validatie, dedupe, mails, pushes). */
 const bereidZiekmeldingVoor = async (arg: string, vandaag: string): Promise<string | { tekst: string; knoppen: TelegramKnop[][] }> => {
-  if (!arg) return "Gebruik: /ziekmeld &lt;naam&gt; [t/m &lt;dag&gt;] — bv. /ziekmeld danny t/m vrijdag.";
+  if (!arg) return "Gebruik: /ziekmeld &lt;naam&gt; [t/m &lt;dag&gt;], bv. /ziekmeld danny t/m vrijdag.";
   const delen = arg.split(/\s+(?:t\/m|tm|tot)\s+/i);
   const naamDeel = delen[0].trim();
   const eindDeel = delen.length > 1 ? delen[delen.length - 1].trim() : "";
   const eind = eindDeel ? parseDagAanduiding(eindDeel, vandaag) : vandaag;
-  if (!eind) return `Ik begrijp "${escapeHtml(eindDeel)}" niet als dag — gebruik bv. "t/m vrijdag", "t/m 29/08" of "t/m morgen".`;
+  if (!eind) return `Ik begrijp "${escapeHtml(eindDeel)}" niet als dag, gebruik bv. "t/m vrijdag", "t/m 29/08" of "t/m morgen".`;
   const treffer = await vindChauffeur(naamDeel);
   if ("melding" in treffer) return treffer.melding;
   const u = treffer.chauffeur;
   const data = `zm|${String(u.id)}|${vandaag}|${eind}`;
-  if (data.length > 64) return "Deze combinatie is te lang voor een Telegram-knop — registreer via het Ziekte-blad.";
+  if (data.length > 64) return "Deze combinatie is te lang voor een Telegram-knop, registreer via het Ziekte-blad.";
   return {
     tekst: `🤒 Ziek melden: <b>${escapeHtml(String(u.name))}</b>, ${DAG_KORT(vandaag)}${eind !== vandaag ? ` t/m ${DAG_KORT(eind)}` : " (alleen vandaag)"}. Klopt dat?`,
     knoppen: [[{ tekst: "✅ Registreer", data }, { tekst: "Annuleren", data: "nvt" }]],
@@ -321,14 +321,14 @@ const bereidZiekmeldingVoor = async (arg: string, vandaag: string): Promise<stri
 
 const HULP = [
   "Ik ben de VHB-portaal-bot. Commando's:",
-  "/gaten — openstaande diensten komende 7 dagen (met kandidaten-knoppen)",
-  "/ziek — wie is er nu ziek gemeld",
-  "/vandaag — de dag in het kort",
-  "/wie 2114 — wie rijdt deze dienst, komende 7 dagen",
-  "/rooster Danny — iemands week",
-  "/dienst 2601 — de tijden van een dienst",
-  "/ziekmeld danny t/m vrijdag — ziekmelding registreren (met bevestigknop)",
-  "Gewone tekst — een vraag aan de planner-assistent",
+  "/gaten, openstaande diensten komende 7 dagen (met kandidaten-knoppen)",
+  "/ziek, wie is er nu ziek gemeld",
+  "/vandaag, de dag in het kort",
+  "/wie 2114, wie rijdt deze dienst, komende 7 dagen",
+  "/rooster Danny, iemands week",
+  "/dienst 2601, de tijden van een dienst",
+  "/ziekmeld danny t/m vrijdag, ziekmelding registreren (met bevestigknop)",
+  "Gewone tekst, een vraag aan de planner-assistent",
 ].join("\n");
 
 // ---------------------------------------------------------------------------
@@ -432,7 +432,7 @@ export const meldVerlofAanvraagTelegram = async (info: { id: string; naam: strin
   const periode = info.start === info.eind ? DAG_KORT(info.start) : `${DAG_KORT(info.start)} t/m ${DAG_KORT(info.eind)}`;
   const knopData = `lv|${info.id}|approved`;
   await stuurTelegram(
-    `📝 <b>Nieuwe verlofaanvraag</b>\n${escapeHtml(info.naam)} — ${escapeHtml(info.typeLabel)} (${periode})`,
+    `📝 <b>Nieuwe verlofaanvraag</b>\n${escapeHtml(info.naam)}, ${escapeHtml(info.typeLabel)} (${periode})`,
     {
       knoppen: knopData.length <= 64
         ? [[{ tekst: "✅ Goedkeuren", data: `lv|${info.id}|approved` }, { tekst: "❌ Afwijzen", data: `lv|${info.id}|rejected` }]]
@@ -569,7 +569,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
             const periode = start === String(eind ?? "") ? DAG_KORT(start) : `${DAG_KORT(start)} t/m ${DAG_KORT(String(eind ?? ""))}`;
             await antwoord(
               [
-                `🤒 <b>Ziek gemeld:</b> ${escapeHtml(uit.targetName)} (${periode})${bijgesteld ? " — start bijgesteld naar vandaag" : ""}.`,
+                `🤒 <b>Ziek gemeld:</b> ${escapeHtml(uit.targetName)} (${periode})${bijgesteld ? ", start bijgesteld naar vandaag" : ""}.`,
                 diensten.length > 0 ? `Diensten die openvallen:\n${regels.join("\n")}` : "Geen diensten op naam in deze periode.",
               ].join("\n"),
               { knoppen },
@@ -598,7 +598,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
           await antwoord(
             "fout" in uit
               ? `⚠️ ${escapeHtml(uit.fout.error)}`
-              : `✅ Dienst ${escapeHtml(uit.serviceNumber)} op ${DAG_KORT(uit.date)} toegewezen aan <b>${escapeHtml(uit.driverName)}</b> — de chauffeur krijgt een melding.`,
+              : `✅ Dienst ${escapeHtml(uit.serviceNumber)} op ${DAG_KORT(uit.date)} toegewezen aan <b>${escapeHtml(uit.driverName)}</b>, de chauffeur krijgt een melding.`,
           );
           } finally {
             inFlight.delete(data);
@@ -623,7 +623,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
       if (!bekend) {
         if (tekst.startsWith("/start")) {
           await antwoord(
-            `Deze chat heeft id <code>${escapeHtml(vanChat)}</code>.\nZet die waarde als TELEGRAM_CHAT_ID in de Vercel-omgeving en redeploy — daarna is de bot gekoppeld.`,
+            `Deze chat heeft id <code>${escapeHtml(vanChat)}</code>.\nZet die waarde als TELEGRAM_CHAT_ID in de Vercel-omgeving en redeploy, daarna is de bot gekoppeld.`,
             { chatId: vanChat },
           );
         }
@@ -666,7 +666,7 @@ export function mountTelegramRoutes(app: express.Express, deps: TelegramDeps) {
         // Vrije tekst = een vraag aan de planner-assistent (zelfde leestools
         // en beknoptheidscontract als in het portaal). Zachte uurlimiet.
         if (!(await chatBinnenLimiet())) {
-          await antwoord("Even rustig aan — maximaal 20 assistent-vragen per uur via de bot. Probeer het straks opnieuw of gebruik de Assistent in het portaal.");
+          await antwoord("Even rustig aan, maximaal 20 assistent-vragen per uur via de bot. Probeer het straks opnieuw of gebruik de Assistent in het portaal.");
         } else {
           const uit = await deps.draaiPlannerChat([{ role: "user", content: tekst.slice(0, 1000) }]);
           await antwoord("antwoord" in uit ? escapeHtml(uit.antwoord) : `⚠️ ${escapeHtml(uit.error)}`);

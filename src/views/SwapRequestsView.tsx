@@ -22,7 +22,7 @@ type ReturnOption = { date: string; code: string; isFree: boolean };
  *  het is een soort, geen signaal (afwerking 04-09, nr. 6). */
 const TakeoverBadge = ({ compact = false }: { compact?: boolean }) => (
   <Badge tone="blue" stil icon={<Handshake size={12} />}>
-    {compact ? 'Overname' : 'Overname — geen tegenprestatie'}
+    {compact ? 'Overname' : 'Overname, geen tegenprestatie'}
   </Badge>
 );
 
@@ -311,7 +311,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
       const toastFor: Partial<Record<SwapRequest['status'], string>> = {
         approved: 'Dienstruil goedgekeurd.',
         rejected: 'Dienstruil geweigerd.',
-        accepted: 'Geaccepteerd — de planner beoordeelt de ruil nu.',
+        accepted: 'Geaccepteerd, de planner beoordeelt de ruil nu.',
         cancelled: 'Aanvraag ingetrokken.',
       };
       void onDecide(swapId, newStatus, seenStatus ?? swaps.find((s) => s.id === swapId)?.status).then((ok) => {
@@ -482,7 +482,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
               compact
               illustratie={<LegeLijst />}
               title="Nog geen ruilverzoeken"
-              message="Klik op “Dienstruil aanvragen” — je collega en de planner keuren daarna goed."
+              message="Klik op “Dienstruil aanvragen”, je collega en de planner keuren daarna goed."
             />
           )}
         </div>
@@ -526,7 +526,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       </Button>
                     </div>
                   ) : swap.status === 'accepted' && swap.targetDriverId === user.id ? (
-                    <p className="text-xs font-medium text-blue-700">Je accepteerde deze ruil — de planner valideert nog (rij-/rusttijden).</p>
+                    <p className="text-xs font-medium text-blue-700">Je accepteerde deze ruil, de planner valideert nog (rij-/rusttijden).</p>
                   ) : swap.status === 'approved' && swap.targetDriverId === user.id && !swap.targetSeenAt ? (
                     /* Doorgevoerd maar nog niet bevestigd: dé plek waar de
                        chauffeur laat weten dat hij de wijziging gezien heeft
@@ -538,7 +538,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       disabled={isConfirmingSeen === swap.id}
                       onClick={() => void bevestigGezien(swap.id)}
                     >
-                      {isConfirmingSeen === swap.id ? 'Bevestigen…' : 'Begrepen — ik rijd deze dienst'}
+                      {isConfirmingSeen === swap.id ? 'Bevestigen…' : 'Begrepen, ik rijd deze dienst'}
                     </Button>
                   ) : null}
                 </Card>
@@ -635,7 +635,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </Td>
                           <Td>
                             <span className="font-semibold text-oker-700 tabular-nums">Dienst {info.line}</span>
-                            <span className="text-slate-500 tabular-nums"> — {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${info.startTime} – ${info.endTime})` : ''}</span>
+                            <span className="text-slate-500 tabular-nums">, {formatDateHuman(info.date)}{info.startTime && info.endTime ? ` (${info.startTime} – ${info.endTime})` : ''}</span>
                             {isTakeoverSwap(swap) ? (
                               <span className="mt-1 block"><TakeoverBadge compact /></span>
                             ) : returnLabel(swap) && (
@@ -665,7 +665,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               )}
                               {swap.status === 'pending' && (isAdmin ? (
                                 <>
-                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Direct goedkeuren" title="Direct goedkeuren — collega heeft nog niet bevestigd" onClick={() => handleAdminForceApprove(swap.id)} />
+                                  <Button variant="ghost" size="sm" icon={<Check size={16} />} className="text-emerald-700 hover:text-emerald-700 hover:bg-emerald-50" aria-label="Direct goedkeuren" title="Direct goedkeuren, collega heeft nog niet bevestigd" onClick={() => handleAdminForceApprove(swap.id)} />
                                   <Button variant="ghost" size="sm" icon={<X size={16} />} className="text-red-700 hover:text-red-700 hover:bg-red-50" aria-label="Afwijzen" title="Afwijzen" onClick={() => handleStatusUpdate(swap.id, 'rejected')} />
                                 </>
                               ) : (
@@ -876,7 +876,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           </Button>
                         )}
                         {freeForDate && freeCount === 0 && !showBusyColleagues && (
-                          <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)} — je kan wel een bezette collega vragen.</p>
+                          <p className="text-xs font-medium text-slate-500 text-center">Niemand is vrij op {formatDateHuman(selectedShiftDate)}, je kan wel een bezette collega vragen.</p>
                         )}
                         <p className="text-2xs font-medium text-slate-500">"Vrij" = geen dienst en geen verlof op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'}. Bij vrij/bv/tk/ta kan je de dienst ook zonder tegenprestatie doorgeven.</p>
                       </>
@@ -953,7 +953,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                               <span className="block text-sm font-bold text-slate-800">Zonder tegenprestatie</span>
                               <span className="block text-xs font-medium text-slate-500">
                                 {takeoverCode
-                                  ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag) — jij geeft niets terug.</>
+                                  ? <>{voornaam} neemt je dienst over ({takeoverCode} die dag), jij geeft niets terug.</>
                                   : <>Kan niet: {voornaam} staat op {selectedShiftDate ? formatDateHuman(selectedShiftDate) : 'die dag'} niet op vrij/bv/tk/ta</>}
                               </span>
                             </span>
@@ -999,12 +999,12 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                           )}
                           {showAllReturns && conflicted.length > 0 && (
                             <div className="space-y-2">
-                              <MicroLabel>Niet mogelijk — jij bent die dag al ingepland</MicroLabel>
+                              <MicroLabel>Niet mogelijk, jij bent die dag al ingepland</MicroLabel>
                               {conflicted.map((o) => (
                                 <Card key={`${o.date}|${o.code}`} tone="muted" padding="none" className="flex items-center justify-between gap-3 px-4 py-3 opacity-60">
                                   <span className="min-w-0">
                                     <span className="block text-sm font-semibold text-slate-500 capitalize">{formatDateHuman(o.date)}</span>
-                                    <span className="block text-xs font-medium text-slate-500">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`} — {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
+                                    <span className="block text-xs font-medium text-slate-500">{o.isFree ? "Vrije dag van de collega" : `Dienst ${o.code}`}, {o.ownDuty === "verlof" ? "jij hebt die dag verlof" : `jij rijdt al ${o.ownDuty}`}</span>
                                   </span>
                                 </Card>
                               ))}
@@ -1029,11 +1029,11 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
                       </Field>
                       {isTakeover ? (
                         <Card tone="accent" padding="none" className="px-4 py-3 text-sm font-medium text-slate-800">
-                          Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — <strong>zonder tegenprestatie</strong>.
+                          Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong>, <strong>zonder tegenprestatie</strong>.
                         </Card>
                       ) : pick && (
                         <Card tone="accent" padding="none" className="px-4 py-3 text-sm font-medium text-slate-800">
-                          Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong> — jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
+                          Jij geeft <strong>dienst {serviceNumberOf(offered)}</strong> ({selectedShiftDate ? fmtShort(selectedShiftDate) : '—'}) aan <strong>{target?.name}</strong>, jij neemt {pick.code.toLowerCase() === 'vrij' ? <>zijn <strong>vrije dag</strong></> : <>zijn <strong>dienst {pick.code}</strong></>} ({fmtShort(pick.date)}).
                         </Card>
                       )}
                       <div className="space-y-2">
@@ -1192,7 +1192,7 @@ export function SwapRequestsView({ user, swaps, shifts, users, leaveRequests = [
         onClose={() => setHistorySwap(null)}
         entityType="swap"
         entityId={historySwap?.id ?? ''}
-        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'} — ${shifts.find((s) => s.id === historySwap.shiftId)?.date ?? ''}` : undefined}
+        title={historySwap ? `${users.find((u) => u.id === historySwap.requesterId)?.name || 'Onbekend'}, ${shifts.find((s) => s.id === historySwap.shiftId)?.date ?? ''}` : undefined}
       />
     </PageShell>
   );

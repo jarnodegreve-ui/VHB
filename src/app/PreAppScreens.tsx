@@ -122,7 +122,7 @@ export function ToestelGeblokkeerd({ revoked, onRetry, onLogout }: { revoked: bo
         <p className="mt-2 text-sm font-medium leading-6 text-slate-300">
           {revoked
             ? 'De toegang voor dit toestel is ingetrokken. Neem contact op met de planning als dit niet klopt.'
-            : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen — zodra het toestel is goedgekeurd kun je verder. Tip: zet je de app op je beginscherm, dan kan die één keer apart goedgekeurd moeten worden.'}
+            : 'Je login werkt, maar dit toestel is nog niet goedgekeurd. De planning heeft een melding gekregen, zodra het toestel is goedgekeurd kun je verder. Tip: zet je de app op je beginscherm, dan kan die één keer apart goedgekeurd moeten worden.'}
         </p>
         {!revoked && (
           <Button variant="primary" className="mt-5" onClick={onRetry}>Opnieuw controleren</Button>

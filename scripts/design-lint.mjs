@@ -32,6 +32,9 @@ const REGELS = [
   // spread-operator (`...props`, `[...x]`) wordt gevolgd door een
   // identifier/haak en matcht niet; commentaar wordt vooraf weggehaald.
   { naam: 'drie puntjes in UI-tekst (gebruik …)', re: /\.\.\.(?=[\s'"`<})]|$)/gm, zonderCommentaar: true },
+  // Em dash als zinsscheiding in zichtbare tekst: Jarno (06-09) wil overal een
+  // komma. Een losse '—' als leegte-waarde (geen spaties eromheen) mag blijven.
+  { naam: 'em dash in UI-tekst (gebruik een komma)', re: / — /g, zonderCommentaar: true },
 ];
 
 /** Bron zonder //- en /* *\/-commentaar (voor regels die alleen UI-tekst

@@ -48,7 +48,7 @@ describe('openstaandeDienstenVanAfwezigen', () => {
     expect(open.map((s) => s.id)).toEqual(['s2', 's3', 's4', 's5']);
   });
 
-  it('kapt het verleden af — gisteren valt niets meer te herverdelen', () => {
+  it('kapt het verleden af, gisteren valt niets meer te herverdelen', () => {
     const open = openstaandeDienstenVanAfwezigen(planning, langeZiekte, '2026-08-28');
     expect(open.map((s) => s.id)).toEqual(['s4', 's5']);
   });

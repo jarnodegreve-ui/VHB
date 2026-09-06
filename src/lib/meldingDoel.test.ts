@@ -7,7 +7,7 @@ import { PAD_PER_VIEW, doelUitPushUrl, meldingUitPayload, soortUitPushUrl, viewU
  * api↔src) en spiegelt de view→pad-tabel in api/_lib/meldingen.ts. Loopt die
  * uit de pas met ROUTES, dan wijst het `doel` van een melding nergens heen.
  */
-describe('meldingen — doel uit push-URL', () => {
+describe('meldingen, doel uit push-URL', () => {
   it('PAD_PER_VIEW is exact de routetabel (beide richtingen)', () => {
     const uitRoutes = Object.fromEntries(ROUTES.map((r) => [r.view, r.pad]));
     expect(PAD_PER_VIEW).toEqual(uitRoutes);

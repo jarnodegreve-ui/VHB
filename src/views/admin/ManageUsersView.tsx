@@ -228,7 +228,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
   const [confirmNaamBotsing, setConfirmNaamBotsing] = useState<{ melding: string; doorgaan: () => void } | null>(null);
   const naamBotsingMelding = (botsingen: User[]) => {
     const wie = botsingen.map((b) => `${b.name}${b.employeeId ? ` (${b.employeeId})` : ''}`).join(', ');
-    return `Er bestaat al een account met deze naam: ${wie}. Twee accounts met dezelfde naam kunnen niet aan de planning gekoppeld worden — de diensten op die naam verdwijnen dan uit de maandplanning en de dekking. Toch opslaan?`;
+    return `Er bestaat al een account met deze naam: ${wie}. Twee accounts met dezelfde naam kunnen niet aan de planning gekoppeld worden, de diensten op die naam verdwijnen dan uit de maandplanning en de dekking. Toch opslaan?`;
   };
 
   const handleAddUser = async (e: React.FormEvent) => {
@@ -322,7 +322,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           return { ...prev, [editingUser.id]: per };
         });
       } catch {
-        notify(`${EXPIRY_SOORT_LABELS[soort]} kon niet opgeslagen worden — probeer opnieuw.`, 'error');
+        notify(`${EXPIRY_SOORT_LABELS[soort]} kon niet opgeslagen worden, probeer opnieuw.`, 'error');
       }
     }
     setEditingUser(null);
@@ -516,7 +516,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
           // de importknop; nu de import in het "…"-menu zit, hoort ze hier.
           const basis = updatedCount > 0 ? `Er zijn ${addedCount} nieuwe gebruikers gevonden en ${updatedCount} bestaande gebruikers die op naam worden bijgewerkt (hun wachtwoord blijft ongemoeid). Wilt u doorgaan?` : `Er zijn ${addedCount} nieuwe gebruikers gevonden. Wilt u deze toevoegen?`;
           setPendingImportUsers(newUsersList);
-          setPendingImportMessage(dubbeleNamen.length > 0 ? `${basis} Let op: na deze import bestaan er meerdere accounts met dezelfde naam (${dubbeleNamen.join(', ')}) — die namen zijn dan niet aan de planning te koppelen.` : basis);
+          setPendingImportMessage(dubbeleNamen.length > 0 ? `${basis} Let op: na deze import bestaan er meerdere accounts met dezelfde naam (${dubbeleNamen.join(', ')}), die namen zijn dan niet aan de planning te koppelen.` : basis);
         }
       } catch (error) {
         console.error('Error parsing Excel:', error);
@@ -689,8 +689,8 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                                 tone="amber"
                                 icon={<CalendarOff size={12} />}
                                 title={laatsteInPlanning(u)
-                                  ? `Laatste dag in de planning: ${laatsteInPlanning(u)} — daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
-                                  : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor — nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
+                                  ? `Laatste dag in de planning: ${laatsteInPlanning(u)}, daarna komt dit account niet meer voor (weggevallen Excel-kolom of vertrokken).`
+                                  : 'Dit account komt in geen enkele dag van de geïmporteerde planning voor, nieuwe collega, vertrokken, of een weggevallen kolom in de Excel.'}
                               >
                                 Niet in planning
                               </Badge>
@@ -836,7 +836,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
               htmlFor="nieuw-naam"
               className="sm:col-span-2"
               error={nieuwFouten.name}
-              hint={vindNaamBotsingen(newUser.name, users).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een account met deze naam — een tweede maakt de naam onkoppelbaar in de planning.</span> : undefined}
+              hint={vindNaamBotsingen(newUser.name, users).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een account met deze naam, een tweede maakt de naam onkoppelbaar in de planning.</span> : undefined}
             >
               <Input id="nieuw-naam" type="text" autoComplete="name" required value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} placeholder="bv. Jan Janssen" />
             </Field>
@@ -864,7 +864,7 @@ export function ManageUsersView({ title = 'Gebruikersbeheer', currentUser }: {
                   htmlFor="bewerk-naam"
                   className="sm:col-span-2"
                   error={bewerkFouten.name}
-                  hint={vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een ander account met deze naam — de naam is dan niet aan de planning te koppelen.</span> : undefined}
+                  hint={vindNaamBotsingen(editingUser.name, users, editingUser.id).length > 0 ? <span className="font-medium text-amber-700">Er bestaat al een ander account met deze naam, de naam is dan niet aan de planning te koppelen.</span> : undefined}
                 >
                   <Input id="bewerk-naam" type="text" autoComplete="name" required value={editingUser.name} onChange={(e) => setEditingUser({ ...editingUser, name: e.target.value })} />
                 </Field>

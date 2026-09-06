@@ -53,7 +53,7 @@ const SCHERMEN: Scherm[] = [
 ];
 
 const beschrijf = (v: { id: string; impact?: string | null; help: string; nodes: { target: unknown[] }[] }) =>
-  `[${v.impact}] ${v.id}: ${v.help} — ${v.nodes.length}× (bv. ${JSON.stringify(v.nodes[0]?.target)})`;
+  `[${v.impact}] ${v.id}: ${v.help}, ${v.nodes.length}× (bv. ${JSON.stringify(v.nodes[0]?.target)})`;
 
 for (const scherm of SCHERMEN) {
   test(`a11y (WCAG 2.1 AA): ${scherm.naam}`, async ({ page }) => {

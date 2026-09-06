@@ -20,7 +20,7 @@ const ongedaanToast = (run = vi.fn()): Toast => ({
   action: { label: 'Ongedaan maken', run },
 });
 
-describe('ToastStack — ongedaan-variant', () => {
+describe('ToastStack, ongedaan-variant', () => {
   it('toont de knop en voert bij klik de herstelactie uit + sluit', () => {
     const run = vi.fn();
     const onDismiss = vi.fn();

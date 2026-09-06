@@ -71,7 +71,7 @@ describe('makeUserCache', () => {
   });
 });
 
-describe('makeUserCache — gedeelde epoch over instanties (controle-ronde 27-08, nr. 33)', () => {
+describe('makeUserCache, gedeelde epoch over instanties (controle-ronde 27-08, nr. 33)', () => {
   const fakeStore = () => {
     let epoch = 0;
     return { lees: async () => epoch, verhoog: async () => { epoch += 1; } };
@@ -105,7 +105,7 @@ describe('makeUserCache — gedeelde epoch over instanties (controle-ronde 27-08
     t += 500;
     await c.get();
     expect(calls).toBe(1);
-    c.invalidate(); // verhoog() faalt — mag niet gooien
+    c.invalidate(); // verhoog() faalt, mag niet gooien
     await c.get();
     expect(calls).toBe(2);
   });

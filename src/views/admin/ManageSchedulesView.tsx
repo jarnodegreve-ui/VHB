@@ -263,7 +263,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
       notify(`Ziekte geregistreerd voor ${reeks.naam} (${reeks.van}${reeks.tot !== reeks.van ? ` t/m ${reeks.tot}` : ''}).`, 'success');
       setZiekteGeregistreerd((cur) => new Set(cur).add(sleutel));
     } catch {
-      notify('Ziekte registreren is mislukt — controleer je verbinding en probeer opnieuw.', 'error');
+      notify('Ziekte registreren is mislukt, controleer je verbinding en probeer opnieuw.', 'error');
     } finally {
       setZiekteRegBusy(null);
     }
@@ -469,7 +469,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             description="Upload het originele .xls/.xlsx-bestand; je controleert eerst een preview."
             aside={(
               <InfoTip label="Uitleg bij de import" align="right">
-                <p>De server leest de praktijk-tab van het hele bestand — geen CSV-export of conversie nodig.</p>
+                <p>De server leest de praktijk-tab van het hele bestand, geen CSV-export of conversie nodig.</p>
                 <p className="mt-2">De preview toont dagen, diensten, onbekende codes, niet-gematchte chauffeurs en services zonder uren. Alleen de gekozen periode wordt vervangen; planning daarbuiten blijft staan.</p>
               </InfoTip>
             )}
@@ -525,7 +525,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     )}
                   </button>
                   <InfoTip label="Wat betekent dit?" align="right">
-                    <p>Dienstruilen voert het portaal automatisch door, ook na een import — dit lijstje is ter controle voor je Excel-archief. Verlof verwerk je wél in Excel.</p>
+                    <p>Dienstruilen voert het portaal automatisch door, ook na een import, dit lijstje is ter controle voor je Excel-archief. Verlof verwerk je wél in Excel.</p>
                     <p className="mt-2">Ziekte hoeft niet vooraf in je Excel: na de import staan die diensten als te herverdelen klaar.</p>
                   </InfoTip>
                 </div>
@@ -540,7 +540,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
                               <span>
                                 <span className="font-semibold">{l.userName}</span>
-                                {' — '}
+                                {', '}
                                 {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
                                 {l.type ? ` (${l.type})` : ''}
                               </span>
@@ -559,7 +559,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                                 <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-rose-500" />
                                 <span>
                                   <span className="font-semibold">{l.userName}</span>
-                                  {' — ziek '}
+                                  {', ziek '}
                                   {l.startDate}{l.startDate !== l.endDate ? ` t/m ${l.endDate}` : ''}
                                 </span>
                               </li>
@@ -628,7 +628,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             description="Opnieuw opbouwen uit de laatst geïmporteerde matrix, of volledig wissen."
             aside={(
               <InfoTip label="Uitleg bij opnieuw opbouwen" align="right">
-                <p>Opnieuw opbouwen gebruikt de matrix die al in het portaal staat — je Excel hoef je niet opnieuw te uploaden.</p>
+                <p>Opnieuw opbouwen gebruikt de matrix die al in het portaal staat, je Excel hoef je niet opnieuw te uploaden.</p>
                 <p className="mt-2">Doe dit nadat je in het Dienstoverzicht tijden of loopnummers wijzigde: zo komen die bij de chauffeurs terecht. Handmatige wijzigingen in de planning gaan daarbij verloren.</p>
               </InfoTip>
             )}
@@ -746,7 +746,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
           description="Maandoverzicht per chauffeur, printklaar of als PDF."
           aside={(
             <InfoTip label="Uitleg bij printen" align="right">
-              Opent in een nieuw tabblad met een printvriendelijke layout. De printdialoog van je browser opent automatisch — kies daar "Opslaan als PDF" of druk direct af.
+              Opent in een nieuw tabblad met een printvriendelijke layout. De printdialoog van je browser opent automatisch, kies daar "Opslaan als PDF" of druk direct af.
             </InfoTip>
           )}
         />
@@ -807,7 +807,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
             .filter((s) => s.date && s.date >= today)
             .sort((a, b) => a.date.localeCompare(b.date) || String(a.startTime || '').localeCompare(String(b.startTime || '')));
           if (upcoming.length === 0) {
-            return <EmptyState title="Geen actieve planning" message={shifts.length === 0 ? 'Er is nog geen planning geïmporteerd.' : 'Geen diensten vanaf vandaag — importeer of synchroniseer een planning.'} />;
+            return <EmptyState title="Geen actieve planning" message={shifts.length === 0 ? 'Er is nog geen planning geïmporteerd.' : 'Geen diensten vanaf vandaag, importeer of synchroniseer een planning.'} />;
           }
           const byDate = new Map<string, Shift[]>();
           for (const s of upcoming) {
@@ -880,7 +880,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
         <>
               <ModalHeader
                 title="Controleer voor je deze periode vervangt"
-                description="Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen — planning daarbuiten blijft staan."
+                description="Deze stap schrijft nog niets weg. Alleen de periode van dit bestand wordt vervangen, planning daarbuiten blijft staan."
               />
 
               <div className="p-6 md:p-7 space-y-6 overflow-y-auto flex-1">
@@ -913,7 +913,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                               <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-red-500" />
                               <span>
                                 <span className="font-semibold">{c.driverName}</span>
-                                {' — '}
+                                {', '}
                                 {c.date}, dienst {c.serviceNumber}
                                 <span className="text-red-700"> · verlof {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
                               </span>
@@ -955,7 +955,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     defaultOpen
                   >
                     <p className="text-xs font-medium text-amber-900/80">
-                      Klopt dit met de realiteit (vertrokken of nieuwe collega), dan is er niets aan de hand — staat hier iemand die nog gewoon rijdt, controleer dan zijn kolom in de Excel.
+                      Klopt dit met de realiteit (vertrokken of nieuwe collega), dan is er niets aan de hand, staat hier iemand die nog gewoon rijdt, controleer dan zijn kolom in de Excel.
                     </p>
                     <div className="mt-3 space-y-2 text-xs text-amber-900">
                       {matrixPreview.chauffeursVerdwenen.length > 0 && (
@@ -986,7 +986,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 {matrixPreview.ziekTeRegistreren.length > 0 && (
                   <InklapSectie title="Ziekte nog niet geregistreerd" aantal={matrixPreview.ziekTeRegistreren.length} tone="amber" defaultOpen>
                     <p className="text-xs font-medium text-amber-900/80">
-                      Deze chauffeurs staan in de Excel als "ziek", maar hebben geen ziekteperiode in het portaal — het Ziekte-blad en de meldingen kennen hen dan niet. Registreren kan meteen:
+                      Deze chauffeurs staan in de Excel als "ziek", maar hebben geen ziekteperiode in het portaal, het Ziekte-blad en de meldingen kennen hen dan niet. Registreren kan meteen:
                     </p>
                     {/* Zelfde rij-component als het Ziekte-blad: één presentatie
                         (datumvorm, knoptekst, chips) op beide plekken. */}
@@ -1035,7 +1035,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                           <span className="mt-1 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-500" />
                           <span>
                             <span className="font-semibold">{c.driverName}</span>
-                            {' — '}
+                            {', '}
                             {c.date}, dienst {c.serviceNumber}
                             <span className="opacity-75"> · ziek {c.leaveStart}{c.leaveStart !== c.leaveEnd ? ` t/m ${c.leaveEnd}` : ''}</span>
                           </span>
@@ -1074,7 +1074,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                       {isPreviewVerversen && <MicroLabel className="text-oker-700">Bijwerken…</MicroLabel>}
                     </div>
                     <p className="mt-2 text-sm font-medium text-slate-500">
-                      Het bestand loopt van {matrixPreview.fileStartDate ? new Date(matrixPreview.fileStartDate).toLocaleDateString('nl-BE') : '?'} t/m {matrixPreview.fileEndDate ? new Date(matrixPreview.fileEndDate).toLocaleDateString('nl-BE') : '?'}. Alleen de gekozen periode wordt geïmporteerd en vervangen — kort hem in als latere maanden nog niet vaststaan.
+                      Het bestand loopt van {matrixPreview.fileStartDate ? new Date(matrixPreview.fileStartDate).toLocaleDateString('nl-BE') : '?'} t/m {matrixPreview.fileEndDate ? new Date(matrixPreview.fileEndDate).toLocaleDateString('nl-BE') : '?'}. Alleen de gekozen periode wordt geïmporteerd en vervangen, kort hem in als latere maanden nog niet vaststaan.
                     </p>
                     <div className="mt-3 grid grid-cols-2 gap-3">
                       <Field label="Van" htmlFor="import-periode-van">
@@ -1098,7 +1098,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                     </div>
                     <p className="mt-3 text-sm font-medium text-slate-500">
                       {matrixPreview.importedDays} dag{matrixPreview.importedDays === 1 ? '' : 'en'} geselecteerd. Alleen dit bereik wordt vervangen{matrixPreview.retainedDays > 0
-                        ? ` — ${matrixPreview.retainedDays} bestaande dag${matrixPreview.retainedDays === 1 ? ' erbuiten blijft' : 'en erbuiten blijven'} staan.`
+                        ? `, ${matrixPreview.retainedDays} bestaande dag${matrixPreview.retainedDays === 1 ? ' erbuiten blijft' : 'en erbuiten blijven'} staan.`
                         : '; er staat geen planning buiten dit bereik.'}
                     </p>
                   </Card>
@@ -1141,7 +1141,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                         <MicroLabel className="text-amber-700">De periodes sluiten niet aan</MicroLabel>
                         <p className="mt-1 text-sm font-medium text-amber-900">
                           Tussen {new Date(matrixOverwriteSummary.gap.van).toLocaleDateString('nl-BE')} en {new Date(matrixOverwriteSummary.gap.tot).toLocaleDateString('nl-BE')} {matrixOverwriteSummary.gap.dagen === 1 ? 'valt 1 dag' : `vallen ${matrixOverwriteSummary.gap.dagen} dagen`} zonder planning.
-                          Klopt dat niet, controleer dan of je het juiste bestand uploadt — de import gaat anders gewoon door.
+                          Klopt dat niet, controleer dan of je het juiste bestand uploadt, de import gaat anders gewoon door.
                         </p>
                       </div>
                     </div>
@@ -1192,7 +1192,7 @@ export function ManageSchedulesView({ shifts, onSave, users, history, canAdminOv
                 {matrixPreview.servicesWithoutSegments.length > 0 && (
                   <InklapSectie title="Services zonder geldige uren" aantal={matrixPreview.servicesWithoutSegments.length} tone="amber" defaultOpen>
                     <p className="text-sm font-medium text-amber-900">
-                      {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd — vul de uren aan via Dienstoverzicht.
+                      {matrixPreview.servicesWithoutSegments.length} service{matrixPreview.servicesWithoutSegments.length === 1 ? '' : 's'} word{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'en'} in de Excel toegewezen, maar heb{matrixPreview.servicesWithoutSegments.length === 1 ? 't' : 'ben'} geen valid HH:MM-segmenten in de dienstoverzicht-tabel. Voor deze dagen wordt géén shift opgebouwd, vul de uren aan via Dienstoverzicht.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       {matrixPreview.servicesWithoutSegments.map((code) => (

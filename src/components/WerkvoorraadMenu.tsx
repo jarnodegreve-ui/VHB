@@ -60,7 +60,7 @@ export function WerkvoorraadMenu({
       tone: wv.horizonDagenOver! <= 0 ? 'red' : 'amber',
       label: wv.horizonDagenOver! <= 0
         ? 'De geladen planning is op'
-        : `Planning t/m ${formatShortDay(wv.planningHorizon)} — nog ${enkelvoud(wv.horizonDagenOver!, 'dag', 'dagen')}`,
+        : `Planning t/m ${formatShortDay(wv.planningHorizon)}, nog ${enkelvoud(wv.horizonDagenOver!, 'dag', 'dagen')}`,
       view: 'beheer-roosters',
     });
   }
