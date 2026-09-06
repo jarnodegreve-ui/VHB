@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, AlertTriangle, Bell, Bus, Calendar, CalendarCheck, CalendarCog, ClipboardList, FileText, FolderOpen,
-  Hash, HeartPulse, IdCard, LayoutDashboard, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
+  Hash, HeartPulse, IdCard, Inbox, LayoutDashboard, Map as MapIcon, MapPin, Palette, Phone, Plus, RotateCcw, Settings, Smartphone,
   Sparkles, Sunrise, Thermometer, Users, Zap,
 } from 'lucide-react';
 import type { Role, View } from '../types';
@@ -49,6 +49,7 @@ export const ROUTES: readonly RouteDef[] = [
   { view: 'ruil-verzoeken', pad: 'dienstruil', label: 'Dienstruil', omschrijving: 'Ruil een dienst met een collega.', icoon: RotateCcw, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'verlof', pad: 'verlof', label: 'Verlof', omschrijving: 'Vraag verlof aan en volg je aanvragen op.', icoon: CalendarCheck, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'updates', pad: 'updates', label: 'Updates', omschrijving: 'Nieuws en mededelingen.', icoon: Bell, sectie: 'algemeen', rollen: IEDEREEN },
+  { view: 'meldingen', pad: 'meldingen', label: 'Meldingen', omschrijving: 'Wat er voor jou binnenkwam: planning, verlof, ruil en updates.', icoon: Inbox, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'contacten', pad: 'contacten', label: 'Contacten', omschrijving: 'Contactgegevens van alle medewerkers.', icoon: Phone, sectie: 'algemeen', rollen: IEDEREEN },
   { view: 'bezetting', pad: 'maandplanning', label: 'Maandplanning', omschrijving: 'Wie rijdt welke dienst, zoals in het chauffeurslokaal.', icoon: Users, sectie: 'algemeen', rollen: IEDEREEN },
   // — Beheer › Planning —

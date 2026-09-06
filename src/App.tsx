@@ -18,7 +18,6 @@ import { ViewFout } from './app/ViewFout';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { useHistoryDismiss } from './lib/useHistoryDismiss';
 import {
-  Bell,
   Eye,
   Menu,
   RefreshCw,
@@ -47,6 +46,7 @@ import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
 import { UserMenu } from './components/UserMenu';
 import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
+import { MeldingenBel } from './components/MeldingenBel';
 import { berekenWerkvoorraad } from './lib/werkvoorraad';
 import { BrandSpinner } from './components/BrandSpinner';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
@@ -85,6 +85,7 @@ const LazyMijnDagView = lazyWithRetry(() => VIEW_LOADERS['mijn-dag']().then((m) 
 const LazyDiversionsView = lazyWithRetry(() => VIEW_LOADERS['omleidingen']().then((m) => ({ default: (m as typeof import('./views/DiversionsView')).DiversionsView })));
 const LazyScheduleView = lazyWithRetry(() => VIEW_LOADERS['rooster']().then((m) => ({ default: (m as typeof import('./views/ScheduleView')).ScheduleView })));
 const LazyUpdatesView = lazyWithRetry(() => VIEW_LOADERS['updates']().then((m) => ({ default: (m as typeof import('./views/UpdatesView')).UpdatesView })));
+const LazyMeldingenView = lazyWithRetry(() => VIEW_LOADERS['meldingen']().then((m) => ({ default: (m as typeof import('./views/MeldingenView')).MeldingenView })));
 const LazySwapRequestsView = lazyWithRetry(() => VIEW_LOADERS['ruil-verzoeken']().then((m) => ({ default: (m as typeof import('./views/SwapRequestsView')).SwapRequestsView })));
 const LazyRitblaadjesView = lazyWithRetry(() => VIEW_LOADERS['ritblaadjes']().then((m) => ({ default: (m as typeof import('./views/RitblaadjesView')).RitblaadjesView })));
 const LazyDocumentsView = lazyWithRetry(() => VIEW_LOADERS['documenten']().then((m) => ({ default: (m as typeof import('./views/DocumentsView')).DocumentsView })));
@@ -203,6 +204,7 @@ export default function App() {
     savePlanningCodes, markLeaveDecisionsSeen, saveLeave, reportSick, decideLeave, decideSwap, confirmSwapSeen, fetchMyNotes,
     saveServices, fetchUsers, fetchPlanning, savePlanning, fetchDiversions, saveDiversions,
     saveDiversion, createDiversion, deleteDiversion, saveUpdate, createUpdate, deleteUpdate,
+    fetchMeldingen, ongelezenMeldingen,
   } = appData;
   // Toast-ids: Date.now()+random kon botsen (dubbele keys, dismiss
   // verwijderde dan twee meldingen tegelijk).
@@ -274,6 +276,9 @@ export default function App() {
     refetchDiversions: () => fetchDiversions(undefined, { silent: true }),
     refetchUpdates: () => fetchUpdates(),
     refetchNotes: () => fetchMyNotes(),
+    // Meldingencentrum: eigen rijen → bel + badge live.
+    refetchMeldingen: () => fetchMeldingen(),
+    meldingenUserId: currentUser ? String(currentUser.id) : undefined,
     refetchPlanning: () => {
       // Chauffeur krijgt enkel eigen shifts (zelfde filter als initial)
       const planningFilter = currentUser?.role === 'chauffeur'
@@ -299,6 +304,7 @@ export default function App() {
     },
     refetchAll: () => {
       void fetchMyNotes();
+      void fetchMeldingen();
       // Catch-up na reconnect/heropenen: stil alles verversen — gemiste
       // realtime-events zijn definitief weg, dus opnieuw ophalen is de
       // enige manier om zeker in sync te komen.
@@ -913,13 +919,14 @@ export default function App() {
     : null;
 
   // Badge op het app-icoon (iOS 16.4+ PWA, Chromium-desktop): wat op jou
-  // wacht, zichtbaar zonder de app te openen. Chauffeur: ruilverzoeken aan
-  // hem + ongelezen documenten; planner/admin: de volledige werkvoorraad
-  // (zelfde teller als de topbar-knop — was alleen verlof+ruil).
+  // wacht, zichtbaar zonder de app te openen. Chauffeur: ongelezen meldingen
+  // (meldingencentrum, 06-09 — ruilverzoeken en nieuwe documenten zitten
+  // daar als melding in; was ruil + documenten); planner/admin: de volledige
+  // werkvoorraad (zelfde teller als de topbar-knop — was alleen verlof+ruil).
   const appBadgeCount = !currentUser
     ? 0
     : currentUser.role === 'chauffeur'
-      ? targetedSwapsCount + unseenDocuments
+      ? ongelezenMeldingen
       : werkvoorraad?.attentionCount ?? 0;
   useEffect(() => {
     const nav = navigator as any;
@@ -1363,22 +1370,10 @@ export default function App() {
                       onNavigate={setCurrentView}
                     />
                   )}
-                  <IconButton
-                    label="Meldingen"
-                    title="Updates en meldingen"
-                    variant="ghost"
-                    size="sm"
-                    className="relative"
-                    onClick={() => setCurrentView('updates')}
-                  >
-                    <Bell size={16} />
-                    {/* Stip alleen voor chauffeurs: bij staf draagt de
-                        werkvoorraad-knop hiernaast dit signaal al met een
-                        teller — dubbel signaleren maakt beide zwakker. */}
-                    {currentUser.role === 'chauffeur' && appBadgeCount > 0 && (
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-oker-500 ring-2 ring-paper" aria-hidden="true" />
-                    )}
-                  </IconButton>
+                  {/* Bel = meldingencentrum (06-09): eigen meldingen met
+                      ongelezen-teller; de werkvoorraad-knop hiernaast blijft
+                      de open taken van staf tellen. */}
+                  <MeldingenBel onNavigate={setCurrentView} actief={resolvedCurrentView === 'meldingen'} />
                   <UserMenu
                     user={currentUser}
                     initials={userInitials}
@@ -1447,6 +1442,7 @@ export default function App() {
               {resolvedCurrentView === 'ritblaadjes' && <LazyRitblaadjesView currentUser={currentUser!} />}
               {resolvedCurrentView === 'documenten' && <LazyDocumentsView currentUser={currentUser!} onSeen={markDocumentsSeen} />}
               {resolvedCurrentView === 'updates' && (isInitialLoad ? <ViewLoader /> : <LazyUpdatesView updates={updates} />)}
+              {resolvedCurrentView === 'meldingen' && <LazyMeldingenView onNavigate={setCurrentView} />}
               {resolvedCurrentView === 'contacten' && (isInitialLoad ? <ViewLoader /> : <LazyContactsView users={users} currentUser={currentUser!} />)}
               {resolvedCurrentView === 'beheer-roosters' && (isInitialLoad ? <ViewLoader /> : (
                 <Suspense fallback={<ViewLoader />}>

@@ -1,4 +1,10 @@
+import type { DashboardVoorkeuren } from '../shared/schemas/dashboardVoorkeuren';
+import type { Melding, MeldingSoort } from '../shared/schemas/meldingen';
+
 export type Role = 'chauffeur' | 'planner' | 'admin';
+
+// Meldingencentrum: het record en de soorten komen uit het gedeelde contract.
+export type { Melding, MeldingSoort, DashboardVoorkeuren };
 
 export interface User {
   id: string;
@@ -18,6 +24,9 @@ export interface User {
   section?: string;
   /** In dienst sinds (YYYY-MM-DD) — anciënniteit-sortering binnen een sectie. */
   startDate?: string;
+  /** Eigen dashboardindeling (verborgen tegels + volgorde); alleen in het
+   *  eigen profiel (/api/me), opgeslagen via PATCH /api/me/voorkeuren. */
+  dashboardVoorkeuren?: DashboardVoorkeuren;
 }
 
 export interface Diversion {
@@ -189,4 +198,4 @@ export interface ActivityLogEntry {
   entityId?: string | null;
 }
 
-export type View = 'dashboard' | 'mijn-dag' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'ruil-verzoeken' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'assistent' | 'ocpi-monitoring' | 'vervaldata' | 'ziekte' | 'instellingen' | 'designsysteem';
+export type View = 'dashboard' | 'mijn-dag' | 'omleidingen' | 'rooster' | 'updates' | 'beheer-roosters' | 'beheer-updates' | 'gebruikers' | 'toestellen' | 'beheer-omleidingen' | 'contacten' | 'dienstoverzicht' | 'beheer-dienstoverzicht' | 'ruil-verzoeken' | 'verlof-kalender' | 'verlof' | 'planning-matrix' | 'planning-codes' | 'activiteit' | 'beheer-debug' | 'ritblaadjes' | 'documenten' | 'bezetting' | 'dekking' | 'assistent' | 'ocpi-monitoring' | 'vervaldata' | 'ziekte' | 'instellingen' | 'designsysteem' | 'meldingen';

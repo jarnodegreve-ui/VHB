@@ -218,6 +218,7 @@ export const verwerkUpdatesOpslag = async (
     for (const u of updDiff.added) {
       await sendPushToUsers(chauffeurIds, {
         title: u.isUrgent ? "Belangrijke update" : "Nieuwe update",
+        soort: "update",
         body: u.title,
         url: opts.pushUrl,
       });

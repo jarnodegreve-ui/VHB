@@ -60,6 +60,8 @@ const mem = vi.hoisted(() => ({
   devices: [] as any[],
   planningNotes: [] as any[],
   userExpiries: [] as any[],
+  // Meldingencentrum: wat sendPushToUsers per ontvanger bewaart.
+  meldingen: [] as any[],
   // Adres dat in Supabase Auth al bij een ánder account hoort: de
   // saveUsersData-mock gooit dan dezelfde EmailInGebruikError als de echte
   // (de Auth-kant zelf zit in src/storageAuthSync.test.ts).
@@ -115,7 +117,15 @@ vi.mock('../api/push.js', async (importOriginal) => ({
     mem.pushSubscriptions = mem.pushSubscriptions.filter((s) => !(s.endpoint === endpoint && String(s.userId) === String(userId)));
   },
   sendPushToUsers: async (userIds: string[], payload: any) => {
-    if (userIds.length > 0) mem.pushesSent.push({ userIds, payload });
+    if (userIds.length === 0) return;
+    mem.pushesSent.push({ userIds, payload });
+    // Zelfde bijwerking als de echte functie (api/push.ts → bewaarMeldingen):
+    // één rij per unieke ontvanger, soort/doel uit de payload of de url.
+    const { meldingUitPayload } = await import('../api/_lib/meldingen.js');
+    const rij = meldingUitPayload(payload);
+    for (const userId of new Set(userIds.map(String))) {
+      mem.meldingen.push({ id: `m-${mem.meldingen.length + 1}`, userId, ...rij, createdAt: new Date(Date.UTC(2026, 6, 1, 8, mem.meldingen.length)).toISOString(), gelezenOp: null });
+    }
   },
   getUsersMetPush: async () => [...new Set(mem.pushSubscriptions.map((s: any) => String(s.userId)))],
 }));
@@ -154,6 +164,26 @@ vi.mock('../api/storage.js', async (importOriginal) => {
     },
     deleteUserExpiry: async (userId: string, soort: string) => {
       mem.userExpiries = mem.userExpiries.filter((e: any) => !(e.userId === userId && e.soort === soort));
+    },
+    // Meldingencentrum (public.meldingen) — zelfde contract als de echte
+    // functies, tegen mem.meldingen; gescoped op user_id zoals de DB-query.
+    getMeldingen: async (userId: string, max = 100) =>
+      mem.meldingen.filter((m: any) => m.userId === String(userId)).sort((a: any, b: any) => b.createdAt.localeCompare(a.createdAt)).slice(0, max)
+        .map(({ userId: _u, ...rest }: any) => ({ ...rest, tekst: rest.tekst ?? undefined, doel: rest.doel ?? undefined, gelezenOp: rest.gelezenOp ?? undefined })),
+    telOngelezenMeldingen: async (userId: string) => mem.meldingen.filter((m: any) => m.userId === String(userId) && !m.gelezenOp).length,
+    markeerMeldingenGelezen: async (userId: string, ids?: string[]) => {
+      let n = 0;
+      for (const m of mem.meldingen) {
+        if (m.userId !== String(userId) || m.gelezenOp) continue;
+        if (ids && ids.length > 0 && !ids.includes(m.id)) continue;
+        m.gelezenOp = '2026-07-02T08:00:00.000Z';
+        n++;
+      }
+      return n;
+    },
+    updateUserDashboardVoorkeuren: async (userId: string, voorkeuren: any) => {
+      const u = mem.users.find((x: any) => String(x.id) === String(userId));
+      if (u) u.dashboardVoorkeuren = voorkeuren;
     },
     deletePlanningNote: async (driverId: string, date: string) => { mem.planningNotes = mem.planningNotes.filter((n: any) => !(n.driverId === driverId && n.date === date)); },
     saveUsersData: async (data: any[]) => {
@@ -483,6 +513,7 @@ beforeEach(() => {
   // van de api()-helper), zodat de whitelist-gate bestaande tests niet raakt.
   mem.planningNotes = [];
   mem.userExpiries = [];
+  mem.meldingen = [];
   mem.authEmailBezet = null;
   mem.devices = [
     { userId: '3', deviceToken: 'dev-ok', name: 'iPhone · app', status: 'approved', createdAt: '2026-07-01T00:00:00Z', lastSeenAt: '2026-07-01T00:00:00Z', approvedAt: '2026-07-01T00:00:00Z', approvedBy: 'auto' },
@@ -4363,5 +4394,86 @@ describe('gedeelde zod-contracten (shared/schemas): 400 met veldfouten', () => {
     const res = await api('POST', '/api/users/one', { token: 'tok-admin', body: { name: 'Dubbel', email: 'a@vhb.be' } });
     expect(res.status).toBe(409);
     expect(res.json.conflict).toBe('email');
+  });
+});
+
+describe('meldingencentrum (public.meldingen)', () => {
+  const zaai = () => {
+    mem.meldingen = [
+      { id: 'm-a1', userId: '3', titel: 'Verlof goedgekeurd', tekst: 'Betaald verlof', soort: 'verlof', doel: 'verlof', createdAt: '2026-06-30T08:00:00.000Z', gelezenOp: null },
+      { id: 'm-a2', userId: '3', titel: 'Rooster bijgewerkt', tekst: null, soort: 'planning', doel: 'rooster', createdAt: '2026-06-29T08:00:00.000Z', gelezenOp: '2026-06-29T09:00:00.000Z' },
+      { id: 'm-b1', userId: '4', titel: 'Nieuwe dienstruil-aanvraag', tekst: 'A wil ruilen', soort: 'ruil', doel: 'dienstruil', createdAt: '2026-06-30T09:00:00.000Z', gelezenOp: null },
+    ];
+  };
+
+  it('GET geeft alleen de eigen meldingen, nieuwste eerst, mét ongelezen-teller', async () => {
+    zaai();
+    const res = await api('GET', '/api/meldingen', { token: 'tok-a' });
+    expect(res.status).toBe(200);
+    expect(res.json.ongelezen).toBe(1);
+    expect(res.json.meldingen.map((m: any) => m.id)).toEqual(['m-a1', 'm-a2']);
+    expect(res.json.meldingen[0]).toEqual({ id: 'm-a1', titel: 'Verlof goedgekeurd', tekst: 'Betaald verlof', soort: 'verlof', doel: 'verlof', createdAt: '2026-06-30T08:00:00.000Z' });
+    expect(res.json.meldingen.some((m: any) => 'userId' in m)).toBe(false);
+  });
+
+  it('gelezen markeren: een selectie, alleen eigen rijen; zonder ids alles', async () => {
+    zaai();
+    // Andermans id in de selectie doet niets.
+    const sel = await api('POST', '/api/meldingen/gelezen', { token: 'tok-a', body: { ids: ['m-a1', 'm-b1'] } });
+    expect(sel.status).toBe(200);
+    expect(sel.json.gelezen).toBe(1);
+    expect(mem.meldingen.find((m: any) => m.id === 'm-b1').gelezenOp).toBeNull();
+    // Alles (chauffeur B): één rij open.
+    const alles = await api('POST', '/api/meldingen/gelezen', { token: 'tok-b', body: {} });
+    expect(alles.json.gelezen).toBe(1);
+    expect((await api('GET', '/api/meldingen', { token: 'tok-b' })).json.ongelezen).toBe(0);
+  });
+
+  it('valideert de body (400) en eist een sessie (401)', async () => {
+    const fout = await api('POST', '/api/meldingen/gelezen', { token: 'tok-a', body: { ids: 'm-a1' } });
+    expect(fout.status).toBe(400);
+    expect(fout.json.error).toBe('Ongeldige invoer');
+    expect((await api('GET', '/api/meldingen')).status).toBe(401);
+  });
+
+  it('een verlofbeslissing landt als melding bij de chauffeur (soort verlof, doel verlof)', async () => {
+    const res = await api('PATCH', '/api/leave/l-a1', { token: 'tok-planner', body: { status: 'approved', ifStatus: 'pending' } });
+    expect(res.status).toBe(200);
+    const vanA = mem.meldingen.filter((m: any) => m.userId === '3');
+    expect(vanA).toHaveLength(1);
+    expect(vanA[0]).toMatchObject({ soort: 'verlof', doel: 'verlof', gelezenOp: null });
+    expect(vanA[0].titel).toMatch(/goedgekeurd/i);
+  });
+
+  it('een ruilverzoek landt als melding bij de aangezochte collega (soort ruil, doel dienstruil)', async () => {
+    const nieuw = { id: 's-nieuw', shiftId: 'sh-c', requesterId: '3', targetDriverId: '4', status: 'pending', reason: '', createdAt: '2026-06-13T08:00:00Z', returnDate: '2026-07-09', returnCode: 'VRIJ' };
+    const own = mem.swaps.filter((s: any) => s.requesterId === '3' || s.targetDriverId === '3');
+    const res = await api('POST', '/api/swaps', { token: 'tok-a', body: [...own, nieuw] });
+    expect(res.status).toBe(200);
+    const vanB = mem.meldingen.filter((m: any) => m.userId === '4');
+    expect(vanB.map((m: any) => [m.soort, m.doel])).toEqual([['ruil', 'dienstruil']]);
+  });
+});
+
+describe('eigen voorkeuren (PATCH /api/me/voorkeuren)', () => {
+  it('slaat de dashboardindeling op en /api/me geeft ze terug; de gebruikerslijst niet', async () => {
+    const res = await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { verborgen: ['deze-maand'], volgorde: ['volgende-dienst', 'vandaag'] } } });
+    expect(res.status).toBe(200);
+    expect(res.json.dashboardVoorkeuren).toEqual({ verborgen: ['deze-maand'], volgorde: ['volgende-dienst', 'vandaag'] });
+    const me = await api('GET', '/api/me', { token: 'tok-a' });
+    expect(me.json.dashboardVoorkeuren).toEqual({ verborgen: ['deze-maand'], volgorde: ['volgende-dienst', 'vandaag'] });
+    // Persoonlijke UI-staat reist niet mee in de lijst (ook niet voor admin).
+    const lijst = await api('GET', '/api/users', { token: 'tok-admin' });
+    expect(lijst.json.some((u: any) => 'dashboardVoorkeuren' in u)).toBe(false);
+  });
+
+  it('weigert een ongeldige body (400) en raakt alleen het eigen profiel', async () => {
+    const fout = await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { verborgen: 'x' } } });
+    expect(fout.status).toBe(400);
+    const fout2 = await api('PATCH', '/api/me/voorkeuren', { token: 'tok-a', body: { dashboard: { verborgen: ['Niet Geldig!'], volgorde: [] } } });
+    expect(fout2.status).toBe(400);
+    await api('PATCH', '/api/me/voorkeuren', { token: 'tok-b', body: { dashboard: { verborgen: [], volgorde: ['vandaag'] } } });
+    expect(mem.users.find((u: any) => u.id === '3').dashboardVoorkeuren).toBeUndefined();
+    expect(mem.users.find((u: any) => u.id === '4').dashboardVoorkeuren).toEqual({ verborgen: [], volgorde: ['vandaag'] });
   });
 });
