@@ -45,6 +45,7 @@ import { Toast, ToastOpties, ToastStack } from './components/ToastStack';
 import { OfflineBanner, InstallPrompt } from './components/PwaChrome';
 import { BottomNav } from './components/BottomNav';
 import { BrandLogo } from './components/BrandLogo';
+import { OmgevingLabel } from './components/OmgevingLabel';
 import { UserMenu } from './components/UserMenu';
 import { WerkvoorraadMenu } from './components/WerkvoorraadMenu';
 import { berekenWerkvoorraad } from './lib/werkvoorraad';
@@ -1321,6 +1322,8 @@ export default function App() {
                       dubbele titeling boven de vouw is weg. */}
                   {/* Titel verschijnt pas zodra de paginakop (h1) weggescrold
                       is — anders stond dezelfde naam twee keer boven de vouw. */}
+                  {/* Staging-label (alleen met VITE_OMGEVING=staging) — nooit een preview voor productie aanzien. */}
+                  <OmgevingLabel className="shrink-0" />
                   <h2
                     aria-hidden={!isScrolled || undefined}
                     className={cn('text-sm font-semibold tracking-tight text-slate-900 leading-tight truncate transition-opacity duration-200', isScrolled ? 'opacity-100' : 'opacity-0')}
