@@ -126,7 +126,7 @@ export function ActieMenu({
           role="menu"
           aria-label={label}
           className={cn(
-            'absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline shadow-xl',
+            'popover-in absolute top-full z-50 mt-2 min-w-[12rem] rounded-2xl bg-paper p-1.5 ring-1 ring-hairline shadow-xl',
             kant === 'right' ? 'right-0' : 'left-0',
           )}
         >

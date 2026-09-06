@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { formatGetal } from './format';
+import { formatGetal, metEenheid } from './format';
 
 describe('formatGetal (komma als decimaalteken, smalle spatie als duizendtal, max. 2 decimalen)', () => {
   it('kapt ChargEye-decimalen af op twee cijfers na de komma', () => {
@@ -18,5 +18,18 @@ describe('formatGetal (komma als decimaalteken, smalle spatie als duizendtal, ma
     expect(formatGetal(1234.5, 0)).toBe('1\u202F235');
     expect(formatGetal(Number.NaN)).toBe('—');
     expect(formatGetal(Number.POSITIVE_INFINITY)).toBe('—');
+  });
+});
+
+describe('metEenheid (smalle vaste spatie tussen getal en eenheid)', () => {
+  it('zet U+202F tussen getal en eenheid, voor ruwe én geformatteerde waarden', () => {
+    expect(metEenheid(12, 'kW')).toBe('12\u202FkW');
+    expect(metEenheid('6\u202F559', 'kWh')).toBe('6\u202F559\u202FkWh');
+    expect(metEenheid(3, 'u')).toBe('3\u202Fu');
+    expect(metEenheid(12, 'kW')).not.toContain(' ');
+  });
+  it('laat een streepje (onbekend) zonder eenheid', () => {
+    expect(metEenheid(Number.NaN, 'kW')).toBe('—');
+    expect(metEenheid('—', 'kWh')).toBe('—');
   });
 });

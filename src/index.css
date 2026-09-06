@@ -171,6 +171,10 @@
      Alle transition-utilities krijgen standaard deze easing; duraties als
      var(--duration-*) in component-CSS. Geen losse ms-waarden meer. */
   --ease-standard: cubic-bezier(0.22, 1, 0.36, 1);
+  /* Veer voor bínnenkomende panelen (sheet, slide-over, modal, menu): mild
+     overshoot, geen bounce. Uitgaand blijft --ease-standard. Tegenhanger:
+     EASE_SPRING in src/lib/motion.ts. */
+  --ease-spring: cubic-bezier(0.34, 1.2, 0.64, 1);
   --default-transition-timing-function: var(--ease-standard);
   --default-transition-duration: 150ms;
 
@@ -358,6 +362,16 @@ html.dark {
     box-shadow: none;
   }
 
+  /* Lopende tekst (alinea's in kaarten, lege staten, hints, InfoTips):
+     geen weduwe van één woord op de laatste regel. Koppen krijgen
+     `text-wrap: balance` via hun rol (text-page/section/card-title). */
+  p,
+  li,
+  dd,
+  figcaption {
+    text-wrap: pretty;
+  }
+
   /* Respect users who prefer reduced motion. */
   @media (prefers-reduced-motion: reduce) {
     *,
@@ -420,6 +434,7 @@ html.dark {
      In @layer components: een kleur-utility ernaast (text-oker-700) wint
      dan van de rol-kleur, zoals bedoeld. */
   .text-page-title {
+    text-wrap: balance;
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 1.5rem;
@@ -431,6 +446,7 @@ html.dark {
     .text-page-title { font-size: 1.875rem; }
   }
   .text-section-title {
+    text-wrap: balance;
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 1.125rem;
@@ -442,6 +458,7 @@ html.dark {
     .text-section-title { font-size: 1.25rem; }
   }
   .text-card-title {
+    text-wrap: balance;
     font-family: var(--font-display);
     font-weight: 700;
     font-size: 1rem;
@@ -1077,3 +1094,72 @@ html.login-donker {
 /* (De mobile-override met blur(14px) op .glass-modal is weg — zie de
    toelichting bij .glass-modal zelf.) */
 
+/* === View transitions (src/lib/overgang.ts) ===
+   Route-wissel: de schil (sidebar, topbar, dock) staat stil — de root-
+   snapshot wisselt zonder animatie; alleen #hoofdinhoud cross-fadet met een
+   verschuiving van 4–5 px (html.vt-route). Lijst → detail (html.vt-record):
+   de inhoud wisselt direct en alleen de gedeelde titel (view-transition-name
+   vt-record-<id>, gezet door DetailPaneel + data-vt-record op de rij) schuift
+   van de rij naar het paneel. Duraties uit de ladder. */
+::view-transition-old(root),
+::view-transition-new(root) {
+  /* De schil wisselt zonder animatie (de nieuwe snapshot staat er meteen);
+     Chrome rendert de pagina niet live onder de overlay, dus 'verbergen'
+     van de root-snapshot laat de schil verdwijnen — niet doen. */
+  animation: none;
+  mix-blend-mode: normal;
+}
+/* De actieve nav-indicator (sidebar-rail, dock-tab) is apart benoemd: hij
+   schuift mee via de overgang i.p.v. te bevriezen in de root-snapshot;
+   Navigation/BottomNav zetten hun motion-veer intussen uit (overgangActief). */
+::view-transition {
+  pointer-events: none;
+}
+#hoofdinhoud {
+  view-transition-name: hoofdinhoud;
+}
+::view-transition-group(*) {
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-standard);
+}
+::view-transition-old(*),
+::view-transition-new(*) {
+  animation-duration: var(--duration-base);
+  animation-timing-function: var(--ease-standard);
+}
+@keyframes vt-inhoud-uit {
+  to { opacity: 0; transform: translateY(-4px); }
+}
+@keyframes vt-inhoud-in {
+  from { opacity: 0; transform: translateY(5px); }
+}
+html.vt-route::view-transition-old(hoofdinhoud) {
+  animation: vt-inhoud-uit var(--duration-fast) var(--ease-standard) both;
+  mix-blend-mode: normal;
+}
+html.vt-route::view-transition-new(hoofdinhoud) {
+  animation: vt-inhoud-in var(--duration-base) var(--ease-standard) both;
+  mix-blend-mode: normal;
+}
+html.vt-record::view-transition-old(hoofdinhoud),
+html.vt-record::view-transition-new(hoofdinhoud) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
+/* Binnenkomend menu/popover zonder motion-package (ActieMenu): korte veer
+   vanuit -4 px / 98 %. Uitgaand: direct weg (het menu unmount). */
+@keyframes vhb-popover-in {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+.popover-in {
+  animation: vhb-popover-in var(--duration-fast) var(--ease-spring) both;
+  transform-origin: top;
+}

@@ -1,5 +1,6 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { cn } from '../lib/ui';
+import { recordNaam } from '../lib/overgang';
 import { useMinWidth } from '../lib/useMinWidth';
 import { Card } from './Card';
 import { SlideOver } from './SlideOver';
@@ -131,6 +132,9 @@ export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, ac
 
 /**
  * Lijst + paneel naast elkaar vanaf `lg` (lijst 38 %, paneel de rest);
+ * rijen die de titel naar het paneel willen laten schuiven, zetten
+ * `data-vt-record={id}` op hun titel en kiezen via `kiesRecord`
+ * (src/lib/overgang.ts) — zie UpdatesView/DiversionsView;
  * eronder gewoon de lijst — het paneel is dan een SlideOver (portal) en
  * neemt geen plaats in. Zonder `paneel` (bv. lege lijst met EmptyState)
  * krijgt de lijst de volle breedte.
@@ -248,7 +252,15 @@ export function DetailPaneel({
           {icon}
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-              <h2 className="text-section-title min-w-0 truncate">{title}</h2>
+              {/* Gedeelde-element-overgang (src/lib/overgang.ts): dezelfde naam
+                  als de titel van de gekozen rij (data-vt-record), zodat die
+                  bij een keuze van de lijst naar hier schuift. */}
+              <h2
+                className="text-section-title min-w-0 truncate"
+                style={sleutel ? { viewTransitionName: recordNaam(sleutel) } : undefined}
+              >
+                {title}
+              </h2>
               {chip}
             </div>
             {subtitle ? <p className="mt-0.5 text-sm text-slate-500 truncate">{subtitle}</p> : null}

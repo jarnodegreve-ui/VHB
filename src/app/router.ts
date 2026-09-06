@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { View } from '../types';
 import { ALLE_VIEWS, ROUTES, padVan, routeVanPad } from './routes';
+import { metOvergang } from '../lib/overgang';
 
 /**
  * Lichtgewicht router op de History API — geen library, geen <Route>-boom.
@@ -85,12 +86,19 @@ export function navigeer(view: View, opts: { params?: readonly string[]; replace
   if (typeof window === 'undefined') return;
   const pad = padVan(view, opts.params ?? []);
   const zelfde = window.location.pathname === pad;
-  if (!zelfde) {
-    if (opts.replace) window.history.replaceState(null, '', pad);
-    else window.history.pushState(null, '', pad);
-  }
-  onthoud(view);
-  window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
+  // Ander scherm = view-transition (cross-fade van de inhoud, schil stil —
+  // src/lib/overgang.ts); een parameterwissel binnen hetzelfde scherm
+  // (maand, replace) blijft direct, anders fadet elke maandstap.
+  const anderScherm = !opts.replace && lees().view !== view;
+  const wissel = () => {
+    if (!zelfde) {
+      if (opts.replace) window.history.replaceState(null, '', pad);
+      else window.history.pushState(null, '', pad);
+    }
+    onthoud(view);
+    window.dispatchEvent(new CustomEvent(ROUTE_EVENT));
+  };
+  if (anderScherm) metOvergang(wissel); else wissel();
 }
 
 export function useRoute() {

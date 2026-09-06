@@ -868,7 +868,7 @@ export function LeaveManagementView({ user, leaveRequests, users, onSave, onDeci
                       ? 'Klik op de startdatum.'
                       : !formData.endDate
                         ? 'Klik nu op de einddatum (of dezelfde dag voor één dag verlof).'
-                        : 'Periode geselecteerd. Pas aan via "Periode wissen" of klik een nieuwe startdatum aan.'}
+                        : 'Periode geselecteerd. Pas aan via “Periode wissen” of klik een nieuwe startdatum aan.'}
                   </p>
                 </Card>
 
