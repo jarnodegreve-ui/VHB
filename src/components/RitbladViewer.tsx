@@ -54,7 +54,30 @@ export const somPaginas = (paginas: number[]): string => {
 const nummerLijst = (dienstnummer: string | string[]): string[] =>
   (Array.isArray(dienstnummer) ? dienstnummer : [dienstnummer]).map((n) => n.trim()).filter(Boolean);
 
-/** Eén pagina van de bundel op een canvas, op devicePixelRatio. */
+/**
+ * Pixelbudget per pagina-canvas (controle 05-09, nr. 35). Rekensom: een
+ * A4-blad op een iPhone (scherm 390 px, dpr 3) is op zoom 1 ±366 × 518 css-
+ * px → ×3 = 1,7 Mpx (7 MB RGBA); op zoom 3 ±1098 × 1553 css-px → ×3 = 15,3
+ * Mpx ≈ 61 MB per pagina. Oudere iPhones tonen boven ±16,7 Mpx (of bij te
+ * veel canvas-geheugen in totaal, 2–3 bladen) stil een wit vlak. Daarom
+ * geen vaste dpr-cap maar een budget van 6 Mpx (24 MB) per pagina: de dpr
+ * zakt vanzelf zodra breedte × hoogte × dpr² daarboven komt — op zoom 1 en
+ * 1,5 blijft alles scherp (dpr 3), op zoom 2 wordt het ±2,8, op zoom 3
+ * ±1,9; de effectieve resolutie (zoom × dpr) blijft daarmee altijd ≥ die
+ * van zoom 1 op dpr 3. Desktop (paneel ±640 px, dpr 2): zoom 1 en 1,5 op
+ * dpr 2, zoom 2 ±1,6, zoom 3 ±1,1 — op die grootte is dat nog altijd
+ * scherper dan het blad op zoom 1.
+ */
+const MAX_CANVAS_PIXELS = 6_000_000;
+const canvasDpr = (cssBreedte: number, cssHoogte: number): number => {
+  const scherm = Math.min(window.devicePixelRatio || 1, 3);
+  const budget = Math.sqrt(MAX_CANVAS_PIXELS / Math.max(1, cssBreedte * cssHoogte));
+  // Nooit onder 1 (dan wordt het blad waziger dan het scherm zelf) — een
+  // pagina die zelfs op dpr 1 boven budget zit bestaat bij deze zoomstappen niet.
+  return Math.max(1, Math.min(scherm, budget));
+};
+
+/** Eén pagina van de bundel op een canvas, op de (begrensde) devicePixelRatio. */
 function PaginaCanvas({ doc, nummer, breedte }: { doc: PDFDocumentProxy; nummer: number; breedte: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
 
@@ -68,9 +91,7 @@ function PaginaCanvas({ doc, nummer, breedte }: { doc: PDFDocumentProxy; nummer:
       if (!actief || !canvas) return;
       const basis = pagina.getViewport({ scale: 1 });
       const viewport = pagina.getViewport({ scale: breedte / basis.width });
-      // Begrensd op 3: een 3×-scherm op zoom 3 zou anders een canvas van
-      // ±16 miljoen pixels vragen, en iOS weigert dat stil (wit vlak).
-      const dpr = Math.min(window.devicePixelRatio || 1, 3);
+      const dpr = canvasDpr(viewport.width, viewport.height);
       canvas.width = Math.floor(viewport.width * dpr);
       canvas.height = Math.floor(viewport.height * dpr);
       canvas.style.width = `${Math.floor(viewport.width)}px`;

@@ -64,12 +64,22 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    // De pdfjs-worker (`?worker`) is een aparte Rollup-build die
+    // build.rollupOptions niet erft — zonder dit droeg zijn map (2,5 MB) als
+    // enige nog de volledige brontekst mee.
+    worker: {
+      rollupOptions: { output: { sourcemapExcludeSources: true } },
+    },
     build: {
       // Sourcemaps mee-deployen: de foutendigest vertaalt geminifieerde
-      // stack-posities terug naar src/-bestanden (api/symbolicate.ts) en
-      // DevTools tonen leesbare code. De repo is publiek — de maps lekken
-      // niets dat niet al op GitHub staat. .map-bestanden tellen niet mee
-      // in scripts/check-bundle-size.mjs (die telt alleen .js).
+      // stack-posities terug naar src/-bestanden (api/symbolicate.ts). Die
+      // heeft alleen de mappings + bronpaden nodig, niet de brontekst — dus
+      // zonder `sourcesContent` (sourcemapExcludeSources hieronder): de maps
+      // worden een fractie zo groot en er gaat geen kopie van de volledige
+      // broncode publiek mee met elke deploy (controle 05-09, nr. 32; de
+      // repo is publiek, maar env-afhankelijke build-paden en toekomstige
+      // private code horen niet via dist/ te lekken). .map-bestanden tellen
+      // niet mee in scripts/check-bundle-size.mjs (die telt alleen .js).
       sourcemap: true,
       // Enige chunk boven de standaard-500kB is xlsx (~500 kB min.) — die is
       // al lazy (alleen geladen bij een Excel-import in Beheer) en zit vast
@@ -79,6 +89,8 @@ export default defineConfig(() => {
       chunkSizeWarningLimit: 520,
       rollupOptions: {
         output: {
+          // Maps zonder brontekst — zie het commentaar bij `sourcemap`.
+          sourcemapExcludeSources: true,
           manualChunks(id) {
             if (!id.includes('node_modules')) return;
             // Volgorde is betekenisvol: 'lucide-react' bevat de substring

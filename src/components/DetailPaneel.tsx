@@ -45,9 +45,20 @@ export function useInlinePaneel() {
  * anders toont dan een item (bv. het lege "nieuw"-formulier), zodat de
  * preselectie dat niet kaapt.
  *
+ * Terugkeer (controle 05-09, nr. 33): verwijderen is optimistisch — de
+ * lijst laat het item meteen los en deze hook schuift door naar de buur nog
+ * vóór de server antwoordt. Geeft die 409/404, dan brengt de refetch het
+ * item terug; hetzelfde bij "Ongedaan maken". Komt het weggeschoven item
+ * binnen korte tijd terug en koos de gebruiker intussen niets zelf, dan
+ * gaat de keuze weer naar dat item — anders bleef het paneel op de buur
+ * staan met een overschreven formulier.
+ *
  * Geeft `inline` terug (lg+), zodat de view op mobiel wél kan sluiten na een
  * actie waar desktop gewoon op het item blijft staan.
  */
+/** Zolang mag een weggeschoven item terugkomen en de keuze heroveren:
+ *  ruim boven de undo-toast (6 s) en een 409-refetch. */
+const TERUGKEER_MS = 15_000;
 export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, actief = true }: {
   items: T[];
   sleutelVan: (item: T) => string;
@@ -63,11 +74,27 @@ export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, ac
   const vorige = useRef<string[]>([]);
   // Sleutel van de laatste automatische keuze; null zodra de gebruiker zelf koos.
   const automatisch = useRef<string | null>(null);
+  // Item dat door een verdwijning uit de lijst is weggeschoven naar een
+  // buur, met de uiterste terugkeertijd (zie TERUGKEER_MS).
+  const weggeschoven = useRef<{ sleutel: string; tot: number } | null>(null);
 
   // Zonder deps: goedkoop (één map over de lijst) en zo mist hij nooit een
   // wissel — kiezen gebeurt alleen als er echt iets ontbreekt.
   useEffect(() => {
     const sleutels = items.map(sleutelVan);
+    const terug = weggeschoven.current;
+    if (terug && (Date.now() > terug.tot || gekozen !== automatisch.current)) {
+      // Te laat, of de gebruiker koos intussen zelf iets: niet meer terugspringen.
+      weggeschoven.current = null;
+    } else if (terug && inline && actief && sleutels.includes(terug.sleutel)) {
+      // Het weggeschoven item is terug (mislukte DELETE → refetch, of
+      // ongedaan gemaakt): de keuze herstellen.
+      weggeschoven.current = null;
+      kies(items[sleutels.indexOf(terug.sleutel)]);
+      automatisch.current = terug.sleutel;
+      vorige.current = sleutels;
+      return;
+    }
     if (gekozen !== null && !sleutels.includes(gekozen)) {
       // Het gekozen item staat niet (meer) in de lijst.
       if (inline && actief && sleutels.length > 0) {
@@ -75,6 +102,7 @@ export function useStandaardKeuze<T>({ items, sleutelVan, gekozen, kies, wis, ac
         const doel = items[Math.min(Math.max(i, 0), items.length - 1)];
         kies(doel);
         automatisch.current = sleutelVan(doel);
+        weggeschoven.current = { sleutel: gekozen, tot: Date.now() + TERUGKEER_MS };
       } else {
         // Geen buur (lijst leeg) of mobiel: keuze wissen, zodat het paneel
         // niet op een verwijderd record blijft staan.
