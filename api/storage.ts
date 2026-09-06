@@ -1049,6 +1049,17 @@ export const bouwPlanningUitMatrix = ({ rows, users, services, planningCodes }: 
 
 // --- Users ---
 
+/** Het e-mailadres hoort in Supabase Auth al bij een ánder account dan dat
+ *  van dit profiel. De routes vertalen dit naar een 409 (conflict: "email")
+ *  — vroeger werd het profiel dan stil aan dat vreemde account gekoppeld
+ *  (controle 05-09, nr. 29). */
+export class EmailInGebruikError extends Error {
+  constructor(public readonly email: string) {
+    super("Dit e-mailadres is al in gebruik bij een ander account.");
+    this.name = "EmailInGebruikError";
+  }
+}
+
 export const getUsersData = async (): Promise<AppUserIntern[]> => {
   const client = requireDb();
   const rows = await paginatedFetch((from, to) =>
@@ -1103,6 +1114,32 @@ export const saveUsersData = async (incomingUsers: IncomingUser[]): Promise<{ cr
   const removedUserIds = currentUsers
     .map((user) => String(user.id))
     .filter((id) => !incomingIds.has(id));
+
+  // Vangrail (controle 05-09, nr. 29), vóór élke write: een adres waar in
+  // Supabase Auth al een account op staat mag een profiel niet stil aan dat
+  // account koppelen — dat gaf iemand anders' login toegang tot dit profiel.
+  //  - Bestaand profiel dat van adres wisselt: het account op het nieuwe
+  //    adres moet zijn éigen account zijn (authid, of bij gebrek daaraan het
+  //    account op het oude adres); anders is het van iemand anders.
+  //  - Nieuw profiel: een Auth-account op dat adres mag alleen als geen
+  //    ander profiel eraan gekoppeld is (verweesd account → koppelen mag,
+  //    zoals bij het aanmaken van profielen voor bestaande accounts).
+  // De routes vangen dubbele adressen in de users-tabel zelf; dit is de
+  // Auth-kant, die daar niet zichtbaar is. Hier en niet in de lus verderop,
+  // omdat de tabel anders al het nieuwe adres had terwijl Auth nog het oude hield.
+  for (const sanitizedUser of sanitizedUsers) {
+    const currentEmail = normalizeEmail(sanitizedUser.email);
+    const authOpAdres = currentEmail ? authUsersByEmail.get(currentEmail) : undefined;
+    if (!currentEmail || !authOpAdres) continue;
+    const previousUser = currentById.get(String(sanitizedUser.id)) as AppUserIntern | undefined;
+    const previousEmail = normalizeEmail(previousUser?.email);
+    const eigenAuthId = previousUser?.authId ?? (previousEmail ? authUsersByEmail.get(previousEmail)?.id : undefined);
+    const adresWisselt = Boolean(previousUser) && previousEmail !== currentEmail;
+    const vanAnderProfiel = currentUsers.some((u) => String(u.id) !== String(sanitizedUser.id) && u.authId === authOpAdres.id);
+    if ((adresWisselt && authOpAdres.id !== eigenAuthId) || (!previousUser && vanAnderProfiel)) {
+      throw new EmailInGebruikError(currentEmail);
+    }
+  }
 
   // DB-writes EERST. De Auth-mutaties hieronder zijn onomkeerbaar; door de
   // database vooraf te schrijven faalt een DB-fout vóór er ook maar één

@@ -193,6 +193,9 @@ export function useDataKern(basis: DataBasis): DataCtx {
         return true;
       }
       if (response.status === 409 || response.status === 404) {
+        // Na een mislukte DELETE brengt de refetch het record terug in de
+        // lijst; op desktop herstelt useStandaardKeuze (DetailPaneel.tsx)
+        // dan de keuze die de optimistische verwijdering had weggeschoven.
         showToast(
           response.status === 404
             ? `${opts.label} is intussen door iemand anders verwijderd — ik ververs de lijst.`

@@ -63,6 +63,7 @@ import {
   getUpdatesData,
   getUpdateReadCounts,
   getUsersData,
+  EmailInGebruikError,
   logActivity,
   markUpdatesRead,
   logClientError,
@@ -166,7 +167,11 @@ const ALLOWED_ORIGINS: Array<string | RegExp> = [
 app.use(cors({ origin: ALLOWED_ORIGINS, exposedHeaders: ["X-Collection-Revision", "Retry-After"] }));
 // 5 MB is eerlijk: Vercel kapt request-bodies sowieso op ~4,5 MB af — de
 // oude 25mb-limiet wekte de indruk dat grotere uploads (PDF's, Excels) konden.
-app.use(express.json({ limit: '5mb' }));
+// /api/client-errors (open, zonder auth) krijgt een eigen, veel kleinere
+// limiet op de route zelf (controle 05-09, nr. 31): een route-parser doet
+// niets meer zodra de globale al geparset heeft, dus die slaat dat pad over.
+const jsonBody = express.json({ limit: '5mb' });
+app.use((req, res, next) => (req.path === "/api/client-errors" ? next() : jsonBody(req, res, next)));
 
 // Rem op tollende/vastgelopen clients — per ingelogde gebruiker (token),
 // niet per IP, zodat het hele bedrijfsnetwerk achter één NAT niet samen één
@@ -2131,6 +2136,7 @@ app.post("/api/users", authenticate, requireRole("admin"), async (req, res) => {
       res.status(400).json({ error: "Ongeldig formaat: lijst verwacht." });
     }
   } catch (err: any) {
+    if (err instanceof EmailInGebruikError) return res.status(409).json({ error: err.message, conflict: "email" });
     const errorMessage = err.message || (typeof err === 'object' ? JSON.stringify(err) : String(err));
     console.error("Error saving users data:", errorMessage);
     console.error("Opslaan is mislukt.", errorMessage);
@@ -2186,6 +2192,9 @@ app.post("/api/users/one", authenticate, requireRole("admin"), async (req: Authe
     res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
     res.status(201).json({ success: true, user: await userResponseRecord(id) });
   } catch (err: any) {
+    // Het adres hoort in Supabase Auth al bij een ánder account (de
+    // users-tabel-check hierboven ziet dat niet) — 409, geen stille herkoppeling.
+    if (err instanceof EmailInGebruikError) return res.status(409).json({ error: err.message, conflict: "email" });
     console.error("Gebruiker toevoegen is mislukt.", err?.message || err);
     res.status(500).json({ error: "Opslaan is mislukt." });
   }
@@ -2212,6 +2221,7 @@ app.put("/api/users/:id", authenticate, requireRole("admin"), async (req: Authen
     res.setHeader(COLLECTION_REVISION_HEADER, usersRevisionOf(await getUsersData()));
     res.json({ success: true, user: await userResponseRecord(id) });
   } catch (err: any) {
+    if (err instanceof EmailInGebruikError) return res.status(409).json({ error: err.message, conflict: "email" });
     console.error("Gebruiker opslaan is mislukt.", err?.message || err);
     res.status(500).json({ error: "Opslaan is mislukt." });
   }
@@ -2298,7 +2308,11 @@ app.post("/api/push/unsubscribe", authenticate, async (req: AuthenticatedRequest
 // Bewust zónder authenticate: fouten op het loginscherm of bij een verlopen
 // sessie moeten ook binnenkomen. De client dedupet en plafonneert zelf
 // (max 20/sessie); hier kappen we payloads af zodat misbruik niets oplevert.
-app.post("/api/client-errors", clientErrorRateLimit, async (req, res) => {
+// Eigen bodylimiet: de globale 5 MB slaat dit pad over (zie boven). Een
+// foutmelding is hooguit een paar kB (velden worden hieronder afgekapt);
+// groter = misbruik → 413 via de error-handler, zonder dat de 5 MB eerst
+// in het geheugen van een open, ongeauthenticeerde route belandt.
+app.post("/api/client-errors", clientErrorRateLimit, express.json({ limit: "32kb" }), async (req, res) => {
   try {
     const b = req.body ?? {};
     const cut = (v: unknown, max: number) => String(v ?? "").slice(0, max);
@@ -3038,24 +3052,46 @@ app.post("/api/restore", authenticate, requireRole("admin"), async (req: Authent
 // Bijlage-URL's zijn kortlevend ondertekend (bucket is privé, zie
 // supabase/2026-07-26_diversions_private.sql): een gedeelde link vervalt,
 // i.p.v. eeuwig te blijven werken voor ex-medewerkers. Pad is stabiel
-// `${id}.pdf`. Mislukt het ondertekenen (bucket nog publiek, bestand weg),
-// dan blijft de opgeslagen URL staan — bijlagen breken nooit door deze stap.
+// `${id}.pdf`. De opgeslagen pdfUrl is alleen een marker "er is een PDF";
+// wat de chauffeur krijgt komt altijd uit de bucket. Mislukt het
+// ondertekenen (bestand weg), dan valt de bijlage weg i.p.v. de rauwe
+// opgeslagen waarde door te geven — die was vroeger een (nu waardeloze)
+// publieke URL en kon, vóór nr. 28 van de controle 05-09, ook een door de
+// client opgegeven externe link zijn.
 const DIVERSION_URL_TTL_SEC = 60 * 60 * 12;
-const withSignedDiversionUrls = async (diversions: any[]): Promise<any[]> => {
-  if (!db) return diversions;
-  return Promise.all(
+/** Ondertekende URL van `${id}.pdf`, of undefined als het bestand er niet is. */
+const signedDiversionPdfUrl = async (id: string): Promise<string | undefined> => {
+  if (!db) return undefined;
+  try {
+    const { data: signed } = await db.storage
+      .from(DIVERSIONS_BUCKET)
+      .createSignedUrl(`${id}.pdf`, DIVERSION_URL_TTL_SEC);
+    return signed?.signedUrl || undefined;
+  } catch {
+    return undefined;
+  }
+};
+const withSignedDiversionUrls = async (diversions: any[]): Promise<any[]> =>
+  Promise.all(
     diversions.map(async (d) => {
       if (!d?.pdfUrl || !d?.id) return d;
-      try {
-        const { data: signed } = await db.storage
-          .from(DIVERSIONS_BUCKET)
-          .createSignedUrl(`${d.id}.pdf`, DIVERSION_URL_TTL_SEC);
-        return signed?.signedUrl ? { ...d, pdfUrl: signed.signedUrl } : d;
-      } catch {
-        return d;
-      }
+      const { pdfUrl: _bewaard, ...rest } = d;
+      const pdfUrl = await signedDiversionPdfUrl(String(d.id));
+      return pdfUrl ? { ...rest, pdfUrl } : rest;
     }),
   );
+/**
+ * Server-side normalisatie van `pdfUrl` bij het schrijven: de clientwaarde
+ * wordt genegeerd (het schema accepteert het veld alleen omdat het formulier
+ * het record heen en terug stuurt) en afgeleid uit Storage — bestaat
+ * `${id}.pdf` (geüpload via POST /api/diversions/pdf), dan een verse
+ * ondertekende URL, anders geen pdfUrl. Zo kan een planner nooit een
+ * externe link als "officiële PDF" bij een omleiding zetten.
+ */
+const metServerPdfUrl = async <T extends { id: string; pdfUrl?: string }>(record: T): Promise<T> => {
+  const { pdfUrl: _client, ...rest } = record;
+  const pdfUrl = await signedDiversionPdfUrl(String(record.id));
+  return (pdfUrl ? { ...rest, pdfUrl } : rest) as T;
 };
 
 app.get("/api/diversions", authenticate, async (req, res) => {
@@ -3083,7 +3119,9 @@ app.post("/api/diversions", authenticate, requireRole("planner", "admin"), async
       if (revisionConflict(req, previousDiversions)) return revisionConflictResponse(res, "De omleidingen");
       const diversionsRemoved = detectMassDelete(previousDiversions, newData);
       if (diversionsRemoved !== null) return massDeleteResponse(res, diversionsRemoved, previousDiversions.length, "omleidingen");
-      await verwerkDiversionsOpslag(req as AuthenticatedRequest, previousDiversions, newData);
+      // pdfUrl komt uit Storage, nooit van de client (zie metServerPdfUrl).
+      const genormaliseerd = await Promise.all(newData.map((d: any) => metServerPdfUrl({ ...d, id: String(d.id) })));
+      await verwerkDiversionsOpslag(req as AuthenticatedRequest, previousDiversions, genormaliseerd);
 
       res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
       res.json({ success: true, count: newData.length });
@@ -3118,7 +3156,8 @@ app.post("/api/diversions/one", authenticate, requireRole("planner", "admin"), a
     if (previousDiversions.some((d: any) => String(d.id) === id)) {
       return res.status(409).json({ error: "Er bestaat al een omleiding met dit id.", conflict: "exists" });
     }
-    await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, { ...body, id }], { samenvatting: false, herstel: String(req.get("x-herstel") ?? "") === "1" });
+    const record = await metServerPdfUrl({ ...body, id });
+    await verwerkDiversionsOpslag(req, previousDiversions, [...previousDiversions, record], { samenvatting: false, herstel: String(req.get("x-herstel") ?? "") === "1" });
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
     res.status(201).json({ success: true, diversion: await diversionResponseRecord(id) });
   } catch (err: any) {
@@ -3139,7 +3178,8 @@ app.put("/api/diversions/:id", authenticate, requireRole("planner", "admin"), as
     const current = previousDiversions.find((d: any) => String(d.id) === id);
     if (!current) return res.status(404).json({ error: "Omleiding niet gevonden — mogelijk intussen verwijderd." });
     if (rev !== recordRevisionOf(current)) return recordConflictResponse(res, "Deze omleiding", withRecordRevision(current, recordRevisionOf(current)));
-    const newData = previousDiversions.map((d: any) => (String(d.id) === id ? { ...body, id } : d));
+    const record = await metServerPdfUrl({ ...body, id });
+    const newData = previousDiversions.map((d: any) => (String(d.id) === id ? record : d));
     await verwerkDiversionsOpslag(req, previousDiversions, newData, { samenvatting: false });
     res.setHeader(COLLECTION_REVISION_HEADER, revisionOf(await getDiversionsData()));
     res.json({ success: true, diversion: await diversionResponseRecord(id) });
@@ -5632,6 +5672,11 @@ app.all("/api/*", (req, res) => {
 // Global error handler — details/stack alleen in de server-logs, nooit
 // naar de client (info-disclosure).
 app.use((err: any, req: any, res: any, next: any) => {
+  // Te grote body (express.json-limiet): een nette 413 i.p.v. een 500 —
+  // het is een clientfout, geen serverstoring.
+  if (err?.type === "entity.too.large" || err?.status === 413) {
+    return res.status(413).json({ error: "Verzoek is te groot." });
+  }
   console.error("GLOBAL ERROR:", err);
   res.status(500).json({ error: "Er ging iets mis op de server." });
 });

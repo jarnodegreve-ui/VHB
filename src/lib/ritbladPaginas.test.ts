@@ -194,6 +194,31 @@ describe('zoekPaginasVoorDienstGecached', () => {
     expect(cache.paginas).toEqual({ '2116': [1], '2117': [2] });
   });
 
+  it('bewaart een resultaat met leesfouten niet: de volgende keer wordt opnieuw gezocht (controle 05-09, nr. 36)', async () => {
+    const doc = maakDoc([['Dienst', '2116'], ['Dienst', '2116']]);
+    // Tijdelijke getTextContent-fout op pagina 1: het resultaat is dan
+    // onvolledig ([2]) en mag niet als waarheid voor de hele bundel vastliggen.
+    doc.getPage.mockImplementationOnce(async () => { throw new Error('tijdelijk'); });
+    await expect(zoekPaginasVoorDienstGecached(doc, '2116', 'v1')).resolves.toEqual([2]);
+    expect(window.localStorage.getItem(PAGINAS_CACHE_KEY)).toBeNull();
+
+    doc.getPage.mockClear();
+    await expect(zoekPaginasVoorDienstGecached(doc, '2116', 'v1')).resolves.toEqual([1, 2]);
+    expect(doc.getPage).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(window.localStorage.getItem(PAGINAS_CACHE_KEY)!).paginas).toEqual({ '2116': [1, 2] });
+  });
+
+  it('bewaart een leeg resultaat mét leesfout evenmin (een scan zonder tekst wél — die is compleet gelezen)', async () => {
+    const kapot = maakDoc([['Dienst', '2117']]);
+    kapot.getPage.mockImplementationOnce(async () => { throw new Error('tijdelijk'); });
+    await expect(zoekPaginasVoorDienstGecached(kapot, '2116', 'v1')).resolves.toEqual([]);
+    expect(window.localStorage.getItem(PAGINAS_CACHE_KEY)).toBeNull();
+
+    const scan = maakDoc([[], []]);
+    await expect(zoekPaginasVoorDienstGecached(scan, '2116', 'v1')).resolves.toEqual([]);
+    expect(JSON.parse(window.localStorage.getItem(PAGINAS_CACHE_KEY)!).paginas).toEqual({ '2116': [] });
+  });
+
   it('overleeft een kapotte cache-waarde', async () => {
     window.localStorage.setItem(PAGINAS_CACHE_KEY, '{niet-json');
     const doc = maakDoc([['Dienst', '2116']]);
