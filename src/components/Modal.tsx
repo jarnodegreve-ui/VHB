@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { cn } from '../lib/ui';
 import { useKeyboardInset } from '../lib/useKeyboardInset';
-import { DUR, EASE } from '../lib/motion';
+import { DUR, EASE_SPRING } from '../lib/motion';
 import { useHistoryDismiss } from '../lib/useHistoryDismiss';
 
 // Stapel van open modals (module-scope): bij een dialoog bóven een dialoog
@@ -181,7 +181,9 @@ export function Modal({
         // de CSS-regel raakt alleen CSS-animaties, niet deze JS-animaties).
         initial={reduceMotion ? { opacity: 1 } : { opacity: 0, scale: 0.95, y: 20 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
-        transition={reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE }}
+        // Binnenkomend met de veer (EASE_SPRING); de Modal heeft geen exit-
+        // animatie (zie boven), dus de standaard-ease komt hier niet voor.
+        transition={reduceMotion ? { duration: 0 } : { duration: DUR.base, ease: EASE_SPRING }}
         onClick={(e) => e.stopPropagation()}
         // Op mobile: max-h = viewport minus de safe-area-padding van de
         // backdrop hierboven (dezelfde max(0.5rem, env(…))-termen), zodat een

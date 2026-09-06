@@ -4,6 +4,7 @@ import { isExpiredDiversion } from '../lib/diversions';
 import type { Diversion } from '../types';
 import { formatDateHuman, formatSyncedTime } from '../lib/format';
 import { cn, openPdfInNewTab, safeDocumentHref } from '../lib/ui';
+import { kiesRecord } from '../lib/overgang';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge, Button, IconButton } from '../components/primitives';
 import { Card } from '../components/Card';
@@ -117,7 +118,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                   {/* rauw: lijstrij van het master-detail (kaart als knop: icoontegel + titel + badges + chevron) */}
                   <button
                     type="button"
-                    onClick={() => setSelectedId(div.id)}
+                    onClick={() => kiesRecord(div.id, detail?.id ?? null, () => setSelectedId(div.id))}
                     className="w-full px-3.5 py-3 md:px-4 cursor-pointer hover:bg-slate-50/50 transition-colors flex items-center justify-between gap-3 text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
@@ -125,7 +126,7 @@ export function DiversionsView({ diversions, lastSyncedAt = null }: { diversions
                         <MapPin size={16} />
                       </div>
                       <div className="min-w-0 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                        <h4 className="text-card-title leading-snug">{div.title}</h4>
+                        <h4 className="text-card-title leading-snug" data-vt-record={div.id}>{div.title}</h4>
                         <Badge tone="slate">{div.line}</Badge>
                         {isExpiredDiversion(div) && <Badge tone="slate">Verlopen</Badge>}
                       </div>

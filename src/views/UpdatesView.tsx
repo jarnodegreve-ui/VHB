@@ -4,6 +4,7 @@ import type { Update } from '../types';
 import { cn } from '../lib/ui';
 import { markUpdatesRead } from '../lib/updateReads';
 import { formatUpdateDate } from '../lib/format';
+import { kiesRecord } from '../lib/overgang';
 import { EmptyState, PageHeader, PageShell } from '../components/ui';
 import { Badge } from '../components/primitives';
 import { Card } from '../components/Card';
@@ -68,11 +69,11 @@ export function UpdatesView({ updates }: { updates: Update[] }) {
                     {/* rauw: lijstrij van het master-detail (kaart als knop: titel + datum + dringend-badge + eerste regel) */}
                     <button
                       type="button"
-                      onClick={() => setSelectedId(update.id)}
+                      onClick={() => kiesRecord(update.id, detail?.id ?? null, () => setSelectedId(update.id))}
                       className="flex w-full items-center justify-between gap-3 px-4 py-3 pl-5 text-left transition-colors hover:bg-slate-50/50"
                     >
                       <div className="min-w-0">
-                        <p className="text-card-title truncate">{update.title}</p>
+                        <p className="text-card-title truncate" data-vt-record={update.id}>{update.title}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2">
                           <span className="inline-flex items-center gap-1.5 text-2xs font-medium text-slate-500 tabular-nums">
                             <Clock size={12} className="text-slate-300" />
